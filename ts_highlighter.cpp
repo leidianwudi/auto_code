@@ -1,9 +1,9 @@
 /**
- * @file tshighlighter.cpp
+ * @file ts_highlighter.cpp
  * @brief TypeScript 语法高亮器实现
  */
 
-#include "tshighlighter.h"
+#include "ts_highlighter.h"
 
 /**
  * @brief 构造函数

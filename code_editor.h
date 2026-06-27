@@ -1,5 +1,5 @@
 /**
- * @file codeeditor.h
+ * @file code_editor.h
  * @brief 代码编辑器控件
  * 
  * 基于 QPlainTextEdit 的增强编辑器，提供：

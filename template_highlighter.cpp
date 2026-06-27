@@ -1,9 +1,9 @@
 /**
- * @file templatehighlighter.cpp
+ * @file template_highlighter.cpp
  * @brief 模板语法高亮器实现
  */
 
-#include "templatehighlighter.h"
+#include "template_highlighter.h"
 
 /**
  * @brief 构造函数

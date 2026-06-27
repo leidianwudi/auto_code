@@ -15,7 +15,7 @@
  * @version 1.0
  */
 
-#include "mainwindow.h"
+#include "main_window.h"
 
 #include <QApplication>
 

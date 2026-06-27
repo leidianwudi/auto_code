@@ -8,19 +8,19 @@ qt_standard_project_setup()
 qt_add_executable(auto_code
     WIN32 MACOSX_BUNDLE
     main.cpp
-    mainwindow.cpp
-    mainwindow.h
-    mainwindow.ui
-    templateengine.h
-    templateengine.cpp
-    codeeditor.h
-    codeeditor.cpp
-    templatehighlighter.h
-    templatehighlighter.cpp
-    jsonhighlighter.h
-    jsonhighlighter.cpp
-    tshighlighter.h
-    tshighlighter.cpp
+    main_window.cpp
+    main_window.h
+    main_window.ui
+    template_engine.h
+    template_engine.cpp
+    code_editor.h
+    code_editor.cpp
+    template_highlighter.h
+    template_highlighter.cpp
+    json_highlighter.h
+    json_highlighter.cpp
+    ts_highlighter.h
+    ts_highlighter.cpp
 )
 
 target_include_directories(auto_code PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

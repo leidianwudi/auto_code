@@ -1,9 +1,9 @@
 /**
- * @file jsonhighlighter.cpp
+ * @file json_highlighter.cpp
  * @brief JSON 语法高亮器实现
  */
 
-#include "jsonhighlighter.h"
+#include "json_highlighter.h"
 
 /**
  * @brief 构造函数

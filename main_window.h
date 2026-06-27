@@ -1,18 +1,18 @@
 /**
- * @file mainwindow.h
+ * @file main_window.h
  * @brief 主窗口头文件
  * 
  * 定义应用程序的主窗口类，提供模板编辑、数据输入和代码生成功能的界面。
  */
 
-#ifndef MAINWINDOW_H
-#define MAINWINDOW_H
+#ifndef MAIN_WINDOW_H
+#define MAIN_WINDOW_H
 
 #include <QMainWindow>
-#include "templateengine.h"
-#include "templatehighlighter.h"
-#include "jsonhighlighter.h"
-#include "tshighlighter.h"
+#include "template_engine.h"
+#include "template_highlighter.h"
+#include "json_highlighter.h"
+#include "ts_highlighter.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -88,4 +88,4 @@ private:
     TypeScriptHighlighter *m_tsHighlighter;      ///< TypeScript 语法高亮器
 };
 
-#endif // MAINWINDOW_H
+#endif // MAIN_WINDOW_H

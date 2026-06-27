@@ -1,11 +1,11 @@
 /**
- * @file templateengine.cpp
+ * @file template_engine.cpp
  * @brief 模板引擎实现文件
  * 
  * 包含模板解析、变量替换、循环、条件判断和算术运算的完整实现。
  */
 
-#include "templateengine.h"
+#include "template_engine.h"
 #include <QRegularExpression>
 
 /**

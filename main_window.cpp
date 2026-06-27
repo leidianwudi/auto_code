@@ -1,5 +1,5 @@
 /**
- * @file mainwindow.cpp
+ * @file main_window.cpp
  * @brief 主窗口实现文件
  *
  * 实现主窗口的所有功能，包括：
@@ -8,8 +8,8 @@
  * - 文件的加载和保存
  */
 
-#include "mainwindow.h"
-#include "ui_mainwindow.h"
+#include "main_window.h"
+#include "ui_main_window.h"
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QJsonDocument>

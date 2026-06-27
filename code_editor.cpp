@@ -1,9 +1,9 @@
 /**
- * @file codeeditor.cpp
+ * @file code_editor.cpp
  * @brief 代码编辑器控件实现
  */
 
-#include "codeeditor.h"
+#include "code_editor.h"
 #include <QPainter>
 #include <QTextBlock>
 #include <QScrollBar>

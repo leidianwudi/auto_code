@@ -1,5 +1,5 @@
 /**
- * @file tshighlighter.h
+ * @file ts_highlighter.h
  * @brief TypeScript 语法高亮器
  * 
  * 为输出结果提供 TypeScript 语法高亮，包括：
