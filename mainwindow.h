@@ -10,6 +10,9 @@
 
 #include <QMainWindow>
 #include "templateengine.h"
+#include "templatehighlighter.h"
+#include "jsonhighlighter.h"
+#include "tshighlighter.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -22,9 +25,9 @@ QT_END_NAMESPACE
  * @brief 应用程序主窗口
  * 
  * 提供图形用户界面，包含：
- * - 模板编辑区：输入模板代码
- * - 数据输入区：输入 JSON 数据
- * - 输出显示区：显示生成的 TypeScript 代码
+ * - 模板编辑区：输入模板代码（带语法高亮）
+ * - 数据输入区：输入 JSON 数据（带语法高亮）
+ * - 输出显示区：显示生成的 TypeScript 代码（带语法高亮）
  * - 菜单栏和工具栏：提供文件操作和生成功能
  */
 class MainWindow : public QMainWindow
@@ -78,8 +81,11 @@ private slots:
     void on_actionExit_triggered();
 
 private:
-    Ui::MainWindow *ui;           ///< UI 界面对象
-    TemplateEngine m_engine;      ///< 模板引擎实例
+    Ui::MainWindow *ui;                          ///< UI 界面对象
+    TemplateEngine m_engine;                     ///< 模板引擎实例
+    TemplateHighlighter *m_templateHighlighter;  ///< 模板语法高亮器
+    JsonHighlighter *m_jsonHighlighter;          ///< JSON 语法高亮器
+    TypeScriptHighlighter *m_tsHighlighter;      ///< TypeScript 语法高亮器
 };
 
 #endif // MAINWINDOW_H

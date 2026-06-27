@@ -1,7 +1,7 @@
 /**
  * @file mainwindow.cpp
  * @brief 主窗口实现文件
- * 
+ *
  * 实现主窗口的所有功能，包括：
  * - 初始化界面和示例数据
  * - 模板渲染和代码生成
@@ -19,7 +19,7 @@
 
 /**
  * @brief 构造函数
- * 
+ *
  * 初始化主窗口并设置示例模板和数据。
  * 示例展示了模板引擎的所有功能：
  * - 变量替换：${modelName}
@@ -30,9 +30,17 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
+    , m_templateHighlighter(nullptr)
+    , m_jsonHighlighter(nullptr)
+    , m_tsHighlighter(nullptr)
 {
     ui->setupUi(this);
-    
+
+    // 初始化语法高亮器
+    m_templateHighlighter = new TemplateHighlighter(ui->templateEdit->document());
+    m_jsonHighlighter = new JsonHighlighter(ui->dataEdit->document());
+    m_tsHighlighter = new TypeScriptHighlighter(ui->outputEdit->document());
+
     // 设置示例模板
     // 演示 TypeScript 接口和服务类的生成
     ui->templateEdit->setPlainText(
@@ -58,7 +66,7 @@ MainWindow::MainWindow(QWidget *parent)
         "// 平均值: ${total / count}\n"
         "// 复杂计算: ${(a + b) * c - d / 2}\n"
     );
-    
+
     // 设置示例 JSON 数据
     // 包含模板中使用的所有变量
     ui->dataEdit->setPlainText(R"({
@@ -83,19 +91,25 @@ MainWindow::MainWindow(QWidget *parent)
 
 /**
  * @brief 析构函数
- * 
- * 释放 UI 资源
+ *
+ * 释放语法高亮器和 UI 资源
  */
 MainWindow::~MainWindow()
 {
+    // 删除语法高亮器
+    delete m_templateHighlighter;
+    delete m_jsonHighlighter;
+    delete m_tsHighlighter;
+
+    // 删除 UI
     delete ui;
 }
 
 /**
  * @brief 生成代码
- * 
+ *
  * 核心功能：将模板和数据结合生成代码
- * 
+ *
  * 处理流程：
  * 1. 获取模板文本和 JSON 数据
  * 2. 解析 JSON 数据
@@ -107,36 +121,36 @@ void MainWindow::on_actionGenerate_triggered()
     // 获取模板和数据
     QString tmpl = ui->templateEdit->toPlainText();
     QString dataStr = ui->dataEdit->toPlainText();
-    
+
     // 解析 JSON 数据
     QJsonParseError error;
     QJsonDocument doc = QJsonDocument::fromJson(dataStr.toUtf8(), &error);
-    
+
     // 检查 JSON 解析错误
     if (error.error != QJsonParseError::NoError) {
         QMessageBox::warning(this, QStringLiteral("JSON 解析错误"),
                            QStringLiteral("JSON 数据格式错误: %1").arg(error.errorString()));
         return;
     }
-    
+
     // 检查是否为 JSON 对象
     if (!doc.isObject()) {
         QMessageBox::warning(this, QStringLiteral("JSON 格式错误"),
                            QStringLiteral("JSON 数据必须是一个对象"));
         return;
     }
-    
+
     // 执行模板渲染
     QJsonObject data = doc.object();
     QString result = m_engine.render(tmpl, data);
-    
+
     // 检查渲染错误
     if (!m_engine.lastError().isEmpty()) {
         QMessageBox::warning(this, QStringLiteral("模板渲染错误"),
                            m_engine.lastError());
         return;
     }
-    
+
     // 显示结果
     ui->outputEdit->setPlainText(result);
     ui->statusbar->showMessage(QStringLiteral("生成成功"), 3000);
@@ -144,7 +158,7 @@ void MainWindow::on_actionGenerate_triggered()
 
 /**
  * @brief 加载模板文件
- * 
+ *
  * 从文件系统加载模板文件到编辑区。
  * 支持的文件类型：.tmpl, .txt 或任意文件
  */
@@ -154,9 +168,9 @@ void MainWindow::on_actionLoadTemplate_triggered()
     QString fileName = QFileDialog::getOpenFileName(
         this, QStringLiteral("加载模板文件"), QString(),
         QStringLiteral("模板文件 (*.tmpl *.txt);;所有文件 (*)"));
-    
+
     if (fileName.isEmpty()) return;
-    
+
     // 打开并读取文件
     QFile file(fileName);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -164,7 +178,7 @@ void MainWindow::on_actionLoadTemplate_triggered()
                            QStringLiteral("无法打开文件: %1").arg(fileName));
         return;
     }
-    
+
     // 读取文件内容（UTF-8 编码）
     QTextStream in(&file);
     in.setEncoding(QStringConverter::Utf8);
@@ -174,7 +188,7 @@ void MainWindow::on_actionLoadTemplate_triggered()
 
 /**
  * @brief 加载数据文件
- * 
+ *
  * 从文件系统加载 JSON 数据文件到编辑区。
  * 支持的文件类型：.json 或任意文件
  */
@@ -184,9 +198,9 @@ void MainWindow::on_actionLoadData_triggered()
     QString fileName = QFileDialog::getOpenFileName(
         this, QStringLiteral("加载数据文件"), QString(),
         QStringLiteral("JSON 文件 (*.json);;所有文件 (*)"));
-    
+
     if (fileName.isEmpty()) return;
-    
+
     // 打开并读取文件
     QFile file(fileName);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -194,7 +208,7 @@ void MainWindow::on_actionLoadData_triggered()
                            QStringLiteral("无法打开文件: %1").arg(fileName));
         return;
     }
-    
+
     // 读取文件内容（UTF-8 编码）
     QTextStream in(&file);
     in.setEncoding(QStringConverter::Utf8);
@@ -204,7 +218,7 @@ void MainWindow::on_actionLoadData_triggered()
 
 /**
  * @brief 保存输出结果
- * 
+ *
  * 将生成的代码保存到文件。
  * 默认保存为 TypeScript 文件 (.ts)
  */
@@ -217,14 +231,14 @@ void MainWindow::on_actionSaveOutput_triggered()
                                QStringLiteral("没有可保存的内容"));
         return;
     }
-    
+
     // 显示文件保存对话框
     QString fileName = QFileDialog::getSaveFileName(
         this, QStringLiteral("保存结果"), QString(),
         QStringLiteral("TypeScript 文件 (*.ts);;所有文件 (*)"));
-    
+
     if (fileName.isEmpty()) return;
-    
+
     // 打开文件进行写入
     QFile file(fileName);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
@@ -232,7 +246,7 @@ void MainWindow::on_actionSaveOutput_triggered()
                            QStringLiteral("无法保存文件: %1").arg(fileName));
         return;
     }
-    
+
     // 写入文件内容（UTF-8 编码）
     QTextStream out(&file);
     out.setEncoding(QStringConverter::Utf8);
@@ -242,7 +256,7 @@ void MainWindow::on_actionSaveOutput_triggered()
 
 /**
  * @brief 退出应用程序
- * 
+ *
  * 关闭主窗口，结束应用程序
  */
 void MainWindow::on_actionExit_triggered()

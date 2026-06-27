@@ -29,14 +29,7 @@
           </property>
           <layout class="QVBoxLayout" name="verticalLayout_2">
            <item>
-            <widget class="QPlainTextEdit" name="templateEdit">
-             <property name="font">
-              <font>
-               <family>Consolas</family>
-               <pointsize>10</pointsize>
-              </font>
-             </property>
-            </widget>
+            <widget class="CodeEditor" name="templateEdit"/>
            </item>
           </layout>
          </widget>
@@ -48,14 +41,7 @@
           </property>
           <layout class="QVBoxLayout" name="verticalLayout_3">
            <item>
-            <widget class="QPlainTextEdit" name="dataEdit">
-             <property name="font">
-              <font>
-               <family>Consolas</family>
-               <pointsize>10</pointsize>
-              </font>
-             </property>
-            </widget>
+            <widget class="CodeEditor" name="dataEdit"/>
            </item>
           </layout>
          </widget>
@@ -68,13 +54,7 @@
        </property>
        <layout class="QVBoxLayout" name="verticalLayout_4">
         <item>
-         <widget class="QPlainTextEdit" name="outputEdit">
-          <property name="font">
-           <font>
-            <family>Consolas</family>
-            <pointsize>10</pointsize>
-           </font>
-          </property>
+         <widget class="CodeEditor" name="outputEdit">
           <property name="readOnly">
            <bool>true</bool>
           </property>
@@ -163,6 +143,13 @@
    </property>
   </action>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>CodeEditor</class>
+   <extends>QPlainTextEdit</extends>
+   <header>codeeditor.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

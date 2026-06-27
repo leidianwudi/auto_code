@@ -13,7 +13,17 @@ qt_add_executable(auto_code
     mainwindow.ui
     templateengine.h
     templateengine.cpp
+    codeeditor.h
+    codeeditor.cpp
+    templatehighlighter.h
+    templatehighlighter.cpp
+    jsonhighlighter.h
+    jsonhighlighter.cpp
+    tshighlighter.h
+    tshighlighter.cpp
 )
+
+target_include_directories(auto_code PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(auto_code
     PRIVATE
