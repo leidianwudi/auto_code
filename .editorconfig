@@ -1,0 +1,24 @@
+# EditorConfig - 代码缩进与格式规范
+# 详见 https://editorconfig.org
+
+root = true
+
+[*]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.{cpp,h,hpp,c,cc,cxx}]
+indent_size = 2
+
+[CMakeLists.txt]
+indent_size = 2
+
+[*.ui]
+indent_size = 2
+
+[*.{md,markdown}]
+trim_trailing_whitespace = false

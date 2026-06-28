@@ -10,6 +10,7 @@
 
 #include "main_window.h"
 #include "ui_main_window.h"
+#include "code_editor.h"
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QJsonDocument>
@@ -40,6 +41,22 @@ MainWindow::MainWindow(QWidget *parent)
     m_templateHighlighter = new TemplateHighlighter(ui->templateEdit->document());
     m_jsonHighlighter = new JsonHighlighter(ui->dataEdit->document());
     m_tsHighlighter = new TypeScriptHighlighter(ui->outputEdit->document());
+
+    // 设置验证模式
+    ui->templateEdit->setValidationMode(CodeEditor::TemplateValidation);
+    ui->dataEdit->setValidationMode(CodeEditor::JsonValidation);
+
+    // 连接验证信号到状态栏
+    connect(ui->templateEdit, &CodeEditor::validationMessage, this, [this](const QString &msg) {
+        if (!msg.isEmpty()) {
+            ui->statusbar->showMessage(QStringLiteral("模板错误: %1").arg(msg), 5000);
+        }
+    });
+    connect(ui->dataEdit, &CodeEditor::validationMessage, this, [this](const QString &msg) {
+        if (!msg.isEmpty()) {
+            ui->statusbar->showMessage(QStringLiteral("JSON 错误: %1").arg(msg), 5000);
+        }
+    });
 
     // 设置示例模板
     // 演示 TypeScript 接口和服务类的生成
@@ -92,14 +109,14 @@ MainWindow::MainWindow(QWidget *parent)
 /**
  * @brief 析构函数
  *
- * 释放语法高亮器和 UI 资源
+ * 释放 UI 资源。
+ * 语法高亮器作为 document 的子对象，由 Qt 父子机制自动释放，
+ * 不需要手动 delete，否则会导致双重释放崩溃。
  */
 MainWindow::~MainWindow()
 {
-    // 删除语法高亮器
-    delete m_templateHighlighter;
-    delete m_jsonHighlighter;
-    delete m_tsHighlighter;
+    // 语法高亮器是 document 的子对象，随 document 销毁时自动删除
+    // 不要手动 delete，否则 delete ui 时 document 会再次释放它们导致崩溃
 
     // 删除 UI
     delete ui;

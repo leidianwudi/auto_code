@@ -1,16 +1,20 @@
 /**
  * @file code_editor.h
  * @brief 代码编辑器控件
- * 
+ *
  * 基于 QPlainTextEdit 的增强编辑器，提供：
  * - 行号显示
  * - 当前行高亮
  * - 括号匹配高亮
+ * - 语法验证（JSON / 模板标签）
  */
 
 #pragma once
 
 #include <QPlainTextEdit>
+#include <QTimer>
+#include <QString>
+#include <QSet>
 
 class QPaintEvent;
 class QResizeEvent;
@@ -25,48 +29,61 @@ class CodeEditor : public QPlainTextEdit
     Q_OBJECT
 
 public:
+    /// 验证模式
+    enum ValidationMode {
+        NoValidation,       ///< 不做验证
+        JsonValidation,     ///< JSON 语法验证
+        TemplateValidation  ///< 模板标签 + 括号验证
+    };
+
     explicit CodeEditor(QWidget *parent = nullptr);
 
-    /**
-     * @brief 行号区域绘制
-     * @param event 绘制事件
-     * @param area 行号区域矩形
-     */
-    void lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area);
+    /// 设置验证模式
+    void setValidationMode(ValidationMode mode);
 
-    /**
-     * @brief 计算行号区域宽度
-     * @return 行号区域所需的宽度（像素）
-     */
+    void lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area);
     int lineNumberAreaWidth() const;
+
+signals:
+    /**
+     * @brief 验证结果信号
+     * @param message 错误信息，无错误时为空
+     */
+    void validationMessage(const QString &message);
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
 
 private slots:
-    /**
-     * @brief 更新行号区域宽度
-     */
     void updateLineNumberAreaWidth(int newBlockCount);
-
-    /**
-     * @brief 高亮当前行并更新行号区域
-     */
     void highlightCurrentLine();
-
-    /**
-     * @brief 更新行号区域
-     */
     void updateLineNumberArea(const QRect &rect, int dy);
 
-private:
-    /**
-     * @brief 查找匹配的括号
-     * @return 匹配括号的文本块和位置
-     */
-    void highlightMatchingBrackets();
+    /// 延迟触发验证（防抖）
+    void scheduleValidation();
 
-    QWidget *m_lineNumberArea;  ///< 行号区域控件
+    /// 执行验证
+    void performValidation();
+
+private:
+    /// 刷新 ExtraSelection 列表（行高亮 + 括号匹配 + 错误标记）
+    void refreshExtraSelections();
+
+    /// JSON 验证，返回错误信息列表
+    QStringList validateJson();
+
+    /// 模板验证，返回错误信息列表
+    QStringList validateTemplate();
+
+    /// 将错误区间应用到 ExtraSelection 并标记波浪下划线
+    void applyErrorUnderline(int from, int length, const QString &tooltip,
+                             QList<QTextEdit::ExtraSelection> &selections);
+
+    ValidationMode m_validationMode = NoValidation;
+    QTimer m_validationTimer;       ///< 防抖定时器
+    QList<QTextEdit::ExtraSelection> m_errorSelections; ///< 持久化的错误标记
+    QSet<int> m_errorLines;         ///< 有错误的行号集合
+    QWidget *m_lineNumberArea;
 };
 
 /**

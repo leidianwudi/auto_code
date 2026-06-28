@@ -132,25 +132,68 @@ QString TemplateEngine::renderBlock(const QString &block, const QJsonObject &con
  * 支持点号分隔的属性访问，如 "user.name.email"
  * 会逐层查找：context["user"]["name"]["email"]
  * 
+ * 同时支持内置字符串方法：
+ * - .toLowerCase - 转小写
+ * - .toUpperCase - 转大写
+ * - .trim - 去除首尾空白
+ * - .capitalize - 首字母大写
+ * 
  * 示例：
  * - resolvePath("name", {name: "John"}) → "John"
  * - resolvePath("user.name", {user: {name: "John"}}) → "John"
+ * - resolvePath("modelName.toLowerCase", {modelName: "User"}) → "user"
  */
 QJsonValue TemplateEngine::resolvePath(const QString &path, const QJsonObject &context) const
 {
+    // 内置字符串方法列表
+    static const QStringList stringMethods = {
+        QStringLiteral("toLowerCase"),
+        QStringLiteral("toUpperCase"),
+        QStringLiteral("trim"),
+        QStringLiteral("capitalize")
+    };
+    
     // 按点号分割路径
     QStringList parts = path.split(QStringLiteral("."));
     QJsonValue current(context);
-
+    
     // 逐层查找
-    for (const QString &part : parts) {
+    for (int i = 0; i < parts.size(); ++i) {
+        const QString &part = parts[i];
+        
+        // 检查是否是内置方法
+        if (stringMethods.contains(part)) {
+            // 当前值必须是字符串才能应用方法
+            if (!current.isString()) {
+                return QJsonValue();  // 非字符串无法调用方法
+            }
+            
+            QString str = current.toString();
+            
+            // 应用方法
+            if (part == QStringLiteral("toLowerCase")) {
+                str = str.toLower();
+            } else if (part == QStringLiteral("toUpperCase")) {
+                str = str.toUpper();
+            } else if (part == QStringLiteral("trim")) {
+                str = str.trimmed();
+            } else if (part == QStringLiteral("capitalize")) {
+                if (!str.isEmpty()) {
+                    str = str[0].toUpper() + str.mid(1);
+                }
+            }
+            
+            current = QJsonValue(str);
+            continue;
+        }
+        
+        // 普通属性访问
         if (!current.isObject()) {
-            // 当前值不是对象，无法继续查找
-            return QJsonValue();
+            return QJsonValue();  // 当前值不是对象，无法继续查找
         }
         current = current.toObject().value(part);
     }
-
+    
     return current;
 }
 
