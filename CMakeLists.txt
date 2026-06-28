@@ -11,8 +11,16 @@ qt_add_executable(auto_code
     main_window.cpp
     main_window.h
     main_window.ui
-    template_engine.h
-    template_engine.cpp
+    src/engine/template_engine.h
+    src/engine/template_engine.cpp
+    src/engine/handler/block_handler.h
+    src/engine/handler/block_handler.cpp
+    src/engine/handler/each_block_handler.h
+    src/engine/handler/each_block_handler.cpp
+    src/engine/handler/if_block_handler.h
+    src/engine/handler/if_block_handler.cpp
+    src/engine/handler/expression_handler.h
+    src/engine/handler/expression_handler.cpp
     code_editor.h
     code_editor.cpp
     template_highlighter.h

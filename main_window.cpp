@@ -18,7 +18,6 @@
 #include <QMessageBox>
 #include <QTextStream>
 
-
 /**
  * @brief 构造函数
  *
@@ -35,16 +34,16 @@ MainWindow::MainWindow(QWidget *parent)
       m_tsHighlighter(nullptr) {
   ui->setupUi(this);
 
-  // 初始化语法高亮器
+  // 初始化语法高亮器（传入文档对象，由 Qt 父子机制管理生命周期）
   m_templateHighlighter = new TemplateHighlighter(ui->templateEdit->document());
   m_jsonHighlighter = new JsonHighlighter(ui->dataEdit->document());
   m_tsHighlighter = new TypeScriptHighlighter(ui->outputEdit->document());
 
-  // 设置验证模式
+  // 设置验证模式：模板区域验证标签和括号，JSON 区域验证 JSON 语法
   ui->templateEdit->setValidationMode(CodeEditor::TemplateValidation);
   ui->dataEdit->setValidationMode(CodeEditor::JsonValidation);
 
-  // 连接验证信号到状态栏
+  // 连接验证信号到状态栏，实时显示错误信息
   connect(ui->templateEdit, &CodeEditor::validationMessage, this,
           [this](const QString &msg) {
             if (!msg.isEmpty()) {
@@ -129,9 +128,11 @@ MainWindow::~MainWindow() {
  *
  * 处理流程：
  * 1. 获取模板文本和 JSON 数据
- * 2. 解析 JSON 数据
- * 3. 调用模板引擎渲染
- * 4. 显示结果或错误信息
+ * 2. 解析 JSON 数据（使用 QJsonDocument 解析）
+ * 3. 检查 JSON 格式和类型
+ * 4. 调用模板引擎 render() 方法执行渲染
+ * 5. 检查渲染是否出错
+ * 6. 显示结果或错误信息
  */
 void MainWindow::on_actionGenerate_triggered() {
   // 获取模板和数据
@@ -150,7 +151,7 @@ void MainWindow::on_actionGenerate_triggered() {
     return;
   }
 
-  // 检查是否为 JSON 对象
+  // 检查是否为 JSON 对象（模板引擎需要对象作为上下文）
   if (!doc.isObject()) {
     QMessageBox::warning(this, QStringLiteral("JSON 格式错误"),
                          QStringLiteral("JSON 数据必须是一个对象"));
@@ -161,14 +162,14 @@ void MainWindow::on_actionGenerate_triggered() {
   QJsonObject data = doc.object();
   QString result = m_engine.render(tmpl, data);
 
-  // 检查渲染错误
+  // 检查渲染错误（如未闭合的 ${each}、不支持的变量等）
   if (!m_engine.lastError().isEmpty()) {
     QMessageBox::warning(this, QStringLiteral("模板渲染错误"),
                          m_engine.lastError());
     return;
   }
 
-  // 显示结果
+  // 显示结果到输出区（带 TypeScript 高亮）
   ui->outputEdit->setPlainText(result);
   ui->statusbar->showMessage(QStringLiteral("生成成功"), 3000);
 }
