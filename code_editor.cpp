@@ -793,11 +793,14 @@ void CodeEditor::paintEvent(QPaintEvent *event) {
         // 计算波浪线的 y 坐标（文字基线下方，留出足够空间）
         int y = blockRect.bottom() + 3;
 
+        // 波浪线参数（集中定义，便于调整）
+        const double waveAmplitude = 1.5; // 振幅：波浪高度（px）
+        const double waveLength = 8.0;    // 波长：一个完整波形的宽度（px）
+
         // 使用 QPainterPath 绘制连续的波浪线（避免 drawPoint 导致的糊状效果）
-        // 参数：振幅=2px（适中），波长=8px（平滑波形）
         QPainterPath path;
         for (int x = startX; x < endX; ++x) {
-          double waveY = y + 2 * qSin(x * M_PI / 4);
+          double waveY = y + waveAmplitude * qSin(x * M_PI / (waveLength / 2));
           if (x == startX)
             path.moveTo(x, static_cast<int>(waveY));
           else
