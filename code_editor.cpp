@@ -7,6 +7,7 @@
 #include <QJsonDocument>
 #include <QMap>
 #include <QPainter>
+#include <QPainterPath>
 #include <QRegularExpression>
 #include <QScrollBar>
 #include <QStack>
@@ -297,6 +298,7 @@ void CodeEditor::performValidation() {
   // 清除旧的错误标记
   m_errorSelections.clear();
   m_errorLines.clear();
+  m_errorRanges.clear(); // 清除错误位置范围（供 paintEvent 使用）
 
   // 根据验证模式调用不同的验证函数
   QStringList errors;
@@ -318,6 +320,10 @@ void CodeEditor::performValidation() {
 
   // 刷新行号区域（错误行号显示红色）
   m_lineNumberArea->update();
+
+  // 强制触发一次完整重绘（确保自定义波浪线立即完整显示）
+  // 不带参数的 update() 会标记整个控件为脏区域
+  update();
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -700,9 +706,9 @@ void CodeEditor::applyErrorUnderline(
     int from, int length, const QString &tooltip,
     QList<QTextEdit::ExtraSelection> &selections) {
   QTextEdit::ExtraSelection sel;
-  // 使用拼写检查风格的下划线（红色波浪线）
-  sel.format.setUnderlineStyle(QTextCharFormat::SpellCheckUnderline);
-  sel.format.setUnderlineColor(Qt::red);
+  // 不设置下划线样式（由 paintEvent 自定义绘制超粗波浪线）
+  // 只设置加粗字体和 Tooltip 提示
+  sel.format.setFontWeight(QFont::Bold);
   sel.format.setToolTip(tooltip);
   sel.cursor = textCursor();
   // 设置选区，限制在文档范围内
@@ -716,5 +722,92 @@ void CodeEditor::applyErrorUnderline(
       document()->findBlock(qMin(from, document()->characterCount() - 1));
   if (block.isValid()) {
     m_errorLines.insert(block.blockNumber());
+  }
+
+  // 同时记录错误位置范围（供 paintEvent 自定义绘制使用）
+  m_errorRanges.append(ErrorRange(from, length));
+}
+
+// ──────────────────────────────────────────────────────────────
+//  自定义绘制：超粗红色波浪线
+// ──────────────────────────────────────────────────────────────
+
+/**
+ * @brief 自定义绘制事件（覆盖 QPlainTextEdit 的默认绘制）
+ *
+ * 绘制流程：
+ * 1. 先调用基类方法完成标准绘制（文本、行号、高亮等）
+ * 2. 遍历所有错误选区，在每个错误位置额外绘制超粗波浪线
+ *    （覆盖默认的细波浪线，实现更醒目的视觉效果）
+ *
+ * 波浪线参数：
+ * - 线宽：3 像素（默认约 1 像素）
+ * - 振幅：4 像素（波浪高度）
+ * - 波长：8 像素（一个完整波形的宽度）
+ * - 颜色：Qt::red
+ */
+void CodeEditor::paintEvent(QPaintEvent *event) {
+
+  // 步骤1: 调用基类完成标准绘制
+  // 这会绘制所有文本、背景、ExtraSelection（包括默认的细波浪线）
+  QPlainTextEdit::paintEvent(event);
+
+  // 步骤2: 如果没有错误标记，直接返回
+  if (m_errorRanges.isEmpty())
+    return;
+
+  // 创建画笔用于绘制超粗波浪线
+  QPainter painter(viewport());
+  painter.setRenderHint(QPainter::Antialiasing); // 启用抗锯齿，使线条平滑
+  painter.setPen(QPen(Qt::red, 1.5));            // 1.5 像素宽的红色画笔
+
+  // 步骤3: 遍历所有错误位置范围，为每个位置绘制超粗波浪线
+  for (const auto &range : m_errorRanges) {
+
+    int start = range.start;
+    int end = start + range.length;
+
+    // 将文档位置转换为屏幕坐标
+    QTextCursor cursor(document());
+    cursor.setPosition(start);
+
+    // 遍历选区覆盖的所有文本块（可能跨多行）
+    while (!cursor.atEnd() && cursor.position() <= end) {
+      QTextBlock block = cursor.block();
+      QRect blockRect =
+          blockBoundingGeometry(block).translated(contentOffset()).toRect();
+
+      // 计算当前块内需要绘制的字符范围
+      int blockStart = block.position();
+      int selStartInBlock = qMax(0, start - blockStart);
+      int selEndInBlock = qMin(block.length() - 1, end - blockStart);
+
+      if (selStartInBlock < selEndInBlock) {
+
+        // 获取起始字符的 x 坐标（使用 QTextLine 的 cursorToX 方法）
+        QTextLine line = block.layout()->lineForTextPosition(selStartInBlock);
+        int startX = line.cursorToX(selStartInBlock);
+        // 获取结束字符的 x 坐标
+        int endX = line.cursorToX(selEndInBlock);
+
+        // 计算波浪线的 y 坐标（文字基线下方，留出足够空间）
+        int y = blockRect.bottom() + 3;
+
+        // 使用 QPainterPath 绘制连续的波浪线（避免 drawPoint 导致的糊状效果）
+        // 参数：振幅=2px（适中），波长=8px（平滑波形）
+        QPainterPath path;
+        for (int x = startX; x < endX; ++x) {
+          double waveY = y + 2 * qSin(x * M_PI / 4);
+          if (x == startX)
+            path.moveTo(x, static_cast<int>(waveY));
+          else
+            path.lineTo(x, static_cast<int>(waveY));
+        }
+        painter.drawPath(path);
+      }
+
+      // 移动到下一个块
+      cursor.movePosition(QTextCursor::NextBlock);
+    }
   }
 }

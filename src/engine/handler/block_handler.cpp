@@ -24,11 +24,34 @@ static QString jsonValueToString(const QJsonValue &val) {
   return val.toString();
 }
 
+/**
+ * @brief 根据表达式前缀检测其类型
+ *
+ * 按优先级依次匹配：
+ * 1. "each " 前缀（5 字符）=> 循环块
+ * 2. "if "   前缀（3 字符）=> 条件块
+ * 3. 其他              => 普通表达式（兜底）
+ *
+ * @param expr ${...} 内的表达式内容
+ * @return 对应的 ExprType 枚举值
+ */
+ExprType HandlerFactory::detectType(const QString &expr) {
+  if (expr.startsWith(QStringLiteral("each ")))
+    return ExprType::Each;
+  if (expr.startsWith(QStringLiteral("if ")))
+    return ExprType::If;
+  return ExprType::Expression;
+}
+
 std::unique_ptr<BlockHandler>
 HandlerFactory::createHandler(const QString &expr) const {
-  if (expr.startsWith(QStringLiteral("each ")))
+  switch (detectType(expr)) {
+  case ExprType::Each:
     return std::make_unique<EachBlockHandler>(m_engine);
-  if (expr.startsWith(QStringLiteral("if ")))
+  case ExprType::If:
     return std::make_unique<IfBlockHandler>(m_engine);
+  case ExprType::Expression:
+    return std::make_unique<ExpressionHandler>(m_engine);
+  }
   return std::make_unique<ExpressionHandler>(m_engine);
 }

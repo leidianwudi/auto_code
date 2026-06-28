@@ -7,9 +7,9 @@
  * - HandlerFactory：根据表达式前缀自动选择并创建对应的处理器
  *
  * 具体处理器定义在各自的头文件中：
- * - EachBlockHandler   → each_block_handler.h
- * - IfBlockHandler     → if_block_handler.h
- * - ExpressionHandler  → expression_handler.h
+ * - EachBlockHandler   -> each_block_handler.h
+ * - IfBlockHandler     -> if_block_handler.h
+ * - ExpressionHandler  -> expression_handler.h
  */
 
 #pragma once
@@ -45,13 +45,26 @@ public:
 };
 
 /**
+ * @enum ExprType
+ * @brief 表达式类型枚举
+ *
+ * 用于 HandlerFactory 内部分发：根据表达式前缀匹配到对应类型，
+ * 再通过 switch 创建对应的 BlockHandler 实例。
+ */
+enum class ExprType {
+  Each,      // ${each items}...${/each} 循环块
+  If,        // ${if cond}...${else}...${/if} 条件块
+  Expression // ${expression} 普通表达式（兜底）
+};
+
+/**
  * @class HandlerFactory
  * @brief 处理器工厂
  *
  * 根据表达式前缀自动选择并创建合适的处理器：
- * - "each " 开头 → EachBlockHandler
- * - "if "   开头 → IfBlockHandler
- * - 其他          → ExpressionHandler
+ * - "each " 开头 => EachBlockHandler (ExprType::Each)
+ * - "if "   开头 => IfBlockHandler   (ExprType::If)
+ * - 其他          => ExpressionHandler(ExprType::Expression)
  */
 class HandlerFactory {
 public:
@@ -60,5 +73,12 @@ public:
   std::unique_ptr<BlockHandler> createHandler(const QString &expr) const;
 
 private:
+  /**
+   * @brief 根据表达式前缀检测其类型
+   * @param expr ${...} 内的表达式内容（已 trim）
+   * @return 对应的 ExprType 枚举值
+   */
+  static ExprType detectType(const QString &expr);
+
   const TemplateEngine &m_engine;
 };

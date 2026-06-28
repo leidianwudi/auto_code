@@ -61,6 +61,8 @@ signals:
 
 protected:
   void resizeEvent(QResizeEvent *event) override;
+  /// 自定义绘制：在标准绘制后，额外绘制超粗红色波浪线（覆盖默认细波浪线）
+  void paintEvent(QPaintEvent *event) override;
 
 private slots:
   /// 行数变化时重新计算行号区域宽度
@@ -90,6 +92,14 @@ private:
   QList<QTextEdit::ExtraSelection> m_errorSelections; ///< 持久化的错误标记
   QSet<int> m_errorLines;                             ///< 有错误的行号集合
   QWidget *m_lineNumberArea;                          ///< 行号显示区域
+
+  /// 错误位置列表（用于 paintEvent 自定义绘制，避免 cursor 失效）
+  struct ErrorRange {
+    int start;  ///< 起始位置
+    int length; ///< 长度
+    ErrorRange(int s, int l) : start(s), length(l) {}
+  };
+  QVector<ErrorRange> m_errorRanges; ///< 所有错误的位置范围
 };
 
 /**
