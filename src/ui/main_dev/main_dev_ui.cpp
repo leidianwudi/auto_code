@@ -125,12 +125,14 @@ void DraggableTabBar::dropEvent(QDropEvent *event) {
 // ──────────────────────────────────────────────────────────────
 
 DimmableTabWidget::DimmableTabWidget(QWidget *parent) : QTabWidget(parent) {
-  setTabsClosable(true);
   setAcceptDrops(true); // 内容区也接受拖放
 
   // 用 DraggableTabBar 替换默认标签栏
   auto *bar = new DraggableTabBar;
   setTabBar(bar);
+
+  // setTabBar 之后设置，确保作用到 DraggableTabBar
+  setTabsClosable(true);
 
   QStyle *fs = QStyleFactory::create(QStringLiteral("Fusion"));
   if (fs) {
