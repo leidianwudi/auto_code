@@ -371,6 +371,7 @@ void MainDevUi::setupUI() {
   // ════════════════════════════════════════════════════════════
 
   m_editorSplitter = new QSplitter(Qt::Horizontal);
+  m_editorSplitter->setChildrenCollapsible(false);
 
   QTabWidget *initialTabs = createEditorPanel();
   m_editorSplitter->addWidget(initialTabs);
@@ -531,7 +532,7 @@ void MainDevUi::onMaximizeClicked() {
 // ──────────────────────────────────────────────────────────────
 
 /// @brief  创建新的编辑器面板（DimmableTabWidget）
-/// @return 新面板指针，已设置 Expanding 策略并去除外间距 / pane 内边距
+/// @return 新面板指针，已设置 Expanding 策略、去内外边距、最小宽度 60
 QTabWidget *MainDevUi::createEditorPanel() {
   auto *tabs = new DimmableTabWidget;
   tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
