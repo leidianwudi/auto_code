@@ -19,23 +19,65 @@
 
 class QTreeWidgetItem;
 class QTabBar;
+class QDrag;
+class QMimeData;
+class QMouseEvent;
+class QDragEnterEvent;
+class QDragMoveEvent;
+class QDropEvent;
 class CodeEditor;
+
+// ──────────────────────────────────────────────────────────────
+//  DraggableTabBar  — 支持跨面板拖拽的标签栏
+// ──────────────────────────────────────────────────────────────
+
+class DraggableTabBar : public QTabBar {
+  Q_OBJECT
+
+public:
+  explicit DraggableTabBar(QWidget *parent = nullptr);
+
+signals:
+  /// 标签从 fromBar(fromIndex) 拖拽到此 bar 的 toIndex 位置
+  void tabDropped(int fromIndex, DraggableTabBar *fromBar, int toIndex);
+
+protected:
+  void mousePressEvent(QMouseEvent *event) override;
+  void mouseMoveEvent(QMouseEvent *event) override;
+  void dragEnterEvent(QDragEnterEvent *event) override;
+  void dragMoveEvent(QDragMoveEvent *event) override;
+  void dropEvent(QDropEvent *event) override;
+
+public:
+  static DraggableTabBar *dragSourceBar() { return s_sourceBar; }
+  static int dragSourceIndex() { return s_sourceIndex; }
+  static void clearDragSource() {
+    s_sourceBar = nullptr;
+    s_sourceIndex = -1;
+  }
+
+private:
+  int m_pressedIndex = -1;
+  QPoint m_dragStartPos;
+
+  static DraggableTabBar *s_sourceBar;
+  static int s_sourceIndex;
+};
 
 // ──────────────────────────────────────────────────────────────
 //  DimmableTabWidget
 // ──────────────────────────────────────────────────────────────
 
 class DimmableTabWidget : public QTabWidget {
+  Q_OBJECT
+
 public:
-  explicit DimmableTabWidget(QWidget *parent = nullptr) : QTabWidget(parent) {
-    setTabsClosable(true);
-    setMovable(true);
-    QStyle *fs = QStyleFactory::create("Fusion");
-    if (fs) {
-      fs->setParent(tabBar());
-      tabBar()->setStyle(fs);
-    }
-  }
+  explicit DimmableTabWidget(QWidget *parent = nullptr);
+
+protected:
+  void dragEnterEvent(QDragEnterEvent *event) override;
+  void dragMoveEvent(QDragMoveEvent *event) override;
+  void dropEvent(QDropEvent *event) override;
 };
 
 // ──────────────────────────────────────────────────────────────
