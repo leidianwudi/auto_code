@@ -53,6 +53,19 @@ QWidget *MainDevMgr::onCreateWindow() {
   m_ui->setWindowTitle(QStringLiteral("Auto Code"));
 
   // ── 连接信号 ──
+  initUi();
+
+  // ── 加载文件树 ──
+  loadFiles();
+
+  return m_ui;
+}
+
+// ──────────────────────────────────────────────────────────────
+//  initUi — 连接所有信号槽
+// ──────────────────────────────────────────────────────────────
+
+void MainDevMgr::initUi() {
   connect(m_ui->splitAction(), &QAction::triggered, this,
           &MainDevMgr::onSplitRight);
   connect(m_ui->closeAction(), &QAction::triggered, this,
@@ -71,11 +84,6 @@ QWidget *MainDevMgr::onCreateWindow() {
               &MainDevMgr::onCurrentTabChanged);
     }
   }
-
-  // ── 加载文件树 ──
-  loadFiles();
-
-  return m_ui;
 }
 
 // ──────────────────────────────────────────────────────────────

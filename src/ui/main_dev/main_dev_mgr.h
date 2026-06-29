@@ -76,6 +76,8 @@ private slots:
 private:
   /// 查找并加载 file/ 目录
   void loadFiles();
+  /// 连接所有信号槽（在 onCreateWindow 中调用）
+  void initUi();
   /// 为文件路径创建编辑器实例（含高亮器）
   CodeEditor *createEditorForFile(const QString &filePath);
   /// 在编辑器中打开文件（查重 → 读取 → 创建 → 显示）
