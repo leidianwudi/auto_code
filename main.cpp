@@ -21,8 +21,8 @@
 int main(int argc, char *argv[]) {
   QApplication a(argc, argv);
 
-  // 单例创建并显示开发模式主窗口
-  MainDevMgr::ins().show();
+  // 单例创建并打开开发模式主窗口（可重复调用）
+  MainDevMgr::ins().open();
 
   return QApplication::exec();
 }

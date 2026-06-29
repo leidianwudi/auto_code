@@ -5,6 +5,9 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets)
 
 qt_standard_project_setup()
 
+# 本项目不使用 .ui 文件，关闭 AutoUic 避免将 ui_mgr.h 误判为 UI 表单头文件
+set(CMAKE_AUTOUIC OFF)
+
 qt_add_executable(auto_code
     WIN32 MACOSX_BUNDLE
     main.cpp
@@ -29,6 +32,7 @@ qt_add_executable(auto_code
     src/ui/tool_ui/highlighter/json_highlighter.cpp
     src/ui/tool_ui/highlighter/ts_highlighter.h
     src/ui/tool_ui/highlighter/ts_highlighter.cpp
+    src/tool/ui/ui_mgr.h
     src/ui/main_dev/main_dev_ui.h
     src/ui/main_dev/main_dev_ui.cpp
     src/ui/main_dev/main_dev_mgr.h

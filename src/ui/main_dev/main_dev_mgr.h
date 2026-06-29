@@ -1,16 +1,20 @@
 /**
  * @file main_dev_mgr.h
- * @brief MainDev 控制器层（单例 + 主窗口）
+ * @brief 代码编辑器控制器（单例）
  *
- * 继承 QMainWindow 作为主窗口，继承 Singleton 实现全局唯一实例。
- * 所有 UI 操作委托给 MainDevUi，不直接操控 Qt 控件。
+ * 继承 UiMgr<MainDevMgr> 作为 UI 控制器，所有 UI 操作委托给 MainDevUi。
+ * MainDevUi 负责实际的界面呈现（QMainWindow）。
+ *
+ * 架构：
+ *   MainDevMgr (控制器 + 单例) ─── 创建并管理 ──→ MainDevUi (视图 /
+ * QMainWindow) │ └── 创建并管理 ──→ MainDevModel (数据)
  */
 
 #pragma once
 
-#include "src/tool/design/Singleton.h"
-#include <QMainWindow>
+#include "src/tool/ui/ui_mgr.h"
 
+#include <QObject>
 
 class QTreeWidgetItem;
 class QTabWidget;
@@ -20,19 +24,22 @@ class MainDevModel;
 
 /**
  * @class MainDevMgr
- * @brief 编辑器管理器（单例主窗口）
+ * @brief 编辑器管理器（单例 UI 控制器）
  *
- * MVC 中的控制器层 + 壳：
- * - 创建 MainDevUi（视图）和 MainDevModel（数据）
+ * MVC 中的控制器层：
+ * - 继承 UiMgr<MainDevMgr>，通过 ins() 获取全局唯一实例
+ * - onCreateWindow() 创建 MainDevUi（QMainWindow）并初始化
  * - 处理所有业务逻辑和信号槽
  * - 提供静态方法供其他模块调用 UI 功能
  */
-class MainDevMgr : public QMainWindow, public Singleton<MainDevMgr> {
+class MainDevMgr : public UiMgr<MainDevMgr> {
   Q_OBJECT
 
+  // CRTP 基类 UiMgr<MainDevMgr> 需要访问 onCreateWindow()
+  friend class UiMgr<MainDevMgr>;
+
 public:
-  /// 构造时自动完成窗口初始化
-  MainDevMgr(QWidget *parent = nullptr);
+  MainDevMgr() = default;
   ~MainDevMgr() override = default;
 
   // ── 静态方法：供其他模块调用 ──
@@ -45,6 +52,10 @@ public:
 
   /// 关闭当前标签页
   static void closeCurrentEditor();
+
+protected:
+  /// 创建并初始化 MainDevUi 窗口（首次 open() 时调用）
+  QWidget *onCreateWindow() override;
 
 private slots:
   /// 点击文件树节点，打开对应文件

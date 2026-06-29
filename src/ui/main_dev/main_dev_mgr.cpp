@@ -1,6 +1,6 @@
 /**
  * @file main_dev_mgr.cpp
- * @brief MainDev 控制器层实现（单例主窗口）
+ * @brief 代码编辑器控制器层实现（单例 UI 控制器）
  */
 
 #include "main_dev_mgr.h"
@@ -26,19 +26,31 @@
 #include <QTreeWidgetItem>
 
 // ──────────────────────────────────────────────────────────────
-//  构造（单例初始化）
+//  静态方法（通过单例转发）
 // ──────────────────────────────────────────────────────────────
 
-MainDevMgr::MainDevMgr(QWidget *parent) : QMainWindow(parent) {
-  setWindowTitle(QStringLiteral("Auto Code - 开发模式"));
-  resize(1400, 850);
+void MainDevMgr::openFile(const QString &filePath) {
+  ins().open();
+  ins().openFileInEditor(filePath);
+}
 
+void MainDevMgr::splitRight() { ins().onSplitRight(); }
+
+void MainDevMgr::closeCurrentEditor() { ins().onCloseEditor(); }
+
+// ──────────────────────────────────────────────────────────────
+//  onCreateWindow — 创建 MainDevUi 窗口（首次 open() 时调用）
+// ──────────────────────────────────────────────────────────────
+
+QWidget *MainDevMgr::onCreateWindow() {
   // ── 创建 MVC 组件 ──
-  m_ui = new MainDevUi(this);
+  m_ui = new MainDevUi;
   m_model = new MainDevModel;
 
   // ── 构建界面 ──
-  m_ui->setupUI(this);
+  m_ui->setupUI();
+  m_ui->resize(1400, 850);
+  m_ui->setWindowTitle(QStringLiteral("Auto Code"));
 
   // ── 连接信号 ──
   connect(m_ui->splitAction(), &QAction::triggered, this,
@@ -62,19 +74,9 @@ MainDevMgr::MainDevMgr(QWidget *parent) : QMainWindow(parent) {
 
   // ── 加载文件树 ──
   loadFiles();
+
+  return m_ui;
 }
-
-// ──────────────────────────────────────────────────────────────
-//  静态方法（通过单例转发）
-// ──────────────────────────────────────────────────────────────
-
-void MainDevMgr::openFile(const QString &filePath) {
-  ins().openFileInEditor(filePath);
-}
-
-void MainDevMgr::splitRight() { ins().onSplitRight(); }
-
-void MainDevMgr::closeCurrentEditor() { ins().onCloseEditor(); }
 
 // ──────────────────────────────────────────────────────────────
 //  文件扫描与树构建
@@ -152,7 +154,7 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
   // ── 读取文件 ──
   QFile file(filePath);
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-    QMessageBox::warning(this, QStringLiteral("打开失败"),
+    QMessageBox::warning(m_ui, QStringLiteral("打开失败"),
                          QStringLiteral("无法打开文件: %1").arg(filePath));
     return nullptr;
   }
@@ -189,7 +191,7 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
   m_model->registerFile(filePath, content, editor);
   editor->setObjectName(filePath);
   editor->setFocus();
-  setWindowTitle(QStringLiteral("Auto Code - %1").arg(fi.fileName()));
+  m_ui->setWindowTitle(QStringLiteral("Auto Code - %1").arg(fi.fileName()));
 
   return editor;
 }
@@ -345,7 +347,7 @@ void MainDevMgr::onTabCloseRequested(int index) {
     m_ui->setEditorPanelsUniformStretch();
     if (m_model->lastActivePanel == tabs)
       m_model->lastActivePanel = nullptr;
-    setWindowTitle(QStringLiteral("Auto Code - 开发模式"));
+    m_ui->setWindowTitle(QStringLiteral("Auto Code - 开发模式"));
     connectEditor(currentEditor());
     m_ui->applyTabDimming(currentTabWidget());
     return;
@@ -353,14 +355,15 @@ void MainDevMgr::onTabCloseRequested(int index) {
 
   // ── 更新窗口标题 ──
   if (tabs->count() == 0) {
-    setWindowTitle(QStringLiteral("Auto Code - 开发模式"));
+    m_ui->setWindowTitle(QStringLiteral("Auto Code - 开发模式"));
   } else {
     int newIdx = tabs->currentIndex();
     if (newIdx >= 0) {
       QString fullPath = tabs->tabToolTip(newIdx);
       if (!fullPath.isEmpty()) {
         QFileInfo fi(fullPath);
-        setWindowTitle(QStringLiteral("Auto Code - %1").arg(fi.fileName()));
+        m_ui->setWindowTitle(
+            QStringLiteral("Auto Code - %1").arg(fi.fileName()));
       }
     }
   }
@@ -375,14 +378,14 @@ void MainDevMgr::onCurrentTabChanged(int index) {
 
   // ── 更新窗口标题 ──
   if (index < 0 || index >= tabs->count()) {
-    setWindowTitle(QStringLiteral("Auto Code - 开发模式"));
+    m_ui->setWindowTitle(QStringLiteral("Auto Code - 开发模式"));
     return;
   }
 
   QString fullPath = tabs->tabToolTip(index);
   if (!fullPath.isEmpty()) {
     QFileInfo fi(fullPath);
-    setWindowTitle(QStringLiteral("Auto Code - %1").arg(fi.fileName()));
+    m_ui->setWindowTitle(QStringLiteral("Auto Code - %1").arg(fi.fileName()));
   }
 
   connectEditor(currentEditor());

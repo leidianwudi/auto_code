@@ -1,17 +1,14 @@
 /**
  * @file main_dev_ui.cpp
- * @brief MainDev 视图层实现
+ * @brief 代码编辑器主窗口（视图层）实现
  */
 
 #include "main_dev_ui.h"
 
-#include <QAction>
-#include <QApplication>
 #include <QDir>
 #include <QFileInfo>
 #include <QFileInfoList>
 #include <QKeySequence>
-#include <QMainWindow>
 #include <QMenuBar>
 #include <QStatusBar>
 #include <QStyle>
@@ -26,15 +23,15 @@
 //  构造
 // ──────────────────────────────────────────────────────────────
 
-MainDevUi::MainDevUi(QObject *parent) : QObject(parent) {}
+MainDevUi::MainDevUi(QWidget *parent) : QMainWindow(parent) {}
 
 // ──────────────────────────────────────────────────────────────
 //  界面布局
 // ──────────────────────────────────────────────────────────────
 
-void MainDevUi::setupUI(QMainWindow *window) {
+void MainDevUi::setupUI() {
   // ── 菜单栏 ──
-  QMenu *viewMenu = window->menuBar()->addMenu(QStringLiteral("视图(&V)"));
+  QMenu *viewMenu = menuBar()->addMenu(QStringLiteral("视图(&V)"));
 
   m_splitAction = viewMenu->addAction(QStringLiteral("向右拆分编辑器"));
   m_splitAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+\\")));
@@ -43,7 +40,7 @@ void MainDevUi::setupUI(QMainWindow *window) {
   m_closeAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+W")));
 
   // ── 左侧文件树 ──
-  m_fileTree = new QTreeWidget(window);
+  m_fileTree = new QTreeWidget(this);
   m_fileTree->setHeaderLabel(QStringLiteral("文件"));
   m_fileTree->setMinimumWidth(200);
   m_fileTree->setMaximumWidth(400);
@@ -52,27 +49,27 @@ void MainDevUi::setupUI(QMainWindow *window) {
   m_fileTree->setSortingEnabled(false);
 
   // ── 右侧编辑器区域 ──
-  m_editorSplitter = new QSplitter(Qt::Horizontal, window);
+  m_editorSplitter = new QSplitter(Qt::Horizontal, this);
 
   QTabWidget *initialTabs = createEditorPanel();
   m_editorSplitter->addWidget(initialTabs);
   m_editorSplitter->setStretchFactor(0, 1);
 
   // ── 主分割器 ──
-  m_mainSplitter = new QSplitter(Qt::Horizontal, window);
+  m_mainSplitter = new QSplitter(Qt::Horizontal, this);
   m_mainSplitter->addWidget(m_fileTree);
   m_mainSplitter->addWidget(m_editorSplitter);
   m_mainSplitter->setStretchFactor(0, 0);
   m_mainSplitter->setStretchFactor(1, 1);
   m_mainSplitter->setSizes({250, 1150});
 
-  window->setCentralWidget(m_mainSplitter);
+  setCentralWidget(m_mainSplitter);
 
   // ── 底部状态栏 ──
   m_cursorPositionLabel = new QLabel(QStringLiteral("行: 1, 列: 1"));
   m_cursorPositionLabel->setMinimumWidth(120);
   m_cursorPositionLabel->setAlignment(Qt::AlignCenter);
-  window->statusBar()->addPermanentWidget(m_cursorPositionLabel);
+  statusBar()->addPermanentWidget(m_cursorPositionLabel);
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -104,7 +101,6 @@ void MainDevUi::addDirectoryToTree(QTreeWidgetItem *parentItem,
   for (const QFileInfo &info : dirs) {
     auto *dirItem = parentItem ? new QTreeWidgetItem(parentItem)
                                : new QTreeWidgetItem(m_fileTree);
-
     dirItem->setText(0, info.fileName());
     dirItem->setIcon(0, m_fileTree->style()->standardIcon(QStyle::SP_DirIcon));
     dirItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
@@ -135,8 +131,7 @@ QTabWidget *MainDevUi::editorPanelAt(int index) const {
 }
 
 int MainDevUi::editorPanelIndex(const QTabWidget *tabs) const {
-  return m_editorSplitter->indexOf(
-      const_cast<QTabWidget *>(tabs)); // indexOf 参数非 const
+  return m_editorSplitter->indexOf(const_cast<QTabWidget *>(tabs));
 }
 
 void MainDevUi::addEditorPanel(QTabWidget *panel) {
@@ -145,9 +140,8 @@ void MainDevUi::addEditorPanel(QTabWidget *panel) {
 
 void MainDevUi::removeEditorPanelAt(int index) {
   QWidget *w = m_editorSplitter->widget(index);
-  if (w) {
-    m_editorSplitter->widget(index)->deleteLater();
-  }
+  if (w)
+    w->deleteLater();
 }
 
 void MainDevUi::setEditorPanelsUniformStretch() {
@@ -181,7 +175,6 @@ void MainDevUi::setCursorStatusText(const QString &text) {
 //  标签页颜色
 // ══════════════════════════════════════════════════════════════
 
-/// 确保 QTabBar 使用 Fusion 风格（Windows 原生风格忽略 setTabTextColor）
 static void ensureFusionTabBar(QTabBar *bar) {
 #ifdef Q_OS_WIN
   if (bar->style() &&
