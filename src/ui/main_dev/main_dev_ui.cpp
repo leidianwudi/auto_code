@@ -13,6 +13,8 @@
 #include <QKeySequence>
 #include <QMenu>
 #include <QMenuBar>
+#include <QPainter>
+#include <QPixmap>
 #include <QStatusBar>
 #include <QStyle>
 #include <QTabBar>
@@ -21,11 +23,8 @@
 #include <QVBoxLayout>
 
 #ifdef Q_OS_WIN
-#include <dwmapi.h>
 #include <windows.h>
 #include <windowsx.h>
-
-#pragma comment(lib, "dwmapi")
 #endif
 
 // ──────────────────────────────────────────────────────────────
@@ -44,14 +43,15 @@ void MainDevUi::setupUI() {
 
   // 基础样式
   setStyleSheet(QStringLiteral(
-      "#TitleBar { background: #2d2d2d; }"
-      "#TitleLabel { color: #ccc; font-size: 12px; }"
-      "QToolButton { color: #ccc; border: none; padding: 2px 6px; }"
-      "QToolButton:hover { background: #3d3d3d; }"
-      "QPushButton { color: #ccc; border: none; }"
-      "QPushButton:hover { background: #3d3d3d; }"
-      "QStatusBar { background: #2d2d2d; color: #ccc; }"
-      "QStatusBar::item { border: none; }"));
+      "#TitleBar { background: #e0e0e0; }"
+      "#TitleLabel { color: #333; font-size: 12px; }"
+      "QToolButton { color: #333; border: none; padding: 2px 6px; }"
+      "QToolButton:hover { background: #d0d0d0; }"
+      "QPushButton { color: #333; border: none; }"
+      "QPushButton:hover { background: #d0d0d0; }"
+      "QStatusBar { background: #e0e0e0; color: #333; }"
+      "QStatusBar::item { border: none; }"
+      "#WindowFrame { background: #e0e0e0; }"));
 
   // ════════════════════════════════════════════════════════════
   //  自定义标题栏（单行：菜单 + 窗口标题 + 控制按钮）
@@ -87,15 +87,35 @@ void MainDevUi::setupUI() {
 
   titleLayout->addSpacing(8);
 
+  // ── 向右拆分按钮 ──
+  m_splitBtn = new QPushButton;
+  {
+    QPixmap px(20, 20);
+    px.fill(Qt::transparent);
+    QPainter p(&px);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(QPen(QColor("#333"), 1.5));
+    p.drawRect(2, 3, 16, 14);                    // 外框
+    p.drawLine(QPointF(10, 3), QPointF(10, 17)); // 中分线
+    p.end();
+    m_splitBtn->setIcon(QIcon(px));
+    m_splitBtn->setIconSize(QSize(20, 20));
+  }
+  m_splitBtn->setToolTip(QStringLiteral("向右拆分编辑器 (Ctrl+\\)"));
+
   m_minBtn = new QPushButton(QStringLiteral("—"));
-  m_maxBtn = new QPushButton(QStringLiteral("□"));
+  m_maxBtn = new QPushButton;
   m_closeBtn = new QPushButton(QStringLiteral("✕"));
-  for (auto *btn : {m_minBtn, m_maxBtn, m_closeBtn}) {
+  for (auto *btn : {m_splitBtn, m_minBtn, m_maxBtn, m_closeBtn}) {
     btn->setFixedSize(36, 26);
     btn->setFlat(true);
     btn->setFocusPolicy(Qt::NoFocus);
   }
 
+  // 初始化为最大化图标
+  updateMaximizeIcon();
+
+  titleLayout->addWidget(m_splitBtn);
   titleLayout->addWidget(m_minBtn);
   titleLayout->addWidget(m_maxBtn);
   titleLayout->addWidget(m_closeBtn);
@@ -103,6 +123,7 @@ void MainDevUi::setupUI() {
   connect(m_closeBtn, &QPushButton::clicked, this, &QWidget::close);
   connect(m_minBtn, &QPushButton::clicked, this, &QWidget::showMinimized);
   connect(m_maxBtn, &QPushButton::clicked, this, &MainDevUi::onMaximizeClicked);
+  connect(m_splitBtn, &QPushButton::clicked, m_splitAction, &QAction::trigger);
 
   // ════════════════════════════════════════════════════════════
   //  左侧文件树
@@ -151,12 +172,15 @@ void MainDevUi::setupUI() {
 
   setCentralWidget(frame);
 
-  // 启用 Windows 原生窗口阴影
+  // ── 通过 Win32 添加 WS_THICKFRAME 以支持拉伸 ──
 #if defined(Q_OS_WIN)
   {
     HWND hwnd = reinterpret_cast<HWND>(winId());
-    const MARGINS margins = {0, 0, 0, 0};
-    DwmExtendFrameIntoClientArea(hwnd, &margins);
+    LONG_PTR style = GetWindowLongPtr(hwnd, GWL_STYLE);
+    style |= WS_THICKFRAME;
+    SetWindowLongPtr(hwnd, GWL_STYLE, style);
+    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
   }
 #endif
 
@@ -179,6 +203,17 @@ bool MainDevUi::nativeEvent(const QByteArray &eventType, void *message,
                             qintptr *result) {
   Q_UNUSED(eventType)
   const auto *msg = static_cast<MSG *>(message);
+
+  // ── 抑制非客户区绘制，消除拉伸时黑色方块 ──
+  if (msg->message == WM_NCPAINT) {
+    *result = 0;
+    return true;
+  }
+  if (msg->message == WM_ERASEBKGND) {
+    *result = 1;
+    return true;
+  }
+
   if (msg->message == WM_NCHITTEST) {
     const int x = GET_X_LPARAM(msg->lParam);
     const int y = GET_Y_LPARAM(msg->lParam);
@@ -242,10 +277,27 @@ bool MainDevUi::nativeEvent(const QByteArray &eventType, void *message,
 //  窗口状态变化（最大化/还原更新按钮文字）
 // ══════════════════════════════════════════════════════════════
 
+void MainDevUi::updateMaximizeIcon() {
+  QPixmap px(14, 14);
+  px.fill(Qt::transparent);
+  QPainter p(&px);
+  p.setRenderHint(QPainter::Antialiasing);
+  p.setPen(QPen(QColor("#333"), 1.2));
+
+  if (isMaximized()) {
+    p.drawRect(1, 4, 9, 7);
+    p.drawRect(5, 1, 9, 7);
+  } else {
+    p.drawRect(1, 1, 12, 12);
+  }
+  p.end();
+  m_maxBtn->setIcon(QIcon(px));
+  m_maxBtn->setIconSize(QSize(14, 14));
+}
+
 void MainDevUi::changeEvent(QEvent *ev) {
   if (ev->type() == QEvent::WindowStateChange) {
-    m_maxBtn->setText(isMaximized() ? QStringLiteral("❐")
-                                    : QStringLiteral("□"));
+    updateMaximizeIcon();
   }
   QMainWindow::changeEvent(ev);
 }
@@ -253,11 +305,10 @@ void MainDevUi::changeEvent(QEvent *ev) {
 void MainDevUi::onMaximizeClicked() {
   if (isMaximized()) {
     showNormal();
-    m_maxBtn->setText(QStringLiteral("□"));
   } else {
     showMaximized();
-    m_maxBtn->setText(QStringLiteral("❐"));
   }
+  updateMaximizeIcon();
 }
 
 // ──────────────────────────────────────────────────────────────

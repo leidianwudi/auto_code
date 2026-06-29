@@ -406,6 +406,11 @@ void MainDevMgr::onCurrentTabChanged(int index) {
 // ──────────────────────────────────────────────────────────────
 
 void MainDevMgr::onSplitRight() {
+  // 没有打开任何文件时不拆分
+  CodeEditor *current = currentEditor();
+  if (!current)
+    return;
+
   QTabWidget *newPanel = m_ui->createEditorPanel();
 
   connect(newPanel, &QTabWidget::tabCloseRequested, this,
@@ -413,8 +418,7 @@ void MainDevMgr::onSplitRight() {
   connect(newPanel, &QTabWidget::currentChanged, this,
           &MainDevMgr::onCurrentTabChanged);
 
-  CodeEditor *current = currentEditor();
-  if (current) {
+  {
     auto *editor = new CodeEditor;
     editor->setPlainText(current->toPlainText());
 
@@ -438,14 +442,25 @@ void MainDevMgr::onSplitRight() {
       editor->setObjectName(filePath);
       m_model->registerFile(filePath, current->toPlainText(), editor);
     }
-  } else {
-    auto *editor = new CodeEditor;
-    int idx = newPanel->addTab(editor, QStringLiteral("新编辑器"));
-    newPanel->setCurrentIndex(idx);
   }
+
+  // ── 计算当前面板在分割器中的大小，用于平分 ──
+  QTabWidget *curPanel = currentTabWidget();
+  int curIdx = m_ui->editorPanelIndex(curPanel);
+  QList<int> oldSizes =
+      curIdx >= 0 ? m_ui->editorSplitter()->sizes() : QList<int>();
 
   m_ui->addEditorPanel(newPanel);
   m_ui->setEditorPanelsUniformStretch();
+
+  // 仅平分当前面板：原面板和新面板各占一半
+  if (curIdx >= 0 && curIdx < oldSizes.size()) {
+    int half = oldSizes[curIdx] / 2;
+    QList<int> newSizes = m_ui->editorSplitter()->sizes();
+    newSizes[curIdx] = half;
+    newSizes.insert(curIdx + 1, half);
+    m_ui->editorSplitter()->setSizes(newSizes);
+  }
 
   m_model->lastActivePanel = newPanel;
   m_ui->applyTabDimming(newPanel);

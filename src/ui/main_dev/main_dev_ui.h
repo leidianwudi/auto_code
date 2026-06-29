@@ -105,6 +105,9 @@ public:
 private:
   void addDirectoryToTree(QTreeWidgetItem *parentItem, const QString &dirPath);
 
+  /// 更新最大化/还原按钮图标
+  void updateMaximizeIcon();
+
   // ── 窗口事件 ──
   void onMaximizeClicked();
   void changeEvent(QEvent *ev) override;
@@ -123,6 +126,7 @@ private:
   // ── 自定义标题栏 ──
   QWidget *m_titleBar = nullptr;
   QLabel *m_titleLabel = nullptr;
+  QPushButton *m_splitBtn = nullptr;
   QPushButton *m_minBtn = nullptr;
   QPushButton *m_maxBtn = nullptr;
   QPushButton *m_closeBtn = nullptr;
