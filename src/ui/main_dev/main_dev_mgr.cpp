@@ -16,6 +16,7 @@
 #include <QDebug>
 #include <QDir>
 #include <QFile>
+#include <QFileDialog>
 #include <QFileInfo>
 #include <QMessageBox>
 #include <QStatusBar>
@@ -66,6 +67,20 @@ QWidget *MainDevMgr::onCreateWindow() {
 // ──────────────────────────────────────────────────────────────
 
 void MainDevMgr::initUi() {
+  connect(m_ui->openAction(), &QAction::triggered, this, [this]() {
+    QString filePath = QFileDialog::getOpenFileName(
+        m_ui, QStringLiteral("打开文件"), QStringLiteral(PROJECT_SOURCE_DIR));
+    if (!filePath.isEmpty())
+      openFileInEditor(filePath);
+  });
+
+  connect(m_ui->openFolderAction(), &QAction::triggered, this, [this]() {
+    QString dir = QFileDialog::getExistingDirectory(
+        m_ui, QStringLiteral("选择文件夹"), QStringLiteral(PROJECT_SOURCE_DIR));
+    if (!dir.isEmpty())
+      m_ui->buildFileTree(dir);
+  });
+
   connect(m_ui->splitAction(), &QAction::triggered, this,
           &MainDevMgr::onSplitRight);
   connect(m_ui->closeAction(), &QAction::triggered, this,

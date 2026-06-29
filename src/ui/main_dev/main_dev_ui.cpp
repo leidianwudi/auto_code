@@ -272,8 +272,43 @@ void MainDevUi::setupUI() {
   m_titleBar = new QWidget;
   m_titleBar->setObjectName(QStringLiteral("TitleBar"));
   auto *titleLayout = new QHBoxLayout(m_titleBar);
-  titleLayout->setContentsMargins(4, 2, 8, 2);
+  titleLayout->setContentsMargins(6, 2, 6, 2);
   titleLayout->setSpacing(4);
+
+  // ── 程序图标（AC 粗体字母） ──
+  auto *appIconLabel = new QLabel;
+  {
+    QPixmap px(20, 20);
+    px.fill(Qt::transparent);
+    QPainter p(&px);
+    p.setRenderHint(QPainter::Antialiasing);
+    QPen pen(AuiStyle::textColor(), 2.0);
+    pen.setCapStyle(Qt::RoundCap);
+    p.setPen(pen);
+
+    QFont f(QStringLiteral("Consolas"), 11, QFont::Bold);
+    p.setFont(f);
+    p.drawText(QRectF(0, 0, 20, 20), Qt::AlignCenter, QStringLiteral("AC"));
+
+    p.end();
+    appIconLabel->setPixmap(px);
+  }
+  titleLayout->addWidget(appIconLabel);
+
+  // titleLayout->addSpacing(5);
+
+  // ── 左侧：文件菜单 ──
+  auto *fileMenu = new QMenu(m_titleBar);
+  m_openAction = fileMenu->addAction(QStringLiteral("打开(&O)..."));
+  m_openAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+O")));
+
+  m_openFolderAction = fileMenu->addAction(QStringLiteral("打开文件夹(&F)..."));
+
+  auto *fileBtn = new QToolButton;
+  fileBtn->setText(QStringLiteral("文件(&F)"));
+  fileBtn->setPopupMode(QToolButton::InstantPopup);
+  fileBtn->setMenu(fileMenu);
+  titleLayout->addWidget(fileBtn);
 
   // ── 左侧：视图菜单 ──
   auto *viewMenu = new QMenu(m_titleBar);
@@ -345,11 +380,11 @@ void MainDevUi::setupUI() {
   //  主分割器
   // ════════════════════════════════════════════════════════════
 
-  m_mainSplitter = new QSplitter(Qt::Horizontal);
+  m_mainSplitter = new QSplitter(Qt::Horizontal); // 主分割器, 水平方向
   m_mainSplitter->addWidget(m_fileTree);
   m_mainSplitter->addWidget(m_editorSplitter);
-  m_mainSplitter->setStretchFactor(0, 0);
-  m_mainSplitter->setStretchFactor(1, 1);
+  m_mainSplitter->setStretchFactor(0, 0); // 左侧文件树固定宽度
+  m_mainSplitter->setStretchFactor(1, 1); // 右侧编辑器区域可拉伸
   m_mainSplitter->setSizes({250, 1150});
 
   // ════════════════════════════════════════════════════════════
@@ -359,7 +394,7 @@ void MainDevUi::setupUI() {
   auto *frame = new QFrame;
   frame->setObjectName(QStringLiteral("WindowFrame"));
   auto *frameLayout = new QVBoxLayout(frame);
-  frameLayout->setContentsMargins(0, 0, 0, 0);
+  frameLayout->setContentsMargins(2, 0, 2, 0);
   frameLayout->setSpacing(0);
   frameLayout->addWidget(m_titleBar);
   frameLayout->addWidget(m_mainSplitter, 1);
@@ -495,9 +530,14 @@ void MainDevUi::onMaximizeClicked() {
 //  编辑器面板组创建
 // ──────────────────────────────────────────────────────────────
 
+/// @brief  创建新的编辑器面板（DimmableTabWidget）
+/// @return 新面板指针，已设置 Expanding 策略并去除外间距 / pane 内边距
 QTabWidget *MainDevUi::createEditorPanel() {
   auto *tabs = new DimmableTabWidget;
   tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+  tabs->setContentsMargins(0, 0, 0, 0);
+  tabs->setStyleSheet(
+      QStringLiteral("QTabWidget::pane { margin: 0; border: none; }"));
   return tabs;
 }
 
@@ -543,20 +583,33 @@ void MainDevUi::addDirectoryToTree(QTreeWidgetItem *parentItem,
 //  编辑器面板组操作
 // ══════════════════════════════════════════════════════════════
 
+/// @brief  获取编辑器面板数量（即分割器中的子控件数）
+/// @return 当前 m_editorSplitter 中的面板个数
 int MainDevUi::editorPanelCount() const { return m_editorSplitter->count(); }
 
+/// @brief  获取指定索引处的编辑器面板
+/// @param index 面板索引（0 ~ count-1）
+/// @return 对应位置的 QTabWidget 指针，索引越界时返回 nullptr
 QTabWidget *MainDevUi::editorPanelAt(int index) const {
   return qobject_cast<QTabWidget *>(m_editorSplitter->widget(index));
 }
 
+/// @brief  查找指定面板在分割器中的索引
+/// @param tabs 待查找的面板指针
+/// @return 面板在 m_editorSplitter 中的位置，未找到时返回 -1
 int MainDevUi::editorPanelIndex(const QTabWidget *tabs) const {
   return m_editorSplitter->indexOf(const_cast<QTabWidget *>(tabs));
 }
 
+/// @brief  在分割器末尾添加一个新面板
+/// @param panel 待添加的 QTabWidget 面板
 void MainDevUi::addEditorPanel(QTabWidget *panel) {
   m_editorSplitter->addWidget(panel);
 }
 
+/// @brief  移除并销毁指定索引处的面板
+/// @param index 待移除的面板索引
+/// @note 面板对象通过 deleteLater 延迟销毁，内部标签页会连带释放
 void MainDevUi::removeEditorPanelAt(int index) {
   QWidget *w = m_editorSplitter->widget(index);
   if (w)

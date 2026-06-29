@@ -27,6 +27,9 @@ CodeEditor::CodeEditor(QWidget *parent)
   font.setPointSize(11);
   setFont(font);
 
+  // 去除文档外边距，使编辑区紧贴父容器
+  document()->setDocumentMargin(0);
+
   // ── 连接信号槽 ──
   // blockCountChanged: 行数变化时重新计算行号区域宽度
   // updateRequest: 滚动/绘制时更新行号区域

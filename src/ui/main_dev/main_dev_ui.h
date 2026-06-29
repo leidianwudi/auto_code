@@ -142,6 +142,8 @@ public:
   QSplitter *editorSplitter() const { return m_editorSplitter; }
   QAction *splitAction() const { return m_splitAction; }
   QAction *closeAction() const { return m_closeAction; }
+  QAction *openAction() const { return m_openAction; }
+  QAction *openFolderAction() const { return m_openFolderAction; }
 
 private:
   void addDirectoryToTree(QTreeWidgetItem *parentItem, const QString &dirPath);
@@ -163,6 +165,8 @@ private:
   QLabel *m_cursorPositionLabel = nullptr;
   QAction *m_splitAction = nullptr;
   QAction *m_closeAction = nullptr;
+  QAction *m_openAction = nullptr;
+  QAction *m_openFolderAction = nullptr;
 
   // ── 自定义标题栏 ──
   QWidget *m_titleBar = nullptr;
