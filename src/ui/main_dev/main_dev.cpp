@@ -277,22 +277,21 @@ CodeEditor *MainDev::createEditorForFile(const QString &filePath) {
  * @return 编辑该文件的 CodeEditor 指针
  */
 CodeEditor *MainDev::openFileInEditor(const QString &filePath) {
-  // ── 检查文件是否已在某标签页中打开 ──
-  if (m_openFiles.contains(filePath)) {
-    CodeEditor *editor = m_openFiles.value(filePath);
-    // 找到该编辑器所属的 QTabWidget
-    QTabWidget *parentTabs = qobject_cast<QTabWidget *>(editor->parentWidget());
-    if (parentTabs) {
-      int idx = parentTabs->indexOf(editor);
-      if (idx >= 0) {
-        parentTabs->setCurrentIndex(idx);
-        parentTabs->setFocus();
+  // ── 检查文件是否已在某面板的某标签页中打开 ──
+  for (int i = 0; i < m_editorSplitter->count(); ++i) {
+    auto *tabs = qobject_cast<QTabWidget *>(m_editorSplitter->widget(i));
+    if (!tabs)
+      continue;
+    for (int j = 0; j < tabs->count(); ++j) {
+      auto *editor = qobject_cast<CodeEditor *>(tabs->widget(j));
+      if (editor && editor->objectName() == filePath) {
+        // 跳转到该 tab，并聚焦
+        tabs->setCurrentIndex(j);
+        tabs->setFocus();
         editor->setFocus();
         return editor;
       }
     }
-    // 编辑器已被移除，重新打开
-    m_openFiles.remove(filePath);
   }
 
   // ── 读取文件内容 ──
