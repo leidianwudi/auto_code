@@ -9,6 +9,7 @@
 #pragma once
 
 #include <QHash>
+#include <QLabel>
 #include <QMainWindow>
 #include <QSplitter>
 #include <QString>
@@ -46,6 +47,10 @@ private slots:
   void onTabCloseRequested(int index);
   /// 当前标签页切换时更新窗口标题
   void onCurrentTabChanged(int index);
+  /// 更新状态栏光标位置（从当前焦点编辑器读取）
+  void updateCursorPosition();
+  /// 应用程序焦点变化时，连接新焦点的编辑器信号
+  void onFocusChanged(QWidget *oldFocus, QWidget *newFocus);
 
 private:
   /// 初始化界面布局
@@ -64,6 +69,8 @@ private:
   QTabWidget *currentTabWidget() const;
   /// 创建一个新的编辑器面板组（QTabWidget + 空 CodeEditor）
   QTabWidget *createEditorPanel();
+  /// 连接指定编辑器的光标位置信号到状态栏
+  void connectEditor(CodeEditor *editor);
 
   /// 用户数据角色：存储文件完整路径
   static constexpr int FilePathRole = Qt::UserRole + 1;
@@ -72,5 +79,8 @@ private:
   QSplitter *m_mainSplitter;   ///< 主分割器（树 | 编辑器）
   QSplitter *m_editorSplitter; ///< 编辑器分割器（包含多个 QTabWidget）
   QHash<QString, CodeEditor *>
-      m_openFiles; ///< filePath -> editor 映射（跨所有面板）
+      m_openFiles;               ///< filePath -> editor 映射（跨所有面板）
+  QLabel *m_cursorPositionLabel; ///< 状态栏：光标位置标签
+  CodeEditor *m_connectedEditor; ///< 当前已连接光标信号的编辑器
+  QTabWidget *m_lastActivePanel; ///< 最后获得焦点的编辑器面板组
 };

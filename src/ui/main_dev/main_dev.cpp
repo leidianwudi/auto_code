@@ -18,6 +18,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QSplitter>
+#include <QStatusBar>
 #include <QStyle>
 #include <QTabWidget>
 #include <QTextStream>
@@ -68,6 +69,7 @@ void MainDev::setupUI() {
   // 创建初始编辑器面板组
   QTabWidget *initialTabs = createEditorPanel();
   m_editorSplitter->addWidget(initialTabs);
+  m_editorSplitter->setStretchFactor(0, 1);
 
   // ── 主分割器 ──
   m_mainSplitter = new QSplitter(Qt::Horizontal, this);
@@ -78,6 +80,17 @@ void MainDev::setupUI() {
   m_mainSplitter->setSizes({250, 1150});
 
   setCentralWidget(m_mainSplitter);
+
+  // ── 底部状态栏 ──
+  m_cursorPositionLabel = new QLabel(QStringLiteral("行: 1, 列: 1"));
+  m_cursorPositionLabel->setMinimumWidth(120);
+  m_cursorPositionLabel->setAlignment(Qt::AlignCenter);
+  statusBar()->addPermanentWidget(m_cursorPositionLabel);
+  m_connectedEditor = nullptr;
+  m_lastActivePanel = nullptr;
+
+  // 连接全局焦点变化信号，自动追踪光标位置
+  connect(qApp, &QApplication::focusChanged, this, &MainDev::onFocusChanged);
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -97,6 +110,7 @@ QTabWidget *MainDev::createEditorPanel() {
   tabs->setTabsClosable(true);
   tabs->setDocumentMode(true);
   tabs->setMovable(true);
+  tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
   // 连接信号
   connect(tabs, &QTabWidget::tabCloseRequested, this,
@@ -306,6 +320,13 @@ CodeEditor *MainDev::openFileInEditor(const QString &filePath) {
   tabs->setTabToolTip(idx, filePath);
   tabs->setCurrentIndex(idx);
 
+  // ── 首次加载文件时强制刷新布局 ──
+  if (m_openFiles.isEmpty()) {
+    m_mainSplitter->setSizes(
+        {m_fileTree->width(),
+         m_mainSplitter->width() - m_fileTree->width() - 6});
+  }
+
   // ── 记录状态 ──
   m_openFiles.insert(filePath, editor);
   editor->setObjectName(filePath);
@@ -334,23 +355,119 @@ CodeEditor *MainDev::currentEditor() const {
 
 /**
  * @brief 获取当前激活的标签页控件
- * @return 当前获得焦点的 QTabWidget，或第一个可见的
+ *
+ * 优先级：
+ * 1. m_lastActivePanel（用户最后操作过的编辑器面板，点击目录树时用这个）
+ * 2. 从焦点小部件向上查找 QTabWidget
+ * 3. 回退：第一个有标签页的可见面板
+ *
+ * @return 当前激活的 QTabWidget
  */
 QTabWidget *MainDev::currentTabWidget() const {
-  // 从焦点小部件向上查找 QTabWidget
-  QWidget *w = QApplication::focusWidget();
-  while (w) {
-    if (auto *tabs = qobject_cast<QTabWidget *>(w))
-      return tabs;
-    w = w->parentWidget();
+  // ── 1. 最后激活的面板组（点击目录树时最可靠） ──
+  if (m_lastActivePanel && m_lastActivePanel->isVisible() &&
+      m_lastActivePanel->count() > 0) {
+    return m_lastActivePanel;
   }
-  // 回退：返回第一个可见的
+
+  // ── 2. 从焦点小部件向上查找 ──
+  QWidget *focus = QApplication::focusWidget();
+  while (focus) {
+    if (auto *tabs = qobject_cast<QTabWidget *>(focus))
+      return tabs;
+    focus = focus->parentWidget();
+  }
+
+  // ── 3. 回退：优先返回有标签页的面板，否则返回第一个可见面板 ──
+  QTabWidget *emptyPanel = nullptr;
   for (int i = 0; i < m_editorSplitter->count(); ++i) {
     auto *tabs = qobject_cast<QTabWidget *>(m_editorSplitter->widget(i));
-    if (tabs && tabs->isVisible())
-      return tabs;
+    if (tabs && tabs->isVisible()) {
+      if (tabs->count() > 0)
+        return tabs;
+      if (!emptyPanel)
+        emptyPanel = tabs;
+    }
   }
-  return nullptr;
+  return emptyPanel;
+}
+
+// ──────────────────────────────────────────────────────────────
+//  信号连接
+// ──────────────────────────────────────────────────────────────
+
+/**
+ * @brief 连接指定编辑器的光标位置信号到状态栏
+ *
+ * 先断开旧编辑器的信号，再连接新编辑器的。
+ * 这样无论焦点在哪个编辑器（包括拆分副本），都能正确显示光标位置。
+ */
+void MainDev::connectEditor(CodeEditor *editor) {
+  // 断开旧编辑器的信号
+  if (m_connectedEditor) {
+    disconnect(m_connectedEditor, &QPlainTextEdit::cursorPositionChanged, this,
+               &MainDev::updateCursorPosition);
+  }
+
+  m_connectedEditor = editor;
+
+  if (editor) {
+    connect(editor, &QPlainTextEdit::cursorPositionChanged, this,
+            &MainDev::updateCursorPosition);
+    updateCursorPosition();
+  } else {
+    m_cursorPositionLabel->setText(QStringLiteral("行: -, 列: -"));
+  }
+}
+
+/**
+ * @brief 应用程序焦点变化时，自动切换光标信号连接
+ *
+ * 遍历焦点小部件的完整父链，同时查找 CodeEditor 和 QTabWidget，
+ * 确保 m_lastActivePanel 始终指向正确的面板组。
+ */
+void MainDev::onFocusChanged(QWidget * /*oldFocus*/, QWidget *newFocus) {
+  if (!newFocus)
+    return;
+
+  QWidget *w = newFocus;
+  CodeEditor *foundEditor = nullptr;
+
+  // 遍历父链，同时查找 CodeEditor 和 QTabWidget
+  while (w) {
+    // 记录最后激活的面板组
+    if (auto *tabs = qobject_cast<QTabWidget *>(w)) {
+      m_lastActivePanel = tabs;
+    }
+    // 找到第一个 CodeEditor（不提前返回，继续向上找 QTabWidget）
+    if (!foundEditor) {
+      if (auto *editor = qobject_cast<CodeEditor *>(w)) {
+        foundEditor = editor;
+      }
+    }
+    w = w->parentWidget();
+  }
+
+  if (foundEditor) {
+    connectEditor(foundEditor);
+  }
+}
+
+/**
+ * @brief 更新状态栏光标位置
+ *
+ * 从当前已连接的编辑器的 textCursor 获取行号和列号并显示。
+ */
+void MainDev::updateCursorPosition() {
+  if (!m_connectedEditor || !m_connectedEditor->isVisible()) {
+    m_cursorPositionLabel->setText(QStringLiteral("行: -, 列: -"));
+    return;
+  }
+  QTextCursor cursor = m_connectedEditor->textCursor();
+  int line = cursor.blockNumber() + 1;
+  int col = cursor.columnNumber() + 1;
+  m_cursorPositionLabel->setText(
+      QStringLiteral("行: %1, 列: %2").arg(line).arg(col));
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -361,7 +478,8 @@ QTabWidget *MainDev::currentTabWidget() const {
  * @brief 标签页关闭按钮被点击
  *
  * 关闭指定索引的标签页，从 m_openFiles 中移除记录。
- * 如果标签页内容是文件，则关闭前不做保存提示。
+ * 如果该面板组的最后一个标签页被关闭，且存在多个面板组，
+ * 则自动移除该空面板组，让剩余面板占满空间。
  */
 void MainDev::onTabCloseRequested(int index) {
   auto *tabs = qobject_cast<QTabWidget *>(sender());
@@ -381,10 +499,41 @@ void MainDev::onTabCloseRequested(int index) {
   tabs->removeTab(index);
   editor->deleteLater();
 
-  // 如果当前面板组没有标签页了，更新窗口标题
+  // ── 如果面板组空了，且存在多个面板组，则移除空面板 ──
+  if (tabs->count() == 0 && m_editorSplitter->count() > 1) {
+    int idx = m_editorSplitter->indexOf(tabs);
+    if (idx >= 0) {
+      m_editorSplitter->widget(idx)->deleteLater();
+    }
+    // 剩余面板均匀分配宽度
+    int count = m_editorSplitter->count();
+    for (int i = 0; i < count; ++i) {
+      m_editorSplitter->setStretchFactor(i, 1);
+    }
+    // 若关闭的是最后活跃的面板，重置它
+    if (m_lastActivePanel == tabs)
+      m_lastActivePanel = nullptr;
+    setWindowTitle(QStringLiteral("Auto Code - 开发模式"));
+    connectEditor(currentEditor());
+    return;
+  }
+
+  // 更新窗口标题
   if (tabs->count() == 0) {
     setWindowTitle(QStringLiteral("Auto Code - 开发模式"));
+  } else {
+    int newIdx = tabs->currentIndex();
+    if (newIdx >= 0) {
+      QString fullPath = tabs->tabToolTip(newIdx);
+      if (!fullPath.isEmpty()) {
+        QFileInfo fi(fullPath);
+        setWindowTitle(QStringLiteral("Auto Code - %1").arg(fi.fileName()));
+      }
+    }
   }
+
+  // 更新状态栏和活跃面板
+  connectEditor(currentEditor());
 }
 
 /**
@@ -400,11 +549,17 @@ void MainDev::onCurrentTabChanged(int index) {
     return;
   }
 
+  // 更新窗口标题
   QString fullPath = tabs->tabToolTip(index);
   if (!fullPath.isEmpty()) {
     QFileInfo fi(fullPath);
     setWindowTitle(QStringLiteral("Auto Code - %1").arg(fi.fileName()));
   }
+
+  // 重新连接光标信号
+  connectEditor(currentEditor());
+  // 更新最后活跃面板
+  m_lastActivePanel = tabs;
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -414,18 +569,18 @@ void MainDev::onCurrentTabChanged(int index) {
 /**
  * @brief 向右拆分编辑器
  *
- * 创建一个新的编辑器面板组（QTabWidget），里面包含一个空白的 CodeEditor。
+ * 创建一个新的编辑器面板组（QTabWidget），复制当前编辑器的
+ * 内容、高亮器和验证模式，标签名显示当前文件的名称。
  */
 void MainDev::onSplitRight() {
   QTabWidget *newPanel = createEditorPanel();
 
-  // 可以复制当前激活编辑器的内容
   CodeEditor *current = currentEditor();
   if (current) {
     auto *editor = new CodeEditor;
     editor->setPlainText(current->toPlainText());
 
-    // 复制高亮器
+    // 复制高亮器和验证模式
     QString filePath = current->objectName();
     if (filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
       new JsonHighlighter(editor->document());
@@ -435,12 +590,39 @@ void MainDev::onSplitRight() {
       editor->setValidationMode(CodeEditor::TemplateValidation);
     }
 
-    int idx = newPanel->addTab(editor, QStringLiteral("拆分副本"));
+    // 使用文件名作为标签名，存储完整路径到 tooltip
+    QFileInfo fi(filePath);
+    QString tabLabel =
+        filePath.isEmpty() ? QStringLiteral("拆分副本") : fi.fileName();
+    int idx = newPanel->addTab(editor, tabLabel);
+    newPanel->setTabToolTip(idx, filePath);
+    newPanel->setCurrentIndex(idx);
+
+    // 设置对象名以便光标追踪
+    if (!filePath.isEmpty()) {
+      editor->setObjectName(filePath);
+    }
+  } else {
+    // 没有当前编辑器时创建空白标签页
+    auto *editor = new CodeEditor;
+    int idx = newPanel->addTab(editor, QStringLiteral("新编辑器"));
     newPanel->setCurrentIndex(idx);
   }
 
   m_editorSplitter->addWidget(newPanel);
-  newPanel->setFocus();
+  m_lastActivePanel = newPanel; // 拆分后新面板成为活跃面板
+
+  // 所有面板均匀分配宽度
+  int count = m_editorSplitter->count();
+  for (int i = 0; i < count; ++i) {
+    m_editorSplitter->setStretchFactor(i, 1);
+  }
+
+  // 确保焦点在编辑器内
+  auto *focusEditor = qobject_cast<CodeEditor *>(newPanel->currentWidget());
+  if (focusEditor) {
+    focusEditor->setFocus();
+  }
 }
 
 /**
