@@ -1,10 +1,9 @@
 /**
  * @file main_dev_mgr.cpp
- * @brief MainDev 管理器层实现
+ * @brief MainDev 控制器层实现（单例主窗口）
  */
 
 #include "main_dev_mgr.h"
-#include "main_dev.h"
 #include "main_dev_model.h"
 #include "main_dev_ui.h"
 #include "src/ui/tool_ui/code_editor.h"
@@ -18,89 +17,64 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QMainWindow>
 #include <QMessageBox>
-#include <QPalette>
-#include <QSplitter>
 #include <QStatusBar>
-#include <QStyle>
-#include <QStyleFactory>
-#include <QTabBar>
 #include <QTabWidget>
 #include <QTextCursor>
 #include <QTextStream>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 
-#ifdef Q_OS_WIN
-#include <windows.h>
-#endif
-
 // ──────────────────────────────────────────────────────────────
-//  单例
+//  构造（单例初始化）
 // ──────────────────────────────────────────────────────────────
 
-MainDevMgr *MainDevMgr::s_instance = nullptr;
+MainDevMgr::MainDevMgr(QWidget *parent) : QMainWindow(parent) {
+  setWindowTitle(QStringLiteral("Auto Code - 开发模式"));
+  resize(1400, 850);
 
-MainDevMgr *MainDevMgr::instance() { return s_instance; }
+  // ── 创建 MVC 组件 ──
+  m_ui = new MainDevUi(this);
+  m_model = new MainDevModel;
 
-void MainDevMgr::init(MainDevUi *ui, MainDevModel *model, QMainWindow *window) {
-  if (!s_instance) {
-    s_instance = new MainDevMgr;
-  }
-  s_instance->m_ui = ui;
-  s_instance->m_model = model;
-  s_instance->m_window = window;
+  // ── 构建界面 ──
+  m_ui->setupUI(this);
 
-  // ── 连接 UI 信号到管理器 ──
+  // ── 连接信号 ──
+  connect(m_ui->splitAction(), &QAction::triggered, this,
+          &MainDevMgr::onSplitRight);
+  connect(m_ui->closeAction(), &QAction::triggered, this,
+          &MainDevMgr::onCloseEditor);
+  connect(m_ui->fileTree(), &QTreeWidget::itemClicked, this,
+          &MainDevMgr::onTreeItemClicked);
+  connect(qApp, &QApplication::focusChanged, this, &MainDevMgr::onFocusChanged);
 
-  // 菜单栏动作
-  QObject::connect(ui->splitAction(), &QAction::triggered, s_instance,
-                   &MainDevMgr::onSplitRight);
-  QObject::connect(ui->closeAction(), &QAction::triggered, s_instance,
-                   &MainDevMgr::onCloseEditor);
-
-  // 文件树
-  QObject::connect(ui->fileTree(), &QTreeWidget::itemClicked, s_instance,
-                   &MainDevMgr::onTreeItemClicked);
-
-  // 全局焦点变化
-  QObject::connect(qApp, &QApplication::focusChanged, s_instance,
-                   &MainDevMgr::onFocusChanged);
-
-  // 连接初始编辑器面板组的信号（setupUI 中创建的）
-  for (int i = 0; i < ui->editorSplitter()->count(); ++i) {
-    auto *tabs = qobject_cast<QTabWidget *>(ui->editorSplitter()->widget(i));
+  // 连接初始编辑器面板组的信号
+  for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
+    auto *tabs = m_ui->editorPanelAt(i);
     if (tabs) {
-      QObject::connect(tabs, &QTabWidget::tabCloseRequested, s_instance,
-                       &MainDevMgr::onTabCloseRequested);
-      QObject::connect(tabs, &QTabWidget::currentChanged, s_instance,
-                       &MainDevMgr::onCurrentTabChanged);
+      connect(tabs, &QTabWidget::tabCloseRequested, this,
+              &MainDevMgr::onTabCloseRequested);
+      connect(tabs, &QTabWidget::currentChanged, this,
+              &MainDevMgr::onCurrentTabChanged);
     }
   }
+
+  // ── 加载文件树 ──
+  loadFiles();
 }
 
 // ──────────────────────────────────────────────────────────────
-//  静态方法：供其他模块调用
+//  静态方法（通过单例转发）
 // ──────────────────────────────────────────────────────────────
 
 void MainDevMgr::openFile(const QString &filePath) {
-  if (s_instance) {
-    s_instance->openFileInEditor(filePath);
-  }
+  ins().openFileInEditor(filePath);
 }
 
-void MainDevMgr::splitRight() {
-  if (s_instance) {
-    s_instance->onSplitRight();
-  }
-}
+void MainDevMgr::splitRight() { ins().onSplitRight(); }
 
-void MainDevMgr::closeCurrentEditor() {
-  if (s_instance) {
-    s_instance->onCloseEditor();
-  }
-}
+void MainDevMgr::closeCurrentEditor() { ins().onCloseEditor(); }
 
 // ──────────────────────────────────────────────────────────────
 //  文件扫描与树构建
@@ -110,62 +84,21 @@ void MainDevMgr::loadFiles() {
   QDir baseDir;
 
   baseDir.setPath(QStringLiteral(PROJECT_SOURCE_DIR) + QStringLiteral("/file"));
-
-  if (!baseDir.exists()) {
+  if (!baseDir.exists())
     baseDir.setPath(QCoreApplication::applicationDirPath() +
                     QStringLiteral("/file"));
-  }
-  if (!baseDir.exists()) {
+  if (!baseDir.exists())
     baseDir.setPath(QCoreApplication::applicationDirPath() +
                     QStringLiteral("/../../file"));
-  }
-  if (!baseDir.exists()) {
+  if (!baseDir.exists())
     baseDir.setPath(QDir::currentPath() + QStringLiteral("/file"));
-  }
 
   if (!baseDir.exists()) {
     qWarning("未找到 file/ 目录");
     return;
   }
 
-  addDirectoryToTree(nullptr, baseDir.absolutePath());
-  m_ui->fileTree()->expandAll();
-}
-
-void MainDevMgr::addDirectoryToTree(QTreeWidgetItem *parentItem,
-                                    const QString &dirPath) {
-  QDir dir(dirPath);
-
-  QFileInfoList dirs = dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
-  for (const QFileInfo &info : dirs) {
-    QTreeWidgetItem *dirItem;
-    if (parentItem) {
-      dirItem = new QTreeWidgetItem(parentItem);
-    } else {
-      dirItem = new QTreeWidgetItem(m_ui->fileTree());
-    }
-    dirItem->setText(0, info.fileName());
-    dirItem->setIcon(
-        0, m_ui->fileTree()->style()->standardIcon(QStyle::SP_DirIcon));
-    dirItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
-    addDirectoryToTree(dirItem, info.absoluteFilePath());
-  }
-
-  QStringList nameFilters;
-  nameFilters << QStringLiteral("*.ac") << QStringLiteral("*.json");
-  QFileInfoList files = dir.entryInfoList(nameFilters, QDir::Files);
-  for (const QFileInfo &info : files) {
-    QTreeWidgetItem *fileItem;
-    if (parentItem) {
-      fileItem = new QTreeWidgetItem(parentItem);
-    } else {
-      fileItem = new QTreeWidgetItem(m_ui->fileTree());
-    }
-    fileItem->setText(0, info.fileName());
-    fileItem->setIcon(
-        0, m_ui->fileTree()->style()->standardIcon(QStyle::SP_FileIcon));
-    fileItem->setData(0, Qt::UserRole + 1, info.absoluteFilePath());
-  }
+  m_ui->buildFileTree(baseDir.absolutePath());
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -191,19 +124,18 @@ void MainDevMgr::onTreeItemClicked(QTreeWidgetItem *item, int column) {
 CodeEditor *MainDevMgr::createEditorForFile(const QString &filePath) {
   auto *editor = new CodeEditor;
 
-  if (filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
+  if (filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive))
     new JsonHighlighter(editor->document());
-  } else {
+  else
     new TemplateHighlighter(editor->document());
-  }
 
   return editor;
 }
 
 CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
-  // ── 检查文件是否已打开：遍历所有面板组查找对应标签页 ──
-  for (int i = 0; i < m_ui->editorSplitter()->count(); ++i) {
-    auto *tabs = qobject_cast<QTabWidget *>(m_ui->editorSplitter()->widget(i));
+  // ── 查重：遍历所有面板组的所有标签页 ──
+  for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
+    auto *tabs = m_ui->editorPanelAt(i);
     if (!tabs)
       continue;
     for (int j = 0; j < tabs->count(); ++j) {
@@ -217,10 +149,10 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
     }
   }
 
-  // ── 读取文件内容 ──
+  // ── 读取文件 ──
   QFile file(filePath);
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-    QMessageBox::warning(m_window, QStringLiteral("打开失败"),
+    QMessageBox::warning(this, QStringLiteral("打开失败"),
                          QStringLiteral("无法打开文件: %1").arg(filePath));
     return nullptr;
   }
@@ -232,17 +164,16 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
   CodeEditor *editor = createEditorForFile(filePath);
   editor->setPlainText(content);
 
-  if (filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
+  if (filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive))
     editor->setValidationMode(CodeEditor::JsonValidation);
-  } else {
+  else
     editor->setValidationMode(CodeEditor::TemplateValidation);
-  }
 
-  // ── 获取当前面板组，添加到新标签页 ──
+  // ── 获取 / 创建面板组 ──
   QTabWidget *tabs = currentTabWidget();
   if (!tabs) {
     tabs = m_ui->createEditorPanel();
-    m_ui->editorSplitter()->addWidget(tabs);
+    m_ui->addEditorPanel(tabs);
   }
 
   QFileInfo fi(filePath);
@@ -250,25 +181,22 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
   tabs->setTabToolTip(idx, filePath);
   tabs->setCurrentIndex(idx);
 
-  // ── 首次加载文件时强制刷新布局 ──
-  if (m_model->openFiles.isEmpty()) {
-    m_ui->mainSplitter()->setSizes(
-        {m_ui->fileTree()->width(),
-         m_ui->mainSplitter()->width() - m_ui->fileTree()->width() - 6});
-  }
+  // 首次加载文件时刷新主分割器布局
+  if (m_model->openFiles.isEmpty())
+    m_ui->adjustMainSplitter();
 
   // ── 记录状态 ──
   m_model->registerFile(filePath, content, editor);
   editor->setObjectName(filePath);
   editor->setFocus();
-  m_window->setWindowTitle(QStringLiteral("Auto Code - %1").arg(fi.fileName()));
+  setWindowTitle(QStringLiteral("Auto Code - %1").arg(fi.fileName()));
 
   return editor;
 }
 
 CodeEditor *MainDevMgr::currentEditor() const {
-  for (int i = 0; i < m_ui->editorSplitter()->count(); ++i) {
-    auto *tabs = qobject_cast<QTabWidget *>(m_ui->editorSplitter()->widget(i));
+  for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
+    auto *tabs = m_ui->editorPanelAt(i);
     if (tabs && tabs->isVisible()) {
       auto *editor = qobject_cast<CodeEditor *>(tabs->currentWidget());
       if (editor)
@@ -292,8 +220,8 @@ QTabWidget *MainDevMgr::currentTabWidget() const {
   }
 
   QTabWidget *emptyPanel = nullptr;
-  for (int i = 0; i < m_ui->editorSplitter()->count(); ++i) {
-    auto *tabs = qobject_cast<QTabWidget *>(m_ui->editorSplitter()->widget(i));
+  for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
+    auto *tabs = m_ui->editorPanelAt(i);
     if (tabs && tabs->isVisible()) {
       if (tabs->count() > 0)
         return tabs;
@@ -321,7 +249,7 @@ void MainDevMgr::connectEditor(CodeEditor *editor) {
             &MainDevMgr::updateCursorPosition);
     updateCursorPosition();
   } else {
-    m_ui->cursorPositionLabel()->setText(QStringLiteral("行: -, 列: -"));
+    m_ui->setCursorStatusText(QStringLiteral("行: -, 列: -"));
   }
 }
 
@@ -333,87 +261,42 @@ void MainDevMgr::onFocusChanged(QWidget * /*oldFocus*/, QWidget *newFocus) {
   CodeEditor *foundEditor = nullptr;
 
   while (w) {
-    if (auto *tabs = qobject_cast<QTabWidget *>(w)) {
+    if (auto *tabs = qobject_cast<QTabWidget *>(w))
       m_model->lastActivePanel = tabs;
-    }
     if (!foundEditor) {
-      if (auto *editor = qobject_cast<CodeEditor *>(w)) {
+      if (auto *editor = qobject_cast<CodeEditor *>(w))
         foundEditor = editor;
-      }
     }
     w = w->parentWidget();
   }
 
-  if (foundEditor) {
+  if (foundEditor)
     connectEditor(foundEditor);
-  }
 
+  // 找出焦点所在的面板组 → 应用 dimming
   QTabWidget *activeTabs = nullptr;
-  for (int i = 0; i < m_ui->editorSplitter()->count(); ++i) {
-    auto *tabs = qobject_cast<QTabWidget *>(m_ui->editorSplitter()->widget(i));
+  for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
+    auto *tabs = m_ui->editorPanelAt(i);
     if (tabs && tabs->isAncestorOf(newFocus)) {
       activeTabs = tabs;
       break;
     }
   }
 
-  applyTabDimming(activeTabs);
+  m_ui->applyTabDimming(activeTabs);
 }
 
 void MainDevMgr::updateCursorPosition() {
   if (!m_model->connectedEditor || !m_model->connectedEditor->isVisible()) {
-    m_ui->cursorPositionLabel()->setText(QStringLiteral("行: -, 列: -"));
+    m_ui->setCursorStatusText(QStringLiteral("行: -, 列: -"));
     return;
   }
 
   QTextCursor cursor = m_model->connectedEditor->textCursor();
   int line = cursor.blockNumber() + 1;
   int col = cursor.columnNumber() + 1;
-  m_ui->cursorPositionLabel()->setText(
+  m_ui->setCursorStatusText(
       QStringLiteral("行: %1, 列: %2").arg(line).arg(col));
-}
-
-/// 确保 QTabBar 使用 Fusion 风格（Windows 原生风格忽略 setTabTextColor）
-static void ensureFusionTabBar(QTabBar *bar) {
-  // 仅在 Windows 上需要
-#ifdef Q_OS_WIN
-  // 如果当前已经是 Fusion 风格则跳过
-  if (bar->style() &&
-      QString::fromLatin1(bar->style()->metaObject()->className())
-          .contains(QStringLiteral("Fusion")))
-    return;
-  QStyle *fs = QStyleFactory::create(QStringLiteral("Fusion"));
-  if (fs) {
-    fs->setParent(bar);
-    bar->setStyle(fs);
-  }
-#else
-  Q_UNUSED(bar);
-#endif
-}
-
-void MainDevMgr::applyTabDimming(QTabWidget *active) {
-  for (int i = 0; i < m_ui->editorSplitter()->count(); ++i) {
-    auto *tabs = qobject_cast<QTabWidget *>(m_ui->editorSplitter()->widget(i));
-    if (!tabs)
-      continue;
-
-    QTabBar *bar = tabs->tabBar();
-    ensureFusionTabBar(bar);
-
-    bool isActive = (tabs == active);
-    if (isActive) {
-      for (int j = 0; j < bar->count(); ++j)
-        bar->setTabTextColor(j, QColor());
-    } else {
-      for (int j = 0; j < bar->count(); ++j)
-        bar->setTabTextColor(j, QColor(0x88, 0x88, 0x88));
-    }
-  }
-}
-
-void MainDevMgr::setWindowTitles(const QString &text) {
-  m_window->setWindowTitle(text);
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -429,12 +312,12 @@ void MainDevMgr::onTabCloseRequested(int index) {
   if (!editor)
     return;
 
+  // ── 清理数据层 ──
   QString filePath = editor->objectName();
   if (!filePath.isEmpty()) {
     bool stillOpen = false;
-    for (int i = 0; i < m_ui->editorSplitter()->count(); ++i) {
-      auto *otherTabs =
-          qobject_cast<QTabWidget *>(m_ui->editorSplitter()->widget(i));
+    for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
+      auto *otherTabs = m_ui->editorPanelAt(i);
       if (!otherTabs || otherTabs == tabs)
         continue;
       for (int j = 0; j < otherTabs->count(); ++j) {
@@ -447,42 +330,37 @@ void MainDevMgr::onTabCloseRequested(int index) {
       if (stillOpen)
         break;
     }
-    if (!stillOpen) {
+    if (!stillOpen)
       m_model->unregisterFile(filePath);
-    }
   }
 
   tabs->removeTab(index);
   editor->deleteLater();
 
-  if (tabs->count() == 0 && m_ui->editorSplitter()->count() > 1) {
-    int idx = m_ui->editorSplitter()->indexOf(tabs);
-    if (idx >= 0) {
-      m_ui->editorSplitter()->widget(idx)->deleteLater();
-    }
-    int count = m_ui->editorSplitter()->count();
-    for (int i = 0; i < count; ++i) {
-      m_ui->editorSplitter()->setStretchFactor(i, 1);
-    }
+  // ── 空面板且存在多个面板 → 删除面板组 ──
+  if (tabs->count() == 0 && m_ui->editorPanelCount() > 1) {
+    int idx = m_ui->editorPanelIndex(tabs);
+    if (idx >= 0)
+      m_ui->removeEditorPanelAt(idx);
+    m_ui->setEditorPanelsUniformStretch();
     if (m_model->lastActivePanel == tabs)
       m_model->lastActivePanel = nullptr;
-    m_window->setWindowTitle(QStringLiteral("Auto Code - 开发模式"));
+    setWindowTitle(QStringLiteral("Auto Code - 开发模式"));
     connectEditor(currentEditor());
-    // 更新剩余面板的 tab 颜色
-    applyTabDimming(currentTabWidget());
+    m_ui->applyTabDimming(currentTabWidget());
     return;
   }
 
+  // ── 更新窗口标题 ──
   if (tabs->count() == 0) {
-    m_window->setWindowTitle(QStringLiteral("Auto Code - 开发模式"));
+    setWindowTitle(QStringLiteral("Auto Code - 开发模式"));
   } else {
     int newIdx = tabs->currentIndex();
     if (newIdx >= 0) {
       QString fullPath = tabs->tabToolTip(newIdx);
       if (!fullPath.isEmpty()) {
         QFileInfo fi(fullPath);
-        m_window->setWindowTitle(
-            QStringLiteral("Auto Code - %1").arg(fi.fileName()));
+        setWindowTitle(QStringLiteral("Auto Code - %1").arg(fi.fileName()));
       }
     }
   }
@@ -495,34 +373,34 @@ void MainDevMgr::onCurrentTabChanged(int index) {
   if (!tabs)
     return;
 
+  // ── 更新窗口标题 ──
   if (index < 0 || index >= tabs->count()) {
-    m_window->setWindowTitle(QStringLiteral("Auto Code - 开发模式"));
+    setWindowTitle(QStringLiteral("Auto Code - 开发模式"));
     return;
   }
 
   QString fullPath = tabs->tabToolTip(index);
   if (!fullPath.isEmpty()) {
     QFileInfo fi(fullPath);
-    m_window->setWindowTitle(
-        QStringLiteral("Auto Code - %1").arg(fi.fileName()));
+    setWindowTitle(QStringLiteral("Auto Code - %1").arg(fi.fileName()));
   }
 
   connectEditor(currentEditor());
   m_model->lastActivePanel = tabs;
-  applyTabDimming(tabs);
+  m_ui->applyTabDimming(tabs);
 }
 
 // ──────────────────────────────────────────────────────────────
-//  拆分 / 关闭 标签页
+//  拆分 / 关闭标签页
 // ──────────────────────────────────────────────────────────────
 
 void MainDevMgr::onSplitRight() {
   QTabWidget *newPanel = m_ui->createEditorPanel();
 
-  QObject::connect(newPanel, &QTabWidget::tabCloseRequested, this,
-                   &MainDevMgr::onTabCloseRequested);
-  QObject::connect(newPanel, &QTabWidget::currentChanged, this,
-                   &MainDevMgr::onCurrentTabChanged);
+  connect(newPanel, &QTabWidget::tabCloseRequested, this,
+          &MainDevMgr::onTabCloseRequested);
+  connect(newPanel, &QTabWidget::currentChanged, this,
+          &MainDevMgr::onCurrentTabChanged);
 
   CodeEditor *current = currentEditor();
   if (current) {
@@ -555,23 +433,17 @@ void MainDevMgr::onSplitRight() {
     newPanel->setCurrentIndex(idx);
   }
 
-  m_ui->editorSplitter()->addWidget(newPanel);
-
-  int count = m_ui->editorSplitter()->count();
-  for (int i = 0; i < count; ++i) {
-    m_ui->editorSplitter()->setStretchFactor(i, 1);
-  }
+  m_ui->addEditorPanel(newPanel);
+  m_ui->setEditorPanelsUniformStretch();
 
   m_model->lastActivePanel = newPanel;
-  applyTabDimming(newPanel);
+  m_ui->applyTabDimming(newPanel);
 
-  // 聚焦编辑器而不是面板组，确保焦点链正确触发 onFocusChanged
   auto *editorInPanel = qobject_cast<CodeEditor *>(newPanel->currentWidget());
-  if (editorInPanel) {
+  if (editorInPanel)
     editorInPanel->setFocus();
-  } else {
+  else
     newPanel->setFocus();
-  }
 }
 
 void MainDevMgr::onCloseEditor() {
@@ -580,7 +452,6 @@ void MainDevMgr::onCloseEditor() {
     return;
 
   int idx = tabs->currentIndex();
-  if (idx >= 0) {
+  if (idx >= 0)
     onTabCloseRequested(idx);
-  }
 }

@@ -1,14 +1,9 @@
 /**
  * @file main_dev_ui.h
- * @brief MainDev UI 层
+ * @brief MainDev 视图层
  *
- * 负责所有界面控件的创建和布局，包括：
- * - 菜单栏
- * - 左侧文件树
- * - 右侧可拆分编辑器区域
- * - 底部状态栏
- *
- * 所有 Qt 控件由本类持有，控制器通过 getter 访问。
+ * 负责所有界面控件的创建、布局和直接操控。
+ * 控制器只能通过本类提供的命名方法操作界面，不能直接访问内部控件。
  */
 
 #pragma once
@@ -22,14 +17,14 @@
 #include <QTreeWidget>
 
 class QMainWindow;
+class QTreeWidgetItem;
+class QTabBar;
+class CodeEditor;
 
-/**
- * @class DimmableTabWidget
- * @brief 支持 tab 文字变灰的 QTabWidget 子类
- *
- * 使用 Fusion 风格绘制 tab bar，确保 setTabTextColor 生效。
- * Windows 原生风格会忽略 setTabTextColor，必须用 Fusion 替代。
- */
+// ──────────────────────────────────────────────────────────────
+//  DimmableTabWidget — 支持 tab 文字变灰
+// ──────────────────────────────────────────────────────────────
+
 class DimmableTabWidget : public QTabWidget {
 public:
   explicit DimmableTabWidget(QWidget *parent = nullptr) : QTabWidget(parent) {
@@ -43,13 +38,10 @@ public:
   }
 };
 
-/**
- * @class MainDevUi
- * @brief 编辑器 UI 管理层
- *
- * 创建并持有所有界面控件，提供 getter 供控制器访问。
- * 不包含任何业务逻辑或信号连接。
- */
+// ──────────────────────────────────────────────────────────────
+//  MainDevUi
+// ──────────────────────────────────────────────────────────────
+
 class MainDevUi : public QObject {
   Q_OBJECT
 
@@ -60,22 +52,85 @@ public:
   /// 初始化界面布局（菜单栏、文件树、编辑器区域、状态栏）
   void setupUI(QMainWindow *window);
 
-  /// 创建一个新的编辑器面板组（QTabWidget）
+  /// 创建一个新的编辑器面板组
   QTabWidget *createEditorPanel();
 
-  // ── 控件 getter ──
+  // ════════════════════════════════════════════════════════════
+  //  文件树操作
+  // ════════════════════════════════════════════════════════════
+
+  /// 展开整个文件树
+  void expandFileTree();
+
+  /// 从目录路径构建文件树（递归遍历）
+  void buildFileTree(const QString &dirPath);
+
+  // ════════════════════════════════════════════════════════════
+  //  编辑器面板组操作
+  // ════════════════════════════════════════════════════════════
+
+  /// 当前编辑器面板数量
+  int editorPanelCount() const;
+
+  /// 获取第 i 个面板组
+  QTabWidget *editorPanelAt(int index) const;
+
+  /// 获取面板组在分割器中的索引
+  int editorPanelIndex(const QTabWidget *tabs) const;
+
+  /// 添加一个面板组到分割器中
+  void addEditorPanel(QTabWidget *panel);
+
+  /// 移除并删除第 i 个面板组
+  void removeEditorPanelAt(int index);
+
+  /// 将所有面板组的拉伸因子设为 1（均匀分配空间）
+  void setEditorPanelsUniformStretch();
+
+  // ════════════════════════════════════════════════════════════
+  //  主分割器操作
+  // ════════════════════════════════════════════════════════════
+
+  /// 根据当前实际宽度刷新主分割器尺寸
+  void adjustMainSplitter();
+
+  /// 主分割器当前宽度
+  int mainSplitterWidth() const;
+
+  /// 文件树当前宽度
+  int fileTreeWidth() const;
+
+  // ════════════════════════════════════════════════════════════
+  //  状态栏
+  // ════════════════════════════════════════════════════════════
+
+  /// 设置状态栏光标位置文字
+  void setCursorStatusText(const QString &text);
+
+  // ════════════════════════════════════════════════════════════
+  //  标签页颜色
+  // ════════════════════════════════════════════════════════════
+
+  /// 对所有面板组应用 tab 颜色：焦点面板默认色，非焦点灰色
+  void applyTabDimming(QTabWidget *active);
+
+  // ════════════════════════════════════════════════════════════
+  //  控件 getter（仅限控制器需要直接访问的场合）
+  // ════════════════════════════════════════════════════════════
+
   QTreeWidget *fileTree() const { return m_fileTree; }
-  QSplitter *mainSplitter() const { return m_mainSplitter; }
   QSplitter *editorSplitter() const { return m_editorSplitter; }
-  QLabel *cursorPositionLabel() const { return m_cursorPositionLabel; }
   QAction *splitAction() const { return m_splitAction; }
   QAction *closeAction() const { return m_closeAction; }
 
 private:
-  QTreeWidget *m_fileTree = nullptr;       ///< 左侧文件树
-  QSplitter *m_mainSplitter = nullptr;     ///< 主分割器（树 | 编辑器）
-  QSplitter *m_editorSplitter = nullptr;   ///< 编辑器分割器
-  QLabel *m_cursorPositionLabel = nullptr; ///< 状态栏光标位置标签
-  QAction *m_splitAction = nullptr;        ///< 向右拆分菜单动作
-  QAction *m_closeAction = nullptr;        ///< 关闭标签页菜单动作
+  /// 递归构建文件树的内部方法
+  void addDirectoryToTree(QTreeWidgetItem *parentItem, const QString &dirPath);
+
+  QTreeWidget *m_fileTree = nullptr;
+  QSplitter *m_mainSplitter = nullptr;
+  QSplitter *m_editorSplitter = nullptr;
+  QLabel *m_cursorPositionLabel = nullptr;
+  QAction *m_splitAction = nullptr;
+  QAction *m_closeAction = nullptr;
 };

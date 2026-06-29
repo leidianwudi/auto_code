@@ -29,13 +29,12 @@ qt_add_executable(auto_code
     src/ui/tool_ui/highlighter/json_highlighter.cpp
     src/ui/tool_ui/highlighter/ts_highlighter.h
     src/ui/tool_ui/highlighter/ts_highlighter.cpp
-    src/ui/main_dev/main_dev.h
-    src/ui/main_dev/main_dev.cpp
     src/ui/main_dev/main_dev_ui.h
     src/ui/main_dev/main_dev_ui.cpp
     src/ui/main_dev/main_dev_mgr.h
     src/ui/main_dev/main_dev_mgr.cpp
     src/ui/main_dev/main_dev_model.h
+    src/ui/main_dev/main_dev_model.cpp
 )
 
 target_include_directories(auto_code PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

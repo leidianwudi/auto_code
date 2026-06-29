@@ -36,9 +36,7 @@ public:
    * @param filePath 文件绝对路径
    * @return true 如果该文件已存在标签页中
    */
-  bool isFileOpen(const QString &filePath) const {
-    return openFiles.contains(filePath);
-  }
+  bool isFileOpen(const QString &filePath) const;
 
   /**
    * @brief 记录文件打开状态
@@ -47,28 +45,20 @@ public:
    * @param editor 对应的编辑器实例
    */
   void registerFile(const QString &filePath, const QString &content,
-                    CodeEditor *editor) {
-    fileContents[filePath] = content;
-    openFiles[filePath] = editor;
-  }
+                    CodeEditor *editor);
 
   /**
    * @brief 移除文件记录（标签页关闭时调用）
    * @param filePath 文件绝对路径
    */
-  void unregisterFile(const QString &filePath) {
-    fileContents.remove(filePath);
-    openFiles.remove(filePath);
-  }
+  void unregisterFile(const QString &filePath);
 
   /**
    * @brief 获取已打开文件的内容
    * @param filePath 文件绝对路径
    * @return 文件内容，若未打开则返回空字符串
    */
-  QString fileContent(const QString &filePath) const {
-    return fileContents.value(filePath);
-  }
+  QString fileContent(const QString &filePath) const;
 
   /// filePath → 文件内容映射（标签页关闭时同步清理）
   QHash<QString, QString> fileContents;

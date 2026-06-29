@@ -1,17 +1,26 @@
 /**
  * @file main_dev_ui.cpp
- * @brief MainDev UI 层实现
+ * @brief MainDev 视图层实现
  */
 
 #include "main_dev_ui.h"
 
 #include <QAction>
 #include <QApplication>
+#include <QDir>
+#include <QFileInfo>
+#include <QFileInfoList>
 #include <QKeySequence>
 #include <QMainWindow>
 #include <QMenuBar>
 #include <QStatusBar>
 #include <QStyle>
+#include <QTabBar>
+#include <QTreeWidgetItem>
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 
 // ──────────────────────────────────────────────────────────────
 //  构造
@@ -74,4 +83,132 @@ QTabWidget *MainDevUi::createEditorPanel() {
   auto *tabs = new DimmableTabWidget;
   tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
   return tabs;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  文件树操作
+// ══════════════════════════════════════════════════════════════
+
+void MainDevUi::expandFileTree() { m_fileTree->expandAll(); }
+
+void MainDevUi::buildFileTree(const QString &dirPath) {
+  addDirectoryToTree(nullptr, dirPath);
+  expandFileTree();
+}
+
+void MainDevUi::addDirectoryToTree(QTreeWidgetItem *parentItem,
+                                   const QString &dirPath) {
+  QDir dir(dirPath);
+
+  QFileInfoList dirs = dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
+  for (const QFileInfo &info : dirs) {
+    auto *dirItem = parentItem ? new QTreeWidgetItem(parentItem)
+                               : new QTreeWidgetItem(m_fileTree);
+
+    dirItem->setText(0, info.fileName());
+    dirItem->setIcon(0, m_fileTree->style()->standardIcon(QStyle::SP_DirIcon));
+    dirItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
+    addDirectoryToTree(dirItem, info.absoluteFilePath());
+  }
+
+  QStringList nameFilters;
+  nameFilters << QStringLiteral("*.ac") << QStringLiteral("*.json");
+  QFileInfoList files = dir.entryInfoList(nameFilters, QDir::Files);
+  for (const QFileInfo &info : files) {
+    auto *fileItem = parentItem ? new QTreeWidgetItem(parentItem)
+                                : new QTreeWidgetItem(m_fileTree);
+    fileItem->setText(0, info.fileName());
+    fileItem->setIcon(0,
+                      m_fileTree->style()->standardIcon(QStyle::SP_FileIcon));
+    fileItem->setData(0, Qt::UserRole + 1, info.absoluteFilePath());
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  编辑器面板组操作
+// ══════════════════════════════════════════════════════════════
+
+int MainDevUi::editorPanelCount() const { return m_editorSplitter->count(); }
+
+QTabWidget *MainDevUi::editorPanelAt(int index) const {
+  return qobject_cast<QTabWidget *>(m_editorSplitter->widget(index));
+}
+
+int MainDevUi::editorPanelIndex(const QTabWidget *tabs) const {
+  return m_editorSplitter->indexOf(
+      const_cast<QTabWidget *>(tabs)); // indexOf 参数非 const
+}
+
+void MainDevUi::addEditorPanel(QTabWidget *panel) {
+  m_editorSplitter->addWidget(panel);
+}
+
+void MainDevUi::removeEditorPanelAt(int index) {
+  QWidget *w = m_editorSplitter->widget(index);
+  if (w) {
+    m_editorSplitter->widget(index)->deleteLater();
+  }
+}
+
+void MainDevUi::setEditorPanelsUniformStretch() {
+  int count = m_editorSplitter->count();
+  for (int i = 0; i < count; ++i)
+    m_editorSplitter->setStretchFactor(i, 1);
+}
+
+// ══════════════════════════════════════════════════════════════
+//  主分割器操作
+// ══════════════════════════════════════════════════════════════
+
+void MainDevUi::adjustMainSplitter() {
+  m_mainSplitter->setSizes(
+      {m_fileTree->width(), m_mainSplitter->width() - m_fileTree->width() - 6});
+}
+
+int MainDevUi::mainSplitterWidth() const { return m_mainSplitter->width(); }
+
+int MainDevUi::fileTreeWidth() const { return m_fileTree->width(); }
+
+// ══════════════════════════════════════════════════════════════
+//  状态栏
+// ══════════════════════════════════════════════════════════════
+
+void MainDevUi::setCursorStatusText(const QString &text) {
+  m_cursorPositionLabel->setText(text);
+}
+
+// ══════════════════════════════════════════════════════════════
+//  标签页颜色
+// ══════════════════════════════════════════════════════════════
+
+/// 确保 QTabBar 使用 Fusion 风格（Windows 原生风格忽略 setTabTextColor）
+static void ensureFusionTabBar(QTabBar *bar) {
+#ifdef Q_OS_WIN
+  if (bar->style() &&
+      QString::fromLatin1(bar->style()->metaObject()->className())
+          .contains(QStringLiteral("Fusion")))
+    return;
+  QStyle *fs = QStyleFactory::create(QStringLiteral("Fusion"));
+  if (fs) {
+    fs->setParent(bar);
+    bar->setStyle(fs);
+  }
+#else
+  Q_UNUSED(bar);
+#endif
+}
+
+void MainDevUi::applyTabDimming(QTabWidget *active) {
+  for (int i = 0; i < editorPanelCount(); ++i) {
+    auto *tabs = editorPanelAt(i);
+    if (!tabs)
+      continue;
+
+    QTabBar *bar = tabs->tabBar();
+    ensureFusionTabBar(bar);
+
+    bool isActive = (tabs == active);
+    for (int j = 0; j < bar->count(); ++j)
+      bar->setTabTextColor(j, isActive ? QColor() : QColor(0x88, 0x88, 0x88));
+  }
 }

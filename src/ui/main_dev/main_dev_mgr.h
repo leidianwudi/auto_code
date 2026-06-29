@@ -1,21 +1,18 @@
 /**
  * @file main_dev_mgr.h
- * @brief MainDev 管理器层
+ * @brief MainDev 控制器层（单例 + 主窗口）
  *
- * 采用单例模式，管理所有编辑器的业务逻辑和信号处理。
- * 提供静态方法供其他模块调用，实现 UI 操作入口。
- *
- * 使用方式：
- *   MainDevMgr::openFile("path/to/file.ac");  // 其他模块直接调用
+ * 继承 QMainWindow 作为主窗口，继承 Singleton 实现全局唯一实例。
+ * 所有 UI 操作委托给 MainDevUi，不直接操控 Qt 控件。
  */
 
 #pragma once
 
-#include <QObject>
+#include "src/tool/design/Singleton.h"
+#include <QMainWindow>
+
 
 class QTreeWidgetItem;
-class QWidget;
-class QMainWindow;
 class QTabWidget;
 class CodeEditor;
 class MainDevUi;
@@ -23,30 +20,20 @@ class MainDevModel;
 
 /**
  * @class MainDevMgr
- * @brief 编辑器管理器（单例）
+ * @brief 编辑器管理器（单例主窗口）
  *
- * 职责：
- * 1. 连接 UI 控件信号到管理器槽函数
- * 2. 实现文件打开、拆分、关闭等所有业务逻辑
- * 3. 提供静态方法让其他模块调用 UI 功能
+ * MVC 中的控制器层 + 壳：
+ * - 创建 MainDevUi（视图）和 MainDevModel（数据）
+ * - 处理所有业务逻辑和信号槽
+ * - 提供静态方法供其他模块调用 UI 功能
  */
-class MainDevMgr : public QObject {
+class MainDevMgr : public QMainWindow, public Singleton<MainDevMgr> {
   Q_OBJECT
 
 public:
-  /// 获取单例实例
-  static MainDevMgr *instance();
-
-  /**
-   * @brief 初始化管理器
-   * @param ui UI 层指针
-   * @param model 数据模型指针
-   * @param window 主窗口指针（用于 setWindowTitle / statusBar）
-   */
-  static void init(MainDevUi *ui, MainDevModel *model, QMainWindow *window);
-
-  /// 扫描并加载 file/ 目录下的文件树
-  void loadFiles();
+  /// 构造时自动完成窗口初始化
+  MainDevMgr(QWidget *parent = nullptr);
+  ~MainDevMgr() override = default;
 
   // ── 静态方法：供其他模块调用 ──
 
@@ -76,22 +63,19 @@ private slots:
   void onFocusChanged(QWidget *oldFocus, QWidget *newFocus);
 
 private:
-  MainDevMgr() = default;
-
-  static MainDevMgr *s_instance;
+  /// 查找并加载 file/ 目录
+  void loadFiles();
+  /// 为文件路径创建编辑器实例（含高亮器）
+  CodeEditor *createEditorForFile(const QString &filePath);
+  /// 在编辑器中打开文件（查重 → 读取 → 创建 → 显示）
+  CodeEditor *openFileInEditor(const QString &filePath);
+  /// 获取当前活跃的编辑器
+  CodeEditor *currentEditor() const;
+  /// 获取当前活跃的面板组
+  QTabWidget *currentTabWidget() const;
+  /// 连接编辑器的光标位置信号
+  void connectEditor(CodeEditor *editor);
 
   MainDevUi *m_ui = nullptr;
   MainDevModel *m_model = nullptr;
-  QMainWindow *m_window = nullptr;
-
-  // ── 内部辅助方法 ──
-
-  void addDirectoryToTree(QTreeWidgetItem *parentItem, const QString &dirPath);
-  CodeEditor *createEditorForFile(const QString &filePath);
-  CodeEditor *openFileInEditor(const QString &filePath);
-  CodeEditor *currentEditor() const;
-  QTabWidget *currentTabWidget() const;
-  void connectEditor(CodeEditor *editor);
-  void applyTabDimming(QTabWidget *active);
-  void setWindowTitles(const QString &text);
 };
