@@ -8,10 +8,10 @@
 #ifndef MAIN_WINDOW_H
 #define MAIN_WINDOW_H
 
-#include "json_highlighter.h"
 #include "src/engine/template_engine.h"
-#include "template_highlighter.h"
-#include "ts_highlighter.h"
+#include "src/ui/tool_ui/highlighter/json_highlighter.h"
+#include "src/ui/tool_ui/highlighter/template_highlighter.h"
+#include "src/ui/tool_ui/highlighter/ts_highlighter.h"
 #include <QMainWindow>
 
 

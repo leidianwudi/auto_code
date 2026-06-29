@@ -1,0 +1,10 @@
+{
+  "modelName": "User",
+  "fields": [
+    { "name": "id", "type": "number" },
+    { "name": "name", "type": "string" },
+    { "name": "email", "type": "string" },
+    { "name": "age", "type": "number" }
+  ],
+  "hasService": true
+}

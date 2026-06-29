@@ -21,17 +21,24 @@ qt_add_executable(auto_code
     src/engine/handler/if_block_handler.cpp
     src/engine/handler/expression_handler.h
     src/engine/handler/expression_handler.cpp
-    code_editor.h
-    code_editor.cpp
-    template_highlighter.h
-    template_highlighter.cpp
-    json_highlighter.h
-    json_highlighter.cpp
-    ts_highlighter.h
-    ts_highlighter.cpp
+    src/ui/tool_ui/code_editor.h
+    src/ui/tool_ui/code_editor.cpp
+    src/ui/tool_ui/highlighter/template_highlighter.h
+    src/ui/tool_ui/highlighter/template_highlighter.cpp
+    src/ui/tool_ui/highlighter/json_highlighter.h
+    src/ui/tool_ui/highlighter/json_highlighter.cpp
+    src/ui/tool_ui/highlighter/ts_highlighter.h
+    src/ui/tool_ui/highlighter/ts_highlighter.cpp
+    src/ui/main_dev/main_dev.h
+    src/ui/main_dev/main_dev.cpp
 )
 
 target_include_directories(auto_code PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+# 注入项目源码路径，使运行时能准确找到 file/ 目录
+target_compile_definitions(auto_code PRIVATE
+    PROJECT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
 
 target_link_libraries(auto_code
     PRIVATE

@@ -1,0 +1,10 @@
+// Nested Template
+// 测试子目录加载
+
+const ${varName} = {
+${each props}
+  ${key}: ${value},
+${/each}
+};
+
+export default ${varName};

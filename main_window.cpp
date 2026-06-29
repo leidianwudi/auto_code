@@ -9,7 +9,7 @@
  */
 
 #include "main_window.h"
-#include "code_editor.h"
+#include "src/ui/tool_ui/code_editor.h"
 #include "ui_main_window.h"
 #include <QFile>
 #include <QFileDialog>
