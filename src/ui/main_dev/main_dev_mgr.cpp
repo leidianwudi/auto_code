@@ -414,10 +414,6 @@ void MainDevMgr::applyTabDimming(QTabWidget *active) {
 
 void MainDevMgr::setWindowTitles(const QString &text) {
   m_window->setWindowTitle(text);
-  auto *mainDev = qobject_cast<MainDev *>(m_window);
-  if (mainDev) {
-    mainDev->setTitleText(text);
-  }
 }
 
 // ──────────────────────────────────────────────────────────────
