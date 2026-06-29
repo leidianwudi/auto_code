@@ -5,6 +5,9 @@
 
 #include "main_dev_ui.h"
 
+#include "src/tool/ui/ui_button.h"
+#include "src/tool/ui/ui_style.h"
+
 #include <QApplication>
 #include <QDir>
 #include <QDrag>
@@ -134,11 +137,8 @@ DimmableTabWidget::DimmableTabWidget(QWidget *parent) : QTabWidget(parent) {
   // setTabBar 之后设置，确保作用到 DraggableTabBar
   setTabsClosable(true);
 
-  QStyle *fs = QStyleFactory::create(QStringLiteral("Fusion"));
-  if (fs) {
-    fs->setParent(bar);
-    bar->setStyle(fs);
-  }
+  // 强制 Fusion 风格使 setTabTextColor 生效
+  UiStyle::ensureFusionTabBar(bar);
 
   // ── 跨面板拖拽：标签移动 ──
   connect(bar, &DraggableTabBar::tabDropped, this,
@@ -263,16 +263,7 @@ void MainDevUi::setupUI() {
   setWindowFlags(Qt::FramelessWindowHint | Qt::WindowMinMaxButtonsHint);
 
   // 基础样式
-  setStyleSheet(QStringLiteral(
-      "#TitleBar { background: #e0e0e0; }"
-      "#TitleLabel { color: #333; font-size: 12px; }"
-      "QToolButton { color: #333; border: none; padding: 2px 6px; }"
-      "QToolButton:hover { background: #d0d0d0; }"
-      "QPushButton { color: #333; border: none; }"
-      "QPushButton:hover { background: #d0d0d0; }"
-      "QStatusBar { background: #e0e0e0; color: #333; }"
-      "QStatusBar::item { border: none; }"
-      "#WindowFrame { background: #e0e0e0; }"));
+  setStyleSheet(UiStyle::mainStyleSheet());
 
   // ════════════════════════════════════════════════════════════
   //  自定义标题栏（单行：菜单 + 窗口标题 + 控制按钮）
@@ -309,29 +300,11 @@ void MainDevUi::setupUI() {
   titleLayout->addSpacing(8);
 
   // ── 向右拆分按钮 ──
-  m_splitBtn = new QPushButton;
-  {
-    QPixmap px(20, 20);
-    px.fill(Qt::transparent);
-    QPainter p(&px);
-    p.setRenderHint(QPainter::Antialiasing);
-    p.setPen(QPen(QColor("#333"), 1.5));
-    p.drawRect(2, 3, 16, 14);                    // 外框
-    p.drawLine(QPointF(10, 3), QPointF(10, 17)); // 中分线
-    p.end();
-    m_splitBtn->setIcon(QIcon(px));
-    m_splitBtn->setIconSize(QSize(20, 20));
-  }
-  m_splitBtn->setToolTip(QStringLiteral("向右拆分编辑器 (Ctrl+\\)"));
+  m_splitBtn = UiButton::createSplitButton();
 
-  m_minBtn = new QPushButton(QStringLiteral("—"));
-  m_maxBtn = new QPushButton;
-  m_closeBtn = new QPushButton(QStringLiteral("✕"));
-  for (auto *btn : {m_splitBtn, m_minBtn, m_maxBtn, m_closeBtn}) {
-    btn->setFixedSize(36, 26);
-    btn->setFlat(true);
-    btn->setFocusPolicy(Qt::NoFocus);
-  }
+  m_minBtn = UiButton::createMinButton();
+  m_maxBtn = UiButton::createMaxButton();
+  m_closeBtn = UiButton::createCloseButton();
 
   // 初始化为最大化图标
   updateMaximizeIcon();
@@ -499,21 +472,7 @@ bool MainDevUi::nativeEvent(const QByteArray &eventType, void *message,
 // ══════════════════════════════════════════════════════════════
 
 void MainDevUi::updateMaximizeIcon() {
-  QPixmap px(14, 14);
-  px.fill(Qt::transparent);
-  QPainter p(&px);
-  p.setRenderHint(QPainter::Antialiasing);
-  p.setPen(QPen(QColor("#333"), 1.2));
-
-  if (isMaximized()) {
-    p.drawRect(1, 4, 9, 7);
-    p.drawRect(5, 1, 9, 7);
-  } else {
-    p.drawRect(1, 1, 12, 12);
-  }
-  p.end();
-  m_maxBtn->setIcon(QIcon(px));
-  m_maxBtn->setIconSize(QSize(14, 14));
+  UiButton::updateMaximizeIcon(m_maxBtn, isMaximized());
 }
 
 void MainDevUi::changeEvent(QEvent *ev) {
@@ -635,22 +594,6 @@ void MainDevUi::setCursorStatusText(const QString &text) {
 //  标签页颜色
 // ══════════════════════════════════════════════════════════════
 
-static void ensureFusionTabBar(QTabBar *bar) {
-#ifdef Q_OS_WIN
-  if (bar->style() &&
-      QString::fromLatin1(bar->style()->metaObject()->className())
-          .contains(QStringLiteral("Fusion")))
-    return;
-  QStyle *fs = QStyleFactory::create(QStringLiteral("Fusion"));
-  if (fs) {
-    fs->setParent(bar);
-    bar->setStyle(fs);
-  }
-#else
-  Q_UNUSED(bar);
-#endif
-}
-
 void MainDevUi::applyTabDimming(QTabWidget *active) {
   for (int i = 0; i < editorPanelCount(); ++i) {
     auto *tabs = editorPanelAt(i);
@@ -658,10 +601,11 @@ void MainDevUi::applyTabDimming(QTabWidget *active) {
       continue;
 
     QTabBar *bar = tabs->tabBar();
-    ensureFusionTabBar(bar);
+    UiStyle::ensureFusionTabBar(bar);
 
     bool isActive = (tabs == active);
     for (int j = 0; j < bar->count(); ++j)
-      bar->setTabTextColor(j, isActive ? QColor() : QColor(0x88, 0x88, 0x88));
+      bar->setTabTextColor(j,
+                           isActive ? QColor() : UiStyle::inactiveTabColor());
   }
 }

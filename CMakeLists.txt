@@ -33,6 +33,8 @@ qt_add_executable(auto_code
     src/ui/tool_ui/highlighter/ts_highlighter.h
     src/ui/tool_ui/highlighter/ts_highlighter.cpp
     src/tool/ui/ui_mgr.h
+    src/tool/ui/ui_style.h
+    src/tool/ui/ui_button.h
     src/ui/main_dev/main_dev_ui.h
     src/ui/main_dev/main_dev_ui.cpp
     src/ui/main_dev/main_dev_mgr.h

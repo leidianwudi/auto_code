@@ -13,7 +13,6 @@
 #include <QMainWindow>
 #include <QPushButton>
 #include <QSplitter>
-#include <QStyleFactory>
 #include <QTabWidget>
 #include <QTreeWidget>
 
