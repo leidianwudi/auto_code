@@ -20,6 +20,8 @@
 #include <QSplitter>
 #include <QStatusBar>
 #include <QStyle>
+#include <QStyleFactory>
+#include <QTabBar>
 #include <QTabWidget>
 #include <QTextStream>
 #include <QTreeWidget>
@@ -111,6 +113,13 @@ QTabWidget *MainDev::createEditorPanel() {
   tabs->setDocumentMode(true);
   tabs->setMovable(true);
   tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+  // Windows 原生风格忽略 setTabTextColor，必须用 Fusion 风格
+  QStyle *fs = QStyleFactory::create(QStringLiteral("Fusion"));
+  if (fs) {
+    fs->setParent(tabs->tabBar());
+    tabs->tabBar()->setStyle(fs);
+  }
 
   // 连接信号
   connect(tabs, &QTabWidget::tabCloseRequested, this,
@@ -451,6 +460,18 @@ void MainDev::onFocusChanged(QWidget * /*oldFocus*/, QWidget *newFocus) {
   if (foundEditor) {
     connectEditor(foundEditor);
   }
+
+  // 查找焦点所在的 QTabWidget 面板组
+  QTabWidget *activeTabs = nullptr;
+  for (int i = 0; i < m_editorSplitter->count(); ++i) {
+    auto *tabs = qobject_cast<QTabWidget *>(m_editorSplitter->widget(i));
+    if (tabs && tabs->isAncestorOf(newFocus)) {
+      activeTabs = tabs;
+      break;
+    }
+  }
+
+  applyTabDimming(activeTabs);
 }
 
 /**
@@ -468,6 +489,28 @@ void MainDev::updateCursorPosition() {
   int col = cursor.columnNumber() + 1;
   m_cursorPositionLabel->setText(
       QStringLiteral("行: %1, 列: %2").arg(line).arg(col));
+}
+
+/**
+ * @brief 根据焦点面板组，变灰非焦点面板的 tab 文字
+ *
+ * 焦点面板的 tab 使用默认颜色，非焦点面板的 tab 使用灰色。
+ * 需要 Fusion 风格（在 createEditorPanel 中设置）才能生效。
+ *
+ * @param active 当前获得焦点的面板组，nullptr 表示全部变灰
+ */
+void MainDev::applyTabDimming(QTabWidget *active) {
+  for (int i = 0; i < m_editorSplitter->count(); ++i) {
+    auto *tabs = qobject_cast<QTabWidget *>(m_editorSplitter->widget(i));
+    if (!tabs)
+      continue;
+
+    QTabBar *bar = tabs->tabBar();
+    bool isActive = (tabs == active);
+    for (int j = 0; j < bar->count(); ++j) {
+      bar->setTabTextColor(j, isActive ? QColor() : QColor(0x88, 0x88, 0x88));
+    }
+  }
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -515,6 +558,7 @@ void MainDev::onTabCloseRequested(int index) {
       m_lastActivePanel = nullptr;
     setWindowTitle(QStringLiteral("Auto Code - 开发模式"));
     connectEditor(currentEditor());
+    applyTabDimming(currentTabWidget());
     return;
   }
 
@@ -560,6 +604,8 @@ void MainDev::onCurrentTabChanged(int index) {
   connectEditor(currentEditor());
   // 更新最后活跃面板
   m_lastActivePanel = tabs;
+  // 更新 tab 变灰状态
+  applyTabDimming(tabs);
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -617,6 +663,9 @@ void MainDev::onSplitRight() {
   for (int i = 0; i < count; ++i) {
     m_editorSplitter->setStretchFactor(i, 1);
   }
+
+  // 应用 tab 变灰：新面板正常，旧面板变灰
+  applyTabDimming(newPanel);
 
   // 确保焦点在编辑器内
   auto *focusEditor = qobject_cast<CodeEditor *>(newPanel->currentWidget());

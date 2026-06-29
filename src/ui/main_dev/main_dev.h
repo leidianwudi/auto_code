@@ -71,6 +71,8 @@ private:
   QTabWidget *createEditorPanel();
   /// 连接指定编辑器的光标位置信号到状态栏
   void connectEditor(CodeEditor *editor);
+  /// 根据焦点面板组，变灰非焦点面板的 tab 文字
+  void applyTabDimming(QTabWidget *active);
 
   /// 用户数据角色：存储文件完整路径
   static constexpr int FilePathRole = Qt::UserRole + 1;

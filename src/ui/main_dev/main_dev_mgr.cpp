@@ -24,6 +24,7 @@
 #include <QSplitter>
 #include <QStatusBar>
 #include <QStyle>
+#include <QStyleFactory>
 #include <QTabBar>
 #include <QTabWidget>
 #include <QTextCursor>
@@ -372,13 +373,35 @@ void MainDevMgr::updateCursorPosition() {
       QStringLiteral("行: %1, 列: %2").arg(line).arg(col));
 }
 
+/// 确保 QTabBar 使用 Fusion 风格（Windows 原生风格忽略 setTabTextColor）
+static void ensureFusionTabBar(QTabBar *bar) {
+  // 仅在 Windows 上需要
+#ifdef Q_OS_WIN
+  // 如果当前已经是 Fusion 风格则跳过
+  if (bar->style() &&
+      QString::fromLatin1(bar->style()->metaObject()->className())
+          .contains(QStringLiteral("Fusion")))
+    return;
+  QStyle *fs = QStyleFactory::create(QStringLiteral("Fusion"));
+  if (fs) {
+    fs->setParent(bar);
+    bar->setStyle(fs);
+  }
+#else
+  Q_UNUSED(bar);
+#endif
+}
+
 void MainDevMgr::applyTabDimming(QTabWidget *active) {
   for (int i = 0; i < m_ui->editorSplitter()->count(); ++i) {
     auto *tabs = qobject_cast<QTabWidget *>(m_ui->editorSplitter()->widget(i));
     if (!tabs)
       continue;
-    bool isActive = (tabs == active);
+
     QTabBar *bar = tabs->tabBar();
+    ensureFusionTabBar(bar);
+
+    bool isActive = (tabs == active);
     if (isActive) {
       for (int j = 0; j < bar->count(); ++j)
         bar->setTabTextColor(j, QColor());
@@ -449,6 +472,8 @@ void MainDevMgr::onTabCloseRequested(int index) {
       m_model->lastActivePanel = nullptr;
     m_window->setWindowTitle(QStringLiteral("Auto Code - 开发模式"));
     connectEditor(currentEditor());
+    // 更新剩余面板的 tab 颜色
+    applyTabDimming(currentTabWidget());
     return;
   }
 
@@ -541,7 +566,16 @@ void MainDevMgr::onSplitRight() {
     m_ui->editorSplitter()->setStretchFactor(i, 1);
   }
 
-  newPanel->setFocus();
+  m_model->lastActivePanel = newPanel;
+  applyTabDimming(newPanel);
+
+  // 聚焦编辑器而不是面板组，确保焦点链正确触发 onFocusChanged
+  auto *editorInPanel = qobject_cast<CodeEditor *>(newPanel->currentWidget());
+  if (editorInPanel) {
+    editorInPanel->setFocus();
+  } else {
+    newPanel->setFocus();
+  }
 }
 
 void MainDevMgr::onCloseEditor() {
