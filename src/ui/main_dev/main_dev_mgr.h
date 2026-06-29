@@ -2,7 +2,7 @@
  * @file main_dev_mgr.h
  * @brief 代码编辑器控制器（单例）
  *
- * 继承 UiMgr<MainDevMgr> 作为 UI 控制器，所有 UI 操作委托给 MainDevUi。
+ * 继承 AuiMgr<MainDevMgr> 作为 UI 控制器，所有 UI 操作委托给 MainDevUi。
  * MainDevUi 负责实际的界面呈现（QMainWindow）。
  *
  * 架构：
@@ -12,7 +12,7 @@
 
 #pragma once
 
-#include "src/tool/ui/ui_mgr.h"
+#include "src/tool/ui/aui_mgr.h"
 
 #include <QObject>
 
@@ -27,16 +27,16 @@ class MainDevModel;
  * @brief 编辑器管理器（单例 UI 控制器）
  *
  * MVC 中的控制器层：
- * - 继承 UiMgr<MainDevMgr>，通过 ins() 获取全局唯一实例
+ * - 继承 AuiMgr<MainDevMgr>，通过 ins() 获取全局唯一实例
  * - onCreateWindow() 创建 MainDevUi（QMainWindow）并初始化
  * - 处理所有业务逻辑和信号槽
  * - 提供静态方法供其他模块调用 UI 功能
  */
-class MainDevMgr : public UiMgr<MainDevMgr> {
+class MainDevMgr : public AuiMgr<MainDevMgr> {
   Q_OBJECT
 
-  // CRTP 基类 UiMgr<MainDevMgr> 需要访问 onCreateWindow()
-  friend class UiMgr<MainDevMgr>;
+  // CRTP 基类 AuiMgr<MainDevMgr> 需要访问 onCreateWindow()
+  friend class AuiMgr<MainDevMgr>;
 
 public:
   MainDevMgr() = default;

@@ -5,8 +5,8 @@
 
 #include "main_dev_ui.h"
 
-#include "src/tool/ui/ui_button.h"
-#include "src/tool/ui/ui_style.h"
+#include "src/tool/ui/aui_button.h"
+#include "src/tool/ui/aui_style.h"
 
 #include <QApplication>
 #include <QDir>
@@ -138,7 +138,7 @@ DimmableTabWidget::DimmableTabWidget(QWidget *parent) : QTabWidget(parent) {
   setTabsClosable(true);
 
   // 强制 Fusion 风格使 setTabTextColor 生效
-  UiStyle::ensureFusionTabBar(bar);
+  AuiStyle::ensureFusionTabBar(bar);
 
   // ── 跨面板拖拽：标签移动 ──
   connect(bar, &DraggableTabBar::tabDropped, this,
@@ -263,7 +263,7 @@ void MainDevUi::setupUI() {
   setWindowFlags(Qt::FramelessWindowHint | Qt::WindowMinMaxButtonsHint);
 
   // 基础样式
-  setStyleSheet(UiStyle::mainStyleSheet());
+  setStyleSheet(AuiStyle::mainStyleSheet());
 
   // ════════════════════════════════════════════════════════════
   //  自定义标题栏（单行：菜单 + 窗口标题 + 控制按钮）
@@ -300,11 +300,11 @@ void MainDevUi::setupUI() {
   titleLayout->addSpacing(8);
 
   // ── 向右拆分按钮 ──
-  m_splitBtn = UiButton::createSplitButton();
+  m_splitBtn = AuiButton::createSplitButton();
 
-  m_minBtn = UiButton::createMinButton();
-  m_maxBtn = UiButton::createMaxButton();
-  m_closeBtn = UiButton::createCloseButton();
+  m_minBtn = AuiButton::createMinButton();
+  m_maxBtn = AuiButton::createMaxButton();
+  m_closeBtn = AuiButton::createCloseButton();
 
   // 初始化为最大化图标
   updateMaximizeIcon();
@@ -472,7 +472,7 @@ bool MainDevUi::nativeEvent(const QByteArray &eventType, void *message,
 // ══════════════════════════════════════════════════════════════
 
 void MainDevUi::updateMaximizeIcon() {
-  UiButton::updateMaximizeIcon(m_maxBtn, isMaximized());
+  AuiButton::updateMaximizeIcon(m_maxBtn, isMaximized());
 }
 
 void MainDevUi::changeEvent(QEvent *ev) {
@@ -601,11 +601,11 @@ void MainDevUi::applyTabDimming(QTabWidget *active) {
       continue;
 
     QTabBar *bar = tabs->tabBar();
-    UiStyle::ensureFusionTabBar(bar);
+    AuiStyle::ensureFusionTabBar(bar);
 
     bool isActive = (tabs == active);
     for (int j = 0; j < bar->count(); ++j)
       bar->setTabTextColor(j,
-                           isActive ? QColor() : UiStyle::inactiveTabColor());
+                           isActive ? QColor() : AuiStyle::inactiveTabColor());
   }
 }
