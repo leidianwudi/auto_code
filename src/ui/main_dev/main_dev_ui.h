@@ -11,6 +11,7 @@
 #include <QAction>
 #include <QLabel>
 #include <QMainWindow>
+#include <QPushButton>
 #include <QSplitter>
 #include <QStyleFactory>
 #include <QTabWidget>
@@ -104,10 +105,25 @@ public:
 private:
   void addDirectoryToTree(QTreeWidgetItem *parentItem, const QString &dirPath);
 
+  // ── 窗口事件 ──
+  void onMaximizeClicked();
+  void changeEvent(QEvent *ev) override;
+#if defined(Q_OS_WIN)
+  bool nativeEvent(const QByteArray &eventType, void *message,
+                   qintptr *result) override;
+#endif
+
   QTreeWidget *m_fileTree = nullptr;
   QSplitter *m_mainSplitter = nullptr;
   QSplitter *m_editorSplitter = nullptr;
   QLabel *m_cursorPositionLabel = nullptr;
   QAction *m_splitAction = nullptr;
   QAction *m_closeAction = nullptr;
+
+  // ── 自定义标题栏 ──
+  QWidget *m_titleBar = nullptr;
+  QLabel *m_titleLabel = nullptr;
+  QPushButton *m_minBtn = nullptr;
+  QPushButton *m_maxBtn = nullptr;
+  QPushButton *m_closeBtn = nullptr;
 };
