@@ -1,66 +1,64 @@
 /**
  * @file fun_db.h
- * @brief 数据库函数 — 通过 MySQL C API 直连 MySQL 并查询表结构
+ * @brief 数据库函数 — 向 FunMgr 注册 MySQL 表结构 / 查询操作
  *
- * 直接使用 MySQL Connector/C 的 libmysql.dll，
- * 无需 Qt SQL 驱动插件，exe 打包 libmysql.dll 即可运行。
+ * 通过 MySQL C API 直连 MySQL，使用 FunMgr::call("db", subCmd, args) 调用。
+ * 支持持久连接管理：init() 建立连接，cleanup() 关闭连接。
  *
- * 流程：FunDb → MySQL C API (libmysql.dll 捆绑在 exe 目录) → MySQL Server
+ * 用法示例：
+ * @code
+ *   FunDb::init();    // 注册函数 + 连接配置
+ *   // 获取表结构
+ *   QJsonValue r = FunMgr::ins().call("db", "tableSchema",
+ *       QJsonArray{{{"host":"127.0.0.1","port":3306,"user":"root",
+ *                     "password":"123456","database":"my_db",
+ *                     "table":"users"}}});
+ * @endcode
  */
 
 #pragma once
 
-#include "fun_base.h"
-#include "fun_const.h"
+#include <QJsonArray>
+#include <QJsonValue>
+#include <QString>
 
-/**
- * @class FunDb
- * @brief MySQL 数据库查询函数，继承 FunBase
- *
- * 用法示例：
- * @code
- *   FunFactory 注册后调用 call("db", [{
- *       "host":     "127.0.0.1",
- *       "port":     3306,
- *       "user":     "root",
- *       "password": "123456",
- *       "database": "my_db",
- *       "table":    "users"
- *   }])
- * @endcode
- *
- * 参数说明（JSON 对象）：
- * | 字段       | 类型   | 必填 | 说明               |
- * |-----------|--------|------|--------------------|
- * | host      | string | 是   | MySQL 主机地址     |
- * | port      | int    | 否   | 端口号，默认 3306  |
- * | user      | string | 是   | 用户名             |
- * | password  | string | 是   | 密码               |
- * | database  | string | 是   | 数据库名           |
- * | table     | string | 是   | 表名               |
- *
- * 返回值（JSON 数组）示例：
- * @code
- *   [
- *       { "name": "id",   "type": "int",        "nullable": false, "key":
- * "PRI", "default": null,     "extra": "auto_increment", "comment": "主键" },
- *       { "name": "name", "type": "varchar(64)", "nullable": false, "key": "",
- * "default": "",       "extra": "",               "comment": "姓名" }, {
- * "name": "age",  "type": "int",         "nullable": true,  "key": "",
- * "default": "0",       "extra": "",               "comment": "年龄" }
- *   ]
- * @endcode
- *
- * @note 运行时依赖：exe 目录下必须存在 libmysql.dll（编译后自动复制）
- */
-class FunDb : public FunBase {
+struct MYSQL;
+
+/// 数据库工具类（全静态）
+class FunDb {
 public:
-  QString name() const override { return QString::fromLatin1(FunConst::kDb); }
+  /**
+   * @brief 注册所有数据库函数到 FunMgr
+   *
+   * 必须在首次 call("db", ...) 之前调用。
+   */
+  static void init();
 
   /**
-   * @brief 执行 MySQL 表结构查询
-   * @param args [0] JSON 对象，包含 host/port/user/password/database/table
-   * @return 表结构 JSON 数组；出错时返回 Null
+   * @brief 关闭持久连接（程序退出时调用）
    */
-  QJsonValue execute(const QJsonArray &args) override;
+  static void cleanup();
+
+  // ── 子命令 ──
+
+  /**
+   * @brief 获取指定表的列信息
+   * args[0] JSON: { host, port?, user, password, database, table }
+   * @return 列信息 JSON 数组
+   */
+  static QJsonValue tableSchema(const QJsonArray &args);
+
+  /**
+   * @brief 执行自定义 SQL 查询
+   * args[0] JSON: { host, port?, user, password, database, sql }
+   * @return 查询结果 JSON 数组
+   */
+  static QJsonValue query(const QJsonArray &args);
+
+private:
+  /// 建立/获取持久连接（内部调用）
+  static MYSQL *getConnection(const QJsonObject &cfg);
+
+  /// MySQL 持久连接（首次 getConnection 时建立）
+  static MYSQL *s_conn;
 };

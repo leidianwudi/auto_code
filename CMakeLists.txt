@@ -24,13 +24,14 @@ qt_add_executable(auto_code
     src/engine/handler/if_block_handler.cpp
     src/engine/handler/expression_handler.h
     src/engine/handler/expression_handler.cpp
-    src/engine/function/fun_base.h
     src/engine/function/fun_str.h
     src/engine/function/fun_str.cpp
     src/engine/function/fun_db.h
     src/engine/function/fun_db.cpp
-    src/engine/function/fun_factory.h
-    src/engine/function/fun_factory.cpp
+    src/engine/function/fun_file.h
+    src/engine/function/fun_file.cpp
+    src/engine/function/fun_mgr.h
+    src/engine/function/fun_mgr.cpp
     src/engine/function/fun_const.h
     src/engine/function/fun_const.cpp
     src/ui/tool_ui/code_editor.h

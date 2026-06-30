@@ -13,6 +13,7 @@
 #include "template_engine.h"
 
 #include "function/fun_const.h"
+#include "function/fun_mgr.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -74,38 +75,74 @@ QString TemplateEngine::renderBlock(const QString &block,
 }
 
 // ============================================================================
-// resolvePath — 嵌套属性路径解析 + 工厂函数调用
+// resolvePath — 嵌套属性路径解析 + 通过 FunMgr 调用 C++ 函数
 // ============================================================================
 
 QJsonValue TemplateEngine::resolvePath(const QString &path,
                                        const QJsonObject &context) const {
-  static const QStringList stringMethods = {
-      QStringLiteral("toLowerCase"), QStringLiteral("toUpperCase"),
-      QStringLiteral("trim"), QStringLiteral("capitalize")};
+  // 检查是否是函数调用格式: funcName(...)
+  // 例如: str.toLowerCase(Hello) 或 file.read(C:/data.txt)
+  int parenPos = path.indexOf(QStringLiteral("("));
+  if (parenPos != -1 && path.endsWith(QStringLiteral(")"))) {
+    // 拆分为 类名.函数名(参数)
+    QString fullFunc = path.left(parenPos);
+    QString argsStr = path.mid(parenPos + 1);
+    argsStr.chop(1); // 去掉尾部的 )
 
+    // 解析参数：逗号分隔，去除首尾空白
+    QStringList rawArgs;
+    if (!argsStr.isEmpty()) {
+      // 简单逗号分割（不考虑转义逗号）
+      int start = 0;
+      for (int i = 0; i < argsStr.length(); ++i) {
+        if (argsStr[i] == QLatin1Char(',')) {
+          rawArgs.append(argsStr.mid(start, i - start).trimmed());
+          start = i + 1;
+        }
+      }
+      rawArgs.append(argsStr.mid(start).trimmed());
+    }
+
+    // 解析类名.函数名
+    int dotPos = fullFunc.indexOf(QStringLiteral("."));
+    if (dotPos == -1)
+      return QJsonValue();
+
+    QString className = fullFunc.left(dotPos).trimmed();
+    QString funcName = fullFunc.mid(dotPos + 1).trimmed();
+
+    // 将参数解析为 QJsonArray
+    QJsonArray jsonArgs;
+    for (const QString &raw : rawArgs) {
+      // 尝试解析为 JSON，否则当作字符串
+      QJsonDocument doc = QJsonDocument::fromJson(raw.toUtf8());
+      if (doc.isNull() || doc.isObject()) {
+        // 纯字符串
+        jsonArgs.append(QJsonValue(raw));
+      } else {
+        jsonArgs.append(doc.array());
+      }
+    }
+
+    // 通过 FunMgr 调用
+    return FunMgr::ins().call(className, funcName, jsonArgs);
+  }
+
+  // 普通属性路径: user.name.email 或 modelName.toLowerCase
   QStringList parts = path.split(QStringLiteral("."));
   QJsonValue current(context);
 
   for (int i = 0; i < parts.size(); ++i) {
     const QString &part = parts[i];
 
-    if (stringMethods.contains(part)) {
+    // 检查是否是 FunStr 字符串方法（如 toLowerCase、trim 等）
+    // 此时当前值应作为输入，应用方法后得到新值
+    if (FunConst::stringMethods().contains(part)) {
       if (!current.isString())
         return QJsonValue();
-
-      QString str = current.toString();
-      if (part == QLatin1String(FunConst::kToLowerCase))
-        str = str.toLower();
-      else if (part == QLatin1String(FunConst::kToUpperCase))
-        str = str.toUpper();
-      else if (part == QLatin1String(FunConst::kTrim))
-        str = str.trimmed();
-      else if (part == QLatin1String(FunConst::kCapitalize))
-        if (!str.isEmpty())
-          str = str[0].toUpper() + str.mid(1);
-
-      current = QJsonValue(str);
-      continue;
+      QJsonArray arr = {current.toString()};
+      return FunMgr::ins().call(QString::fromLatin1(FunConst::kClsStr), part,
+                                arr);
     }
 
     if (!current.isObject())

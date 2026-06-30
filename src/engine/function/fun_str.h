@@ -1,34 +1,40 @@
 /**
  * @file fun_str.h
- * @brief 字符串函数 — toLowerCase / toUpperCase / trim / capitalize
+ * @brief 字符串函数 — 向 FunMgr 注册字符串操作
+ *
+ * 支持的子命令（通过 FunMgr::call("str", subCmd, args) 调用）：
+ * - toLowerCase — 转小写    args: [inputStr]
+ * - toUpperCase — 转大写    args: [inputStr]
+ * - trim        — 去首尾空白 args: [inputStr]
+ * - capitalize  — 首字母大写 args: [inputStr]
+ * - substring   — 截子串    args: [inputStr, start, length?]
+ * - replace     — 替换      args: [inputStr, oldStr, newStr]
+ *
+ * 用法示例：
+ * @code
+ *   FunStr::init();  // 启动时注册
+ *   FunMgr::ins().call("str", "toLowerCase", QJsonArray{"Hello"});
+ * @endcode
  */
 
 #pragma once
 
-#include "fun_base.h"
-#include "fun_const.h"
+#include <QJsonArray>
+#include <QJsonValue>
 
-/**
- * @class FunStr
- * @brief 字符串处理函数，继承 FunBase
- *
- * 用法示例：
- *   FunFactory 注册后调用 call("str", ["toLowerCase", "Hello World"])
- *
- * 支持的子命令：
- * - toLowerCase — 转换为小写
- * - toUpperCase — 转换为大写
- * - trim        — 去除首尾空白
- * - capitalize  — 首字母大写
- */
-class FunStr : public FunBase {
+class FunMgr;
+
+/// 字符串工具类（全静态）
+class FunStr {
 public:
-  QString name() const override { return QString::fromLatin1(FunConst::kStr); }
+  /// 注册所有字符串函数到 FunMgr
+  static void init();
 
-  /**
-   * @brief 执行字符串操作
-   * @param args [0] 子命令名称，[1] 输入字符串
-   * @return 处理后的字符串；参数错误时返回 Null
-   */
-  QJsonValue execute(const QJsonArray &args) override;
+  // ── 具体操作（公开，也可直接调用） ──
+  static QJsonValue toLowerCase(const QJsonArray &args);
+  static QJsonValue toUpperCase(const QJsonArray &args);
+  static QJsonValue trim(const QJsonArray &args);
+  static QJsonValue capitalize(const QJsonArray &args);
+  static QJsonValue substring(const QJsonArray &args);
+  static QJsonValue replace(const QJsonArray &args);
 };

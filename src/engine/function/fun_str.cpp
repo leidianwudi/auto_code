@@ -5,26 +5,97 @@
 
 #include "fun_str.h"
 #include "fun_const.h"
+#include "fun_mgr.h"
 
-QJsonValue FunStr::execute(const QJsonArray &args) {
-  if (args.size() < 2 || !args[1].isString())
+#include <QString>
+
+void FunStr::init() {
+  FunMgr::ins().registerFuncs(
+      QString::fromLatin1(FunConst::kClsStr),
+      {
+          {QString::fromLatin1(FunConst::kToLowerCase), toLowerCase},
+          {QString::fromLatin1(FunConst::kToUpperCase), toUpperCase},
+          {QString::fromLatin1(FunConst::kTrim), trim},
+          {QString::fromLatin1(FunConst::kCapitalize), capitalize},
+          {QString::fromLatin1(FunConst::kSubstring), substring},
+          {QString::fromLatin1(FunConst::kReplace), replace},
+      });
+}
+
+// ============================================================================
+// toLowerCase — 转小写
+// ============================================================================
+
+QJsonValue FunStr::toLowerCase(const QJsonArray &args) {
+  if (args.isEmpty() || !args[0].isString())
+    return QJsonValue();
+  return QJsonValue(args[0].toString().toLower());
+}
+
+// ============================================================================
+// toUpperCase — 转大写
+// ============================================================================
+
+QJsonValue FunStr::toUpperCase(const QJsonArray &args) {
+  if (args.isEmpty() || !args[0].isString())
+    return QJsonValue();
+  return QJsonValue(args[0].toString().toUpper());
+}
+
+// ============================================================================
+// trim — 去首尾空白
+// ============================================================================
+
+QJsonValue FunStr::trim(const QJsonArray &args) {
+  if (args.isEmpty() || !args[0].isString())
+    return QJsonValue();
+  return QJsonValue(args[0].toString().trimmed());
+}
+
+// ============================================================================
+// capitalize — 首字母大写
+// ============================================================================
+
+QJsonValue FunStr::capitalize(const QJsonArray &args) {
+  if (args.isEmpty() || !args[0].isString())
+    return QJsonValue();
+  QString str = args[0].toString();
+  if (!str.isEmpty())
+    str = str[0].toUpper() + str.mid(1);
+  return QJsonValue(str);
+}
+
+// ============================================================================
+// substring — 截子串
+// ============================================================================
+
+QJsonValue FunStr::substring(const QJsonArray &args) {
+  if (args.size() < 2 || !args[0].isString() || !args[1].isDouble())
     return QJsonValue();
 
-  const QString cmd = args[0].toString();
-  QString str = args[1].toString();
+  const QString str = args[0].toString();
+  const int start = static_cast<int>(args[1].toDouble());
 
-  if (cmd == QLatin1String(FunConst::kToLowerCase)) {
-    str = str.toLower();
-  } else if (cmd == QLatin1String(FunConst::kToUpperCase)) {
-    str = str.toUpper();
-  } else if (cmd == QLatin1String(FunConst::kTrim)) {
-    str = str.trimmed();
-  } else if (cmd == QLatin1String(FunConst::kCapitalize)) {
-    if (!str.isEmpty())
-      str = str[0].toUpper() + str.mid(1);
-  } else {
-    return QJsonValue();
+  if (args.size() >= 3 && args[2].isDouble()) {
+    const int length = static_cast<int>(args[2].toDouble());
+    return QJsonValue(str.mid(start, length));
   }
 
-  return QJsonValue(str);
+  return QJsonValue(str.mid(start));
+}
+
+// ============================================================================
+// replace — 替换
+// ============================================================================
+
+QJsonValue FunStr::replace(const QJsonArray &args) {
+  if (args.size() < 3 || !args[0].isString() || !args[1].isString() ||
+      !args[2].isString())
+    return QJsonValue();
+
+  QString str = args[0].toString();
+  const QString before = args[1].toString();
+  const QString after = args[2].toString();
+
+  return QJsonValue(str.replace(before, after));
 }
