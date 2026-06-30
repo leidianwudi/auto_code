@@ -373,7 +373,6 @@ void MainDevUi::setupUI() {
   // ════════════════════════════════════════════════════════════
   //  左侧文件树
   // ════════════════════════════════════════════════════════════
-
   m_fileTree = new QTreeWidget;
   m_fileTree->setHeaderLabel(QStringLiteral("文件"));
   m_fileTree->setMinimumWidth(200);
@@ -396,7 +395,6 @@ void MainDevUi::setupUI() {
   // ════════════════════════════════════════════════════════════
   //  主分割器
   // ════════════════════════════════════════════════════════════
-
   m_mainSplitter = new QSplitter(Qt::Horizontal); // 主分割器, 水平方向
   m_mainSplitter->addWidget(m_fileTree);
   m_mainSplitter->addWidget(m_editorSplitter);
@@ -433,7 +431,6 @@ void MainDevUi::setupUI() {
   // ════════════════════════════════════════════════════════════
   //  底部状态栏
   // ════════════════════════════════════════════════════════════
-
   m_cursorPositionLabel = new QLabel(QStringLiteral("行: 1, 列: 1"));
   m_cursorPositionLabel->setMinimumWidth(120);
   m_cursorPositionLabel->setAlignment(Qt::AlignCenter);
@@ -522,7 +519,6 @@ bool MainDevUi::nativeEvent(const QByteArray &eventType, void *message,
 // ══════════════════════════════════════════════════════════════
 //  窗口状态变化（最大化/还原更新按钮文字）
 // ══════════════════════════════════════════════════════════════
-
 void MainDevUi::updateMaximizeIcon() {
   AuiButton::updateMaximizeIcon(m_maxBtn, isMaximized());
 }
@@ -604,7 +600,6 @@ void MainDevUi::addDirectoryToTree(QTreeWidgetItem *parentItem,
 // ══════════════════════════════════════════════════════════════
 //  编辑器面板组操作
 // ══════════════════════════════════════════════════════════════
-
 /// @brief  获取编辑器面板数量（即分割器中的子控件数）
 /// @return 当前 m_editorSplitter 中的面板个数
 int MainDevUi::editorPanelCount() const { return m_editorSplitter->count(); }
@@ -660,7 +655,6 @@ int MainDevUi::fileTreeWidth() const { return m_fileTree->width(); }
 // ══════════════════════════════════════════════════════════════
 //  状态栏
 // ══════════════════════════════════════════════════════════════
-
 void MainDevUi::setCursorStatusText(const QString &text) {
   m_cursorPositionLabel->setText(text);
 }
@@ -668,7 +662,6 @@ void MainDevUi::setCursorStatusText(const QString &text) {
 // ══════════════════════════════════════════════════════════════
 //  标签页颜色
 // ══════════════════════════════════════════════════════════════
-
 void MainDevUi::applyTabDimming(QTabWidget *active) {
   for (int i = 0; i < editorPanelCount(); ++i) {
     auto *tabs = editorPanelAt(i);

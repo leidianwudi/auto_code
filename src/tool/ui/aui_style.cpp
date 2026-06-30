@@ -12,7 +12,6 @@
 // ════════════════════════════════════════════════════════════
 //  全局样式表
 // ════════════════════════════════════════════════════════════
-
 QString AuiStyle::mainStyleSheet() {
   return QStringLiteral(
       "#TitleBar { background: #e0e0e0; }"
@@ -29,7 +28,6 @@ QString AuiStyle::mainStyleSheet() {
 // ════════════════════════════════════════════════════════════
 //  风格适配（跨平台兼容）
 // ════════════════════════════════════════════════════════════
-
 void AuiStyle::ensureFusionTabBar(QTabBar *bar) {
 #ifdef Q_OS_WIN
   if (bar->style() &&

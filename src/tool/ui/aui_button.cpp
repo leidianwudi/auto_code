@@ -23,7 +23,6 @@ void AuiButton::applyCommonStyle(QPushButton *btn) {
 // ════════════════════════════════════════════════════════════
 //  工厂方法
 // ════════════════════════════════════════════════════════════
-
 QPushButton *AuiButton::createSplitButton() {
   auto *btn = new QPushButton;
   {
@@ -124,7 +123,6 @@ QPushButton *AuiButton::createBuildButton(const QString &text) {
 // ════════════════════════════════════════════════════════════
 //  图标更新
 // ════════════════════════════════════════════════════════════
-
 void AuiButton::updateMaximizeIcon(QPushButton *btn, bool isMaximized) {
   QPixmap px(14, 14);
   px.fill(Qt::transparent);

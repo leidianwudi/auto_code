@@ -99,7 +99,6 @@ public:
   // ════════════════════════════════════════════════════════════
   //  文件树操作
   // ════════════════════════════════════════════════════════════
-
   void expandFileTree();
   void buildFileTree(const QString &dirPath);
 
@@ -117,7 +116,6 @@ public:
   // ════════════════════════════════════════════════════════════
   //  主分割器操作
   // ════════════════════════════════════════════════════════════
-
   void adjustMainSplitter();
   int mainSplitterWidth() const;
   int fileTreeWidth() const;
@@ -137,7 +135,6 @@ public:
   // ════════════════════════════════════════════════════════════
   //  控件 getter
   // ════════════════════════════════════════════════════════════
-
   QTreeWidget *fileTree() const { return m_fileTree; }
   QSplitter *editorSplitter() const { return m_editorSplitter; }
   QAction *splitAction() const { return m_splitAction; }

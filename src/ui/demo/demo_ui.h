@@ -36,7 +36,6 @@ public:
   // ════════════════════════════════════════════════════════════
   //  控件 getter
   // ════════════════════════════════════════════════════════════
-
   CodeEditor *templateEdit() const { return m_templateEdit; }
   CodeEditor *dataEdit() const { return m_dataEdit; }
   CodeEditor *outputEdit() const { return m_outputEdit; }
