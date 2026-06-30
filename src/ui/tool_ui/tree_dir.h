@@ -12,6 +12,7 @@
 #pragma once
 
 #include <QJsonArray>
+#include <QStringList>
 #include <QTreeWidget>
 
 class QTreeWidgetItem;
@@ -63,9 +64,9 @@ private:
   /// 递归收集所有 json 文件路径（绝对路径）
   void collectJsonFiles(QTreeWidgetItem *item, QStringList &files) const;
 
-  /// 递归设置节点的勾选状态（从已加载的路径集合匹配）
-  void applyStateToTree(QTreeWidgetItem *item, const QStringList &checkedFiles,
-                        const QString &rootPath);
+  /// 递归设置节点的勾选状态
+  void applyStateToTree(QTreeWidgetItem *item,
+                        const QStringList &checkedAbsPaths);
 
   /// 拦截鼠标释放以判断点击位置是否在复选框区域
   void mouseReleaseEvent(QMouseEvent *event) override;

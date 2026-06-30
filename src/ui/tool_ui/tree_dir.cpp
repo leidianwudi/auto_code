@@ -66,10 +66,16 @@ void TreeDir::mouseReleaseEvent(QMouseEvent *event) {
 
 void TreeDir::buildTree(const QString &dirPath) {
   clear();
-  m_rootPath = dirPath;
-  m_configPath = dirPath + QStringLiteral("/tree.config");
+  // 统一使用正斜杠，确保与 QFileInfo::absoluteFilePath() 格式一致
+  m_rootPath = QDir::cleanPath(dirPath);
+  m_configPath = m_rootPath + QStringLiteral("/tree.config");
 
+  // 树构建期间 setCheckState 会触发 itemChanged → onItemChanged → saveState，
+  // 在 loadState 完成前禁止保存，避免将空的未选中状态写入 tree.config
+  m_bulkUpdating = true;
   addDirectoryToTree(nullptr, dirPath);
+  m_bulkUpdating = false;
+
   expandAll();
   loadState();
 }
@@ -319,14 +325,21 @@ void TreeDir::loadState() {
     return;
 
   QJsonArray arr = doc.object()[QStringLiteral("checked")].toArray();
-  QStringList checkedFiles;
+
+  // 将相对路径还原为绝对路径并统一格式
+  QStringList checkedAbsPaths;
   for (const QJsonValue &v : arr) {
-    if (v.isString())
-      checkedFiles.append(m_rootPath + QStringLiteral("/") + v.toString());
+    if (v.isString()) {
+      // 用 "/" 拼接相对路径，再统一 cleanPath
+      QString abs =
+          QDir::cleanPath(m_rootPath + QStringLiteral("/") + v.toString());
+      checkedAbsPaths.append(abs);
+    }
   }
 
+  // 递归应用到树节点
   for (int i = 0; i < topLevelItemCount(); ++i)
-    applyStateToTree(topLevelItem(i), checkedFiles, m_rootPath);
+    applyStateToTree(topLevelItem(i), checkedAbsPaths);
 }
 
 // ============================================================================
@@ -348,14 +361,23 @@ void TreeDir::collectJsonFiles(QTreeWidgetItem *item,
     collectJsonFiles(item->child(i), files);
 }
 
+/// 检查绝对路径是否匹配某个已保存的绝对路径
+static bool pathListContains(const QStringList &list, const QString &absPath) {
+  for (const QString &p : list) {
+    // 同时 cleanPath（主要处理分隔符），轻松对比
+    if (QDir::cleanPath(p) == QDir::cleanPath(absPath))
+      return true;
+  }
+  return false;
+}
+
 void TreeDir::applyStateToTree(QTreeWidgetItem *item,
-                               const QStringList &checkedFiles,
-                               const QString &rootPath) {
+                               const QStringList &checkedAbsPaths) {
   // 检查当前节点本身（处理根目录下的 .json 文件）
   QString selfPath = item->data(0, Qt::UserRole + 1).toString();
   if (!selfPath.isEmpty() &&
       selfPath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
-    if (checkedFiles.contains(selfPath))
+    if (pathListContains(checkedAbsPaths, selfPath))
       item->setCheckState(0, Qt::Checked);
     return; // 文件节点无子节点，无需递归
   }
@@ -367,11 +389,11 @@ void TreeDir::applyStateToTree(QTreeWidgetItem *item,
 
     if (!filePath.isEmpty() &&
         filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
-      if (checkedFiles.contains(filePath))
+      if (pathListContains(checkedAbsPaths, filePath))
         child->setCheckState(0, Qt::Checked);
     }
 
-    applyStateToTree(child, checkedFiles, rootPath);
+    applyStateToTree(child, checkedAbsPaths);
 
     if (child->childCount() > 0)
       updateParentCheckState(child);
