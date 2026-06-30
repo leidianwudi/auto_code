@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.19)
 project(auto_code LANGUAGES CXX)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Sql)
 
 qt_standard_project_setup()
 
@@ -24,6 +24,13 @@ qt_add_executable(auto_code
     src/engine/handler/if_block_handler.cpp
     src/engine/handler/expression_handler.h
     src/engine/handler/expression_handler.cpp
+    src/engine/function/fun_base.h
+    src/engine/function/fun_str.h
+    src/engine/function/fun_str.cpp
+    src/engine/function/fun_db.h
+    src/engine/function/fun_db.cpp
+    src/engine/function/fun_link.h
+    src/engine/function/fun_link.cpp
     src/ui/tool_ui/code_editor.h
     src/ui/tool_ui/code_editor.cpp
     src/ui/tool_ui/highlighter/template_highlighter.h
@@ -43,7 +50,10 @@ qt_add_executable(auto_code
     src/ui/main_dev/main_dev_model.cpp
 )
 
-target_include_directories(auto_code PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(auto_code PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    D:/tool/mysql9_0/include
+)
 
 # 注入项目源码路径，使运行时能准确找到 file/ 目录
 target_compile_definitions(auto_code PRIVATE
@@ -54,6 +64,37 @@ target_link_libraries(auto_code
     PRIVATE
         Qt::Core
         Qt::Widgets
+        Qt::Sql
+        D:/tool/mysql9_0/lib/libmysql.lib
+)
+
+# ── MySQL 运行时依赖自动部署（libmysql.dll + OpenSSL） ──
+# 以下是 MySQL 本机的安装目录
+set(MYSQL_LIB_DIR "D:/tool/mysql9_0/lib")
+set(MYSQL_BIN_DIR "D:/tool/mysql9_0/bin")
+
+set(MYSQL_RUNTIME_DLLS
+    "${MYSQL_LIB_DIR}/libmysql.dll"
+    "${MYSQL_BIN_DIR}/libssl-3-x64.dll"
+    "${MYSQL_BIN_DIR}/libcrypto-3-x64.dll"
+)
+
+# ① CMake Configure 时复制到构建根目录
+foreach(dll ${MYSQL_RUNTIME_DLLS})
+    file(COPY "${dll}" DESTINATION "${CMAKE_BINARY_DIR}")
+endforeach()
+
+# ② 每次编译后复制到 exe 输出目录
+add_custom_command(TARGET auto_code POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${MYSQL_LIB_DIR}/libmysql.dll"
+        "$<TARGET_FILE_DIR:auto_code>"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${MYSQL_BIN_DIR}/libssl-3-x64.dll"
+        "$<TARGET_FILE_DIR:auto_code>"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${MYSQL_BIN_DIR}/libcrypto-3-x64.dll"
+        "$<TARGET_FILE_DIR:auto_code>"
 )
 
 install(TARGETS auto_code
