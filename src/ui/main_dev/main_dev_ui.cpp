@@ -10,6 +10,7 @@
 #include "src/ui/demo/demo_mgr.h"
 
 #include <QApplication>
+#include <QCloseEvent>
 #include <QDir>
 #include <QDrag>
 #include <QDragEnterEvent>
@@ -555,6 +556,11 @@ QTabWidget *MainDevUi::createEditorPanel() {
   tabs->setStyleSheet(
       QStringLiteral("QTabWidget::pane { margin: 0; border: none; }"));
   return tabs;
+}
+
+void MainDevUi::closeEvent(QCloseEvent *event) {
+  QApplication::quit();
+  QMainWindow::closeEvent(event);
 }
 
 // ══════════════════════════════════════════════════════════════
