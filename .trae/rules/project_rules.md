@@ -30,3 +30,14 @@ Fusion 风格使用 `QPainter` 自绘所有控件，100% 遵循 `setTabTextColor
 - Qt 版本：6.12.0
 - 代码缩进：2 空格（`.editorconfig`）
 - 注释规范：Doxygen
+
+### 构建方法
+
+如果 Trae IDE 直接运行 cmake 时报 `SAFE_RM_*` 环境变量格式错误，请改用项目自带的构建脚本：
+
+```powershell
+# PowerShell 中运行
+cmd.exe /c .trae\build.bat
+```
+
+该脚本会自动清理 `SAFE_RM_*` 环境变量并加载 VS 开发环境。

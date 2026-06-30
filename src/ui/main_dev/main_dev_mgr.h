@@ -16,7 +16,6 @@
 
 #include <QObject>
 
-class QTreeWidgetItem;
 class QTabWidget;
 class CodeEditor;
 class MainDevUi;
@@ -58,8 +57,6 @@ protected:
   QWidget *onCreateWindow() override;
 
 private slots:
-  /// 点击文件树节点，打开对应文件
-  void onTreeItemClicked(QTreeWidgetItem *item, int column);
   /// 向右拆分编辑器
   void onSplitRight();
   /// 关闭当前标签页

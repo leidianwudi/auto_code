@@ -34,6 +34,8 @@ qt_add_executable(auto_code
     src/engine/function/fun_mgr.cpp
     src/engine/function/fun_const.h
     src/engine/function/fun_const.cpp
+    src/ui/tool_ui/tree_dir.h
+    src/ui/tool_ui/tree_dir.cpp
     src/ui/tool_ui/code_editor.h
     src/ui/tool_ui/code_editor.cpp
     src/ui/tool_ui/highlighter/template_highlighter.h

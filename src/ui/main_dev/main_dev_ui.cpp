@@ -11,7 +11,6 @@
 
 #include <QApplication>
 #include <QCloseEvent>
-#include <QDir>
 #include <QDrag>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -30,7 +29,6 @@
 #include <QStyle>
 #include <QTabBar>
 #include <QToolButton>
-#include <QTreeWidgetItem>
 #include <QVBoxLayout>
 
 #ifdef Q_OS_WIN
@@ -373,13 +371,7 @@ void MainDevUi::setupUI() {
   // ════════════════════════════════════════════════════════════
   //  左侧文件树
   // ════════════════════════════════════════════════════════════
-  m_fileTree = new QTreeWidget;
-  m_fileTree->setHeaderLabel(QStringLiteral("文件"));
-  m_fileTree->setMinimumWidth(200);
-  m_fileTree->setMaximumWidth(400);
-  m_fileTree->setAnimated(true);
-  m_fileTree->setIndentation(16);
-  m_fileTree->setSortingEnabled(false);
+  m_fileTree = new TreeDir;
 
   // ════════════════════════════════════════════════════════════
   //  右侧编辑器区域
@@ -557,44 +549,6 @@ QTabWidget *MainDevUi::createEditorPanel() {
 void MainDevUi::closeEvent(QCloseEvent *event) {
   QApplication::quit();
   QMainWindow::closeEvent(event);
-}
-
-// ══════════════════════════════════════════════════════════════
-//  文件树操作
-// ══════════════════════════════════════════════════════════════
-
-void MainDevUi::expandFileTree() { m_fileTree->expandAll(); }
-
-void MainDevUi::buildFileTree(const QString &dirPath) {
-  addDirectoryToTree(nullptr, dirPath);
-  expandFileTree();
-}
-
-void MainDevUi::addDirectoryToTree(QTreeWidgetItem *parentItem,
-                                   const QString &dirPath) {
-  QDir dir(dirPath);
-
-  QFileInfoList dirs = dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
-  for (const QFileInfo &info : dirs) {
-    auto *dirItem = parentItem ? new QTreeWidgetItem(parentItem)
-                               : new QTreeWidgetItem(m_fileTree);
-    dirItem->setText(0, info.fileName());
-    dirItem->setIcon(0, m_fileTree->style()->standardIcon(QStyle::SP_DirIcon));
-    dirItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
-    addDirectoryToTree(dirItem, info.absoluteFilePath());
-  }
-
-  QStringList nameFilters;
-  nameFilters << QStringLiteral("*.ac") << QStringLiteral("*.json");
-  QFileInfoList files = dir.entryInfoList(nameFilters, QDir::Files);
-  for (const QFileInfo &info : files) {
-    auto *fileItem = parentItem ? new QTreeWidgetItem(parentItem)
-                                : new QTreeWidgetItem(m_fileTree);
-    fileItem->setText(0, info.fileName());
-    fileItem->setIcon(0,
-                      m_fileTree->style()->standardIcon(QStyle::SP_FileIcon));
-    fileItem->setData(0, Qt::UserRole + 1, info.absoluteFilePath());
-  }
 }
 
 // ══════════════════════════════════════════════════════════════

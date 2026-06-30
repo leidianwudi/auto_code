@@ -23,8 +23,6 @@
 #include <QTabWidget>
 #include <QTextCursor>
 #include <QTextStream>
-#include <QTreeWidget>
-#include <QTreeWidgetItem>
 
 // ──────────────────────────────────────────────────────────────
 //  静态方法（通过单例转发）
@@ -78,15 +76,15 @@ void MainDevMgr::initUi() {
     QString dir = QFileDialog::getExistingDirectory(
         m_ui, QStringLiteral("选择文件夹"), QStringLiteral(PROJECT_SOURCE_DIR));
     if (!dir.isEmpty())
-      m_ui->buildFileTree(dir);
+      m_ui->fileTree()->buildTree(dir);
   });
 
   connect(m_ui->splitAction(), &QAction::triggered, this,
           &MainDevMgr::onSplitRight);
   connect(m_ui->closeAction(), &QAction::triggered, this,
           &MainDevMgr::onCloseEditor);
-  connect(m_ui->fileTree(), &QTreeWidget::itemClicked, this,
-          &MainDevMgr::onTreeItemClicked);
+  connect(m_ui->fileTree(), &TreeDir::fileActivated, this,
+          &MainDevMgr::openFileInEditor);
   connect(qApp, &QApplication::focusChanged, this, &MainDevMgr::onFocusChanged);
 
   // 连接初始编辑器面板组的信号
@@ -123,23 +121,7 @@ void MainDevMgr::loadFiles() {
     return;
   }
 
-  m_ui->buildFileTree(baseDir.absolutePath());
-}
-
-// ──────────────────────────────────────────────────────────────
-//  树节点点击 → 打开文件
-// ──────────────────────────────────────────────────────────────
-
-void MainDevMgr::onTreeItemClicked(QTreeWidgetItem *item, int column) {
-  Q_UNUSED(column);
-  if (!item)
-    return;
-
-  QString filePath = item->data(0, Qt::UserRole + 1).toString();
-  if (filePath.isEmpty())
-    return;
-
-  openFileInEditor(filePath);
+  m_ui->fileTree()->buildTree(baseDir.absolutePath());
 }
 
 // ──────────────────────────────────────────────────────────────

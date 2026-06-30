@@ -14,7 +14,8 @@
 #include <QPushButton>
 #include <QSplitter>
 #include <QTabWidget>
-#include <QTreeWidget>
+
+#include "src/ui/tool_ui/tree_dir.h"
 
 class QTreeWidgetItem;
 class QTabBar;
@@ -99,8 +100,7 @@ public:
   // ════════════════════════════════════════════════════════════
   //  文件树操作
   // ════════════════════════════════════════════════════════════
-  void expandFileTree();
-  void buildFileTree(const QString &dirPath);
+  TreeDir *fileTree() const { return m_fileTree; }
 
   // ════════════════════════════════════════════════════════════
   //  编辑器面板组操作
@@ -135,7 +135,6 @@ public:
   // ════════════════════════════════════════════════════════════
   //  控件 getter
   // ════════════════════════════════════════════════════════════
-  QTreeWidget *fileTree() const { return m_fileTree; }
   QSplitter *editorSplitter() const { return m_editorSplitter; }
   QAction *splitAction() const { return m_splitAction; }
   QAction *closeAction() const { return m_closeAction; }
@@ -144,8 +143,6 @@ public:
   QAction *helpExampleAction() const { return m_helpExampleAction; }
 
 private:
-  void addDirectoryToTree(QTreeWidgetItem *parentItem, const QString &dirPath);
-
   /// 更新最大化/还原按钮图标
   void updateMaximizeIcon();
 
@@ -158,7 +155,7 @@ private:
                    qintptr *result) override;
 #endif
 
-  QTreeWidget *m_fileTree = nullptr;
+  TreeDir *m_fileTree = nullptr;
   QSplitter *m_mainSplitter = nullptr;
   QSplitter *m_editorSplitter = nullptr;
   QLabel *m_cursorPositionLabel = nullptr;
