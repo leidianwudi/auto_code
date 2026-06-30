@@ -18,7 +18,7 @@
  *
  * 用法示例：
  * @code
- *   FunLink 路由后调用 execute([{
+ *   FunFactory 注册后调用 call("db", [{
  *       "host":     "127.0.0.1",
  *       "port":     3306,
  *       "user":     "root",

@@ -12,7 +12,7 @@
  * @brief 字符串处理函数，继承 FunBase
  *
  * 用法示例：
- *   FunLink 路由后调用 execute(["toLowerCase", "Hello World"])
+ *   FunFactory 注册后调用 call("str", ["toLowerCase", "Hello World"])
  *
  * 支持的子命令：
  * - toLowerCase — 转换为小写

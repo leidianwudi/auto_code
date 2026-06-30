@@ -144,6 +144,7 @@ public:
   QAction *closeAction() const { return m_closeAction; }
   QAction *openAction() const { return m_openAction; }
   QAction *openFolderAction() const { return m_openFolderAction; }
+  QAction *helpExampleAction() const { return m_helpExampleAction; }
 
 private:
   void addDirectoryToTree(QTreeWidgetItem *parentItem, const QString &dirPath);
@@ -167,6 +168,7 @@ private:
   QAction *m_closeAction = nullptr;
   QAction *m_openAction = nullptr;
   QAction *m_openFolderAction = nullptr;
+  QAction *m_helpExampleAction = nullptr;
 
   // ── 自定义标题栏 ──
   QWidget *m_titleBar = nullptr;

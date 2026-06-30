@@ -19,6 +19,7 @@
 #include <QJsonValue>
 #include <QString>
 
+#include "function/fun_factory.h"
 #include "handler/block_handler.h"
 
 /**
@@ -37,7 +38,7 @@ public:
   /**
    * @brief 默认构造函数
    */
-  TemplateEngine() = default;
+  TemplateEngine();
 
   /**
    * @brief 渲染模板
@@ -64,12 +65,27 @@ public:
   // ====================================================================
 
   /**
+   * @brief 获取函数工厂引用（用于注册自定义函数）
+   * @return FunFactory 引用
+   */
+  FunFactory &funFactory() { return m_funFactory; }
+
+  /**
+   * @brief 获取函数工厂 const 引用
+   */
+  const FunFactory &funFactory() const { return m_funFactory; }
+
+  /**
    * @brief 解析嵌套属性路径
-   * @param path 属性路径，如 "user.name.email"
+   * @param path 属性路径，如 "user.name.email" 或 "str.toLowerCase(Hello)"
    * @param context 变量上下文
    * @return 解析到的 JSON 值
    *
-   * 支持内置字符串方法后缀：
+   * 优先检查路径首段是否为已注册的函数名（如 "str"、"db"），
+   * 若是则交由 FunFactory 处理；
+   * 否则按 JSON 对象嵌套属性解析。
+   *
+   * 内置字符串方法后缀（向下兼容）：
    * - .toLowerCase - 转小写
    * - .toUpperCase - 转大写
    * - .trim - 去除首尾空白
@@ -93,5 +109,6 @@ private:
    * BlockHandler 可通过 setError() 设置。
    */
   mutable QString m_lastError;
-  mutable HandlerFactory m_handlerFactory{*this};
+  mutable HandlerFactory m_handlerFactory;
+  FunFactory m_funFactory;
 };

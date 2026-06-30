@@ -13,10 +13,17 @@
 #include "template_engine.h"
 
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QRegularExpression>
 #include <QString>
+
+// ============================================================================
+// 构造函数
+// ============================================================================
+
+TemplateEngine::TemplateEngine() : m_handlerFactory(*this) {}
 
 // ============================================================================
 // render — 对外渲染入口
@@ -65,7 +72,7 @@ QString TemplateEngine::renderBlock(const QString &block,
 }
 
 // ============================================================================
-// resolvePath — 嵌套属性路径解析（如 "user.name.email"）
+// resolvePath — 嵌套属性路径解析 + 工厂函数调用
 // ============================================================================
 
 QJsonValue TemplateEngine::resolvePath(const QString &path,

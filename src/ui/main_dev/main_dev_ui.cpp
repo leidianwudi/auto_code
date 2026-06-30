@@ -7,6 +7,7 @@
 
 #include "src/tool/ui/aui_button.h"
 #include "src/tool/ui/aui_style.h"
+#include "src/ui/demo/demo_mgr.h"
 
 #include <QApplication>
 #include <QDir>
@@ -325,6 +326,16 @@ void MainDevUi::setupUI() {
   viewBtn->setMenu(viewMenu);
   titleLayout->addWidget(viewBtn);
 
+  // ── 右侧：帮助菜单 ──
+  auto *helpMenu = new QMenu(m_titleBar);
+  m_helpExampleAction = helpMenu->addAction(QStringLiteral("例子(&E)..."));
+
+  auto *helpBtn = new QToolButton;
+  helpBtn->setText(QStringLiteral("帮助(&H)"));
+  helpBtn->setPopupMode(QToolButton::InstantPopup);
+  helpBtn->setMenu(helpMenu);
+  titleLayout->addWidget(helpBtn);
+
   titleLayout->addStretch();
 
   // ── 右侧：窗口标题 + 控制按钮 ──
@@ -353,6 +364,10 @@ void MainDevUi::setupUI() {
   connect(m_minBtn, &QPushButton::clicked, this, &QWidget::showMinimized);
   connect(m_maxBtn, &QPushButton::clicked, this, &MainDevUi::onMaximizeClicked);
   connect(m_splitBtn, &QPushButton::clicked, m_splitAction, &QAction::trigger);
+
+  // ── 帮助 → 例子：弹出 Demo 窗口 ──
+  connect(m_helpExampleAction, &QAction::triggered, this,
+          []() { DemoMgr::ins().open(); });
 
   // ════════════════════════════════════════════════════════════
   //  左侧文件树

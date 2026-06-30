@@ -2,8 +2,8 @@
  * @file fun_base.h
  * @brief 函数基类 — 所有可执行函数的公共接口
  *
- * FunLink 责任链中的每个处理器都继承自 FunBase。
- * 通过 name() 标识自己能处理的函数名，由 FunLink 按链路由。
+ * FunFactory 中的每个处理器都继承自 FunBase。
+ * 通过 name() 标识自己能处理的函数名，由 FunFactory 按名称查找调用。
  */
 
 #pragma once
@@ -17,7 +17,7 @@
  * @brief 函数对象抽象基类
  *
  * 子类必须实现：
- * - name()     — 返回函数名称，供 FunLink 路由匹配
+ * - name()     — 返回函数名称，供 FunFactory 注册查找
  * - execute()  — 执行函数逻辑，接收 QJsonArray 参数，返回 QJsonValue
  */
 class FunBase {

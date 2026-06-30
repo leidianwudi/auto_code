@@ -7,12 +7,9 @@
 
 #pragma once
 
-#include "aui_style.h"
-
 #include <QIcon>
-#include <QPainter>
-#include <QPixmap>
 #include <QPushButton>
+#include <QString>
 
 class AuiButton {
 public:
@@ -21,80 +18,44 @@ public:
   // ════════════════════════════════════════════════════════════
 
   /// 对按钮应用标题栏按钮通用样式
-  static void applyCommonStyle(QPushButton *btn) {
-    btn->setFixedSize(36, 26);
-    btn->setFlat(true);
-    btn->setFocusPolicy(Qt::NoFocus);
-  }
+  static void applyCommonStyle(QPushButton *btn);
 
   // ════════════════════════════════════════════════════════════
   //  工厂方法
   // ════════════════════════════════════════════════════════════
 
   /// 创建「向右拆分」按钮
-  static QPushButton *createSplitButton() {
-    auto *btn = new QPushButton;
-    {
-      QPixmap px(20, 20);
-      px.fill(Qt::transparent);
-      QPainter p(&px);
-      p.setRenderHint(QPainter::Antialiasing);
-      p.setPen(QPen(AuiStyle::textColor(), 1.5));
-      p.drawRect(2, 3, 16, 14);                    // 外框
-      p.drawLine(QPointF(10, 3), QPointF(10, 17)); // 中分线
-      p.end();
-      btn->setIcon(QIcon(px));
-      btn->setIconSize(QSize(20, 20));
-    }
-    btn->setToolTip(QStringLiteral("向右拆分编辑器 (Ctrl+\\)"));
-    applyCommonStyle(btn);
-    return btn;
-  }
+  static QPushButton *createSplitButton();
 
   /// 创建「最小化」按钮
-  static QPushButton *createMinButton() {
-    auto *btn = new QPushButton(QStringLiteral("—"));
-    applyCommonStyle(btn);
-    return btn;
-  }
+  static QPushButton *createMinButton();
 
   /// 创建「最大化」按钮（初始为未最大化图标）
-  static QPushButton *createMaxButton() {
-    auto *btn = new QPushButton;
-    updateMaximizeIcon(btn, false);
-    applyCommonStyle(btn);
-    return btn;
-  }
+  static QPushButton *createMaxButton();
 
   /// 创建「关闭」按钮
-  static QPushButton *createCloseButton() {
-    auto *btn = new QPushButton(QStringLiteral("✕"));
-    applyCommonStyle(btn);
-    return btn;
-  }
+  static QPushButton *createCloseButton();
+
+  // ════════════════════════════════════════════════════════════
+  //  构建 / 生成按钮图标
+  // ════════════════════════════════════════════════════════════
+
+  /// 创建构建 / 生成按钮的三角形箭头图标
+  /// @param size  三角区域边长（像素）
+  /// @param text  可选文字，显示在箭头右侧
+  static QIcon createBuildIcon(int size = 24,
+                               const QString &text = QStringLiteral("F5"));
+
+  /// 创建「构建 / 生成」按钮（QPushButton，含三角形图标 + 文字）
+  static QPushButton *
+  createBuildButton(const QString &text = QStringLiteral("F5"));
 
   // ════════════════════════════════════════════════════════════
   //  图标更新
   // ════════════════════════════════════════════════════════════
 
   /// 更新最大化 / 还原按钮图标
-  static void updateMaximizeIcon(QPushButton *btn, bool isMaximized) {
-    QPixmap px(14, 14);
-    px.fill(Qt::transparent);
-    QPainter p(&px);
-    p.setRenderHint(QPainter::Antialiasing);
-    p.setPen(QPen(AuiStyle::textColor(), 1.2));
-
-    if (isMaximized) {
-      p.drawRect(1, 4, 9, 7);
-      p.drawRect(5, 1, 9, 7);
-    } else {
-      p.drawRect(1, 1, 12, 12);
-    }
-    p.end();
-    btn->setIcon(QIcon(px));
-    btn->setIconSize(QSize(14, 14));
-  }
+  static void updateMaximizeIcon(QPushButton *btn, bool isMaximized);
 
 private:
   AuiButton() = delete;

@@ -29,8 +29,8 @@ qt_add_executable(auto_code
     src/engine/function/fun_str.cpp
     src/engine/function/fun_db.h
     src/engine/function/fun_db.cpp
-    src/engine/function/fun_link.h
-    src/engine/function/fun_link.cpp
+    src/engine/function/fun_factory.h
+    src/engine/function/fun_factory.cpp
     src/ui/tool_ui/code_editor.h
     src/ui/tool_ui/code_editor.cpp
     src/ui/tool_ui/highlighter/template_highlighter.h
@@ -41,13 +41,21 @@ qt_add_executable(auto_code
     src/ui/tool_ui/highlighter/ts_highlighter.cpp
     src/tool/ui/aui_mgr.h
     src/tool/ui/aui_style.h
+    src/tool/ui/aui_style.cpp
     src/tool/ui/aui_button.h
+    src/tool/ui/aui_button.cpp
     src/ui/main_dev/main_dev_ui.h
     src/ui/main_dev/main_dev_ui.cpp
     src/ui/main_dev/main_dev_mgr.h
     src/ui/main_dev/main_dev_mgr.cpp
     src/ui/main_dev/main_dev_model.h
     src/ui/main_dev/main_dev_model.cpp
+    src/ui/demo/demo_ui.h
+    src/ui/demo/demo_ui.cpp
+    src/ui/demo/demo_mgr.h
+    src/ui/demo/demo_mgr.cpp
+    src/ui/demo/demo_model.h
+    src/ui/demo/demo_model.cpp
 )
 
 target_include_directories(auto_code PRIVATE
