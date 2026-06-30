@@ -12,6 +12,8 @@
 
 #include "template_engine.h"
 
+#include "function/fun_const.h"
+
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -92,13 +94,13 @@ QJsonValue TemplateEngine::resolvePath(const QString &path,
         return QJsonValue();
 
       QString str = current.toString();
-      if (part == QStringLiteral("toLowerCase"))
+      if (part == QLatin1String(FunConst::kToLowerCase))
         str = str.toLower();
-      else if (part == QStringLiteral("toUpperCase"))
+      else if (part == QLatin1String(FunConst::kToUpperCase))
         str = str.toUpper();
-      else if (part == QStringLiteral("trim"))
+      else if (part == QLatin1String(FunConst::kTrim))
         str = str.trimmed();
-      else if (part == QStringLiteral("capitalize"))
+      else if (part == QLatin1String(FunConst::kCapitalize))
         if (!str.isEmpty())
           str = str[0].toUpper() + str.mid(1);
 

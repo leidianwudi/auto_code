@@ -13,6 +13,7 @@
 // ============================================================================
 
 FunFactory::FunFactory() {
+  // 注册支持的函数处理器
   registerHandler(std::make_unique<FunStr>());
   registerHandler(std::make_unique<FunDb>());
 }

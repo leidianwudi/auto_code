@@ -11,6 +11,7 @@
 #pragma once
 
 #include "fun_base.h"
+#include "fun_const.h"
 
 /**
  * @class FunDb
@@ -54,7 +55,7 @@
  */
 class FunDb : public FunBase {
 public:
-  QString name() const override { return QStringLiteral("db"); }
+  QString name() const override { return QString::fromLatin1(FunConst::kDb); }
 
   /**
    * @brief 执行 MySQL 表结构查询

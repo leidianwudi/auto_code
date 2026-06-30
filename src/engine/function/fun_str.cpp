@@ -4,6 +4,7 @@
  */
 
 #include "fun_str.h"
+#include "fun_const.h"
 
 QJsonValue FunStr::execute(const QJsonArray &args) {
   if (args.size() < 2 || !args[1].isString())
@@ -12,13 +13,13 @@ QJsonValue FunStr::execute(const QJsonArray &args) {
   const QString cmd = args[0].toString();
   QString str = args[1].toString();
 
-  if (cmd == QStringLiteral("toLowerCase")) {
+  if (cmd == QLatin1String(FunConst::kToLowerCase)) {
     str = str.toLower();
-  } else if (cmd == QStringLiteral("toUpperCase")) {
+  } else if (cmd == QLatin1String(FunConst::kToUpperCase)) {
     str = str.toUpper();
-  } else if (cmd == QStringLiteral("trim")) {
+  } else if (cmd == QLatin1String(FunConst::kTrim)) {
     str = str.trimmed();
-  } else if (cmd == QStringLiteral("capitalize")) {
+  } else if (cmd == QLatin1String(FunConst::kCapitalize)) {
     if (!str.isEmpty())
       str = str[0].toUpper() + str.mid(1);
   } else {

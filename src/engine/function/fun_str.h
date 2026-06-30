@@ -6,6 +6,7 @@
 #pragma once
 
 #include "fun_base.h"
+#include "fun_const.h"
 
 /**
  * @class FunStr
@@ -22,7 +23,7 @@
  */
 class FunStr : public FunBase {
 public:
-  QString name() const override { return QStringLiteral("str"); }
+  QString name() const override { return QString::fromLatin1(FunConst::kStr); }
 
   /**
    * @brief 执行字符串操作
