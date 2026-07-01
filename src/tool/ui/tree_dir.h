@@ -39,6 +39,9 @@ public:
   /// 将当前勾选状态保存到 file/tree.config
   void saveState();
 
+  /// 获取当前所有勾选的 json 文件绝对路径
+  QStringList checkedJsonFiles() const;
+
 signals:
   /// 双击非 json 文件时发射，携带文件绝对路径
   void fileActivated(const QString &filePath);

@@ -346,6 +346,13 @@ void TreeDir::loadState() {
 // 辅助：收集 / 应用勾选状态
 // ============================================================================
 
+QStringList TreeDir::checkedJsonFiles() const {
+  QStringList files;
+  for (int i = 0; i < topLevelItemCount(); ++i)
+    collectJsonFiles(topLevelItem(i), files);
+  return files;
+}
+
 void TreeDir::collectJsonFiles(QTreeWidgetItem *item,
                                QStringList &files) const {
   // 检查当前节点本身（处理根目录下的 .json 文件）

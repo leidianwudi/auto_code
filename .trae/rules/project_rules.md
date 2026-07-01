@@ -29,7 +29,7 @@ Fusion 风格使用 `QPainter` 自绘所有控件，100% 遵循 `setTabTextColor
 - 编译器：MSVC 2022
 - Qt 版本：6.12.0
 - 代码缩进：2 空格（`.editorconfig`）
-- 注释规范：Doxygen
+- 注释规范：使用 Doxygen 风格，**注释内容用中文**
 
 ### 构建方法
 

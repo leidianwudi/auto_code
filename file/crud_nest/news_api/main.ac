@@ -1,0 +1,28 @@
+main {
+  // 连接数据库
+  call("db", "connect", {
+    host: "127.0.0.1",
+    port: 3306,
+    user: "root",
+    password: "123456",
+    database: "test_db"
+  })
+
+  outputPath = "D:/output"
+
+  // 获取主界面勾选的 json 文件
+  files = getCheckedFiles()
+
+  // 遍历每个 json 文件
+  for (file in files) {
+    json = readJson(file)
+    schema = call("db", "tableSchema", { table: json.modelName })
+    combined = merge(json, schema)
+    result = render("1.ac", combined)
+    name = basename(file)
+    write(outputPath + "/" + name + ".ts", result)
+  }
+
+  // 断开数据库
+  call("db", "disconnect")
+}
