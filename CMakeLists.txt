@@ -13,6 +13,8 @@ qt_add_executable(auto_code
     main.cpp
     src/engine/template_engine.h
     src/engine/template_engine.cpp
+    src/engine/schema_validator.h
+    src/engine/schema_validator.cpp
     src/engine/handler/block_handler.h
     src/engine/handler/block_handler.cpp
     src/engine/handler/each_block_handler.h

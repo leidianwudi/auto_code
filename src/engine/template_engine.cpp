@@ -14,6 +14,7 @@
 
 #include "function/fun_const.h"
 #include "function/fun_mgr.h"
+#include "schema_validator.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -28,13 +29,32 @@
 
 TemplateEngine::TemplateEngine() : m_handlerFactory(*this) {}
 
-// ============================================================================
-// render — 对外渲染入口
-// ============================================================================
+// setSchema — 设置 Schema 校验
+void TemplateEngine::setSchema(const QString &className,
+                               const SchemaValidator *validator) {
+  m_schemaClass = className;
+  m_validator = validator;
+}
 
+// clearSchema — 清除 Schema 校验
+void TemplateEngine::clearSchema() {
+  m_schemaClass.clear();
+  m_validator = nullptr;
+}
+
+// render — 对外渲染入口
 QString TemplateEngine::render(const QString &tmpl,
                                const QJsonObject &data) const {
   m_lastError.clear();
+
+  if (m_validator && !m_schemaClass.isEmpty()) {
+    QString err = m_validator->validate(m_schemaClass, data);
+    if (!err.isEmpty()) {
+      m_lastError = err;
+      return {};
+    }
+  }
+
   return renderBlock(tmpl, data);
 }
 

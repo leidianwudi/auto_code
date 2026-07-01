@@ -21,6 +21,8 @@
 
 #include "handler/block_handler.h"
 
+class SchemaValidator;
+
 /**
  * @class TemplateEngine
  * @brief 模板引擎类
@@ -39,6 +41,18 @@ public:
    * @brief 默认构造函数
    */
   TemplateEngine();
+
+  /**
+   * @brief 设置 Schema 校验器（启用后渲染前自动校验数据）
+   * @param className 数据对应的类名
+   * @param validator Schema 校验器指针（生命周期由调用者管理）
+   */
+  void setSchema(const QString &className, const SchemaValidator *validator);
+
+  /**
+   * @brief 清除 Schema 校验（关闭数据校验）
+   */
+  void clearSchema();
 
   /**
    * @brief 渲染模板
@@ -83,4 +97,9 @@ private:
 
   /// 最后一次错误信息
   mutable QString m_lastError;
+
+  /// Schema 校验器（nullptr 表示不校验）
+  const SchemaValidator *m_validator = nullptr;
+  /// 当前 Schema 类名
+  QString m_schemaClass;
 };
