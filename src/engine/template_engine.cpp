@@ -23,23 +23,24 @@
 #include <QRegularExpression>
 #include <QString>
 
-// ============================================================================
-// 构造函数
-// ============================================================================
+// 静态成员定义
+
+const SchemaValidator *TemplateEngine::sm_validator = nullptr;
+QString TemplateEngine::sm_schemaClass;
 
 TemplateEngine::TemplateEngine() : m_handlerFactory(*this) {}
 
 // setSchema — 设置 Schema 校验
 void TemplateEngine::setSchema(const QString &className,
                                const SchemaValidator *validator) {
-  m_schemaClass = className;
-  m_validator = validator;
+  sm_schemaClass = className;
+  sm_validator = validator;
 }
 
 // clearSchema — 清除 Schema 校验
 void TemplateEngine::clearSchema() {
-  m_schemaClass.clear();
-  m_validator = nullptr;
+  sm_schemaClass.clear();
+  sm_validator = nullptr;
 }
 
 // render — 对外渲染入口
@@ -47,8 +48,8 @@ QString TemplateEngine::render(const QString &tmpl,
                                const QJsonObject &data) const {
   m_lastError.clear();
 
-  if (m_validator && !m_schemaClass.isEmpty()) {
-    QString err = m_validator->validate(m_schemaClass, data);
+  if (sm_validator && !sm_schemaClass.isEmpty()) {
+    QString err = sm_validator->validate(sm_schemaClass, data);
     if (!err.isEmpty()) {
       m_lastError = err;
       return {};
@@ -58,9 +59,7 @@ QString TemplateEngine::render(const QString &tmpl,
   return renderBlock(tmpl, data);
 }
 
-// ============================================================================
 // renderBlock — 递归扫描 ${...} 并交给处理器
-// ============================================================================
 
 QString TemplateEngine::renderBlock(const QString &block,
                                     const QJsonObject &context) const {
@@ -94,9 +93,7 @@ QString TemplateEngine::renderBlock(const QString &block,
   return result;
 }
 
-// ============================================================================
 // resolvePath — 嵌套属性路径解析 + 通过 FunMgr 调用 C++ 函数
-// ============================================================================
 
 QJsonValue TemplateEngine::resolvePath(const QString &path,
                                        const QJsonObject &context) const {

@@ -47,12 +47,13 @@ public:
    * @param className 数据对应的类名
    * @param validator Schema 校验器指针（生命周期由调用者管理）
    */
-  void setSchema(const QString &className, const SchemaValidator *validator);
+  static void setSchema(const QString &className,
+                        const SchemaValidator *validator);
 
   /**
    * @brief 清除 Schema 校验（关闭数据校验）
    */
-  void clearSchema();
+  static void clearSchema();
 
   /**
    * @brief 渲染模板
@@ -99,7 +100,7 @@ private:
   mutable QString m_lastError;
 
   /// Schema 校验器（nullptr 表示不校验）
-  const SchemaValidator *m_validator = nullptr;
+  static const SchemaValidator *sm_validator;
   /// 当前 Schema 类名
-  QString m_schemaClass;
+  static QString sm_schemaClass;
 };
