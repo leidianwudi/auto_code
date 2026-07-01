@@ -7,10 +7,10 @@
 #include "demo_model.h"
 #include "demo_ui.h"
 #include "src/engine/template_engine.h"
-#include "src/ui/tool_ui/code_editor.h"
-#include "src/ui/tool_ui/highlighter/json_highlighter.h"
-#include "src/ui/tool_ui/highlighter/template_highlighter.h"
-#include "src/ui/tool_ui/highlighter/ts_highlighter.h"
+#include "src/tool/ui/code_editor.h"
+#include "src/tool/ui/highlighter/json_highlighter.h"
+#include "src/tool/ui/highlighter/template_highlighter.h"
+#include "src/tool/ui/highlighter/ts_highlighter.h"
 
 #include <QFile>
 #include <QFileDialog>

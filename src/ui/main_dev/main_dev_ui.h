@@ -15,7 +15,7 @@
 #include <QSplitter>
 #include <QTabWidget>
 
-#include "src/ui/tool_ui/tree_dir.h"
+#include "src/tool/ui/tree_dir.h"
 
 class QTreeWidgetItem;
 class QTabBar;

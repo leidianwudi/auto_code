@@ -6,9 +6,9 @@
 #include "main_dev_mgr.h"
 #include "main_dev_model.h"
 #include "main_dev_ui.h"
-#include "src/ui/tool_ui/code_editor.h"
-#include "src/ui/tool_ui/highlighter/json_highlighter.h"
-#include "src/ui/tool_ui/highlighter/template_highlighter.h"
+#include "src/tool/ui/code_editor.h"
+#include "src/tool/ui/highlighter/json_highlighter.h"
+#include "src/tool/ui/highlighter/template_highlighter.h"
 
 #include <QAction>
 #include <QApplication>

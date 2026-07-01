@@ -4,7 +4,7 @@
  */
 
 #include "main_dev_model.h"
-#include "src/ui/tool_ui/code_editor.h"
+#include "src/tool/ui/code_editor.h"
 
 // ──────────────────────────────────────────────────────────────
 //  文件状态管理

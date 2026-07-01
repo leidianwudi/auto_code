@@ -6,7 +6,7 @@
 #include "demo_ui.h"
 #include "src/tool/ui/aui_button.h"
 #include "src/tool/ui/aui_style.h"
-#include "src/ui/tool_ui/code_editor.h"
+#include "src/tool/ui/code_editor.h"
 
 #include <QAction>
 
