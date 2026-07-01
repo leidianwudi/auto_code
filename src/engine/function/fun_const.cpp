@@ -15,6 +15,8 @@ QStringList FunConst::stringMethods() {
 
 QStringList FunConst::dbMethods() {
   return {
+      QString::fromLatin1(kConnect),
+      QString::fromLatin1(kDisconnect),
       QString::fromLatin1(kTableSchema),
       QString::fromLatin1(kQuery),
   };

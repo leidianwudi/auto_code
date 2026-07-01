@@ -32,6 +32,8 @@ struct FunConst {
   // ── FunDb 子命令 ──
   static constexpr const char *kTableSchema = "tableSchema"; ///< 获取表结构
   static constexpr const char *kQuery = "query";             ///< 执行 SQL
+  static constexpr const char *kConnect = "connect";         ///< 连接数据库
+  static constexpr const char *kDisconnect = "disconnect";   ///< 断开连接
 
   /// 返回所有支持的数据库子命令列表
   static QStringList dbMethods();

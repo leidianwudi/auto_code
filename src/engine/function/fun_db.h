@@ -42,8 +42,21 @@ public:
   // ── 子命令 ──
 
   /**
-   * @brief 获取指定表的列信息
-   * args[0] JSON: { host, port?, user, password, database, table }
+   * @brief 连接数据库
+   * args[0] JSON: { host, port?, user, password, database }
+   * @return 成功返回 true，失败返回 false
+   */
+  static QJsonValue connectDb(const QJsonArray &args);
+
+  /**
+   * @brief 断开数据库连接
+   * @return 成功返回 true
+   */
+  static QJsonValue disconnectDb();
+
+  /**
+   * @brief 获取指定表的列信息（database 从连接配置获取）
+   * args[0] JSON: { table }
    * @return 列信息 JSON 数组
    */
   static QJsonValue tableSchema(const QJsonArray &args);
@@ -56,9 +69,11 @@ public:
   static QJsonValue query(const QJsonArray &args);
 
 private:
-  /// 建立/获取持久连接（内部调用）
-  static MYSQL *getConnection(const QJsonObject &cfg);
+  /// 建立/获取持久连接（使用 connectDb 保存的配置）
+  static MYSQL *getConnection();
 
   /// MySQL 持久连接（首次 getConnection 时建立）
   static MYSQL *s_conn;
+  /// 连接配置缓存（connectDb 时保存）
+  static QJsonObject s_config;
 };

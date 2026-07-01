@@ -37,6 +37,8 @@ class FunMgr {
 public:
   /// 函数指针类型：接收 QJsonArray 参数，返回 QJsonValue
   using FunPtr = std::function<QJsonValue(const QJsonArray &)>;
+  /// 无参函数指针类型：不接收参数，返回 QJsonValue
+  using FunPtrVoid = std::function<QJsonValue()>;
 
   /**
    * @brief 单例访问
@@ -64,6 +66,14 @@ public:
    */
   void registerFuncs(const QString &className,
                      const std::map<QString, FunPtr> &funcs);
+
+  /**
+   * @brief 注册一个类的所有无参函数（自动包装为 FunPtr）
+   * @param className 类名
+   * @param funcs     函数名 → 无参函数指针 映射表
+   */
+  void registerFuncs(const QString &className,
+                     const std::map<QString, FunPtrVoid> &funcs);
 
   /**
    * @brief 调用已注册的函数

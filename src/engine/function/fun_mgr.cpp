@@ -44,6 +44,14 @@ void FunMgr::registerFuncs(const QString &className,
   m_registry[className] = funcs;
 }
 
+void FunMgr::registerFuncs(const QString &className,
+                           const std::map<QString, FunPtrVoid> &funcs) {
+  auto &target = m_registry[className];
+  for (const auto &[name, fn] : funcs) {
+    target[name] = [fn](const QJsonArray &) { return fn(); };
+  }
+}
+
 // ============================================================================
 // call — 二级查找并执行
 // ============================================================================

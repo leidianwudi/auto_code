@@ -17,24 +17,27 @@
 #include <mysql.h>
 
 MYSQL *FunDb::s_conn = nullptr;
+QJsonObject FunDb::s_config;
 
-// ============================================================================
 // init — 注册所有数据库函数到 FunMgr
-// ============================================================================
-
 void FunDb::init() {
+  // 注册数据库函数,带参数
   FunMgr::ins().registerFuncs(
       QString::fromLatin1(FunConst::kClsDb),
       {
+          {QString::fromLatin1(FunConst::kConnect), connectDb},
           {QString::fromLatin1(FunConst::kTableSchema), tableSchema},
           {QString::fromLatin1(FunConst::kQuery), query},
       });
+  // 注册数据库函数,不带参数
+  FunMgr::ins().registerFuncs(
+      QString::fromLatin1(FunConst::kClsDb),
+      std::map<QString, FunMgr::FunPtrVoid>{
+          {QString::fromLatin1(FunConst::kDisconnect), disconnectDb},
+      });
 }
 
-// ============================================================================
 // cleanup — 关闭持久连接
-// ============================================================================
-
 void FunDb::cleanup() {
   if (s_conn) {
     mysql_close(s_conn);
@@ -42,27 +45,31 @@ void FunDb::cleanup() {
   }
 }
 
-// ============================================================================
-// getConnection — 建立/获取持久连接
-// ============================================================================
+// getConnection — 获取持久连接
+MYSQL *FunDb::getConnection() { return s_conn; }
 
-MYSQL *FunDb::getConnection(const QJsonObject &cfg) {
-  // 已有持久连接则直接复用
+// connectDb — 连接数据库
+QJsonValue FunDb::connectDb(const QJsonArray &args) {
   if (s_conn)
-    return s_conn;
+    return QJsonValue(true);
 
-  const QString host = cfg.value(QStringLiteral("host")).toString();
-  const int port = cfg.value(QStringLiteral("port")).toInt(3306);
-  const QString user = cfg.value(QStringLiteral("user")).toString();
-  const QString pass = cfg.value(QStringLiteral("password")).toString();
-  const QString dbName = cfg.value(QStringLiteral("database")).toString();
+  if (args.isEmpty() || !args[0].isObject())
+    return QJsonValue(false);
+
+  s_config = args[0].toObject();
+
+  const QString host = s_config.value(QStringLiteral("host")).toString();
+  const int port = s_config.value(QStringLiteral("port")).toInt(3306);
+  const QString user = s_config.value(QStringLiteral("user")).toString();
+  const QString pass = s_config.value(QStringLiteral("password")).toString();
+  const QString dbName = s_config.value(QStringLiteral("database")).toString();
 
   if (host.isEmpty() || user.isEmpty() || dbName.isEmpty())
-    return nullptr;
+    return QJsonValue(false);
 
   MYSQL *conn = mysql_init(nullptr);
   if (!conn)
-    return nullptr;
+    return QJsonValue(false);
 
   unsigned int timeout = 5;
   mysql_options(conn, MYSQL_OPT_CONNECT_TIMEOUT, &timeout);
@@ -71,29 +78,35 @@ MYSQL *FunDb::getConnection(const QJsonObject &cfg) {
                           user.toUtf8().constData(), pass.toUtf8().constData(),
                           dbName.toUtf8().constData(), port, nullptr, 0)) {
     mysql_close(conn);
-    return nullptr;
+    return QJsonValue(false);
   }
 
   mysql_set_character_set(conn, "utf8mb4");
   s_conn = conn;
-  return conn;
+  return QJsonValue(true);
 }
 
-// ============================================================================
-// tableSchema — 获取表列信息
-// ============================================================================
+// disconnectDb — 断开数据库连接
+QJsonValue FunDb::disconnectDb() {
+  if (s_conn) {
+    mysql_close(s_conn);
+    s_conn = nullptr;
+  }
+  return QJsonValue(true);
+}
 
+// tableSchema — 获取表列信息
 QJsonValue FunDb::tableSchema(const QJsonArray &args) {
   if (args.isEmpty() || !args[0].isObject())
     return QJsonValue();
 
   const QJsonObject cfg = args[0].toObject();
 
-  MYSQL *conn = getConnection(cfg);
+  MYSQL *conn = getConnection();
   if (!conn)
     return QJsonValue();
 
-  const QString dbName = cfg.value(QStringLiteral("database")).toString();
+  const QString dbName = s_config.value(QStringLiteral("database")).toString();
   const QString table = cfg.value(QStringLiteral("table")).toString();
   if (table.isEmpty())
     return QJsonValue();
@@ -140,17 +153,14 @@ QJsonValue FunDb::tableSchema(const QJsonArray &args) {
   return QJsonValue(columns);
 }
 
-// ============================================================================
 // query — 执行自定义 SQL
-// ============================================================================
-
 QJsonValue FunDb::query(const QJsonArray &args) {
   if (args.isEmpty() || !args[0].isObject())
     return QJsonValue();
 
   const QJsonObject cfg = args[0].toObject();
 
-  MYSQL *conn = getConnection(cfg);
+  MYSQL *conn = getConnection();
   if (!conn)
     return QJsonValue();
 
