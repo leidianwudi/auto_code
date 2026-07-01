@@ -46,6 +46,8 @@ public:
 
   /// 设置验证模式，切换后立即执行一次验证
   void setValidationMode(ValidationMode mode);
+  /// 手动触发一次验证（同步执行，立即发出 validationMessage 信号）
+  void validate();
 
   /// 绘制行号区域（由 LineNumberArea 委托调用）
   void lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area);

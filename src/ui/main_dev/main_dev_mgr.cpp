@@ -247,6 +247,8 @@ void MainDevMgr::connectEditor(CodeEditor *editor) {
   if (m_model->connectedEditor) {
     disconnect(m_model->connectedEditor, &QPlainTextEdit::cursorPositionChanged,
                this, &MainDevMgr::updateCursorPosition);
+    disconnect(m_model->connectedEditor, &CodeEditor::validationMessage, this,
+               &MainDevMgr::onValidationMessage);
   }
 
   m_model->connectedEditor = editor;
@@ -254,9 +256,13 @@ void MainDevMgr::connectEditor(CodeEditor *editor) {
   if (editor) {
     connect(editor, &QPlainTextEdit::cursorPositionChanged, this,
             &MainDevMgr::updateCursorPosition);
+    connect(editor, &CodeEditor::validationMessage, this,
+            &MainDevMgr::onValidationMessage);
     updateCursorPosition();
+    editor->validate();
   } else {
     m_ui->setCursorStatusText(QStringLiteral("行: -, 列: -"));
+    m_ui->setErrorMessage(QString());
   }
 }
 
@@ -304,6 +310,10 @@ void MainDevMgr::updateCursorPosition() {
   int col = cursor.columnNumber() + 1;
   m_ui->setCursorStatusText(
       QStringLiteral("行: %1, 列: %2").arg(line).arg(col));
+}
+
+void MainDevMgr::onValidationMessage(const QString &msg) {
+  m_ui->setErrorMessage(msg);
 }
 
 // ──────────────────────────────────────────────────────────────

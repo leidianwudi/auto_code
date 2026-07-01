@@ -64,6 +64,8 @@ void CodeEditor::setValidationMode(ValidationMode mode) {
   performValidation(); // 立即做一次验证
 }
 
+void CodeEditor::validate() { performValidation(); }
+
 // ──────────────────────────────────────────────────────────────
 //  行号区域
 // ──────────────────────────────────────────────────────────────

@@ -125,6 +125,7 @@ public:
   // ════════════════════════════════════════════════════════════
 
   void setCursorStatusText(const QString &text);
+  void setErrorMessage(const QString &msg);
 
   // ════════════════════════════════════════════════════════════
   //  标签页颜色
@@ -159,6 +160,7 @@ private:
   QSplitter *m_mainSplitter = nullptr;
   QSplitter *m_editorSplitter = nullptr;
   QLabel *m_cursorPositionLabel = nullptr;
+  QLabel *m_errorLabel = nullptr;
   QAction *m_splitAction = nullptr;
   QAction *m_closeAction = nullptr;
   QAction *m_openAction = nullptr;

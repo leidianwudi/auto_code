@@ -427,6 +427,10 @@ void MainDevUi::setupUI() {
   m_cursorPositionLabel->setMinimumWidth(120);
   m_cursorPositionLabel->setAlignment(Qt::AlignCenter);
   statusBar()->addPermanentWidget(m_cursorPositionLabel);
+
+  m_errorLabel = new QLabel;
+  m_errorLabel->setStyleSheet(QStringLiteral("QLabel { color: #f44747; }"));
+  statusBar()->addWidget(m_errorLabel, 1);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -611,6 +615,10 @@ int MainDevUi::fileTreeWidth() const { return m_fileTree->width(); }
 // ══════════════════════════════════════════════════════════════
 void MainDevUi::setCursorStatusText(const QString &text) {
   m_cursorPositionLabel->setText(text);
+}
+
+void MainDevUi::setErrorMessage(const QString &msg) {
+  m_errorLabel->setText(msg);
 }
 
 // ══════════════════════════════════════════════════════════════

@@ -69,6 +69,8 @@ private slots:
   void updateCursorPosition();
   /// 应用程序焦点变化时，连接新焦点的编辑器信号
   void onFocusChanged(QWidget *oldFocus, QWidget *newFocus);
+  /// 编辑器验证结果变化时，更新状态栏错误信息
+  void onValidationMessage(const QString &msg);
 
 private:
   /// 查找并加载 file/ 目录
