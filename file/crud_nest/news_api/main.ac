@@ -6,23 +6,23 @@ main {
     user: "root",
     password: "123456",
     database: "test_db"
-  })
+  });
 
-  outputPath = "D:/output"
+  outputPath = "D:/output";
 
   // 获取主界面勾选的 json 文件
-  files = getCheckedFiles()
+  files = getCheckedFiles();
 
   // 遍历每个 json 文件
   for (file in files) {
-    json = readJson(file)
-    schema = call("db", "tableSchema", { table: json.modelName })
-    combined = merge(json, schema)
-    result = render("1.ac", combined)
-    name = basename(file)
-    write(outputPath + "/" + name + ".ts", result)
+    json = readJson(file);
+    schema = call("db", "tableSchema", { table: json.modelName });
+    combined = merge(json, schema);
+    result = render("1.ac", combined);
+    name = basename(file);
+    write(outputPath + "/" + name + ".ts", result);
   }
 
   // 断开数据库
-  call("db", "disconnect")
+  call("db", "disconnect");
 }

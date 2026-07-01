@@ -37,23 +37,24 @@ public:
 private:
   /// @brief 词法单元类型
   enum TokenType {
-    TOK_EOF,
-    TOK_IDENT,
-    TOK_STRING,
-    TOK_NUMBER,
-    TOK_LBRACE,
-    TOK_RBRACE, // { }
-    TOK_LPAREN,
-    TOK_RPAREN, // ( )
-    TOK_LBRACKET,
-    TOK_RBRACKET, // [ ]
-    TOK_COMMA,
-    TOK_COLON,
-    TOK_DOT,
-    TOK_EQUALS,
-    TOK_PLUS,
-    TOK_FOR,
-    TOK_IN,
+    TOK_EOF,      ///< 输入结束
+    TOK_IDENT,    ///< 标识符（变量名、函数名）
+    TOK_STRING,   ///< 字符串字面量 "hello"
+    TOK_NUMBER,   ///< 数字字面量 123
+    TOK_LBRACE,   ///< {
+    TOK_RBRACE,   ///< }
+    TOK_LPAREN,   ///< (
+    TOK_RPAREN,   ///< )
+    TOK_LBRACKET, ///< [
+    TOK_RBRACKET, ///< ]
+    TOK_COMMA,    ///< ,
+    TOK_COLON,    ///< :
+    TOK_DOT,      ///< .（属性访问）
+    TOK_EQUALS,   ///< =（赋值）
+    TOK_PLUS,     ///< +（字符串拼接）
+    TOK_SEMI,     ///< ;（语句结束）
+    TOK_FOR,      ///< for 关键字
+    TOK_IN,       ///< in 关键字
   };
 
   /// @brief 词法单元
@@ -126,49 +127,65 @@ private:
     ~Expr() { freeOwned(); }
 
   private:
+    /// @brief 深拷贝 — 递归复制所有指针成员，避免共享所有权
     void copyFrom(const Expr &other) {
+      // 拷贝基础字段
       kind = other.kind;
       strVal = other.strVal;
       numVal = other.numVal;
       ident = other.ident;
       prop = other.prop;
+      // 深拷贝对象条目
       for (const auto &e : other.objEntries)
         objEntries.append({e.key, e.value ? new Expr(*e.value) : nullptr});
+      // 深拷贝数组元素
       for (auto *e : other.arrItems)
         arrItems.append(e ? new Expr(*e) : nullptr);
+      // 深拷贝函数调用参数
       funcCall.name = other.funcCall.name;
       for (auto *e : other.funcCall.args)
         funcCall.args.append(e ? new Expr(*e) : nullptr);
+      // 拷贝运算符和子树
       binOp = other.binOp;
       left = other.left ? new Expr(*other.left) : nullptr;
       right = other.right ? new Expr(*other.right) : nullptr;
     }
+    /// @brief 移动构造 — 转移指针所有权，源对象指针置空
     void moveFrom(Expr &&other) {
+      // 移动基础字段
       kind = other.kind;
       strVal = std::move(other.strVal);
       numVal = other.numVal;
       ident = std::move(other.ident);
       prop = std::move(other.prop);
+      // 移动容器（直接转移内部指针，无需深拷贝）
       objEntries = std::move(other.objEntries);
       arrItems = std::move(other.arrItems);
       funcCall = std::move(other.funcCall);
+      // 转移树指针所有权
       binOp = other.binOp;
       left = other.left;
       right = other.right;
+      // 源对象指针置空，防止双重释放
       other.left = nullptr;
       other.right = nullptr;
     }
+    /// @brief 释放所有指针成员，防止内存泄漏
     void freeOwned() {
+      // 释放对象条目中的值指针
       for (auto &e : objEntries) {
         delete e.value;
         e.value = nullptr;
       }
+      // 释放数组元素指针
       for (auto *e : arrItems)
         delete e;
       arrItems.clear();
+      // 释放函数调用参数指针
       for (auto *e : funcCall.args)
         delete e;
       funcCall.args.clear();
+      // 释放子树指针
       delete left;
       left = nullptr;
       delete right;

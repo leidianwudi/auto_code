@@ -89,6 +89,10 @@ QVector<ScriptParser::Token> ScriptParser::tokenize(const QString &source) {
       tokens.append({TOK_PLUS, QStringLiteral("+"), line});
       ++i;
       break;
+    case ';':
+      tokens.append({TOK_SEMI, QStringLiteral(";"), line});
+      ++i;
+      break;
     case '"': {
       int start = ++i;
       while (i < n && source[i] != '"') {
@@ -201,6 +205,9 @@ bool ScriptParser::parseBlock(Block &block) {
     if (!parseStmt(stmt))
       return false;
     block.stmts.append(stmt);
+    // 消费可选的 ; 语句结束符
+    if (peek().type == TOK_SEMI)
+      advance();
   }
   return expect(TOK_RBRACE, QStringLiteral("expected '}'"));
 }
