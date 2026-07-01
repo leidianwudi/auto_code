@@ -380,7 +380,9 @@ QStringList CodeEditor::validateJson() {
     errors << msg;
 
     // 标记错误位置（红色波浪下划线）
-    int markPos = qMin(offset, text.length() - 1);
+    // QJsonParseError::offset 指向解析器停止位置（即错误字符的下一位），
+    // 因此需要 -1 才能定位到实际错误字符
+    int markPos = qMin(offset, text.length()) - 1;
     if (markPos < 0)
       markPos = 0;
     applyErrorUnderline(markPos, 1, msg, m_errorSelections);
