@@ -335,6 +335,11 @@ void MainDevUi::setupUI() {
   helpBtn->setMenu(helpMenu);
   titleLayout->addWidget(helpBtn);
 
+  // ── 编译按钮 ──
+  m_buildBtn = AuiButton::createBuildButton();
+  m_buildBtn->setToolTip(QStringLiteral("编译 (F5)"));
+  titleLayout->addWidget(m_buildBtn);
+
   titleLayout->addStretch();
 
   // ── 右侧：窗口标题 + 控制按钮 ──

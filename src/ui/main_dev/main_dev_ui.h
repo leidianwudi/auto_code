@@ -142,6 +142,7 @@ public:
   QAction *openAction() const { return m_openAction; }
   QAction *openFolderAction() const { return m_openFolderAction; }
   QAction *helpExampleAction() const { return m_helpExampleAction; }
+  QPushButton *buildBtn() const { return m_buildBtn; }
 
 private:
   /// 更新最大化/还原按钮图标
@@ -174,4 +175,5 @@ private:
   QPushButton *m_minBtn = nullptr;
   QPushButton *m_maxBtn = nullptr;
   QPushButton *m_closeBtn = nullptr;
+  QPushButton *m_buildBtn = nullptr;
 };
