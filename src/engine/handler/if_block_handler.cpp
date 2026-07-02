@@ -45,6 +45,13 @@ bool IfBlockHandler::handle(const QString &block, int &pos, const QString &expr,
                             const QJsonObject &context, QString &result) const {
   QString condition = expr.mid(3).trimmed();
 
+  // 支持 ! 取反
+  bool negate = false;
+  if (condition.startsWith('!')) {
+    negate = true;
+    condition = condition.mid(1).trimmed();
+  }
+
   int ifStart = pos;
   int elsePos = block.indexOf(QStringLiteral("${else}"), pos);
   int ifEnd = block.indexOf(QStringLiteral("${/if}"), pos);
@@ -67,7 +74,19 @@ bool IfBlockHandler::handle(const QString &block, int &pos, const QString &expr,
   pos = ifEnd + 6;
 
   QJsonValue val = m_engine.resolvePath(condition, context);
-  if (isTruthy(val)) {
+  // 如果 resolvePath 找不到，尝试作为表达式求值（如 fileExists(path)）
+  if (val.isNull() || val.isUndefined()) {
+    QString exprResult =
+        m_engine.renderBlock(QStringLiteral("${%1}").arg(condition), context);
+    if (exprResult == QStringLiteral("true"))
+      val = QJsonValue(true);
+    else if (exprResult == QStringLiteral("false"))
+      val = QJsonValue(false);
+  }
+  bool truthy = isTruthy(val);
+  if (negate)
+    truthy = !truthy;
+  if (truthy) {
     result += m_engine.renderBlock(thenBlock, context);
   } else {
     result += m_engine.renderBlock(elseBlock, context);

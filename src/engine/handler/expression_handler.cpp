@@ -14,6 +14,8 @@
 #include "expression_handler.h"
 #include "../template_engine.h"
 
+#include <QFileInfo>
+
 namespace {
 
 /**
@@ -59,6 +61,23 @@ bool ExpressionHandler::handle(const QString &block, int &pos,
                                QString &result) const {
   Q_UNUSED(block)
   Q_UNUSED(pos)
+
+  // === 策略 0: 内置函数调用 fileExists(path) ===
+  if (expr.startsWith(QStringLiteral("fileExists(")) &&
+      expr.endsWith(QStringLiteral(")"))) {
+    QString arg = expr.mid(11, expr.length() - 12).trimmed();
+    // 去掉可能的外层引号
+    if ((arg.startsWith('\'') && arg.endsWith('\'')) ||
+        (arg.startsWith('"') && arg.endsWith('"')))
+      arg = arg.mid(1, arg.length() - 2);
+    // 如果参数不是字面量，尝试从 context 解析变量
+    QJsonValue v = m_engine.resolvePath(arg, context);
+    if (!v.isNull() && !v.isUndefined())
+      arg = v.toString();
+    bool exists = QFileInfo::exists(arg);
+    result += exists ? QStringLiteral("true") : QStringLiteral("false");
+    return true;
+  }
 
   // === 策略 1: 循环变量 ${this} 或 ${.} ===
   // 在 each 循环体内，当前元素存储在 context["."] 中。

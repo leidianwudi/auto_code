@@ -18,8 +18,9 @@ main {
     json = readJson(file);
     schema = call("db", "tableSchema", { table: json.modelName });
     combined = merge(json, schema);
-    result = render("1.ac", combined);
     name = basename(file);
+    combined["outputPath"] = outputPath + "/" + name + ".ts"
+    result = render("1.ac", combined);
     write(outputPath + "/" + name + ".ts", result);
   }
 

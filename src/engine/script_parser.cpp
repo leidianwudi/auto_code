@@ -233,6 +233,12 @@ bool ScriptParser::parseStmt(Stmt &stmt) {
       stmt.kind = Stmt::kAssign;
       return parseAssignStmt(stmt.assign);
     }
+    // look ahead: if next is '[', it's indexed assignment obj["key"] = expr
+    if (m_pos + 1 < m_tokens.size() &&
+        m_tokens[m_pos + 1].type == TOK_LBRACKET) {
+      stmt.kind = Stmt::kIndexAssign;
+      return parseIndexAssignStmt(stmt.indexAssign);
+    }
     // look ahead: if next is '(', it's an expression statement (e.g.
     // write(...))
     if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_LPAREN) {
@@ -270,6 +276,25 @@ bool ScriptParser::parseAssignStmt(AssignStmt &as) {
   if (!expect(TOK_EQUALS, QStringLiteral("expected '='")))
     return false;
   return parseExpr(as.value);
+}
+
+/// @brief 解析 obj["key"] = expr
+bool ScriptParser::parseIndexAssignStmt(IndexAssignStmt &ias) {
+  ias.objName = advance().text;
+  if (!expect(TOK_LBRACKET, QStringLiteral("expected '['")))
+    return false;
+  if (peek().type != TOK_STRING) {
+    m_error =
+        QStringLiteral("expected string key in index assignment at line %1")
+            .arg(peek().line);
+    return false;
+  }
+  ias.key = advance().text;
+  if (!expect(TOK_RBRACKET, QStringLiteral("expected ']'")))
+    return false;
+  if (!expect(TOK_EQUALS, QStringLiteral("expected '='")))
+    return false;
+  return parseExpr(ias.value);
 }
 
 /// @brief 解析 for (var in arrayExpr) { body }
@@ -551,7 +576,10 @@ QJsonValue ScriptParser::callBuiltin(const QString &name,
       return QJsonValue();
     }
     QString tplPath = evalExpr(*args[0]).toString();
-    QJsonValue data = evalExpr(*args[1]);
+    // 相对路径相对于脚本目录解析
+    QFileInfo tplInfo(tplPath);
+    if (tplInfo.isRelative())
+      tplPath = m_scriptDir + QStringLiteral("/") + tplPath;
 
     QFile f(tplPath);
     if (!f.open(QIODevice::ReadOnly))
@@ -559,6 +587,7 @@ QJsonValue ScriptParser::callBuiltin(const QString &name,
     QString tpl = QString::fromUtf8(f.readAll());
 
     TemplateEngine engine;
+    QJsonValue data = evalExpr(*args[1]);
     if (!data.isObject()) {
       m_error = QStringLiteral("render() data must be a JSON object");
       return QJsonValue();
@@ -648,6 +677,14 @@ void ScriptParser::execStmt(const Stmt &stmt) {
 
   case Stmt::kAssign: {
     m_vars[stmt.assign.name] = evalExpr(stmt.assign.value);
+    break;
+  }
+
+  case Stmt::kIndexAssign: {
+    QJsonValue objVal = m_vars.value(stmt.indexAssign.objName);
+    QJsonObject obj = objVal.toObject();
+    obj[stmt.indexAssign.key] = evalExpr(stmt.indexAssign.value);
+    m_vars[stmt.indexAssign.objName] = obj;
     break;
   }
 

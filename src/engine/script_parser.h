@@ -206,6 +206,13 @@ private:
     Expr value;
   };
 
+  /// @brief 索引赋值语句：obj["key"] = expr
+  struct IndexAssignStmt {
+    QString objName;
+    QString key;
+    Expr value;
+  };
+
   /// @brief for 循环语句：for (var in arrayExpr) { body }
   struct ForStmt {
     QString varName;
@@ -215,9 +222,10 @@ private:
 
   /// @brief 语句 — 包含调用、赋值、循环三种类型
   struct Stmt {
-    enum Kind { kCall, kAssign, kFor, kExpr } kind = kCall;
+    enum Kind { kCall, kAssign, kIndexAssign, kFor, kExpr } kind = kCall;
     CallStmt call;
     AssignStmt assign;
+    IndexAssignStmt indexAssign;
     ForStmt forStmt;
     Expr exprStmt;
   };
@@ -236,6 +244,7 @@ private:
   bool parseStmt(Stmt &stmt);
   bool parseCallStmt(CallStmt &cs);
   bool parseAssignStmt(AssignStmt &as);
+  bool parseIndexAssignStmt(IndexAssignStmt &ias);
   bool parseForStmt(ForStmt &fs);
   bool parseExpr(Expr &expr);
   bool parsePrimary(Expr &expr);

@@ -1,3 +1,4 @@
+${if !fileExists(outputPath)}
 // ${modelName} Model
 export interface ${modelName} {
 ${each fields}  ${name}: ${type};
@@ -9,8 +10,8 @@ ${if hasService}export class ${modelName}Service {
   }
 }
 ${/if}
-
-// 算术运算示例
+${/if}
+// 算111333333333术运算示例
 // 总价: ${price * quantity}
 // 含税价: ${price * 1.13}
 // 折扣后: ${(price * quantity) * discount}
