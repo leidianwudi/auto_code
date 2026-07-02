@@ -42,7 +42,7 @@ public:
   static QPushButton *createSaveButton(int size = 18);
 
   /// 创建「保存全部」按钮（QPushButton，软盘图标 + 全部标记）
-  static QPushButton *createSaveAllButton(int size = 18);
+  static QPushButton *createSaveAllButton(int size = 20);
 
   // ════════════════════════════════════════════════════════════
   //  图标更新

@@ -8,6 +8,7 @@
 #include "aui_style.h"
 
 #include <QPainter>
+#include <QPainterPath>
 #include <QPixmap>
 #include <QPolygonF>
 
@@ -142,18 +143,28 @@ QPushButton *AuiButton::createSaveAllButton(int size) {
   px.fill(Qt::transparent);
   QPainter p(&px);
   p.setRenderHint(QPainter::Antialiasing);
-  p.setPen(QPen(AuiStyle::textColor(), 1.2));
 
-  int m = 2;
-  // 后层软盘（略微偏移）
-  p.drawRect(m + 1, m + 1, size - 2 * m, size - 2 * m);
-  p.drawRect(m + 4, m + 1, size - 2 * m - 6, size / 3);
-  p.drawLine(m + 3, size - m - 3, size - m - 1, size - m - 3);
+  QColor fg = AuiStyle::textColor(); // 前景 #333
+  QColor bg(0x88, 0x88, 0x88);       // 背景浅灰
+  int d = 2;                         // 偏移量
 
-  // 前层软盘
-  p.drawRect(m, m, size - 2 * m, size - 2 * m);
-  p.drawRect(m + 3, m, size - 2 * m - 6, size / 3);
-  p.drawLine(m + 2, size - m - 4, size - m - 2, size - m - 4);
+  // 绘制软盘图标（与 createSaveButton 相同样式）
+  auto drawDisk = [&](int ox, int oy, const QColor &color) {
+    p.setPen(QPen(color, 1.2));
+    int m = 1 + d; // 留出偏移空间
+    int x = m + ox;
+    int y = m + oy;
+    int w = size - 2 * m;
+    int h = size - 2 * m;
+    p.drawRect(x, y, w, h);
+    p.drawRect(x + 3, y, w - 6, h / 3);
+    p.drawLine(x + 2, y + h - 4, x + w - 2, y + h - 4);
+  };
+
+  // 背景层 左上偏移
+  drawDisk(-d, -d, bg);
+  // 前景层 右下偏移
+  drawDisk(+d, +d, fg);
 
   p.end();
   btn->setIcon(QIcon(px));
