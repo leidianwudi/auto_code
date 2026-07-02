@@ -12,10 +12,12 @@
 #pragma once
 
 #include <QJsonArray>
+#include <QSet>
 #include <QStringList>
 #include <QTreeWidget>
 
 class QTreeWidgetItem;
+class QContextMenuEvent;
 
 /**
  * @class TreeDir
@@ -42,9 +44,18 @@ public:
   /// 获取当前所有勾选的 json 文件绝对路径
   QStringList checkedJsonFiles() const;
 
+  /// 获取所有被设为启动项的 .ac 文件绝对路径
+  QStringList startupFiles() const;
+  /// 获取当前选中的启动项绝对路径
+  QString selectedStartup() const { return m_selectedStartup; }
+  /// 设置当前选中的启动项（由外部下拉框联动）
+  void setSelectedStartup(const QString &path);
+
 signals:
   /// 双击非 json 文件时发射，携带文件绝对路径
   void fileActivated(const QString &filePath);
+  /// 启动项列表变化时发射
+  void startupItemsChanged();
 
 private slots:
   /// 单击节点
@@ -71,12 +82,24 @@ private:
   void applyStateToTree(QTreeWidgetItem *item,
                         const QStringList &checkedAbsPaths);
 
+  /// 为启动项创建带三角标记的图标
+  QIcon makeStartupIcon() const;
+
+  /// 根据启动项集合更新树中所有 .ac 文件的图标
+  void refreshStartupIcons();
+
   /// 拦截鼠标释放以判断点击位置是否在复选框区域
   void mouseReleaseEvent(QMouseEvent *event) override;
+
+  /// 右键菜单：.ac 文件设为/取消启动项
+  void contextMenuEvent(QContextMenuEvent *event) override;
 
   bool m_lastClickOnCheckbox = false; ///< 最近一次鼠标释放是否落在复选框区域
   bool m_bulkUpdating = false;        ///< 批量更新中，抑制 itemChanged 级联
 
   QString m_rootPath;   ///< 当前展示的根目录
   QString m_configPath; ///< tree.config 完整路径
+
+  QSet<QString> m_startupFiles; ///< 被设为启动项的 .ac 文件绝对路径集合
+  QString m_selectedStartup;    ///< 当前下拉框选中的启动项路径
 };

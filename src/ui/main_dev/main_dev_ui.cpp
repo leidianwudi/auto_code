@@ -341,6 +341,18 @@ void MainDevUi::setupUI() {
   m_buildBtn->setToolTip(QStringLiteral("编译 (F5)"));
   titleLayout->addWidget(m_buildBtn);
 
+  // ── 启动项下拉框 ──
+  m_startupCombo = new QComboBox;
+  m_startupCombo->setMinimumWidth(120);
+  m_startupCombo->setToolTip(QStringLiteral("选择启动项"));
+  m_startupCombo->setStyleSheet(
+      QStringLiteral("QComboBox { background: #3c3c3c; color: #d4d4d4; "
+                     "border: 1px solid #555; padding: 2px 6px; }"
+                     "QComboBox::drop-down { border: none; }"
+                     "QComboBox QAbstractItemView { background: #3c3c3c; "
+                     "color: #d4d4d4; selection-background-color: #264f78; }"));
+  titleLayout->addWidget(m_startupCombo);
+
   titleLayout->addStretch();
 
   // ── 右侧：窗口标题 + 控制按钮 ──
@@ -378,6 +390,18 @@ void MainDevUi::setupUI() {
   //  左侧文件树
   // ════════════════════════════════════════════════════════════
   m_fileTree = new TreeDir;
+
+  // ── 启动项变化时刷新下拉框 ──
+  connect(m_fileTree, &TreeDir::startupItemsChanged, this,
+          &MainDevUi::refreshStartupCombo);
+
+  // ── 下拉框切换时联动文件树的选中启动项 ──
+  connect(m_startupCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+          this, [this](int /*idx*/) {
+            QString path = m_startupCombo->currentData().toString();
+            if (!path.isEmpty())
+              m_fileTree->setSelectedStartup(path);
+          });
 
   // ════════════════════════════════════════════════════════════
   //  右侧编辑器区域
@@ -695,3 +719,26 @@ void MainDevUi::appendOutput(const QString &text, bool isError) {
 
 /// @brief 清空输出面板
 void MainDevUi::clearOutput() { m_outputPanel->clear(); }
+
+/// @brief 刷新启动项下拉框 — 从文件树获取所有启动项并填充
+void MainDevUi::refreshStartupCombo() {
+  if (!m_startupCombo || !m_fileTree)
+    return;
+
+  m_startupCombo->blockSignals(true); // 避免触发 currentIndexChanged
+  QString prev = m_startupCombo->currentData().toString();
+  m_startupCombo->clear();
+
+  QStringList files = m_fileTree->startupFiles();
+  QFileInfo selInfo(m_fileTree->selectedStartup());
+
+  for (const QString &path : files) {
+    QFileInfo fi(path);
+    m_startupCombo->addItem(fi.fileName(), path);
+    // 恢复上次选中或选中第一个
+    if (path == m_fileTree->selectedStartup())
+      m_startupCombo->setCurrentIndex(m_startupCombo->count() - 1);
+  }
+
+  m_startupCombo->blockSignals(false);
+}

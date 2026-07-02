@@ -5,14 +5,19 @@
 
 #include "tree_dir.h"
 
+#include <QContextMenuEvent>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QHeaderView>
+#include <QIcon>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMenu>
 #include <QMouseEvent>
+#include <QPainter>
+#include <QPixmap>
 #include <QStyle>
 #include <QStyleOptionViewItem>
 #include <QTreeWidgetItem>
@@ -292,20 +297,38 @@ void TreeDir::saveState() {
   QFileInfo fi(m_configPath);
   QDir().mkpath(fi.absolutePath());
 
+  // ── 勾选的 json 文件 ──
   QStringList checkedFiles;
   for (int i = 0; i < topLevelItemCount(); ++i)
     collectJsonFiles(topLevelItem(i), checkedFiles);
 
-  QJsonArray arr;
+  QJsonArray checkedArr;
   for (const QString &absPath : checkedFiles) {
     if (absPath.startsWith(m_rootPath)) {
       QString rel = absPath.mid(m_rootPath.length() + 1);
-      arr.append(rel);
+      checkedArr.append(rel);
     }
   }
 
+  // ── 启动项 .ac 文件 ──
+  QJsonArray startupArr;
+  for (const QString &absPath : m_startupFiles) {
+    if (absPath.startsWith(m_rootPath)) {
+      QString rel = absPath.mid(m_rootPath.length() + 1);
+      startupArr.append(rel);
+    }
+  }
+
+  // ── 当前选中的启动项 ──
+  QString selectedRel;
+  if (!m_selectedStartup.isEmpty() && m_selectedStartup.startsWith(m_rootPath))
+    selectedRel = m_selectedStartup.mid(m_rootPath.length() + 1);
+
   QJsonObject root;
-  root[QStringLiteral("checked")] = arr;
+  root[QStringLiteral("checked")] = checkedArr;
+  root[QStringLiteral("startup")] = startupArr;
+  if (!selectedRel.isEmpty())
+    root[QStringLiteral("startupSelected")] = selectedRel;
 
   QFile file(m_configPath);
   if (file.open(QIODevice::WriteOnly | QIODevice::Truncate))
@@ -324,7 +347,10 @@ void TreeDir::loadState() {
   if (doc.isNull() || !doc.isObject())
     return;
 
-  QJsonArray arr = doc.object()[QStringLiteral("checked")].toArray();
+  QJsonObject obj = doc.object();
+
+  // ── 恢复勾选状态 ──
+  QJsonArray arr = obj[QStringLiteral("checked")].toArray();
 
   // 将相对路径还原为绝对路径并统一格式
   QStringList checkedAbsPaths;
@@ -340,6 +366,31 @@ void TreeDir::loadState() {
   // 递归应用到树节点
   for (int i = 0; i < topLevelItemCount(); ++i)
     applyStateToTree(topLevelItem(i), checkedAbsPaths);
+
+  // ── 恢复启动项 ──
+  QJsonArray startupArr = obj[QStringLiteral("startup")].toArray();
+  m_startupFiles.clear();
+  for (const QJsonValue &v : startupArr) {
+    if (v.isString()) {
+      QString abs =
+          QDir::cleanPath(m_rootPath + QStringLiteral("/") + v.toString());
+      m_startupFiles.insert(abs);
+    }
+  }
+
+  // ── 恢复当前选中的启动项 ──
+  QString selRel = obj[QStringLiteral("startupSelected")].toString();
+  if (!selRel.isEmpty())
+    m_selectedStartup =
+        QDir::cleanPath(m_rootPath + QStringLiteral("/") + selRel);
+  else
+    m_selectedStartup.clear();
+
+  // 刷新启动项图标
+  refreshStartupIcons();
+
+  // 通知外部启动项已恢复
+  emit startupItemsChanged();
 }
 
 // ============================================================================
@@ -404,5 +455,123 @@ void TreeDir::applyStateToTree(QTreeWidgetItem *item,
 
     if (child->childCount() > 0)
       updateParentCheckState(child);
+  }
+}
+
+// ============================================================================
+// 启动项管理
+// ============================================================================
+
+/// @brief 创建带三角标记的启动项图标 — 在默认文件图标右下角叠加小三角
+QIcon TreeDir::makeStartupIcon() const {
+  QIcon baseIcon = style()->standardIcon(QStyle::SP_FileIcon);
+  QPixmap base = baseIcon.pixmap(16, 16);
+  QPixmap overlay(base.size());
+  overlay.fill(Qt::transparent);
+
+  QPainter painter(&overlay);
+  painter.setRenderHint(QPainter::Antialiasing);
+  painter.drawPixmap(0, 0, base);
+
+  // 右下角绘制绿色三角形
+  int w = base.width();
+  int h = base.height();
+  int triSize = 9; // 三角形边长
+  QPolygon tri;
+  tri << QPoint(w - triSize, h)                        // 左下角
+      << QPoint(w, h - triSize)                        // 右上角
+      << QPoint(w, h);                                 // 右下角
+  painter.setBrush(QColor(QStringLiteral("#4ec9b0"))); // 绿色三角
+  painter.setPen(Qt::NoPen);
+  painter.drawPolygon(tri);
+  painter.end();
+
+  return QIcon(overlay);
+}
+
+/// @brief 根据 m_startupFiles 集合更新所有 .ac 文件节点的图标
+void TreeDir::refreshStartupIcons() {
+  QIcon startupIcon = makeStartupIcon();
+  QIcon normalIcon = style()->standardIcon(QStyle::SP_FileIcon);
+
+  // 遍历所有顶层节点
+  QList<QTreeWidgetItem *> stack;
+  for (int i = 0; i < topLevelItemCount(); ++i)
+    stack.append(topLevelItem(i));
+
+  while (!stack.isEmpty()) {
+    QTreeWidgetItem *item = stack.takeLast();
+    for (int i = 0; i < item->childCount(); ++i)
+      stack.append(item->child(i));
+
+    QString filePath = item->data(0, Qt::UserRole + 1).toString();
+    if (!filePath.isEmpty() &&
+        filePath.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive)) {
+      if (m_startupFiles.contains(filePath))
+        item->setIcon(0, startupIcon);
+      else
+        item->setIcon(0, normalIcon);
+    }
+  }
+}
+
+/// @brief 获取所有启动项文件绝对路径
+QStringList TreeDir::startupFiles() const {
+  QStringList result;
+  for (const QString &p : m_startupFiles)
+    result.append(p);
+  return result;
+}
+
+/// @brief 设置当前选中的启动项
+void TreeDir::setSelectedStartup(const QString &path) {
+  if (m_selectedStartup != path) {
+    m_selectedStartup = path;
+    saveState();
+  }
+}
+
+// ============================================================================
+// 右键菜单 — .ac 文件设为/取消启动项
+// ============================================================================
+
+void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
+  QTreeWidgetItem *item = itemAt(event->pos());
+  if (!item) {
+    QTreeWidget::contextMenuEvent(event);
+    return;
+  }
+
+  QString filePath = item->data(0, Qt::UserRole + 1).toString();
+  if (filePath.isEmpty() ||
+      !filePath.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive)) {
+    QTreeWidget::contextMenuEvent(event);
+    return;
+  }
+
+  bool isStartup = m_startupFiles.contains(filePath);
+
+  QMenu menu(this);
+  if (isStartup) {
+    QAction *act = menu.addAction(QStringLiteral("取消启动项"));
+    if (menu.exec(event->globalPos()) == act) {
+      m_startupFiles.remove(filePath);
+      if (m_selectedStartup == filePath)
+        m_selectedStartup.clear();
+      refreshStartupIcons();
+      saveState();
+      emit startupItemsChanged();
+    }
+  } else {
+    QAction *act = menu.addAction(QStringLiteral("设为启动项"));
+    if (menu.exec(event->globalPos()) == act) {
+      m_startupFiles.insert(filePath);
+      // 如果此前没有选中的启动项，自动选中第一个
+      if (m_selectedStartup.isEmpty())
+        m_selectedStartup = filePath;
+      refreshStartupIcons();
+      saveState();
+      emit startupItemsChanged();
+    }
   }
 }

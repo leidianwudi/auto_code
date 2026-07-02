@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <QComboBox>
 #include <QEvent>
 #include <QLabel>
 #include <QMainWindow>
@@ -154,6 +155,10 @@ public:
   QAction *openFolderAction() const { return m_openFolderAction; }
   QAction *helpExampleAction() const { return m_helpExampleAction; }
   QPushButton *buildBtn() const { return m_buildBtn; }
+  QComboBox *startupCombo() const { return m_startupCombo; }
+
+  /// 刷新启动项下拉框（由外部在启动项变化后调用）
+  void refreshStartupCombo();
 
 private:
   /// 更新最大化/还原按钮图标
@@ -187,6 +192,7 @@ private:
   QPushButton *m_maxBtn = nullptr;
   QPushButton *m_closeBtn = nullptr;
   QPushButton *m_buildBtn = nullptr;
+  QComboBox *m_startupCombo = nullptr; ///< 启动项下拉框
 
   // ── 输出面板 ──
   QSplitter *m_contentSplitter = nullptr;  ///< 垂直分割器：编辑器 + 输出面板
