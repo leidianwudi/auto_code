@@ -9,6 +9,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
 
 // load — 加载 schema 定义文件
 bool SchemaValidator::load(const QString &filePath) {
@@ -17,9 +18,19 @@ bool SchemaValidator::load(const QString &filePath) {
   if (!file.open(QIODevice::ReadOnly))
     return false;
 
+  // 读取文件内容并去掉注释（支持 // 行注释和 /* */ 块注释）
+  QByteArray data = file.readAll();
+  QString text = QString::fromUtf8(data);
+  // 去掉行注释和块注释
+  text.replace(QRegularExpression(QStringLiteral("//[^\\n]*")), QString());
+  // 去掉块注释
+  text.replace(
+      QRegularExpression(QStringLiteral("/\\*[^*]*\\*+(?:[^/*][^*]*\\*+)*/")),
+      QString());
+
   // 解析 JSON
   QJsonParseError err;
-  QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &err);
+  QJsonDocument doc = QJsonDocument::fromJson(text.toUtf8(), &err);
   if (err.error != QJsonParseError::NoError)
     return false;
 
