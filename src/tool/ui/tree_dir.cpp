@@ -347,6 +347,7 @@ void TreeDir::loadState() {
     return;
 
   QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+  file.close();
   if (doc.isNull() || !doc.isObject())
     return;
 
@@ -366,7 +367,10 @@ void TreeDir::loadState() {
     }
   }
 
-  // 递归应用到树节点
+  // 递归应用到树节点（setCheckState 会触发 onItemChanged → saveState，
+  // 但此时 m_startupFiles 尚未恢复，saveState 会写入空数组覆盖原数据，
+  // 因此在 loadState 期间设置 m_bulkUpdating 禁止保存）
+  m_bulkUpdating = true;
   for (int i = 0; i < topLevelItemCount(); ++i)
     applyStateToTree(topLevelItem(i), checkedAbsPaths);
 
@@ -394,6 +398,8 @@ void TreeDir::loadState() {
 
   // 通知外部启动项已恢复
   emit startupItemsChanged();
+
+  m_bulkUpdating = false;
 }
 
 // ============================================================================
