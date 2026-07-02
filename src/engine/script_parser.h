@@ -215,10 +215,11 @@ private:
 
   /// @brief 语句 — 包含调用、赋值、循环三种类型
   struct Stmt {
-    enum Kind { kCall, kAssign, kFor } kind = kCall;
+    enum Kind { kCall, kAssign, kFor, kExpr } kind = kCall;
     CallStmt call;
     AssignStmt assign;
     ForStmt forStmt;
+    Expr exprStmt;
   };
 
   // ── 词法分析 ──

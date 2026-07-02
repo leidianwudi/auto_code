@@ -217,6 +217,7 @@ bool ScriptParser::parseStmt(Stmt &stmt) {
   Token t = peek();
 
   if (t.type == TOK_IDENT && t.text == QStringLiteral("call")) {
+    advance(); // 消费 'call'
     stmt.kind = Stmt::kCall;
     return parseCallStmt(stmt.call);
   }
@@ -231,6 +232,13 @@ bool ScriptParser::parseStmt(Stmt &stmt) {
     if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_EQUALS) {
       stmt.kind = Stmt::kAssign;
       return parseAssignStmt(stmt.assign);
+    }
+    // look ahead: if next is '(', it's an expression statement (e.g.
+    // write(...))
+    if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_LPAREN) {
+      stmt.kind = Stmt::kExpr;
+      QString name = advance().text;
+      return parseFuncCall(name, stmt.exprStmt);
     }
   }
 
@@ -656,6 +664,11 @@ void ScriptParser::execStmt(const Stmt &stmt) {
       if (!m_error.isEmpty())
         return;
     }
+    break;
+  }
+
+  case Stmt::kExpr: {
+    evalExpr(stmt.exprStmt);
     break;
   }
   }

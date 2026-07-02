@@ -42,6 +42,9 @@ public:
   /// 扫描 dirPath 并构建文件树（自动加载已有勾选状态）
   void buildTree(const QString &dirPath);
 
+  /// 获取当前展示的根目录
+  QString rootPath() const { return m_rootPath; }
+
   /// 展开所有节点
   void expandAllNodes();
 

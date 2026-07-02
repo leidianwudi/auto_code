@@ -1,31 +1,18 @@
-// Generated from ${tableName}
-// Table: ${table}
-
-// Original Model
+// ${modelName} Model
 export interface ${modelName} {
-${each fields}
-  ${name}: ${type};
-${/each}
-}
+${each fields}  ${name}: ${type};
+${/each}}
 
-// Database Columns
-${each dbColumns}
-// ${name}  ${type}  ${key ? "PRIMARY KEY" : ""}  ${comment}
-${/each}
-
-// Service
-export class ${modelName}Service {
-  static bas1e身上Url = '/api/${tableName ? tableName.toLowerCase : modelName.toLowerCase}';
-
-${if hasService}
+${if hasService}export class ${modelName}Service {
   static async getAll(): Promise<${modelName}[]> {
-    const response = await fetch(this.baseUrl);
-    return response.json();
+    return fetch('/api/${modelName.toLowerCase}').then(r => r.json());
   }
-
-  static async getById(id: number): Promise<${modelName}> {
-    const response = await fetch(`${this.baseUrl}/${id}`);
-    return response.json();
-  }
-${/if}
 }
+${/if}
+
+// 算术运算示例
+// 总价: ${price * quantity}
+// 含税价: ${price * 1.13}
+// 折扣后: ${(price * quantity) * discount}
+// 平均值: ${total / count}
+// 复杂计算: ${(a + b) * c - d / 2}

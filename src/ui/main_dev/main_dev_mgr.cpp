@@ -7,6 +7,7 @@
 #include "main_dev_model.h"
 #include "main_dev_ui.h"
 #include "main_dev_ui_ext.h"
+#include "src/engine/main_engine.h"
 #include "src/tool/ui/code_editor.h"
 #include "src/tool/ui/highlighter/json_highlighter.h"
 #include "src/tool/ui/highlighter/template_highlighter.h"
@@ -131,6 +132,24 @@ void MainDevMgr::initUi() {
         file.close();
         editor->document()->setModified(false);
       }
+    }
+  });
+
+  // ── 编译按钮 ──
+  connect(m_ui->buildBtn(), &QPushButton::clicked, this, [this]() {
+    QString scriptPath = m_ui->startupCombo()->currentData().toString();
+    if (scriptPath.isEmpty()) {
+      m_ui->appendOutput(QStringLiteral("未选择启动项"), true);
+      return;
+    }
+    m_ui->clearOutput();
+    m_ui->appendOutput(QStringLiteral("执行: %1").arg(scriptPath), false);
+    MainEngine::ins().setRootDir(m_ui->fileTree()->rootPath());
+    QString err = MainEngine::ins().execute(scriptPath);
+    if (!err.isEmpty()) {
+      m_ui->appendOutput(err, true);
+    } else {
+      m_ui->appendOutput(QStringLiteral("执行完成"), false);
     }
   });
 

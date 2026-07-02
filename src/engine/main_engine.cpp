@@ -27,6 +27,8 @@ QString MainEngine::execute(const QString &mainAcPath) {
 
   ScriptParser parser;
   parser.setScriptDir(dir);
+  if (!m_rootDir.isEmpty())
+    parser.setRootDir(m_rootDir);
 
   if (!parser.parse(source))
     return QStringLiteral("parse error: %1").arg(parser.error());
