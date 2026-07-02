@@ -7,6 +7,7 @@
 
 #include "src/tool/ui/aui_button.h"
 #include "src/tool/ui/aui_icon.h"
+#include "src/tool/ui/aui_style.h"
 
 #include <QContextMenuEvent>
 #include <QDir>
@@ -24,6 +25,7 @@
 #include <QStyle>
 #include <QStyleOptionViewItem>
 #include <QTreeWidgetItem>
+#include <QTreeWidgetItemIterator>
 
 // ============================================================================
 // 构造
@@ -561,5 +563,30 @@ void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
       saveState();
       emit startupItemsChanged();
     }
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  setFileModified — 设置文件修改状态
+// ════════════════════════════════════════════════════════════
+
+void TreeDir::setFileModified(const QString &filePath, bool modified) {
+  QTreeWidgetItemIterator it(const_cast<TreeDir *>(this));
+  while (*it) {
+    QTreeWidgetItem *item = *it;
+    if (item->data(0, Qt::UserRole + 1).toString() == filePath) {
+      QString text = item->text(0);
+      if (modified) {
+        if (!text.endsWith(QStringLiteral(" *")))
+          item->setText(0, text + QStringLiteral(" *"));
+        item->setForeground(0, QBrush(AuiStyle::modifiedColor()));
+      } else {
+        if (text.endsWith(QStringLiteral(" *")))
+          item->setText(0, text.chopped(2));
+        item->setForeground(0, QBrush());
+      }
+      return;
+    }
+    ++it;
   }
 }

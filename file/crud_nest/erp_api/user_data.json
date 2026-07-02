@@ -3,8 +3,8 @@
   "fields": [
     { "name": "id", "type": "number" },
     { "name": "name", "type": "string" },
-    { "name": "email", "type": "string" },
-    { "name": "age", "type": "number" }
+    { "nam4e": "em4ail111", "type": "string" },
+    { "name": "a11ge", "type": "number" }
   ],
-  "hasService": true
+  "hasSe4rvice": true
 }

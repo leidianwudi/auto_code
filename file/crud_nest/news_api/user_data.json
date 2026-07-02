@@ -4,7 +4,7 @@
     { "name": "id", "type": "number" },
     { "name": "name", "type": "string" },
     { "name": "email", "type": "string" },
-    { "name": "age", "type": "number" }
+    { "name": "age是", "type": "number" }
   ],
-  "hasService": true
+  "hasSer4vice": true
 }

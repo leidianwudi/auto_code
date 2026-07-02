@@ -88,6 +88,98 @@ QPushButton *AuiButton::createBuildButton(int size) {
 }
 
 // ════════════════════════════════════════════════════════════
+//  保存按钮
+// ════════════════════════════════════════════════════════════
+
+QPushButton *AuiButton::createSaveButton(int size) {
+  auto *btn = new QPushButton;
+  // 绘制软盘图标
+  QPixmap px(size, size);
+  px.fill(Qt::transparent);
+  QPainter p(&px);
+  p.setRenderHint(QPainter::Antialiasing);
+  p.setPen(QPen(AuiStyle::textColor(), 1.2));
+
+  int m = 2; // margin
+  // 软盘外框
+  p.drawRect(m, m, size - 2 * m, size - 2 * m);
+  // 软盘标签（上部小矩形）
+  p.drawRect(m + 3, m, size - 2 * m - 6, size / 3);
+  // 底部横线
+  p.drawLine(m + 2, size - m - 4, size - m - 2, size - m - 4);
+
+  p.end();
+  btn->setIcon(QIcon(px));
+  btn->setIconSize(QSize(size, size));
+  btn->setCursor(Qt::PointingHandCursor);
+  btn->setFocusPolicy(Qt::NoFocus);
+  btn->setToolTip(QStringLiteral("保存 (Ctrl+S)"));
+  btn->setStyleSheet(QStringLiteral("QPushButton {"
+                                    "  background: transparent;"
+                                    "  border: none;"
+                                    "  margin: 2px 4px;"
+                                    "  padding: 2px 4px;"
+                                    "}"
+                                    "QPushButton:hover {"
+                                    "  background: rgba(128, 128, 128, 40);"
+                                    "}"
+                                    "QPushButton:pressed {"
+                                    "  background: rgba(128, 128, 128, 80);"
+                                    "}"
+                                    "QPushButton:disabled {"
+                                    "  color: transparent;"
+                                    "}"));
+  return btn;
+}
+
+// ════════════════════════════════════════════════════════════
+//  保存全部按钮
+// ════════════════════════════════════════════════════════════
+
+QPushButton *AuiButton::createSaveAllButton(int size) {
+  auto *btn = new QPushButton;
+  QPixmap px(size, size);
+  px.fill(Qt::transparent);
+  QPainter p(&px);
+  p.setRenderHint(QPainter::Antialiasing);
+  p.setPen(QPen(AuiStyle::textColor(), 1.2));
+
+  int m = 2;
+  // 后层软盘（略微偏移）
+  p.drawRect(m + 1, m + 1, size - 2 * m, size - 2 * m);
+  p.drawRect(m + 4, m + 1, size - 2 * m - 6, size / 3);
+  p.drawLine(m + 3, size - m - 3, size - m - 1, size - m - 3);
+
+  // 前层软盘
+  p.drawRect(m, m, size - 2 * m, size - 2 * m);
+  p.drawRect(m + 3, m, size - 2 * m - 6, size / 3);
+  p.drawLine(m + 2, size - m - 4, size - m - 2, size - m - 4);
+
+  p.end();
+  btn->setIcon(QIcon(px));
+  btn->setIconSize(QSize(size, size));
+  btn->setCursor(Qt::PointingHandCursor);
+  btn->setFocusPolicy(Qt::NoFocus);
+  btn->setToolTip(QStringLiteral("保存全部"));
+  btn->setStyleSheet(QStringLiteral("QPushButton {"
+                                    "  background: transparent;"
+                                    "  border: none;"
+                                    "  margin: 2px 4px;"
+                                    "  padding: 2px 4px;"
+                                    "}"
+                                    "QPushButton:hover {"
+                                    "  background: rgba(128, 128, 128, 40);"
+                                    "}"
+                                    "QPushButton:pressed {"
+                                    "  background: rgba(128, 128, 128, 80);"
+                                    "}"
+                                    "QPushButton:disabled {"
+                                    "  color: transparent;"
+                                    "}"));
+  return btn;
+}
+
+// ════════════════════════════════════════════════════════════
 //  图标更新
 // ════════════════════════════════════════════════════════════
 void AuiButton::updateMaximizeIcon(QPushButton *btn, bool isMaximized) {

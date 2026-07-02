@@ -19,6 +19,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QMessageBox>
+#include <QShortcut>
 #include <QStatusBar>
 #include <QTabWidget>
 #include <QTextCursor>
@@ -86,6 +87,51 @@ void MainDevMgr::initUi() {
   connect(m_ui->fileTree(), &TreeDir::fileActivated, this,
           &MainDevMgr::openFileInEditor);
   connect(qApp, &QApplication::focusChanged, this, &MainDevMgr::onFocusChanged);
+
+  // ── 保存按钮 ──
+  auto saveCurrent = [this]() {
+    CodeEditor *editor = currentEditor();
+    if (!editor)
+      return;
+    QString filePath = editor->objectName();
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+      qWarning() << "保存失败:" << filePath;
+      return;
+    }
+    file.write(editor->toPlainText().toUtf8());
+    file.close();
+    editor->document()->setModified(false);
+  };
+  connect(m_ui->saveBtn(), &QPushButton::clicked, this, saveCurrent);
+
+  // ── Ctrl+S 快捷键 ──
+  auto *saveShortcut =
+      new QShortcut(QKeySequence(QStringLiteral("Ctrl+S")), m_ui);
+  connect(saveShortcut, &QShortcut::activated, this, saveCurrent);
+
+  // ── 保存全部按钮 ──
+  connect(m_ui->saveAllBtn(), &QPushButton::clicked, this, [this]() {
+    for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
+      auto *tabs = m_ui->editorPanelAt(pi);
+      if (!tabs)
+        continue;
+      for (int ti = 0; ti < tabs->count(); ++ti) {
+        auto *editor = qobject_cast<CodeEditor *>(tabs->widget(ti));
+        if (!editor || !editor->document()->isModified())
+          continue;
+        QString filePath = editor->objectName();
+        QFile file(filePath);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+          qWarning() << "保存失败:" << filePath;
+          continue;
+        }
+        file.write(editor->toPlainText().toUtf8());
+        file.close();
+        editor->document()->setModified(false);
+      }
+    }
+  });
 
   // 连接初始编辑器面板组的信号
   for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
@@ -198,6 +244,48 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
   editor->setFocus();
   m_ui->setWindowTitle(QStringLiteral("Auto Code - %1").arg(fi.fileName()));
 
+  // ── 修改标记：内容变化时标签页标题追加 " *" ──
+  connect(editor->document(), &QTextDocument::modificationChanged, this,
+          [this, tabs, editor, filePath](bool changed) {
+            for (int i = 0; i < tabs->count(); ++i) {
+              if (tabs->widget(i) == editor) {
+                QString text = tabs->tabText(i);
+                if (changed) {
+                  if (!text.endsWith(QStringLiteral(" *")))
+                    tabs->setTabText(i, text + QStringLiteral(" *"));
+                } else {
+                  if (text.endsWith(QStringLiteral(" *")))
+                    tabs->setTabText(i, text.chopped(2));
+                }
+                break;
+              }
+            }
+            // 更新树形目录对应文件的修改状态
+            m_ui->fileTree()->setFileModified(filePath, changed);
+            // 更新标签页颜色（红色 = 已修改）
+            m_ui->applyTabDimming(tabs);
+            // 更新保存按钮可用状态
+            m_ui->saveBtn()->setEnabled(
+                currentEditor() && currentEditor()->document()->isModified());
+            // 更新保存全部按钮（只要有任一编辑器已修改就可用）
+            bool anyModified = false;
+            for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
+              auto *panel = m_ui->editorPanelAt(pi);
+              if (!panel)
+                continue;
+              for (int ti = 0; ti < panel->count(); ++ti) {
+                auto *ed = qobject_cast<CodeEditor *>(panel->widget(ti));
+                if (ed && ed->document()->isModified()) {
+                  anyModified = true;
+                  break;
+                }
+              }
+              if (anyModified)
+                break;
+            }
+            m_ui->saveAllBtn()->setEnabled(anyModified);
+          });
+
   return editor;
 }
 
@@ -297,6 +385,27 @@ void MainDevMgr::onFocusChanged(QWidget * /*oldFocus*/, QWidget *newFocus) {
   }
 
   m_ui->applyTabDimming(activeTabs);
+
+  // 更新保存按钮可用状态
+  m_ui->saveBtn()->setEnabled(currentEditor() &&
+                              currentEditor()->document()->isModified());
+  // 更新保存全部按钮（只要有任一编辑器已修改就可用）
+  bool anyModified = false;
+  for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
+    auto *tabs = m_ui->editorPanelAt(pi);
+    if (!tabs)
+      continue;
+    for (int ti = 0; ti < tabs->count(); ++ti) {
+      auto *ed = qobject_cast<CodeEditor *>(tabs->widget(ti));
+      if (ed && ed->document()->isModified()) {
+        anyModified = true;
+        break;
+      }
+    }
+    if (anyModified)
+      break;
+  }
+  m_ui->saveAllBtn()->setEnabled(anyModified);
 }
 
 void MainDevMgr::updateCursorPosition() {

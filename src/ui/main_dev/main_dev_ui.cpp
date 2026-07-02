@@ -8,6 +8,7 @@
 
 #include "src/tool/ui/aui_button.h"
 #include "src/tool/ui/aui_style.h"
+#include "src/tool/ui/code_editor.h"
 #include "src/ui/demo/demo_mgr.h"
 
 #include <QApplication>
@@ -140,6 +141,16 @@ void MainDevUi::setupUI() {
                      "QComboBox QAbstractItemView { background: #3c3c3c; "
                      "color: #d4d4d4; selection-background-color: #264f78; }"));
   titleLayout->addWidget(m_startupCombo);
+
+  // ── 保存按钮 ──
+  m_saveBtn = AuiButton::createSaveButton();
+  m_saveBtn->setEnabled(false);
+  titleLayout->addWidget(m_saveBtn);
+
+  // ── 保存全部按钮 ──
+  m_saveAllBtn = AuiButton::createSaveAllButton();
+  m_saveAllBtn->setEnabled(false);
+  titleLayout->addWidget(m_saveAllBtn);
 
   titleLayout->addStretch();
 
@@ -472,9 +483,16 @@ void MainDevUi::applyTabDimming(QTabWidget *active) {
     AuiStyle::ensureFusionTabBar(bar);
 
     bool isActive = (tabs == active);
-    for (int j = 0; j < bar->count(); ++j)
-      bar->setTabTextColor(j,
-                           isActive ? QColor() : AuiStyle::inactiveTabColor());
+    for (int j = 0; j < bar->count(); ++j) {
+      // 检查对应编辑器是否已修改 → 红色
+      auto *editor = qobject_cast<CodeEditor *>(tabs->widget(j));
+      if (editor && editor->document()->isModified()) {
+        bar->setTabTextColor(j, AuiStyle::modifiedColor());
+      } else {
+        bar->setTabTextColor(j, isActive ? QColor()
+                                         : AuiStyle::inactiveTabColor());
+      }
+    }
   }
 }
 

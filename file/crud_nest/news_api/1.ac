@@ -15,7 +15,7 @@ ${/each}
 
 // Service
 export class ${modelName}Service {
-  static baseUrl = '/api/${tableName ? tableName.toLowerCase : modelName.toLowerCase}';
+  static bas1e身上Url = '/api/${tableName ? tableName.toLowerCase : modelName.toLowerCase}';
 
 ${if hasService}
   static async getAll(): Promise<${modelName}[]> {

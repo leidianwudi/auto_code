@@ -94,6 +94,8 @@ public:
   QAction *helpExampleAction() const { return m_helpExampleAction; }
   QPushButton *buildBtn() const { return m_buildBtn; }
   QComboBox *startupCombo() const { return m_startupCombo; }
+  QPushButton *saveBtn() const { return m_saveBtn; }
+  QPushButton *saveAllBtn() const { return m_saveAllBtn; }
 
   /// 刷新启动项下拉框（由外部在启动项变化后调用）
   void refreshStartupCombo();
@@ -131,6 +133,8 @@ private:
   QPushButton *m_closeBtn = nullptr;
   QPushButton *m_buildBtn = nullptr;
   QComboBox *m_startupCombo = nullptr; ///< 启动项下拉框
+  QPushButton *m_saveBtn = nullptr;    ///< 保存按钮
+  QPushButton *m_saveAllBtn = nullptr; ///< 保存全部按钮
 
   // ── 输出面板 ──
   QSplitter *m_contentSplitter = nullptr;  ///< 垂直分割器：编辑器 + 输出面板

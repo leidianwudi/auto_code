@@ -51,6 +51,9 @@ public:
   /// 设置当前选中的启动项（由外部下拉框联动）
   void setSelectedStartup(const QString &path);
 
+  /// 设置文件的修改状态（树节点文本追加/移除 " *"）
+  void setFileModified(const QString &filePath, bool modified);
+
 signals:
   /// 双击非 json 文件时发射，携带文件绝对路径
   void fileActivated(const QString &filePath);

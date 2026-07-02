@@ -38,6 +38,12 @@ public:
   /// 创建「构建 / 生成」按钮（QPushButton，三角形图标）
   static QPushButton *createBuildButton(int size = 18);
 
+  /// 创建「保存」按钮（QPushButton，软盘图标）
+  static QPushButton *createSaveButton(int size = 18);
+
+  /// 创建「保存全部」按钮（QPushButton，软盘图标 + 全部标记）
+  static QPushButton *createSaveAllButton(int size = 18);
+
   // ════════════════════════════════════════════════════════════
   //  图标更新
   // ════════════════════════════════════════════════════════════
