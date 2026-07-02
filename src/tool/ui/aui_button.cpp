@@ -4,6 +4,7 @@
  */
 
 #include "aui_button.h"
+#include "aui_icon.h"
 #include "aui_style.h"
 
 #include <QPainter>
@@ -62,36 +63,12 @@ QPushButton *AuiButton::createCloseButton() {
 }
 
 // ════════════════════════════════════════════════════════════
-//  构建 / 生成按钮图标
+//  构建 / 生成按钮
 // ════════════════════════════════════════════════════════════
-
-QIcon AuiButton::createBuildIcon(int size) {
-  // 测量文字宽度（使用匹配图标尺寸的字体）
-  QFont fnt;
-  fnt.setPixelSize(qMax(1, size - 2));
-  QFontMetrics fm(fnt);
-
-  QPixmap px(size, size);
-  px.fill(Qt::transparent);
-  QPainter p(&px);
-  p.setRenderHint(QPainter::Antialiasing);
-  p.setFont(fnt);
-
-  // ── 左侧三角形（接近铺满，仅留 1px 边距） ──
-  p.setPen(Qt::NoPen);
-  p.setBrush(AuiStyle::textColor());
-  const double half = size * 0.5;
-  QPolygonF tri;
-  tri << QPointF(1.0, 1.0) << QPointF(size - 1.0, half)
-      << QPointF(1.0, size - 1.0);
-  p.drawPolygon(tri);
-  p.end();
-  return QIcon(px);
-}
 
 QPushButton *AuiButton::createBuildButton(int size) {
   auto *btn = new QPushButton;
-  btn->setIcon(createBuildIcon(size));
+  btn->setIcon(AuiIcon::createBuildIcon(size));
   btn->setIconSize(QSize(size, size));
   btn->setCursor(Qt::PointingHandCursor);
   btn->setFocusPolicy(Qt::NoFocus);
@@ -129,40 +106,4 @@ void AuiButton::updateMaximizeIcon(QPushButton *btn, bool isMaximized) {
   p.end();
   btn->setIcon(QIcon(px));
   btn->setIconSize(QSize(14, 14));
-}
-
-// ════════════════════════════════════════════════════════════
-//  启动项叠加图标
-// ════════════════════════════════════════════════════════════
-
-/// @brief 在图标右下角叠加绿色三角形（启动项标记）
-/// @param baseIcon 基础图标
-/// @param size     图标像素尺寸
-/// @param triSize  三角形边长
-QIcon AuiButton::createStartupOverlayIcon(const QIcon &baseIcon, int size,
-                                          int triSize) {
-  // 将基础图标绘制到指定尺寸的像素图上
-  QPixmap base = baseIcon.pixmap(size, size);
-  QPixmap overlay(base.size());
-  overlay.fill(Qt::transparent);
-
-  // 先绘制基础图标，再叠加三角形
-  QPainter painter(&overlay);
-  painter.setRenderHint(QPainter::Antialiasing);
-  painter.drawPixmap(0, 0, base);
-
-  // 在图标右下角绘制绿色三角形，箭头方向指向右
-  int w = base.width();
-  int h = base.height();
-  int leftSp = 3; // 左间隔
-  QPolygon tri;
-  tri << QPoint(leftSp, leftSp)           // 左上角（三角形左侧上顶点）
-      << QPoint(leftSp, h - leftSp)       // 左下角（三角形左侧下顶点）
-      << QPoint((w / 2) + leftSp, h / 2); // 右顶点（箭头尖端朝右）
-  painter.setBrush(QColor(QStringLiteral("#4ec9b0"))); // 绿色填充
-  painter.setPen(Qt::NoPen);                           // 无边框
-  painter.drawPolygon(tri);
-  painter.end();
-
-  return QIcon(overlay);
 }

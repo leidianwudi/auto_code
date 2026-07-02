@@ -6,6 +6,7 @@
 #include "tree_dir.h"
 
 #include "src/tool/ui/aui_button.h"
+#include "src/tool/ui/aui_icon.h"
 
 #include <QContextMenuEvent>
 #include <QDir>
@@ -466,7 +467,7 @@ void TreeDir::applyStateToTree(QTreeWidgetItem *item,
 
 /// @brief 创建带三角标记的启动项图标 — 委托 AuiButton 叠加绿色三角
 QIcon TreeDir::makeStartupIcon() const {
-  return AuiButton::createStartupOverlayIcon(
+  return AuiIcon::createStartupOverlayIcon(
       style()->standardIcon(QStyle::SP_FileIcon));
 }
 

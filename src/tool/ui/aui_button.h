@@ -35,14 +35,6 @@ public:
   /// 创建「关闭」按钮
   static QPushButton *createCloseButton();
 
-  // ════════════════════════════════════════════════════════════
-  //  构建 / 生成按钮图标
-  // ════════════════════════════════════════════════════════════
-
-  /// 创建构建 / 生成按钮的三角形箭头图标
-  /// @param size  三角区域边长（像素）
-  static QIcon createBuildIcon(int size = 18);
-
   /// 创建「构建 / 生成」按钮（QPushButton，三角形图标）
   static QPushButton *createBuildButton(int size = 18);
 
@@ -51,13 +43,6 @@ public:
   // ════════════════════════════════════════════════════════════
   /// 更新最大化 / 还原按钮图标
   static void updateMaximizeIcon(QPushButton *btn, bool isMaximized);
-
-  /// 在图标右下角叠加绿色三角形（启动项标记）
-  /// @param baseIcon 基础图标
-  /// @param size     图标像素尺寸
-  /// @param triSize  三角形边长
-  static QIcon createStartupOverlayIcon(const QIcon &baseIcon, int size = 16,
-                                        int triSize = 9);
 
 private:
   AuiButton() = delete;
