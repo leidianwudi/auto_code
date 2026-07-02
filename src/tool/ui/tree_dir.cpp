@@ -5,6 +5,8 @@
 
 #include "tree_dir.h"
 
+#include "src/tool/ui/aui_button.h"
+
 #include <QContextMenuEvent>
 #include <QDir>
 #include <QFile>
@@ -462,31 +464,10 @@ void TreeDir::applyStateToTree(QTreeWidgetItem *item,
 // 启动项管理
 // ============================================================================
 
-/// @brief 创建带三角标记的启动项图标 — 在默认文件图标右下角叠加小三角
+/// @brief 创建带三角标记的启动项图标 — 委托 AuiButton 叠加绿色三角
 QIcon TreeDir::makeStartupIcon() const {
-  QIcon baseIcon = style()->standardIcon(QStyle::SP_FileIcon);
-  QPixmap base = baseIcon.pixmap(16, 16);
-  QPixmap overlay(base.size());
-  overlay.fill(Qt::transparent);
-
-  QPainter painter(&overlay);
-  painter.setRenderHint(QPainter::Antialiasing);
-  painter.drawPixmap(0, 0, base);
-
-  // 右下角绘制绿色三角形
-  int w = base.width();
-  int h = base.height();
-  int triSize = 9; // 三角形边长
-  QPolygon tri;
-  tri << QPoint(w - triSize, h)                        // 左下角
-      << QPoint(w, h - triSize)                        // 右上角
-      << QPoint(w, h);                                 // 右下角
-  painter.setBrush(QColor(QStringLiteral("#4ec9b0"))); // 绿色三角
-  painter.setPen(Qt::NoPen);
-  painter.drawPolygon(tri);
-  painter.end();
-
-  return QIcon(overlay);
+  return AuiButton::createStartupOverlayIcon(
+      style()->standardIcon(QStyle::SP_FileIcon));
 }
 
 /// @brief 根据 m_startupFiles 集合更新所有 .ac 文件节点的图标

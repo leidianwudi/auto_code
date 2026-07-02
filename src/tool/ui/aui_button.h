@@ -55,6 +55,13 @@ public:
   /// 更新最大化 / 还原按钮图标
   static void updateMaximizeIcon(QPushButton *btn, bool isMaximized);
 
+  /// 在图标右下角叠加绿色三角形（启动项标记）
+  /// @param baseIcon 基础图标
+  /// @param size     图标像素尺寸
+  /// @param triSize  三角形边长
+  static QIcon createStartupOverlayIcon(const QIcon &baseIcon, int size = 16,
+                                        int triSize = 9);
+
 private:
   AuiButton() = delete;
 };

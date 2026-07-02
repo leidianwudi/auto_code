@@ -140,3 +140,39 @@ void AuiButton::updateMaximizeIcon(QPushButton *btn, bool isMaximized) {
   btn->setIcon(QIcon(px));
   btn->setIconSize(QSize(14, 14));
 }
+
+// ════════════════════════════════════════════════════════════
+//  启动项叠加图标
+// ════════════════════════════════════════════════════════════
+
+/// @brief 在图标右下角叠加绿色三角形（启动项标记）
+/// @param baseIcon 基础图标
+/// @param size     图标像素尺寸
+/// @param triSize  三角形边长
+QIcon AuiButton::createStartupOverlayIcon(const QIcon &baseIcon, int size,
+                                          int triSize) {
+  // 将基础图标绘制到指定尺寸的像素图上
+  QPixmap base = baseIcon.pixmap(size, size);
+  QPixmap overlay(base.size());
+  overlay.fill(Qt::transparent);
+
+  // 先绘制基础图标，再叠加三角形
+  QPainter painter(&overlay);
+  painter.setRenderHint(QPainter::Antialiasing);
+  painter.drawPixmap(0, 0, base);
+
+  // 在图标右下角绘制绿色三角形，箭头方向指向右
+  int w = base.width();
+  int h = base.height();
+  int leftSp = 3; // 左间隔
+  QPolygon tri;
+  tri << QPoint(leftSp, leftSp)           // 左上角（三角形左侧上顶点）
+      << QPoint(leftSp, h - leftSp)       // 左下角（三角形左侧下顶点）
+      << QPoint((w / 2) + leftSp, h / 2); // 右顶点（箭头尖端朝右）
+  painter.setBrush(QColor(QStringLiteral("#4ec9b0"))); // 绿色填充
+  painter.setPen(Qt::NoPen);                           // 无边框
+  painter.drawPolygon(tri);
+  painter.end();
+
+  return QIcon(overlay);
+}
