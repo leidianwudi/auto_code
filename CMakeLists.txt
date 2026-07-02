@@ -56,6 +56,8 @@ qt_add_executable(auto_code
     src/tool/ui/aui_icon.cpp
     src/ui/main_dev/main_dev_ui.h
     src/ui/main_dev/main_dev_ui.cpp
+    src/ui/main_dev/main_dev_ui_ext.h
+    src/ui/main_dev/main_dev_ui_ext.cpp
     src/ui/main_dev/main_dev_mgr.h
     src/ui/main_dev/main_dev_mgr.cpp
     src/ui/main_dev/main_dev_model.h

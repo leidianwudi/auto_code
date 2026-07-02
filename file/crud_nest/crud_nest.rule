@@ -1,0 +1,55 @@
+{
+  // ════════════════════════════════════════════════════════════
+  //  主副表关联字段配置
+  // ════════════════════════════════════════════════════════════
+  "JoinColumn": {
+    "properties": {
+      "name": { "type": "string" },               // 主表中关联的字段名
+      "referencedColumnName": { "type": "string" } // 副表中关联的字段名
+    }
+  },
+
+  // ════════════════════════════════════════════════════════════
+  //  自动生成关联配置 — 描述当前实体与目标实体之间的一条关联
+  // ════════════════════════════════════════════════════════════
+  "JoinTable": {
+    "properties": {
+      "joinEnClass": { "type": "string" },          // 关联的副表实体类名
+      "joinEnClass_Url": { "type": "string" },       // 关联的副表实体类 URL
+      "joinEnClassPro": { "type": "string" },        // 副表在主表中的属性名
+      "joinType": { "type": "string" },              // 关联类型：OneToOne / ManyToOne / OneToMany / ManyToMany
+      "inverseJoinEnClassPro": { "type": "string" }, // 主表在副表中的属性名（可选）
+      "joinColumn": { "type": "object", "class": "JoinColumn" }, // 主副表关联字段
+      "isArray": { "type": "bool" },                 // 是否数组关联（自动由 JoinType 推断，外部无需设置）
+      "isJoinRelations": { "type": "bool" },         // 是否为关联关系生成 SQL 语句
+      "joinQueryMode": { "type": "string" }          // 关联查询模式：leftJoin / innerJoin
+    }
+  },
+
+  // ════════════════════════════════════════════════════════════
+  //  表枚举配置 — 将整张业务表作为枚举生成时的字段配置
+  // ════════════════════════════════════════════════════════════
+  "TableEnumConfig": {
+    "properties": {
+      "field": { "type": "string" },   // 枚举字段
+      "comment": { "type": "string" }  // 枚举字段注释（可选）
+    }
+  },
+
+  // ════════════════════════════════════════════════════════════
+  //  自动代码生成输入参数 — 定义一张业务表的生成配置
+  // ════════════════════════════════════════════════════════════
+  "AutoParam": {
+    "properties": {
+      "modelName": { "type": "string" },                      // 模块名，可以包括路径
+      "tableName": { "type": "string" },                      // 数据库表名
+      "selCols": { "type": "array", "items": "string" },      // 精确查询的字段列表
+      "selColsGap": { "type": "array", "items": "string" },   // 范围查询的字段列表
+      "selColsLike": { "type": "array", "items": "string" },  // 模糊查询的字段列表
+      "joinTable": { "type": "array", "items": "JoinTable" }, // 关联表配置列表
+      "selColsSum": { "type": "array", "items": "string" },   // 汇总查询的字段列表
+      "selColsSort": { "type": "string" },                    // 排序字段（Record<string, 'ASC'|'DESC'>，暂用 string 代替）
+      "tableEnum": { "type": "object", "class": "TableEnumConfig" } // 表枚举配置
+    }
+  }
+}
