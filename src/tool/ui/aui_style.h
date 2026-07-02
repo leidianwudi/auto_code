@@ -30,6 +30,9 @@ public:
   /// 非活跃面板的标签页文字颜色（灰色）
   static QColor inactiveTabColor() { return QColor(0x88, 0x88, 0x88); }
 
+  // 编译按钮颜色，绿色
+  static QColor compileButtonColor() { return QColor(0x44, 0x99, 0x00); }
+
   // ════════════════════════════════════════════════════════════
   //  全局样式表
   // ════════════════════════════════════════════════════════════

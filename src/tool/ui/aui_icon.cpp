@@ -22,7 +22,7 @@ QIcon AuiIcon::createBuildIcon(int size) {
 
   // 绘制三角形（接近铺满，仅留 1px 边距）
   p.setPen(Qt::NoPen);
-  p.setBrush(AuiStyle::textColor());
+  p.setBrush(AuiStyle::compileButtonColor());
   const double half = size * 0.5;
   QPolygonF tri;
   tri << QPointF(1.0, 1.0) << QPointF(size - 1.0, half)
@@ -60,8 +60,8 @@ QIcon AuiIcon::createStartupOverlayIcon(const QIcon &baseIcon, int size,
   tri << QPoint(leftSp, leftSp)           // 左上角（三角形左侧上顶点）
       << QPoint(leftSp, h - leftSp)       // 左下角（三角形左侧下顶点）
       << QPoint((w / 2) + leftSp, h / 2); // 右顶点（箭头尖端朝右）
-  painter.setBrush(QColor(QStringLiteral("#4ec9b0"))); // 绿色填充
-  painter.setPen(Qt::NoPen);                           // 无边框
+  painter.setBrush(AuiStyle::compileButtonColor()); // 绿色填充
+  painter.setPen(Qt::NoPen);                        // 无边框
   painter.drawPolygon(tri);
   painter.end();
 
