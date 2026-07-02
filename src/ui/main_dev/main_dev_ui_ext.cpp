@@ -161,7 +161,7 @@ DimmableTabWidget::DimmableTabWidget(QWidget *parent) : QTabWidget(parent) {
 
   // tab 样式
   bar->setStyleSheet(QStringLiteral("QTabBar::tab {"
-                                    "  padding: 6px 4px 6px 8px;"
+                                    "  padding: 6px 2px 6px 4px;"
                                     "  border: 1px solid #c8c8c8;"
                                     "  border-bottom: none;"
                                     "  border-top-left-radius: 4px;"
