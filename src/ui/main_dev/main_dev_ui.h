@@ -8,9 +8,10 @@
 
 #pragma once
 
-#include <QAction>
+#include <QEvent>
 #include <QLabel>
 #include <QMainWindow>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSplitter>
 #include <QTabWidget>
@@ -134,6 +135,16 @@ public:
   void applyTabDimming(QTabWidget *active);
 
   // ════════════════════════════════════════════════════════════
+  //  输出面板
+  // ════════════════════════════════════════════════════════════
+
+  /// 向输出面板追加文本，isError 为 true 时显示红色
+  void appendOutput(const QString &text, bool isError = false);
+  /// 清空输出面板
+  void clearOutput();
+  QPlainTextEdit *outputPanel() const { return m_outputPanel; }
+
+  // ════════════════════════════════════════════════════════════
   //  控件 getter
   // ════════════════════════════════════════════════════════════
   QSplitter *editorSplitter() const { return m_editorSplitter; }
@@ -176,4 +187,8 @@ private:
   QPushButton *m_maxBtn = nullptr;
   QPushButton *m_closeBtn = nullptr;
   QPushButton *m_buildBtn = nullptr;
+
+  // ── 输出面板 ──
+  QSplitter *m_contentSplitter = nullptr;  ///< 垂直分割器：编辑器 + 输出面板
+  QPlainTextEdit *m_outputPanel = nullptr; ///< 脚本运行结果输出
 };

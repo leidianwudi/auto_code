@@ -28,6 +28,7 @@
 #include <QStatusBar>
 #include <QStyle>
 #include <QTabBar>
+#include <QTextCursor>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -390,13 +391,33 @@ void MainDevUi::setupUI() {
   m_editorSplitter->setStretchFactor(0, 1);
 
   // ════════════════════════════════════════════════════════════
-  //  主分割器
+  //  输出面板（编辑器下方，脚本运行结果）
   // ════════════════════════════════════════════════════════════
-  m_mainSplitter = new QSplitter(Qt::Horizontal); // 主分割器, 水平方向
+  m_outputPanel = new QPlainTextEdit;
+  m_outputPanel->setReadOnly(true);
+  m_outputPanel->setMaximumBlockCount(5000); // 限制行数，防止内存溢出
+  m_outputPanel->setStyleSheet(
+      QStringLiteral("QPlainTextEdit { background: #ffffff; color: #333333; "
+                     "border: 1px solid #cccccc; }"));
+
+  // ════════════════════════════════════════════════════════════
+  //  右侧分割器（垂直：编辑器 + 输出面板）
+  // ════════════════════════════════════════════════════════════
+  m_contentSplitter = new QSplitter(Qt::Vertical);
+  m_contentSplitter->addWidget(m_editorSplitter);
+  m_contentSplitter->addWidget(m_outputPanel);
+  m_contentSplitter->setStretchFactor(0, 1); // 编辑器可拉伸
+  m_contentSplitter->setStretchFactor(1, 0); // 输出面板固定高度
+  m_contentSplitter->setSizes({700, 120});   // 编辑器 700，输出面板 120
+
+  // ════════════════════════════════════════════════════════════
+  //  主分割器（水平：文件树 + 右侧区域）
+  // ════════════════════════════════════════════════════════════
+  m_mainSplitter = new QSplitter(Qt::Horizontal);
   m_mainSplitter->addWidget(m_fileTree);
-  m_mainSplitter->addWidget(m_editorSplitter);
+  m_mainSplitter->addWidget(m_contentSplitter);
   m_mainSplitter->setStretchFactor(0, 0); // 左侧文件树固定宽度
-  m_mainSplitter->setStretchFactor(1, 1); // 右侧编辑器区域可拉伸
+  m_mainSplitter->setStretchFactor(1, 1); // 右侧区域可拉伸
   m_mainSplitter->setSizes({250, 1150});
 
   // ════════════════════════════════════════════════════════════
@@ -644,3 +665,33 @@ void MainDevUi::applyTabDimming(QTabWidget *active) {
                            isActive ? QColor() : AuiStyle::inactiveTabColor());
   }
 }
+
+// ══════════════════════════════════════════════════════════════
+//  输出面板
+// ══════════════════════════════════════════════════════════════
+
+/// @brief 向输出面板追加文本
+/// @param text 要显示的文本
+/// @param isError 是否为错误信息，错误信息显示红色
+void MainDevUi::appendOutput(const QString &text, bool isError) {
+  QTextCursor cursor = m_outputPanel->textCursor();
+  cursor.movePosition(QTextCursor::End);
+
+  QTextCharFormat fmt;
+  if (isError) {
+    fmt.setForeground(QColor(QStringLiteral("#f44747"))); // 红色
+  } else {
+    fmt.setForeground(QColor(QStringLiteral("#333333"))); // 正常颜色
+  }
+
+  cursor.insertText(text, fmt);
+  // 如果不是以换行结尾则追加换行
+  if (!text.endsWith('\n'))
+    cursor.insertText(QStringLiteral("\n"), fmt);
+
+  m_outputPanel->setTextCursor(cursor);
+  m_outputPanel->ensureCursorVisible();
+}
+
+/// @brief 清空输出面板
+void MainDevUi::clearOutput() { m_outputPanel->clear(); }
