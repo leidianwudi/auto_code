@@ -41,13 +41,10 @@ public:
 
   /// 创建构建 / 生成按钮的三角形箭头图标
   /// @param size  三角区域边长（像素）
-  /// @param text  可选文字，显示在箭头右侧
-  static QIcon createBuildIcon(int size = 24,
-                               const QString &text = QStringLiteral("F5"));
+  static QIcon createBuildIcon(int size = 18);
 
-  /// 创建「构建 / 生成」按钮（QPushButton，含三角形图标 + 文字）
-  static QPushButton *
-  createBuildButton(const QString &text = QStringLiteral("F5"));
+  /// 创建「构建 / 生成」按钮（QPushButton，三角形图标）
+  static QPushButton *createBuildButton(int size = 18);
 
   // ════════════════════════════════════════════════════════════
   //  图标更新
