@@ -1,8 +1,8 @@
 {
-  "modelName": "User",
+  "modelNam4e": "User",
   "fields": [
     { "name": "id", "type": "number" },
-    { "name": "name", "type": "string" },
+    { "na4me": "dname", "type": "string" },
     { "name": "email", "type": "string" },
     { "name": "age是", "type": "number" }
   ],

@@ -483,16 +483,9 @@ void MainDevUi::applyTabDimming(QTabWidget *active) {
     AuiStyle::ensureFusionTabBar(bar);
 
     bool isActive = (tabs == active);
-    for (int j = 0; j < bar->count(); ++j) {
-      // 检查对应编辑器是否已修改 → 红色
-      auto *editor = qobject_cast<CodeEditor *>(tabs->widget(j));
-      if (editor && editor->document()->isModified()) {
-        bar->setTabTextColor(j, AuiStyle::modifiedColor());
-      } else {
-        bar->setTabTextColor(j, isActive ? QColor()
-                                         : AuiStyle::inactiveTabColor());
-      }
-    }
+    for (int j = 0; j < bar->count(); ++j)
+      bar->setTabTextColor(j,
+                           isActive ? QColor() : AuiStyle::inactiveTabColor());
   }
 }
 

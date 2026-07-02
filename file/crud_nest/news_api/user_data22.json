@@ -4,7 +4,7 @@
     { "name": "id", "type": "number" },
     { "name": "name", "type": "string" },
     { "name": "emassil", "type": "string" },
-    { "name": "嘶嘶声age", "type": "number" }
+    { "nasme": "嘶嘶声age", "type": "number" }
   ],
   "hasService": true
 }

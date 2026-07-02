@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <QSet>
 #include <QTabBar>
 #include <QTabWidget>
 
@@ -27,6 +28,10 @@ class DraggableTabBar : public QTabBar {
 public:
   explicit DraggableTabBar(QWidget *parent = nullptr);
 
+  /// 设置标签页的修改状态（已修改则在标签右侧绘制红色 "*"）
+  void setTabModified(int index, bool modified);
+  bool isTabModified(int index) const;
+
 signals:
   /// 标签从 fromBar(fromIndex) 拖拽到此 bar 的 toIndex 位置
   void tabDropped(int fromIndex, DraggableTabBar *fromBar, int toIndex);
@@ -37,6 +42,7 @@ protected:
   void dragEnterEvent(QDragEnterEvent *event) override;
   void dragMoveEvent(QDragMoveEvent *event) override;
   void dropEvent(QDropEvent *event) override;
+  void paintEvent(QPaintEvent *event) override;
 
 public:
   static DraggableTabBar *dragSourceBar() { return s_sourceBar; }
@@ -49,6 +55,7 @@ public:
 private:
   int m_pressedIndex = -1;
   QPoint m_dragStartPos;
+  QSet<int> m_modifiedTabs; ///< 已修改标签页索引集合
 
   static DraggableTabBar *s_sourceBar;
   static int s_sourceIndex;

@@ -27,6 +27,53 @@
 #include <QTreeWidgetItem>
 #include <QTreeWidgetItemIterator>
 
+// ──────────────────────────────────────────────────────────────
+//  ModifiedFileDelegate 实现
+// ──────────────────────────────────────────────────────────────
+
+void ModifiedFileDelegate::paint(QPainter *painter,
+                                 const QStyleOptionViewItem &option,
+                                 const QModelIndex &index) const {
+  // 先绘制默认内容（图标 + 文件名）
+  QStyledItemDelegate::paint(painter, option, index);
+
+  // 检查是否为已修改文件
+  bool modified = index.data(Qt::UserRole + 2).toBool();
+  if (!modified)
+    return;
+
+  // 在文件名右上角绘制红色 "*"
+  painter->save();
+  painter->setPen(AuiStyle::modifiedColor());
+
+  const QTreeWidget *tree = qobject_cast<const QTreeWidget *>(parent());
+  QFont treeFont = tree ? tree->font() : option.font;
+  QFontMetrics fm(treeFont);
+  QString text = index.data(Qt::DisplayRole).toString();
+
+  // 图标宽度（decorationSize 可能为 0，回退取实际图标大小）
+  int decoWidth = option.decorationSize.width();
+  if (decoWidth == 0)
+    decoWidth = option.icon.actualSize(QSize(16, 16)).width();
+
+  // 复选框宽度（.json 文件有复选框，.ac 文件没有）
+  int checkWidth = 0;
+  if (index.data(Qt::CheckStateRole).isValid())
+    checkWidth =
+        tree ? tree->style()->pixelMetric(QStyle::PM_IndicatorWidth) + 4 : 20;
+
+  // 文本起始位置（图标 + 复选框 + 4px 边距）
+  int textStartX = option.rect.left() + checkWidth + decoWidth + 4;
+  int starX = textStartX + fm.horizontalAdvance(text) + 6;
+  int starY = option.rect.top() + fm.ascent();
+
+  QFont boldFont = treeFont;
+  boldFont.setBold(true);
+  painter->setFont(boldFont);
+  painter->drawText(starX, starY, QStringLiteral("*"));
+  painter->restore();
+}
+
 // ============================================================================
 // 构造
 // ============================================================================
@@ -38,6 +85,8 @@ TreeDir::TreeDir(QWidget *parent) : QTreeWidget(parent) {
   setAnimated(true);
   setIndentation(16);
   setSortingEnabled(false);
+
+  setItemDelegate(new ModifiedFileDelegate(this));
 
   connect(this, &QTreeWidget::itemClicked, this, &TreeDir::onItemClicked);
   connect(this, &QTreeWidget::itemDoubleClicked, this,
@@ -575,16 +624,8 @@ void TreeDir::setFileModified(const QString &filePath, bool modified) {
   while (*it) {
     QTreeWidgetItem *item = *it;
     if (item->data(0, Qt::UserRole + 1).toString() == filePath) {
-      QString text = item->text(0);
-      if (modified) {
-        if (!text.endsWith(QStringLiteral(" *")))
-          item->setText(0, text + QStringLiteral(" *"));
-        item->setForeground(0, QBrush(AuiStyle::modifiedColor()));
-      } else {
-        if (text.endsWith(QStringLiteral(" *")))
-          item->setText(0, text.chopped(2));
-        item->setForeground(0, QBrush());
-      }
+      // 通过自定义数据角色存储修改状态，由 ModifiedFileDelegate 绘制红色 "*"
+      item->setData(0, Qt::UserRole + 2, modified);
       return;
     }
     ++it;

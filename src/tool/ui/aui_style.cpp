@@ -30,14 +30,15 @@ QString AuiStyle::mainStyleSheet() {
 // ════════════════════════════════════════════════════════════
 void AuiStyle::ensureFusionTabBar(QTabBar *bar) {
 #ifdef Q_OS_WIN
-  if (bar->style() &&
-      QString::fromLatin1(bar->style()->metaObject()->className())
-          .contains(QStringLiteral("Fusion")))
-    return;
-  QStyle *fs = QStyleFactory::create(QStringLiteral("Fusion"));
-  if (fs) {
-    fs->setParent(bar);
-    bar->setStyle(fs);
+  bool isFusion = bar->style() &&
+                  QString::fromLatin1(bar->style()->metaObject()->className())
+                      .contains(QStringLiteral("Fusion"));
+  if (!isFusion) {
+    QStyle *fs = QStyleFactory::create(QStringLiteral("Fusion"));
+    if (fs) {
+      fs->setParent(bar);
+      bar->setStyle(fs);
+    }
   }
 #else
   Q_UNUSED(bar);

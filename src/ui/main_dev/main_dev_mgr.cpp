@@ -6,6 +6,7 @@
 #include "main_dev_mgr.h"
 #include "main_dev_model.h"
 #include "main_dev_ui.h"
+#include "main_dev_ui_ext.h"
 #include "src/tool/ui/code_editor.h"
 #include "src/tool/ui/highlighter/json_highlighter.h"
 #include "src/tool/ui/highlighter/template_highlighter.h"
@@ -244,26 +245,19 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
   editor->setFocus();
   m_ui->setWindowTitle(QStringLiteral("Auto Code - %1").arg(fi.fileName()));
 
-  // ── 修改标记：内容变化时标签页标题追加 " *" ──
+  // ── 修改标记：内容变化时标签页和树节点绘制红色 "*" ──
   connect(editor->document(), &QTextDocument::modificationChanged, this,
           [this, tabs, editor, filePath](bool changed) {
             for (int i = 0; i < tabs->count(); ++i) {
               if (tabs->widget(i) == editor) {
-                QString text = tabs->tabText(i);
-                if (changed) {
-                  if (!text.endsWith(QStringLiteral(" *")))
-                    tabs->setTabText(i, text + QStringLiteral(" *"));
-                } else {
-                  if (text.endsWith(QStringLiteral(" *")))
-                    tabs->setTabText(i, text.chopped(2));
-                }
+                auto *bar = qobject_cast<DraggableTabBar *>(tabs->tabBar());
+                if (bar)
+                  bar->setTabModified(i, changed);
                 break;
               }
             }
             // 更新树形目录对应文件的修改状态
             m_ui->fileTree()->setFileModified(filePath, changed);
-            // 更新标签页颜色（红色 = 已修改）
-            m_ui->applyTabDimming(tabs);
             // 更新保存按钮可用状态
             m_ui->saveBtn()->setEnabled(
                 currentEditor() && currentEditor()->document()->isModified());

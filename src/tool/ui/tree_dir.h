@@ -14,10 +14,20 @@
 #include <QJsonArray>
 #include <QSet>
 #include <QStringList>
+#include <QStyledItemDelegate>
 #include <QTreeWidget>
 
 class QTreeWidgetItem;
 class QContextMenuEvent;
+
+/// 文件树绘制代理 — 对已修改文件在其名称后绘制红色 "*"
+class ModifiedFileDelegate : public QStyledItemDelegate {
+  Q_OBJECT
+public:
+  using QStyledItemDelegate::QStyledItemDelegate;
+  void paint(QPainter *painter, const QStyleOptionViewItem &option,
+             const QModelIndex &index) const override;
+};
 
 /**
  * @class TreeDir

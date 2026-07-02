@@ -12,8 +12,10 @@
 #include <QDropEvent>
 #include <QMimeData>
 #include <QMouseEvent>
+#include <QPainter>
 #include <QPixmap>
 #include <QSplitter>
+#include <QStyleOptionTab>
 
 // ════════════════════════════════════════════════════════════
 //  DraggableTabBar 实现
@@ -25,6 +27,44 @@ int DraggableTabBar::s_sourceIndex = -1;
 DraggableTabBar::DraggableTabBar(QWidget *parent) : QTabBar(parent) {
   setAcceptDrops(true);
   setMovable(false); // 自行处理跨面板拖拽
+}
+
+void DraggableTabBar::setTabModified(int index, bool modified) {
+  if (modified)
+    m_modifiedTabs.insert(index);
+  else
+    m_modifiedTabs.remove(index);
+  update(); // 触发重绘
+}
+
+bool DraggableTabBar::isTabModified(int index) const {
+  return m_modifiedTabs.contains(index);
+}
+
+void DraggableTabBar::paintEvent(QPaintEvent *event) {
+  // 先绘制默认标签栏
+  QTabBar::paintEvent(event);
+
+  // 在已修改标签上叠加红色 "*"
+  QPainter painter(this);
+  painter.setPen(AuiStyle::modifiedColor());
+  QFont font = painter.font();
+  font.setBold(true);
+  font.setPixelSize(14);
+  painter.setFont(font);
+
+  for (int i = 0; i < count(); ++i) {
+    if (!m_modifiedTabs.contains(i))
+      continue;
+    // 绘制在文字右侧，紧贴文字
+    QStyleOptionTab opt;
+    initStyleOption(&opt, i);
+    QRect textRect =
+        style()->subElementRect(QStyle::SE_TabBarTabText, &opt, this);
+    int starX = textRect.right() + 2;
+    int starY = textRect.top() + font.pixelSize() - 2;
+    painter.drawText(starX, starY, QStringLiteral("*"));
+  }
 }
 
 void DraggableTabBar::mousePressEvent(QMouseEvent *event) {
@@ -118,6 +158,27 @@ DimmableTabWidget::DimmableTabWidget(QWidget *parent) : QTabWidget(parent) {
 
   // 强制 Fusion 风格使 setTabTextColor 生效
   AuiStyle::ensureFusionTabBar(bar);
+
+  // tab 样式
+  bar->setStyleSheet(QStringLiteral("QTabBar::tab {"
+                                    "  padding: 6px 4px 6px 8px;"
+                                    "  border: 1px solid #c8c8c8;"
+                                    "  border-bottom: none;"
+                                    "  border-top-left-radius: 4px;"
+                                    "  border-top-right-radius: 4px;"
+                                    "  background: #e8e8e8;"
+                                    "  margin-right: 0px;"
+                                    "}"
+                                    "QTabBar::tab:selected {"
+                                    "  background: #ffffff;"
+                                    "}"
+                                    "QTabBar::tab:hover:!selected {"
+                                    "  background: #dcdcdc;"
+                                    "}"
+                                    "QTabBar::close-button {"
+                                    "  padding: 0px;"
+                                    "  margin: 0px;"
+                                    "}"));
 
   // 跨面板拖拽：标签移动
   connect(bar, &DraggableTabBar::tabDropped, this,
