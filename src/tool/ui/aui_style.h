@@ -48,6 +48,9 @@ public:
   /// 确保 QTabBar 使用 Fusion 风格（Windows 原生风格忽略 setTabTextColor）
   static void ensureFusionTabBar(QTabBar *bar);
 
+  /// QTabBar 样式表
+  static QString tabBarStyleSheet();
+
 private:
   AuiStyle() = delete;
 };

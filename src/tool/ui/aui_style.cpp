@@ -25,6 +25,28 @@ QString AuiStyle::mainStyleSheet() {
       "#WindowFrame { background: #e0e0e0; }");
 }
 
+QString AuiStyle::tabBarStyleSheet() {
+  return QStringLiteral("QTabBar::tab {"
+                        "  padding: 6px 2px 6px 4px;"
+                        "  border: 1px solid #c8c8c8;"
+                        "  border-bottom: none;"
+                        "  border-top-left-radius: 4px;"
+                        "  border-top-right-radius: 4px;"
+                        "  background: #e8e8e8;"
+                        "  margin-right: 0px;"
+                        "}"
+                        "QTabBar::tab:selected {"
+                        "  background: #ffffff;"
+                        "}"
+                        "QTabBar::tab:hover:!selected {"
+                        "  background: #dcdcdc;"
+                        "}"
+                        "QTabBar::close-button {"
+                        "  padding: 0px;"
+                        "  margin: 0px;"
+                        "}");
+}
+
 // ════════════════════════════════════════════════════════════
 //  风格适配（跨平台兼容）
 // ════════════════════════════════════════════════════════════

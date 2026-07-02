@@ -160,25 +160,7 @@ DimmableTabWidget::DimmableTabWidget(QWidget *parent) : QTabWidget(parent) {
   AuiStyle::ensureFusionTabBar(bar);
 
   // tab 样式
-  bar->setStyleSheet(QStringLiteral("QTabBar::tab {"
-                                    "  padding: 6px 2px 6px 4px;"
-                                    "  border: 1px solid #c8c8c8;"
-                                    "  border-bottom: none;"
-                                    "  border-top-left-radius: 4px;"
-                                    "  border-top-right-radius: 4px;"
-                                    "  background: #e8e8e8;"
-                                    "  margin-right: 0px;"
-                                    "}"
-                                    "QTabBar::tab:selected {"
-                                    "  background: #ffffff;"
-                                    "}"
-                                    "QTabBar::tab:hover:!selected {"
-                                    "  background: #dcdcdc;"
-                                    "}"
-                                    "QTabBar::close-button {"
-                                    "  padding: 0px;"
-                                    "  margin: 0px;"
-                                    "}"));
+  bar->setStyleSheet(AuiStyle::tabBarStyleSheet());
 
   // 跨面板拖拽：标签移动
   connect(bar, &DraggableTabBar::tabDropped, this,
