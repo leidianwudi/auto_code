@@ -55,10 +55,11 @@ QIcon AuiIcon::createStartupOverlayIcon(const QIcon &baseIcon, int size,
   // 在图标右下角绘制绿色三角形，箭头方向指向右
   int w = base.width();
   int h = base.height();
+  int leftSp = 3; // 左间隔
   QPolygon tri;
-  tri << QPoint(w - triSize, 0)     // 左上角（三角形左侧上顶点）
-      << QPoint(w - triSize, h - 1) // 左下角（三角形左侧下顶点）
-      << QPoint(w - 1, h / 2);      // 右顶点（箭头尖端朝右）
+  tri << QPoint(leftSp, leftSp)           // 左上角（三角形左侧上顶点）
+      << QPoint(leftSp, h - leftSp)       // 左下角（三角形左侧下顶点）
+      << QPoint((w / 2) + leftSp, h / 2); // 右顶点（箭头尖端朝右）
   painter.setBrush(QColor(QStringLiteral("#4ec9b0"))); // 绿色填充
   painter.setPen(Qt::NoPen);                           // 无边框
   painter.drawPolygon(tri);
