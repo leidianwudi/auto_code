@@ -7,6 +7,7 @@
 #include <QString>
 #include <QStringList>
 #include <QVector>
+#include <functional>
 #include <utility>
 
 /// @brief 脚本解析器 — 将 main.ac 脚本解析为 AST 并解释执行
@@ -30,6 +31,11 @@ public:
   void setScriptDir(const QString &dir) { m_scriptDir = dir; }
   void setRootDir(const QString &dir) { m_rootDir = dir; }
   void setJsonFile(const QString &path) { m_jsonPath = path; }
+  QStringList generatedFiles() const { return m_generatedFiles; }
+
+  /// 日志回调：print() 的输出通过此回调通知 UI
+  using LogCallback = std::function<void(const QString &text, bool isError)>;
+  void setLogCallback(LogCallback cb) { m_logCallback = std::move(cb); }
 
   bool parse(const QString &source);
   QJsonValue execute();
@@ -281,4 +287,6 @@ private:
   QString m_jsonPath;                   ///< 当前处理的 JSON 文件路径
   QHash<QString, QJsonValue> m_vars;    ///< 局部变量表
   QHash<QString, QJsonValue> m_globals; ///< 全局变量表
+  QStringList m_generatedFiles;         ///< 本次执行生成的文件列表
+  LogCallback m_logCallback;            ///< 日志回调
 };

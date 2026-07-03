@@ -57,6 +57,11 @@ QWidget *MainDevMgr::onCreateWindow() {
   // ── 连接信号 ──
   initUi();
 
+  // ── 设置日志回调：脚本中 print() 输出到 UI 面板 ──
+  MainEngine::ins().setLogCallback([this](const QString &text, bool isError) {
+    m_ui->appendOutput(text, isError);
+  });
+
   // ── 加载文件树 ──
   loadFiles();
 
@@ -142,7 +147,6 @@ void MainDevMgr::initUi() {
       m_ui->appendOutput(QStringLiteral("未选择启动项"), true);
       return;
     }
-    m_ui->clearOutput();
     m_ui->appendOutput(QStringLiteral("执行: %1").arg(scriptPath), false);
     MainEngine::ins().setRootDir(m_ui->fileTree()->rootPath());
     QString err = MainEngine::ins().execute(scriptPath);
@@ -150,6 +154,9 @@ void MainDevMgr::initUi() {
       m_ui->appendOutput(err, true);
     } else {
       m_ui->appendOutput(QStringLiteral("执行完成"), false);
+      QStringList files = MainEngine::ins().generatedFiles();
+      for (const QString &f : files)
+        m_ui->appendOutput(QStringLiteral("  生成: %1").arg(f), false);
     }
   });
 

@@ -9,6 +9,7 @@ ${if hasService}export class ${modelName}Service {
     return fetch('/api/${modelName.toLowerCase}').then(r => r.json());
   }
 }
+${print("生成完成1111111")}
 ${/if}
 // 算111333333333术运算111111111示例
 // 总价: ${price * quantity}

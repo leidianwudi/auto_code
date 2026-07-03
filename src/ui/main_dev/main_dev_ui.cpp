@@ -497,6 +497,11 @@ void MainDevUi::applyTabDimming(QTabWidget *active) {
 /// @param text 要显示的文本
 /// @param isError 是否为错误信息，错误信息显示红色
 void MainDevUi::appendOutput(const QString &text, bool isError) {
+  // 超过 5000 行时清空旧日志
+  if (m_outputPanel->document()->blockCount() > 5000) {
+    m_outputPanel->clear();
+  }
+
   QTextCursor cursor = m_outputPanel->textCursor();
   cursor.movePosition(QTextCursor::End);
 

@@ -29,11 +29,14 @@ QString MainEngine::execute(const QString &mainAcPath) {
   parser.setScriptDir(dir);
   if (!m_rootDir.isEmpty())
     parser.setRootDir(m_rootDir);
+  if (m_logCallback)
+    parser.setLogCallback(m_logCallback);
 
   if (!parser.parse(source))
     return QStringLiteral("parse error: %1").arg(parser.error());
 
   QJsonValue result = parser.execute();
+  m_generatedFiles = parser.generatedFiles();
   if (!parser.error().isEmpty())
     return parser.error();
 

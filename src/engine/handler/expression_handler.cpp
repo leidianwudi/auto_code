@@ -62,6 +62,24 @@ bool ExpressionHandler::handle(const QString &block, int &pos,
   Q_UNUSED(block)
   Q_UNUSED(pos)
 
+  // === 策略 0: 内置函数调用 print(text) ===
+  if (expr.startsWith(QStringLiteral("print(")) &&
+      expr.endsWith(QStringLiteral(")"))) {
+    QString arg = expr.mid(6, expr.length() - 7).trimmed();
+    // 去掉可能的外层引号
+    if ((arg.startsWith('\'') && arg.endsWith('\'')) ||
+        (arg.startsWith('"') && arg.endsWith('"')))
+      arg = arg.mid(1, arg.length() - 2);
+    // 如果参数不是字面量，尝试从 context 解析变量
+    QJsonValue v = m_engine.resolvePath(arg, context);
+    if (!v.isNull() && !v.isUndefined())
+      arg = v.toString();
+    auto cb = m_engine.logCallback();
+    if (cb)
+      cb(arg, false);
+    return true;
+  }
+
   // === 策略 0: 内置函数调用 fileExists(path) ===
   if (expr.startsWith(QStringLiteral("fileExists(")) &&
       expr.endsWith(QStringLiteral(")"))) {

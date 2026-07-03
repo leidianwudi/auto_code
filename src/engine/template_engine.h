@@ -19,6 +19,8 @@
 #include <QJsonValue>
 #include <QString>
 
+#include <functional>
+
 #include "handler/block_handler.h"
 
 class SchemaValidator;
@@ -41,6 +43,11 @@ public:
    * @brief 默认构造函数
    */
   TemplateEngine();
+
+  /// 日志回调：模板中 ${print(...)} 的输出通过此回调通知 UI
+  using LogCallback = std::function<void(const QString &text, bool isError)>;
+  void setLogCallback(LogCallback cb) { m_logCallback = std::move(cb); }
+  LogCallback logCallback() const { return m_logCallback; }
 
   /**
    * @brief 设置 Schema 校验器（启用后渲染前自动校验数据）
@@ -98,6 +105,9 @@ private:
 
   /// 最后一次错误信息
   mutable QString m_lastError;
+
+  /// 日志回调
+  LogCallback m_logCallback;
 
   /// Schema 校验器（nullptr 表示不校验）
   static const SchemaValidator *sm_validator;

@@ -616,12 +616,26 @@ QJsonValue ScriptParser::callBuiltin(const QString &name,
     QString tpl = QString::fromUtf8(f.readAll());
 
     TemplateEngine engine;
+    if (m_logCallback)
+      engine.setLogCallback(m_logCallback);
     QJsonValue data = evalExpr(*args[1]);
     if (!data.isObject()) {
       m_error = QStringLiteral("render() data must be a JSON object");
       return QJsonValue();
     }
     return QJsonValue(engine.render(tpl, data.toObject()));
+  }
+
+  // print(text) → 输出日志到 UI 面板
+  if (name == QStringLiteral("print")) {
+    if (args.isEmpty()) {
+      m_error = QStringLiteral("print() requires at least one argument");
+      return QJsonValue();
+    }
+    QString text = evalExpr(*args[0]).toString();
+    if (m_logCallback)
+      m_logCallback(text, false);
+    return QJsonValue(true);
   }
 
   // write(path, content) → write file
@@ -638,6 +652,7 @@ QJsonValue ScriptParser::callBuiltin(const QString &name,
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
       return QJsonValue(false);
     f.write(content.toUtf8());
+    m_generatedFiles.append(QDir::toNativeSeparators(path));
     return QJsonValue(true);
   }
 
