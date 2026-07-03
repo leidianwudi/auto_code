@@ -8,7 +8,13 @@ main {
     database: "news"
   });
 
-  outputPath = "D:/output";
+  basePath = "D:/output";
+
+  // 模板配置列表：[模板文件, 输出后缀]
+  templates = [
+    { tpl: "1.ac", suffix: ".ts" },
+    { tpl: "2.ac", suffix: ".ts" }
+  ];
 
   // 获取主界面勾选的 json 文件
   files = getCheckedFiles();
@@ -19,10 +25,15 @@ main {
     schema = call("db", "tableSchema", { table: json.modelName });
     combined = merge(json, schema);
     name = basename(file);
-    combined["outputPath"] = outputPath + "/" + name + ".ts"
-    result = render("1.ac", combined);
-    if (result) {
-       write(outputPath + "/" + name + ".ts", result);
+
+    // 遍历每个模板
+    for (cfg in templates) {
+      combined["outputPath"] = basePath + "/" + name;
+      result = render(cfg.tpl, combined);
+      print("sss" + combined["outputPath"]);
+      if (result) {
+        write(combined["outputPath"], result);
+      }
     }
   }
 
