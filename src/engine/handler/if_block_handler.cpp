@@ -54,7 +54,8 @@ bool IfBlockHandler::handle(const QString &block, int &pos, const QString &expr,
 
   int ifStart = pos;
   int elsePos = block.indexOf(QStringLiteral("${else}"), pos);
-  int ifEnd = block.indexOf(QStringLiteral("${/if}"), pos);
+  int ifEnd = findMatchingClose(block, pos, QStringLiteral("if "),
+                                QStringLiteral("${/if}"));
 
   if (ifEnd == -1) {
     m_engine.setError(QStringLiteral("Unclosed ${if %1}").arg(condition));

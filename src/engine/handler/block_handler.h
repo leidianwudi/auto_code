@@ -21,6 +21,15 @@
 class TemplateEngine;
 
 /**
+ * @brief 查找匹配的闭合标签（支持嵌套）
+ *
+ * 从 startPos 开始扫描 block，计数嵌套的 openTag 和 closeTag，
+ * 返回深度归零时的位置（即匹配的闭合标签位置）。
+ */
+int findMatchingClose(const QString &block, int startPos,
+                      const QString &openPrefix, const QString &closeTag);
+
+/**
  * @class BlockHandler
  * @brief 模板块处理器抽象基类
  *

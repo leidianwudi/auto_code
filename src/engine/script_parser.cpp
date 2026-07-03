@@ -127,6 +127,10 @@ QVector<ScriptParser::Token> ScriptParser::tokenize(const QString &source) {
           tokens.append({TOK_FOR, word, line});
         else if (word == QStringLiteral("in"))
           tokens.append({TOK_IN, word, line});
+        else if (word == QStringLiteral("if"))
+          tokens.append({TOK_IF, word, line});
+        else if (word == QStringLiteral("else"))
+          tokens.append({TOK_ELSE, word, line});
         else
           tokens.append({TOK_IDENT, word, line});
       } else {
@@ -227,6 +231,11 @@ bool ScriptParser::parseStmt(Stmt &stmt) {
     return parseForStmt(stmt.forStmt);
   }
 
+  if (t.type == TOK_IF) {
+    stmt.kind = Stmt::kIf;
+    return parseIfStmt(stmt.ifStmt);
+  }
+
   if (t.type == TOK_IDENT) {
     // look ahead: if next is '=', it's assignment
     if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_EQUALS) {
@@ -315,6 +324,26 @@ bool ScriptParser::parseForStmt(ForStmt &fs) {
   if (!expect(TOK_RPAREN, QStringLiteral("expected ')'")))
     return false;
   return parseBlock(fs.body);
+}
+
+/// @brief 解析 if (cond) { then } [else { else }]
+bool ScriptParser::parseIfStmt(IfStmt &is) {
+  advance(); // 跳过 'if'
+  if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after if")))
+    return false;
+  if (!parseExpr(is.condition))
+    return false;
+  if (!expect(TOK_RPAREN, QStringLiteral("expected ')'")))
+    return false;
+  if (!parseBlock(is.thenBlock))
+    return false;
+  // 可选的 else 分支
+  if (peek().type == TOK_ELSE) {
+    advance();
+    is.hasElse = true;
+    return parseBlock(is.elseBlock);
+  }
+  return true;
 }
 
 /// @brief 解析表达式 — 先解析 primary，再处理 + 运算符
@@ -701,6 +730,27 @@ void ScriptParser::execStmt(const Stmt &stmt) {
       if (!m_error.isEmpty())
         return;
     }
+    break;
+  }
+
+  case Stmt::kIf: {
+    QJsonValue cond = evalExpr(stmt.ifStmt.condition);
+    bool truthy = false;
+    if (cond.isBool())
+      truthy = cond.toBool();
+    else if (cond.isString())
+      truthy = !cond.toString().isEmpty();
+    else if (cond.isDouble())
+      truthy = cond.toDouble() != 0.0;
+    else if (cond.isNull() || cond.isUndefined())
+      truthy = false;
+    else
+      truthy = true; // object/array 均视为 truthy
+
+    if (truthy)
+      execBlock(stmt.ifStmt.thenBlock);
+    else if (stmt.ifStmt.hasElse)
+      execBlock(stmt.ifStmt.elseBlock);
     break;
   }
 

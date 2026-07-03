@@ -8,6 +8,46 @@
 #include "expression_handler.h"
 #include "if_block_handler.h"
 
+/**
+ * @brief 查找匹配的闭合标签（支持嵌套）
+ *
+ * 从 startPos 开始扫描 block，计数嵌套的 openTag 和 closeTag，
+ * 返回深度归零时的位置（即匹配的闭合标签位置）。
+ *
+ * @param block  完整的模板字符串
+ * @param startPos 开始搜索的位置
+ * @param openPrefix 开放标签前缀（如 "if "、"each "）
+ * @param closeTag 闭合标签（如 "${/if}"、"${/each}"）
+ * @return 匹配的闭合标签位置，未找到返回 -1
+ */
+int findMatchingClose(const QString &block, int startPos,
+                      const QString &openPrefix, const QString &closeTag) {
+  int depth = 1;
+  int pos = startPos;
+  int openLen = 2 + openPrefix.length(); // "${" + prefix
+  int closeLen = closeTag.length();
+
+  while (pos < block.length()) {
+    int nextOpen = block.indexOf(QStringLiteral("${") + openPrefix, pos);
+    int nextClose = block.indexOf(closeTag, pos);
+
+    if (nextClose == -1)
+      return -1; // 没有闭合标签
+
+    // 如果下一个 open 在 close 之前，说明嵌套了一层
+    if (nextOpen != -1 && nextOpen < nextClose) {
+      ++depth;
+      pos = nextOpen + openLen;
+    } else {
+      --depth;
+      if (depth == 0)
+        return nextClose;
+      pos = nextClose + closeLen;
+    }
+  }
+  return -1;
+}
+
 static QString jsonValueToString(const QJsonValue &val) {
   if (val.isString())
     return val.toString();

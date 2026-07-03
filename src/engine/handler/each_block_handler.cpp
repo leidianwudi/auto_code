@@ -53,7 +53,8 @@ bool EachBlockHandler::handle(const QString &block, int &pos,
 
   // 步骤3: 查找 ${/each} 结束标记
   // 从当前位置向后搜索，必须找到结束标记才能构成完整的循环块
-  int eachEnd = block.indexOf(QStringLiteral("${/each}"), pos);
+  int eachEnd = findMatchingClose(block, pos, QStringLiteral("each "),
+                                  QStringLiteral("${/each}"));
   if (eachEnd == -1) {
     // 未找到结束标记，设置错误信息并返回失败
     m_engine.setError(QStringLiteral("Unclosed ${each %1}").arg(varName));

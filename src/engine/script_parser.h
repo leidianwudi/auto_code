@@ -55,6 +55,8 @@ private:
     TOK_SEMI,     ///< ;（语句结束）
     TOK_FOR,      ///< for 关键字
     TOK_IN,       ///< in 关键字
+    TOK_IF,       ///< if 关键字
+    TOK_ELSE,     ///< else 关键字
   };
 
   /// @brief 词法单元
@@ -220,13 +222,22 @@ private:
     Block body;
   };
 
+  /// @brief if 条件语句：if (cond) { then } else { else }
+  struct IfStmt {
+    Expr condition;
+    Block thenBlock;
+    Block elseBlock;
+    bool hasElse = false;
+  };
+
   /// @brief 语句 — 包含调用、赋值、循环三种类型
   struct Stmt {
-    enum Kind { kCall, kAssign, kIndexAssign, kFor, kExpr } kind = kCall;
+    enum Kind { kCall, kAssign, kIndexAssign, kFor, kIf, kExpr } kind = kCall;
     CallStmt call;
     AssignStmt assign;
     IndexAssignStmt indexAssign;
     ForStmt forStmt;
+    IfStmt ifStmt;
     Expr exprStmt;
   };
 
@@ -246,6 +257,7 @@ private:
   bool parseAssignStmt(AssignStmt &as);
   bool parseIndexAssignStmt(IndexAssignStmt &ias);
   bool parseForStmt(ForStmt &fs);
+  bool parseIfStmt(IfStmt &is);
   bool parseExpr(Expr &expr);
   bool parsePrimary(Expr &expr);
   bool parseObject(Expr &expr);

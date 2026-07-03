@@ -21,7 +21,9 @@ main {
     name = basename(file);
     combined["outputPath"] = outputPath + "/" + name + ".ts"
     result = render("1.ac", combined);
-    write(outputPath + "/" + name + ".ts", result);
+    if (result) {
+       write(outputPath + "/" + name + ".ts", result);
+    }
   }
 
   // 断开数据库
