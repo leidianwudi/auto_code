@@ -125,9 +125,9 @@ void MainDevUi::setupUI() {
   helpBtn->setMenu(helpMenu);
   titleLayout->addWidget(helpBtn);
 
-  // ── 编译按钮 ──
+  // ── 执行按钮 ──
   m_buildBtn = AuiButton::createBuildButton();
-  m_buildBtn->setToolTip(QStringLiteral("编译 (F5)"));
+  m_buildBtn->setToolTip(QStringLiteral("执行 (F5)"));
   titleLayout->addWidget(m_buildBtn);
 
   // ── 启动项下拉框 ──

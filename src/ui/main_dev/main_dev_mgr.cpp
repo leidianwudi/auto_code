@@ -135,7 +135,7 @@ void MainDevMgr::initUi() {
     }
   });
 
-  // ── 编译按钮 ──
+  // ── 执行按钮 ──
   connect(m_ui->buildBtn(), &QPushButton::clicked, this, [this]() {
     QString scriptPath = m_ui->startupCombo()->currentData().toString();
     if (scriptPath.isEmpty()) {
