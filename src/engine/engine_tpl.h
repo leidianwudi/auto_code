@@ -8,7 +8,7 @@
  * - 条件判断: ${if condition}...${else}...${/if}
  * - 算术运算: ${a + b * c}
  *
- * 具体的处理逻辑已提取到对应的 HandBlock 子类中。
+ * 具体的处理逻辑已提取到对应的 TplBlock 子类中。
  * TemplateEngine 作为协调者：提供 render 入口 + 共享工具方法。
  */
 
@@ -21,7 +21,7 @@
 
 #include <functional>
 
-#include "tpl_hand/hand_block.h"
+#include "tpl_hand/tpl_block.h"
 
 class ValidatorJson;
 
@@ -34,7 +34,7 @@ class ValidatorJson;
  * 2. renderBlock() — 递归扫描 ${...} 并交给 HandlerFactory
  * 3. resolvePath() — 嵌套属性解析（供 handler 共享调用）
  *
- * 算术表达式求值已移至 HandExpression 内部实现。
+ * 算术表达式求值已移至 TplExpression 内部实现。
  * C++ 函数调用使用 FunMgr::call(类名, 函数名, 参数)。
  */
 class TemplateEngine {
@@ -77,13 +77,13 @@ public:
   QString lastError() const { return m_lastError; }
 
   /**
-   * @brief 设置错误信息（供 HandBlock 调用）
+   * @brief 设置错误信息（供 TplBlock 调用）
    * @param msg 错误信息
    */
   void setError(const QString &msg) const { m_lastError = msg; }
 
   // ====================================================================
-  // 共享工具方法（供 HandBlock 子类调用）
+  // 共享工具方法（供 TplBlock 子类调用）
   // ====================================================================
 
   /**
@@ -95,7 +95,7 @@ public:
   QJsonValue resolvePath(const QString &path, const QJsonObject &context) const;
 
   /**
-   * @brief 递归渲染模板块（供 HandBlock 子类调用）
+   * @brief 递归渲染模板块（供 TplBlock 子类调用）
    */
   QString renderBlock(const QString &block, const QJsonObject &context) const;
 

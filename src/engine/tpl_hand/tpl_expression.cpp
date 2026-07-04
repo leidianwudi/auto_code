@@ -1,8 +1,8 @@
 /**
- * @file hand_expression.cpp
+ * @file tpl_expression.cpp
  * @brief 表达式处理器实现（自包含：算术解析器 + 变量求值）
  *
- * 本文件是 HandExpression 的完整实现，包含：
+ * 本文件是 TplExpression 的完整实现，包含：
  * - checkArithmetic() -- 判断表达式是否含算术运算符
  * - handle()          -- 三策略分发（循环变量 / 算术 / 普通变量）
  * - evalExpression()  -- 算术解析入口
@@ -11,7 +11,7 @@
  * - evalPrimary()     -- 基本元素（最高优先级）
  */
 
-#include "hand_expression.h"
+#include "tpl_expression.h"
 #include "../engine_tpl.h"
 
 #include <QFileInfo>
@@ -53,11 +53,11 @@ bool checkArithmetic(const QString &expr) {
 } // namespace
 
 // ====================================================================
-// HandExpression::handle() -- 三策略分发
+// TplExpression::handle() -- 三策略分发
 // ====================================================================
 
-bool HandExpression::handle(const QString &block, int &pos, const QString &expr,
-                            const QJsonObject &context, QString &result) const {
+bool TplExpression::handle(const QString &block, int &pos, const QString &expr,
+                           const QJsonObject &context, QString &result) const {
   Q_UNUSED(block)
   Q_UNUSED(pos)
 
@@ -156,8 +156,8 @@ bool HandExpression::handle(const QString &block, int &pos, const QString &expr,
 //   evalPrimary: 处理原子元素（数字、变量、括号、一元符号）
 // ====================================================================
 
-double HandExpression::evalExpression(const QString &expr,
-                                      const QJsonObject &context) const {
+double TplExpression::evalExpression(const QString &expr,
+                                     const QJsonObject &context) const {
   int pos = 0;
   return evalAddSub(expr, pos, context);
 }
@@ -185,8 +185,8 @@ double HandExpression::evalExpression(const QString &expr,
  * @param context 变量上下文（用于解析表达式中引用的变量名）
  * @return 加减法子表达式的计算结果
  */
-double HandExpression::evalAddSub(const QString &expr, int &pos,
-                                  const QJsonObject &context) const {
+double TplExpression::evalAddSub(const QString &expr, int &pos,
+                                 const QJsonObject &context) const {
 
   // 步骤1: 解析第一个操作数（可能是乘除法表达式、单个数字或变量）
   // 例如 "a + b - c" 中，先通过 evalMulDiv 解析出 left=a
@@ -248,8 +248,8 @@ double HandExpression::evalAddSub(const QString &expr, int &pos,
  * @param context 变量上下文（用于解析表达式中引用的变量名）
  * @return 乘除法子表达式的计算结果
  */
-double HandExpression::evalMulDiv(const QString &expr, int &pos,
-                                  const QJsonObject &context) const {
+double TplExpression::evalMulDiv(const QString &expr, int &pos,
+                                 const QJsonObject &context) const {
 
   // 步骤1: 解析第一个操作数（数字、变量、括号表达式或一元运算符）
   // 例如 "2 * 3" 中，先解析出 left=2
@@ -298,8 +298,8 @@ double HandExpression::evalMulDiv(const QString &expr, int &pos,
   return left;
 }
 
-double HandExpression::evalPrimary(const QString &expr, int &pos,
-                                   const QJsonObject &context) const {
+double TplExpression::evalPrimary(const QString &expr, int &pos,
+                                  const QJsonObject &context) const {
   while (pos < expr.length() && expr[pos].isSpace())
     ++pos;
 

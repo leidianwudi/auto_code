@@ -19,14 +19,14 @@ qt_add_executable(auto_code
     src/engine/script_parser.cpp
     src/engine/validator_json.h
     src/engine/validator_json.cpp
-    src/engine/tpl_hand/hand_block.h
-    src/engine/tpl_hand/hand_block.cpp
-    src/engine/tpl_hand/hand_each_block.h
-    src/engine/tpl_hand/hand_each_block.cpp
-    src/engine/tpl_hand/hand_if_block.h
-    src/engine/tpl_hand/hand_if_block.cpp
-    src/engine/tpl_hand/hand_expression.h
-    src/engine/tpl_hand/hand_expression.cpp
+    src/engine/tpl_hand/tpl_block.h
+    src/engine/tpl_hand/tpl_block.cpp
+    src/engine/tpl_hand/tpl_each_block.h
+    src/engine/tpl_hand/tpl_each_block.cpp
+    src/engine/tpl_hand/tpl_if_block.h
+    src/engine/tpl_hand/tpl_if_block.cpp
+    src/engine/tpl_hand/tpl_expression.h
+    src/engine/tpl_hand/tpl_expression.cpp
     src/engine/function/fun_str.h
     src/engine/function/fun_str.cpp
     src/engine/function/fun_db.h

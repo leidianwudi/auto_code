@@ -1,9 +1,9 @@
 /**
- * @file hand_if_block.cpp
+ * @file tpl_if_block.cpp
  * @brief 条件块处理器实现
  */
 
-#include "hand_if_block.h"
+#include "tpl_if_block.h"
 #include "../engine_tpl.h"
 
 /**
@@ -41,8 +41,8 @@ static bool isTruthy(const QJsonValue &val) {
   return false; // null / undefined
 }
 
-bool HandIfBlock::handle(const QString &block, int &pos, const QString &expr,
-                         const QJsonObject &context, QString &result) const {
+bool TplIfBlock::handle(const QString &block, int &pos, const QString &expr,
+                        const QJsonObject &context, QString &result) const {
   QString condition = expr.mid(3).trimmed();
 
   // 支持 ! 取反

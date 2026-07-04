@@ -1,5 +1,5 @@
 /**
- * @file hand_expression.h
+ * @file tpl_expression.h
  * @brief 表达式处理器 -- 处理普通 ${expression} 表达式求值
  *
  * 这是模板引擎中最复杂的处理器，承担三大职责：
@@ -18,10 +18,10 @@
 
 #pragma once
 
-#include "hand_block.h"
+#include "tpl_block.h"
 
 /**
- * @class HandExpression
+ * @class TplExpression
  * @brief 表达式处理器（兜底处理器）
  *
  * HandlerFactory 的默认处理器，处理所有非 "each " / "if "
@@ -30,13 +30,13 @@
  * 设计为自包含：算术解析器（4 个私有方法）完全封装在内部，
  * 不依赖外部计算库，TemplateEngine 只提供 resolvePath 共享工具。
  */
-class HandExpression : public HandBlock {
+class TplExpression : public TplBlock {
 public:
   /**
    * @brief 构造函数
    * @param engine 模板引擎引用，用于调用 resolvePath 和 setError
    */
-  explicit HandExpression(const TemplateEngine &engine) : m_engine(engine) {}
+  explicit TplExpression(const TemplateEngine &engine) : m_engine(engine) {}
 
   /**
    * @brief 处理普通表达式（分发入口）
