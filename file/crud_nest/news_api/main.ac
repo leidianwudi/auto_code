@@ -12,8 +12,8 @@ main {
 
   // 模板配置列表：[模板文件, 输出后缀]
   let templates = [
-    { tpl: "1.tpl", suffix: ".ts" },
-    { tpl: "2.tpl", suffix: ".ts" }
+    { tpl: "1.tpl", suffix: ".ts" },    
+    { tpl: "2.tpl", suffix: ".ts" },
   ];
 
   // 获取主界面勾选的 json 文件
@@ -40,3 +40,5 @@ main {
   // 断开数据库
   call("db", "disconnect");
 }
+
+

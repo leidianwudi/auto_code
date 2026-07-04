@@ -59,6 +59,8 @@ qt_add_executable(auto_code
     src/tool/ui/aui_icon.cpp
     src/tool/ui/aui_error_tool_tip.h
     src/tool/ui/aui_error_tool_tip.cpp
+    src/tool/ui/format/format_code.h
+    src/tool/ui/format/format_code.cpp
     src/ui/main_dev/main_dev_ui.h
     src/ui/main_dev/main_dev_ui.cpp
     src/ui/main_dev/main_dev_ui_ext.h

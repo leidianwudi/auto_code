@@ -5,12 +5,16 @@
 
 #include "code_editor.h"
 #include "aui_error_tool_tip.h"
+#include "format/format_code.h"
 #include "src/engine/function/fun_const.h"
 #include "src/engine/script_parser.h"
+#include <QContextMenuEvent>
 #include <QEvent>
 #include <QHelpEvent>
 #include <QJsonDocument>
+#include <QKeyEvent>
 #include <QMap>
+#include <QMenu>
 #include <QPainter>
 #include <QPainterPath>
 #include <QRegularExpression>
@@ -951,4 +955,125 @@ void CodeEditor::hideErrorTooltip() {
     m_errorTooltip->close();
     m_errorTooltip.clear();
   }
+}
+
+// ──────────────────────────────────────────────────────────────
+//  回车自动缩进
+// ──────────────────────────────────────────────────────────────
+
+int CodeEditor::calculateNewLineIndent(const QString &linePrefix) const {
+  // 计算当前行的前导空格数
+  int baseIndent = 0;
+  for (const QChar &ch : linePrefix) {
+    if (ch == QLatin1Char(' '))
+      ++baseIndent;
+    else if (ch == QLatin1Char('\t'))
+      baseIndent += FormatCode::kIndentSize;
+    else
+      break;
+  }
+
+  QString trimmed = linePrefix.trimmed();
+  if (trimmed.isEmpty())
+    return baseIndent;
+
+  // ── AC / JSON：{ 结尾 → 加一级缩进 ──
+  if (trimmed.endsWith(QLatin1Char('{')))
+    return baseIndent + FormatCode::kIndentSize;
+
+  // ── JSON：[ 结尾 → 加一级缩进 ──
+  if (m_validationMode == JsonValidation && trimmed.endsWith(QLatin1Char('[')))
+    return baseIndent + FormatCode::kIndentSize;
+
+  // ── TPL：${if ...} / ${each ...} 结尾 → 加一级缩进 ──
+  if (m_validationMode == TemplateValidation) {
+    static const QRegularExpression openTplRe(
+        QStringLiteral(R"(\$\{(each\b|if\b)[^}]*\}$)"));
+    if (openTplRe.match(trimmed).hasMatch())
+      return baseIndent + FormatCode::kIndentSize;
+
+    // ${/each} / ${/if} 单独一行 → 减一级缩进
+    static const QRegularExpression closeTplRe(
+        QStringLiteral(R"(\$\{/(each|if)\}$)"));
+    if (closeTplRe.match(trimmed).hasMatch())
+      return qMax(0, baseIndent - FormatCode::kIndentSize);
+  }
+
+  return baseIndent;
+}
+
+void CodeEditor::keyPressEvent(QKeyEvent *event) {
+  if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+    // 获取光标前的当前行文本
+    QTextCursor cursor = textCursor();
+    cursor.movePosition(QTextCursor::StartOfLine, QTextCursor::KeepAnchor);
+    QString linePrefix = cursor.selectedText();
+
+    int indent = calculateNewLineIndent(linePrefix);
+
+    // 先插入换行
+    QPlainTextEdit::keyPressEvent(event);
+
+    // 再插入缩进空格
+    if (indent > 0) {
+      insertPlainText(QString(indent, QLatin1Char(' ')));
+    }
+    return;
+  }
+
+  QPlainTextEdit::keyPressEvent(event);
+}
+
+// ──────────────────────────────────────────────────────────────
+//  右键菜单 — 增加「格式化代码」
+// ──────────────────────────────────────────────────────────────
+
+void CodeEditor::contextMenuEvent(QContextMenuEvent *event) {
+  // 创建标准右键菜单
+  QMenu *menu = createStandardContextMenu();
+
+  // 只在支持的验证模式下添加格式化功能（JSON / AC / TPL）
+  if (m_validationMode != NoValidation) {
+    menu->addSeparator();
+
+    QAction *fmtAction = menu->addAction(QStringLiteral("格式化代码"));
+    fmtAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+F")));
+    connect(fmtAction, &QAction::triggered, this, &CodeEditor::formatCode);
+  }
+
+  menu->exec(event->globalPos());
+  delete menu;
+}
+
+void CodeEditor::formatCode() {
+  QString src = toPlainText();
+  FormatCode::FormatMode mode;
+
+  switch (m_validationMode) {
+  case JsonValidation:
+    mode = FormatCode::FormatJson;
+    break;
+  case AcValidation:
+    mode = FormatCode::FormatAc;
+    break;
+  case TemplateValidation:
+    mode = FormatCode::FormatTpl;
+    break;
+  default:
+    return; // 不支持的模式，不做格式化
+  }
+
+  QString formatted = FormatCode::format(src, mode);
+  if (formatted == src)
+    return;
+
+  // 替换文本，并保持光标位置
+  int cursorPos = textCursor().position();
+  selectAll();
+  insertPlainText(formatted);
+
+  // 恢复光标位置（不超过文档长度）
+  QTextCursor c = textCursor();
+  c.setPosition(qMin(cursorPos, document()->characterCount() - 1));
+  setTextCursor(c);
 }

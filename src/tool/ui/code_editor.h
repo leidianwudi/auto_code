@@ -52,6 +52,9 @@ public:
   /// 手动触发一次验证（同步执行，立即发出 validationMessage 信号）
   void validate();
 
+  /// @brief 自动排版代码（根据当前验证模式选择格式器）
+  void formatCode();
+
   /// 绘制行号区域（由 LineNumberArea 委托调用）
   void lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area);
   /// 计算行号区域宽度（根据行数动态计算）
@@ -70,6 +73,10 @@ protected:
   void paintEvent(QPaintEvent *event) override;
   /// 处理视口事件（ToolTip 显示错误提示）
   bool viewportEvent(QEvent *event) override;
+  /// 按键事件：Enter 自动缩进
+  void keyPressEvent(QKeyEvent *event) override;
+  /// 右键菜单：增加「格式化代码」项
+  void contextMenuEvent(QContextMenuEvent *event) override;
 
 private slots:
   /// 行数变化时重新计算行号区域宽度
@@ -99,6 +106,11 @@ private:
   void showErrorTooltip(const QPoint &pos, const QString &text);
   /// 隐藏自定义错误提示弹窗
   void hideErrorTooltip();
+
+  /// @brief 计算新行需要的缩进空格数
+  /// @param currentLineText 当前行光标前的文本
+  /// @return 缩进空格数
+  int calculateNewLineIndent(const QString &linePrefix) const;
 
   ValidationMode m_validationMode = NoValidation;
   QTimer m_validationTimer;                           ///< 防抖定时器（500ms）
