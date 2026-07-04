@@ -4,6 +4,7 @@
  */
 
 #include "ts_highlighter.h"
+#include "lighter_color.h"
 
 /**
  * @brief 构造函数
@@ -21,31 +22,33 @@
  */
 TypeScriptHighlighter::TypeScriptHighlighter(QTextDocument *parent)
     : QSyntaxHighlighter(parent) {
+  using namespace LighterColor;
+
   // ── 关键字格式（蓝色加粗） ──
   QTextCharFormat keywordFormat;
-  keywordFormat.setForeground(QColor("#0000FF"));
+  keywordFormat.setForeground(keyword);
   keywordFormat.setFontWeight(QFont::Bold);
 
   // ── 类型格式（青色） ──
   QTextCharFormat typeFormat;
-  typeFormat.setForeground(QColor("#267F99"));
+  typeFormat.setForeground(type);
 
   // ── 字符串格式（橙色） ──
   QTextCharFormat stringFormat;
-  stringFormat.setForeground(QColor("#FF8C00"));
+  stringFormat.setForeground(string_);
 
   // ── 注释格式（灰色斜体） ──
   QTextCharFormat commentFormat;
-  commentFormat.setForeground(QColor("#808080"));
+  commentFormat.setForeground(comment);
   commentFormat.setFontItalic(true);
 
   // ── 数字格式（紫色） ──
   QTextCharFormat numberFormat;
-  numberFormat.setForeground(QColor("#800080"));
+  numberFormat.setForeground(builtin);
 
   // ── 装饰器格式（洋红色） ──
   QTextCharFormat decoratorFormat;
-  decoratorFormat.setForeground(QColor("#FF00FF"));
+  decoratorFormat.setForeground(decorator);
 
   // TypeScript 关键字列表
   // 包含 ES6+ 关键字和 TypeScript 特有关键字

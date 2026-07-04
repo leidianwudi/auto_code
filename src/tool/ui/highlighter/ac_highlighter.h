@@ -21,8 +21,6 @@
 /**
  * @class AcHighlighter
  * @brief AC 脚本语法高亮器
- *
- * 对 main.ac 脚本进行语法高亮着色，使脚本结构清晰可读。
  */
 class AcHighlighter : public QSyntaxHighlighter {
   Q_OBJECT

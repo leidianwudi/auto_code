@@ -9,7 +9,7 @@
 #include "src/engine/template_engine.h"
 #include "src/tool/ui/code_editor.h"
 #include "src/tool/ui/highlighter/json_highlighter.h"
-#include "src/tool/ui/highlighter/template_highlighter.h"
+#include "src/tool/ui/highlighter/tpl_highlighter.h"
 #include "src/tool/ui/highlighter/ts_highlighter.h"
 
 #include <QFile>
@@ -32,7 +32,7 @@ QWidget *DemoMgr::onCreateWindow() {
   m_ui->resize(1200, 750);
 
   // ── 语法高亮器 ──
-  new TemplateHighlighter(m_ui->templateEdit()->document());
+  new TplHighlighter(m_ui->templateEdit()->document());
   new JsonHighlighter(m_ui->dataEdit()->document());
   new TypeScriptHighlighter(m_ui->outputEdit()->document());
 

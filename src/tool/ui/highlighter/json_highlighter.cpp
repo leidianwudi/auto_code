@@ -4,6 +4,7 @@
  */
 
 #include "json_highlighter.h"
+#include "lighter_color.h"
 
 /**
  * @brief 构造函数
@@ -21,41 +22,39 @@
  */
 JsonHighlighter::JsonHighlighter(QTextDocument *parent)
     : QSyntaxHighlighter(parent) {
+  using namespace LighterColor;
+
   // ── 1. JSON 键名（蓝色加粗） ──
-  // 匹配 "key": 模式，正则要求冒号前有字符串
   QTextCharFormat keyFormat;
-  keyFormat.setForeground(QColor("#0000FF")); // 蓝色
+  keyFormat.setForeground(keyword);
   keyFormat.setFontWeight(QFont::Bold);
   m_rules.append(
       {QRegularExpression(QStringLiteral("\"[^\"]+\"\\s*:")), keyFormat});
 
   // ── 2. JSON 字符串值（绿色） ──
-  // 匹配所有带引号的字符串（包括键名和值，但键名已被前面的规则覆盖）
   QTextCharFormat stringFormat;
-  stringFormat.setForeground(QColor("#008000")); // 绿色
+  stringFormat.setForeground(variable);
   m_rules.append(
       {QRegularExpression(QStringLiteral("\"[^\"]*\"")), stringFormat});
 
   // ── 3. 数字（橙色加粗） ──
-  // 支持：整数（123）、浮点数（3.14）、负数（-42）
   QTextCharFormat numberFormat;
-  numberFormat.setForeground(QColor("#FF8C00")); // 深橙色
+  numberFormat.setForeground(number);
   numberFormat.setFontWeight(QFont::Bold);
   m_rules.append(
       {QRegularExpression(QStringLiteral("\\b-?\\d+(?:\\.\\d+)?\\b")),
        numberFormat});
 
   // ── 4. 布尔值（红色加粗） ──
-  // 使用单词边界确保精确匹配（不会匹配 "trueValue"）
   QTextCharFormat boolFormat;
-  boolFormat.setForeground(QColor("#FF0000")); // 红色
+  boolFormat.setForeground(boolean_);
   boolFormat.setFontWeight(QFont::Bold);
   m_rules.append(
       {QRegularExpression(QStringLiteral("\\b(?:true|false)\\b")), boolFormat});
 
   // ── 5. null（紫色加粗） ──
   QTextCharFormat nullFormat;
-  nullFormat.setForeground(QColor("#800080")); // 紫色
+  nullFormat.setForeground(builtin);
   nullFormat.setFontWeight(QFont::Bold);
   m_rules.append(
       {QRegularExpression(QStringLiteral("\\bnull\\b")), nullFormat});

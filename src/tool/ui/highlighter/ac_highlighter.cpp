@@ -4,6 +4,7 @@
  */
 
 #include "ac_highlighter.h"
+#include "lighter_color.h"
 
 /**
  * @brief 构造函数
@@ -17,15 +18,17 @@
  * 4. 字符串（橙色）："" 和 '' 字面量
  * 5. 数字（橙色加粗）：整数、浮点数
  * 6. 布尔值（红色加粗）：true, false
+ * 7. 函数调用（紫色）：任何标识符后跟括号
  *
  * 注意：规则按顺序应用，前面的规则优先级更高。
  */
 AcHighlighter::AcHighlighter(QTextDocument *parent)
     : QSyntaxHighlighter(parent) {
+  using namespace LighterColor;
+
   // ── 1. 关键字（蓝色加粗） ──
-  // 使用 \b 确保精确匹配单词边界
   QTextCharFormat keywordFormat;
-  keywordFormat.setForeground(QColor("#0000FF")); // 蓝色
+  keywordFormat.setForeground(keyword);
   keywordFormat.setFontWeight(QFont::Bold);
   m_rules.append({QRegularExpression(QStringLiteral(
                       "\\b(?:main|for|in|if|else|call|return)\\b")),
@@ -33,7 +36,7 @@ AcHighlighter::AcHighlighter(QTextDocument *parent)
 
   // ── 2. 内置函数（紫色加粗） ──
   QTextCharFormat builtinFormat;
-  builtinFormat.setForeground(QColor("#800080")); // 紫色
+  builtinFormat.setForeground(builtin);
   builtinFormat.setFontWeight(QFont::Bold);
   m_rules.append(
       {QRegularExpression(QStringLiteral("\\b(?:readJson|merge|basename|render|"
@@ -41,33 +44,38 @@ AcHighlighter::AcHighlighter(QTextDocument *parent)
        builtinFormat});
 
   // ── 3. 注释（灰色斜体） ──
-  // 匹配 // 到行尾的文本
   QTextCharFormat commentFormat;
-  commentFormat.setForeground(QColor("#808080")); // 灰色
+  commentFormat.setForeground(comment);
   commentFormat.setFontItalic(true);
   m_rules.append(
       {QRegularExpression(QStringLiteral("//[^\n]*")), commentFormat});
 
   // ── 4. 字符串（橙色） ──
-  // 匹配双引号或单引号包围的字符串
   QTextCharFormat stringFormat;
-  stringFormat.setForeground(QColor("#FF8C00")); // 深橙色
+  stringFormat.setForeground(string_);
   m_rules.append(
       {QRegularExpression(QStringLiteral("\"[^\"]*\"|'[^']*'")), stringFormat});
 
   // ── 5. 数字（橙色加粗） ──
   QTextCharFormat numberFormat;
-  numberFormat.setForeground(QColor("#FF8C00")); // 深橙色
+  numberFormat.setForeground(number);
   numberFormat.setFontWeight(QFont::Bold);
   m_rules.append({QRegularExpression(QStringLiteral("\\b\\d+(?:\\.\\d+)?\\b")),
                   numberFormat});
 
   // ── 6. 布尔值（红色加粗） ──
   QTextCharFormat boolFormat;
-  boolFormat.setForeground(QColor("#FF0000")); // 红色
+  boolFormat.setForeground(boolean_);
   boolFormat.setFontWeight(QFont::Bold);
   m_rules.append(
       {QRegularExpression(QStringLiteral("\\b(?:true|false)\\b")), boolFormat});
+
+  // ── 7. 函数调用（紫色） ──
+  // 匹配任何标识符后跟括号，如 render()、write()、readJson() 等
+  QTextCharFormat callFormat;
+  callFormat.setForeground(call);
+  m_rules.append(
+      {QRegularExpression(QStringLiteral("\\b\\w+(?=\\s*\\()")), callFormat});
 }
 
 /**
@@ -77,7 +85,6 @@ AcHighlighter::AcHighlighter(QTextDocument *parent)
  * 遍历所有高亮规则，对匹配的文本应用对应的格式
  */
 void AcHighlighter::highlightBlock(const QString &text) {
-  // 应用所有高亮规则
   for (const HighlightRule &rule : std::as_const(m_rules)) {
     QRegularExpressionMatchIterator matchIterator =
         rule.pattern.globalMatch(text);

@@ -1,5 +1,5 @@
 /**
- * @file template_highlighter.h
+ * @file tpl_highlighter.h
  * @brief 模板语法高亮器
  *
  * 为模板编辑器提供语法高亮，包括：
@@ -15,18 +15,17 @@
 #include <QSyntaxHighlighter>
 #include <QTextCharFormat>
 
-
 /**
- * @class TemplateHighlighter
+ * @class TplHighlighter
  * @brief 模板语法高亮器
  *
  * 对模板文本进行语法高亮着色，使模板结构一目了然。
  */
-class TemplateHighlighter : public QSyntaxHighlighter {
+class TplHighlighter : public QSyntaxHighlighter {
   Q_OBJECT
 
 public:
-  explicit TemplateHighlighter(QTextDocument *parent = nullptr);
+  explicit TplHighlighter(QTextDocument *parent = nullptr);
 
 protected:
   /**

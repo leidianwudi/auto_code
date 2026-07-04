@@ -11,7 +11,7 @@
 #include "src/tool/ui/code_editor.h"
 #include "src/tool/ui/highlighter/ac_highlighter.h"
 #include "src/tool/ui/highlighter/json_highlighter.h"
-#include "src/tool/ui/highlighter/template_highlighter.h"
+#include "src/tool/ui/highlighter/tpl_highlighter.h"
 
 #include <QAction>
 #include <QApplication>
@@ -210,9 +210,9 @@ CodeEditor *MainDevMgr::createEditorForFile(const QString &filePath) {
   else if (filePath.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive))
     new AcHighlighter(editor->document());
   else if (filePath.endsWith(QStringLiteral(".tpl"), Qt::CaseInsensitive))
-    new TemplateHighlighter(editor->document());
+    new TplHighlighter(editor->document());
   else
-    new TemplateHighlighter(editor->document());
+    new TplHighlighter(editor->document());
 
   return editor;
 }
@@ -570,10 +570,10 @@ void MainDevMgr::onSplitRight() {
     } else if (filePath.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive)) {
       new AcHighlighter(editor->document());
     } else if (filePath.endsWith(QStringLiteral(".tpl"), Qt::CaseInsensitive)) {
-      new TemplateHighlighter(editor->document());
+      new TplHighlighter(editor->document());
       editor->setValidationMode(CodeEditor::TemplateValidation);
     } else {
-      new TemplateHighlighter(editor->document());
+      new TplHighlighter(editor->document());
       editor->setValidationMode(CodeEditor::TemplateValidation);
     }
 
