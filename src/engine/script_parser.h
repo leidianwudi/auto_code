@@ -106,20 +106,22 @@ private:
   /// @brief 表达式节点 — AST 中的表达式
   struct Expr {
     enum Kind {
-      kString,     ///< 字符串字面量
-      kNumber,     ///< 数字字面量
-      kIdent,      ///< 变量引用
-      kPropAccess, ///< 属性访问 obj.prop
-      kObject,     ///< 对象字面量 { key: val }
-      kArray,      ///< 数组字面量 [item, ...]
-      kFuncCall,   ///< 函数调用 name(args)
-      kBinary,     ///< 二元运算 left op right
+      kString,      ///< 字符串字面量
+      kNumber,      ///< 数字字面量
+      kIdent,       ///< 变量引用
+      kPropAccess,  ///< 属性访问 obj.prop
+      kIndexAccess, ///< 索引访问 obj["key"]
+      kObject,      ///< 对象字面量 { key: val }
+      kArray,       ///< 数组字面量 [item, ...]
+      kFuncCall,    ///< 函数调用 name(args)
+      kBinary,      ///< 二元运算 left op right
     } kind = kString;
     int line = 0;                    ///< 源码行号（用于错误报告）
     QString strVal;                  ///< 字符串值
     double numVal = 0;               ///< 数值
     QString ident;                   ///< 标识符名
     QString prop;                    ///< 属性名（用于 kPropAccess）
+    QString indexKey;                ///< 索引键（用于 kIndexAccess）
     QVector<ObjectEntry> objEntries; ///< 对象条目
     QVector<Expr *> arrItems;        ///< 数组元素（指针）
     FuncCall funcCall;               ///< 函数调用信息
@@ -156,6 +158,7 @@ private:
       numVal = other.numVal;
       ident = other.ident;
       prop = other.prop;
+      indexKey = other.indexKey;
       // 深拷贝对象条目
       for (const auto &e : other.objEntries)
         objEntries.append({e.key, e.value ? new Expr(*e.value) : nullptr});
@@ -180,6 +183,7 @@ private:
       numVal = other.numVal;
       ident = std::move(other.ident);
       prop = std::move(other.prop);
+      indexKey = std::move(other.indexKey);
       // 移动容器（直接转移内部指针，无需深拷贝）
       objEntries = std::move(other.objEntries);
       arrItems = std::move(other.arrItems);

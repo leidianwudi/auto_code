@@ -517,6 +517,19 @@ bool ScriptParser::parsePrimary(Expr &expr) {
     if (peek().type == TOK_LPAREN) {
       return parseFuncCall(name, expr);
     }
+    if (peek().type == TOK_LBRACKET) {
+      // 索引访问：obj["key"]
+      advance(); // 消费 '['
+      if (peek().type != TOK_STRING) {
+        m_error = QStringLiteral("expected string key in '[]' at line %1")
+                      .arg(peek().line);
+        return false;
+      }
+      expr.kind = Expr::kIndexAccess;
+      expr.ident = name;
+      expr.indexKey = advance().text;
+      return expect(TOK_RBRACKET, QStringLiteral("expected ']'"));
+    }
     expr.kind = Expr::kIdent;
     expr.ident = name;
     expr.line = t.line;
@@ -648,6 +661,28 @@ QJsonValue ScriptParser::evalExpr(const Expr &expr) {
     }
     m_error = QStringLiteral("cannot access property '%1' on '%2'")
                   .arg(expr.prop, expr.ident);
+    return QJsonValue();
+  }
+
+  case Expr::kIndexAccess: {
+    QJsonValue obj;
+    if (m_vars.contains(expr.ident))
+      obj = m_vars[expr.ident];
+    else if (m_globals.contains(expr.ident))
+      obj = m_globals[expr.ident];
+    if (obj.isObject())
+      return obj.toObject().value(expr.indexKey);
+    if (obj.isArray()) {
+      bool ok = false;
+      int idx = expr.indexKey.toInt(&ok);
+      if (ok) {
+        QJsonArray arr = obj.toArray();
+        if (idx >= 0 && idx < arr.size())
+          return arr[idx];
+      }
+    }
+    m_error = QStringLiteral("cannot access index '%1' on '%2'")
+                  .arg(expr.indexKey, expr.ident);
     return QJsonValue();
   }
 
@@ -1000,6 +1035,13 @@ void ScriptParser::validateExprIdents(const Expr &expr, QStringList &errors,
     break;
   case Expr::kPropAccess:
     // obj.prop：验证 obj 部分
+    if (!scopeVars.contains(expr.ident)) {
+      errors << QStringLiteral("undefined variable '%1' at line %2")
+                    .arg(expr.ident, QString::number(expr.line));
+    }
+    break;
+  case Expr::kIndexAccess:
+    // obj["key"]：验证 obj 部分
     if (!scopeVars.contains(expr.ident)) {
       errors << QStringLiteral("undefined variable '%1' at line %2")
                     .arg(expr.ident, QString::number(expr.line));
