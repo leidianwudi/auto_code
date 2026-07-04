@@ -1,10 +1,10 @@
 /**
- * @file ts_highlighter.cpp
+ * @file light_ts.cpp
  * @brief TypeScript 语法高亮器实现
  */
 
-#include "ts_highlighter.h"
-#include "lighter_color.h"
+#include "light_ts.h"
+#include "light_color.h"
 
 /**
  * @brief 构造函数
@@ -20,9 +20,8 @@
  * - 数字（紫色）：整数和浮点数
  * - 装饰器（洋红色）：@Component 等
  */
-TypeScriptHighlighter::TypeScriptHighlighter(QTextDocument *parent)
-    : QSyntaxHighlighter(parent) {
-  using namespace LighterColor;
+LightTs::LightTs(QTextDocument *parent) : QSyntaxHighlighter(parent) {
+  using namespace LightColor;
 
   // ── 关键字格式（蓝色加粗） ──
   QTextCharFormat keywordFormat;
@@ -117,7 +116,7 @@ TypeScriptHighlighter::TypeScriptHighlighter(QTextDocument *parent)
  * 2. 处理多行注释（块注释），使用 previousBlockState/currentBlockState
  *    跨行传递注释状态（状态 1 = 在注释中）
  */
-void TypeScriptHighlighter::highlightBlock(const QString &text) {
+void LightTs::highlightBlock(const QString &text) {
   // 应用所有高亮规则（单行匹配）
   for (const HighlightRule &rule : std::as_const(m_rules)) {
     QRegularExpressionMatchIterator matchIterator =

@@ -1,10 +1,10 @@
 /**
- * @file json_highlighter.cpp
+ * @file light_json.cpp
  * @brief JSON 语法高亮器实现
  */
 
-#include "json_highlighter.h"
-#include "lighter_color.h"
+#include "light_json.h"
+#include "light_color.h"
 
 /**
  * @brief 构造函数
@@ -20,9 +20,8 @@
  * 注意：键名使用前瞻匹配冒号，字符串值使用通用匹配，两者可能重叠。
  * 由于规则按顺序应用，键名（更具体）放在前面，字符串值（通用）放在后面。
  */
-JsonHighlighter::JsonHighlighter(QTextDocument *parent)
-    : QSyntaxHighlighter(parent) {
-  using namespace LighterColor;
+LightJson::LightJson(QTextDocument *parent) : QSyntaxHighlighter(parent) {
+  using namespace LightColor;
 
   // ── 1. JSON 键名（蓝色加粗） ──
   QTextCharFormat keyFormat;
@@ -66,7 +65,7 @@ JsonHighlighter::JsonHighlighter(QTextDocument *parent)
  *
  * 遍历所有高亮规则，对匹配的文本应用对应的格式
  */
-void JsonHighlighter::highlightBlock(const QString &text) {
+void LightJson::highlightBlock(const QString &text) {
   // 应用所有高亮规则
   for (const HighlightRule &rule : std::as_const(m_rules)) {
     QRegularExpressionMatchIterator matchIterator =

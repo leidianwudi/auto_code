@@ -1,10 +1,10 @@
 /**
- * @file tpl_highlighter.cpp
+ * @file light_tpl.cpp
  * @brief 模板语法高亮器实现
  */
 
-#include "tpl_highlighter.h"
-#include "lighter_color.h"
+#include "light_tpl.h"
+#include "light_color.h"
 
 /**
  * @brief 构造函数
@@ -21,9 +21,8 @@
  * 注意：规则按顺序应用，先匹配控制标签（更具体），再匹配变量表达式（通用），
  * 正则的顺序决定了优先级。
  */
-TplHighlighter::TplHighlighter(QTextDocument *parent)
-    : QSyntaxHighlighter(parent) {
-  using namespace LighterColor;
+LightTpl::LightTpl(QTextDocument *parent) : QSyntaxHighlighter(parent) {
+  using namespace LightColor;
 
   // ── 1. 模板控制标签（蓝色加粗） ──
   QTextCharFormat keywordFormat;
@@ -73,7 +72,7 @@ TplHighlighter::TplHighlighter(QTextDocument *parent)
  *
  * 遍历所有高亮规则，对匹配的文本应用对应的格式
  */
-void TplHighlighter::highlightBlock(const QString &text) {
+void LightTpl::highlightBlock(const QString &text) {
   // 应用所有高亮规则
   for (const HighlightRule &rule : std::as_const(m_rules)) {
     QRegularExpressionMatchIterator matchIterator =

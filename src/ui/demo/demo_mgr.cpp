@@ -8,9 +8,9 @@
 #include "demo_ui.h"
 #include "src/engine/engine_tpl.h"
 #include "src/tool/ui/code_editor.h"
-#include "src/tool/ui/highlighter/json_highlighter.h"
-#include "src/tool/ui/highlighter/tpl_highlighter.h"
-#include "src/tool/ui/highlighter/ts_highlighter.h"
+#include "src/tool/ui/highlighter/light_json.h"
+#include "src/tool/ui/highlighter/light_tpl.h"
+#include "src/tool/ui/highlighter/light_ts.h"
 
 #include <QFile>
 #include <QFileDialog>
@@ -32,9 +32,9 @@ QWidget *DemoMgr::onCreateWindow() {
   m_ui->resize(1200, 750);
 
   // ── 语法高亮器 ──
-  new TplHighlighter(m_ui->templateEdit()->document());
-  new JsonHighlighter(m_ui->dataEdit()->document());
-  new TypeScriptHighlighter(m_ui->outputEdit()->document());
+  new LightTpl(m_ui->templateEdit()->document());
+  new LightJson(m_ui->dataEdit()->document());
+  new LightTs(m_ui->outputEdit()->document());
 
   initUi();
 

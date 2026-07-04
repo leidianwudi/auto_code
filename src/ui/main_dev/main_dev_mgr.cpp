@@ -9,9 +9,9 @@
 #include "main_dev_ui_ext.h"
 #include "src/engine/engine_ac.h"
 #include "src/tool/ui/code_editor.h"
-#include "src/tool/ui/highlighter/ac_highlighter.h"
-#include "src/tool/ui/highlighter/json_highlighter.h"
-#include "src/tool/ui/highlighter/tpl_highlighter.h"
+#include "src/tool/ui/highlighter/light_ac.h"
+#include "src/tool/ui/highlighter/light_json.h"
+#include "src/tool/ui/highlighter/light_tpl.h"
 
 #include <QAction>
 #include <QApplication>
@@ -206,13 +206,13 @@ CodeEditor *MainDevMgr::createEditorForFile(const QString &filePath) {
   auto *editor = new CodeEditor;
 
   if (filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive))
-    new JsonHighlighter(editor->document());
+    new LightJson(editor->document());
   else if (filePath.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive))
-    new AcHighlighter(editor->document());
+    new LightAc(editor->document());
   else if (filePath.endsWith(QStringLiteral(".tpl"), Qt::CaseInsensitive))
-    new TplHighlighter(editor->document());
+    new LightTpl(editor->document());
   else
-    new TplHighlighter(editor->document());
+    new LightTpl(editor->document());
 
   return editor;
 }
@@ -565,15 +565,15 @@ void MainDevMgr::onSplitRight() {
 
     QString filePath = current->objectName();
     if (filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
-      new JsonHighlighter(editor->document());
+      new LightJson(editor->document());
       editor->setValidationMode(CodeEditor::JsonValidation);
     } else if (filePath.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive)) {
-      new AcHighlighter(editor->document());
+      new LightAc(editor->document());
     } else if (filePath.endsWith(QStringLiteral(".tpl"), Qt::CaseInsensitive)) {
-      new TplHighlighter(editor->document());
+      new LightTpl(editor->document());
       editor->setValidationMode(CodeEditor::TemplateValidation);
     } else {
-      new TplHighlighter(editor->document());
+      new LightTpl(editor->document());
       editor->setValidationMode(CodeEditor::TemplateValidation);
     }
 

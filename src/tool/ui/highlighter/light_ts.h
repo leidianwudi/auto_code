@@ -1,5 +1,5 @@
 /**
- * @file ts_highlighter.h
+ * @file light_ts.h
  * @brief TypeScript 语法高亮器
  *
  * 为输出结果提供 TypeScript 语法高亮，包括：
@@ -16,18 +16,17 @@
 #include <QSyntaxHighlighter>
 #include <QTextCharFormat>
 
-
 /**
- * @class TypeScriptHighlighter
- * @brief TypeScript 语法高亮器
+ * @class LightTs
+ * @brief TypeScript/JavaScript 语法高亮器
  *
- * 对 TypeScript 代码进行语法高亮着色，使生成的代码更易读。
+ * 对 TypeScript/JavaScript 代码进行语法高亮着色。
  */
-class TypeScriptHighlighter : public QSyntaxHighlighter {
+class LightTs : public QSyntaxHighlighter {
   Q_OBJECT
 
 public:
-  explicit TypeScriptHighlighter(QTextDocument *parent = nullptr);
+  explicit LightTs(QTextDocument *parent = nullptr);
 
 protected:
   /**

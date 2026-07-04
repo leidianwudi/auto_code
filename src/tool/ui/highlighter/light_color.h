@@ -1,9 +1,9 @@
 /**
- * @file lighter_color.h
+ * @file light_color.h
  * @brief 语法高亮统一颜色定义
  *
- * 所有高亮器（AcHighlighter、TplHighlighter、JsonHighlighter、
- * TypeScriptHighlighter）共用此文件中定义的颜色常量，确保视觉风格一致。
+ * 所有高亮器（LightAc、LightTpl、LightJson、
+ * LightTs）共用此文件中定义的颜色常量，确保视觉风格一致。
  */
 
 #pragma once
@@ -11,7 +11,7 @@
 #include <QColor>
 
 /**
- * @namespace LighterColor
+ * @namespace LightColor
  * @brief 语法高亮颜色常量
  *
  * 按语义分类定义颜色，每个高亮器按需引用：
@@ -27,7 +27,7 @@
  * - type        : 类型标注
  * - decorator   : 装饰器
  */
-namespace LighterColor {
+namespace LightColor {
 
 /// @brief 关键字（蓝色）— main, for, ${each}, JSON 键名
 inline const QColor keyword{0x00, 0x00, 0xFF};
@@ -62,4 +62,4 @@ inline const QColor type{0x26, 0x7F, 0x99};
 /// @brief 装饰器（洋红色）
 inline const QColor decorator{0xFF, 0x00, 0xFF};
 
-} // namespace LighterColor
+} // namespace LightColor

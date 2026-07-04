@@ -41,15 +41,15 @@ qt_add_executable(auto_code
     src/tool/ui/tree_dir.cpp
     src/tool/ui/code_editor.h
     src/tool/ui/code_editor.cpp
-    src/tool/ui/highlighter/lighter_color.h
-    src/tool/ui/highlighter/tpl_highlighter.h
-    src/tool/ui/highlighter/tpl_highlighter.cpp
-    src/tool/ui/highlighter/json_highlighter.h
-    src/tool/ui/highlighter/json_highlighter.cpp
-    src/tool/ui/highlighter/ts_highlighter.h
-    src/tool/ui/highlighter/ts_highlighter.cpp
-    src/tool/ui/highlighter/ac_highlighter.h
-    src/tool/ui/highlighter/ac_highlighter.cpp
+    src/tool/ui/highlighter/light_color.h
+    src/tool/ui/highlighter/light_tpl.h
+    src/tool/ui/highlighter/light_tpl.cpp
+    src/tool/ui/highlighter/light_json.h
+    src/tool/ui/highlighter/light_json.cpp
+    src/tool/ui/highlighter/light_ts.h
+    src/tool/ui/highlighter/light_ts.cpp
+    src/tool/ui/highlighter/light_ac.h
+    src/tool/ui/highlighter/light_ac.cpp
     src/tool/ui/aui_mgr.h
     src/tool/ui/aui_style.h
     src/tool/ui/aui_style.cpp

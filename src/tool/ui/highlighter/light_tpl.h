@@ -1,13 +1,12 @@
 /**
- * @file json_highlighter.h
- * @brief JSON 语法高亮器
+ * @file light_tpl.h
+ * @brief 模板语法高亮器
  *
- * 为 JSON 编辑器提供语法高亮，包括：
- * - 键名（蓝色）: "key"
- * - 字符串值（绿色）: "value"
- * - 数字（橙色）: 123, 3.14
- * - 布尔值（红色）: true, false
- * - null（紫色）: null
+ * 为模板编辑器提供语法高亮，包括：
+ * - 模板标签: ${each}, ${if}, ${/each}, ${/if}, ${else}
+ * - 模板变量: ${varName}
+ * - 算术运算符: +, -, *, /
+ * - 注释: //
  */
 
 #pragma once
@@ -16,18 +15,17 @@
 #include <QSyntaxHighlighter>
 #include <QTextCharFormat>
 
-
 /**
- * @class JsonHighlighter
- * @brief JSON 语法高亮器
+ * @class LightTpl
+ * @brief 模板语法高亮器
  *
- * 对 JSON 文本进行语法高亮着色，使 JSON 结构清晰易读。
+ * 对模板文本进行语法高亮着色，使模板结构一目了然。
  */
-class JsonHighlighter : public QSyntaxHighlighter {
+class LightTpl : public QSyntaxHighlighter {
   Q_OBJECT
 
 public:
-  explicit JsonHighlighter(QTextDocument *parent = nullptr);
+  explicit LightTpl(QTextDocument *parent = nullptr);
 
 protected:
   /**

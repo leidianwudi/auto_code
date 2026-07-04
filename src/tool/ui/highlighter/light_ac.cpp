@@ -1,10 +1,10 @@
 /**
- * @file ac_highlighter.cpp
+ * @file light_ac.cpp
  * @brief AC 脚本语法高亮器实现
  */
 
-#include "ac_highlighter.h"
-#include "lighter_color.h"
+#include "light_ac.h"
+#include "light_color.h"
 
 /**
  * @brief 构造函数
@@ -22,9 +22,8 @@
  *
  * 注意：规则按顺序应用，前面的规则优先级更高。
  */
-AcHighlighter::AcHighlighter(QTextDocument *parent)
-    : QSyntaxHighlighter(parent) {
-  using namespace LighterColor;
+LightAc::LightAc(QTextDocument *parent) : QSyntaxHighlighter(parent) {
+  using namespace LightColor;
 
   // ── 1. 关键字（蓝色加粗） ──
   QTextCharFormat keywordFormat;
@@ -84,7 +83,7 @@ AcHighlighter::AcHighlighter(QTextDocument *parent)
  *
  * 遍历所有高亮规则，对匹配的文本应用对应的格式
  */
-void AcHighlighter::highlightBlock(const QString &text) {
+void LightAc::highlightBlock(const QString &text) {
   for (const HighlightRule &rule : std::as_const(m_rules)) {
     QRegularExpressionMatchIterator matchIterator =
         rule.pattern.globalMatch(text);

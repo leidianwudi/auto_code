@@ -1,5 +1,5 @@
 /**
- * @file ac_highlighter.h
+ * @file light_ac.h
  * @brief AC 脚本语法高亮器
  *
  * 为 main.ac 脚本文件提供语法高亮，包括：
@@ -19,14 +19,14 @@
 #include <QTextCharFormat>
 
 /**
- * @class AcHighlighter
+ * @class LightAc
  * @brief AC 脚本语法高亮器
  */
-class AcHighlighter : public QSyntaxHighlighter {
+class LightAc : public QSyntaxHighlighter {
   Q_OBJECT
 
 public:
-  explicit AcHighlighter(QTextDocument *parent = nullptr);
+  explicit LightAc(QTextDocument *parent = nullptr);
 
 protected:
   /**
