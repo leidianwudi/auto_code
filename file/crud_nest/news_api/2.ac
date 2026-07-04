@@ -1,0 +1,20 @@
+${if !fileExists(outputPath)}
+// ${modelName} Model
+export interface ${modelName} {
+${each fields}  ${name}: ${type};
+${/each}}
+
+${if hasService}export class ${modelName}Service {
+  static async getAll(): Promise<${modelName}[]> {
+    return fetch('/api/${modelName.toLowerCase}').then(r => r.json());
+  }
+}
+${print("22222")}
+${/if}
+// 算111333333333术运算111111111示例
+// 总价: ${price * quantity}
+// 含税价: ${price * 1.13}
+// 折扣后: ${(price * quantity) * discount}
+// 平均值: ${total / count}
+// 复杂计算: ${(a + b) * c - d / 2}
+${/if}

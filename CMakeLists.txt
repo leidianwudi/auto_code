@@ -47,6 +47,8 @@ qt_add_executable(auto_code
     src/tool/ui/highlighter/json_highlighter.cpp
     src/tool/ui/highlighter/ts_highlighter.h
     src/tool/ui/highlighter/ts_highlighter.cpp
+    src/tool/ui/highlighter/ac_highlighter.h
+    src/tool/ui/highlighter/ac_highlighter.cpp
     src/tool/ui/aui_mgr.h
     src/tool/ui/aui_style.h
     src/tool/ui/aui_style.cpp
