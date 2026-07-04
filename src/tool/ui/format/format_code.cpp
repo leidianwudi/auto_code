@@ -15,6 +15,50 @@
 //  公共接口
 // ──────────────────────────────────────────────────────────────
 
+// 配对字符表
+const FormatCode::CharPair FormatCode::kPairs[] = {
+    {QLatin1Char('{'), QLatin1Char('}')},
+    {QLatin1Char('['), QLatin1Char(']')},
+    {QLatin1Char('('), QLatin1Char(')')},
+    {QLatin1Char('"'), QLatin1Char('"')},
+};
+
+bool FormatCode::isOpenChar(QChar ch) {
+  for (int i = 0; i < kPairCount; ++i) {
+    if (kPairs[i].open == ch)
+      return true;
+  }
+  return false;
+}
+
+QChar FormatCode::matchingCloseChar(QChar open) {
+  for (int i = 0; i < kPairCount; ++i) {
+    if (kPairs[i].open == open)
+      return kPairs[i].close;
+  }
+  return QChar();
+}
+
+bool FormatCode::isCloseChar(QChar ch) {
+  for (int i = 0; i < kPairCount; ++i) {
+    if (kPairs[i].close == ch && kPairs[i].open != ch)
+      return true;
+  }
+  return false;
+}
+
+bool FormatCode::shouldAutoPair(QChar open, QChar charBefore) {
+  // 不支持配对的开字符 → 不配对
+  if (!isOpenChar(open))
+    return false;
+
+  // " 的特殊处理：前面是字母/数字时不配对（避免 typo 场景）
+  if (open == QLatin1Char('"') && charBefore.isLetterOrNumber())
+    return false;
+
+  return true;
+}
+
 QString FormatCode::format(const QString &input, FormatMode mode) {
   switch (mode) {
   case FormatJson:

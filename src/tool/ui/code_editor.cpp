@@ -1062,22 +1062,91 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
     return;
   }
 
-  // ── Enter 自动缩进 ──
+  // ── 键入开字符时自动补全闭字符 ──
+  if (event->text().length() == 1 && m_validationMode != NoValidation) {
+    QChar ch = event->text()[0];
+    if (FormatCode::isOpenChar(ch)) {
+      // 获取光标前一个字符（用于 " 的特殊判断）
+      QTextCursor tc = textCursor();
+      tc.movePosition(QTextCursor::Left, QTextCursor::KeepAnchor, 1);
+      QChar charBefore =
+          tc.selectedText().isEmpty() ? QChar() : tc.selectedText()[0];
+
+      if (FormatCode::shouldAutoPair(ch, charBefore)) {
+        QChar close = FormatCode::matchingCloseChar(ch);
+        insertPlainText(QString(ch) + close);
+        // 光标回到中间
+        QTextCursor back = textCursor();
+        back.movePosition(QTextCursor::Left, QTextCursor::MoveAnchor, 1);
+        setTextCursor(back);
+        return;
+      }
+    }
+  }
+
+  // ── Enter 自动缩进 + 拆分配对块 ──
   if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
-    // 获取光标前的当前行文本
+    // 检查光标后是否是某个闭字符
     QTextCursor cursor = textCursor();
+    cursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor, 1);
+    QString nextText = cursor.selectedText();
+    QChar nextChar = nextText.isEmpty() ? QChar() : nextText[0];
+    bool hasClosePair = !nextChar.isNull() && FormatCode::isCloseChar(nextChar);
+
+    // 恢复光标位置
+    cursor.setPosition(textCursor().position());
     cursor.movePosition(QTextCursor::StartOfLine, QTextCursor::KeepAnchor);
     QString linePrefix = cursor.selectedText();
-
     int indent = calculateNewLineIndent(linePrefix);
 
-    // 先插入换行
-    QPlainTextEdit::keyPressEvent(event);
-    // 再插入缩进空格
-    if (indent > 0) {
-      insertPlainText(QString(indent, QLatin1Char(' ')));
+    if (hasClosePair) {
+      // 删除后面的闭字符
+      QTextCursor tc = textCursor();
+      tc.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor, 1);
+      tc.removeSelectedText();
+
+      // 换行 + 缩进（块内）
+      QPlainTextEdit::keyPressEvent(event);
+      if (indent > 0)
+        insertPlainText(QString(indent, QLatin1Char(' ')));
+
+      // 再换行 + 反缩进 + 闭字符
+      int closeIndent = qMax(0, indent - FormatCode::kIndentSize);
+      insertPlainText(QStringLiteral("\n") +
+                      QString(closeIndent, QLatin1Char(' ')) + nextChar);
+
+      // 光标回到中间行末尾
+      QTextCursor back = textCursor();
+      back.movePosition(QTextCursor::Up, QTextCursor::MoveAnchor);
+      back.movePosition(QTextCursor::EndOfLine, QTextCursor::MoveAnchor);
+      setTextCursor(back);
+    } else {
+      // 普通 Enter 自动缩进
+      QPlainTextEdit::keyPressEvent(event);
+      if (indent > 0)
+        insertPlainText(QString(indent, QLatin1Char(' ')));
     }
     return;
+  }
+
+  // ── 键入闭字符时自动反向缩进 ──
+  if (event->text().length() == 1 && m_validationMode != NoValidation) {
+    QChar ch = event->text()[0];
+    if (FormatCode::isCloseChar(ch)) {
+      QTextCursor tc = textCursor();
+      tc.movePosition(QTextCursor::StartOfLine, QTextCursor::KeepAnchor);
+      QString beforeCursor = tc.selectedText();
+      // 光标前只有空白 → 删除空白，在正确层级插入括号
+      if (!beforeCursor.isEmpty() && beforeCursor.trimmed().isEmpty()) {
+        int currentIndent = beforeCursor.length();
+        int correctIndent = qMax(0, currentIndent - FormatCode::kIndentSize);
+        tc.removeSelectedText();
+        if (correctIndent > 0)
+          insertPlainText(QString(correctIndent, QLatin1Char(' ')));
+        insertPlainText(QString(ch));
+        return;
+      }
+    }
   }
 
   // ── 普通按键 ──
