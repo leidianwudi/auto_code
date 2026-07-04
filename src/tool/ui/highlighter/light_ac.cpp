@@ -11,19 +11,28 @@
  * @param parent 父文档
  *
  * 初始化高亮规则，定义 AC 脚本元素的着色方案：
- * 1. 关键字（蓝色加粗）：let, main, for, in, if, else, call, return
- * 2. 内置函数（紫色加粗）：readJson, merge, basename, render, write, print,
+ * 1. 变量（绿色）：普通标识符
+ * 2. 关键字（蓝色加粗）：let, main, for, in, if, else, call, return
+ * 3. 内置函数（紫色加粗）：readJson, merge, basename, render, write, print,
  * getCheckedFiles
- * 3. 注释（灰色斜体）：// 单行注释
- * 4. 字符串（橙色）："" 和 '' 字面量
- * 5. 数字（橙色加粗）：整数、浮点数
- * 6. 布尔值（红色加粗）：true, false
- * 7. 函数调用（紫色）：任何标识符后跟括号
+ * 4. 注释（灰色斜体）：// 单行注释
+ * 5. 字符串（橙色）："" 和 '' 字面量
+ * 6. 数字（橙色加粗）：整数、浮点数
+ * 7. 布尔值（红色加粗）：true, false
+ * 8. 函数调用（紫色）：任何非关键字的标识符后跟括号
  *
- * 注意：规则按顺序应用，前面的规则优先级更高。
+ * 注意：规则按顺序应用，前面的规则优先级更低，后面的规则会覆盖前面的。
+ * 变量规则放在最前面，关键字/内置函数/布尔值/函数调用等更具体的规则在后面覆盖它。
  */
 LightAc::LightAc(QTextDocument *parent) : QSyntaxHighlighter(parent) {
   using namespace LightColor;
+
+  // ── 0. 变量（绿色） ──
+  // 放在最前面作为兜底规则，后面更具体的规则（关键字、内置函数等）会覆盖它
+  QTextCharFormat variableFormat;
+  variableFormat.setForeground(variable);
+  m_rules.append({QRegularExpression(QStringLiteral("\\b[a-zA-Z_]\\w*\\b")),
+                  variableFormat});
 
   // ── 1. 关键字（蓝色加粗） ──
   QTextCharFormat keywordFormat;
@@ -70,11 +79,14 @@ LightAc::LightAc(QTextDocument *parent) : QSyntaxHighlighter(parent) {
       {QRegularExpression(QStringLiteral("\\b(?:true|false)\\b")), boolFormat});
 
   // ── 7. 函数调用（紫色） ──
-  // 匹配任何标识符后跟括号，如 render()、write()、readJson() 等
+  // 匹配任何非关键字的标识符后跟括号，如 render()、write()、readJson() 等
+  // 使用负面前瞻排除关键字，避免 for(、if(、else( 等被误染成函数调用颜色
   QTextCharFormat callFormat;
   callFormat.setForeground(call);
   m_rules.append(
-      {QRegularExpression(QStringLiteral("\\b\\w+(?=\\s*\\()")), callFormat});
+      {QRegularExpression(QStringLiteral(
+           "\\b(?!(?:let|main|for|in|if|else|call|return)\\b)\\w+(?=\\s*\\()")),
+       callFormat});
 }
 
 /**

@@ -8,28 +8,28 @@ main {
     database: "news"
   });
 
-  basePath = "D:/output";
+  let basePath = "D:/output";
 
   // 模板配置列表：[模板文件, 输出后缀]
-  templates = [
+  let templates = [
     { tpl: "1.tpl", suffix: ".ts" },
     { tpl: "2.tpl", suffix: ".ts" }
   ];
 
   // 获取主界面勾选的 json 文件
-  files = getCheckedFiles();
+  let files = getCheckedFiles();
 
   // 遍历每个 json 文件
   for (file in files) {
     let json = readJson(file);
-    schema = call("db", "tableSchema", { table: json.modelName });
-    combined = merge(json, schema);
-    name = basename(file);
+    let schema = call("db", "tableSchema", { table: json.modelName });
+    let combined = merge(json, schema);
+    let name = basename(file);
 
     // 遍历每个模板
     for (cfg in templates) {
       combined["outputPath"] = basePath + "/" + name;
-      result = render(cfg.tpl, combined);
+      let result = render(cfg.tpl, combined);
       print("sss" + combined["outputPath"]);
       if (result) {
         write(combined["outputPath"], result);
