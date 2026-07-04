@@ -12,6 +12,7 @@
 #pragma once
 
 #include <QPlainTextEdit>
+#include <QPointer>
 #include <QSet>
 #include <QString>
 #include <QTimer>
@@ -19,6 +20,7 @@
 class QPaintEvent;
 class QResizeEvent;
 class QWidget;
+class AuiErrorToolTip; ///< 自定义可选中/复制的错误提示弹窗
 
 /**
  * @class CodeEditor
@@ -66,6 +68,8 @@ protected:
   void resizeEvent(QResizeEvent *event) override;
   /// 自定义绘制：在标准绘制后，额外绘制超粗红色波浪线（覆盖默认细波浪线）
   void paintEvent(QPaintEvent *event) override;
+  /// 处理视口事件（ToolTip 显示错误提示）
+  bool viewportEvent(QEvent *event) override;
 
 private slots:
   /// 行数变化时重新计算行号区域宽度
@@ -91,18 +95,25 @@ private:
   /// 将错误区间应用到 ExtraSelection 并标记红色波浪下划线
   void applyErrorUnderline(int from, int length, const QString &tooltip,
                            QList<QTextEdit::ExtraSelection> &selections);
+  /// 显示自定义错误提示弹窗（可选中/复制）
+  void showErrorTooltip(const QPoint &pos, const QString &text);
+  /// 隐藏自定义错误提示弹窗
+  void hideErrorTooltip();
 
   ValidationMode m_validationMode = NoValidation;
   QTimer m_validationTimer;                           ///< 防抖定时器（500ms）
   QList<QTextEdit::ExtraSelection> m_errorSelections; ///< 持久化的错误标记
   QSet<int> m_errorLines;                             ///< 有错误的行号集合
   QWidget *m_lineNumberArea;                          ///< 行号显示区域
+  QPointer<AuiErrorToolTip> m_errorTooltip;           ///< 自定义错误提示弹窗
 
   /// 错误位置列表（用于 paintEvent 自定义绘制，避免 cursor 失效）
   struct ErrorRange {
-    int start;  ///< 起始位置
-    int length; ///< 长度
-    ErrorRange(int s, int l) : start(s), length(l) {}
+    int start;       ///< 起始位置
+    int length;      ///< 长度
+    QString tooltip; ///< 错误提示文本
+    ErrorRange(int s, int l, const QString &t)
+        : start(s), length(l), tooltip(t) {}
   };
   QVector<ErrorRange> m_errorRanges; ///< 所有错误的位置范围
 };

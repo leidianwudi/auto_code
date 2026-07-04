@@ -4,8 +4,11 @@
  */
 
 #include "code_editor.h"
+#include "aui_error_tool_tip.h"
 #include "src/engine/function/fun_const.h"
 #include "src/engine/script_parser.h"
+#include <QEvent>
+#include <QHelpEvent>
 #include <QJsonDocument>
 #include <QMap>
 #include <QPainter>
@@ -14,7 +17,6 @@
 #include <QScrollBar>
 #include <QStack>
 #include <QTextBlock>
-#include <QToolTip>
 
 // ──────────────────────────────────────────────────────────────
 //  构造 / 基本接口
@@ -54,6 +56,11 @@ CodeEditor::CodeEditor(QWidget *parent)
   // 任何文本变化都重新调度验证（每次变化会重置 500ms 计时器）
   connect(this, &QPlainTextEdit::textChanged, this,
           &CodeEditor::scheduleValidation);
+  // 文本变化或滚动时自动关闭错误提示弹窗
+  connect(this, &QPlainTextEdit::textChanged, this,
+          &CodeEditor::hideErrorTooltip);
+  connect(this, &QPlainTextEdit::cursorPositionChanged, this,
+          &CodeEditor::hideErrorTooltip);
 
   // 初始化：计算行号区域宽度并高亮当前行
   updateLineNumberAreaWidth(0);
@@ -792,7 +799,7 @@ void CodeEditor::applyErrorUnderline(
   }
 
   // 同时记录错误位置范围（供 paintEvent 自定义绘制使用）
-  m_errorRanges.append(ErrorRange(from, length));
+  m_errorRanges.append(ErrorRange(from, length, tooltip));
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -890,5 +897,58 @@ void CodeEditor::paintEvent(QPaintEvent *event) {
       if (!cursor.movePosition(QTextCursor::NextBlock))
         break;
     }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+//  ToolTip 事件：鼠标悬停时显示错误提示
+// ──────────────────────────────────────────────────────────────
+
+/**
+ * @brief 视口事件处理（拦截 ToolTip 事件显示错误提示）
+ *
+ * 当鼠标悬停在有红色波浪线的错误代码上时，显示具体的错误信息。
+ * 遍历 m_errorRanges 查找鼠标位置是否落在某个错误区间内，
+ * 如果是则显示对应的 tooltip 文本。
+ */
+bool CodeEditor::viewportEvent(QEvent *event) {
+  if (event->type() == QEvent::ToolTip) {
+    QHelpEvent *helpEvent = static_cast<QHelpEvent *>(event);
+    // 将鼠标屏幕坐标转换为文档中的光标位置
+    QTextCursor cursor = cursorForPosition(helpEvent->pos());
+    int pos = cursor.position(); // 光标在文档中的位置
+
+    // 如果已有自定义弹窗，先隐藏
+    hideErrorTooltip();
+
+    // 遍历所有错误范围，查找鼠标位置是否落在某个错误区间内
+    for (const auto &range : m_errorRanges) {
+      if (pos >= range.start && pos < range.start + range.length) {
+        // 找到匹配的错误区间，显示自定义弹窗（可选中/复制）
+        showErrorTooltip(helpEvent->globalPos(), range.tooltip);
+        return true;
+      }
+    }
+
+    // 没有匹配的错误，让基类继续处理
+    event->ignore();
+    return true;
+  }
+  return QPlainTextEdit::viewportEvent(event);
+}
+
+void CodeEditor::showErrorTooltip(const QPoint &pos, const QString &text) {
+  hideErrorTooltip();
+  auto *tip = new AuiErrorToolTip(text, this);
+  tip->move(pos + QPoint(1, 6)); // 略微偏移，避免遮挡代码
+  tip->adjustSize();
+  tip->show();
+  m_errorTooltip = tip;
+}
+
+void CodeEditor::hideErrorTooltip() {
+  if (m_errorTooltip) {
+    m_errorTooltip->close();
+    m_errorTooltip.clear();
   }
 }
