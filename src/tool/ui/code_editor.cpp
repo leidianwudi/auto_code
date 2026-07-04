@@ -284,6 +284,10 @@ void CodeEditor::refreshExtraSelections() {
 void CodeEditor::scheduleValidation() {
   if (m_validationMode == NoValidation)
     return;
+  // 文本已变化，立即清除旧错误标记，防止指向失效位置导致崩溃
+  m_errorSelections.clear();
+  m_errorLines.clear();
+  m_errorRanges.clear();
   m_validationTimer.start(); // 每次调用都会重置计时器
 }
 
@@ -794,11 +798,21 @@ void CodeEditor::paintEvent(QPaintEvent *event) {
 
       if (selStartInBlock < selEndInBlock) {
 
+        QTextLayout *layout = block.layout();
+        if (!layout) {
+          cursor.movePosition(QTextCursor::NextBlock);
+          continue;
+        }
+
         // 获取起始字符的 x 坐标（使用 QTextLine 的 cursorToX 方法）
-        QTextLine line = block.layout()->lineForTextPosition(selStartInBlock);
-        int startX = line.cursorToX(selStartInBlock);
+        QTextLine line = layout->lineForTextPosition(selStartInBlock);
+        if (!line.isValid()) {
+          cursor.movePosition(QTextCursor::NextBlock);
+          continue;
+        }
+        int startX = static_cast<int>(line.cursorToX(selStartInBlock));
         // 获取结束字符的 x 坐标
-        int endX = line.cursorToX(selEndInBlock);
+        int endX = static_cast<int>(line.cursorToX(selEndInBlock));
 
         // 计算波浪线的 y 坐标（文字基线下方，留出足够空间）
         int y = blockRect.bottom() + 3;
@@ -820,7 +834,8 @@ void CodeEditor::paintEvent(QPaintEvent *event) {
       }
 
       // 移动到下一个块
-      cursor.movePosition(QTextCursor::NextBlock);
+      if (!cursor.movePosition(QTextCursor::NextBlock))
+        break;
     }
   }
 }
