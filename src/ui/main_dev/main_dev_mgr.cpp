@@ -7,7 +7,7 @@
 #include "main_dev_model.h"
 #include "main_dev_ui.h"
 #include "main_dev_ui_ext.h"
-#include "src/engine/main_engine.h"
+#include "src/engine/engine_ac.h"
 #include "src/tool/ui/code_editor.h"
 #include "src/tool/ui/highlighter/ac_highlighter.h"
 #include "src/tool/ui/highlighter/json_highlighter.h"
@@ -59,7 +59,7 @@ QWidget *MainDevMgr::onCreateWindow() {
   initUi();
 
   // ── 设置日志回调：脚本中 print() 输出到 UI 面板 ──
-  MainEngine::ins().setLogCallback([this](const QString &text, bool isError) {
+  EngineAc::ins().setLogCallback([this](const QString &text, bool isError) {
     m_ui->appendOutput(text, isError);
   });
 
@@ -149,13 +149,13 @@ void MainDevMgr::initUi() {
       return;
     }
     m_ui->appendOutput(QStringLiteral("执行: %1").arg(scriptPath), false);
-    MainEngine::ins().setRootDir(m_ui->fileTree()->rootPath());
-    QString err = MainEngine::ins().execute(scriptPath);
+    EngineAc::ins().setRootDir(m_ui->fileTree()->rootPath());
+    QString err = EngineAc::ins().execute(scriptPath);
     if (!err.isEmpty()) {
       m_ui->appendOutput(err, true);
     } else {
       m_ui->appendOutput(QStringLiteral("执行完成"), false);
-      QStringList files = MainEngine::ins().generatedFiles();
+      QStringList files = EngineAc::ins().generatedFiles();
       for (const QString &f : files)
         m_ui->appendOutput(QStringLiteral("  生成: %1").arg(f), false);
     }

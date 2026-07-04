@@ -1,5 +1,5 @@
 /**
- * @file template_engine.cpp
+ * @file engine_tpl.cpp
  * @brief 模板引擎实现
  *
  * TemplateEngine 的职责（精简后）：
@@ -10,7 +10,7 @@
  * 算术表达式求值已移至 ExpressionHandler。
  */
 
-#include "template_engine.h"
+#include "engine_tpl.h"
 
 #include "function/fun_const.h"
 #include "function/fun_mgr.h"

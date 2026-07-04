@@ -11,10 +11,10 @@ set(CMAKE_AUTOUIC OFF)
 qt_add_executable(auto_code
     WIN32 MACOSX_BUNDLE
     main.cpp
-    src/engine/template_engine.h
-    src/engine/template_engine.cpp
-    src/engine/main_engine.h
-    src/engine/main_engine.cpp
+    src/engine/engine_tpl.h
+    src/engine/engine_tpl.cpp
+    src/engine/engine_ac.h
+    src/engine/engine_ac.cpp
     src/engine/script_parser.h
     src/engine/script_parser.cpp
     src/engine/schema_validator.h

@@ -12,7 +12,7 @@
  */
 
 #include "expression_handler.h"
-#include "../template_engine.h"
+#include "../engine_tpl.h"
 
 #include <QFileInfo>
 

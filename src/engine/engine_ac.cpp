@@ -1,23 +1,23 @@
-#include "main_engine.h"
+#include "engine_ac.h"
 
 #include "script_parser.h"
 
 #include <QFile>
 #include <QFileInfo>
 
-MainEngine &MainEngine::ins() {
-  static MainEngine instance;
+EngineAc &EngineAc::ins() {
+  static EngineAc instance;
   return instance;
 }
 
-QString MainEngine::readFileUtf8(const QString &path) {
+QString EngineAc::readFileUtf8(const QString &path) {
   QFile f(path);
   if (!f.open(QIODevice::ReadOnly))
     return {};
   return QString::fromUtf8(f.readAll());
 }
 
-QString MainEngine::execute(const QString &mainAcPath) {
+QString EngineAc::execute(const QString &mainAcPath) {
   QString source = readFileUtf8(mainAcPath);
   if (source.isEmpty())
     return QStringLiteral("failed to read main.ac: %1").arg(mainAcPath);

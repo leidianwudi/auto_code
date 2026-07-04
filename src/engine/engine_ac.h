@@ -5,9 +5,9 @@
 
 #include <functional>
 
-class MainEngine {
+class EngineAc {
 public:
-  static MainEngine &ins();
+  static EngineAc &ins();
 
   /// 日志回调：UI 设置后，脚本中 print() 的输出会通过此回调通知
   /// @param text  日志文本
@@ -31,7 +31,7 @@ public:
   QStringList generatedFiles() const { return m_generatedFiles; }
 
 private:
-  MainEngine() = default;
+  EngineAc() = default;
   QString readFileUtf8(const QString &path);
   QString m_rootDir;
   QStringList m_generatedFiles;

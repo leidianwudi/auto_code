@@ -6,7 +6,7 @@
 #include "demo_mgr.h"
 #include "demo_model.h"
 #include "demo_ui.h"
-#include "src/engine/template_engine.h"
+#include "src/engine/engine_tpl.h"
 #include "src/tool/ui/code_editor.h"
 #include "src/tool/ui/highlighter/json_highlighter.h"
 #include "src/tool/ui/highlighter/tpl_highlighter.h"
