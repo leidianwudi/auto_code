@@ -65,18 +65,17 @@ cmd.exe /c .trae\build.bat
 
 Trae IDE 默认启用了安全删除保护（safe-rm），会在终端注入 `SAFE_RM_*` 环境变量。但这些变量使用 bash 语法格式（`KEY=VALUE`），与 PowerShell 不兼容，导致**所有终端命令都无法执行**。
 
-**解决办法**：在项目根目录创建 `.vscode/settings.json` 或 `.trae/settings.json`，添加以下配置：
+**✅ 有效解决方案**：在每条命令前加 `; ` 前缀（分号+空格），即可绕过注入。分号在 PowerShell 中作为语句分隔符，将命令与注入文本隔离开：
 
-```json
-{
-  "trae.safe-rm.enabled": false,
-  "terminal.integrated.env.windows": {
-    "SAFE_RM_ALLOWED_PATH": null,
-    "SAFE_RM_DENIED_PATH": null,
-    "SAFE_RM_AUTO_ADD_TEMP": null,
-    "SAFE_RM_PROTECTION_FLAG": null
-  }
-}
+```powershell
+; <你的命令>
+; cmake --version
+; .trae\build.bat
+; echo "Hello"
 ```
 
-如果上述配置无效，请在 Trae IDE 的 **设置 → 扩展 → safe-rm** 中手动关闭，或通过 **命令面板（Ctrl+Shift+P）→ Preferences: Open User Settings** 搜索 `safe-rm` 禁用。
+**备选方案（不一定会生效）**：在用户 settings.json 中添加：
+
+```json
+"trae.safe-rm.enabled": false
+```
