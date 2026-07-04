@@ -4,6 +4,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -14,13 +15,18 @@
 ///
 /// 支持的语法：
 ///   - 变量声明：  let name = expr
-///   - 变量赋值：  name = expr
+///   - 变量赋值：  name = expr（变量必须先 let 声明才能赋值）
 ///   - 函数调用：  call("cls", "func", arg)
 ///   - for 循环：  for (var in arrayExpr) { ... }
 ///   - 对象字面量：{ key: val, ... }
 ///   - 数组字面量：[item, ...]
 ///   - 属性访问：  obj.prop
 ///   - 字符串拼接：expr + expr
+///
+/// 变量规则：
+///   - 所有变量必须先使用 let 声明才能使用
+///   - 未声明的变量赋值会报错
+///   - for 循环变量自动视为已声明
 ///
 /// 内置函数：call / readJson / render / write / getCheckedFiles / merge /
 /// basename
@@ -289,6 +295,7 @@ private:
   QString m_jsonPath;                   ///< 当前处理的 JSON 文件路径
   QHash<QString, QJsonValue> m_vars;    ///< 局部变量表
   QHash<QString, QJsonValue> m_globals; ///< 全局变量表
+  QSet<QString> m_declaredVars;         ///< 已用 let 声明的变量名
   QStringList m_generatedFiles;         ///< 本次执行生成的文件列表
   LogCallback m_logCallback;            ///< 日志回调
 };

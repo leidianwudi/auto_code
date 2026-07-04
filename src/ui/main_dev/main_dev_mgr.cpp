@@ -251,6 +251,8 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
 
   if (filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive))
     editor->setValidationMode(CodeEditor::JsonValidation);
+  else if (filePath.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive))
+    editor->setValidationMode(CodeEditor::AcValidation);
   else if (filePath.endsWith(QStringLiteral(".tpl"), Qt::CaseInsensitive))
     editor->setValidationMode(CodeEditor::TemplateValidation);
 
@@ -569,6 +571,7 @@ void MainDevMgr::onSplitRight() {
       editor->setValidationMode(CodeEditor::JsonValidation);
     } else if (filePath.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive)) {
       new LightAc(editor->document());
+      editor->setValidationMode(CodeEditor::AcValidation);
     } else if (filePath.endsWith(QStringLiteral(".tpl"), Qt::CaseInsensitive)) {
       new LightTpl(editor->document());
       editor->setValidationMode(CodeEditor::TemplateValidation);

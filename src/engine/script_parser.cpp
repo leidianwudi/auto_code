@@ -4,7 +4,6 @@
 #include "function/fun_const.h"
 #include "function/fun_mgr.h"
 
-
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -241,6 +240,14 @@ bool ScriptParser::parseStmt(Stmt &stmt) {
 
   if (t.type == TOK_LET) {
     advance(); // 消费 'let'
+    // 必须先有标识符
+    if (peek().type != TOK_IDENT) {
+      m_error = QStringLiteral("expected variable name after 'let' at line %1")
+                    .arg(peek().line);
+      return false;
+    }
+    // 注册为已声明变量
+    m_declaredVars.insert(peek().text);
     stmt.kind = Stmt::kAssign;
     return parseAssignStmt(stmt.assign);
   }
@@ -248,6 +255,13 @@ bool ScriptParser::parseStmt(Stmt &stmt) {
   if (t.type == TOK_IDENT) {
     // look ahead: if next is '=', it's assignment
     if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_EQUALS) {
+      // 变量必须先 let 声明才能赋值
+      if (!m_declaredVars.contains(t.text)) {
+        m_error = QStringLiteral("variable '%1' must be declared with 'let' "
+                                 "before assignment at line %2")
+                      .arg(t.text, QString::number(t.line));
+        return false;
+      }
       stmt.kind = Stmt::kAssign;
       return parseAssignStmt(stmt.assign);
     }
@@ -473,6 +487,18 @@ bool ScriptParser::parseArray(Expr &expr) {
 
 /// @brief 解析函数调用 name(arg1, arg2, ...)
 bool ScriptParser::parseFuncCall(const QString &name, Expr &expr) {
+  // 校验函数名是否为已知内置函数
+  static const QSet<QString> kBuiltins = {
+      QStringLiteral("call"),   QStringLiteral("readJson"),
+      QStringLiteral("render"), QStringLiteral("write"),
+      QStringLiteral("print"),  QStringLiteral("getCheckedFiles"),
+      QStringLiteral("merge"),  QStringLiteral("basename")};
+  if (!kBuiltins.contains(name)) {
+    m_error = QStringLiteral("unknown function '%1' at line %2")
+                  .arg(name, QString::number(peek().line));
+    return false;
+  }
+
   expr.kind = Expr::kFuncCall;
   expr.funcCall.name = name;
   advance(); // 跳过 '('
@@ -798,6 +824,7 @@ void ScriptParser::execBlock(const Block &block) {
 QJsonValue ScriptParser::execute() {
   m_error.clear();
   m_vars.clear();
+  m_declaredVars.clear();
   // Re-parse the program from tokens
   m_pos = 0;
   Block program;

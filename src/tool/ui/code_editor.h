@@ -6,7 +6,7 @@
  * - 行号显示
  * - 当前行高亮
  * - 括号匹配高亮
- * - 语法验证（JSON / 模板标签）
+ * - 语法验证（JSON / 模板标签 / AC 脚本）
  */
 
 #pragma once
@@ -28,7 +28,7 @@ class QWidget;
  * - 行号显示（左侧行号区域，错误行号显示红色）
  * - 当前行高亮（淡黄色背景）
  * - 括号匹配高亮（青色背景，支持 () [] {}）
- * - 实时语法验证（JSON 或模板标签，带 500ms 防抖）
+ * - 实时语法验证（JSON / 模板标签 / AC 脚本，带 500ms 防抖）
  * - 错误波浪下划线（红色波浪线 + Tooltip）
  */
 class CodeEditor : public QPlainTextEdit {
@@ -37,9 +37,10 @@ class CodeEditor : public QPlainTextEdit {
 public:
   /// 验证模式枚举
   enum ValidationMode {
-    NoValidation,      ///< 不做验证
-    JsonValidation,    ///< JSON 语法验证（使用 QJsonDocument）
-    TemplateValidation ///< 模板标签 + 括号匹配验证
+    NoValidation,       ///< 不做验证
+    JsonValidation,     ///< JSON 语法验证（使用 QJsonDocument）
+    TemplateValidation, ///< 模板标签 + 括号匹配验证
+    AcValidation        ///< AC 脚本语法验证（使用 ScriptParser）
   };
 
   explicit CodeEditor(QWidget *parent = nullptr);
@@ -85,6 +86,8 @@ private:
   QStringList validateJson();
   /// 模板验证（4 步：括号匹配、${} 闭合、标签配对、方法检查），返回错误信息列表
   QStringList validateTemplate();
+  /// AC 脚本语法验证（使用 ScriptParser 解析），返回错误信息列表
+  QStringList validateAc();
   /// 将错误区间应用到 ExtraSelection 并标记红色波浪下划线
   void applyErrorUnderline(int from, int length, const QString &tooltip,
                            QList<QTextEdit::ExtraSelection> &selections);

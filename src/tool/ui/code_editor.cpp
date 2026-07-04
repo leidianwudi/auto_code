@@ -5,6 +5,7 @@
 
 #include "code_editor.h"
 #include "src/engine/function/fun_const.h"
+#include "src/engine/script_parser.h"
 #include <QJsonDocument>
 #include <QMap>
 #include <QPainter>
@@ -316,6 +317,8 @@ void CodeEditor::performValidation() {
     errors = validateJson();
   } else if (m_validationMode == TemplateValidation) {
     errors = validateTemplate();
+  } else if (m_validationMode == AcValidation) {
+    errors = validateAc();
   }
 
   // 发出验证结果信号（无错误时传空字符串）
@@ -695,6 +698,56 @@ QStringList CodeEditor::validateTemplate() {
       // 跳到下一个段
       if (s + 1 < segments.size())
         segPos += seg.length() + 1;
+    }
+  }
+
+  return errors;
+}
+
+// ──────────────────────────────────────────────────────────────
+//  AC 脚本语法验证
+// ──────────────────────────────────────────────────────────────
+
+/**
+ * @brief AC 脚本语法验证
+ *
+ * 使用 ScriptParser 解析器检查 AC 脚本语法，包括：
+ * - 变量必须先 let 声明才能赋值
+ * - 括号匹配
+ * - 语句块 {} 完整性
+ * - 关键字使用正确性
+ *
+ * 解析失败时提取错误信息中的行号，在该行标记红色波浪下划线。
+ */
+QStringList CodeEditor::validateAc() {
+  QStringList errors;
+  QString text = toPlainText();
+
+  if (text.trimmed().isEmpty())
+    return errors;
+
+  ScriptParser parser;
+  if (!parser.parse(text)) {
+    QString errMsg = parser.error();
+    if (errMsg.isEmpty())
+      return errors;
+
+    errors << errMsg;
+
+    // 从错误信息中提取行号，格式如 "... at line 5"
+    // 也支持 "... at line 5" 或 "... at line 5\n..."
+    static const QRegularExpression lineRegex(QStringLiteral("at line (\\d+)"));
+    auto match = lineRegex.match(errMsg);
+    if (match.hasMatch()) {
+      int line = match.captured(1).toInt() - 1; // 0-based
+      QTextBlock block = document()->findBlockByNumber(line);
+      if (block.isValid()) {
+        int blockPos = block.position();
+        int blockLen = block.length() - 1; // 去掉换行符
+        if (blockLen > 0) {
+          applyErrorUnderline(blockPos, blockLen, errMsg, m_errorSelections);
+        }
+      }
     }
   }
 
