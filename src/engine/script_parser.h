@@ -112,6 +112,7 @@ private:
       kFuncCall,   ///< 函数调用 name(args)
       kBinary,     ///< 二元运算 left op right
     } kind = kString;
+    int line = 0;                        ///< 源码行号（用于错误报告）
     QString strVal;                      ///< 字符串值
     double numVal = 0;                   ///< 数值
     QString ident;                       ///< 标识符名
@@ -147,6 +148,7 @@ private:
     void copyFrom(const Expr &other) {
       // 拷贝基础字段
       kind = other.kind;
+      line = other.line;
       strVal = other.strVal;
       numVal = other.numVal;
       ident = other.ident;
@@ -170,6 +172,7 @@ private:
     void moveFrom(Expr &&other) {
       // 移动基础字段
       kind = other.kind;
+      line = other.line;
       strVal = std::move(other.strVal);
       numVal = other.numVal;
       ident = std::move(other.ident);
@@ -287,12 +290,26 @@ private:
   void execStmt(const Stmt &stmt);
   void execBlock(const Block &block);
 
+public:
+  // ── 未声明标识符验证 ──
+  /// @brief 解析后调用，检查所有 kIdent 是否都已用 let 声明
+  /// @return 错误信息列表，每个元素格式 "undefined variable 'xxx' at line N"
+  QStringList validateUndeclaredIdents() const;
+  void validateExprIdents(const Expr &expr, QStringList &errors,
+                          const QSet<QString> &scopeVars) const;
+  void validateStmtIdents(const Stmt &stmt, QStringList &errors,
+                          const QSet<QString> &scopeVars) const;
+  void validateBlockIdents(const Block &block, QStringList &errors,
+                           const QSet<QString> &scopeVars) const;
+
+private:
   QString m_error;                      ///< 错误信息
   QVector<Token> m_tokens;              ///< 词法分析结果
   int m_pos = 0;                        ///< 当前 token 位置
   QString m_scriptDir;                  ///< main.ac 所在目录
   QString m_rootDir;                    ///< 项目根目录
   QString m_jsonPath;                   ///< 当前处理的 JSON 文件路径
+  Block m_program;                      ///< 解析后的 AST 根节点
   QHash<QString, QJsonValue> m_vars;    ///< 局部变量表
   QHash<QString, QJsonValue> m_globals; ///< 全局变量表
   QSet<QString> m_declaredVars;         ///< 已用 let 声明的变量名

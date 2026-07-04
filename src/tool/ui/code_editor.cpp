@@ -742,15 +742,20 @@ QStringList CodeEditor::validateAc() {
     return errors;
 
   ScriptParser parser;
-  if (!parser.parse(text)) {
-    QString errMsg = parser.error();
-    if (errMsg.isEmpty())
-      return errors;
+  parser.parse(text);
 
+  // 收集所有错误：先取解析错误，再取未声明变量错误
+  QStringList allErrors;
+  if (!parser.error().isEmpty())
+    allErrors << parser.error();
+  allErrors << parser.validateUndeclaredIdents();
+
+  for (const QString &errMsg : allErrors) {
+    if (errMsg.isEmpty())
+      continue;
     errors << errMsg;
 
     // 从错误信息中提取行号，格式如 "... at line 5"
-    // 也支持 "... at line 5" 或 "... at line 5\n..."
     static const QRegularExpression lineRegex(QStringLiteral("at line (\\d+)"));
     auto match = lineRegex.match(errMsg);
     if (match.hasMatch()) {

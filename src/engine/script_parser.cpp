@@ -189,8 +189,8 @@ bool ScriptParser::parse(const QString &source) {
   if (!m_error.isEmpty())
     return false;
   m_pos = 0;
-  Block program;
-  return parseProgram(program);
+  m_program = Block();
+  return parseProgram(m_program);
 }
 
 /// @brief 解析程序入口 — 跳过可选的 main 关键字后进入 block
@@ -426,6 +426,7 @@ bool ScriptParser::parsePrimary(Expr &expr) {
     }
     expr.kind = Expr::kIdent;
     expr.ident = name;
+    expr.line = t.line;
     return true;
   }
 
@@ -820,17 +821,112 @@ void ScriptParser::execBlock(const Block &block) {
   }
 }
 
+/// @brief 解析后验证：检查 AST 中所有 kIdent 是否已用 let 声明
+/// @return 错误信息列表，格式 "undefined variable 'xxx' at line N"
+QStringList ScriptParser::validateUndeclaredIdents() const {
+  QStringList errors;
+  // 初始作用域 = 已用 let 声明的全局变量
+  QSet<QString> scopeVars = m_declaredVars;
+  validateBlockIdents(m_program, errors, scopeVars);
+  return errors;
+}
+
+/// @brief 递归验证 Block 中的所有 Stmt
+void ScriptParser::validateBlockIdents(const Block &block, QStringList &errors,
+                                       const QSet<QString> &scopeVars) const {
+  for (const auto &stmt : block.stmts)
+    validateStmtIdents(stmt, errors, scopeVars);
+}
+
+/// @brief 验证单个 Stmt 中的 kIdent
+void ScriptParser::validateStmtIdents(const Stmt &stmt, QStringList &errors,
+                                      const QSet<QString> &scopeVars) const {
+  switch (stmt.kind) {
+  case Stmt::kCall:
+    validateExprIdents(stmt.call.className, errors, scopeVars);
+    validateExprIdents(stmt.call.funcName, errors, scopeVars);
+    validateExprIdents(stmt.call.args, errors, scopeVars);
+    break;
+  case Stmt::kAssign:
+    validateExprIdents(stmt.assign.value, errors, scopeVars);
+    break;
+  case Stmt::kIndexAssign:
+    validateExprIdents(stmt.indexAssign.value, errors, scopeVars);
+    break;
+  case Stmt::kFor: {
+    validateExprIdents(stmt.forStmt.arrayExpr, errors, scopeVars);
+    // for 循环变量在 body 内视为已声明
+    QSet<QString> bodyScope = scopeVars;
+    bodyScope.insert(stmt.forStmt.varName);
+    validateBlockIdents(stmt.forStmt.body, errors, bodyScope);
+    break;
+  }
+  case Stmt::kIf:
+    validateExprIdents(stmt.ifStmt.condition, errors, scopeVars);
+    validateBlockIdents(stmt.ifStmt.thenBlock, errors, scopeVars);
+    if (stmt.ifStmt.hasElse)
+      validateBlockIdents(stmt.ifStmt.elseBlock, errors, scopeVars);
+    break;
+  case Stmt::kExpr:
+    validateExprIdents(stmt.exprStmt, errors, scopeVars);
+    break;
+  }
+}
+
+/// @brief 递归验证 Expr 树中的 kIdent
+void ScriptParser::validateExprIdents(const Expr &expr, QStringList &errors,
+                                      const QSet<QString> &scopeVars) const {
+  switch (expr.kind) {
+  case Expr::kIdent:
+    if (!scopeVars.contains(expr.ident)) {
+      errors << QStringLiteral("undefined variable '%1' at line %2")
+                    .arg(expr.ident, QString::number(expr.line));
+    }
+    break;
+  case Expr::kPropAccess:
+    // obj.prop：验证 obj 部分
+    if (!scopeVars.contains(expr.ident)) {
+      errors << QStringLiteral("undefined variable '%1' at line %2")
+                    .arg(expr.ident, QString::number(expr.line));
+    }
+    break;
+  case Expr::kFuncCall:
+    for (const auto *arg : expr.funcCall.args)
+      validateExprIdents(*arg, errors, scopeVars);
+    break;
+  case Expr::kObject:
+    for (const auto &entry : expr.objEntries) {
+      if (entry.value)
+        validateExprIdents(*entry.value, errors, scopeVars);
+    }
+    break;
+  case Expr::kArray:
+    for (const auto *item : expr.arrItems)
+      validateExprIdents(*item, errors, scopeVars);
+    break;
+  case Expr::kBinary:
+    if (expr.left)
+      validateExprIdents(*expr.left, errors, scopeVars);
+    if (expr.right)
+      validateExprIdents(*expr.right, errors, scopeVars);
+    break;
+  default:
+    // kString / kNumber — 无需检查
+    break;
+  }
+}
+
 /// @brief 执行脚本：重新解析 token 序列并执行
 QJsonValue ScriptParser::execute() {
   m_error.clear();
   m_vars.clear();
   m_declaredVars.clear();
+  m_program = Block();
   // Re-parse the program from tokens
   m_pos = 0;
-  Block program;
-  if (!parseProgram(program))
+  if (!parseProgram(m_program))
     return QJsonValue();
-  execBlock(program);
+  execBlock(m_program);
   if (!m_error.isEmpty())
     return QJsonValue();
   return QJsonValue(true);

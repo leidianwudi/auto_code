@@ -9,7 +9,6 @@ main {
   });
 
   let basePath = "D:/output";
-  let aa = getCheckedFiles;
   
   // 模板配置列表：[模板文件, 输出后缀]
   let templates = [
@@ -18,8 +17,7 @@ main {
   ];
 
   // 获取主界面勾选的 json 文件
-  let files = getCheckedFiles();
-
+  let files = getCheckedFiles(); 
   // 遍历每个 json 文件
   for (file in files) {
     let json = readJson(file);
