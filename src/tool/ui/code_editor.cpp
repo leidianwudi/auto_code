@@ -26,7 +26,6 @@
 #include <QStringListModel>
 #include <QTextBlock>
 
-
 // ──────────────────────────────────────────────────────────────
 //  构造 / 基本接口
 // ──────────────────────────────────────────────────────────────
@@ -1204,10 +1203,19 @@ void CodeEditor::initCompleter(ValidationMode mode) {
 }
 
 void CodeEditor::insertCompletion(const QString &completion) {
+  // 与 showCompleter() 保持一致：手动向左扫描单词前缀并删除
   QTextCursor tc = textCursor();
-  // 向左选中到单词开头（即当前正在输入的前缀）
-  tc.movePosition(QTextCursor::StartOfWord, QTextCursor::KeepAnchor);
-  tc.removeSelectedText();
+  int pos = tc.position();
+  QString text = toPlainText();
+  int start = pos;
+  while (start > 0 &&
+         (text[start - 1].isLetterOrNumber() || text[start - 1] == '_'))
+    --start;
+  if (start < pos) {
+    tc.setPosition(start);
+    tc.setPosition(pos, QTextCursor::KeepAnchor);
+    tc.removeSelectedText();
+  }
   // 插入补全后的文本
   insertPlainText(completion);
   // 关闭补全弹窗
@@ -1228,10 +1236,16 @@ void CodeEditor::showCompleter() {
   if (!m_completer)
     return;
 
-  // 获取光标前当前单词前缀
-  QTextCursor tc = textCursor();
-  tc.movePosition(QTextCursor::StartOfWord, QTextCursor::KeepAnchor);
-  QString prefix = tc.selectedText();
+  // 手动从光标位置向左扫描，提取单词前缀
+  // 不使用 QTextCursor::StartOfWord，因为它在某些标点后的位置行为不稳定
+  int pos = textCursor().position();
+  QString text = toPlainText();
+  int start = pos;
+  // 从光标前一个字符开始向左扫描单词字符（字母、数字、下划线）
+  while (start > 0 &&
+         (text[start - 1].isLetterOrNumber() || text[start - 1] == '_'))
+    --start;
+  QString prefix = text.mid(start, pos - start);
 
   if (prefix.isEmpty()) {
     m_completer->popup()->hide();
