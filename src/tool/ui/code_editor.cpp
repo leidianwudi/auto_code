@@ -1036,6 +1036,32 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
     }
   }
 
+  // ── Tab → 2 空格（补全弹出时由补全器优先处理，不走到这里） ──
+  if (event->key() == Qt::Key_Tab) {
+    // Shift+Tab：反向缩进
+    if (event->modifiers() & Qt::ShiftModifier) {
+      QTextCursor cursor = textCursor();
+      cursor.movePosition(QTextCursor::StartOfLine, QTextCursor::KeepAnchor);
+      QString line = cursor.selectedText();
+      // 去掉开头的 kIndentSize 个空格
+      int remove = 0;
+      while (remove < FormatCode::kIndentSize && remove < line.length() &&
+             line[remove] == QLatin1Char(' ')) {
+        ++remove;
+      }
+      if (remove > 0) {
+        cursor.beginEditBlock();
+        for (int i = 0; i < remove; ++i)
+          cursor.deleteChar();
+        cursor.endEditBlock();
+      }
+      return;
+    }
+    // Tab → 插入 2 空格
+    insertPlainText(QString(FormatCode::kIndentSize, QLatin1Char(' ')));
+    return;
+  }
+
   // ── Enter 自动缩进 ──
   if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
     // 获取光标前的当前行文本
