@@ -17,8 +17,8 @@ qt_add_executable(auto_code
     src/engine/engine_ac.cpp
     src/engine/script_parser.h
     src/engine/script_parser.cpp
-    src/engine/schema_validator.h
-    src/engine/schema_validator.cpp
+    src/engine/validator_json.h
+    src/engine/validator_json.cpp
     src/engine/handler/block_handler.h
     src/engine/handler/block_handler.cpp
     src/engine/handler/each_block_handler.h

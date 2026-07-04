@@ -23,7 +23,7 @@
 
 #include "handler/block_handler.h"
 
-class SchemaValidator;
+class ValidatorJson;
 
 /**
  * @class TemplateEngine
@@ -55,7 +55,7 @@ public:
    * @param validator Schema 校验器指针（生命周期由调用者管理）
    */
   static void setSchema(const QString &className,
-                        const SchemaValidator *validator);
+                        const ValidatorJson *validator);
 
   /**
    * @brief 清除 Schema 校验（关闭数据校验）
@@ -110,7 +110,7 @@ private:
   LogCallback m_logCallback;
 
   /// Schema 校验器（nullptr 表示不校验）
-  static const SchemaValidator *sm_validator;
+  static const ValidatorJson *sm_validator;
   /// 当前 Schema 类名
   static QString sm_schemaClass;
 };

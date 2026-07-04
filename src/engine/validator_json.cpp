@@ -1,9 +1,9 @@
 /**
- * @file schema_validator.cpp
- * @brief SchemaValidator 实现
+ * @file validator_json.cpp
+ * @brief ValidatorJson 实现
  */
 
-#include "schema_validator.h"
+#include "validator_json.h"
 
 #include <QFile>
 #include <QJsonArray>
@@ -12,7 +12,7 @@
 #include <QRegularExpression>
 
 // load — 加载 schema 定义文件
-bool SchemaValidator::load(const QString &filePath) {
+bool ValidatorJson::load(const QString &filePath) {
   // 打开文件
   QFile file(filePath);
   if (!file.open(QIODevice::ReadOnly))
@@ -68,8 +68,8 @@ bool SchemaValidator::load(const QString &filePath) {
 }
 
 // validate — 校验入口
-QString SchemaValidator::validate(const QString &className,
-                                  const QJsonObject &data) const {
+QString ValidatorJson::validate(const QString &className,
+                                const QJsonObject &data) const {
   auto it = m_classes.find(className);
   if (it == m_classes.end())
     return QStringLiteral("Schema class '%1' not defined").arg(className);
@@ -78,9 +78,9 @@ QString SchemaValidator::validate(const QString &className,
 }
 
 // validateObject — 递归校验对象
-QString SchemaValidator::validateObject(const ClassDef &def,
-                                        const QJsonObject &obj,
-                                        const QString &path) const {
+QString ValidatorJson::validateObject(const ClassDef &def,
+                                      const QJsonObject &obj,
+                                      const QString &path) const {
   // 检查是否有未定义的属性
   for (auto it = obj.begin(); it != obj.end(); ++it) {
     const QString &key = it.key();
@@ -157,9 +157,9 @@ QString SchemaValidator::validateObject(const ClassDef &def,
 }
 
 // classNames — 所有已注册类名
-QStringList SchemaValidator::classNames() const { return m_classes.keys(); }
+QStringList ValidatorJson::classNames() const { return m_classes.keys(); }
 
 // hasClass — 判断类是否已注册
-bool SchemaValidator::hasClass(const QString &className) const {
+bool ValidatorJson::hasClass(const QString &className) const {
   return m_classes.contains(className);
 }

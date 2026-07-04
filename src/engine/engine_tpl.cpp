@@ -14,7 +14,7 @@
 
 #include "function/fun_const.h"
 #include "function/fun_mgr.h"
-#include "schema_validator.h"
+#include "validator_json.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -25,14 +25,14 @@
 
 // 静态成员定义
 
-const SchemaValidator *TemplateEngine::sm_validator = nullptr;
+const ValidatorJson *TemplateEngine::sm_validator = nullptr;
 QString TemplateEngine::sm_schemaClass;
 
 TemplateEngine::TemplateEngine() : m_handlerFactory(*this) {}
 
 // setSchema — 设置 Schema 校验
 void TemplateEngine::setSchema(const QString &className,
-                               const SchemaValidator *validator) {
+                               const ValidatorJson *validator) {
   sm_schemaClass = className;
   sm_validator = validator;
 }
