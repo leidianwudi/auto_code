@@ -108,6 +108,7 @@ private:
   void onMaximizeClicked();
   void closeEvent(QCloseEvent *event) override;
   void changeEvent(QEvent *ev) override;
+  bool eventFilter(QObject *obj, QEvent *ev) override;
 #if defined(Q_OS_WIN)
   bool nativeEvent(const QByteArray &eventType, void *message,
                    qintptr *result) override;

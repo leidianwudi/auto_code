@@ -20,6 +20,7 @@
 #include <QFileInfo>
 #include <QFileInfoList>
 #include <QHBoxLayout>
+#include <QKeyEvent>
 #include <QKeySequence>
 #include <QMenu>
 #include <QMenuBar>
@@ -33,6 +34,7 @@
 #include <QTextCursor>
 #include <QToolButton>
 #include <QVBoxLayout>
+
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -222,6 +224,8 @@ void MainDevUi::setupUI() {
   m_outputPanel->setStyleSheet(
       QStringLiteral("QPlainTextEdit { background: #ffffff; color: #333333; "
                      "border: 1px solid #cccccc; }"));
+  m_outputPanel->installEventFilter(
+      this); // 监听按键事件（Backspace/Delete 清空）
 
   // ════════════════════════════════════════════════════════════
   //  右侧分割器（垂直：编辑器 + 输出面板）
@@ -523,6 +527,18 @@ void MainDevUi::appendOutput(const QString &text, bool isError) {
 
 /// @brief 清空输出面板
 void MainDevUi::clearOutput() { m_outputPanel->clear(); }
+
+/// @brief 事件过滤器 — 捕获输出面板的 Backspace/Delete 按键以清空日志
+bool MainDevUi::eventFilter(QObject *obj, QEvent *ev) {
+  if (obj == m_outputPanel && ev->type() == QEvent::KeyPress) {
+    auto *keyEv = static_cast<QKeyEvent *>(ev);
+    if (keyEv->key() == Qt::Key_Backspace || keyEv->key() == Qt::Key_Delete) {
+      clearOutput();
+      return true;
+    }
+  }
+  return QMainWindow::eventFilter(obj, ev);
+}
 
 /// @brief 刷新启动项下拉框 — 从文件树获取所有启动项并填充
 void MainDevUi::refreshStartupCombo() {
