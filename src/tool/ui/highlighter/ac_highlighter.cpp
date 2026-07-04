@@ -11,7 +11,7 @@
  * @param parent 父文档
  *
  * 初始化高亮规则，定义 AC 脚本元素的着色方案：
- * 1. 关键字（蓝色加粗）：main, for, in, if, else, call, return
+ * 1. 关键字（蓝色加粗）：let, main, for, in, if, else, call, return
  * 2. 内置函数（紫色加粗）：readJson, merge, basename, render, write, print,
  * getCheckedFiles
  * 3. 注释（灰色斜体）：// 单行注释
@@ -31,7 +31,7 @@ AcHighlighter::AcHighlighter(QTextDocument *parent)
   keywordFormat.setForeground(keyword);
   keywordFormat.setFontWeight(QFont::Bold);
   m_rules.append({QRegularExpression(QStringLiteral(
-                      "\\b(?:main|for|in|if|else|call|return)\\b")),
+                      "\\b(?:let|main|for|in|if|else|call|return)\\b")),
                   keywordFormat});
 
   // ── 2. 内置函数（紫色加粗） ──

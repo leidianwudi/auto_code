@@ -131,6 +131,8 @@ QVector<ScriptParser::Token> ScriptParser::tokenize(const QString &source) {
           tokens.append({TOK_IF, word, line});
         else if (word == QStringLiteral("else"))
           tokens.append({TOK_ELSE, word, line});
+        else if (word == QStringLiteral("let"))
+          tokens.append({TOK_LET, word, line});
         else
           tokens.append({TOK_IDENT, word, line});
       } else {
@@ -234,6 +236,12 @@ bool ScriptParser::parseStmt(Stmt &stmt) {
   if (t.type == TOK_IF) {
     stmt.kind = Stmt::kIf;
     return parseIfStmt(stmt.ifStmt);
+  }
+
+  if (t.type == TOK_LET) {
+    advance(); // 消费 'let'
+    stmt.kind = Stmt::kAssign;
+    return parseAssignStmt(stmt.assign);
   }
 
   if (t.type == TOK_IDENT) {

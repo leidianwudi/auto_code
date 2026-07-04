@@ -13,6 +13,7 @@
 /// @brief 脚本解析器 — 将 main.ac 脚本解析为 AST 并解释执行
 ///
 /// 支持的语法：
+///   - 变量声明：  let name = expr
 ///   - 变量赋值：  name = expr
 ///   - 函数调用：  call("cls", "func", arg)
 ///   - for 循环：  for (var in arrayExpr) { ... }
@@ -63,6 +64,7 @@ private:
     TOK_IN,       ///< in 关键字
     TOK_IF,       ///< if 关键字
     TOK_ELSE,     ///< else 关键字
+    TOK_LET,      ///< let 关键字（变量声明）
   };
 
   /// @brief 词法单元
