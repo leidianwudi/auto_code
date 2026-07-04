@@ -1231,8 +1231,10 @@ void CodeEditor::showCompleter() {
   tc.movePosition(QTextCursor::StartOfWord, QTextCursor::KeepAnchor);
   QString prefix = tc.selectedText();
 
-  if (prefix.isEmpty())
+  if (prefix.isEmpty()) {
+    m_completer->popup()->hide();
     return;
+  }
 
   // 设置补全前缀，过滤列表
   m_completer->setCompletionPrefix(prefix);
