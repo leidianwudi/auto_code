@@ -246,6 +246,13 @@ bool ScriptParser::parseStmt(Stmt &stmt) {
                     .arg(peek().line);
       return false;
     }
+    // 变量名不能以数字开头
+    if (!peek().text.isEmpty() && peek().text[0].isDigit()) {
+      m_error =
+          QStringLiteral("variable name cannot start with a digit at line %1")
+              .arg(peek().line);
+      return false;
+    }
     // 注册为已声明变量
     m_declaredVars.insert(peek().text);
     stmt.kind = Stmt::kAssign;
