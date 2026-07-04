@@ -29,4 +29,12 @@ public:
   /// @param validationMode 传入 CodeEditor::ValidationMode 枚举值即可
   static QCompleter *createCompleter(int validationMode,
                                      QObject *parent = nullptr);
+
+  /// @brief 将 CodeEditor::ValidationMode 枚举值映射为 FileType
+  static FileType validationModeToFileType(int validationMode);
+
+  /// @brief 从 AC 脚本文本中提取所有 let 声明的变量名
+  /// @param text 编辑器全文
+  /// @return 去重后的变量名列表
+  static QStringList extractLetVariables(const QString &text);
 };

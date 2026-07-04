@@ -23,7 +23,9 @@
 #include <QRegularExpression>
 #include <QScrollBar>
 #include <QStack>
+#include <QStringListModel>
 #include <QTextBlock>
+
 
 // ──────────────────────────────────────────────────────────────
 //  构造 / 基本接口
@@ -1234,6 +1236,22 @@ void CodeEditor::showCompleter() {
   if (prefix.isEmpty()) {
     m_completer->popup()->hide();
     return;
+  }
+
+  // ── 合并静态词库 + 动态 let 变量 ──
+  GuessCode::FileType ft =
+      GuessCode::validationModeToFileType(m_validationMode);
+  QStringList words = GuessCode::getAllCompletions(ft);
+  words << GuessCode::extractLetVariables(toPlainText());
+  words.removeDuplicates();
+
+  // 更新补全模型
+  auto *model = qobject_cast<QStringListModel *>(m_completer->model());
+  if (model) {
+    model->setStringList(words);
+  } else {
+    model = new QStringListModel(words, m_completer);
+    m_completer->setModel(model);
   }
 
   // 设置补全前缀，过滤列表

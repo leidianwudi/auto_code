@@ -6,6 +6,7 @@
 #include "guess_code.h"
 #include <QCompleter>
 #include <QListView>
+#include <QRegularExpression>
 #include <QStringListModel>
 #include <QStyleFactory>
 
@@ -117,4 +118,37 @@ QCompleter *GuessCode::createCompleter(int validationMode, QObject *parent) {
     break;
   }
   return createCompleter(ft, parent);
+}
+
+// ──────────────────────────────────────────────────────────────
+//  验证模式 → 文件类型
+// ──────────────────────────────────────────────────────────────
+
+GuessCode::FileType GuessCode::validationModeToFileType(int validationMode) {
+  switch (validationMode) {
+  case 1: // CodeEditor::JsonValidation
+    return JsonFile;
+  case 2: // CodeEditor::TemplateValidation
+    return TplFile;
+  default:
+    return AcFile;
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+//  提取 let 变量
+// ──────────────────────────────────────────────────────────────
+
+QStringList GuessCode::extractLetVariables(const QString &text) {
+  QStringList vars;
+  // 匹配 "let 变量名" 或 "let 变量名 = ..."
+  static const QRegularExpression re(
+      QStringLiteral("\\blet\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\b"));
+  QRegularExpressionMatchIterator it = re.globalMatch(text);
+  while (it.hasNext()) {
+    QRegularExpressionMatch m = it.next();
+    vars << m.captured(1);
+  }
+  vars.removeDuplicates();
+  return vars;
 }
