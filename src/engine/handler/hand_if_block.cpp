@@ -1,9 +1,9 @@
 /**
- * @file if_block_handler.cpp
+ * @file hand_if_block.cpp
  * @brief 条件块处理器实现
  */
 
-#include "if_block_handler.h"
+#include "hand_if_block.h"
 #include "../engine_tpl.h"
 
 /**
@@ -41,8 +41,8 @@ static bool isTruthy(const QJsonValue &val) {
   return false; // null / undefined
 }
 
-bool IfBlockHandler::handle(const QString &block, int &pos, const QString &expr,
-                            const QJsonObject &context, QString &result) const {
+bool HandIfBlock::handle(const QString &block, int &pos, const QString &expr,
+                         const QJsonObject &context, QString &result) const {
   QString condition = expr.mid(3).trimmed();
 
   // 支持 ! 取反

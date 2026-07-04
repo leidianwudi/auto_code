@@ -1,12 +1,12 @@
 /**
- * @file each_block_handler.cpp
+ * @file hand_each_block.cpp
  * @brief 循环块处理器实现
  *
  * 处理模板中的 ${each items}...${/each} 循环语法。
  * 支持遍历 JSON 数组，为每个元素渲染循环体内容。
  */
 
-#include "each_block_handler.h"
+#include "hand_each_block.h"
 #include "../engine_tpl.h"
 
 /**
@@ -39,9 +39,8 @@
  * @param result 渲染结果输出（追加模式，每次遍历都追加渲染内容）
  * @return true 表示处理成功；false 表示未找到 ${/each} 结束标记
  */
-bool EachBlockHandler::handle(const QString &block, int &pos,
-                              const QString &expr, const QJsonObject &context,
-                              QString &result) const {
+bool HandEachBlock::handle(const QString &block, int &pos, const QString &expr,
+                           const QJsonObject &context, QString &result) const {
 
   // 步骤1: 提取循环变量名
   // 表达式格式为 "each xxx"，去掉前5个字符 "each " 得到变量名

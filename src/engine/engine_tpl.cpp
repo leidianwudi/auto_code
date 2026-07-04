@@ -7,7 +7,7 @@
  * 2. renderBlock()  — 递归扫描 ${...}，交给 HandlerFactory 创建处理器
  * 3. resolvePath()  — 嵌套属性路径解析（共享工具，供 handler 调用）
  *
- * 算术表达式求值已移至 ExpressionHandler。
+ * 算术表达式求值已移至 HandExpression。
  */
 
 #include "engine_tpl.h"

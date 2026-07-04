@@ -1,12 +1,12 @@
 /**
- * @file block_handler.cpp
+ * @file hand_block.cpp
  * @brief 模板块处理器 — 工厂实现 + 共享辅助函数
  */
 
-#include "block_handler.h"
-#include "each_block_handler.h"
-#include "expression_handler.h"
-#include "if_block_handler.h"
+#include "hand_block.h"
+#include "hand_each_block.h"
+#include "hand_expression.h"
+#include "hand_if_block.h"
 
 /**
  * @brief 查找匹配的闭合标签（支持嵌套）
@@ -83,15 +83,15 @@ ExprType HandlerFactory::detectType(const QString &expr) {
   return ExprType::Expression;
 }
 
-std::unique_ptr<BlockHandler>
+std::unique_ptr<HandBlock>
 HandlerFactory::createHandler(const QString &expr) const {
   switch (detectType(expr)) {
   case ExprType::Each:
-    return std::make_unique<EachBlockHandler>(m_engine);
+    return std::make_unique<HandEachBlock>(m_engine);
   case ExprType::If:
-    return std::make_unique<IfBlockHandler>(m_engine);
+    return std::make_unique<HandIfBlock>(m_engine);
   case ExprType::Expression:
-    return std::make_unique<ExpressionHandler>(m_engine);
+    return std::make_unique<HandExpression>(m_engine);
   }
-  return std::make_unique<ExpressionHandler>(m_engine);
+  return std::make_unique<HandExpression>(m_engine);
 }
