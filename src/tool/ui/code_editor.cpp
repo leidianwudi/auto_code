@@ -1012,11 +1012,15 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
     switch (event->key()) {
     case Qt::Key_Enter:
     case Qt::Key_Return:
-    case Qt::Key_Tab:
-      // 选中当前高亮的项
-      m_completer->activated(
-          m_completer->popup()->currentIndex().data().toString());
+    case Qt::Key_Tab: {
+      // 优先使用弹出列表中用户用方向键选中的行
+      QModelIndex idx = m_completer->popup()->currentIndex();
+      if (!idx.isValid())
+        idx = m_completer->currentIndex(); // 退回到默认第一行
+      if (idx.isValid())
+        m_completer->activated(idx.data().toString());
       return;
+    }
     case Qt::Key_Escape:
       m_completer->popup()->hide();
       return;
@@ -1053,9 +1057,15 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
   // ── 普通按键 ──
   QPlainTextEdit::keyPressEvent(event);
 
-  // ── 键入非单词字符后自动关闭补全 ──
+  // ── Backspace 后刷新补全 ──
+  if (m_completer && event->key() == Qt::Key_Backspace) {
+    showCompleter();
+  }
+
+  // ── 键入非单词字符后自动关闭补全（Backspace 已单独处理） ──
   if (m_completer && m_completer->popup()->isVisible()) {
-    if (event->text().length() != 1 || !event->text()[0].isLetterOrNumber()) {
+    if (event->key() != Qt::Key_Backspace &&
+        (event->text().length() != 1 || !event->text()[0].isLetterOrNumber())) {
       m_completer->popup()->hide();
     }
   }

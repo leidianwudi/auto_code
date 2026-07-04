@@ -67,9 +67,18 @@ QCompleter *GuessCode::createCompleter(FileType type, QObject *parent) {
   completer->setCompletionMode(QCompleter::PopupCompletion);
   completer->setFilterMode(Qt::MatchContains); // 包含匹配，更灵活
 
-  // 弹出框样式：无圆角、紧凑间距；使用 Fusion 风格避免 Windows
-  // 原生风格忽略样式表
-  auto *popupView = completer->popup();
+  // 弹出框样式：无圆角、紧凑间距
+  // 方案：创建自定义 QListView，设置 Fusion 风格 + FramelessWindowHint，
+  //       从根本上避免 Windows DWM 绘制圆角
+  auto *popupView = new QListView();
+  popupView->setWindowFlags(Qt::FramelessWindowHint | Qt::Popup);
+  popupView->setSelectionBehavior(QAbstractItemView::SelectRows);
+  popupView->setSelectionMode(QAbstractItemView::SingleSelection);
+  popupView->setFocusPolicy(Qt::NoFocus);
+  popupView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  // 设置垂直滚动条但只在需要时显示
+  popupView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
   QStyle *fusionStyle = QStyleFactory::create(QStringLiteral("Fusion"));
   if (fusionStyle)
     popupView->setStyle(fusionStyle);
@@ -78,12 +87,14 @@ QCompleter *GuessCode::createCompleter(FileType type, QObject *parent) {
                                           "  border-radius: 0px;"
                                           "  padding: 0px;"
                                           "  margin: 0px;"
-                                          "  outline: none;"
+                                          "  background: white;"
                                           "}"
                                           "QListView::item {"
                                           "  padding: 1px 4px;"
                                           "  min-height: 18px;"
                                           "}"));
+
+  completer->setPopup(popupView);
   return completer;
 }
 
