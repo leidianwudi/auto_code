@@ -9,7 +9,7 @@ main {
   });
 
   let basePath = "D:/output";
-
+  let aa = getCheckedFiles
   // 模板配置列表：[模板文件, 输出后缀]
   let templates = [
     { tpl: "1.tpl", suffix: ".ts" },    

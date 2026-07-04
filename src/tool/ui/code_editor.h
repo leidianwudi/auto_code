@@ -20,6 +20,7 @@
 class QPaintEvent;
 class QResizeEvent;
 class QWidget;
+class QCompleter;
 class AuiErrorToolTip; ///< 自定义可选中/复制的错误提示弹窗
 
 /**
@@ -89,6 +90,8 @@ private slots:
   void scheduleValidation();
   /// 执行验证
   void performValidation();
+  /// 用户选择补全项后的回调
+  void insertCompletion(const QString &completion);
 
 private:
   /// 刷新 ExtraSelection 列表（行高亮 + 括号匹配 + 错误标记）
@@ -112,12 +115,19 @@ private:
   /// @return 缩进空格数
   int calculateNewLineIndent(const QString &linePrefix) const;
 
+  /// @brief 根据验证模式初始化（或销毁）代码补全器
+  void initCompleter(ValidationMode mode);
+
+  /// @brief 弹出代码补全建议列表
+  void showCompleter();
+
   ValidationMode m_validationMode = NoValidation;
   QTimer m_validationTimer;                           ///< 防抖定时器（500ms）
   QList<QTextEdit::ExtraSelection> m_errorSelections; ///< 持久化的错误标记
   QSet<int> m_errorLines;                             ///< 有错误的行号集合
   QWidget *m_lineNumberArea;                          ///< 行号显示区域
   QPointer<AuiErrorToolTip> m_errorTooltip;           ///< 自定义错误提示弹窗
+  QCompleter *m_completer = nullptr;                  ///< 代码补全器
 
   /// 错误位置列表（用于 paintEvent 自定义绘制，避免 cursor 失效）
   struct ErrorRange {

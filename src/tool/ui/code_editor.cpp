@@ -6,8 +6,11 @@
 #include "code_editor.h"
 #include "aui_error_tool_tip.h"
 #include "format/format_code.h"
+#include "guess/guess_code.h"
 #include "src/engine/function/fun_const.h"
 #include "src/engine/script_parser.h"
+#include <QAbstractItemView>
+#include <QCompleter>
 #include <QContextMenuEvent>
 #include <QEvent>
 #include <QHelpEvent>
@@ -73,6 +76,7 @@ CodeEditor::CodeEditor(QWidget *parent)
 
 void CodeEditor::setValidationMode(ValidationMode mode) {
   m_validationMode = mode;
+  initCompleter(mode);
   performValidation(); // 立即做一次验证
 }
 
@@ -1003,6 +1007,32 @@ int CodeEditor::calculateNewLineIndent(const QString &linePrefix) const {
 }
 
 void CodeEditor::keyPressEvent(QKeyEvent *event) {
+  // ── 补全器处于弹出状态时，优先由补全器处理 ──
+  if (m_completer && m_completer->popup()->isVisible()) {
+    switch (event->key()) {
+    case Qt::Key_Enter:
+    case Qt::Key_Return:
+    case Qt::Key_Tab:
+      // 选中当前高亮的项
+      m_completer->activated(
+          m_completer->popup()->currentIndex().data().toString());
+      return;
+    case Qt::Key_Escape:
+      m_completer->popup()->hide();
+      return;
+    case Qt::Key_Up:
+    case Qt::Key_Down:
+    case Qt::Key_PageUp:
+    case Qt::Key_PageDown:
+      // 方向键让补全器自己处理
+      QPlainTextEdit::keyPressEvent(event);
+      return;
+    default:
+      break;
+    }
+  }
+
+  // ── Enter 自动缩进 ──
   if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
     // 获取光标前的当前行文本
     QTextCursor cursor = textCursor();
@@ -1013,7 +1043,6 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
 
     // 先插入换行
     QPlainTextEdit::keyPressEvent(event);
-
     // 再插入缩进空格
     if (indent > 0) {
       insertPlainText(QString(indent, QLatin1Char(' ')));
@@ -1021,7 +1050,90 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
     return;
   }
 
+  // ── 普通按键 ──
   QPlainTextEdit::keyPressEvent(event);
+
+  // ── 键入非单词字符后自动关闭补全 ──
+  if (m_completer && m_completer->popup()->isVisible()) {
+    if (event->text().length() != 1 || !event->text()[0].isLetterOrNumber()) {
+      m_completer->popup()->hide();
+    }
+  }
+
+  // ── 键入单词字符后弹出补全 ──
+  if (m_completer && event->text().length() == 1 &&
+      event->text()[0].isLetterOrNumber()) {
+    showCompleter();
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+//  代码补全
+// ──────────────────────────────────────────────────────────────
+
+void CodeEditor::initCompleter(ValidationMode mode) {
+  // 清理旧的补全器
+  if (m_completer) {
+    disconnect(m_completer, nullptr, this, nullptr);
+    m_completer->deleteLater();
+    m_completer = nullptr;
+  }
+
+  if (mode == NoValidation)
+    return;
+
+  m_completer = GuessCode::createCompleter(static_cast<int>(mode), this);
+  if (!m_completer)
+    return;
+
+  m_completer->setWidget(this);
+  connect(m_completer, QOverload<const QString &>::of(&QCompleter::activated),
+          this, &CodeEditor::insertCompletion);
+}
+
+void CodeEditor::insertCompletion(const QString &completion) {
+  QTextCursor tc = textCursor();
+  // 向左选中到单词开头（即当前正在输入的前缀）
+  tc.movePosition(QTextCursor::StartOfWord, QTextCursor::KeepAnchor);
+  tc.removeSelectedText();
+  // 插入补全后的文本
+  insertPlainText(completion);
+  // 关闭补全弹窗
+  if (m_completer)
+    m_completer->popup()->hide();
+}
+
+/// @brief 弹出补全建议列表
+static void showCompleterInternal(QCompleter *c) {
+  auto *editor = static_cast<QPlainTextEdit *>(c->widget());
+  QRect cr = editor->cursorRect();
+  cr.setWidth(c->popup()->sizeHintForColumn(0) +
+              c->popup()->verticalScrollBar()->sizeHint().width() + 20);
+  c->complete(cr);
+}
+
+void CodeEditor::showCompleter() {
+  if (!m_completer)
+    return;
+
+  // 获取光标前当前单词前缀
+  QTextCursor tc = textCursor();
+  tc.movePosition(QTextCursor::StartOfWord, QTextCursor::KeepAnchor);
+  QString prefix = tc.selectedText();
+
+  if (prefix.isEmpty())
+    return;
+
+  // 设置补全前缀，过滤列表
+  m_completer->setCompletionPrefix(prefix);
+
+  if (m_completer->completionCount() > 0) {
+    // 默认选中第一项
+    m_completer->setCurrentRow(0);
+    showCompleterInternal(m_completer);
+  } else {
+    m_completer->popup()->hide();
+  }
 }
 
 // ──────────────────────────────────────────────────────────────
