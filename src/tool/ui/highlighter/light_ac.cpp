@@ -12,7 +12,8 @@
  *
  * 初始化高亮规则，定义 AC 脚本元素的着色方案：
  * 1. 变量（绿色）：普通标识符
- * 2. 关键字（蓝色加粗）：let, main, for, in, if, else, call, return
+ * 2. 关键字（蓝色加粗）：let, main, for, in, if, else, call, return, class,
+ * function, new, this
  * 3. 内置函数（紫色加粗）：readJson, merge, basename, render, write, print,
  * getCheckedFiles
  * 4. 注释（灰色斜体）：// 单行注释
@@ -38,9 +39,10 @@ LightAc::LightAc(QTextDocument *parent) : QSyntaxHighlighter(parent) {
   QTextCharFormat keywordFormat;
   keywordFormat.setForeground(keyword);
   keywordFormat.setFontWeight(QFont::Bold);
-  m_rules.append({QRegularExpression(QStringLiteral(
-                      "\\b(?:let|main|for|in|if|else|call|return)\\b")),
-                  keywordFormat});
+  m_rules.append(
+      {QRegularExpression(QStringLiteral("\\b(?:let|main|for|in|if|else|call|"
+                                         "return|class|function|new|this)\\b")),
+       keywordFormat});
 
   // ── 2. 内置函数（紫色加粗） ──
   QTextCharFormat builtinFormat;
@@ -83,10 +85,10 @@ LightAc::LightAc(QTextDocument *parent) : QSyntaxHighlighter(parent) {
   // 使用负面前瞻排除关键字，避免 for(、if(、else( 等被误染成函数调用颜色
   QTextCharFormat callFormat;
   callFormat.setForeground(call);
-  m_rules.append(
-      {QRegularExpression(QStringLiteral(
-           "\\b(?!(?:let|main|for|in|if|else|call|return)\\b)\\w+(?=\\s*\\()")),
-       callFormat});
+  m_rules.append({QRegularExpression(QStringLiteral(
+                      "\\b(?!(?:let|main|for|in|if|else|call|return|class|"
+                      "function|new|this)\\b)\\w+(?=\\s*\\()")),
+                  callFormat});
 }
 
 /**

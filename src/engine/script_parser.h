@@ -16,11 +16,17 @@
 /// 支持的语法：
 ///   - 变量声明：  let name = expr
 ///   - 变量赋值：  name = expr（变量必须先 let 声明才能赋值）
+///   - 类定义：    class ClassName { let prop = val; function method(args) {
+///   ... } }
+///   - 实例化：    let obj = new ClassName()
+///   - 方法调用：  obj.method(args)
 ///   - 函数调用：  call("cls", "func", arg)
 ///   - for 循环：  for (var in arrayExpr) { ... }
+///   - if 条件：   if (cond) { ... } else { ... }
+///   - return 语句：return expr
 ///   - 对象字面量：{ key: val, ... }
 ///   - 数组字面量：[item, ...]
-///   - 属性访问：  obj.prop
+///   - 属性访问：  obj.prop / obj["key"]
 ///   - 字符串拼接：expr + expr
 ///
 /// 变量规则：
@@ -29,7 +35,7 @@
 ///   - for 循环变量自动视为已声明
 ///
 /// 内置函数：call / readJson / render / write / getCheckedFiles / merge /
-/// basename
+/// basename / print
 class ScriptParser {
 public:
   ScriptParser();
@@ -51,7 +57,7 @@ private:
   /// @brief 词法单元类型
   enum TokenType {
     TOK_EOF,      ///< 输入结束
-    TOK_IDENT,    ///< 标识符（变量名、函数名）
+    TOK_IDENT,    ///< 标识符（变量名、函数名、方法名）
     TOK_STRING,   ///< 字符串字面量 "hello"
     TOK_NUMBER,   ///< 数字字面量 123
     TOK_LBRACE,   ///< {
@@ -74,6 +80,11 @@ private:
     TOK_IF,       ///< if 关键字
     TOK_ELSE,     ///< else 关键字
     TOK_LET,      ///< let 关键字（变量声明）
+    TOK_CLASS,    ///< class 关键字（类定义）
+    TOK_FUNCTION, ///< function 关键字（方法定义）
+    TOK_NEW,      ///< new 关键字（实例化）
+    TOK_THIS,     ///< this 关键字（当前实例引用）
+    TOK_RETURN,   ///< return 关键字（返回值）
   };
 
   /// @brief 词法单元
@@ -103,6 +114,28 @@ private:
     QVector<Expr *> args; ///< 使用指针避免递归类型导致编译错误
   };
 
+  /// @brief 方法调用表达式：obj.method(arg1, arg2, ...)
+  struct MethodCall {
+    QString objName;      ///< 对象变量名
+    QString methodName;   ///< 方法名
+    QVector<Expr *> args; ///< 参数列表
+  };
+
+  /// @brief 方法定义：function name(params) { body }
+  struct MethodDef {
+    QString name;
+    QStringList params; ///< 参数名列表
+    Block body;         ///< 方法体
+  };
+
+  /// @brief 类定义：class Name { let prop = val; function method(args) { ... }
+  /// }
+  struct ClassDef {
+    QString name;
+    QVector<ObjectEntry> properties; ///< 类属性及其默认值
+    QVector<MethodDef> methods;      ///< 类方法
+  };
+
   /// @brief 表达式节点 — AST 中的表达式
   struct Expr {
     enum Kind {
@@ -114,6 +147,9 @@ private:
       kObject,      ///< 对象字面量 { key: val }
       kArray,       ///< 数组字面量 [item, ...]
       kFuncCall,    ///< 函数调用 name(args)
+      kMethodCall,  ///< 方法调用 obj.method(args)
+      kNewInstance, ///< new ClassName()
+      kThis,        ///< this 关键字
       kBinary,      ///< 二元运算 left op right
     } kind = kString;
     int line = 0;                    ///< 源码行号（用于错误报告）
@@ -125,6 +161,8 @@ private:
     QVector<ObjectEntry> objEntries; ///< 对象条目
     QVector<Expr *> arrItems;        ///< 数组元素（指针）
     FuncCall funcCall;               ///< 函数调用信息
+    MethodCall methodCall;           ///< 方法调用信息
+    QString className;               ///< 类名（用于 kNewInstance）
     enum BinaryOp { kAdd, kSub, kMul, kDiv } binOp = kAdd; ///< 二元运算符
     Expr *left = nullptr;                                  ///< 二元运算左子树
     Expr *right = nullptr;                                 ///< 二元运算右子树
@@ -151,7 +189,6 @@ private:
   private:
     /// @brief 深拷贝 — 递归复制所有指针成员，避免共享所有权
     void copyFrom(const Expr &other) {
-      // 拷贝基础字段
       kind = other.kind;
       line = other.line;
       strVal = other.strVal;
@@ -169,6 +206,13 @@ private:
       funcCall.name = other.funcCall.name;
       for (auto *e : other.funcCall.args)
         funcCall.args.append(e ? new Expr(*e) : nullptr);
+      // 深拷贝方法调用信息
+      methodCall.objName = other.methodCall.objName;
+      methodCall.methodName = other.methodCall.methodName;
+      for (auto *e : other.methodCall.args)
+        methodCall.args.append(e ? new Expr(*e) : nullptr);
+      // 拷贝类名
+      className = other.className;
       // 拷贝运算符和子树
       binOp = other.binOp;
       left = other.left ? new Expr(*other.left) : nullptr;
@@ -176,7 +220,6 @@ private:
     }
     /// @brief 移动构造 — 转移指针所有权，源对象指针置空
     void moveFrom(Expr &&other) {
-      // 移动基础字段
       kind = other.kind;
       line = other.line;
       strVal = std::move(other.strVal);
@@ -184,34 +227,32 @@ private:
       ident = std::move(other.ident);
       prop = std::move(other.prop);
       indexKey = std::move(other.indexKey);
-      // 移动容器（直接转移内部指针，无需深拷贝）
       objEntries = std::move(other.objEntries);
       arrItems = std::move(other.arrItems);
       funcCall = std::move(other.funcCall);
-      // 转移树指针所有权
+      methodCall = std::move(other.methodCall);
+      className = std::move(other.className);
       binOp = other.binOp;
       left = other.left;
       right = other.right;
-      // 源对象指针置空，防止双重释放
       other.left = nullptr;
       other.right = nullptr;
     }
     /// @brief 释放所有指针成员，防止内存泄漏
     void freeOwned() {
-      // 释放对象条目中的值指针
       for (auto &e : objEntries) {
         delete e.value;
         e.value = nullptr;
       }
-      // 释放数组元素指针
       for (auto *e : arrItems)
         delete e;
       arrItems.clear();
-      // 释放函数调用参数指针
       for (auto *e : funcCall.args)
         delete e;
       funcCall.args.clear();
-      // 释放子树指针
+      for (auto *e : methodCall.args)
+        delete e;
+      methodCall.args.clear();
       delete left;
       left = nullptr;
       delete right;
@@ -226,9 +267,10 @@ private:
     Expr args;
   };
 
-  /// @brief 赋值语句：name = expr
+  /// @brief 赋值语句：name = expr 或 this.prop = expr
   struct AssignStmt {
-    QString name;
+    QString name;     ///< 变量名（thisProp 为空时有效）
+    QString thisProp; ///< this 属性名（非空时表示 this.thisProp = val）
     Expr value;
   };
 
@@ -254,15 +296,26 @@ private:
     bool hasElse = false;
   };
 
-  /// @brief 语句 — 包含调用、赋值、循环三种类型
+  /// @brief 语句 — 包含调用、赋值、类定义、循环、条件、返回等类型
   struct Stmt {
-    enum Kind { kCall, kAssign, kIndexAssign, kFor, kIf, kExpr } kind = kCall;
+    enum Kind {
+      kCall,
+      kAssign,
+      kIndexAssign,
+      kFor,
+      kIf,
+      kExpr,
+      kClassDef,
+      kReturn
+    } kind = kCall;
     CallStmt call;
     AssignStmt assign;
     IndexAssignStmt indexAssign;
     ForStmt forStmt;
     IfStmt ifStmt;
     Expr exprStmt;
+    ClassDef classDef;
+    Expr returnValue;
   };
 
   // ── 词法分析 ──
@@ -282,6 +335,8 @@ private:
   bool parseIndexAssignStmt(IndexAssignStmt &ias);
   bool parseForStmt(ForStmt &fs);
   bool parseIfStmt(IfStmt &is);
+  bool parseClassDef(ClassDef &cd);
+  bool parseReturnStmt(Expr &retVal);
   bool parseExpr(Expr &expr);
   bool parseAddSub(Expr &expr);
   bool parseMulDiv(Expr &expr);
@@ -289,15 +344,24 @@ private:
   bool parseObject(Expr &expr);
   bool parseArray(Expr &expr);
   bool parseFuncCall(const QString &name, Expr &expr);
+  bool parseMethodCallTail(const QString &objName, Expr &expr);
+  bool parseMethodDef(MethodDef &md);
 
   // ── 解释执行 ──
   QJsonValue evalExpr(const Expr &expr);
+  QJsonValue evalExprWithThis(const Expr &expr, const QJsonObject &thisObj);
   QJsonValue evalBinary(const Expr &expr);
   QJsonValue callBuiltin(const QString &name, const QVector<Expr *> &args);
   QJsonValue callFunMgr(const QString &cls, const QString &func,
                         const QJsonValue &args);
   void execStmt(const Stmt &stmt);
   void execBlock(const Block &block);
+  void execBlockWithThis(const Block &block, const QJsonObject &thisObj,
+                         QJsonValue &returnVal);
+
+  // ── 类方法执行 ──
+  QJsonValue execMethod(const MethodDef &method, const QJsonObject &thisObj,
+                        const QJsonValue &callArgs);
 
 public:
   // ── 未声明标识符验证 ──
@@ -322,6 +386,13 @@ private:
   QHash<QString, QJsonValue> m_vars;    ///< 局部变量表
   QHash<QString, QJsonValue> m_globals; ///< 全局变量表
   QSet<QString> m_declaredVars;         ///< 已用 let 声明的变量名
-  QStringList m_generatedFiles;         ///< 本次执行生成的文件列表
-  LogCallback m_logCallback;            ///< 日志回调
+  QHash<QString, ClassDef> m_classes;   ///< 类定义表（类名 → ClassDef）
+  QHash<QString, QJsonObject>
+      m_instances; ///< 实例标识表（变量名 → 实例对象，用于跟踪 __class__）
+  QJsonObject m_currentThis;    ///< 当前方法调用的 this 对象
+  QJsonObject m_modifiedThis;   ///< execMethod 执行后修改过的 this 对象
+  bool m_hasReturned = false;   ///< return 语句是否已执行
+  QJsonValue m_returnValue;     ///< return 语句的返回值
+  QStringList m_generatedFiles; ///< 本次执行生成的文件列表
+  LogCallback m_logCallback;    ///< 日志回调
 };

@@ -45,8 +45,90 @@ main {
     }
   }
 
+  // ── 类与对象测试 ──
+
+  // 定义嵌套类：Engine 作为 Car 的属性
+  class Engine {
+    let type = "V8";
+    let horsepower = 400;
+
+    function start() {
+      print("Engine " + type + " started, horsepower: " + horsepower);
+    }
+
+    function getInfo() {
+      return type + " (" + horsepower + "hp)";
+    }
+  }
+
+  class Car {
+    let brand = "Tesla";
+    let engine = new Engine();
+    let year = 2024;
+
+    function drive(speed) {
+      engine.start();
+      print(brand + " is driving at " + speed + " km/h");
+    }
+
+    function getDetails() {
+      let info = engine.getInfo();
+      return brand + " " + year + " with engine: " + info;
+    }
+  }
+
+  // 测试类实例化和方法调用
+  let myEngine = new Engine();
+  myEngine.start();
+  let engineInfo = myEngine.getInfo();
+  print("Engine info: " + engineInfo);
+
+  // 测试嵌套类属性和返回值
+  let myCar = new Car();
+  myCar.drive(120);
+  let details = myCar.getDetails();
+  print("Car details: " + details);
+
+  // 测试 this 关键字
+  class Person {
+    let name = "default";
+    let age = 0;
+
+    function setName(n) {
+      this.name = n;
+    }
+
+    function setAge(a) {
+      this.age = a;
+    }
+
+    function introduce() {
+      return "Hi, I'm " + this.name + ", " + this.age + " years old";
+    }
+  }
+
+  let person = new Person();
+  person.setName("Alice");
+  person.setAge(30);
+  let intro = person.introduce();
+  print(intro);
+
+  // 测试数组操作
+  let testArr = [1, 2, 3, 4, 5];
+  let arrSum = 0;
+  for (i in testArr) {
+    arrSum = arrSum + i;
+  }
+  print("Array sum: " + arrSum);
+
+  // 测试对象属性访问
+  let appConfig = {
+    appName: "AutoCode",
+    version: 1.0,
+    features: ["templates", "classes", "arrays"]
+  };
+  print("App: " + appConfig.appName + " v" + appConfig.version);
+
   // 断开数据库
   call("db", "disconnect");
 }
-
-

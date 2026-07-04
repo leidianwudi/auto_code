@@ -129,6 +129,12 @@ QVector<ScriptParser::Token> ScriptParser::tokenize(const QString &source) {
         int start = i;
         while (i < n && source[i].isDigit())
           ++i;
+        // 处理浮点数：小数点后必须跟数字
+        if (i + 1 < n && source[i] == '.' && source[i + 1].isDigit()) {
+          ++i; // 跳过 '.'
+          while (i < n && source[i].isDigit())
+            ++i;
+        }
         tokens.append({TOK_NUMBER, source.mid(start, i - start), line});
       } else if (c.isLetter() || c == '_') {
         int start = i;
@@ -145,6 +151,16 @@ QVector<ScriptParser::Token> ScriptParser::tokenize(const QString &source) {
           tokens.append({TOK_ELSE, word, line});
         else if (word == QStringLiteral("let"))
           tokens.append({TOK_LET, word, line});
+        else if (word == QStringLiteral("class"))
+          tokens.append({TOK_CLASS, word, line});
+        else if (word == QStringLiteral("function"))
+          tokens.append({TOK_FUNCTION, word, line});
+        else if (word == QStringLiteral("new"))
+          tokens.append({TOK_NEW, word, line});
+        else if (word == QStringLiteral("this"))
+          tokens.append({TOK_THIS, word, line});
+        else if (word == QStringLiteral("return"))
+          tokens.append({TOK_RETURN, word, line});
         else
           tokens.append({TOK_IDENT, word, line});
       } else {
@@ -234,6 +250,20 @@ bool ScriptParser::parseBlock(Block &block) {
 bool ScriptParser::parseStmt(Stmt &stmt) {
   Token t = peek();
 
+  // ── class 定义 ──
+  if (t.type == TOK_CLASS) {
+    advance();
+    stmt.kind = Stmt::kClassDef;
+    return parseClassDef(stmt.classDef);
+  }
+
+  // ── return 语句 ──
+  if (t.type == TOK_RETURN) {
+    advance();
+    stmt.kind = Stmt::kReturn;
+    return parseReturnStmt(stmt.returnValue);
+  }
+
   if (t.type == TOK_IDENT && t.text == QStringLiteral("call")) {
     advance(); // 消费 'call'
     stmt.kind = Stmt::kCall;
@@ -297,6 +327,36 @@ bool ScriptParser::parseStmt(Stmt &stmt) {
       QString name = advance().text;
       return parseFuncCall(name, stmt.exprStmt);
     }
+    // look ahead: if next is '.', it could be a method call or property access
+    if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_DOT) {
+      // 先作为表达式解析，由 parsePrimary 处理方法调用链
+      stmt.kind = Stmt::kExpr;
+      return parseExpr(stmt.exprStmt);
+    }
+  }
+
+  // ── this 关键字：this.prop = expr ──
+  if (t.type == TOK_THIS) {
+    // 必须是 this.prop = expr 形式
+    if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_DOT) {
+      advance(); // 消费 'this'
+      advance(); // 消费 '.'
+      if (peek().type != TOK_IDENT) {
+        m_error =
+            QStringLiteral("expected property name after 'this.' at line %1")
+                .arg(peek().line);
+        return false;
+      }
+      stmt.assign.thisProp = advance().text;
+      if (!expect(TOK_EQUALS, QStringLiteral("expected '=' after 'this.%1'")
+                                  .arg(stmt.assign.thisProp)))
+        return false;
+      stmt.kind = Stmt::kAssign;
+      return parseExpr(stmt.assign.value);
+    }
+    // 单独的 this 作为表达式语句
+    stmt.kind = Stmt::kExpr;
+    return parseExpr(stmt.exprStmt);
   }
 
   m_error = QStringLiteral("unexpected token '%1' at line %2")
@@ -388,6 +448,101 @@ bool ScriptParser::parseIfStmt(IfStmt &is) {
   return true;
 }
 
+// ── 类定义解析 ──
+
+/// @brief 解析 class ClassName { let prop = val; function method(args) { ... }
+/// }
+bool ScriptParser::parseClassDef(ClassDef &cd) {
+  if (peek().type != TOK_IDENT) {
+    m_error = QStringLiteral("expected class name at line %1").arg(peek().line);
+    return false;
+  }
+  cd.name = advance().text;
+
+  if (!expect(TOK_LBRACE, QStringLiteral("expected '{' after class name")))
+    return false;
+
+  while (peek().type != TOK_RBRACE && peek().type != TOK_EOF) {
+    // 属性定义：let propName = expr;
+    if (peek().type == TOK_LET) {
+      advance(); // 消费 'let'
+      if (peek().type != TOK_IDENT) {
+        m_error = QStringLiteral("expected property name in class at line %1")
+                      .arg(peek().line);
+        return false;
+      }
+      ObjectEntry prop;
+      prop.key = advance().text;
+      prop.value = new Expr();
+      if (peek().type == TOK_EQUALS) {
+        advance(); // 消费 '='
+        if (!parseExpr(*prop.value)) {
+          delete prop.value;
+          prop.value = nullptr;
+          return false;
+        }
+      }
+      cd.properties.append(prop);
+      if (peek().type == TOK_SEMI)
+        advance();
+      continue;
+    }
+
+    // 方法定义：function methodName(params) { body }
+    if (peek().type == TOK_FUNCTION) {
+      advance(); // 消费 'function'
+      MethodDef md;
+      if (!parseMethodDef(md))
+        return false;
+      cd.methods.append(md);
+      continue;
+    }
+
+    m_error = QStringLiteral("unexpected token '%1' in class body at line %2")
+                  .arg(peek().text, QString::number(peek().line));
+    return false;
+  }
+
+  return expect(TOK_RBRACE, QStringLiteral("expected '}' after class body"));
+}
+
+/// @brief 解析方法定义：methodName(params) { body }
+bool ScriptParser::parseMethodDef(MethodDef &md) {
+  if (peek().type != TOK_IDENT) {
+    m_error =
+        QStringLiteral("expected method name at line %1").arg(peek().line);
+    return false;
+  }
+  md.name = advance().text;
+
+  if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after method name")))
+    return false;
+
+  // 解析参数列表
+  while (peek().type == TOK_IDENT) {
+    md.params.append(advance().text);
+    if (peek().type == TOK_COMMA)
+      advance();
+  }
+
+  if (!expect(TOK_RPAREN, QStringLiteral("expected ')' after parameters")))
+    return false;
+
+  // 解析方法体
+  return parseBlock(md.body);
+}
+
+/// @brief 解析 return 语句：return expr;
+bool ScriptParser::parseReturnStmt(Expr &retVal) {
+  // 如果后面是 ; 或 }，说明是空 return
+  if (peek().type == TOK_SEMI || peek().type == TOK_RBRACE) {
+    retVal.kind = Expr::kNumber;
+    retVal.numVal = 0;
+    return true;
+  }
+  return parseExpr(retVal);
+}
+
 /// @brief 解析表达式入口 — 委托给 parseAddSub 实现运算符优先级
 bool ScriptParser::parseExpr(Expr &expr) { return parseAddSub(expr); }
 
@@ -451,7 +606,8 @@ bool ScriptParser::parseMulDiv(Expr &expr) {
   return true;
 }
 
-/// @brief 解析基础表达式 — 字符串/数字/标识符/对象/数组/函数调用
+/// @brief 解析基础表达式 —
+/// 字符串/数字/标识符/对象/数组/函数调用/方法调用/new/this
 bool ScriptParser::parsePrimary(Expr &expr) {
   Token t = peek();
 
@@ -481,6 +637,76 @@ bool ScriptParser::parsePrimary(Expr &expr) {
     return true;
   }
 
+  // ── this 关键字 ──
+  if (t.type == TOK_THIS) {
+    advance(); // 消费 'this'
+    // 处理 this.prop、this.method()、this["key"]
+    if (peek().type == TOK_DOT) {
+      advance(); // 消费 '.'
+      if (peek().type != TOK_IDENT) {
+        m_error =
+            QStringLiteral("expected property name after 'this.' at line %1")
+                .arg(peek().line);
+        return false;
+      }
+      QString propName = advance().text;
+      // this.method(args)
+      if (peek().type == TOK_LPAREN) {
+        expr.kind = Expr::kMethodCall;
+        expr.methodCall.objName = QStringLiteral("this");
+        expr.methodCall.methodName = propName;
+        advance(); // 消费 '('
+        while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
+          auto *arg = new Expr();
+          if (!parseExpr(*arg)) {
+            delete arg;
+            return false;
+          }
+          expr.methodCall.args.append(arg);
+          if (peek().type == TOK_COMMA)
+            advance();
+        }
+        return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
+      }
+      // this.prop
+      expr.kind = Expr::kPropAccess;
+      expr.ident = QStringLiteral("this");
+      expr.prop = propName;
+      return true;
+    }
+    // this["key"]
+    if (peek().type == TOK_LBRACKET) {
+      advance(); // 消费 '['
+      if (peek().type != TOK_STRING) {
+        m_error = QStringLiteral("expected string key in '[]' at line %1")
+                      .arg(peek().line);
+        return false;
+      }
+      expr.kind = Expr::kIndexAccess;
+      expr.ident = QStringLiteral("this");
+      expr.indexKey = advance().text;
+      return expect(TOK_RBRACKET, QStringLiteral("expected ']'"));
+    }
+    // 单独的 this
+    expr.kind = Expr::kThis;
+    return true;
+  }
+
+  // ── new 关键字：new ClassName() ──
+  if (t.type == TOK_NEW) {
+    advance();
+    if (peek().type != TOK_IDENT) {
+      m_error = QStringLiteral("expected class name after 'new' at line %1")
+                    .arg(peek().line);
+      return false;
+    }
+    expr.kind = Expr::kNewInstance;
+    expr.className = advance().text;
+    if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after class name")))
+      return false;
+    return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
+  }
+
   switch (t.type) {
   case TOK_STRING:
     expr.kind = Expr::kString;
@@ -503,15 +729,36 @@ bool ScriptParser::parsePrimary(Expr &expr) {
   case TOK_IDENT: {
     QString name = advance().text;
     if (peek().type == TOK_DOT) {
-      advance();
+      // obj.prop 或 obj.method()
+      advance(); // 消费 '.'
       if (peek().type != TOK_IDENT) {
         m_error = QStringLiteral("expected property name after '.' at line %1")
                       .arg(peek().line);
         return false;
       }
+      QString propName = advance().text;
+      // 如果后面是 '('，则是方法调用 obj.method(args)
+      if (peek().type == TOK_LPAREN) {
+        expr.kind = Expr::kMethodCall;
+        expr.methodCall.objName = name;
+        expr.methodCall.methodName = propName;
+        advance(); // 消费 '('
+        while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
+          auto *arg = new Expr();
+          if (!parseExpr(*arg)) {
+            delete arg;
+            return false;
+          }
+          expr.methodCall.args.append(arg);
+          if (peek().type == TOK_COMMA)
+            advance();
+        }
+        return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
+      }
+      // 否则是属性访问 obj.prop
       expr.kind = Expr::kPropAccess;
       expr.ident = name;
-      expr.prop = advance().text;
+      expr.prop = propName;
       return true;
     }
     if (peek().type == TOK_LPAREN) {
@@ -633,6 +880,9 @@ QJsonValue ScriptParser::evalExpr(const Expr &expr) {
   case Expr::kNumber:
     return QJsonValue(expr.numVal);
 
+  case Expr::kThis:
+    return QJsonValue(m_currentThis);
+
   case Expr::kIdent:
     if (m_vars.contains(expr.ident))
       return m_vars[expr.ident];
@@ -643,7 +893,9 @@ QJsonValue ScriptParser::evalExpr(const Expr &expr) {
 
   case Expr::kPropAccess: {
     QJsonValue obj;
-    if (m_vars.contains(expr.ident))
+    if (expr.ident == QStringLiteral("this"))
+      obj = QJsonValue(m_currentThis);
+    else if (m_vars.contains(expr.ident))
       obj = m_vars[expr.ident];
     else if (m_globals.contains(expr.ident))
       obj = m_globals[expr.ident];
@@ -666,7 +918,9 @@ QJsonValue ScriptParser::evalExpr(const Expr &expr) {
 
   case Expr::kIndexAccess: {
     QJsonValue obj;
-    if (m_vars.contains(expr.ident))
+    if (expr.ident == QStringLiteral("this"))
+      obj = QJsonValue(m_currentThis);
+    else if (m_vars.contains(expr.ident))
       obj = m_vars[expr.ident];
     else if (m_globals.contains(expr.ident))
       obj = m_globals[expr.ident];
@@ -704,11 +958,98 @@ QJsonValue ScriptParser::evalExpr(const Expr &expr) {
     return callBuiltin(expr.funcCall.name, expr.funcCall.args);
   }
 
+  case Expr::kMethodCall: {
+    // 获取对象
+    QJsonValue objVal;
+    if (expr.methodCall.objName == QStringLiteral("this"))
+      objVal = QJsonValue(m_currentThis);
+    else if (m_vars.contains(expr.methodCall.objName))
+      objVal = m_vars[expr.methodCall.objName];
+    else if (m_globals.contains(expr.methodCall.objName))
+      objVal = m_globals[expr.methodCall.objName];
+    else {
+      m_error = QStringLiteral("undefined variable '%1' in method call")
+                    .arg(expr.methodCall.objName);
+      return QJsonValue();
+    }
+
+    if (!objVal.isObject()) {
+      m_error = QStringLiteral("cannot call method on non-object '%1'")
+                    .arg(expr.methodCall.objName);
+      return QJsonValue();
+    }
+
+    QJsonObject obj = objVal.toObject();
+    QString className = obj.value(QStringLiteral("__class__")).toString();
+    if (className.isEmpty() || !m_classes.contains(className)) {
+      m_error = QStringLiteral("object '%1' has no class information")
+                    .arg(expr.methodCall.objName);
+      return QJsonValue();
+    }
+
+    const ClassDef &cd = m_classes[className];
+    // 查找方法
+    for (const auto &method : cd.methods) {
+      if (method.name == expr.methodCall.methodName) {
+        // 构建参数数组
+        QJsonArray args;
+        for (auto *argExpr : expr.methodCall.args)
+          args.append(evalExpr(*argExpr));
+        QJsonValue result = execMethod(method, obj, QJsonValue(args));
+        // 将方法中修改的 this 属性写回原变量
+        if (expr.methodCall.objName != QStringLiteral("this")) {
+          if (m_vars.contains(expr.methodCall.objName))
+            m_vars[expr.methodCall.objName] = QJsonValue(m_modifiedThis);
+          else if (m_globals.contains(expr.methodCall.objName))
+            m_globals[expr.methodCall.objName] = QJsonValue(m_modifiedThis);
+        }
+        return result;
+      }
+    }
+
+    m_error = QStringLiteral("method '%1' not found in class '%2'")
+                  .arg(expr.methodCall.methodName, className);
+    return QJsonValue();
+  }
+
+  case Expr::kNewInstance: {
+    if (!m_classes.contains(expr.className)) {
+      m_error = QStringLiteral("undefined class '%1'").arg(expr.className);
+      return QJsonValue();
+    }
+
+    const ClassDef &cd = m_classes[expr.className];
+    QJsonObject instance;
+    // 设置 __class__ 标记
+    instance[QStringLiteral("__class__")] = expr.className;
+
+    // 初始化属性（计算默认值）
+    for (const auto &prop : cd.properties) {
+      if (prop.value)
+        instance[prop.key] = evalExpr(*prop.value);
+      else
+        instance[prop.key] = QJsonValue();
+    }
+
+    return QJsonValue(instance);
+  }
+
   case Expr::kBinary:
     return evalBinary(expr);
   }
 
   return QJsonValue();
+}
+
+/// @brief 在指定 this 上下文中求值表达式
+QJsonValue ScriptParser::evalExprWithThis(const Expr &expr,
+                                          const QJsonObject &thisObj) {
+  // 保存旧的 this，设置新的 this，求值后恢复
+  QJsonObject oldThis = m_currentThis;
+  m_currentThis = thisObj;
+  QJsonValue result = evalExpr(expr);
+  m_currentThis = oldThis;
+  return result;
 }
 
 /// @brief 计算二元运算表达式
@@ -755,7 +1096,7 @@ QJsonValue ScriptParser::callFunMgr(const QString &cls, const QString &func,
 }
 
 /// @brief 执行内置函数：call / readJson / render / write / getCheckedFiles /
-/// merge / basename
+/// merge / basename / print
 QJsonValue ScriptParser::callBuiltin(const QString &name,
                                      const QVector<Expr *> &args) {
   // call("className", "funcName", args) → FunMgr::call
@@ -891,7 +1232,55 @@ QJsonValue ScriptParser::callBuiltin(const QString &name,
   return QJsonValue();
 }
 
-/// @brief 执行单条语句：调用/赋值/循环
+/// @brief 执行方法：在 this 上下文中执行方法体
+QJsonValue ScriptParser::execMethod(const MethodDef &method,
+                                    const QJsonObject &thisObj,
+                                    const QJsonValue &callArgs) {
+  // 保存旧的 this 和返回状态
+  QJsonObject oldThis = m_currentThis;
+  bool oldHasReturned = m_hasReturned;
+  QJsonValue oldReturnValue = m_returnValue;
+
+  m_currentThis = thisObj;
+  m_hasReturned = false;
+  m_returnValue = QJsonValue();
+
+  // 将参数绑定到方法作用域
+  // 先保存当前变量表，创建新作用域
+  QHash<QString, QJsonValue> savedVars = m_vars;
+  m_vars.clear();
+
+  // 将 this 对象的属性也拷贝到作用域中，方便直接访问
+  // 这样方法体内可以直接用 propName 而不是 this.propName
+  for (auto it = thisObj.begin(); it != thisObj.end(); ++it)
+    m_vars[it.key()] = it.value();
+
+  // 绑定参数
+  QJsonArray argsArr = callArgs.toArray();
+  for (int i = 0; i < method.params.size(); ++i) {
+    if (i < argsArr.size())
+      m_vars[method.params[i]] = argsArr[i];
+    else
+      m_vars[method.params[i]] = QJsonValue();
+  }
+
+  // 执行方法体
+  execBlock(method.body);
+
+  QJsonValue result = m_hasReturned ? m_returnValue : QJsonValue();
+  // 保存修改后的 this 对象（用于写回调用方的变量）
+  m_modifiedThis = m_currentThis;
+
+  // 恢复变量表和 this
+  m_vars = savedVars;
+  m_currentThis = oldThis;
+  m_hasReturned = oldHasReturned;
+  m_returnValue = oldReturnValue;
+
+  return result;
+}
+
+/// @brief 执行单条语句：调用/赋值/循环/类定义/返回
 void ScriptParser::execStmt(const Stmt &stmt) {
   switch (stmt.kind) {
   case Stmt::kCall: {
@@ -906,15 +1295,39 @@ void ScriptParser::execStmt(const Stmt &stmt) {
   }
 
   case Stmt::kAssign: {
-    m_vars[stmt.assign.name] = evalExpr(stmt.assign.value);
+    QJsonValue val = evalExpr(stmt.assign.value);
+    if (!stmt.assign.thisProp.isEmpty()) {
+      // this.prop = expr — 更新 this 对象的属性
+      if (!m_currentThis.isEmpty()) {
+        QJsonObject updated = m_currentThis;
+        updated[stmt.assign.thisProp] = val;
+        m_currentThis = updated;
+      }
+    } else {
+      m_vars[stmt.assign.name] = val;
+      // 如果在方法中，同步更新 this 对象的属性
+      if (!m_currentThis.isEmpty() &&
+          m_currentThis.contains(stmt.assign.name)) {
+        QJsonObject updated = m_currentThis;
+        updated[stmt.assign.name] = val;
+        m_currentThis = updated;
+      }
+    }
     break;
   }
 
   case Stmt::kIndexAssign: {
-    QJsonValue objVal = m_vars.value(stmt.indexAssign.objName);
+    QJsonValue objVal;
+    if (stmt.indexAssign.objName == QStringLiteral("this"))
+      objVal = QJsonValue(m_currentThis);
+    else
+      objVal = m_vars.value(stmt.indexAssign.objName);
     QJsonObject obj = objVal.toObject();
     obj[stmt.indexAssign.key] = evalExpr(stmt.indexAssign.value);
-    m_vars[stmt.indexAssign.objName] = obj;
+    if (stmt.indexAssign.objName == QStringLiteral("this"))
+      m_currentThis = obj;
+    else
+      m_vars[stmt.indexAssign.objName] = obj;
     break;
   }
 
@@ -959,6 +1372,18 @@ void ScriptParser::execStmt(const Stmt &stmt) {
     evalExpr(stmt.exprStmt);
     break;
   }
+
+  case Stmt::kClassDef: {
+    // 存储类定义
+    m_classes[stmt.classDef.name] = stmt.classDef;
+    break;
+  }
+
+  case Stmt::kReturn: {
+    m_hasReturned = true;
+    m_returnValue = evalExpr(stmt.returnValue);
+    break;
+  }
   }
 }
 
@@ -968,7 +1393,22 @@ void ScriptParser::execBlock(const Block &block) {
     execStmt(stmt);
     if (!m_error.isEmpty())
       return;
+    // 如果遇到了 return 语句，停止执行后续语句
+    if (m_hasReturned)
+      return;
   }
+}
+
+/// @brief 在指定 this 上下文中执行语句块（用于方法调用）
+void ScriptParser::execBlockWithThis(const Block &block,
+                                     const QJsonObject &thisObj,
+                                     QJsonValue &returnVal) {
+  QJsonObject oldThis = m_currentThis;
+  m_currentThis = thisObj;
+  execBlock(block);
+  if (m_hasReturned)
+    returnVal = m_returnValue;
+  m_currentThis = oldThis;
 }
 
 /// @brief 解析后验证：检查 AST 中所有 kIdent 是否已用 let 声明
@@ -1005,7 +1445,6 @@ void ScriptParser::validateStmtIdents(const Stmt &stmt, QStringList &errors,
     break;
   case Stmt::kFor: {
     validateExprIdents(stmt.forStmt.arrayExpr, errors, scopeVars);
-    // for 循环变量在 body 内视为已声明
     QSet<QString> bodyScope = scopeVars;
     bodyScope.insert(stmt.forStmt.varName);
     validateBlockIdents(stmt.forStmt.body, errors, bodyScope);
@@ -1019,6 +1458,29 @@ void ScriptParser::validateStmtIdents(const Stmt &stmt, QStringList &errors,
     break;
   case Stmt::kExpr:
     validateExprIdents(stmt.exprStmt, errors, scopeVars);
+    break;
+  case Stmt::kClassDef: {
+    // 类定义属性中的默认值表达式
+    QSet<QString> classScope = scopeVars;
+    for (const auto &prop : stmt.classDef.properties) {
+      if (prop.value)
+        validateExprIdents(*prop.value, errors, classScope);
+    }
+    // 方法中可以使用 this 和类属性
+    classScope.insert(QStringLiteral("this"));
+    for (const auto &prop : stmt.classDef.properties)
+      classScope.insert(prop.key);
+    for (const auto &method : stmt.classDef.methods) {
+      QSet<QString> methodScope = classScope;
+      // 方法参数也视为已声明
+      for (const auto &param : method.params)
+        methodScope.insert(param);
+      validateBlockIdents(method.body, errors, methodScope);
+    }
+    break;
+  }
+  case Stmt::kReturn:
+    validateExprIdents(stmt.returnValue, errors, scopeVars);
     break;
   }
 }
@@ -1035,14 +1497,16 @@ void ScriptParser::validateExprIdents(const Expr &expr, QStringList &errors,
     break;
   case Expr::kPropAccess:
     // obj.prop：验证 obj 部分
-    if (!scopeVars.contains(expr.ident)) {
+    if (expr.ident != QStringLiteral("this") &&
+        !scopeVars.contains(expr.ident)) {
       errors << QStringLiteral("undefined variable '%1' at line %2")
                     .arg(expr.ident, QString::number(expr.line));
     }
     break;
   case Expr::kIndexAccess:
     // obj["key"]：验证 obj 部分
-    if (!scopeVars.contains(expr.ident)) {
+    if (expr.ident != QStringLiteral("this") &&
+        !scopeVars.contains(expr.ident)) {
       errors << QStringLiteral("undefined variable '%1' at line %2")
                     .arg(expr.ident, QString::number(expr.line));
     }
@@ -1050,6 +1514,23 @@ void ScriptParser::validateExprIdents(const Expr &expr, QStringList &errors,
   case Expr::kFuncCall:
     for (const auto *arg : expr.funcCall.args)
       validateExprIdents(*arg, errors, scopeVars);
+    break;
+  case Expr::kMethodCall:
+    // 验证对象
+    if (expr.methodCall.objName != QStringLiteral("this") &&
+        !scopeVars.contains(expr.methodCall.objName)) {
+      errors << QStringLiteral("undefined variable '%1' at line %2")
+                    .arg(expr.methodCall.objName, QString::number(expr.line));
+    }
+    // 验证参数
+    for (const auto *arg : expr.methodCall.args)
+      validateExprIdents(*arg, errors, scopeVars);
+    break;
+  case Expr::kNewInstance:
+    // 类名不需要验证（运行时检查）
+    break;
+  case Expr::kThis:
+    // this 关键字无需验证
     break;
   case Expr::kObject:
     for (const auto &entry : expr.objEntries) {
@@ -1078,6 +1559,11 @@ QJsonValue ScriptParser::execute() {
   m_error.clear();
   m_vars.clear();
   m_declaredVars.clear();
+  m_classes.clear();
+  m_instances.clear();
+  m_currentThis = QJsonObject();
+  m_hasReturned = false;
+  m_returnValue = QJsonValue();
   m_program = Block();
   // Re-parse the program from tokens
   m_pos = 0;
