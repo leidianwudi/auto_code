@@ -60,3 +60,23 @@ cmd.exe /c .trae\build.bat
 ```
 
 该脚本会自动清理 `SAFE_RM_*` 环境变量并加载 VS 开发环境。
+
+### 🔒 SAFE_RM_* 环境变量问题
+
+Trae IDE 默认启用了安全删除保护（safe-rm），会在终端注入 `SAFE_RM_*` 环境变量。但这些变量使用 bash 语法格式（`KEY=VALUE`），与 PowerShell 不兼容，导致**所有终端命令都无法执行**。
+
+**解决办法**：在项目根目录创建 `.vscode/settings.json` 或 `.trae/settings.json`，添加以下配置：
+
+```json
+{
+  "trae.safe-rm.enabled": false,
+  "terminal.integrated.env.windows": {
+    "SAFE_RM_ALLOWED_PATH": null,
+    "SAFE_RM_DENIED_PATH": null,
+    "SAFE_RM_AUTO_ADD_TEMP": null,
+    "SAFE_RM_PROTECTION_FLAG": null
+  }
+}
+```
+
+如果上述配置无效，请在 Trae IDE 的 **设置 → 扩展 → safe-rm** 中手动关闭，或通过 **命令面板（Ctrl+Shift+P）→ Preferences: Open User Settings** 搜索 `safe-rm` 禁用。
