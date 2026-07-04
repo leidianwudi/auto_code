@@ -209,6 +209,8 @@ CodeEditor *MainDevMgr::createEditorForFile(const QString &filePath) {
     new JsonHighlighter(editor->document());
   else if (filePath.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive))
     new AcHighlighter(editor->document());
+  else if (filePath.endsWith(QStringLiteral(".tpl"), Qt::CaseInsensitive))
+    new TemplateHighlighter(editor->document());
   else
     new TemplateHighlighter(editor->document());
 
@@ -249,7 +251,7 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
 
   if (filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive))
     editor->setValidationMode(CodeEditor::JsonValidation);
-  else if (!filePath.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive))
+  else if (filePath.endsWith(QStringLiteral(".tpl"), Qt::CaseInsensitive))
     editor->setValidationMode(CodeEditor::TemplateValidation);
 
   // ── 获取 / 创建面板组 ──
@@ -567,6 +569,9 @@ void MainDevMgr::onSplitRight() {
       editor->setValidationMode(CodeEditor::JsonValidation);
     } else if (filePath.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive)) {
       new AcHighlighter(editor->document());
+    } else if (filePath.endsWith(QStringLiteral(".tpl"), Qt::CaseInsensitive)) {
+      new TemplateHighlighter(editor->document());
+      editor->setValidationMode(CodeEditor::TemplateValidation);
     } else {
       new TemplateHighlighter(editor->document());
       editor->setValidationMode(CodeEditor::TemplateValidation);

@@ -175,7 +175,7 @@ void TreeDir::onItemClicked(QTreeWidgetItem *item, int column) {
       emit fileActivated(filePath);
     }
   } else {
-    // .ac 文件：直接打开
+    // .ac / .tpl 文件：直接打开
     emit fileActivated(filePath);
   }
 }
@@ -217,9 +217,10 @@ void TreeDir::addDirectoryToTree(QTreeWidgetItem *parentItem,
                                  const QString &dirPath) {
   QDir dir(dirPath);
 
-  // 文件（.ac 和 .json）
+  // 文件（.ac、.tpl 和 .json）
   QStringList nameFilters;
-  nameFilters << QStringLiteral("*.ac") << QStringLiteral("*.json");
+  nameFilters << QStringLiteral("*.ac") << QStringLiteral("*.tpl")
+              << QStringLiteral("*.json");
   QFileInfoList files = dir.entryInfoList(nameFilters, QDir::Files);
 
   int jsonCount = 0;

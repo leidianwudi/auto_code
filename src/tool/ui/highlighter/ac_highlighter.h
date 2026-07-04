@@ -2,7 +2,7 @@
  * @file ac_highlighter.h
  * @brief AC 脚本语法高亮器
  *
- * 为 main.ac 编辑器提供语法高亮，包括：
+ * 为 main.ac 脚本文件提供语法高亮，包括：
  * - 关键字（蓝色加粗）: main, for, in, if, else, call, return
  * - 内置函数（紫色加粗）: readJson, merge, basename, render, write, print,
  * getCheckedFiles
