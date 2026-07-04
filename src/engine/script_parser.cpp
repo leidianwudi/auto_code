@@ -89,6 +89,18 @@ QVector<ScriptParser::Token> ScriptParser::tokenize(const QString &source) {
       tokens.append({TOK_PLUS, QStringLiteral("+"), line});
       ++i;
       break;
+    case '-':
+      tokens.append({TOK_MINUS, QStringLiteral("-"), line});
+      ++i;
+      break;
+    case '*':
+      tokens.append({TOK_MUL, QStringLiteral("*"), line});
+      ++i;
+      break;
+    case '/':
+      tokens.append({TOK_DIV, QStringLiteral("/"), line});
+      ++i;
+      break;
     case ';':
       tokens.append({TOK_SEMI, QStringLiteral(";"), line});
       ++i;
@@ -248,8 +260,9 @@ bool ScriptParser::parseStmt(Stmt &stmt) {
     }
     // 变量名不能以数字开头
     if (!peek().text.isEmpty() && peek().text[0].isDigit()) {
-      m_error = QStringLiteral("variable name cannot start with a digit at line %1")
-                    .arg(peek().line);
+      m_error =
+          QStringLiteral("variable name cannot start with a digit at line %1")
+              .arg(peek().line);
       return false;
     }
     // 注册为已声明变量
@@ -375,12 +388,52 @@ bool ScriptParser::parseIfStmt(IfStmt &is) {
   return true;
 }
 
-/// @brief 解析表达式 — 先解析 primary，再处理 + 运算符
-bool ScriptParser::parseExpr(Expr &expr) {
+/// @brief 解析表达式入口 — 委托给 parseAddSub 实现运算符优先级
+bool ScriptParser::parseExpr(Expr &expr) { return parseAddSub(expr); }
+
+/// @brief 解析加减法（最低优先级），左结合
+bool ScriptParser::parseAddSub(Expr &expr) {
+  if (!parseMulDiv(expr))
+    return false;
+  while (peek().type == TOK_PLUS || peek().type == TOK_MINUS) {
+    Expr::BinaryOp op;
+    if (peek().type == TOK_PLUS) {
+      op = Expr::kAdd;
+      advance();
+    } else {
+      op = Expr::kSub;
+      advance();
+    }
+    Expr *left = new Expr(std::move(expr));
+    Expr *right = new Expr();
+    if (!parseMulDiv(*right)) {
+      delete left;
+      delete right;
+      return false;
+    }
+    Expr binary;
+    binary.kind = Expr::kBinary;
+    binary.binOp = op;
+    binary.left = left;
+    binary.right = right;
+    expr = std::move(binary);
+  }
+  return true;
+}
+
+/// @brief 解析乘除法（较高优先级），左结合
+bool ScriptParser::parseMulDiv(Expr &expr) {
   if (!parsePrimary(expr))
     return false;
-  while (peek().type == TOK_PLUS) {
-    advance();
+  while (peek().type == TOK_MUL || peek().type == TOK_DIV) {
+    Expr::BinaryOp op;
+    if (peek().type == TOK_MUL) {
+      op = Expr::kMul;
+      advance();
+    } else {
+      op = Expr::kDiv;
+      advance();
+    }
     Expr *left = new Expr(std::move(expr));
     Expr *right = new Expr();
     if (!parsePrimary(*right)) {
@@ -390,7 +443,7 @@ bool ScriptParser::parseExpr(Expr &expr) {
     }
     Expr binary;
     binary.kind = Expr::kBinary;
-    binary.binOp = Expr::kAdd;
+    binary.binOp = op;
     binary.left = left;
     binary.right = right;
     expr = std::move(binary);
@@ -402,6 +455,32 @@ bool ScriptParser::parseExpr(Expr &expr) {
 bool ScriptParser::parsePrimary(Expr &expr) {
   Token t = peek();
 
+  // ── 一元负号 ──
+  if (t.type == TOK_MINUS) {
+    advance();
+    // 检查后面跟的是数字 → 直接产生负数字面量
+    if (peek().type == TOK_NUMBER) {
+      expr.kind = Expr::kNumber;
+      expr.numVal = -advance().text.toDouble();
+      return true;
+    }
+    // 否则产生 0 - expr 的二元运算（处理 -x 或 -(a+b) 等情况）
+    Expr *right = new Expr();
+    if (!parsePrimary(*right)) {
+      delete right;
+      return false;
+    }
+    Expr binary;
+    binary.kind = Expr::kBinary;
+    binary.binOp = Expr::kSub;
+    binary.left = new Expr();
+    binary.left->kind = Expr::kNumber;
+    binary.left->numVal = 0;
+    binary.right = right;
+    expr = std::move(binary);
+    return true;
+  }
+
   switch (t.type) {
   case TOK_STRING:
     expr.kind = Expr::kString;
@@ -412,6 +491,14 @@ bool ScriptParser::parsePrimary(Expr &expr) {
     expr.kind = Expr::kNumber;
     expr.numVal = advance().text.toDouble();
     return true;
+
+  case TOK_LPAREN: {
+    // 括号分组 (expr)
+    advance(); // 消费 '('
+    if (!parseExpr(expr))
+      return false;
+    return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
+  }
 
   case TOK_IDENT: {
     QString name = advance().text;
@@ -589,12 +676,34 @@ QJsonValue ScriptParser::evalExpr(const Expr &expr) {
   return QJsonValue();
 }
 
-/// @brief 计算二元运算表达式（当前仅支持 + 字符串拼接）
+/// @brief 计算二元运算表达式
 QJsonValue ScriptParser::evalBinary(const Expr &expr) {
-  if (expr.binOp == Expr::kAdd) {
-    QJsonValue l = evalExpr(*expr.left);
-    QJsonValue r = evalExpr(*expr.right);
-    return QJsonValue(l.toString() + r.toString());
+  QJsonValue l = evalExpr(*expr.left);
+  QJsonValue r = evalExpr(*expr.right);
+
+  switch (expr.binOp) {
+  case Expr::kAdd: {
+    // + 支持字符串拼接和数字加法
+    // 注意：QJsonValue::toString() 在 Qt 6
+    // 中对数值类型不会自动转换（返回空字符串）， 因此必须显式用
+    // QString::number() 转换
+    if (l.isString() || r.isString()) {
+      QString ls = l.isString() ? l.toString() : QString::number(l.toDouble());
+      QString rs = r.isString() ? r.toString() : QString::number(r.toDouble());
+      return QJsonValue(ls + rs);
+    }
+    return QJsonValue(l.toDouble() + r.toDouble());
+  }
+  case Expr::kSub:
+    return QJsonValue(l.toDouble() - r.toDouble());
+  case Expr::kMul:
+    return QJsonValue(l.toDouble() * r.toDouble());
+  case Expr::kDiv:
+    if (r.toDouble() == 0.0) {
+      m_error = QStringLiteral("division by zero");
+      return QJsonValue();
+    }
+    return QJsonValue(l.toDouble() / r.toDouble());
   }
   return QJsonValue();
 }

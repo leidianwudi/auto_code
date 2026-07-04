@@ -23,6 +23,25 @@ if (fs) {
 
 Fusion 风格使用 `QPainter` 自绘所有控件，100% 遵循 `setTabTextColor`。
 
+### QJsonValue::toString() 不会转换数值（Qt 6 行为）
+
+在 Qt 6 中，`QJsonValue::toString()` **不会**将数值类型自动转为字符串，而是返回空 `QString`。
+这与 Qt 5 的行为不同（Qt 5 中 `QJsonValue(10).toString()` 返回 `"10"`）。
+
+**错误写法（依赖隐式转换）**：
+```cpp
+QJsonValue l = QJsonValue("count: ");  // String 类型
+QJsonValue r = QJsonValue(10.0);       // Double 类型
+return QJsonValue(l.toString() + r.toString()); // Qt 6 中结果是 "count: "，不是 "count: 10"！
+```
+
+**正确写法（显式转换）**：
+```cpp
+QString ls = l.isString() ? l.toString() : QString::number(l.toDouble());
+QString rs = r.isString() ? r.toString() : QString::number(r.toDouble());
+return QJsonValue(ls + rs);
+```
+
 ### 项目架构
 
 - 构建系统：CMake + Ninja

@@ -64,7 +64,10 @@ private:
     TOK_COLON,    ///< :
     TOK_DOT,      ///< .（属性访问）
     TOK_EQUALS,   ///< =（赋值）
-    TOK_PLUS,     ///< +（字符串拼接）
+    TOK_PLUS,     ///< +
+    TOK_MINUS,    ///< -
+    TOK_MUL,      ///< *
+    TOK_DIV,      ///< /
     TOK_SEMI,     ///< ;（语句结束）
     TOK_FOR,      ///< for 关键字
     TOK_IN,       ///< in 关键字
@@ -112,17 +115,17 @@ private:
       kFuncCall,   ///< 函数调用 name(args)
       kBinary,     ///< 二元运算 left op right
     } kind = kString;
-    int line = 0;                        ///< 源码行号（用于错误报告）
-    QString strVal;                      ///< 字符串值
-    double numVal = 0;                   ///< 数值
-    QString ident;                       ///< 标识符名
-    QString prop;                        ///< 属性名（用于 kPropAccess）
-    QVector<ObjectEntry> objEntries;     ///< 对象条目
-    QVector<Expr *> arrItems;            ///< 数组元素（指针）
-    FuncCall funcCall;                   ///< 函数调用信息
-    enum BinaryOp { kAdd } binOp = kAdd; ///< 二元运算符（当前仅支持 +）
-    Expr *left = nullptr;                ///< 二元运算左子树
-    Expr *right = nullptr;               ///< 二元运算右子树
+    int line = 0;                    ///< 源码行号（用于错误报告）
+    QString strVal;                  ///< 字符串值
+    double numVal = 0;               ///< 数值
+    QString ident;                   ///< 标识符名
+    QString prop;                    ///< 属性名（用于 kPropAccess）
+    QVector<ObjectEntry> objEntries; ///< 对象条目
+    QVector<Expr *> arrItems;        ///< 数组元素（指针）
+    FuncCall funcCall;               ///< 函数调用信息
+    enum BinaryOp { kAdd, kSub, kMul, kDiv } binOp = kAdd; ///< 二元运算符
+    Expr *left = nullptr;                                  ///< 二元运算左子树
+    Expr *right = nullptr;                                 ///< 二元运算右子树
 
     Expr() = default;
     Expr(const Expr &other) { copyFrom(other); }
@@ -276,6 +279,8 @@ private:
   bool parseForStmt(ForStmt &fs);
   bool parseIfStmt(IfStmt &is);
   bool parseExpr(Expr &expr);
+  bool parseAddSub(Expr &expr);
+  bool parseMulDiv(Expr &expr);
   bool parsePrimary(Expr &expr);
   bool parseObject(Expr &expr);
   bool parseArray(Expr &expr);

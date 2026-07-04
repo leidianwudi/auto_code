@@ -1,4 +1,13 @@
 main {
+  let a = 10;
+  let b = 3;
+  let sum = a + b * 2;      // 16（乘优先）
+  let result = (a + b) * 2; // 26（括号优先）
+  let neg = -a;             // -10
+  let msg = "count: " + a;  // "count: 10"（字符串拼接）
+  let msg1 = msg + "ssss111";
+  let div = a / b;          // 3.333...
+  print(msg1);
   // 连接数据库
   call("db", "connect", {
     host: "192.168.5.103",
