@@ -379,7 +379,7 @@ private:
   QString m_error;                      ///< 错误信息
   QVector<Token> m_tokens;              ///< 词法分析结果
   int m_pos = 0;                        ///< 当前 token 位置
-  QString m_scriptDir;                  ///< main.ac 所在目录
+  QString m_scriptDir;                  ///< .ac 文件所在目录
   QString m_rootDir;                    ///< 项目根目录
   QString m_jsonPath;                   ///< 当前处理的 JSON 文件路径
   Block m_program;                      ///< 解析后的 AST 根节点
