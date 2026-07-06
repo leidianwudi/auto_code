@@ -4,14 +4,15 @@
  */
 
 #include "ac_lexer.h"
-#include "../ac_language.h"
 
 #include <QHash>
 
+#include "../ac_language.h"
+
+
 /// @brief 跳过行注释（// 到行尾）
 void AcLexer::skipLineComment(const QString &source, int &pos) {
-  while (pos < source.size() && source[pos] != '\n')
-    ++pos;
+  while (pos < source.size() && source[pos] != '\n') ++pos;
 }
 
 /// @brief 关键字到 Token 类型的映射表
@@ -27,6 +28,8 @@ static const QHash<QString, TokenType> &keywordMap() {
       {QString::fromLatin1(AcKeyword::kNew), TOK_NEW},
       {QString::fromLatin1(AcKeyword::kThis), TOK_THIS},
       {QString::fromLatin1(AcKeyword::kReturn), TOK_RETURN},
+      {QString::fromLatin1(AcKeyword::kTrue), TOK_TRUE},
+      {QString::fromLatin1(AcKeyword::kFalse), TOK_FALSE},
   };
   return map;
 }
@@ -56,112 +59,108 @@ QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
     }
 
     switch (c.unicode()) {
-    case '{':
-      tokens.append({TOK_LBRACE, QStringLiteral("{"), line});
-      ++i;
-      break;
-    case '}':
-      tokens.append({TOK_RBRACE, QStringLiteral("}"), line});
-      ++i;
-      break;
-    case '(':
-      tokens.append({TOK_LPAREN, QStringLiteral("("), line});
-      ++i;
-      break;
-    case ')':
-      tokens.append({TOK_RPAREN, QStringLiteral(")"), line});
-      ++i;
-      break;
-    case '[':
-      tokens.append({TOK_LBRACKET, QStringLiteral("["), line});
-      ++i;
-      break;
-    case ']':
-      tokens.append({TOK_RBRACKET, QStringLiteral("]"), line});
-      ++i;
-      break;
-    case ',':
-      tokens.append({TOK_COMMA, QStringLiteral(","), line});
-      ++i;
-      break;
-    case ':':
-      tokens.append({TOK_COLON, QStringLiteral(":"), line});
-      ++i;
-      break;
-    case '.':
-      tokens.append({TOK_DOT, QStringLiteral("."), line});
-      ++i;
-      break;
-    case '=':
-      tokens.append({TOK_EQUALS, QStringLiteral("="), line});
-      ++i;
-      break;
-    case '+':
-      tokens.append({TOK_PLUS, QStringLiteral("+"), line});
-      ++i;
-      break;
-    case '-':
-      tokens.append({TOK_MINUS, QStringLiteral("-"), line});
-      ++i;
-      break;
-    case '*':
-      tokens.append({TOK_MUL, QStringLiteral("*"), line});
-      ++i;
-      break;
-    case '/':
-      tokens.append({TOK_DIV, QStringLiteral("/"), line});
-      ++i;
-      break;
-    case ';':
-      tokens.append({TOK_SEMI, QStringLiteral(";"), line});
-      ++i;
-      break;
-    case '"': {
-      int start = ++i;
-      while (i < n && source[i] != '"') {
-        if (source[i] == '\\' && i + 1 < n)
-          ++i;
+      case '{':
+        tokens.append({TOK_LBRACE, QStringLiteral("{"), line});
         ++i;
-      }
-      if (i >= n) {
-        error = QStringLiteral("unterminated string at line %1").arg(line);
-        return {};
-      }
-      QString val = source.mid(start, i - start);
-      val.replace(QStringLiteral("\\\""), QStringLiteral("\""));
-      val.replace(QStringLiteral("\\n"), QStringLiteral("\n"));
-      val.replace(QStringLiteral("\\\\"), QStringLiteral("\\"));
-      tokens.append({TOK_STRING, val, line});
-      ++i;
-      break;
-    }
-    default:
-      if (c.isDigit()) {
-        int start = i;
-        while (i < n && source[i].isDigit())
+        break;
+      case '}':
+        tokens.append({TOK_RBRACE, QStringLiteral("}"), line});
+        ++i;
+        break;
+      case '(':
+        tokens.append({TOK_LPAREN, QStringLiteral("("), line});
+        ++i;
+        break;
+      case ')':
+        tokens.append({TOK_RPAREN, QStringLiteral(")"), line});
+        ++i;
+        break;
+      case '[':
+        tokens.append({TOK_LBRACKET, QStringLiteral("["), line});
+        ++i;
+        break;
+      case ']':
+        tokens.append({TOK_RBRACKET, QStringLiteral("]"), line});
+        ++i;
+        break;
+      case ',':
+        tokens.append({TOK_COMMA, QStringLiteral(","), line});
+        ++i;
+        break;
+      case ':':
+        tokens.append({TOK_COLON, QStringLiteral(":"), line});
+        ++i;
+        break;
+      case '.':
+        tokens.append({TOK_DOT, QStringLiteral("."), line});
+        ++i;
+        break;
+      case '=':
+        tokens.append({TOK_EQUALS, QStringLiteral("="), line});
+        ++i;
+        break;
+      case '+':
+        tokens.append({TOK_PLUS, QStringLiteral("+"), line});
+        ++i;
+        break;
+      case '-':
+        tokens.append({TOK_MINUS, QStringLiteral("-"), line});
+        ++i;
+        break;
+      case '*':
+        tokens.append({TOK_MUL, QStringLiteral("*"), line});
+        ++i;
+        break;
+      case '/':
+        tokens.append({TOK_DIV, QStringLiteral("/"), line});
+        ++i;
+        break;
+      case ';':
+        tokens.append({TOK_SEMI, QStringLiteral(";"), line});
+        ++i;
+        break;
+      case '"': {
+        int start = ++i;
+        while (i < n && source[i] != '"') {
+          if (source[i] == '\\' && i + 1 < n) ++i;
           ++i;
-        if (i + 1 < n && source[i] == '.' && source[i + 1].isDigit()) {
-          ++i;
-          while (i < n && source[i].isDigit())
-            ++i;
         }
-        tokens.append({TOK_NUMBER, source.mid(start, i - start), line});
-      } else if (c.isLetter() || c == '_') {
-        int start = i;
-        while (i < n && (source[i].isLetterOrNumber() || source[i] == '_'))
-          ++i;
-        QString word = source.mid(start, i - start);
-        auto it = keywordMap().constFind(word);
-        if (it != keywordMap().constEnd())
-          tokens.append({*it, word, line});
-        else
-          tokens.append({TOK_IDENT, word, line});
-      } else {
-        error = QStringLiteral("unexpected character '%1' at line %2")
-                    .arg(c, QString::number(line));
-        return {};
+        if (i >= n) {
+          error = QStringLiteral("unterminated string at line %1").arg(line);
+          return {};
+        }
+        QString val = source.mid(start, i - start);
+        val.replace(QStringLiteral("\\\""), QStringLiteral("\""));
+        val.replace(QStringLiteral("\\n"), QStringLiteral("\n"));
+        val.replace(QStringLiteral("\\\\"), QStringLiteral("\\"));
+        tokens.append({TOK_STRING, val, line});
+        ++i;
+        break;
       }
-      break;
+      default:
+        if (c.isDigit()) {
+          int start = i;
+          while (i < n && source[i].isDigit()) ++i;
+          if (i + 1 < n && source[i] == '.' && source[i + 1].isDigit()) {
+            ++i;
+            while (i < n && source[i].isDigit()) ++i;
+          }
+          tokens.append({TOK_NUMBER, source.mid(start, i - start), line});
+        } else if (c.isLetter() || c == '_') {
+          int start = i;
+          while (i < n && (source[i].isLetterOrNumber() || source[i] == '_')) ++i;
+          QString word = source.mid(start, i - start);
+          auto it = keywordMap().constFind(word);
+          if (it != keywordMap().constEnd())
+            tokens.append({*it, word, line});
+          else
+            tokens.append({TOK_IDENT, word, line});
+        } else {
+          error =
+              QStringLiteral("unexpected character '%1' at line %2").arg(c, QString::number(line));
+          return {};
+        }
+        break;
     }
   }
 

@@ -16,7 +16,6 @@
 #include "../function/fun_mgr.h"
 #include "../tpl/tpl_engine.h"
 
-
 // ═════════════════════════════════════════════════════════════════════════════
 //  表达式求值
 // ═════════════════════════════════════════════════════════════════════════════
@@ -32,11 +31,13 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
     case Expr::kThis:
       return QJsonValue(m_currentThis);
 
-    case Expr::kIdent:
-      if (m_vars.contains(expr.ident)) return m_vars[expr.ident];
-      if (m_globals.contains(expr.ident)) return m_globals[expr.ident];
-      *m_error = QStringLiteral("undefined variable '%1'").arg(expr.ident);
-      return QJsonValue();
+    case Expr::kIdent: {
+      if (!containsVar(expr.ident)) {
+        *m_error = QStringLiteral("undefined variable '%1'").arg(expr.ident);
+        return QJsonValue();
+      }
+      return resolveVar(expr.ident);
+    }
 
     case Expr::kPropAccess: {
       QJsonValue obj = resolveVar(expr.ident);
@@ -147,9 +148,34 @@ QJsonValue AcInterpreter::evalBinary(const Expr &expr) {
 
 QJsonValue AcInterpreter::resolveVar(const QString &name) const {
   if (name == QString::fromLatin1(AcKeyword::kThis)) return QJsonValue(m_currentThis);
-  if (m_vars.contains(name)) return m_vars[name];
-  if (m_globals.contains(name)) return m_globals[name];
+  for (int i = m_scopeStack.size() - 1; i >= 0; --i) {
+    auto it = m_scopeStack[i].find(name);
+    if (it != m_scopeStack[i].end()) return it.value();
+  }
   return QJsonValue();
+}
+
+void AcInterpreter::setVar(const QString &name, const QJsonValue &val) {
+  for (int i = m_scopeStack.size() - 1; i >= 0; --i) {
+    if (m_scopeStack[i].contains(name)) {
+      m_scopeStack[i][name] = val;
+      return;
+    }
+  }
+  m_scopeStack.last()[name] = val;
+}
+
+void AcInterpreter::pushScope() { m_scopeStack.append(QHash<QString, QJsonValue>()); }
+
+void AcInterpreter::popScope() {
+  if (!m_scopeStack.isEmpty()) m_scopeStack.removeLast();
+}
+
+bool AcInterpreter::containsVar(const QString &name) const {
+  for (int i = m_scopeStack.size() - 1; i >= 0; --i) {
+    if (m_scopeStack[i].contains(name)) return true;
+  }
+  return false;
 }
 
 bool AcInterpreter::isTruthy(const QJsonValue &cond) {
@@ -224,10 +250,8 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
       for (auto *argExpr : expr.methodCall.args) args.append(evalExpr(*argExpr));
       QJsonValue result = execMethod(method, obj, QJsonValue(args));
       if (expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis)) {
-        if (m_vars.contains(expr.methodCall.objName))
-          m_vars[expr.methodCall.objName] = QJsonValue(m_modifiedThis);
-        else if (m_globals.contains(expr.methodCall.objName))
-          m_globals[expr.methodCall.objName] = QJsonValue(m_modifiedThis);
+        if (containsVar(expr.methodCall.objName))
+          setVar(expr.methodCall.objName, QJsonValue(m_modifiedThis));
       }
       return result;
     }
@@ -283,17 +307,13 @@ QJsonValue AcInterpreter::execMethod(const MethodDef &method, const QJsonObject 
   m_hasReturned = false;
   m_returnValue = QJsonValue();
 
-  QHash<QString, QJsonValue> savedVars = m_vars;
-  m_vars.clear();
+  pushScope();
 
-  for (auto it = thisObj.begin(); it != thisObj.end(); ++it) m_vars[it.key()] = it.value();
+  for (auto it = thisObj.begin(); it != thisObj.end(); ++it) setVar(it.key(), it.value());
 
   QJsonArray argsArr = callArgs.toArray();
   for (int i = 0; i < method.params.size(); ++i) {
-    if (i < argsArr.size())
-      m_vars[method.params[i]] = argsArr[i];
-    else
-      m_vars[method.params[i]] = QJsonValue();
+    setVar(method.params[i], i < argsArr.size() ? argsArr[i] : QJsonValue());
   }
 
   execBlock(method.body);
@@ -301,7 +321,7 @@ QJsonValue AcInterpreter::execMethod(const MethodDef &method, const QJsonObject 
   QJsonValue result = m_hasReturned ? m_returnValue : QJsonValue();
   m_modifiedThis = m_currentThis;
 
-  m_vars = savedVars;
+  popScope();
   m_currentThis = oldThis;
   m_hasReturned = oldHasReturned;
   m_returnValue = oldReturnValue;
@@ -339,7 +359,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
           m_currentThis = updated;
         }
       } else {
-        m_vars[stmt.assign.name] = val;
+        setVar(stmt.assign.name, val);
         if (!m_currentThis.isEmpty() && m_currentThis.contains(stmt.assign.name)) {
           QJsonObject updated = m_currentThis;
           updated[stmt.assign.name] = val;
@@ -356,7 +376,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       if (stmt.indexAssign.objName == QString::fromLatin1(AcKeyword::kThis))
         m_currentThis = obj;
       else
-        m_vars[stmt.indexAssign.objName] = obj;
+        setVar(stmt.indexAssign.objName, obj);
       break;
     }
 
@@ -365,18 +385,25 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       QJsonArray arr = arrVal.toArray();
       if (arr.isEmpty() && arrVal.isArray()) break;
       for (const QJsonValue &v : arr) {
-        m_vars[stmt.forStmt.varName] = v;
+        pushScope();
+        setVar(stmt.forStmt.varName, v);
         execBlock(stmt.forStmt.body);
+        popScope();
         if (!m_error->isEmpty()) return;
       }
       break;
     }
 
     case Block::Stmt::kIf:
-      if (isTruthy(evalExpr(stmt.ifStmt.condition)))
+      if (isTruthy(evalExpr(stmt.ifStmt.condition))) {
+        pushScope();
         execBlock(stmt.ifStmt.thenBlock);
-      else if (stmt.ifStmt.hasElse)
+        popScope();
+      } else if (stmt.ifStmt.hasElse) {
+        pushScope();
         execBlock(stmt.ifStmt.elseBlock);
+        popScope();
+      }
       break;
 
     case Block::Stmt::kExpr:
@@ -417,14 +444,15 @@ void AcInterpreter::execBlockWithThis(const Block &block, const QJsonObject &thi
 
 QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
   m_error = &error;
-  m_vars.clear();
-  m_globals.clear();
+  m_scopeStack.clear();
   m_classes.clear();
-  m_instances.clear();
   m_currentThis = QJsonObject();
   m_hasReturned = false;
   m_returnValue = QJsonValue();
   m_generatedFiles.clear();
+
+  // 全局作用域
+  pushScope();
 
   // 预先注册 C++ 原生类（供 new 语法创建）
   for (const auto &name : AcClass::kAll) {
@@ -519,6 +547,11 @@ void AcInterpreter::validateExprIdents(const Expr &expr, QStringList &errors,
                       .arg(expr.ident, QString::number(expr.line));
       }
       break;
+    case Expr::kBool:
+    case Expr::kString:
+    case Expr::kNumber:
+    case Expr::kThis:
+      break;
     case Expr::kPropAccess:
       if (expr.ident != QString::fromLatin1(AcKeyword::kThis) && !scopeVars.contains(expr.ident)) {
         errors << QStringLiteral("undefined variable '%1' at line %2")
@@ -543,8 +576,6 @@ void AcInterpreter::validateExprIdents(const Expr &expr, QStringList &errors,
       for (const auto *arg : expr.methodCall.args) validateExprIdents(*arg, errors, scopeVars);
       break;
     case Expr::kNewInstance:
-      break;
-    case Expr::kThis:
       break;
     case Expr::kObject:
       for (const auto &entry : expr.objEntries) {

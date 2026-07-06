@@ -131,4 +131,30 @@ main {
 
   // 断开数据库
   db.disconnect();
+
+  // ── 作用域测试 ──
+
+  let outer = 100;
+  if (true) {
+    let outer = 200;
+    let inner = 300;
+    print("inner outer: " + outer);   // 200
+    print("inner inner: " + inner);   // 300
+  }
+  print("outer after if: " + outer);  // 100（外层未被修改）
+
+  let sum = 0;
+  for (i in [1, 2, 3]) {
+    let squared = i * i;
+    sum = sum + squared;
+  }
+  print("sum of squares: " + sum);    // 14
+
+  let flag = false;
+  if (flag) {
+    print("不会执行");
+  } else {
+    let elseVar = "else block";
+    print("elseVar: " + elseVar);     // "else block"
+  }
 }

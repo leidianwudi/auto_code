@@ -470,6 +470,18 @@ bool AcParser::parsePrimary(Expr &expr) {
       expr.numVal = advance().text.toDouble();
       return true;
 
+    case TOK_TRUE:
+      expr.kind = Expr::kBool;
+      expr.boolVal = true;
+      advance();
+      return true;
+
+    case TOK_FALSE:
+      expr.kind = Expr::kBool;
+      expr.boolVal = false;
+      advance();
+      return true;
+
     case TOK_LPAREN: {
       advance();
       if (!parseExpr(expr)) return false;

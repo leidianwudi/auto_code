@@ -5,8 +5,6 @@
 
 #pragma once
 
-#include "ac_type.h"
-
 #include <QHash>
 #include <QJsonObject>
 #include <QJsonValue>
@@ -14,6 +12,8 @@
 #include <QString>
 #include <QStringList>
 #include <functional>
+
+#include "ac_type.h"
 
 class TplEngine;
 
@@ -49,13 +49,16 @@ private:
 
   // ── 辅助方法 ──
   QJsonValue resolveVar(const QString &name) const;
+  bool containsVar(const QString &name) const;
+  void setVar(const QString &name, const QJsonValue &val);
+  void pushScope();
+  void popScope();
   static bool isTruthy(const QJsonValue &cond);
 
   // ── 语句执行 ──
   void execStmt(const Block::Stmt &stmt);
   void execBlock(const Block &block);
-  void execBlockWithThis(const Block &block, const QJsonObject &thisObj,
-                         QJsonValue &returnVal);
+  void execBlockWithThis(const Block &block, const QJsonObject &thisObj, QJsonValue &returnVal);
 
   // ── 类方法执行 ──
   QJsonValue execMethod(const MethodDef &method, const QJsonObject &thisObj,
@@ -73,10 +76,8 @@ private:
   QString *m_error = nullptr;
   QString m_scriptDir;
   QString m_rootDir;
-  QHash<QString, QJsonValue> m_vars;
-  QHash<QString, QJsonValue> m_globals;
+  QVector<QHash<QString, QJsonValue>> m_scopeStack;
   QHash<QString, ClassDef> m_classes;
-  QHash<QString, QJsonObject> m_instances;
   QJsonObject m_currentThis;
   QJsonObject m_modifiedThis;
   bool m_hasReturned = false;

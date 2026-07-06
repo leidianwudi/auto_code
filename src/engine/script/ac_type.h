@@ -33,42 +33,44 @@ struct Expr;
 
 /// @brief 词法单元类型
 enum TokenType {
-  TOK_EOF,      ///< 输入结束
-  TOK_IDENT,    ///< 标识符（变量名、函数名、方法名）
-  TOK_STRING,   ///< 字符串字面量 "hello"
-  TOK_NUMBER,   ///< 数字字面量 123
-  TOK_LBRACE,   ///< {
-  TOK_RBRACE,   ///< }
-  TOK_LPAREN,   ///< (
-  TOK_RPAREN,   ///< )
-  TOK_LBRACKET, ///< [
-  TOK_RBRACKET, ///< ]
-  TOK_COMMA,    ///< ,
-  TOK_COLON,    ///< :
-  TOK_DOT,      ///< .（属性访问）
-  TOK_EQUALS,   ///< =（赋值）
-  TOK_PLUS,     ///< +
-  TOK_MINUS,    ///< -
-  TOK_MUL,      ///< *
-  TOK_DIV,      ///< /
-  TOK_SEMI,     ///< ;（语句结束）
-  TOK_FOR,      ///< for 关键字
-  TOK_IN,       ///< in 关键字
-  TOK_IF,       ///< if 关键字
-  TOK_ELSE,     ///< else 关键字
-  TOK_LET,      ///< let 关键字（变量声明）
-  TOK_CLASS,    ///< class 关键字（类定义）
-  TOK_FUNCTION, ///< function 关键字（方法定义）
-  TOK_NEW,      ///< new 关键字（实例化）
-  TOK_THIS,     ///< this 关键字（当前实例引用）
-  TOK_RETURN,   ///< return 关键字（返回值）
+  TOK_EOF,       ///< 输入结束
+  TOK_IDENT,     ///< 标识符（变量名、函数名、方法名）
+  TOK_STRING,    ///< 字符串字面量 "hello"
+  TOK_NUMBER,    ///< 数字字面量 123
+  TOK_LBRACE,    ///< {
+  TOK_RBRACE,    ///< }
+  TOK_LPAREN,    ///< (
+  TOK_RPAREN,    ///< )
+  TOK_LBRACKET,  ///< [
+  TOK_RBRACKET,  ///< ]
+  TOK_COMMA,     ///< ,
+  TOK_COLON,     ///< :
+  TOK_DOT,       ///< .（属性访问）
+  TOK_EQUALS,    ///< =（赋值）
+  TOK_PLUS,      ///< +
+  TOK_MINUS,     ///< -
+  TOK_MUL,       ///< *
+  TOK_DIV,       ///< /
+  TOK_SEMI,      ///< ;（语句结束）
+  TOK_FOR,       ///< for 关键字
+  TOK_IN,        ///< in 关键字
+  TOK_IF,        ///< if 关键字
+  TOK_ELSE,      ///< else 关键字
+  TOK_LET,       ///< let 关键字（变量声明）
+  TOK_CLASS,     ///< class 关键字（类定义）
+  TOK_FUNCTION,  ///< function 关键字（方法定义）
+  TOK_NEW,       ///< new 关键字（实例化）
+  TOK_THIS,      ///< this 关键字（当前实例引用）
+  TOK_RETURN,    ///< return 关键字（返回值）
+  TOK_TRUE,      ///< true 布尔字面量
+  TOK_FALSE,     ///< false 布尔字面量
 };
 
 /// @brief 词法单元
 struct Token {
   TokenType type = TOK_EOF;
-  QString text; ///< 原始文本
-  int line = 0; ///< 行号（用于错误报告）
+  QString text;  ///< 原始文本
+  int line = 0;  ///< 行号（用于错误报告）
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -95,9 +97,9 @@ struct FuncCall {
 
 /// @brief 方法调用表达式：obj.method(arg1, arg2, ...)
 struct MethodCall {
-  QString objName;      ///< 对象变量名
-  QString methodName;   ///< 方法名
-  QVector<Expr *> args; ///< 参数列表
+  QString objName;       ///< 对象变量名
+  QString methodName;    ///< 方法名
+  QVector<Expr *> args;  ///< 参数列表
 };
 
 /// @brief 方法定义：function name(params) { body }
@@ -113,38 +115,39 @@ struct ClassDef {
   QString name;
   QVector<ObjectEntry> properties;
   QVector<MethodDef> methods;
-  bool isNative = false; ///< 是否为 C++ 原生类（非 AC 脚本定义）
+  bool isNative = false;  ///< 是否为 C++ 原生类（非 AC 脚本定义）
 };
 
 /// @brief 表达式节点 — AST 中的表达式
 struct Expr {
   enum Kind {
-    kString,      ///< 字符串字面量
-    kNumber,      ///< 数字字面量
-    kIdent,       ///< 变量引用
-    kPropAccess,  ///< 属性访问 obj.prop
-    kIndexAccess, ///< 索引访问 obj["key"]
-    kObject,      ///< 对象字面量 { key: val }
-    kArray,       ///< 数组字面量 [item, ...]
-    kFuncCall,    ///< 函数调用 name(args)
-    kMethodCall,  ///< 方法调用 obj.method(args)
-    kNewInstance, ///< new ClassName()
-    kThis,        ///< this 关键字
-    kBinary,      ///< 二元运算 left op right
+    kString,       ///< 字符串字面量
+    kNumber,       ///< 数字字面量
+    kIdent,        ///< 变量引用
+    kPropAccess,   ///< 属性访问 obj.prop
+    kIndexAccess,  ///< 索引访问 obj["key"]
+    kObject,       ///< 对象字面量 { key: val }
+    kArray,        ///< 数组字面量 [item, ...]
+    kFuncCall,     ///< 函数调用 name(args)
+    kMethodCall,   ///< 方法调用 obj.method(args)
+    kNewInstance,  ///< new ClassName()
+    kThis,         ///< this 关键字
+    kBinary,       ///< 二元运算 left op right
+    kBool,         ///< 布尔字面量 true/false
   } kind = kString;
-  int line = 0;                    ///< 源码行号（用于错误报告）
-  QString strVal;                  ///< 字符串值
-  double numVal = 0;               ///< 数值
-  QString ident;                   ///< 标识符名
-  QString prop;                    ///< 属性名（用于 kPropAccess）
-  QString indexKey;                ///< 索引键（用于 kIndexAccess）
-  QVector<ObjectEntry> objEntries; ///< 对象条目
-  QVector<Expr *> arrItems;        ///< 数组元素（指针）
-  FuncCall funcCall;               ///< 函数调用信息
-  MethodCall methodCall;           ///< 方法调用信息
-  QString className;               ///< 类名（用于 kNewInstance）
-  QVector<Expr *>
-      constructorArgs; ///< 构造参数（用于 kNewInstance 的 native 类）
+  int line = 0;                     ///< 源码行号（用于错误报告）
+  QString strVal;                   ///< 字符串值
+  double numVal = 0;                ///< 数值
+  bool boolVal = false;             ///< 布尔值（用于 kBool）
+  QString ident;                    ///< 标识符名
+  QString prop;                     ///< 属性名（用于 kPropAccess）
+  QString indexKey;                 ///< 索引键（用于 kIndexAccess）
+  QVector<ObjectEntry> objEntries;  ///< 对象条目
+  QVector<Expr *> arrItems;         ///< 数组元素（指针）
+  FuncCall funcCall;                ///< 函数调用信息
+  MethodCall methodCall;            ///< 方法调用信息
+  QString className;                ///< 类名（用于 kNewInstance）
+  QVector<Expr *> constructorArgs;  ///< 构造参数（用于 kNewInstance 的 native 类）
   enum BinaryOp { kAdd, kSub, kMul, kDiv } binOp = kAdd;
   Expr *left = nullptr;
   Expr *right = nullptr;
@@ -174,23 +177,20 @@ private:
     line = other.line;
     strVal = other.strVal;
     numVal = other.numVal;
+    boolVal = other.boolVal;
     ident = other.ident;
     prop = other.prop;
     indexKey = other.indexKey;
     for (const auto &e : other.objEntries)
       objEntries.append({e.key, e.value ? new Expr(*e.value) : nullptr});
-    for (auto *e : other.arrItems)
-      arrItems.append(e ? new Expr(*e) : nullptr);
+    for (auto *e : other.arrItems) arrItems.append(e ? new Expr(*e) : nullptr);
     funcCall.name = other.funcCall.name;
-    for (auto *e : other.funcCall.args)
-      funcCall.args.append(e ? new Expr(*e) : nullptr);
+    for (auto *e : other.funcCall.args) funcCall.args.append(e ? new Expr(*e) : nullptr);
     methodCall.objName = other.methodCall.objName;
     methodCall.methodName = other.methodCall.methodName;
-    for (auto *e : other.methodCall.args)
-      methodCall.args.append(e ? new Expr(*e) : nullptr);
+    for (auto *e : other.methodCall.args) methodCall.args.append(e ? new Expr(*e) : nullptr);
     className = other.className;
-    for (auto *e : other.constructorArgs)
-      constructorArgs.append(e ? new Expr(*e) : nullptr);
+    for (auto *e : other.constructorArgs) constructorArgs.append(e ? new Expr(*e) : nullptr);
     binOp = other.binOp;
     left = other.left ? new Expr(*other.left) : nullptr;
     right = other.right ? new Expr(*other.right) : nullptr;
@@ -200,6 +200,7 @@ private:
     line = other.line;
     strVal = std::move(other.strVal);
     numVal = other.numVal;
+    boolVal = other.boolVal;
     ident = std::move(other.ident);
     prop = std::move(other.prop);
     indexKey = std::move(other.indexKey);
@@ -220,17 +221,13 @@ private:
       delete e.value;
       e.value = nullptr;
     }
-    for (auto *e : arrItems)
-      delete e;
+    for (auto *e : arrItems) delete e;
     arrItems.clear();
-    for (auto *e : funcCall.args)
-      delete e;
+    for (auto *e : funcCall.args) delete e;
     funcCall.args.clear();
-    for (auto *e : methodCall.args)
-      delete e;
+    for (auto *e : methodCall.args) delete e;
     methodCall.args.clear();
-    for (auto *e : constructorArgs)
-      delete e;
+    for (auto *e : constructorArgs) delete e;
     constructorArgs.clear();
     delete left;
     left = nullptr;
@@ -277,16 +274,7 @@ struct IfStmt {
 
 /// @brief 语句 — 包含调用、赋值、类定义、循环、条件、返回等类型
 struct Block::Stmt {
-  enum Kind {
-    kCall,
-    kAssign,
-    kIndexAssign,
-    kFor,
-    kIf,
-    kExpr,
-    kClassDef,
-    kReturn
-  } kind = kCall;
+  enum Kind { kCall, kAssign, kIndexAssign, kFor, kIf, kExpr, kClassDef, kReturn } kind = kCall;
   CallStmt call;
   AssignStmt assign;
   IndexAssignStmt indexAssign;
