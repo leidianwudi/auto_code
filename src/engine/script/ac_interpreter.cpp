@@ -10,7 +10,6 @@
 #include "../function/fun_mgr.h"
 #include "../tpl/tpl_engine.h"
 
-
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -42,7 +41,7 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
 
   case Expr::kPropAccess: {
     QJsonValue obj;
-    if (expr.ident == QStringLiteral("this"))
+    if (expr.ident == QString::fromLatin1(AcKeyword::kThis))
       obj = QJsonValue(m_currentThis);
     else if (m_vars.contains(expr.ident))
       obj = m_vars[expr.ident];
@@ -68,7 +67,7 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
 
   case Expr::kIndexAccess: {
     QJsonValue obj;
-    if (expr.ident == QStringLiteral("this"))
+    if (expr.ident == QString::fromLatin1(AcKeyword::kThis))
       obj = QJsonValue(m_currentThis);
     else if (m_vars.contains(expr.ident))
       obj = m_vars[expr.ident];
@@ -109,7 +108,7 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
 
   case Expr::kMethodCall: {
     QJsonValue objVal;
-    if (expr.methodCall.objName == QStringLiteral("this"))
+    if (expr.methodCall.objName == QString::fromLatin1(AcKeyword::kThis))
       objVal = QJsonValue(m_currentThis);
     else if (m_vars.contains(expr.methodCall.objName))
       objVal = m_vars[expr.methodCall.objName];
@@ -152,7 +151,7 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
         for (auto *argExpr : expr.methodCall.args)
           args.append(evalExpr(*argExpr));
         QJsonValue result = execMethod(method, obj, QJsonValue(args));
-        if (expr.methodCall.objName != QStringLiteral("this")) {
+        if (expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis)) {
           if (m_vars.contains(expr.methodCall.objName))
             m_vars[expr.methodCall.objName] = QJsonValue(m_modifiedThis);
           else if (m_globals.contains(expr.methodCall.objName))
@@ -364,13 +363,13 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
 
   case Block::Stmt::kIndexAssign: {
     QJsonValue objVal;
-    if (stmt.indexAssign.objName == QStringLiteral("this"))
+    if (stmt.indexAssign.objName == QString::fromLatin1(AcKeyword::kThis))
       objVal = QJsonValue(m_currentThis);
     else
       objVal = m_vars.value(stmt.indexAssign.objName);
     QJsonObject obj = objVal.toObject();
     obj[stmt.indexAssign.key] = evalExpr(stmt.indexAssign.value);
-    if (stmt.indexAssign.objName == QStringLiteral("this"))
+    if (stmt.indexAssign.objName == QString::fromLatin1(AcKeyword::kThis))
       m_currentThis = obj;
     else
       m_vars[stmt.indexAssign.objName] = obj;
@@ -538,7 +537,7 @@ void AcInterpreter::validateStmtIdents(const Block::Stmt &stmt,
       if (prop.value)
         validateExprIdents(*prop.value, errors, classScope);
     }
-    classScope.insert(QStringLiteral("this"));
+    classScope.insert(QString::fromLatin1(AcKeyword::kThis));
     for (const auto &prop : stmt.classDef.properties)
       classScope.insert(prop.key);
     for (const auto &method : stmt.classDef.methods) {
@@ -565,14 +564,14 @@ void AcInterpreter::validateExprIdents(const Expr &expr, QStringList &errors,
     }
     break;
   case Expr::kPropAccess:
-    if (expr.ident != QStringLiteral("this") &&
+    if (expr.ident != QString::fromLatin1(AcKeyword::kThis) &&
         !scopeVars.contains(expr.ident)) {
       errors << QStringLiteral("undefined variable '%1' at line %2")
                     .arg(expr.ident, QString::number(expr.line));
     }
     break;
   case Expr::kIndexAccess:
-    if (expr.ident != QStringLiteral("this") &&
+    if (expr.ident != QString::fromLatin1(AcKeyword::kThis) &&
         !scopeVars.contains(expr.ident)) {
       errors << QStringLiteral("undefined variable '%1' at line %2")
                     .arg(expr.ident, QString::number(expr.line));
@@ -583,7 +582,7 @@ void AcInterpreter::validateExprIdents(const Expr &expr, QStringList &errors,
       validateExprIdents(*arg, errors, scopeVars);
     break;
   case Expr::kMethodCall:
-    if (expr.methodCall.objName != QStringLiteral("this") &&
+    if (expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis) &&
         !scopeVars.contains(expr.methodCall.objName)) {
       errors << QStringLiteral("undefined variable '%1' at line %2")
                     .arg(expr.methodCall.objName, QString::number(expr.line));

@@ -4,6 +4,7 @@
  */
 
 #include "ac_lexer.h"
+#include "../ac_language.h"
 
 /// @brief 跳过行注释（// 到行尾）
 void AcLexer::skipLineComment(const QString &source, int &pos) {
@@ -131,25 +132,25 @@ QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
         while (i < n && (source[i].isLetterOrNumber() || source[i] == '_'))
           ++i;
         QString word = source.mid(start, i - start);
-        if (word == QStringLiteral("for"))
+        if (word == QString::fromLatin1(AcKeyword::kFor))
           tokens.append({TOK_FOR, word, line});
-        else if (word == QStringLiteral("in"))
+        else if (word == QString::fromLatin1(AcKeyword::kIn))
           tokens.append({TOK_IN, word, line});
-        else if (word == QStringLiteral("if"))
+        else if (word == QString::fromLatin1(AcKeyword::kIf))
           tokens.append({TOK_IF, word, line});
-        else if (word == QStringLiteral("else"))
+        else if (word == QString::fromLatin1(AcKeyword::kElse))
           tokens.append({TOK_ELSE, word, line});
-        else if (word == QStringLiteral("let"))
+        else if (word == QString::fromLatin1(AcKeyword::kLet))
           tokens.append({TOK_LET, word, line});
-        else if (word == QStringLiteral("class"))
+        else if (word == QString::fromLatin1(AcKeyword::kClass))
           tokens.append({TOK_CLASS, word, line});
-        else if (word == QStringLiteral("function"))
+        else if (word == QString::fromLatin1(AcKeyword::kFunction))
           tokens.append({TOK_FUNCTION, word, line});
-        else if (word == QStringLiteral("new"))
+        else if (word == QString::fromLatin1(AcKeyword::kNew))
           tokens.append({TOK_NEW, word, line});
-        else if (word == QStringLiteral("this"))
+        else if (word == QString::fromLatin1(AcKeyword::kThis))
           tokens.append({TOK_THIS, word, line});
-        else if (word == QStringLiteral("return"))
+        else if (word == QString::fromLatin1(AcKeyword::kReturn))
           tokens.append({TOK_RETURN, word, line});
         else
           tokens.append({TOK_IDENT, word, line});

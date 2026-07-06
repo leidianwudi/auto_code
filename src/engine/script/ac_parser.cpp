@@ -51,7 +51,8 @@ bool AcParser::parse(const QVector<Token> &tokens, Block &program,
 }
 
 bool AcParser::parseProgram(Block &block) {
-  if (peek().type == TOK_IDENT && peek().text == QStringLiteral("main"))
+  if (peek().type == TOK_IDENT &&
+      peek().text == QString::fromLatin1(AcKeyword::kMain))
     advance();
   return parseBlock(block);
 }
@@ -87,7 +88,7 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
     return parseReturnStmt(stmt.returnValue);
   }
 
-  if (t.type == TOK_IDENT && t.text == QStringLiteral("call")) {
+  if (t.type == TOK_IDENT && t.text == QString::fromLatin1(AcKeyword::kCall)) {
     advance();
     stmt.kind = Block::Stmt::kCall;
     return parseCallStmt(stmt.call);
@@ -440,7 +441,7 @@ bool AcParser::parsePrimary(Expr &expr) {
       QString propName = advance().text;
       if (peek().type == TOK_LPAREN) {
         expr.kind = Expr::kMethodCall;
-        expr.methodCall.objName = QStringLiteral("this");
+        expr.methodCall.objName = QString::fromLatin1(AcKeyword::kThis);
         expr.methodCall.methodName = propName;
         advance();
         while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
@@ -456,7 +457,7 @@ bool AcParser::parsePrimary(Expr &expr) {
         return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
       }
       expr.kind = Expr::kPropAccess;
-      expr.ident = QStringLiteral("this");
+      expr.ident = QString::fromLatin1(AcKeyword::kThis);
       expr.prop = propName;
       return true;
     }
@@ -468,7 +469,7 @@ bool AcParser::parsePrimary(Expr &expr) {
         return false;
       }
       expr.kind = Expr::kIndexAccess;
-      expr.ident = QStringLiteral("this");
+      expr.ident = QString::fromLatin1(AcKeyword::kThis);
       expr.indexKey = advance().text;
       return expect(TOK_RBRACKET, QStringLiteral("expected ']'"));
     }

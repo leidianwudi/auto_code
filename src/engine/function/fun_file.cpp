@@ -7,18 +7,19 @@
 #include "../ac_language.h"
 #include "fun_mgr.h"
 
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QString>
 #include <QTextStream>
 
 void FunFile::init() {
-  FunMgr::ins().registerFuncs(
-      QString::fromLatin1(kAcCallFile),
-      {
-          {QString::fromLatin1(AcCallFile::kRead), read},
-          {QString::fromLatin1(AcCallFile::kWrite), write},
-      });
+  FunMgr::ins().registerFuncs(QString::fromLatin1(kAcClassFile),
+                              {
+                                  {QString::fromLatin1(AcFile::kRead), read},
+                                  {QString::fromLatin1(AcFile::kWrite), write},
+                              });
 }
 
 // ============================================================================
@@ -57,6 +58,8 @@ QJsonValue FunFile::write(const QJsonArray &args) {
 
   const QString path = args[0].toString();
   const QString content = args[1].toString();
+
+  QDir().mkpath(QFileInfo(path).absolutePath());
 
   // 打开文件，只写模式
   QFile file(path);

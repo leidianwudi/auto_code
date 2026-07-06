@@ -5,7 +5,8 @@
  * 内置函数在 .ac 脚本中直接调用，无需类名前缀。例如：
  * @code
  *   renderTpl("template.tpl", {name: "world"})
- *   write("output.txt", "content")
+ *   readFile("input.txt")
+ *   writeFile("output.txt", "content")
  *   print("hello")
  *   let files = getCheckedFiles()
  *   let merged = merge({a: 1}, {b: 2})
@@ -60,9 +61,13 @@ private:
   /// @param args [0] 模板路径, [1] 数据对象
   static QJsonValue renderTpl(const QJsonArray &args);
 
-  /// 写文件，自动创建父目录
+  /// 读文件（委托 FunFile::read）
+  /// @param args [0] 文件路径
+  static QJsonValue readFile(const QJsonArray &args);
+
+  /// 写文件（委托 FunFile::write），自动创建父目录并追踪生成文件
   /// @param args [0] 文件路径, [1] 文件内容
-  static QJsonValue write(const QJsonArray &args);
+  static QJsonValue writeFile(const QJsonArray &args);
 
   /// 打印日志到 UI 输出面板
   /// @param args [0] 要打印的文本

@@ -1263,7 +1263,7 @@ void CodeEditor::showCompleter() {
   while (ctxPos > 0 && text[ctxPos - 1].isSpace())
     --ctxPos;
   if (ctxPos >= 3 &&
-      text.mid(ctxPos - 3, 3) == QString::fromLatin1(kAcKeywordNew))
+      text.mid(ctxPos - 3, 3) == QString::fromLatin1(AcKeyword::kNew))
     words << kAcClasses;
 
   words.removeDuplicates();

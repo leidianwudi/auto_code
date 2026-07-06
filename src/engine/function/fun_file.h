@@ -1,8 +1,8 @@
 /**
  * @file fun_file.h
- * @brief 文件读写函数 — 向 FunMgr 注册文件操作
+ * @brief 文件读写函数 — 向 FunMgr 注册 File 类
  *
- * 支持的子命令（通过 FunMgr::call("file", subCmd, args) 调用）：
+ * 通过 new File() 创建实例后调用：
  * - read  — 读文件   args: [filePath]
  * - write — 写文件   args: [filePath, content]
  *
@@ -10,10 +10,10 @@
  * @code
  *   FunFile::init();  // 启动时注册
  *   // 读文件
- *   QJsonValue r = FunMgr::ins().call("file", "read",
+ *   QJsonValue r = FunMgr::ins().call("File", "read",
  *       QJsonArray{"C:/data/config.json"});
  *   // 写文件
- *   FunMgr::ins().call("file", "write",
+ *   FunMgr::ins().call("File", "write",
  *       QJsonArray{"C:/data/output.txt", "Hello World"});
  * @endcode
  */

@@ -8,7 +8,6 @@
 #include "../tpl/tpl_engine.h"
 #include "fun_mgr.h"
 
-
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -32,7 +31,8 @@ void FunBuiltin::init() {
       QStringLiteral("builtin"),
       {
           {QString::fromLatin1(AcBuiltin::kRenderTpl), renderTpl},
-          {QString::fromLatin1(AcBuiltin::kWrite), write},
+          {QString::fromLatin1(AcBuiltin::kReadFile), readFile},
+          {QString::fromLatin1(AcBuiltin::kWriteFile), writeFile},
           {QString::fromLatin1(AcBuiltin::kPrint), print},
           {QString::fromLatin1(AcBuiltin::kGetCheckedFiles), getCheckedFiles},
           {QString::fromLatin1(AcBuiltin::kMerge), merge},
@@ -69,29 +69,24 @@ QJsonValue FunBuiltin::renderTpl(const QJsonArray &args) {
 }
 
 // ============================================================================
-// write — 写文件
+// readFile — 读文件（委托 FunFile::read）
 // ============================================================================
 
-QJsonValue FunBuiltin::write(const QJsonArray &args) {
-  if (args.size() < 2)
-    return QJsonValue(false);
+QJsonValue FunBuiltin::readFile(const QJsonArray &args) {
+  return FunMgr::ins().call(QStringLiteral("File"), QStringLiteral("read"),
+                            args);
+}
 
-  QString path = args[0].toString();
-  QString content = args[1].toString();
+// ============================================================================
+// writeFile — 写文件（委托 FunFile::write）
+// ============================================================================
 
-  QFileInfo fi(path);
-  QDir().mkpath(fi.absolutePath());
-
-  QFile f(path);
-  if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
-    return QJsonValue(false);
-
-  f.write(content.toUtf8());
-
-  if (s_ctx.generatedFiles)
-    s_ctx.generatedFiles->append(QDir::toNativeSeparators(path));
-
-  return QJsonValue(true);
+QJsonValue FunBuiltin::writeFile(const QJsonArray &args) {
+  QJsonValue r =
+      FunMgr::ins().call(QStringLiteral("File"), QStringLiteral("write"), args);
+  if (r.toBool(false) && s_ctx.generatedFiles && !args.isEmpty())
+    s_ctx.generatedFiles->append(QDir::toNativeSeparators(args[0].toString()));
+  return r;
 }
 
 // ============================================================================

@@ -12,6 +12,7 @@
  */
 
 #include "block_expression.h"
+#include "../../ac_language.h"
 #include "../tpl_engine.h"
 
 #include <QFileInfo>
@@ -100,7 +101,8 @@ bool BlockExpression::handle(const QString &block, int &pos,
   // === 策略 1: 循环变量 ${this} 或 ${.} ===
   // 在 each 循环体内，当前元素存储在 context["."] 中。
   // 用户可以用 ${this} 或 ${.} 引用它（两种写法等价）。
-  if (expr == QStringLiteral("this") || expr == QStringLiteral(".")) {
+  if (expr == QString::fromLatin1(AcKeyword::kThis) ||
+      expr == QStringLiteral(".")) {
     QJsonValue v = context.value(QStringLiteral("."));
     if (v.isString())
       return result += v.toString(), true;

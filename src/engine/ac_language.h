@@ -20,15 +20,40 @@
 // 零、语言关键字 — 语法高亮、补全共用
 // ═════════════════════════════════════════════════════════════════════════════
 
-/// @brief new 关键字（补全时判断上下文）
-inline constexpr const char *kAcKeywordNew = "new";
+/// @brief 语言关键字常量（代码逻辑引用，避免硬编码字符串）
+namespace AcKeyword {
+inline constexpr const char *kLet = "let";
+inline constexpr const char *kNew = "new";
+inline constexpr const char *kMain = "main";
+inline constexpr const char *kFor = "for";
+inline constexpr const char *kIn = "in";
+inline constexpr const char *kIf = "if";
+inline constexpr const char *kElse = "else";
+inline constexpr const char *kCall = "call";
+inline constexpr const char *kReturn = "return";
+inline constexpr const char *kThis = "this";
+inline constexpr const char *kTrue = "true";
+inline constexpr const char *kFalse = "false";
+inline constexpr const char *kClass = "class";
+inline constexpr const char *kFunction = "function";
+} // namespace AcKeyword
 
 /// @brief .ac 语言关键字列表（供高亮、补全使用）
 inline const QStringList kAcKeywords = {
-    QStringLiteral("let"),  QStringLiteral("new"),   QStringLiteral("main"),
-    QStringLiteral("for"),  QStringLiteral("in"),    QStringLiteral("if"),
-    QStringLiteral("else"), QStringLiteral("call"),  QStringLiteral("return"),
-    QStringLiteral("true"), QStringLiteral("false"),
+    QString::fromLatin1(AcKeyword::kLet),
+    QString::fromLatin1(AcKeyword::kNew),
+    QString::fromLatin1(AcKeyword::kMain),
+    QString::fromLatin1(AcKeyword::kFor),
+    QString::fromLatin1(AcKeyword::kIn),
+    QString::fromLatin1(AcKeyword::kIf),
+    QString::fromLatin1(AcKeyword::kElse),
+    QString::fromLatin1(AcKeyword::kCall),
+    QString::fromLatin1(AcKeyword::kReturn),
+    QString::fromLatin1(AcKeyword::kThis),
+    QString::fromLatin1(AcKeyword::kTrue),
+    QString::fromLatin1(AcKeyword::kFalse),
+    QString::fromLatin1(AcKeyword::kClass),
+    QString::fromLatin1(AcKeyword::kFunction),
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -40,10 +65,12 @@ namespace AcBuiltin {
 inline constexpr const char *kCall = "call";
 /// @brief 读取 JSON 文件：readJson("path.json") → 返回 QJsonValue
 inline constexpr const char *kReadJson = "readJson";
+/// @brief 读取文本文件：readFile("path.txt") → 返回内容
+inline constexpr const char *kReadFile = "readFile";
 /// @brief 渲染模板文件：renderTpl("template.tpl", data) → 返回渲染文本
 inline constexpr const char *kRenderTpl = "renderTpl";
-/// @brief 写入文本文件：write("path.txt", content) → 返回 bool
-inline constexpr const char *kWrite = "write";
+/// @brief 写入文本文件：writeFile("path.txt", content) → 返回 bool
+inline constexpr const char *kWriteFile = "writeFile";
 /// @brief 打印日志到控制台：print("message") → 无返回值
 inline constexpr const char *kPrint = "print";
 /// @brief 获取 tree.config 中勾选的文件列表：getCheckedFiles() → 返回字符串数组
@@ -56,10 +83,15 @@ inline constexpr const char *kBasename = "basename";
 
 /// @brief 一级函数名列表（供解析器校验、高亮、补全使用）
 inline const QStringList kAcBuiltins = {
-    QString(AcBuiltin::kCall),      QString(AcBuiltin::kReadJson),
-    QString(AcBuiltin::kRenderTpl), QString(AcBuiltin::kWrite),
-    QString(AcBuiltin::kPrint),     QString(AcBuiltin::kGetCheckedFiles),
-    QString(AcBuiltin::kMerge),     QString(AcBuiltin::kBasename),
+    QString(AcBuiltin::kCall),
+    QString(AcBuiltin::kReadJson),
+    QString(AcBuiltin::kReadFile),
+    QString(AcBuiltin::kRenderTpl),
+    QString(AcBuiltin::kWriteFile),
+    QString(AcBuiltin::kPrint),
+    QString(AcBuiltin::kGetCheckedFiles),
+    QString(AcBuiltin::kMerge),
+    QString(AcBuiltin::kBasename),
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -86,9 +118,27 @@ inline const QStringList kMethods = {
 };
 } // namespace AcDB
 
+/// @brief File 类名常量
+inline constexpr const char *kAcClassFile = "File";
+
+/// @brief File 文件类 — 方法名常量
+namespace AcFile {
+/// @brief 读文件：f.read("path.txt") → 返回内容
+inline constexpr const char *kRead = "read";
+/// @brief 写文件：f.write("path.txt", content)
+inline constexpr const char *kWrite = "write";
+
+/// @brief File 类所有方法名列表
+inline const QStringList kMethods = {
+    QString::fromLatin1(kRead),
+    QString::fromLatin1(kWrite),
+};
+} // namespace AcFile
+
 /// @brief 可实例化类名列表（供解释器注册、高亮、补全使用）
 inline const QStringList kAcClasses = {
     QString::fromLatin1(kAcClassDB),
+    QString::fromLatin1(kAcClassFile),
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -120,20 +170,3 @@ inline const QStringList kMethods = {
     QString::fromLatin1(kSubstring),   QString::fromLatin1(kReplace),
 };
 } // namespace AcCallStr
-
-/// @brief file 类名常量
-inline constexpr const char *kAcCallFile = "file";
-
-/// @brief file 文件类 — 方法名常量
-namespace AcCallFile {
-/// @brief 读文件：call("file", "read", "path.txt") → 返回内容
-inline constexpr const char *kRead = "read";
-/// @brief 写文件：call("file", "write", "path.txt", content)
-inline constexpr const char *kWrite = "write";
-
-/// @brief file 类所有方法名列表
-inline const QStringList kMethods = {
-    QString::fromLatin1(kRead),
-    QString::fromLatin1(kWrite),
-};
-} // namespace AcCallFile

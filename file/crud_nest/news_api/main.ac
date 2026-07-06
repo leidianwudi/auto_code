@@ -40,7 +40,7 @@ main {
       let result = renderTpl(cfg.tpl, combined);
       print("sss" + combined["outputPath"]);
       if (result) {
-        write(combined["outputPath"], result);
+        writeFile(combined["outputPath"], result);
       }
     }
   }
