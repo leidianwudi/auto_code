@@ -11,6 +11,7 @@
 #include <QStringListModel>
 #include <QStyleFactory>
 
+#include "../aui_style.h"
 #include "src/engine/ac_language.h"
 
 // ──────────────────────────────────────────────────────────────
@@ -73,18 +74,7 @@ QCompleter *GuessCode::createCompleter(FileType type, QObject *parent) {
 
   QStyle *fusionStyle = QStyleFactory::create(QStringLiteral("Fusion"));
   if (fusionStyle) popupView->setStyle(fusionStyle);
-  popupView->setStyleSheet(
-      QStringLiteral("QListView {"
-                     "  border: 1px solid #999;"
-                     "  border-radius: 0px;"
-                     "  padding: 0px;"
-                     "  margin: 0px;"
-                     "  background: white;"
-                     "}"
-                     "QListView::item {"
-                     "  padding: 1px 4px;"
-                     "  min-height: 18px;"
-                     "}"));
+  popupView->setStyleSheet(AuiStyle::popupListStyleSheet());
 
   completer->setPopup(popupView);
   return completer;

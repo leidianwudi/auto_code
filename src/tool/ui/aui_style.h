@@ -37,6 +37,22 @@ public:
   static QColor modifiedColor() { return QColor(0xcc, 0x33, 0x33); }
 
   // ════════════════════════════════════════════════════════════
+  //  编辑器颜色
+  // ════════════════════════════════════════════════════════════
+
+  /// 行号区域背景色（浅灰）
+  static QColor lineNumberBackground() { return QColor(Qt::lightGray).lighter(110); }
+
+  /// 当前行高亮背景色（淡黄）
+  static QColor currentLineBackground() { return QColor(Qt::yellow).lighter(180); }
+
+  /// 括号匹配高亮背景色（青色）
+  static QColor bracketMatchColor() { return QColor(0, 200, 200); }
+
+  /// 错误波浪线颜色（红色）
+  static QColor errorUnderlineColor() { return QColor(Qt::red); }
+
+  // ════════════════════════════════════════════════════════════
   //  全局样式表
   // ════════════════════════════════════════════════════════════
   /// @brief 主窗口全局样式表
@@ -50,6 +66,12 @@ public:
 
   /// QTabBar 样式表
   static QString tabBarStyleSheet();
+
+  /// 补全弹出列表样式表
+  static QString popupListStyleSheet();
+
+  /// 错误提示弹窗样式表
+  static QString errorToolTipStyleSheet();
 
 private:
   AuiStyle() = delete;

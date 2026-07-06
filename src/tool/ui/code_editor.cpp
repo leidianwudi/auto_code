@@ -23,6 +23,7 @@
 #include <QTextBlock>
 
 #include "aui_error_tool_tip.h"
+#include "aui_style.h"
 #include "format/format_code.h"
 #include "guess/guess_code.h"
 #include "src/engine/ac_language.h"
@@ -128,7 +129,7 @@ void CodeEditor::resizeEvent(QResizeEvent *event) {
 void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area) {
   QPainter painter(m_lineNumberArea);
   // 绘制行号区域背景色（浅灰）
-  painter.fillRect(area, QColor(Qt::lightGray).lighter(110));
+  painter.fillRect(area, AuiStyle::lineNumberBackground());
 
   // 计算第一个可见文本块
   QTextBlock block = firstVisibleBlock();
@@ -172,7 +173,7 @@ void CodeEditor::refreshExtraSelections() {
   // 使用淡黄色背景标记当前行，仅非只读模式下生效
   if (!isReadOnly()) {
     QTextEdit::ExtraSelection sel;
-    sel.format.setBackground(QColor(Qt::yellow).lighter(180));
+    sel.format.setBackground(AuiStyle::currentLineBackground());
     // FullWidthSelection 确保整行高亮（即使行尾有空行）
     sel.format.setProperty(QTextFormat::FullWidthSelection, true);
     sel.cursor = textCursor();
@@ -249,7 +250,7 @@ void CodeEditor::refreshExtraSelections() {
 
     // 找到匹配括号后，用青色背景高亮两个括号
     if (matchBlockPos >= 0) {
-      QColor bracketColor(0, 200, 200);
+      QColor bracketColor = AuiStyle::bracketMatchColor();
       int blockPos = cursor.block().position();
 
       // 创建高亮选区的辅助 Lambda
@@ -796,8 +797,8 @@ void CodeEditor::paintEvent(QPaintEvent *event) {
 
   // 创建画笔用于绘制超粗波浪线
   QPainter painter(viewport());
-  painter.setRenderHint(QPainter::Antialiasing);  // 启用抗锯齿，使线条平滑
-  painter.setPen(QPen(Qt::red, 1.5));             // 1.5 像素宽的红色画笔
+  painter.setRenderHint(QPainter::Antialiasing);               // 启用抗锯齿，使线条平滑
+  painter.setPen(QPen(AuiStyle::errorUnderlineColor(), 1.5));  // 1.5 像素宽的红色画笔
 
   // 步骤3: 遍历所有错误位置范围，为每个位置绘制超粗波浪线
   for (const auto &range : m_errorRanges) {
