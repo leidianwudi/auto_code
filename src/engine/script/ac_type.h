@@ -24,17 +24,6 @@
 /// @defgroup ac_type .ac 脚本类型定义
 /// @{
 
-/// @brief .ac 脚本支持的内置函数名列表
-///
-/// 解析器（AcParser）用于校验函数名是否合法，语法高亮器（LightAc）
-/// 用于确定哪些标识符应着内置函数色。新增内置函数时只需改此处。
-inline const QStringList kAcBuiltinFunctions = {
-    QStringLiteral("call"),      QStringLiteral("readJson"),
-    QStringLiteral("renderTpl"), QStringLiteral("write"),
-    QStringLiteral("print"),     QStringLiteral("getCheckedFiles"),
-    QStringLiteral("merge"),     QStringLiteral("basename"),
-};
-
 // ── 前置声明 ──
 struct Expr;
 
@@ -119,10 +108,12 @@ struct MethodDef {
 };
 
 /// @brief 类定义：class Name { let prop = val; function method(args) { ... } }
+/// 也支持 C++ 原生类（isNative=true），通过 FunMgr 路由方法调用
 struct ClassDef {
   QString name;
   QVector<ObjectEntry> properties;
   QVector<MethodDef> methods;
+  bool isNative = false; ///< 是否为 C++ 原生类（非 AC 脚本定义）
 };
 
 /// @brief 表达式节点 — AST 中的表达式
@@ -152,6 +143,8 @@ struct Expr {
   FuncCall funcCall;               ///< 函数调用信息
   MethodCall methodCall;           ///< 方法调用信息
   QString className;               ///< 类名（用于 kNewInstance）
+  QVector<Expr *>
+      constructorArgs; ///< 构造参数（用于 kNewInstance 的 native 类）
   enum BinaryOp { kAdd, kSub, kMul, kDiv } binOp = kAdd;
   Expr *left = nullptr;
   Expr *right = nullptr;
@@ -196,6 +189,8 @@ private:
     for (auto *e : other.methodCall.args)
       methodCall.args.append(e ? new Expr(*e) : nullptr);
     className = other.className;
+    for (auto *e : other.constructorArgs)
+      constructorArgs.append(e ? new Expr(*e) : nullptr);
     binOp = other.binOp;
     left = other.left ? new Expr(*other.left) : nullptr;
     right = other.right ? new Expr(*other.right) : nullptr;
@@ -213,6 +208,7 @@ private:
     funcCall = std::move(other.funcCall);
     methodCall = std::move(other.methodCall);
     className = std::move(other.className);
+    constructorArgs = std::move(other.constructorArgs);
     binOp = other.binOp;
     left = other.left;
     right = other.right;
@@ -233,6 +229,9 @@ private:
     for (auto *e : methodCall.args)
       delete e;
     methodCall.args.clear();
+    for (auto *e : constructorArgs)
+      delete e;
+    constructorArgs.clear();
     delete left;
     left = nullptr;
     delete right;

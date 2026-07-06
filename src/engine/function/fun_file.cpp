@@ -14,10 +14,10 @@
 
 void FunFile::init() {
   FunMgr::ins().registerFuncs(
-      QString::fromLatin1(FunConst::kClsFile),
+      QString::fromLatin1(AcClasses::kClsFile),
       {
-          {QString::fromLatin1(FunConst::kRead), read},
-          {QString::fromLatin1(FunConst::kWrite), write},
+          {QString::fromLatin1(AcClasses::kRead), read},
+          {QString::fromLatin1(AcClasses::kWrite), write},
       });
 }
 

@@ -5,6 +5,8 @@
 
 #include "ac_parser.h"
 
+#include "../function/fun_const.h"
+
 // ── token 操作 ──
 
 Token AcParser::peek() {
@@ -485,6 +487,20 @@ bool AcParser::parsePrimary(Expr &expr) {
     expr.className = advance().text;
     if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after class name")))
       return false;
+    // 解析构造参数列表（支持任意多个参数）
+    if (peek().type != TOK_RPAREN) {
+      do {
+        Expr *arg = new Expr();
+        if (!parseExpr(*arg)) {
+          delete arg;
+          return false;
+        }
+        expr.constructorArgs.append(arg);
+        if (peek().type != TOK_COMMA)
+          break;
+        advance();
+      } while (true);
+    }
     return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
   }
 

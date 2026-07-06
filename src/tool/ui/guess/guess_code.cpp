@@ -4,6 +4,7 @@
  */
 
 #include "guess_code.h"
+#include "src/engine/function/fun_const.h"
 #include <QCompleter>
 #include <QListView>
 #include <QRegularExpression>
@@ -16,28 +17,18 @@
 
 QStringList GuessCode::getAllCompletions(FileType type) {
   switch (type) {
-  case AcFile:
-    return {
+  case AcFile: {
+    QStringList kw = {
         // 关键字
-        QStringLiteral("let"),
-        QStringLiteral("main"),
-        QStringLiteral("for"),
-        QStringLiteral("in"),
-        QStringLiteral("if"),
-        QStringLiteral("else"),
-        QStringLiteral("call"),
-        QStringLiteral("return"),
-        QStringLiteral("true"),
-        QStringLiteral("false"),
-        // 内置函数
-        QStringLiteral("readJson"),
-        QStringLiteral("merge"),
-        QStringLiteral("basename"),
-        QStringLiteral("render"),
-        QStringLiteral("write"),
-        QStringLiteral("print"),
-        QStringLiteral("getCheckedFiles"),
+        QStringLiteral("let"),  QStringLiteral("main"),
+        QStringLiteral("for"),  QStringLiteral("in"),
+        QStringLiteral("if"),   QStringLiteral("else"),
+        QStringLiteral("call"), QStringLiteral("return"),
+        QStringLiteral("true"), QStringLiteral("false"),
     };
+    // 内置函数由 kAcBuiltinFunctions 统一定义，自动与解析器/高亮器同步
+    return kw + kAcBuiltinFunctions;
+  }
   case TplFile:
     return {
         QStringLiteral("${if "),    QStringLiteral("${else}"),

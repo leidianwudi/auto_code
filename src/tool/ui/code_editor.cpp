@@ -640,10 +640,10 @@ QStringList CodeEditor::validateTemplate() {
   // 模板引擎支持 4 个字符串方法：toLowerCase, toUpperCase, trim, capitalize
   // 检查 ${...} 中的点号分隔段，检测是否有不支持的方法名
   static const QStringList supportedMethods = {
-      QString::fromLatin1(FunConst::kToLowerCase),
-      QString::fromLatin1(FunConst::kToUpperCase),
-      QString::fromLatin1(FunConst::kTrim),
-      QString::fromLatin1(FunConst::kCapitalize)};
+      QString::fromLatin1(AcClasses::kToLowerCase),
+      QString::fromLatin1(AcClasses::kToUpperCase),
+      QString::fromLatin1(AcClasses::kTrim),
+      QString::fromLatin1(AcClasses::kCapitalize)};
   // 匹配 ${...} 中的普通表达式（排除 each/if/else//each//if 标签）
   static const QRegularExpression exprRegex(
       QStringLiteral(R"(\$\{(?!(?:each|if|else|/each|/if)\b)[^}]+\})"));

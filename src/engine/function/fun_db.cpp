@@ -3,6 +3,7 @@
  * @brief 数据库函数实现 — 通过 MySQL C API 直连 MySQL
  *
  * 直接使用 libmysql.dll（捆绑在 exe 目录），无需 ODBC 或 Qt SQL 插件。
+ * 支持多实例：每个 new DB({...}) 创建独立的 MySQL 连接。
  */
 
 #include "fun_db.h"
@@ -13,56 +14,53 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QString>
+#include <QUuid>
 
 #include <mysql.h>
 
-MYSQL *FunDb::s_conn = nullptr;
-QJsonObject FunDb::s_config;
+QHash<QString, MYSQL *> FunDb::s_connections;
+QHash<QString, QJsonObject> FunDb::s_configs;
 
 // init — 注册所有数据库函数到 FunMgr
 void FunDb::init() {
-  // 注册数据库函数,带参数
+  // 注册原生类 DB 的构造器和方法
   FunMgr::ins().registerFuncs(
-      QString::fromLatin1(FunConst::kClsDb),
-      {
-          {QString::fromLatin1(FunConst::kConnect), connectDb},
-          {QString::fromLatin1(FunConst::kTableSchema), tableSchema},
-          {QString::fromLatin1(FunConst::kQuery), query},
-      });
-  // 注册数据库函数,不带参数
-  FunMgr::ins().registerFuncs(
-      QString::fromLatin1(FunConst::kClsDb),
-      std::map<QString, FunMgr::FunPtrVoid>{
-          {QString::fromLatin1(FunConst::kDisconnect), disconnectDb},
-      });
+      QStringLiteral("DB"), {
+                                {QStringLiteral("__construct__"), constructor},
+                                {QStringLiteral("tableSchema"), tableSchema},
+                                {QStringLiteral("query"), query},
+                                {QStringLiteral("disconnect"), disconnect},
+                            });
 }
 
-// cleanup — 关闭持久连接
+// cleanup — 关闭所有连接
 void FunDb::cleanup() {
-  if (s_conn) {
-    mysql_close(s_conn);
-    s_conn = nullptr;
+  for (auto it = s_connections.begin(); it != s_connections.end(); ++it) {
+    if (it.value()) {
+      mysql_close(it.value());
+    }
   }
+  s_connections.clear();
+  s_configs.clear();
 }
 
-// getConnection — 获取持久连接
-MYSQL *FunDb::getConnection() { return s_conn; }
+// getConnection — 根据实例对象获取连接
+MYSQL *FunDb::getConnection(const QJsonObject &instance) {
+  const QString connId = instance.value(QStringLiteral("connId")).toString();
+  return s_connections.value(connId, nullptr);
+}
 
-// connectDb — 连接数据库
-QJsonValue FunDb::connectDb(const QJsonArray &args) {
-  if (s_conn)
-    return QJsonValue(true);
-
+// constructor — new DB({...}) 时调用
+QJsonValue FunDb::constructor(const QJsonArray &args) {
   if (args.isEmpty() || !args[0].isObject())
     return QJsonValue(false);
 
-  s_config = args[0].toObject();
-
-  const QString host = s_config.value(QStringLiteral("host")).toString();
-  const int port = s_config.value(QStringLiteral("port")).toInt(3306);
-  const QString user = s_config.value(QStringLiteral("user")).toString();
-  const QString pass = s_config.value(QStringLiteral("password")).toString();
-  const QString dbName = s_config.value(QStringLiteral("database")).toString();
+  const QJsonObject cfg = args[0].toObject();
+  const QString host = cfg.value(QStringLiteral("host")).toString();
+  const int port = cfg.value(QStringLiteral("port")).toInt(3306);
+  const QString user = cfg.value(QStringLiteral("user")).toString();
+  const QString pass = cfg.value(QStringLiteral("password")).toString();
+  const QString dbName = cfg.value(QStringLiteral("database")).toString();
 
   if (host.isEmpty() || user.isEmpty() || dbName.isEmpty())
     return QJsonValue(false);
@@ -82,32 +80,54 @@ QJsonValue FunDb::connectDb(const QJsonArray &args) {
   }
 
   mysql_set_character_set(conn, "utf8mb4");
-  s_conn = conn;
-  return QJsonValue(true);
+
+  const QString connId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+  s_connections[connId] = conn;
+  s_configs[connId] = cfg;
+
+  QJsonObject result;
+  result[QStringLiteral("connId")] = connId;
+  result[QStringLiteral("connected")] = true;
+  return QJsonValue(result);
 }
 
-// disconnectDb — 断开数据库连接
-QJsonValue FunDb::disconnectDb() {
-  if (s_conn) {
-    mysql_close(s_conn);
-    s_conn = nullptr;
+// disconnect — 断开连接
+QJsonValue FunDb::disconnect(const QJsonArray &args) {
+  if (args.isEmpty() || !args[0].isObject())
+    return QJsonValue(false);
+
+  const QJsonObject instance = args[0].toObject();
+  const QString connId = instance.value(QStringLiteral("connId")).toString();
+  if (connId.isEmpty())
+    return QJsonValue(false);
+
+  if (s_connections.contains(connId)) {
+    MYSQL *conn = s_connections[connId];
+    if (conn)
+      mysql_close(conn);
+    s_connections.remove(connId);
+    s_configs.remove(connId);
   }
   return QJsonValue(true);
 }
 
 // tableSchema — 获取表列信息
 QJsonValue FunDb::tableSchema(const QJsonArray &args) {
-  if (args.isEmpty() || !args[0].isObject())
+  if (args.size() < 2 || !args[0].isObject() || !args[1].isObject())
     return QJsonValue();
 
-  const QJsonObject cfg = args[0].toObject();
+  const QJsonObject instance = args[0].toObject();
+  const QJsonObject params = args[1].toObject();
 
-  MYSQL *conn = getConnection();
+  MYSQL *conn = getConnection(instance);
   if (!conn)
     return QJsonValue();
 
-  const QString dbName = s_config.value(QStringLiteral("database")).toString();
-  const QString table = cfg.value(QStringLiteral("table")).toString();
+  const QString dbName =
+      s_configs.value(instance.value(QStringLiteral("connId")).toString())
+          .value(QStringLiteral("database"))
+          .toString();
+  const QString table = params.value(QStringLiteral("table")).toString();
   if (table.isEmpty())
     return QJsonValue();
 
@@ -155,16 +175,17 @@ QJsonValue FunDb::tableSchema(const QJsonArray &args) {
 
 // query — 执行自定义 SQL
 QJsonValue FunDb::query(const QJsonArray &args) {
-  if (args.isEmpty() || !args[0].isObject())
+  if (args.size() < 2 || !args[0].isObject() || !args[1].isObject())
     return QJsonValue();
 
-  const QJsonObject cfg = args[0].toObject();
+  const QJsonObject instance = args[0].toObject();
+  const QJsonObject params = args[1].toObject();
 
-  MYSQL *conn = getConnection();
+  MYSQL *conn = getConnection(instance);
   if (!conn)
     return QJsonValue();
 
-  const QString sql = cfg.value(QStringLiteral("sql")).toString();
+  const QString sql = params.value(QStringLiteral("sql")).toString();
   if (sql.isEmpty())
     return QJsonValue();
 
@@ -173,11 +194,9 @@ QJsonValue FunDb::query(const QJsonArray &args) {
 
   MYSQL_RES *result = mysql_store_result(conn);
   if (!result) {
-    // 非查询语句（INSERT/UPDATE/DELETE）无结果集
     return QJsonValue(QJsonArray{});
   }
 
-  // ── 读取列名 ──
   const unsigned int numFields = mysql_num_fields(result);
   MYSQL_FIELD *fields = mysql_fetch_fields(result);
 

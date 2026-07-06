@@ -5,7 +5,7 @@
 
 #include "fun_const.h"
 
-QStringList FunConst::stringMethods() {
+QStringList AcClasses::stringMethods() {
   return {
       QString::fromLatin1(kToLowerCase), QString::fromLatin1(kToUpperCase),
       QString::fromLatin1(kTrim),        QString::fromLatin1(kCapitalize),
@@ -13,7 +13,7 @@ QStringList FunConst::stringMethods() {
   };
 }
 
-QStringList FunConst::dbMethods() {
+QStringList AcClasses::dbMethods() {
   return {
       QString::fromLatin1(kConnect),
       QString::fromLatin1(kDisconnect),
@@ -22,7 +22,7 @@ QStringList FunConst::dbMethods() {
   };
 }
 
-QStringList FunConst::fileMethods() {
+QStringList AcClasses::fileMethods() {
   return {
       QString::fromLatin1(kRead),
       QString::fromLatin1(kWrite),

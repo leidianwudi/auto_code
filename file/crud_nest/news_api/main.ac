@@ -9,7 +9,7 @@ main {
   let div = a / b;          // 3.333...
   print(msg1);
   // 连接数据库
-  call("db", "connect", {
+  let db = new DB({
     host: "192.168.5.103",
     port: 3306,
     user: "root",
@@ -30,7 +30,7 @@ main {
   // 遍历每个 json 文件
   for (file in files) {
     let json = readJson(file);
-    let schema = call("db", "tableSchema", { table: json.modelName });
+    let schema = db.tableSchema({ table: json.modelName });
     let combined = merge(json, schema);
     let name = basename(file);
 
@@ -130,5 +130,5 @@ main {
   print("App: " + appConfig.appName + " v" + appConfig.version);
 
   // 断开数据库
-  call("db", "disconnect");
+  db.disconnect();
 }

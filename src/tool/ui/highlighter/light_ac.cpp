@@ -5,7 +5,7 @@
 
 #include "light_ac.h"
 #include "light_color.h"
-#include "src/engine/script/ac_type.h"
+#include "src/engine/function/fun_const.h"
 
 /**
  * @brief 构造函数

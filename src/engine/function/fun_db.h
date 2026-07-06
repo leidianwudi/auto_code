@@ -24,7 +24,9 @@
 
 struct MYSQL;
 
-/// 数据库工具类（全静态）
+/// 数据库工具类（全静态） — 支持多个 DB 实例
+///
+/// 通过 new DB({...}) 创建实例，每个实例独立持有一个 MySQL 连接。
 class FunDb {
 public:
   /**
@@ -35,27 +37,28 @@ public:
   static void init();
 
   /**
-   * @brief 关闭持久连接（程序退出时调用）
+   * @brief 关闭所有连接（程序退出时调用）
    */
   static void cleanup();
 
-  // ── 子命令 ──
+  // ── 实例构造/方法 ──
 
   /**
-   * @brief 连接数据库
+   * @brief 构造 DB 实例并连接数据库
    * args[0] JSON: { host, port?, user, password, database }
-   * @return 成功返回 true，失败返回 false
+   * @return 返回连接实例对象：{ connId: uuid, connected: bool }
    */
-  static QJsonValue connectDb(const QJsonArray &args);
+  static QJsonValue constructor(const QJsonArray &args);
 
   /**
-   * @brief 断开数据库连接
+   * @brief 断开数据库连接并释放资源
+   * this 是当前 DB 实例
    * @return 成功返回 true
    */
-  static QJsonValue disconnectDb();
+  static QJsonValue disconnect(const QJsonArray &args);
 
   /**
-   * @brief 获取指定表的列信息（database 从连接配置获取）
+   * @brief 获取指定表的列信息
    * args[0] JSON: { table }
    * @return 列信息 JSON 数组
    */
@@ -63,17 +66,16 @@ public:
 
   /**
    * @brief 执行自定义 SQL 查询
-   * args[0] JSON: { host, port?, user, password, database, sql }
+   * args[0] JSON: { sql }
    * @return 查询结果 JSON 数组
    */
   static QJsonValue query(const QJsonArray &args);
 
 private:
-  /// 建立/获取持久连接（使用 connectDb 保存的配置）
-  static MYSQL *getConnection();
-
-  /// MySQL 持久连接（首次 getConnection 时建立）
-  static MYSQL *s_conn;
-  /// 连接配置缓存（connectDb 时保存）
-  static QJsonObject s_config;
+  /// 获取实例的连接（根据 this.obj 中的 connId）
+  static MYSQL *getConnection(const QJsonObject &instance);
+  /// 全局连接池：connId -> MYSQL*
+  static QHash<QString, MYSQL *> s_connections;
+  /// 连接配置池：connId -> QJsonObject
+  static QHash<QString, QJsonObject> s_configs;
 };
