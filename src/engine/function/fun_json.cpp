@@ -15,7 +15,7 @@
 // init — 注册 JSON 函数到 FunMgr（builtin 伪类）
 void FunJson::init() {
   FunMgr::ins().registerFuncs(
-      QStringLiteral("builtin"),
+      QString::fromLatin1(AcRuntime::kBuiltinClass),
       {{QString::fromLatin1(AcBuiltin::kReadJson), readJson}});
 }
 

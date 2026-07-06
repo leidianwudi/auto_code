@@ -5,6 +5,7 @@
 
 #include "tpl_factory.h"
 
+#include "../../ac_language.h"
 #include "block_each.h"
 #include "block_expression.h"
 #include "block_if.h"
@@ -12,9 +13,9 @@
 // ── 类型检测 ──
 
 TplFactory::BlockType TplFactory::detectType(const QString &expr) {
-  if (expr.startsWith(QStringLiteral("each ")))
+  if (expr.startsWith(QString::fromLatin1(AcTpl::kEachPrefix)))
     return BlockType::Each;
-  if (expr.startsWith(QStringLiteral("if ")))
+  if (expr.startsWith(QString::fromLatin1(AcTpl::kIfPrefix)))
     return BlockType::If;
   return BlockType::Expression;
 }

@@ -127,7 +127,7 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
     }
 
     QJsonObject obj = objVal.toObject();
-    QString className = obj.value(QStringLiteral("__class__")).toString();
+    QString className = obj.value(QString::fromLatin1(AcRuntime::kClassKey)).toString();
     if (className.isEmpty() || !m_classes.contains(className)) {
       *m_error = QStringLiteral("object '%1' has no class information")
                      .arg(expr.methodCall.objName);
@@ -271,7 +271,7 @@ QJsonValue AcInterpreter::callBuiltin(const QString &name,
   }
 
   // 其余内置函数：路由到 "builtin" 伪类
-  QJsonValue r = FunMgr::ins().call(QStringLiteral("builtin"), name, arr);
+  QJsonValue r = FunMgr::ins().call(QString::fromLatin1(AcRuntime::kBuiltinClass), name, arr);
   if (r.isNull())
     *m_error = QStringLiteral("unknown function '%1'").arg(name);
   return r;

@@ -64,8 +64,8 @@ bool BlockExpression::handle(const QString &block, int &pos,
   Q_UNUSED(pos)
 
   // === 策略 0: 内置函数调用 print(text) ===
-  if (expr.startsWith(QStringLiteral("print(")) &&
-      expr.endsWith(QStringLiteral(")"))) {
+  if (expr.startsWith(QString::fromLatin1(AcBuiltin::kPrint) + QLatin1Char('(')) &&
+      expr.endsWith(QLatin1Char(')'))) {
     QString arg = expr.mid(6, expr.length() - 7).trimmed();
     // 去掉可能的外层引号
     if ((arg.startsWith('\'') && arg.endsWith('\'')) ||
@@ -102,8 +102,8 @@ bool BlockExpression::handle(const QString &block, int &pos,
   // 在 each 循环体内，当前元素存储在 context["."] 中。
   // 用户可以用 ${this} 或 ${.} 引用它（两种写法等价）。
   if (expr == QString::fromLatin1(AcKeyword::kThis) ||
-      expr == QStringLiteral(".")) {
-    QJsonValue v = context.value(QStringLiteral("."));
+      expr == QString::fromLatin1(AcTpl::kCurrentItem)) {
+    QJsonValue v = context.value(QString::fromLatin1(AcTpl::kCurrentItem));
     if (v.isString())
       return result += v.toString(), true;
     if (v.isDouble()) {

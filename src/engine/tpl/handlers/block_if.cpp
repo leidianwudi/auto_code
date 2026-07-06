@@ -4,6 +4,7 @@
  */
 
 #include "block_if.h"
+#include "../../ac_language.h"
 #include "../tpl_engine.h"
 
 /**
@@ -80,7 +81,7 @@ bool BlockIf::handle(const QString &block, int &pos, const QString &expr,
   }
 
   // 在 ${if} 和 ${/if} 之间查找 ${else}
-  int elsePos = block.indexOf(QStringLiteral("${else}"), pos);
+  int elsePos = block.indexOf(QString::fromLatin1(AcTpl::kElse), pos);
 
   if (isTruthy(condVal)) {
     // 条件成立：渲染 then 部分

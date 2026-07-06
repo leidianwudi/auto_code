@@ -7,6 +7,7 @@
  */
 
 #include "block_each.h"
+#include "../../ac_language.h"
 #include "../tpl_engine.h"
 
 /**
@@ -66,7 +67,7 @@ bool BlockEach::handle(const QString &block, int &pos, const QString &expr,
         itemContext[it.key()] = it.value();
     } else {
       // 基本类型值放在 "." 键下（与 ${.} 语法配合）
-      itemContext[QStringLiteral(".")] = item;
+      itemContext[QString::fromLatin1(AcTpl::kCurrentItem)] = item;
       itemContext[varName] = item;
     }
     result += m_engine.renderBlock(body, itemContext);

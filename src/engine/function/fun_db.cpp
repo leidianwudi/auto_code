@@ -27,7 +27,7 @@ void FunDb::init() {
   FunMgr::ins().registerFuncs(
       QString::fromLatin1(AcDB::kClassName),
       {
-          {QStringLiteral("__construct__"), constructor},
+          {QString::fromLatin1(AcRuntime::kConstructor), constructor},
           {QString::fromLatin1(AcDB::kTableSchema), tableSchema},
           {QString::fromLatin1(AcDB::kQuery), query},
           {QString::fromLatin1(AcDB::kDisconnect), disconnect},

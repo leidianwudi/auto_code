@@ -28,7 +28,7 @@ void FunBuiltin::setContext(const BuiltinContext &ctx) { s_ctx = ctx; }
 
 void FunBuiltin::init() {
   FunMgr::ins().registerFuncs(
-      QStringLiteral("builtin"),
+      QString::fromLatin1(AcRuntime::kBuiltinClass),
       {
           {QString::fromLatin1(AcBuiltin::kRenderTpl), renderTpl},
           {QString::fromLatin1(AcBuiltin::kReadFile), readFile},

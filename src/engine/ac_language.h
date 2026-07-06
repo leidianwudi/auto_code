@@ -79,6 +79,8 @@ inline constexpr const char *kGetCheckedFiles = "getCheckedFiles";
 inline constexpr const char *kMerge = "merge";
 /// @brief 获取文件无后缀基名：basename("path/file.cpp") → 返回 "file"
 inline constexpr const char *kBasename = "basename";
+/// @brief 判断文件是否存在（模板专用）：fileExists("path.txt") → 返回 bool
+inline constexpr const char *kFileExists = "fileExists";
 } // namespace AcBuiltin
 
 /// @brief 一级函数名列表（供解析器校验、高亮、补全使用）
@@ -92,6 +94,7 @@ inline const QStringList kAcBuiltins = {
     QString(AcBuiltin::kGetCheckedFiles),
     QString(AcBuiltin::kMerge),
     QString(AcBuiltin::kBasename),
+    QString(AcBuiltin::kFileExists),
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -167,3 +170,37 @@ inline const QStringList kMethods = {
     QString::fromLatin1(kSubstring),   QString::fromLatin1(kReplace),
 };
 } // namespace AcCallStr
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 四、运行时内部协议 — 实例对象标记、构造器入口、伪类名
+// ═════════════════════════════════════════════════════════════════════════════
+
+namespace AcRuntime {
+/// @brief 实例对象中标记类名的内部键：instance["__class__"] = "DB"
+inline constexpr const char *kClassKey = "__class__";
+/// @brief 构造方法名：new DB({...}) 自动调用 __construct__
+inline constexpr const char *kConstructor = "__construct__";
+/// @brief 一级函数注册的伪类名：FunMgr::call("builtin", name, args)
+inline constexpr const char *kBuiltinClass = "builtin";
+} // namespace AcRuntime
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 五、模板语法标记 — ${...} 占位符、块标签
+// ═════════════════════════════════════════════════════════════════════════════
+
+namespace AcTpl {
+/// @brief 表达式开始标记：${variable}、${each items} 等
+inline constexpr const char *kExprOpen = "${";
+/// @brief if 块前缀：${if condition}
+inline constexpr const char *kIfPrefix = "if ";
+/// @brief each 块前缀：${each items}
+inline constexpr const char *kEachPrefix = "each ";
+/// @brief if 块闭合标签：${/if}
+inline constexpr const char *kIfClose = "${/if}";
+/// @brief each 块闭合标签：${/each}
+inline constexpr const char *kEachClose = "${/each}";
+/// @brief else 标签：${else}
+inline constexpr const char *kElse = "${else}";
+/// @brief 循环当前元素的 context 键：${.} 或 ${this}
+inline constexpr const char *kCurrentItem = ".";
+} // namespace AcTpl

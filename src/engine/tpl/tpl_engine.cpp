@@ -66,7 +66,7 @@ QString TplEngine::renderBlock(const QString &block,
   int pos = 0;
 
   while (pos < block.length()) {
-    int start = block.indexOf(QStringLiteral("${"), pos);
+    int start = block.indexOf(QString::fromLatin1(AcTpl::kExprOpen), pos);
     if (start == -1) {
       result += block.mid(pos);
       break;
