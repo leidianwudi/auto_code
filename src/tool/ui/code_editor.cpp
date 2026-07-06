@@ -7,7 +7,7 @@
 #include "aui_error_tool_tip.h"
 #include "format/format_code.h"
 #include "guess/guess_code.h"
-#include "src/engine/function/fun_const.h"
+#include "src/engine/ac_language.h"
 #include "src/engine/script/ac_executor.h"
 #include <QAbstractItemView>
 #include <QCompleter>
@@ -1252,11 +1252,20 @@ void CodeEditor::showCompleter() {
     return;
   }
 
-  // ── 合并静态词库 + 动态 let 变量 ──
+  // ── 合并静态词库 + 动态 let 变量 + new 后的原生类 ──
   GuessCode::FileType ft =
       GuessCode::validationModeToFileType(m_validationMode);
   QStringList words = GuessCode::getAllCompletions(ft);
   words << GuessCode::extractLetVariables(toPlainText());
+
+  // 仅当光标在 new 关键字之后时，才提示原生类名（如 DB）
+  int ctxPos = start;
+  while (ctxPos > 0 && text[ctxPos - 1].isSpace())
+    --ctxPos;
+  if (ctxPos >= 3 &&
+      text.mid(ctxPos - 3, 3) == QString::fromLatin1(kAcKeywordNew))
+    words << kAcClasses;
+
   words.removeDuplicates();
 
   // 更新补全模型

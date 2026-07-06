@@ -4,7 +4,7 @@
  */
 
 #include "fun_json.h"
-#include "fun_const.h"
+#include "../ac_language.h"
 #include "fun_mgr.h"
 
 #include <QFile>
@@ -14,7 +14,8 @@
 
 // init — 注册 JSON 函数到 FunMgr（builtin 伪类）
 void FunJson::init() {
-  FunMgr::ins().registerBuiltin(
+  FunMgr::ins().registerFuncs(
+      QStringLiteral("builtin"),
       {{QString::fromLatin1(AcBuiltin::kReadJson), readJson}});
 }
 

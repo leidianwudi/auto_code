@@ -5,7 +5,7 @@
 
 #include "light_ac.h"
 #include "light_color.h"
-#include "src/engine/function/fun_const.h"
+#include "src/engine/ac_language.h"
 
 /**
  * @brief 构造函数
@@ -15,7 +15,7 @@
  * 1. 变量（绿色）：普通标识符
  * 2. 关键字（蓝色加粗）：let, main, for, in, if, else, call, return, class,
  * function, new, this
- * 3. 内置函数（紫色加粗）：由 kAcBuiltinFunctions 统一定义
+ * 3. 内置函数（紫色加粗）：由 kAcBuiltins 统一定义
  * 4. 注释（灰色斜体）：// 单行注释
  * 5. 字符串（橙色）："" 和 '' 字面量
  * 6. 数字（橙色加粗）：整数、浮点数
@@ -39,20 +39,19 @@ LightAc::LightAc(QTextDocument *parent) : QSyntaxHighlighter(parent) {
   QTextCharFormat keywordFormat;
   keywordFormat.setForeground(keyword);
   keywordFormat.setFontWeight(QFont::Bold);
-  m_rules.append(
-      {QRegularExpression(QStringLiteral("\\b(?:let|main|for|in|if|else|call|"
-                                         "return|class|function|new|this)\\b")),
-       keywordFormat});
+  m_rules.append({QRegularExpression(QStringLiteral("\\b(?:") +
+                                     kAcKeywords.join(QStringLiteral("|")) +
+                                     QStringLiteral(")\\b")),
+                  keywordFormat});
 
   // ── 2. 内置函数（紫色加粗） ──
   QTextCharFormat builtinFormat;
   builtinFormat.setForeground(builtin);
   builtinFormat.setFontWeight(QFont::Bold);
-  m_rules.append(
-      {QRegularExpression(QStringLiteral("\\b(?:") +
-                          kAcBuiltinFunctions.join(QStringLiteral("|")) +
-                          QStringLiteral(")\\b")),
-       builtinFormat});
+  m_rules.append({QRegularExpression(QStringLiteral("\\b(?:") +
+                                     kAcBuiltins.join(QStringLiteral("|")) +
+                                     QStringLiteral(")\\b")),
+                  builtinFormat});
 
   // ── 3. 注释（灰色斜体） ──
   QTextCharFormat commentFormat;
@@ -75,11 +74,16 @@ LightAc::LightAc(QTextDocument *parent) : QSyntaxHighlighter(parent) {
                   numberFormat});
 
   // ── 6. 布尔值（红色加粗） ──
+  // true/false 已在 kAcKeywords 中，但单独用红色高亮区分
+  static const QStringList kBoolLiterals = {QStringLiteral("true"),
+                                            QStringLiteral("false")};
   QTextCharFormat boolFormat;
   boolFormat.setForeground(boolean_);
   boolFormat.setFontWeight(QFont::Bold);
-  m_rules.append(
-      {QRegularExpression(QStringLiteral("\\b(?:true|false)\\b")), boolFormat});
+  m_rules.append({QRegularExpression(QStringLiteral("\\b(?:") +
+                                     kBoolLiterals.join(QStringLiteral("|")) +
+                                     QStringLiteral(")\\b")),
+                  boolFormat});
 
   // ── 7. 函数调用（紫色） ──
   // 匹配任何非关键字的标识符后跟括号，如 render()、write()、readJson() 等

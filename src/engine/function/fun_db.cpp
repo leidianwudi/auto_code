@@ -7,7 +7,7 @@
  */
 
 #include "fun_db.h"
-#include "fun_const.h"
+#include "../ac_language.h"
 #include "fun_mgr.h"
 
 #include <QByteArray>
@@ -23,7 +23,7 @@ QHash<QString, QJsonObject> FunDb::s_configs;
 
 // init — 注册所有数据库函数到 FunMgr
 void FunDb::init() {
-  // 注册原生类 DB 的构造器和方法（名称来自 fun_const.h）
+  // 注册原生类 DB 的构造器和方法（名称来自 ac_language.h）
   FunMgr::ins().registerFuncs(
       QString::fromLatin1(kAcClassDB),
       {

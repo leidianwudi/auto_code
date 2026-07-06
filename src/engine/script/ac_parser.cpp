@@ -5,7 +5,7 @@
 
 #include "ac_parser.h"
 
-#include "../function/fun_const.h"
+#include "../ac_language.h"
 
 // ── token 操作 ──
 
@@ -630,8 +630,7 @@ bool AcParser::parseArray(Expr &expr) {
 }
 
 bool AcParser::parseFuncCall(const QString &name, Expr &expr) {
-  const QSet<QString> kBuiltins(kAcBuiltinFunctions.begin(),
-                                kAcBuiltinFunctions.end());
+  const QSet<QString> kBuiltins(kAcBuiltins.begin(), kAcBuiltins.end());
   if (!kBuiltins.contains(name)) {
     *m_error = QStringLiteral("unknown function '%1' at line %2")
                    .arg(name, QString::number(peek().line));

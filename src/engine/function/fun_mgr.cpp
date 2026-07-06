@@ -4,6 +4,7 @@
  */
 
 #include "fun_mgr.h"
+#include "fun_builtin.h"
 #include "fun_db.h"
 #include "fun_file.h"
 #include "fun_json.h"
@@ -29,6 +30,7 @@ void FunMgr::init() {
   FunDb::init();
   FunFile::init();
   FunJson::init();
+  FunBuiltin::init();
 }
 
 // ============================================================================
@@ -43,7 +45,9 @@ void FunMgr::cleanup() { FunDb::cleanup(); }
 
 void FunMgr::registerFuncs(const QString &className,
                            const std::map<QString, FunPtr> &funcs) {
-  m_registry[className] = funcs;
+  auto &target = m_registry[className];
+  for (const auto &[name, fn] : funcs)
+    target[name] = fn;
 }
 
 void FunMgr::registerFuncs(const QString &className,
@@ -51,17 +55,6 @@ void FunMgr::registerFuncs(const QString &className,
   auto &target = m_registry[className];
   for (const auto &[name, fn] : funcs) {
     target[name] = [fn](const QJsonArray &) { return fn(); };
-  }
-}
-
-// ============================================================================
-// registerBuiltin — 注册内置顶级函数（伪类名 "builtin"）
-// ============================================================================
-
-void FunMgr::registerBuiltin(const std::map<QString, FunPtr> &funcs) {
-  auto &target = m_registry[QStringLiteral("builtin")];
-  for (const auto &[name, fn] : funcs) {
-    target[name] = fn;
   }
 }
 
@@ -81,15 +74,6 @@ QJsonValue FunMgr::call(const QString &className, const QString &funcName,
     return QJsonValue();
 
   return funcIt->second(args);
-}
-
-// ============================================================================
-// callBuiltin — 调用内置顶级函数
-// ============================================================================
-
-QJsonValue FunMgr::callBuiltin(const QString &funcName,
-                               const QJsonArray &args) {
-  return call(QStringLiteral("builtin"), funcName, args);
 }
 
 // ============================================================================

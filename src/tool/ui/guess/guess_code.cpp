@@ -4,7 +4,7 @@
  */
 
 #include "guess_code.h"
-#include "src/engine/function/fun_const.h"
+#include "src/engine/ac_language.h"
 #include <QCompleter>
 #include <QListView>
 #include <QRegularExpression>
@@ -18,17 +18,9 @@
 QStringList GuessCode::getAllCompletions(FileType type) {
   switch (type) {
   case AcFile: {
-    QStringList kw = {
-        // 关键字
-        QStringLiteral("let"),  QStringLiteral("main"),
-        QStringLiteral("for"),  QStringLiteral("in"),
-        QStringLiteral("if"),   QStringLiteral("else"),
-        QStringLiteral("call"), QStringLiteral("return"),
-        QStringLiteral("true"), QStringLiteral("false"),
-        QStringLiteral("new"),
-    };
-    // 内置函数和原生类由 kAcBuiltinFunctions / kAcNativeClasses 统一定义
-    return kw + kAcBuiltinFunctions + kAcNativeClasses;
+    // 关键字和内置函数由 kAcKeywords / kAcBuiltins 统一定义
+    // 原生类（如 DB）仅在 new 后出现，由 showCompleter() 动态添加
+    return kAcKeywords + kAcBuiltins;
   }
   case TplFile:
     return {

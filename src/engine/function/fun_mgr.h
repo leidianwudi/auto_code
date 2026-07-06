@@ -3,9 +3,11 @@
  * @brief 函数管理器（单例） — 统一注册/调用脚本可访问的 C++ 函数
  *
  * 外部通过 FunMgr::ins().call(类名, 函数名, 参数) 调用已注册的任意函数。
+ * 内置函数（renderTpl、write 等）注册在伪类 "builtin"
+ * 下，调用方式与普通类一致。
  *
  * 架构：
- * - FunStr / FunDb / FunFile / FunJson 等类在初始化时调用
+ * - FunBuiltin / FunStr / FunDb / FunFile / FunJson 等类在初始化时调用
  *   FunMgr::ins().registerFuncs() 将所有支持的函数指针注册到 FunMgr 中
  * - 每个函数使用 std::function<QJsonValue(const QJsonArray&)> 签名
  *
@@ -13,8 +15,8 @@
  * @code
  *   FunMgr::init();  // 注册所有内置函数
  *   QJsonValue r = FunMgr::ins().call("str", "toLowerCase",
- * QJsonArray{"Hello"}); QJsonValue v = FunMgr::ins().callBuiltin("readJson",
- * QJsonArray{"data.json"});
+ * QJsonArray{"Hello"}); QJsonValue v = FunMgr::ins().call("builtin",
+ * "readJson", QJsonArray{"data.json"});
  * @endcode
  */
 
@@ -45,9 +47,10 @@ public:
   static FunMgr &ins();
 
   /**
-   * @brief 全局初始化：注册所有内置函数（FunStr、FunDb、FunFile、FunJson）
+   * @brief
+   * 全局初始化：注册所有内置函数（FunBuiltin、FunStr、FunDb、FunFile、FunJson）
    *
-   * 应用启动时调用一次，替代逐个调用 Xxx::init()。
+   * 应用启动时调用一次。
    */
   static void init();
 
@@ -60,7 +63,7 @@ public:
 
   /**
    * @brief 注册一个类的所有函数
-   * @param className 类名（如 "str"、"db"、"file"）
+   * @param className 类名（如 "builtin"、"str"、"DB"、"file"）
    * @param funcs     函数名 → 函数指针 映射表
    */
   void registerFuncs(const QString &className,
@@ -75,28 +78,14 @@ public:
                      const std::map<QString, FunPtrVoid> &funcs);
 
   /**
-   * @brief 注册内置顶级函数（直接调用，不属于任何类）
-   * @param funcs 函数名 → 函数指针 映射表
-   */
-  void registerBuiltin(const std::map<QString, FunPtr> &funcs);
-
-  /**
    * @brief 调用已注册的类成员函数
-   * @param className 类名
+   * @param className 类名（如 "builtin"、"str"、"DB"）
    * @param funcName  函数名
    * @param args      参数数组
    * @return 执行结果；未注册时返回 Null
    */
   QJsonValue call(const QString &className, const QString &funcName,
                   const QJsonArray &args);
-
-  /**
-   * @brief 调用已注册的内置顶级函数
-   * @param funcName 函数名
-   * @param args     参数数组
-   * @return 执行结果；未注册时返回 Null
-   */
-  QJsonValue callBuiltin(const QString &funcName, const QJsonArray &args);
 
   /**
    * @brief 检查某类是否已注册

@@ -5,9 +5,11 @@
 
 #include "ac_interpreter.h"
 
-#include "../function/fun_const.h"
+#include "../ac_language.h"
+#include "../function/fun_builtin.h"
 #include "../function/fun_mgr.h"
 #include "../tpl/tpl_engine.h"
+
 
 #include <QDir>
 #include <QFile>
@@ -245,139 +247,35 @@ QJsonValue AcInterpreter::evalBinary(const Expr &expr) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-//  内置函数 & FunMgr
+//  内置函数 — 统一路由到 FunMgr
 // ═════════════════════════════════════════════════════════════════════════════
-
-QJsonValue AcInterpreter::callFunMgr(const QString &cls, const QString &func,
-                                     const QJsonValue &args) {
-  QJsonArray arr;
-  if (args.isArray())
-    arr = args.toArray();
-  else if (!args.isNull() && !args.isUndefined())
-    arr.append(args);
-  return FunMgr::ins().call(cls, func, arr);
-}
 
 QJsonValue AcInterpreter::callBuiltin(const QString &name,
                                       const QVector<Expr *> &args) {
+  // 统一求值所有参数
+  QJsonArray arr;
+  for (auto *a : args)
+    arr.append(evalExpr(*a));
+
+  // call() 特殊处理：前两个参数是类名和函数名
   if (name == AcBuiltin::kCall) {
-    if (args.size() < 2) {
+    if (arr.size() < 2) {
       *m_error = QStringLiteral("call() requires at least 2 arguments");
       return QJsonValue();
     }
-    QString cls = evalExpr(*args[0]).toString();
-    QString func = evalExpr(*args[1]).toString();
-    QJsonValue a = args.size() >= 3 ? evalExpr(*args[2]) : QJsonValue();
-    return callFunMgr(cls, func, a);
+    QString cls = arr[0].toString();
+    QString func = arr[1].toString();
+    QJsonArray callArgs;
+    if (arr.size() >= 3)
+      callArgs.append(arr[2]);
+    return FunMgr::ins().call(cls, func, callArgs);
   }
 
-  if (name == AcBuiltin::kReadJson) {
-    QJsonArray arr;
-    for (auto *a : args)
-      arr.append(evalExpr(*a));
-    return FunMgr::ins().callBuiltin(QString::fromLatin1(AcBuiltin::kReadJson),
-                                     arr);
-  }
-
-  if (name == AcBuiltin::kRenderTpl) {
-    if (args.size() < 2) {
-      *m_error =
-          QStringLiteral("renderTpl() requires template and data arguments");
-      return QJsonValue();
-    }
-    QString tplPath = evalExpr(*args[0]).toString();
-    QFileInfo tplInfo(tplPath);
-    if (tplInfo.isRelative())
-      tplPath = m_scriptDir + QStringLiteral("/") + tplPath;
-
-    QFile f(tplPath);
-    if (!f.open(QIODevice::ReadOnly))
-      return QJsonValue();
-    QString tpl = QString::fromUtf8(f.readAll());
-
-    TplEngine engine;
-    if (m_logCallback)
-      engine.setLogCallback(m_logCallback);
-    QJsonValue data = evalExpr(*args[1]);
-    if (!data.isObject()) {
-      *m_error = QStringLiteral("renderTpl() data must be a JSON object");
-      return QJsonValue();
-    }
-    return QJsonValue(engine.render(tpl, data.toObject()));
-  }
-
-  if (name == AcBuiltin::kPrint) {
-    if (args.isEmpty()) {
-      *m_error = QStringLiteral("print() requires at least one argument");
-      return QJsonValue();
-    }
-    QString text = evalExpr(*args[0]).toString();
-    if (m_logCallback)
-      m_logCallback(text, false);
-    return QJsonValue(true);
-  }
-
-  if (name == AcBuiltin::kWrite) {
-    if (args.size() < 2) {
-      *m_error = QStringLiteral("write() requires path and content arguments");
-      return QJsonValue(false);
-    }
-    QString path = evalExpr(*args[0]).toString();
-    QString content = evalExpr(*args[1]).toString();
-    QFileInfo fi(path);
-    QDir().mkpath(fi.absolutePath());
-    QFile f(path);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
-      return QJsonValue(false);
-    f.write(content.toUtf8());
-    m_generatedFiles.append(QDir::toNativeSeparators(path));
-    return QJsonValue(true);
-  }
-
-  if (name == AcBuiltin::kGetCheckedFiles) {
-    QString treePath = m_rootDir.isEmpty()
-                           ? m_scriptDir + QStringLiteral("/tree.config")
-                           : m_rootDir + QStringLiteral("/tree.config");
-    QFile f(treePath);
-    QJsonArray result;
-    if (f.open(QIODevice::ReadOnly)) {
-      QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
-      QJsonArray checked =
-          doc.object().value(QStringLiteral("checked")).toArray();
-      for (const QJsonValue &v : checked) {
-        if (v.isString())
-          result.append(QDir::cleanPath(m_rootDir.isEmpty()
-                                            ? m_scriptDir
-                                            : m_rootDir + QStringLiteral("/") +
-                                                  v.toString()));
-      }
-    }
-    return result;
-  }
-
-  if (name == AcBuiltin::kMerge) {
-    if (args.size() < 2) {
-      *m_error = QStringLiteral("merge() requires two arguments");
-      return QJsonValue();
-    }
-    QJsonValue a = evalExpr(*args[0]);
-    QJsonValue b = evalExpr(*args[1]);
-    QJsonObject result = a.toObject();
-    QJsonObject ob = b.toObject();
-    for (auto it = ob.begin(); it != ob.end(); ++it)
-      result[it.key()] = it.value();
-    return result;
-  }
-
-  if (name == AcBuiltin::kBasename) {
-    if (args.isEmpty())
-      return QJsonValue();
-    QString path = evalExpr(*args[0]).toString();
-    return QJsonValue(QFileInfo(path).completeBaseName());
-  }
-
-  *m_error = QStringLiteral("unknown function '%1'").arg(name);
-  return QJsonValue();
+  // 其余内置函数：路由到 "builtin" 伪类
+  QJsonValue r = FunMgr::ins().call(QStringLiteral("builtin"), name, arr);
+  if (r.isNull())
+    *m_error = QStringLiteral("unknown function '%1'").arg(name);
+  return r;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -435,7 +333,12 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
         stmt.call.args.kind != Expr::kString || !stmt.call.args.strVal.isEmpty()
             ? evalExpr(stmt.call.args)
             : QJsonValue();
-    callFunMgr(cls, func, a);
+    QJsonArray callArgs;
+    if (a.isArray())
+      callArgs = a.toArray();
+    else if (!a.isNull() && !a.isUndefined())
+      callArgs.append(a);
+    FunMgr::ins().call(cls, func, callArgs);
     break;
   }
 
@@ -561,12 +464,17 @@ QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
   m_generatedFiles.clear();
 
   // 预先注册 C++ 原生类（供 new 语法创建）
-  for (const auto &name : kAcNativeClasses) {
+  for (const auto &name : kAcClasses) {
     ClassDef nativeClass;
     nativeClass.name = name;
     nativeClass.isNative = true;
     m_classes[name] = nativeClass;
   }
+
+  // 注入解释器上下文供 FunBuiltin 使用
+  FunMgr::init();
+  FunBuiltin::setContext(
+      {m_scriptDir, m_rootDir, m_logCallback, &m_generatedFiles});
 
   execBlock(program);
   if (!m_error->isEmpty())

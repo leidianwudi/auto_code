@@ -1,19 +1,35 @@
 /**
- * @file fun_const.h
- * @brief .ac 脚本引擎 — 所有支持的外部函数名集中定义
+ * @file ac_language.h
+ * @brief .ac 脚本语言 — 关键字、内置函数、类定义集中声明
  *
- * 按调用方式分三大区，看一眼就能找到引擎支持的所有外部函数：
- * 1. AcBuiltin:   一级函数，直接调用     renderTpl(...)  write(...)  print(...)
- * 2. AcClass*:    new 实例化类          new DB({...})  → db.query(...)
- * 3. AcCall*:     call() 路由类         call("str", "toLowerCase", ...)
+ * 按调用方式分四大区，看一眼就能找到引擎支持的全部内容：
+ * 0. kAcKeywords:   语言关键字       let  new  for  if  else  return  ...
+ * 1. AcBuiltin:     一级函数          renderTpl(...)  write(...)  print(...)
+ * 2. AcClass*:      new 实例化类     new DB({...})  → db.query(...)
+ * 3. AcCall*:       call() 路由类    call("str", "toLowerCase", ...)
  *
- * 新增函数/类/方法只需改此文件，脚本引擎、语法高亮、自动补全自动同步。
+ * 新增函数/类/方法/关键字只需改此文件，脚本引擎、语法高亮、自动补全自动同步。
  */
 
 #pragma once
 
 #include <QString>
 #include <QStringList>
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 零、语言关键字 — 语法高亮、补全共用
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// @brief new 关键字（补全时判断上下文）
+inline constexpr const char *kAcKeywordNew = "new";
+
+/// @brief .ac 语言关键字列表（供高亮、补全使用）
+inline const QStringList kAcKeywords = {
+    QStringLiteral("let"),  QStringLiteral("new"),   QStringLiteral("main"),
+    QStringLiteral("for"),  QStringLiteral("in"),    QStringLiteral("if"),
+    QStringLiteral("else"), QStringLiteral("call"),  QStringLiteral("return"),
+    QStringLiteral("true"), QStringLiteral("false"),
+};
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 一、一级函数 — .ac 脚本直接调用，C++ 引擎后端实现
@@ -39,7 +55,7 @@ inline constexpr const char *kBasename = "basename";
 } // namespace AcBuiltin
 
 /// @brief 一级函数名列表（供解析器校验、高亮、补全使用）
-inline const QStringList kAcBuiltinFunctions = {
+inline const QStringList kAcBuiltins = {
     QString(AcBuiltin::kCall),      QString(AcBuiltin::kReadJson),
     QString(AcBuiltin::kRenderTpl), QString(AcBuiltin::kWrite),
     QString(AcBuiltin::kPrint),     QString(AcBuiltin::kGetCheckedFiles),
@@ -70,8 +86,8 @@ inline const QStringList kMethods = {
 };
 } // namespace AcDB
 
-/// @brief 原生类名列表（供解释器自动注册、高亮、补全使用）
-inline const QStringList kAcNativeClasses = {
+/// @brief 可实例化类名列表（供解释器注册、高亮、补全使用）
+inline const QStringList kAcClasses = {
     QString::fromLatin1(kAcClassDB),
 };
 

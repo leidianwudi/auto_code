@@ -44,8 +44,6 @@ private:
   QJsonValue evalExprWithThis(const Expr &expr, const QJsonObject &thisObj);
   QJsonValue evalBinary(const Expr &expr);
   QJsonValue callBuiltin(const QString &name, const QVector<Expr *> &args);
-  QJsonValue callFunMgr(const QString &cls, const QString &func,
-                        const QJsonValue &args);
 
   // ── 语句执行 ──
   void execStmt(const Block::Stmt &stmt);
