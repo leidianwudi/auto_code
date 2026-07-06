@@ -16,7 +16,6 @@
 
 #include <QString>
 #include <QStringList>
-
 #include <functional>
 
 /**
@@ -74,6 +73,29 @@ public:
   void setRootDir(const QString &dir) { m_rootDir = dir; }
 
   /**
+   * @brief 添加一个头文件搜索路径
+   * @param path 搜索路径（绝对路径）
+   *
+   * 在解析 .ac 脚本时，#include <xxx> 指令会在此路径列表中查找。
+   * 已存在的路径不会重复添加。
+   */
+  void addIncludePath(const QString &path);
+
+  /**
+   * @brief 批量设置头文件搜索路径
+   * @param paths 搜索路径列表（绝对路径）
+   *
+   * 会覆盖之前设置的所有搜索路径。
+   */
+  void setIncludePaths(const QStringList &paths);
+
+  /**
+   * @brief 获取当前所有头文件搜索路径
+   * @return 搜索路径列表
+   */
+  QStringList includePaths() const;
+
+  /**
    * @brief 执行 .ac 脚本文件
    * @param acFilePath .ac 文件的绝对路径
    * @return 错误信息，空字符串表示执行成功
@@ -110,6 +132,8 @@ private:
 
   /// @brief 项目根目录（tree.config 所在目录）
   QString m_rootDir;
+  /// @brief 头文件搜索路径列表（#include <xxx> 查找用）
+  QStringList m_includePaths;
   /// @brief 本次执行生成的文件路径列表
   QStringList m_generatedFiles;
   /// @brief 日志回调函数

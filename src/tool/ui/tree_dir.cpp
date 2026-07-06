@@ -5,10 +5,6 @@
 
 #include "tree_dir.h"
 
-#include "src/tool/ui/aui_button.h"
-#include "src/tool/ui/aui_icon.h"
-#include "src/tool/ui/aui_style.h"
-
 #include <QContextMenuEvent>
 #include <QDir>
 #include <QFile>
@@ -27,20 +23,24 @@
 #include <QTreeWidgetItem>
 #include <QTreeWidgetItemIterator>
 
+#include "src/engine/ac_language.h"
+#include "src/engine/script/ac_engine.h"
+#include "src/tool/ui/aui_button.h"
+#include "src/tool/ui/aui_icon.h"
+#include "src/tool/ui/aui_style.h"
+
 // ──────────────────────────────────────────────────────────────
 //  ModifiedFileDelegate 实现
 // ──────────────────────────────────────────────────────────────
 
-void ModifiedFileDelegate::paint(QPainter *painter,
-                                 const QStyleOptionViewItem &option,
+void ModifiedFileDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
                                  const QModelIndex &index) const {
   // 先绘制默认内容（图标 + 文件名）
   QStyledItemDelegate::paint(painter, option, index);
 
   // 检查是否为已修改文件
   bool modified = index.data(Qt::UserRole + 2).toBool();
-  if (!modified)
-    return;
+  if (!modified) return;
 
   // 在文件名右上角绘制红色 "*"
   painter->save();
@@ -53,14 +53,12 @@ void ModifiedFileDelegate::paint(QPainter *painter,
 
   // 图标宽度（decorationSize 可能为 0，回退取实际图标大小）
   int decoWidth = option.decorationSize.width();
-  if (decoWidth == 0)
-    decoWidth = option.icon.actualSize(QSize(16, 16)).width();
+  if (decoWidth == 0) decoWidth = option.icon.actualSize(QSize(16, 16)).width();
 
   // 复选框宽度（.json 文件有复选框，.ac 文件没有）
   int checkWidth = 0;
   if (index.data(Qt::CheckStateRole).isValid())
-    checkWidth =
-        tree ? tree->style()->pixelMetric(QStyle::PM_IndicatorWidth) + 4 : 20;
+    checkWidth = tree ? tree->style()->pixelMetric(QStyle::PM_IndicatorWidth) + 4 : 20;
 
   // 文本起始位置（图标 + 复选框 + 4px 边距）
   int textStartX = option.rect.left() + checkWidth + decoWidth + 4;
@@ -89,8 +87,7 @@ TreeDir::TreeDir(QWidget *parent) : QTreeWidget(parent) {
   setItemDelegate(new ModifiedFileDelegate(this));
 
   connect(this, &QTreeWidget::itemClicked, this, &TreeDir::onItemClicked);
-  connect(this, &QTreeWidget::itemDoubleClicked, this,
-          &TreeDir::onItemDoubleClicked);
+  connect(this, &QTreeWidget::itemDoubleClicked, this, &TreeDir::onItemDoubleClicked);
   connect(this, &QTreeWidget::itemChanged, this, &TreeDir::onItemChanged);
 }
 
@@ -104,16 +101,13 @@ void TreeDir::mouseReleaseEvent(QMouseEvent *event) {
 
   if (item && (item->flags() & Qt::ItemIsUserCheckable)) {
     // 估算复选框区域的宽度
-    int cbWidth =
-        style()->pixelMetric(QStyle::PM_IndicatorWidth, nullptr, this);
-    if (cbWidth < 10)
-      cbWidth = 16; // 默认值
+    int cbWidth = style()->pixelMetric(QStyle::PM_IndicatorWidth, nullptr, this);
+    if (cbWidth < 10) cbWidth = 16;  // 默认值
 
     QRect itemRect = visualRect(indexFromItem(item));
     int clickX = static_cast<int>(event->position().x()) - itemRect.x();
     // 复选框通常绘制在 item 左侧，留 4px 边距
-    if (clickX >= 0 && clickX < cbWidth + 4)
-      m_lastClickOnCheckbox = true;
+    if (clickX >= 0 && clickX < cbWidth + 4) m_lastClickOnCheckbox = true;
   }
 
   QTreeWidget::mouseReleaseEvent(event);
@@ -145,8 +139,7 @@ void TreeDir::buildTree(const QString &dirPath) {
 
 void TreeDir::onItemClicked(QTreeWidgetItem *item, int column) {
   Q_UNUSED(column);
-  if (!item)
-    return;
+  if (!item) return;
 
   const QString filePath = item->data(0, Qt::UserRole + 1).toString();
 
@@ -182,12 +175,10 @@ void TreeDir::onItemClicked(QTreeWidgetItem *item, int column) {
 
 void TreeDir::onItemDoubleClicked(QTreeWidgetItem *item, int column) {
   Q_UNUSED(column);
-  if (!item)
-    return;
+  if (!item) return;
 
   const QString filePath = item->data(0, Qt::UserRole + 1).toString();
-  if (!filePath.isEmpty())
-    emit fileActivated(filePath);
+  if (!filePath.isEmpty()) emit fileActivated(filePath);
 }
 
 // ============================================================================
@@ -196,13 +187,11 @@ void TreeDir::onItemDoubleClicked(QTreeWidgetItem *item, int column) {
 
 void TreeDir::onItemChanged(QTreeWidgetItem *item, int column) {
   Q_UNUSED(column);
-  if (!item || m_bulkUpdating)
-    return;
+  if (!item || m_bulkUpdating) return;
 
   const QString filePath = item->data(0, Qt::UserRole + 1).toString();
 
-  if (!filePath.isEmpty() &&
-      filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
+  if (!filePath.isEmpty() && filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
     // json 文件的复选框变化：更新父节点状态
     updateParentCheckState(item);
     saveState();
@@ -213,20 +202,17 @@ void TreeDir::onItemChanged(QTreeWidgetItem *item, int column) {
 // addDirectoryToTree — 递归添加目录/文件
 // ============================================================================
 
-void TreeDir::addDirectoryToTree(QTreeWidgetItem *parentItem,
-                                 const QString &dirPath) {
+void TreeDir::addDirectoryToTree(QTreeWidgetItem *parentItem, const QString &dirPath) {
   QDir dir(dirPath);
 
   // 文件（.ac、.tpl 和 .json）
   QStringList nameFilters;
-  nameFilters << QStringLiteral("*.ac") << QStringLiteral("*.tpl")
-              << QStringLiteral("*.json");
+  nameFilters << QStringLiteral("*.ac") << QStringLiteral("*.tpl") << QStringLiteral("*.json");
   QFileInfoList files = dir.entryInfoList(nameFilters, QDir::Files);
 
   int jsonCount = 0;
   for (const QFileInfo &info : files) {
-    if (info.fileName().endsWith(QStringLiteral(".json"), Qt::CaseInsensitive))
-      ++jsonCount;
+    if (info.fileName().endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) ++jsonCount;
   }
 
   // 子目录
@@ -239,8 +225,7 @@ void TreeDir::addDirectoryToTree(QTreeWidgetItem *parentItem,
   };
   QList<SubDirInfo> subDirs;
   for (const QFileInfo &info : dirs) {
-    auto *dirItem = parentItem ? new QTreeWidgetItem(parentItem)
-                               : new QTreeWidgetItem(this);
+    auto *dirItem = parentItem ? new QTreeWidgetItem(parentItem) : new QTreeWidgetItem(this);
     dirItem->setText(0, info.fileName());
     dirItem->setIcon(0, style()->standardIcon(QStyle::SP_DirIcon));
     dirItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
@@ -252,21 +237,18 @@ void TreeDir::addDirectoryToTree(QTreeWidgetItem *parentItem,
     addDirectoryToTree(sd.item, sd.path);
     for (int i = 0; i < sd.item->childCount(); ++i) {
       QTreeWidgetItem *child = sd.item->child(i);
-      if (child->flags() & Qt::ItemIsUserCheckable)
-        ++childDirJsonCount;
+      if (child->flags() & Qt::ItemIsUserCheckable) ++childDirJsonCount;
     }
   }
 
   // 添加文件节点
   for (const QFileInfo &info : files) {
-    auto *fileItem = parentItem ? new QTreeWidgetItem(parentItem)
-                                : new QTreeWidgetItem(this);
+    auto *fileItem = parentItem ? new QTreeWidgetItem(parentItem) : new QTreeWidgetItem(this);
     fileItem->setText(0, info.fileName());
     fileItem->setIcon(0, style()->standardIcon(QStyle::SP_FileIcon));
     fileItem->setData(0, Qt::UserRole + 1, info.absoluteFilePath());
 
-    if (info.fileName().endsWith(QStringLiteral(".json"),
-                                 Qt::CaseInsensitive)) {
+    if (info.fileName().endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
       fileItem->setFlags(fileItem->flags() | Qt::ItemIsUserCheckable);
       fileItem->setCheckState(0, Qt::Unchecked);
     }
@@ -292,14 +274,12 @@ void TreeDir::addDirectoryToTree(QTreeWidgetItem *parentItem,
 // 级联更新
 // ============================================================================
 
-void TreeDir::setJsonChildrenCheckState(QTreeWidgetItem *item,
-                                        Qt::CheckState state) {
+void TreeDir::setJsonChildrenCheckState(QTreeWidgetItem *item, Qt::CheckState state) {
   for (int i = 0; i < item->childCount(); ++i) {
     QTreeWidgetItem *child = item->child(i);
     QString filePath = child->data(0, Qt::UserRole + 1).toString();
 
-    if (!filePath.isEmpty() &&
-        filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive))
+    if (!filePath.isEmpty() && filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive))
       child->setCheckState(0, state);
 
     setJsonChildrenCheckState(child, state);
@@ -308,8 +288,7 @@ void TreeDir::setJsonChildrenCheckState(QTreeWidgetItem *item,
 
 void TreeDir::updateParentCheckState(QTreeWidgetItem *item) {
   QTreeWidgetItem *parent = item->parent();
-  if (!parent)
-    return;
+  if (!parent) return;
 
   int checkedCount = 0;
   int totalCheckable = 0;
@@ -345,8 +324,7 @@ void TreeDir::updateParentCheckState(QTreeWidgetItem *item) {
 // ============================================================================
 
 void TreeDir::saveState() {
-  if (m_configPath.isEmpty())
-    return;
+  if (m_configPath.isEmpty()) return;
 
   // 确保父目录存在
   QFileInfo fi(m_configPath);
@@ -354,8 +332,7 @@ void TreeDir::saveState() {
 
   // ── 勾选的 json 文件 ──
   QStringList checkedFiles;
-  for (int i = 0; i < topLevelItemCount(); ++i)
-    collectJsonFiles(topLevelItem(i), checkedFiles);
+  for (int i = 0; i < topLevelItemCount(); ++i) collectJsonFiles(topLevelItem(i), checkedFiles);
 
   QJsonArray checkedArr;
   for (const QString &absPath : checkedFiles) {
@@ -382,8 +359,7 @@ void TreeDir::saveState() {
   QJsonObject root;
   root[QStringLiteral("checked")] = checkedArr;
   root[QStringLiteral("startup")] = startupArr;
-  if (!selectedRel.isEmpty())
-    root[QStringLiteral("startupSelected")] = selectedRel;
+  if (!selectedRel.isEmpty()) root[QStringLiteral("startupSelected")] = selectedRel;
 
   QFile file(m_configPath);
   if (file.open(QIODevice::WriteOnly | QIODevice::Truncate))
@@ -391,17 +367,14 @@ void TreeDir::saveState() {
 }
 
 void TreeDir::loadState() {
-  if (m_configPath.isEmpty())
-    return;
+  if (m_configPath.isEmpty()) return;
 
   QFile file(m_configPath);
-  if (!file.open(QIODevice::ReadOnly))
-    return;
+  if (!file.open(QIODevice::ReadOnly)) return;
 
   QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
   file.close();
-  if (doc.isNull() || !doc.isObject())
-    return;
+  if (doc.isNull() || !doc.isObject()) return;
 
   QJsonObject obj = doc.object();
 
@@ -413,8 +386,7 @@ void TreeDir::loadState() {
   for (const QJsonValue &v : arr) {
     if (v.isString()) {
       // 用 "/" 拼接相对路径，再统一 cleanPath
-      QString abs =
-          QDir::cleanPath(m_rootPath + QStringLiteral("/") + v.toString());
+      QString abs = QDir::cleanPath(m_rootPath + QStringLiteral("/") + v.toString());
       checkedAbsPaths.append(abs);
     }
   }
@@ -423,16 +395,14 @@ void TreeDir::loadState() {
   // 但此时 m_startupFiles 尚未恢复，saveState 会写入空数组覆盖原数据，
   // 因此在 loadState 期间设置 m_bulkUpdating 禁止保存）
   m_bulkUpdating = true;
-  for (int i = 0; i < topLevelItemCount(); ++i)
-    applyStateToTree(topLevelItem(i), checkedAbsPaths);
+  for (int i = 0; i < topLevelItemCount(); ++i) applyStateToTree(topLevelItem(i), checkedAbsPaths);
 
   // ── 恢复启动项 ──
   QJsonArray startupArr = obj[QStringLiteral("startup")].toArray();
   m_startupFiles.clear();
   for (const QJsonValue &v : startupArr) {
     if (v.isString()) {
-      QString abs =
-          QDir::cleanPath(m_rootPath + QStringLiteral("/") + v.toString());
+      QString abs = QDir::cleanPath(m_rootPath + QStringLiteral("/") + v.toString());
       m_startupFiles.insert(abs);
     }
   }
@@ -440,8 +410,7 @@ void TreeDir::loadState() {
   // ── 恢复当前选中的启动项 ──
   QString selRel = obj[QStringLiteral("startupSelected")].toString();
   if (!selRel.isEmpty())
-    m_selectedStartup =
-        QDir::cleanPath(m_rootPath + QStringLiteral("/") + selRel);
+    m_selectedStartup = QDir::cleanPath(m_rootPath + QStringLiteral("/") + selRel);
   else
     m_selectedStartup.clear();
 
@@ -460,45 +429,36 @@ void TreeDir::loadState() {
 
 QStringList TreeDir::checkedJsonFiles() const {
   QStringList files;
-  for (int i = 0; i < topLevelItemCount(); ++i)
-    collectJsonFiles(topLevelItem(i), files);
+  for (int i = 0; i < topLevelItemCount(); ++i) collectJsonFiles(topLevelItem(i), files);
   return files;
 }
 
-void TreeDir::collectJsonFiles(QTreeWidgetItem *item,
-                               QStringList &files) const {
+void TreeDir::collectJsonFiles(QTreeWidgetItem *item, QStringList &files) const {
   // 检查当前节点本身（处理根目录下的 .json 文件）
   QString selfPath = item->data(0, Qt::UserRole + 1).toString();
-  if (!selfPath.isEmpty() &&
-      selfPath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
-    if (item->checkState(0) == Qt::Checked)
-      files.append(selfPath);
+  if (!selfPath.isEmpty() && selfPath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
+    if (item->checkState(0) == Qt::Checked) files.append(selfPath);
   }
 
   // 递归检查子节点
-  for (int i = 0; i < item->childCount(); ++i)
-    collectJsonFiles(item->child(i), files);
+  for (int i = 0; i < item->childCount(); ++i) collectJsonFiles(item->child(i), files);
 }
 
 /// 检查绝对路径是否匹配某个已保存的绝对路径
 static bool pathListContains(const QStringList &list, const QString &absPath) {
   for (const QString &p : list) {
     // 同时 cleanPath（主要处理分隔符），轻松对比
-    if (QDir::cleanPath(p) == QDir::cleanPath(absPath))
-      return true;
+    if (QDir::cleanPath(p) == QDir::cleanPath(absPath)) return true;
   }
   return false;
 }
 
-void TreeDir::applyStateToTree(QTreeWidgetItem *item,
-                               const QStringList &checkedAbsPaths) {
+void TreeDir::applyStateToTree(QTreeWidgetItem *item, const QStringList &checkedAbsPaths) {
   // 检查当前节点本身（处理根目录下的 .json 文件）
   QString selfPath = item->data(0, Qt::UserRole + 1).toString();
-  if (!selfPath.isEmpty() &&
-      selfPath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
-    if (pathListContains(checkedAbsPaths, selfPath))
-      item->setCheckState(0, Qt::Checked);
-    return; // 文件节点无子节点，无需递归
+  if (!selfPath.isEmpty() && selfPath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
+    if (pathListContains(checkedAbsPaths, selfPath)) item->setCheckState(0, Qt::Checked);
+    return;  // 文件节点无子节点，无需递归
   }
 
   // 目录节点：递归处理子节点
@@ -506,16 +466,13 @@ void TreeDir::applyStateToTree(QTreeWidgetItem *item,
     QTreeWidgetItem *child = item->child(i);
     QString filePath = child->data(0, Qt::UserRole + 1).toString();
 
-    if (!filePath.isEmpty() &&
-        filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
-      if (pathListContains(checkedAbsPaths, filePath))
-        child->setCheckState(0, Qt::Checked);
+    if (!filePath.isEmpty() && filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
+      if (pathListContains(checkedAbsPaths, filePath)) child->setCheckState(0, Qt::Checked);
     }
 
     applyStateToTree(child, checkedAbsPaths);
 
-    if (child->childCount() > 0)
-      updateParentCheckState(child);
+    if (child->childCount() > 0) updateParentCheckState(child);
   }
 }
 
@@ -525,8 +482,7 @@ void TreeDir::applyStateToTree(QTreeWidgetItem *item,
 
 /// @brief 创建带三角标记的启动项图标 — 委托 AuiButton 叠加绿色三角
 QIcon TreeDir::makeStartupIcon() const {
-  return AuiIcon::createStartupOverlayIcon(
-      style()->standardIcon(QStyle::SP_FileIcon));
+  return AuiIcon::createStartupOverlayIcon(style()->standardIcon(QStyle::SP_FileIcon));
 }
 
 /// @brief 根据 m_startupFiles 集合更新所有 .ac 文件节点的图标
@@ -536,17 +492,14 @@ void TreeDir::refreshStartupIcons() {
 
   // 遍历所有顶层节点
   QList<QTreeWidgetItem *> stack;
-  for (int i = 0; i < topLevelItemCount(); ++i)
-    stack.append(topLevelItem(i));
+  for (int i = 0; i < topLevelItemCount(); ++i) stack.append(topLevelItem(i));
 
   while (!stack.isEmpty()) {
     QTreeWidgetItem *item = stack.takeLast();
-    for (int i = 0; i < item->childCount(); ++i)
-      stack.append(item->child(i));
+    for (int i = 0; i < item->childCount(); ++i) stack.append(item->child(i));
 
     QString filePath = item->data(0, Qt::UserRole + 1).toString();
-    if (!filePath.isEmpty() &&
-        filePath.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive)) {
+    if (!filePath.isEmpty() && filePath.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive)) {
       if (m_startupFiles.contains(filePath))
         item->setIcon(0, startupIcon);
       else
@@ -558,8 +511,7 @@ void TreeDir::refreshStartupIcons() {
 /// @brief 获取所有启动项文件绝对路径
 QStringList TreeDir::startupFiles() const {
   QStringList result;
-  for (const QString &p : m_startupFiles)
-    result.append(p);
+  for (const QString &p : m_startupFiles) result.append(p);
   return result;
 }
 
@@ -583,8 +535,7 @@ void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
   }
 
   QString filePath = item->data(0, Qt::UserRole + 1).toString();
-  if (filePath.isEmpty() ||
-      !filePath.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive)) {
+  if (filePath.isEmpty() || !filePath.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive)) {
     QTreeWidget::contextMenuEvent(event);
     return;
   }
@@ -596,8 +547,7 @@ void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
     QAction *act = menu.addAction(QStringLiteral("取消启动项"));
     if (menu.exec(event->globalPos()) == act) {
       m_startupFiles.remove(filePath);
-      if (m_selectedStartup == filePath)
-        m_selectedStartup.clear();
+      if (m_selectedStartup == filePath) m_selectedStartup.clear();
       refreshStartupIcons();
       saveState();
       emit startupItemsChanged();
@@ -607,8 +557,7 @@ void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
     if (menu.exec(event->globalPos()) == act) {
       m_startupFiles.insert(filePath);
       // 如果此前没有选中的启动项，自动选中第一个
-      if (m_selectedStartup.isEmpty())
-        m_selectedStartup = filePath;
+      if (m_selectedStartup.isEmpty()) m_selectedStartup = filePath;
       refreshStartupIcons();
       saveState();
       emit startupItemsChanged();
