@@ -1,0 +1,637 @@
+#include "ac_parser.h"
+
+// ── token 操作 ──
+
+Token AcParser::peek() {
+  if (m_pos < m_tokens.size())
+    return m_tokens[m_pos];
+  return {TOK_EOF, {}, 0};
+}
+
+Token AcParser::advance() {
+  if (m_pos < m_tokens.size())
+    return m_tokens[m_pos++];
+  return {TOK_EOF, {}, 0};
+}
+
+bool AcParser::match(TokenType t) {
+  if (peek().type == t) {
+    advance();
+    return true;
+  }
+  return false;
+}
+
+bool AcParser::expect(TokenType t, const QString &msg) {
+  if (peek().type == t) {
+    advance();
+    return true;
+  }
+  *m_error = QStringLiteral("%1 at line %2").arg(msg).arg(peek().line);
+  return false;
+}
+
+// ── 解析入口 ──
+
+bool AcParser::parse(const QVector<Token> &tokens, Block &program,
+                     QString &error, QSet<QString> &declaredVars) {
+  m_tokens = tokens;
+  m_pos = 0;
+  m_error = &error;
+  m_declaredVars = &declaredVars;
+  program = Block();
+  return parseProgram(program);
+}
+
+bool AcParser::parseProgram(Block &block) {
+  if (peek().type == TOK_IDENT && peek().text == QStringLiteral("main"))
+    advance();
+  return parseBlock(block);
+}
+
+bool AcParser::parseBlock(Block &block) {
+  if (!expect(TOK_LBRACE, QStringLiteral("expected '{'")))
+    return false;
+  while (peek().type != TOK_RBRACE && peek().type != TOK_EOF) {
+    Block::Stmt stmt;
+    if (!parseStmt(stmt))
+      return false;
+    block.stmts.append(stmt);
+    if (peek().type == TOK_SEMI)
+      advance();
+  }
+  return expect(TOK_RBRACE, QStringLiteral("expected '}'"));
+}
+
+// ── 语句解析 ──
+
+bool AcParser::parseStmt(Block::Stmt &stmt) {
+  Token t = peek();
+
+  if (t.type == TOK_CLASS) {
+    advance();
+    stmt.kind = Block::Stmt::kClassDef;
+    return parseClassDef(stmt.classDef);
+  }
+
+  if (t.type == TOK_RETURN) {
+    advance();
+    stmt.kind = Block::Stmt::kReturn;
+    return parseReturnStmt(stmt.returnValue);
+  }
+
+  if (t.type == TOK_IDENT && t.text == QStringLiteral("call")) {
+    advance();
+    stmt.kind = Block::Stmt::kCall;
+    return parseCallStmt(stmt.call);
+  }
+
+  if (t.type == TOK_FOR) {
+    stmt.kind = Block::Stmt::kFor;
+    return parseForStmt(stmt.forStmt);
+  }
+
+  if (t.type == TOK_IF) {
+    stmt.kind = Block::Stmt::kIf;
+    return parseIfStmt(stmt.ifStmt);
+  }
+
+  if (t.type == TOK_LET) {
+    advance();
+    if (peek().type != TOK_IDENT) {
+      *m_error = QStringLiteral("expected variable name after 'let' at line %1")
+                     .arg(peek().line);
+      return false;
+    }
+    if (!peek().text.isEmpty() && peek().text[0].isDigit()) {
+      *m_error =
+          QStringLiteral("variable name cannot start with a digit at line %1")
+              .arg(peek().line);
+      return false;
+    }
+    m_declaredVars->insert(peek().text);
+    stmt.kind = Block::Stmt::kAssign;
+    return parseAssignStmt(stmt.assign);
+  }
+
+  if (t.type == TOK_IDENT) {
+    if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_EQUALS) {
+      if (!m_declaredVars->contains(t.text)) {
+        *m_error = QStringLiteral("variable '%1' must be declared with 'let' "
+                                  "before assignment at line %2")
+                       .arg(t.text, QString::number(t.line));
+        return false;
+      }
+      stmt.kind = Block::Stmt::kAssign;
+      return parseAssignStmt(stmt.assign);
+    }
+    if (m_pos + 1 < m_tokens.size() &&
+        m_tokens[m_pos + 1].type == TOK_LBRACKET) {
+      stmt.kind = Block::Stmt::kIndexAssign;
+      return parseIndexAssignStmt(stmt.indexAssign);
+    }
+    if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_LPAREN) {
+      stmt.kind = Block::Stmt::kExpr;
+      QString name = advance().text;
+      return parseFuncCall(name, stmt.exprStmt);
+    }
+    if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_DOT) {
+      stmt.kind = Block::Stmt::kExpr;
+      return parseExpr(stmt.exprStmt);
+    }
+  }
+
+  if (t.type == TOK_THIS) {
+    if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_DOT) {
+      advance();
+      advance();
+      if (peek().type != TOK_IDENT) {
+        *m_error =
+            QStringLiteral("expected property name after 'this.' at line %1")
+                .arg(peek().line);
+        return false;
+      }
+      stmt.assign.thisProp = advance().text;
+      if (!expect(TOK_EQUALS, QStringLiteral("expected '=' after 'this.%1'")
+                                  .arg(stmt.assign.thisProp)))
+        return false;
+      stmt.kind = Block::Stmt::kAssign;
+      return parseExpr(stmt.assign.value);
+    }
+    stmt.kind = Block::Stmt::kExpr;
+    return parseExpr(stmt.exprStmt);
+  }
+
+  *m_error = QStringLiteral("unexpected token '%1' at line %2")
+                 .arg(t.text, QString::number(t.line));
+  return false;
+}
+
+bool AcParser::parseCallStmt(CallStmt &cs) {
+  if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after call")))
+    return false;
+  if (!parseExpr(cs.className))
+    return false;
+  if (!expect(TOK_COMMA, QStringLiteral("expected ',' after class name")))
+    return false;
+  if (!parseExpr(cs.funcName))
+    return false;
+  if (match(TOK_COMMA)) {
+    if (!parseExpr(cs.args))
+      return false;
+  }
+  return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
+}
+
+bool AcParser::parseAssignStmt(AssignStmt &as) {
+  as.name = advance().text;
+  if (!expect(TOK_EQUALS, QStringLiteral("expected '='")))
+    return false;
+  return parseExpr(as.value);
+}
+
+bool AcParser::parseIndexAssignStmt(IndexAssignStmt &ias) {
+  ias.objName = advance().text;
+  if (!expect(TOK_LBRACKET, QStringLiteral("expected '['")))
+    return false;
+  if (peek().type != TOK_STRING) {
+    *m_error =
+        QStringLiteral("expected string key in index assignment at line %1")
+            .arg(peek().line);
+    return false;
+  }
+  ias.key = advance().text;
+  if (!expect(TOK_RBRACKET, QStringLiteral("expected ']'")))
+    return false;
+  if (!expect(TOK_EQUALS, QStringLiteral("expected '='")))
+    return false;
+  return parseExpr(ias.value);
+}
+
+bool AcParser::parseForStmt(ForStmt &fs) {
+  advance();
+  if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after for")))
+    return false;
+  if (peek().type != TOK_IDENT) {
+    *m_error = QStringLiteral("expected variable name in for at line %1")
+                   .arg(peek().line);
+    return false;
+  }
+  fs.varName = advance().text;
+  if (!expect(TOK_IN, QStringLiteral("expected 'in'")))
+    return false;
+  if (!parseExpr(fs.arrayExpr))
+    return false;
+  if (!expect(TOK_RPAREN, QStringLiteral("expected ')'")))
+    return false;
+  return parseBlock(fs.body);
+}
+
+bool AcParser::parseIfStmt(IfStmt &is) {
+  advance();
+  if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after if")))
+    return false;
+  if (!parseExpr(is.condition))
+    return false;
+  if (!expect(TOK_RPAREN, QStringLiteral("expected ')'")))
+    return false;
+  if (!parseBlock(is.thenBlock))
+    return false;
+  if (peek().type == TOK_ELSE) {
+    advance();
+    is.hasElse = true;
+    return parseBlock(is.elseBlock);
+  }
+  return true;
+}
+
+// ── 类定义解析 ──
+
+bool AcParser::parseClassDef(ClassDef &cd) {
+  if (peek().type != TOK_IDENT) {
+    *m_error =
+        QStringLiteral("expected class name at line %1").arg(peek().line);
+    return false;
+  }
+  cd.name = advance().text;
+
+  if (!expect(TOK_LBRACE, QStringLiteral("expected '{' after class name")))
+    return false;
+
+  while (peek().type != TOK_RBRACE && peek().type != TOK_EOF) {
+    if (peek().type == TOK_LET) {
+      advance();
+      if (peek().type != TOK_IDENT) {
+        *m_error = QStringLiteral("expected property name in class at line %1")
+                       .arg(peek().line);
+        return false;
+      }
+      ObjectEntry prop;
+      prop.key = advance().text;
+      prop.value = new Expr();
+      if (peek().type == TOK_EQUALS) {
+        advance();
+        if (!parseExpr(*prop.value)) {
+          delete prop.value;
+          prop.value = nullptr;
+          return false;
+        }
+      }
+      cd.properties.append(prop);
+      if (peek().type == TOK_SEMI)
+        advance();
+      continue;
+    }
+
+    if (peek().type == TOK_FUNCTION) {
+      advance();
+      MethodDef md;
+      if (!parseMethodDef(md))
+        return false;
+      cd.methods.append(md);
+      continue;
+    }
+
+    *m_error = QStringLiteral("unexpected token '%1' in class body at line %2")
+                   .arg(peek().text, QString::number(peek().line));
+    return false;
+  }
+
+  return expect(TOK_RBRACE, QStringLiteral("expected '}' after class body"));
+}
+
+bool AcParser::parseMethodDef(MethodDef &md) {
+  if (peek().type != TOK_IDENT) {
+    *m_error =
+        QStringLiteral("expected method name at line %1").arg(peek().line);
+    return false;
+  }
+  md.name = advance().text;
+
+  if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after method name")))
+    return false;
+
+  while (peek().type == TOK_IDENT) {
+    md.params.append(advance().text);
+    if (peek().type == TOK_COMMA)
+      advance();
+  }
+
+  if (!expect(TOK_RPAREN, QStringLiteral("expected ')' after parameters")))
+    return false;
+
+  return parseBlock(md.body);
+}
+
+bool AcParser::parseReturnStmt(Expr &retVal) {
+  if (peek().type == TOK_SEMI || peek().type == TOK_RBRACE) {
+    retVal.kind = Expr::kNumber;
+    retVal.numVal = 0;
+    return true;
+  }
+  return parseExpr(retVal);
+}
+
+// ── 表达式解析 ──
+
+bool AcParser::parseExpr(Expr &expr) { return parseAddSub(expr); }
+
+bool AcParser::parseAddSub(Expr &expr) {
+  if (!parseMulDiv(expr))
+    return false;
+  while (peek().type == TOK_PLUS || peek().type == TOK_MINUS) {
+    Expr::BinaryOp op;
+    if (peek().type == TOK_PLUS) {
+      op = Expr::kAdd;
+      advance();
+    } else {
+      op = Expr::kSub;
+      advance();
+    }
+    Expr *left = new Expr(std::move(expr));
+    Expr *right = new Expr();
+    if (!parseMulDiv(*right)) {
+      delete left;
+      delete right;
+      return false;
+    }
+    Expr binary;
+    binary.kind = Expr::kBinary;
+    binary.binOp = op;
+    binary.left = left;
+    binary.right = right;
+    expr = std::move(binary);
+  }
+  return true;
+}
+
+bool AcParser::parseMulDiv(Expr &expr) {
+  if (!parsePrimary(expr))
+    return false;
+  while (peek().type == TOK_MUL || peek().type == TOK_DIV) {
+    Expr::BinaryOp op;
+    if (peek().type == TOK_MUL) {
+      op = Expr::kMul;
+      advance();
+    } else {
+      op = Expr::kDiv;
+      advance();
+    }
+    Expr *left = new Expr(std::move(expr));
+    Expr *right = new Expr();
+    if (!parsePrimary(*right)) {
+      delete left;
+      delete right;
+      return false;
+    }
+    Expr binary;
+    binary.kind = Expr::kBinary;
+    binary.binOp = op;
+    binary.left = left;
+    binary.right = right;
+    expr = std::move(binary);
+  }
+  return true;
+}
+
+bool AcParser::parsePrimary(Expr &expr) {
+  Token t = peek();
+
+  if (t.type == TOK_MINUS) {
+    advance();
+    if (peek().type == TOK_NUMBER) {
+      expr.kind = Expr::kNumber;
+      expr.numVal = -advance().text.toDouble();
+      return true;
+    }
+    Expr *right = new Expr();
+    if (!parsePrimary(*right)) {
+      delete right;
+      return false;
+    }
+    Expr binary;
+    binary.kind = Expr::kBinary;
+    binary.binOp = Expr::kSub;
+    binary.left = new Expr();
+    binary.left->kind = Expr::kNumber;
+    binary.left->numVal = 0;
+    binary.right = right;
+    expr = std::move(binary);
+    return true;
+  }
+
+  if (t.type == TOK_THIS) {
+    advance();
+    if (peek().type == TOK_DOT) {
+      advance();
+      if (peek().type != TOK_IDENT) {
+        *m_error =
+            QStringLiteral("expected property name after 'this.' at line %1")
+                .arg(peek().line);
+        return false;
+      }
+      QString propName = advance().text;
+      if (peek().type == TOK_LPAREN) {
+        expr.kind = Expr::kMethodCall;
+        expr.methodCall.objName = QStringLiteral("this");
+        expr.methodCall.methodName = propName;
+        advance();
+        while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
+          auto *arg = new Expr();
+          if (!parseExpr(*arg)) {
+            delete arg;
+            return false;
+          }
+          expr.methodCall.args.append(arg);
+          if (peek().type == TOK_COMMA)
+            advance();
+        }
+        return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
+      }
+      expr.kind = Expr::kPropAccess;
+      expr.ident = QStringLiteral("this");
+      expr.prop = propName;
+      return true;
+    }
+    if (peek().type == TOK_LBRACKET) {
+      advance();
+      if (peek().type != TOK_STRING) {
+        *m_error = QStringLiteral("expected string key in '[]' at line %1")
+                       .arg(peek().line);
+        return false;
+      }
+      expr.kind = Expr::kIndexAccess;
+      expr.ident = QStringLiteral("this");
+      expr.indexKey = advance().text;
+      return expect(TOK_RBRACKET, QStringLiteral("expected ']'"));
+    }
+    expr.kind = Expr::kThis;
+    return true;
+  }
+
+  if (t.type == TOK_NEW) {
+    advance();
+    if (peek().type != TOK_IDENT) {
+      *m_error = QStringLiteral("expected class name after 'new' at line %1")
+                     .arg(peek().line);
+      return false;
+    }
+    expr.kind = Expr::kNewInstance;
+    expr.className = advance().text;
+    if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after class name")))
+      return false;
+    return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
+  }
+
+  switch (t.type) {
+  case TOK_STRING:
+    expr.kind = Expr::kString;
+    expr.strVal = advance().text;
+    return true;
+
+  case TOK_NUMBER:
+    expr.kind = Expr::kNumber;
+    expr.numVal = advance().text.toDouble();
+    return true;
+
+  case TOK_LPAREN: {
+    advance();
+    if (!parseExpr(expr))
+      return false;
+    return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
+  }
+
+  case TOK_IDENT: {
+    QString name = advance().text;
+    if (peek().type == TOK_DOT) {
+      advance();
+      if (peek().type != TOK_IDENT) {
+        *m_error = QStringLiteral("expected property name after '.' at line %1")
+                       .arg(peek().line);
+        return false;
+      }
+      QString propName = advance().text;
+      if (peek().type == TOK_LPAREN) {
+        expr.kind = Expr::kMethodCall;
+        expr.methodCall.objName = name;
+        expr.methodCall.methodName = propName;
+        advance();
+        while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
+          auto *arg = new Expr();
+          if (!parseExpr(*arg)) {
+            delete arg;
+            return false;
+          }
+          expr.methodCall.args.append(arg);
+          if (peek().type == TOK_COMMA)
+            advance();
+        }
+        return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
+      }
+      expr.kind = Expr::kPropAccess;
+      expr.ident = name;
+      expr.prop = propName;
+      return true;
+    }
+    if (peek().type == TOK_LPAREN) {
+      return parseFuncCall(name, expr);
+    }
+    if (peek().type == TOK_LBRACKET) {
+      advance();
+      if (peek().type != TOK_STRING) {
+        *m_error = QStringLiteral("expected string key in '[]' at line %1")
+                       .arg(peek().line);
+        return false;
+      }
+      expr.kind = Expr::kIndexAccess;
+      expr.ident = name;
+      expr.indexKey = advance().text;
+      return expect(TOK_RBRACKET, QStringLiteral("expected ']'"));
+    }
+    expr.kind = Expr::kIdent;
+    expr.ident = name;
+    expr.line = t.line;
+    return true;
+  }
+
+  case TOK_LBRACE:
+    return parseObject(expr);
+
+  case TOK_LBRACKET:
+    return parseArray(expr);
+
+  default:
+    *m_error = QStringLiteral("unexpected token '%1' at line %2")
+                   .arg(t.text, QString::number(t.line));
+    return false;
+  }
+}
+
+bool AcParser::parseObject(Expr &expr) {
+  expr.kind = Expr::kObject;
+  advance();
+  while (peek().type != TOK_RBRACE && peek().type != TOK_EOF) {
+    if (peek().type != TOK_IDENT) {
+      *m_error =
+          QStringLiteral("expected key in object at line %1").arg(peek().line);
+      return false;
+    }
+    ObjectEntry entry;
+    entry.key = advance().text;
+    if (!expect(TOK_COLON, QStringLiteral("expected ':'")))
+      return false;
+    entry.value = new Expr();
+    if (!parseExpr(*entry.value)) {
+      delete entry.value;
+      return false;
+    }
+    expr.objEntries.append(entry);
+    if (peek().type == TOK_COMMA)
+      advance();
+  }
+  return expect(TOK_RBRACE, QStringLiteral("expected '}'"));
+}
+
+bool AcParser::parseArray(Expr &expr) {
+  expr.kind = Expr::kArray;
+  advance();
+  while (peek().type != TOK_RBRACKET && peek().type != TOK_EOF) {
+    auto *item = new Expr();
+    if (!parseExpr(*item)) {
+      delete item;
+      return false;
+    }
+    expr.arrItems.append(item);
+    if (peek().type == TOK_COMMA)
+      advance();
+  }
+  return expect(TOK_RBRACKET, QStringLiteral("expected ']'"));
+}
+
+bool AcParser::parseFuncCall(const QString &name, Expr &expr) {
+  static const QSet<QString> kBuiltins = {
+      QStringLiteral("call"),   QStringLiteral("readJson"),
+      QStringLiteral("render"), QStringLiteral("write"),
+      QStringLiteral("print"),  QStringLiteral("getCheckedFiles"),
+      QStringLiteral("merge"),  QStringLiteral("basename")};
+  if (!kBuiltins.contains(name)) {
+    *m_error = QStringLiteral("unknown function '%1' at line %2")
+                   .arg(name, QString::number(peek().line));
+    return false;
+  }
+
+  expr.kind = Expr::kFuncCall;
+  expr.funcCall.name = name;
+  advance();
+  while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
+    auto *arg = new Expr();
+    if (!parseExpr(*arg)) {
+      delete arg;
+      return false;
+    }
+    expr.funcCall.args.append(arg);
+    if (peek().type == TOK_COMMA)
+      advance();
+  }
+  return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
+}

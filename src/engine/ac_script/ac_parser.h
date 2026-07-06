@@ -1,0 +1,48 @@
+#pragma once
+
+#include "ac_ast.h"
+
+/// @brief 语法分析器 — 将 Token 序列解析为 AST
+class AcParser {
+public:
+  /// @brief 解析入口：将 tokens 解析为 AST（跳过可选的 main 关键字）
+  /// @param tokens 词法分析结果
+  /// @param[out] program 输出的 AST 根节点
+  /// @param[out] error 错误信息
+  /// @param[in,out] declaredVars 已声明的变量名集合（解析过程中会新增）
+  bool parse(const QVector<Token> &tokens, Block &program, QString &error,
+             QSet<QString> &declaredVars);
+
+private:
+  // ── token 操作 ──
+  Token peek();
+  Token advance();
+  bool match(TokenType t);
+  bool expect(TokenType t, const QString &msg);
+
+  // ── 语法分析（递归下降） ──
+  bool parseProgram(Block &block);
+  bool parseBlock(Block &block);
+  bool parseStmt(Block::Stmt &stmt);
+  bool parseCallStmt(CallStmt &cs);
+  bool parseAssignStmt(AssignStmt &as);
+  bool parseIndexAssignStmt(IndexAssignStmt &ias);
+  bool parseForStmt(ForStmt &fs);
+  bool parseIfStmt(IfStmt &is);
+  bool parseClassDef(ClassDef &cd);
+  bool parseReturnStmt(Expr &retVal);
+  bool parseExpr(Expr &expr);
+  bool parseAddSub(Expr &expr);
+  bool parseMulDiv(Expr &expr);
+  bool parsePrimary(Expr &expr);
+  bool parseObject(Expr &expr);
+  bool parseArray(Expr &expr);
+  bool parseFuncCall(const QString &name, Expr &expr);
+  bool parseMethodDef(MethodDef &md);
+
+  // ── 内部状态 ──
+  int m_pos = 0;
+  QVector<Token> m_tokens;
+  QString *m_error = nullptr;
+  QSet<QString> *m_declaredVars = nullptr;
+};

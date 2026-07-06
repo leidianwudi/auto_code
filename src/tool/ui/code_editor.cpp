@@ -7,8 +7,8 @@
 #include "aui_error_tool_tip.h"
 #include "format/format_code.h"
 #include "guess/guess_code.h"
+#include "src/engine/ac_script/ac_engine.h"
 #include "src/engine/function/fun_const.h"
-#include "src/engine/script_parser.h"
 #include <QAbstractItemView>
 #include <QCompleter>
 #include <QContextMenuEvent>
@@ -25,6 +25,7 @@
 #include <QStack>
 #include <QStringListModel>
 #include <QTextBlock>
+
 
 // ──────────────────────────────────────────────────────────────
 //  构造 / 基本接口

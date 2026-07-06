@@ -15,8 +15,15 @@ qt_add_executable(auto_code
     src/engine/engine_tpl.cpp
     src/engine/engine_ac.h
     src/engine/engine_ac.cpp
-    src/engine/script_parser.h
-    src/engine/script_parser.cpp
+    src/engine/ac_script/ac_ast.h
+    src/engine/ac_script/ac_lexer.h
+    src/engine/ac_script/ac_lexer.cpp
+    src/engine/ac_script/ac_parser.h
+    src/engine/ac_script/ac_parser.cpp
+    src/engine/ac_script/ac_interpreter.h
+    src/engine/ac_script/ac_interpreter.cpp
+    src/engine/ac_script/ac_engine.h
+    src/engine/ac_script/ac_engine.cpp
     src/engine/validator_json.h
     src/engine/validator_json.cpp
     src/engine/tpl_hand/tpl_block.h
