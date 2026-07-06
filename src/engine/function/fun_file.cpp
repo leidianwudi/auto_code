@@ -15,7 +15,7 @@
 #include <QTextStream>
 
 void FunFile::init() {
-  FunMgr::ins().registerFuncs(QString::fromLatin1(kAcClassFile),
+  FunMgr::ins().registerFuncs(QString::fromLatin1(AcFile::kClassName),
                               {
                                   {QString::fromLatin1(AcFile::kRead), read},
                                   {QString::fromLatin1(AcFile::kWrite), write},

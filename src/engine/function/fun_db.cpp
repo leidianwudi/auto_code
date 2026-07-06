@@ -25,7 +25,7 @@ QHash<QString, QJsonObject> FunDb::s_configs;
 void FunDb::init() {
   // 注册原生类 DB 的构造器和方法（名称来自 ac_language.h）
   FunMgr::ins().registerFuncs(
-      QString::fromLatin1(kAcClassDB),
+      QString::fromLatin1(AcDB::kClassName),
       {
           {QStringLiteral("__construct__"), constructor},
           {QString::fromLatin1(AcDB::kTableSchema), tableSchema},

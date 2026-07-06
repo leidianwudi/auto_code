@@ -11,7 +11,7 @@
 
 void FunStr::init() {
   FunMgr::ins().registerFuncs(
-      QString::fromLatin1(kAcCallStr),
+      QString::fromLatin1(AcCallStr::kClassName),
       {
           {QString::fromLatin1(AcCallStr::kToLowerCase), toLowerCase},
           {QString::fromLatin1(AcCallStr::kToUpperCase), toUpperCase},

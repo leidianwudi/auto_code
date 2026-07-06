@@ -98,11 +98,10 @@ inline const QStringList kAcBuiltins = {
 // 二、new 实例化类 — new DB({...})  →  db.query(...)
 // ═════════════════════════════════════════════════════════════════════════════
 
-/// @brief DB 类名常量
-inline constexpr const char *kAcClassDB = "DB";
-
-/// @brief DB 数据库类 — 方法名常量
+/// @brief DB 数据库类 — 类名与方法名常量
 namespace AcDB {
+/// @brief 类名：new DB({...})
+inline constexpr const char *kClassName = "DB";
 /// @brief 获取表结构：db.tableSchema({table: "news"})
 inline constexpr const char *kTableSchema = "tableSchema";
 /// @brief 执行 SQL：db.query({sql: "SELECT * FROM t"})
@@ -118,11 +117,10 @@ inline const QStringList kMethods = {
 };
 } // namespace AcDB
 
-/// @brief File 类名常量
-inline constexpr const char *kAcClassFile = "File";
-
-/// @brief File 文件类 — 方法名常量
+/// @brief File 文件类 — 类名与方法名常量
 namespace AcFile {
+/// @brief 类名：new File()
+inline constexpr const char *kClassName = "File";
 /// @brief 读文件：f.read("path.txt") → 返回内容
 inline constexpr const char *kRead = "read";
 /// @brief 写文件：f.write("path.txt", content)
@@ -137,19 +135,18 @@ inline const QStringList kMethods = {
 
 /// @brief 可实例化类名列表（供解释器注册、高亮、补全使用）
 inline const QStringList kAcClasses = {
-    QString::fromLatin1(kAcClassDB),
-    QString::fromLatin1(kAcClassFile),
+    QString::fromLatin1(AcDB::kClassName),
+    QString::fromLatin1(AcFile::kClassName),
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 三、call() 路由类 — call("str", "toLowerCase", ...)
 // ═════════════════════════════════════════════════════════════════════════════
 
-/// @brief str 类名常量
-inline constexpr const char *kAcCallStr = "str";
-
-/// @brief str 字符串类 — 方法名常量
+/// @brief str 字符串类 — 类名与方法名常量
 namespace AcCallStr {
+/// @brief 类名：call("str", "toLowerCase", ...)
+inline constexpr const char *kClassName = "str";
 /// @brief 转小写：call("str", "toLowerCase", "ABC") → "abc"
 inline constexpr const char *kToLowerCase = "toLowerCase";
 /// @brief 转大写：call("str", "toUpperCase", "abc") → "ABC"
