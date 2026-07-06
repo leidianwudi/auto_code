@@ -4,11 +4,7 @@
  */
 
 #include "code_editor.h"
-#include "aui_error_tool_tip.h"
-#include "format/format_code.h"
-#include "guess/guess_code.h"
-#include "src/engine/ac_language.h"
-#include "src/engine/script/ac_executor.h"
+
 #include <QAbstractItemView>
 #include <QCompleter>
 #include <QContextMenuEvent>
@@ -26,9 +22,21 @@
 #include <QStringListModel>
 #include <QTextBlock>
 
+#include "aui_error_tool_tip.h"
+#include "format/format_code.h"
+#include "guess/guess_code.h"
+#include "src/engine/ac_language.h"
+#include "src/engine/script/ac_executor.h"
+
 // ──────────────────────────────────────────────────────────────
 //  构造 / 基本接口
 // ──────────────────────────────────────────────────────────────
+
+namespace {
+const QString kEachName = QString::fromLatin1(AcTemplate::kEachPrefix).trimmed();
+const QString kIfName = QString::fromLatin1(AcTemplate::kIfPrefix).trimmed();
+const QString kElseName = QString::fromLatin1(AcTemplate::kElse).mid(2, 4);
+}  // namespace
 
 CodeEditor::CodeEditor(QWidget *parent)
     : QPlainTextEdit(parent), m_lineNumberArea(new LineNumberArea(this)) {
@@ -47,28 +55,21 @@ CodeEditor::CodeEditor(QWidget *parent)
   // updateRequest: 滚动/绘制时更新行号区域
   // cursorPositionChanged: 光标移动时刷新当前行高亮
   // textChanged: 文本变化时触发验证（经过防抖）
-  connect(this, &QPlainTextEdit::blockCountChanged, this,
-          &CodeEditor::updateLineNumberAreaWidth);
-  connect(this, &QPlainTextEdit::updateRequest, this,
-          &CodeEditor::updateLineNumberArea);
-  connect(this, &QPlainTextEdit::cursorPositionChanged, this,
-          [this]() { highlightCurrentLine(); });
+  connect(this, &QPlainTextEdit::blockCountChanged, this, &CodeEditor::updateLineNumberAreaWidth);
+  connect(this, &QPlainTextEdit::updateRequest, this, &CodeEditor::updateLineNumberArea);
+  connect(this, &QPlainTextEdit::cursorPositionChanged, this, [this]() { highlightCurrentLine(); });
 
   // 验证防抖定时器：用户停止输入 500ms 后才执行验证
   // 避免每次击键都进行完整的 JSON 解析或模板标签匹配，显著提升性能
   m_validationTimer.setSingleShot(true);
-  m_validationTimer.setInterval(500); // 500ms 防抖
-  connect(&m_validationTimer, &QTimer::timeout, this,
-          &CodeEditor::performValidation);
+  m_validationTimer.setInterval(500);  // 500ms 防抖
+  connect(&m_validationTimer, &QTimer::timeout, this, &CodeEditor::performValidation);
 
   // 任何文本变化都重新调度验证（每次变化会重置 500ms 计时器）
-  connect(this, &QPlainTextEdit::textChanged, this,
-          &CodeEditor::scheduleValidation);
+  connect(this, &QPlainTextEdit::textChanged, this, &CodeEditor::scheduleValidation);
   // 文本变化或滚动时自动关闭错误提示弹窗
-  connect(this, &QPlainTextEdit::textChanged, this,
-          &CodeEditor::hideErrorTooltip);
-  connect(this, &QPlainTextEdit::cursorPositionChanged, this,
-          &CodeEditor::hideErrorTooltip);
+  connect(this, &QPlainTextEdit::textChanged, this, &CodeEditor::hideErrorTooltip);
+  connect(this, &QPlainTextEdit::cursorPositionChanged, this, &CodeEditor::hideErrorTooltip);
 
   // 初始化：计算行号区域宽度并高亮当前行
   updateLineNumberAreaWidth(0);
@@ -78,7 +79,7 @@ CodeEditor::CodeEditor(QWidget *parent)
 void CodeEditor::setValidationMode(ValidationMode mode) {
   m_validationMode = mode;
   initCompleter(mode);
-  performValidation(); // 立即做一次验证
+  performValidation();  // 立即做一次验证
 }
 
 void CodeEditor::validate() { performValidation(); }
@@ -111,24 +112,20 @@ void CodeEditor::updateLineNumberArea(const QRect &rect, int dy) {
   if (dy)
     m_lineNumberArea->scroll(0, dy);
   else
-    m_lineNumberArea->update(0, rect.y(), m_lineNumberArea->width(),
-                             rect.height());
+    m_lineNumberArea->update(0, rect.y(), m_lineNumberArea->width(), rect.height());
 
   // 如果整个视口可见区域都包含在更新矩形中，则重新计算行号宽度
-  if (rect.contains(viewport()->rect()))
-    updateLineNumberAreaWidth(0);
+  if (rect.contains(viewport()->rect())) updateLineNumberAreaWidth(0);
 }
 
 void CodeEditor::resizeEvent(QResizeEvent *event) {
   QPlainTextEdit::resizeEvent(event);
   // 将行号区域放置在左侧，高度与内容区域一致
   QRect cr = contentsRect();
-  m_lineNumberArea->setGeometry(
-      QRect(cr.left(), cr.top(), lineNumberAreaWidth(), cr.height()));
+  m_lineNumberArea->setGeometry(QRect(cr.left(), cr.top(), lineNumberAreaWidth(), cr.height()));
 }
 
-void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event,
-                                          const QRect &area) {
+void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area) {
   QPainter painter(m_lineNumberArea);
   // 绘制行号区域背景色（浅灰）
   painter.fillRect(area, QColor(Qt::lightGray).lighter(110));
@@ -137,8 +134,7 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event,
   QTextBlock block = firstVisibleBlock();
   int blockNumber = block.blockNumber();
   // 计算该块在视口中的顶部和底部坐标
-  int top =
-      qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
+  int top = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
   int bottom = top + qRound(blockBoundingRect(block).height());
 
   // 遍历所有可见块，绘制行号
@@ -152,8 +148,8 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event,
         painter.setPen(Qt::black);
       }
       // 右对齐绘制行号，保留 4px 间距
-      painter.drawText(0, top, m_lineNumberArea->width() - 4,
-                       fontMetrics().height(), Qt::AlignRight, number);
+      painter.drawText(0, top, m_lineNumberArea->width() - 4, fontMetrics().height(),
+                       Qt::AlignRight, number);
     }
     // 移动到下一个文本块
     block = block.next();
@@ -195,30 +191,23 @@ void CodeEditor::refreshExtraSelections() {
 
   // 确定检查位置：默认检查光标左侧字符
   int checkPos = posInBlock;
-  if (checkPos >= lineText.length() && checkPos > 0)
-    checkPos = posInBlock - 1;
+  if (checkPos >= lineText.length() && checkPos > 0) checkPos = posInBlock - 1;
 
   // Lambda 辅助函数：判断字符类型
   auto isOpen = [](QChar c) { return c == '(' || c == '{' || c == '['; };
   auto isClose = [](QChar c) { return c == ')' || c == '}' || c == ']'; };
   // 查找开括号对应的闭括号
   auto findMatch = [](QChar open) -> QChar {
-    if (open == '(')
-      return ')';
-    if (open == '{')
-      return '}';
-    if (open == '[')
-      return ']';
+    if (open == '(') return ')';
+    if (open == '{') return '}';
+    if (open == '[') return ']';
     return {};
   };
   // 查找闭括号对应的开括号
   auto findOpen = [](QChar close) -> QChar {
-    if (close == ')')
-      return '(';
-    if (close == '}')
-      return '{';
-    if (close == ']')
-      return '[';
+    if (close == ')') return '(';
+    if (close == '}') return '{';
+    if (close == ']') return '[';
     return {};
   };
 
@@ -299,13 +288,12 @@ void CodeEditor::refreshExtraSelections() {
  * 这种"防抖"（debounce）模式避免了频繁的完整文档解析。
  */
 void CodeEditor::scheduleValidation() {
-  if (m_validationMode == NoValidation)
-    return;
+  if (m_validationMode == NoValidation) return;
   // 文本已变化，立即清除旧错误标记，防止指向失效位置导致崩溃
   m_errorSelections.clear();
   m_errorLines.clear();
   m_errorRanges.clear();
-  m_validationTimer.start(); // 每次调用都会重置计时器
+  m_validationTimer.start();  // 每次调用都会重置计时器
 }
 
 /**
@@ -319,13 +307,12 @@ void CodeEditor::scheduleValidation() {
  * 5. 刷新行号区域（错误行号显示红色）
  */
 void CodeEditor::performValidation() {
-  if (m_validationMode == NoValidation)
-    return;
+  if (m_validationMode == NoValidation) return;
 
   // 清除旧的错误标记
   m_errorSelections.clear();
   m_errorLines.clear();
-  m_errorRanges.clear(); // 清除错误位置范围（供 paintEvent 使用）
+  m_errorRanges.clear();  // 清除错误位置范围（供 paintEvent 使用）
 
   // 根据验证模式调用不同的验证函数
   QStringList errors;
@@ -396,18 +383,15 @@ QStringList CodeEditor::validateJson() {
     int col = block.isValid() ? offset - blockStart + 1 : 1;
 
     // 格式化错误信息
-    QString msg = QStringLiteral("行 %1, 列 %2: %3")
-                      .arg(line)
-                      .arg(col)
-                      .arg(parseError.errorString());
+    QString msg =
+        QStringLiteral("行 %1, 列 %2: %3").arg(line).arg(col).arg(parseError.errorString());
     errors << msg;
 
     // 标记错误位置（红色波浪下划线）
     // QJsonParseError::offset 指向解析器停止位置（即错误字符的下一位），
     // 因此需要 -1 才能定位到实际错误字符
     int markPos = qMin(offset, text.length()) - 1;
-    if (markPos < 0)
-      markPos = 0;
+    if (markPos < 0) markPos = 0;
     applyErrorUnderline(markPos, 1, msg, m_errorSelections);
   }
 
@@ -435,8 +419,7 @@ QStringList CodeEditor::validateTemplate() {
   QString text = toPlainText();
   int len = text.length();
 
-  if (text.isEmpty())
-    return errors;
+  if (text.isEmpty()) return errors;
 
   // ====================================================================
   // 第 1 步：检查普通括号 () [] {} 匹配
@@ -448,9 +431,9 @@ QStringList CodeEditor::validateTemplate() {
     int pos;
   };
   QStack<BracketInfo> stack;
-  bool inString = false;       // 是否在字符串字面量内
-  bool inTemplateExpr = false; // 是否在 ${...} 表达式内
-  int templateExprDepth = 0;   // 模板表达式嵌套深度（支持嵌套 {}）
+  bool inString = false;        // 是否在字符串字面量内
+  bool inTemplateExpr = false;  // 是否在 ${...} 表达式内
+  int templateExprDepth = 0;    // 模板表达式嵌套深度（支持嵌套 {}）
 
   for (int i = 0; i < len; ++i) {
     QChar ch = text[i];
@@ -459,7 +442,7 @@ QStringList CodeEditor::validateTemplate() {
     if (ch == '$' && i + 1 < len && text[i + 1] == '{') {
       inTemplateExpr = true;
       templateExprDepth++;
-      i++; // 跳过 '{'
+      i++;  // 跳过 '{'
       continue;
     }
     // 在 ${...} 内部，跟踪嵌套的 {} 深度
@@ -474,7 +457,7 @@ QStringList CodeEditor::validateTemplate() {
           templateExprDepth = 0;
         }
       }
-      continue; // 跳过 ${...} 内部的括号，不参与匹配
+      continue;  // 跳过 ${...} 内部的括号，不参与匹配
     }
 
     // 跟踪字符串字面量内部（支持转义）
@@ -482,13 +465,11 @@ QStringList CodeEditor::validateTemplate() {
       inString = !inString;
       continue;
     }
-    if (inString)
-      continue; // 字符串内部的括号不参与匹配
+    if (inString) continue;  // 字符串内部的括号不参与匹配
 
     // 跳过单行注释（// 到行尾）
     if (ch == '/' && i + 1 < len && text[i + 1] == '/') {
-      while (i < len && text[i] != '\n')
-        ++i;
+      while (i < len && text[i] != '\n') ++i;
       continue;
     }
 
@@ -499,8 +480,7 @@ QStringList CodeEditor::validateTemplate() {
       QChar expected = (ch == ')') ? '(' : '[';
       if (stack.isEmpty()) {
         // 多余的闭括号
-        QString msg =
-            QStringLiteral("多余的 '%1' 在位置 %2").arg(ch).arg(i + 1);
+        QString msg = QStringLiteral("多余的 '%1' 在位置 %2").arg(ch).arg(i + 1);
         errors << msg;
         applyErrorUnderline(i, 1, msg, m_errorSelections);
       } else if (stack.top().ch != expected) {
@@ -515,8 +495,7 @@ QStringList CodeEditor::validateTemplate() {
         while (!stack.isEmpty() && stack.top().ch != expected) {
           stack.pop();
         }
-        if (!stack.isEmpty())
-          stack.pop();
+        if (!stack.isEmpty()) stack.pop();
       } else {
         // 正常匹配，弹出栈顶
         stack.pop();
@@ -527,9 +506,7 @@ QStringList CodeEditor::validateTemplate() {
   // 检查未闭合的开括号
   while (!stack.isEmpty()) {
     auto info = stack.pop();
-    QString msg = QStringLiteral("未闭合的 '%1' 在位置 %2")
-                      .arg(info.ch)
-                      .arg(info.pos + 1);
+    QString msg = QStringLiteral("未闭合的 '%1' 在位置 %2").arg(info.ch).arg(info.pos + 1);
     errors << msg;
     applyErrorUnderline(info.pos, 1, msg, m_errorSelections);
   }
@@ -549,8 +526,7 @@ QStringList CodeEditor::validateTemplate() {
           depth++;
         else if (text[i] == '}')
           depth--;
-        if (depth > 0)
-          i++;
+        if (depth > 0) i++;
       }
       if (depth > 0) {
         // 扫描到文档末尾仍未闭合
@@ -567,7 +543,9 @@ QStringList CodeEditor::validateTemplate() {
   // 使用栈匹配控制流标签，确保 each/if 与 /each//if 正确配对
   // 正则匹配所有控制流标签：${each}, ${if}, ${else}, ${/each}, ${/if}
   static const QRegularExpression tagRegex(
-      QStringLiteral(R"(\$\{(each|if|else|/each|/if)\b[^}]*\})"));
+      QStringLiteral("\\$\\{(") + kEachName + QStringLiteral("|") + kIfName + QStringLiteral("|") +
+      kElseName + QStringLiteral("|/") + kEachName + QStringLiteral("|/") + kIfName +
+      QStringLiteral(")\\b[^}]*\\}"));
 
   struct TagInfo {
     QString tag;
@@ -583,39 +561,34 @@ QStringList CodeEditor::validateTemplate() {
     int pos = match.capturedStart();
     int tagLen = match.capturedLength();
 
-    if (tag == "each" || tag == "if") {
+    if (tag == kEachName || tag == kIfName) {
       // 开标签压栈
       tagStack.push({tag, pos, tagLen});
-    } else if (tag == "/each" || tag == "/if") {
+    } else if (tag == QLatin1Char('/') + kEachName || tag == QLatin1Char('/') + kIfName) {
       // 闭标签需要匹配栈顶的开标签
-      QString openTag = tag.mid(1); // "each" or "if"
+      QString openTag = tag.mid(1);  // "each" or "if"
       if (tagStack.isEmpty()) {
         // 多余的闭标签
-        QString msg =
-            QStringLiteral("多余的 ${/%1} 在位置 %2").arg(openTag).arg(pos + 1);
+        QString msg = QStringLiteral("多余的 ${/%1} 在位置 %2").arg(openTag).arg(pos + 1);
         errors << msg;
         applyErrorUnderline(pos, tagLen, msg, m_errorSelections);
       } else if (tagStack.top().tag != openTag) {
         // 标签类型不匹配（如 ${if} 被 ${/each} 关闭）
-        QString msg =
-            QStringLiteral("标签不匹配: ${/%1} 在位置 %2，期望 ${/%3}")
-                .arg(openTag)
-                .arg(pos + 1)
-                .arg(tagStack.top().tag);
+        QString msg = QStringLiteral("标签不匹配: ${/%1} 在位置 %2，期望 ${/%3}")
+                          .arg(openTag)
+                          .arg(pos + 1)
+                          .arg(tagStack.top().tag);
         errors << msg;
         applyErrorUnderline(pos, tagLen, msg, m_errorSelections);
         // 错误恢复：弹出直到找到匹配的
         while (!tagStack.isEmpty() && tagStack.top().tag != openTag) {
           auto unmatched = tagStack.pop();
-          QString unMsg = QStringLiteral("未闭合的 ${%1} 在位置 %2")
-                              .arg(unmatched.tag)
-                              .arg(unmatched.pos + 1);
+          QString unMsg =
+              QStringLiteral("未闭合的 ${%1} 在位置 %2").arg(unmatched.tag).arg(unmatched.pos + 1);
           errors << unMsg;
-          applyErrorUnderline(unmatched.pos, unmatched.length, unMsg,
-                              m_errorSelections);
+          applyErrorUnderline(unmatched.pos, unmatched.length, unMsg, m_errorSelections);
         }
-        if (!tagStack.isEmpty())
-          tagStack.pop();
+        if (!tagStack.isEmpty()) tagStack.pop();
       } else {
         // 正常匹配
         tagStack.pop();
@@ -627,9 +600,7 @@ QStringList CodeEditor::validateTemplate() {
   // 检查未闭合的标签
   while (!tagStack.isEmpty()) {
     auto info = tagStack.pop();
-    QString msg = QStringLiteral("未闭合的 ${%1} 在位置 %2")
-                      .arg(info.tag)
-                      .arg(info.pos + 1);
+    QString msg = QStringLiteral("未闭合的 ${%1} 在位置 %2").arg(info.tag).arg(info.pos + 1);
     errors << msg;
     applyErrorUnderline(info.pos, info.length, msg, m_errorSelections);
   }
@@ -640,26 +611,22 @@ QStringList CodeEditor::validateTemplate() {
   // 模板引擎支持 4 个字符串方法：toLowerCase, toUpperCase, trim, capitalize
   // 检查 ${...} 中的点号分隔段，检测是否有不支持的方法名
   static const QStringList supportedMethods = {
-      QString::fromLatin1(AcCallStr::kToLowerCase),
-      QString::fromLatin1(AcCallStr::kToUpperCase),
-      QString::fromLatin1(AcCallStr::kTrim),
-      QString::fromLatin1(AcCallStr::kCapitalize)};
+      QString::fromLatin1(AcCallStr::kToLowerCase), QString::fromLatin1(AcCallStr::kToUpperCase),
+      QString::fromLatin1(AcCallStr::kTrim), QString::fromLatin1(AcCallStr::kCapitalize)};
   // 匹配 ${...} 中的普通表达式（排除 each/if/else//each//if 标签）
   static const QRegularExpression exprRegex(
-      QStringLiteral(R"(\$\{(?!(?:each|if|else|/each|/if)\b)[^}]+\})"));
+      QStringLiteral("\\$\\{(?!(?:") + kEachName + QStringLiteral("|") + kIfName +
+      QStringLiteral("|") + kElseName + QStringLiteral("|/") + kEachName + QStringLiteral("|/") +
+      kIfName + QStringLiteral(")\\b)[^}]+\\}"));
   // 合法标识符：字母或下划线开头，只含字母、数字、下划线
-  static const QRegularExpression identRegex(
-      QStringLiteral(R"(^[a-zA-Z_][a-zA-Z0-9_]*$)"));
+  static const QRegularExpression identRegex(QStringLiteral(R"(^[a-zA-Z_][a-zA-Z0-9_]*$)"));
   // 判断段是否含有方法调用特征（含大写字母，或以数字/非字母开头）
   // 大写字母开头通常表示类名或方法名（驼峰命名）
   auto looksLikeMethod = [](const QString &seg) -> bool {
-    if (seg.isEmpty())
-      return false;
-    if (!seg[0].isLetter() && seg[0] != '_')
-      return true;
+    if (seg.isEmpty()) return false;
+    if (!seg[0].isLetter() && seg[0] != '_') return true;
     for (const QChar &c : seg) {
-      if (c.isUpper())
-        return true;
+      if (c.isUpper()) return true;
     }
     return false;
   };
@@ -669,42 +636,33 @@ QStringList CodeEditor::validateTemplate() {
     auto exprMatch = exprIt.next();
 
     // 跳过注释中的表达式（避免误报）
-    int lineStart =
-        text.lastIndexOf(QLatin1Char('\n'), exprMatch.capturedStart());
-    if (lineStart == -1)
-      lineStart = 0;
-    QString linePrefix =
-        text.mid(lineStart, exprMatch.capturedStart() - lineStart);
-    if (linePrefix.contains(QStringLiteral("//")))
-      continue;
+    int lineStart = text.lastIndexOf(QLatin1Char('\n'), exprMatch.capturedStart());
+    if (lineStart == -1) lineStart = 0;
+    QString linePrefix = text.mid(lineStart, exprMatch.capturedStart() - lineStart);
+    if (linePrefix.contains(QStringLiteral("//"))) continue;
 
     // 去掉 ${ 和 } 取表达式内容
-    QString exprContent =
-        exprMatch.captured().mid(2, exprMatch.capturedLength() - 3);
-    int exprStart =
-        exprMatch.capturedStart() + 2; // 表达式内容在文本中的起始位置
+    QString exprContent = exprMatch.captured().mid(2, exprMatch.capturedLength() - 3);
+    int exprStart = exprMatch.capturedStart() + 2;  // 表达式内容在文本中的起始位置
 
     // 按点号分割路径段（如 user.address.city.toLowerCase）
     QStringList segments = exprContent.split(QLatin1Char('.'));
-    if (segments.size() < 2)
-      continue; // 没有点号，跳过
+    if (segments.size() < 2) continue;  // 没有点号，跳过
 
     // 第一段是变量名，后续段可能是属性或方法
     int segPos = exprStart;
-    segPos += segments[0].length() + 1; // 跳过第一段和点号
+    segPos += segments[0].length() + 1;  // 跳过第一段和点号
 
     for (int s = 1; s < segments.size(); ++s) {
       QString seg = segments[s].trimmed();
 
       if (looksLikeMethod(seg) && !supportedMethods.contains(seg)) {
         // 方法名风格且不在支持列表
-        QString msg =
-            QStringLiteral("不支持的方法 '%1'，支持: %2")
-                .arg(seg, supportedMethods.join(QStringLiteral(", ")));
+        QString msg = QStringLiteral("不支持的方法 '%1'，支持: %2")
+                          .arg(seg, supportedMethods.join(QStringLiteral(", ")));
         errors << msg;
         applyErrorUnderline(segPos, seg.length(), msg, m_errorSelections);
-      } else if (!identRegex.match(seg).hasMatch() &&
-                 !supportedMethods.contains(seg)) {
+      } else if (!identRegex.match(seg).hasMatch() && !supportedMethods.contains(seg)) {
         // 不是合法标识符也不是已知方法
         QString msg = QStringLiteral("无效的标识符 '%1'").arg(seg);
         errors << msg;
@@ -712,8 +670,7 @@ QStringList CodeEditor::validateTemplate() {
       }
 
       // 跳到下一个段
-      if (s + 1 < segments.size())
-        segPos += seg.length() + 1;
+      if (s + 1 < segments.size()) segPos += seg.length() + 1;
     }
   }
 
@@ -739,32 +696,29 @@ QStringList CodeEditor::validateAc() {
   QStringList errors;
   QString text = toPlainText();
 
-  if (text.trimmed().isEmpty())
-    return errors;
+  if (text.trimmed().isEmpty()) return errors;
 
   AcExecutor executor;
   executor.parse(text);
 
   // 收集所有错误：先取解析错误，再取未声明变量错误
   QStringList allErrors;
-  if (!executor.error().isEmpty())
-    allErrors << executor.error();
+  if (!executor.error().isEmpty()) allErrors << executor.error();
   allErrors << executor.validateUndeclaredIdents();
 
   for (const QString &errMsg : allErrors) {
-    if (errMsg.isEmpty())
-      continue;
+    if (errMsg.isEmpty()) continue;
     errors << errMsg;
 
     // 从错误信息中提取行号，格式如 "... at line 5"
     static const QRegularExpression lineRegex(QStringLiteral("at line (\\d+)"));
     auto match = lineRegex.match(errMsg);
     if (match.hasMatch()) {
-      int line = match.captured(1).toInt() - 1; // 0-based
+      int line = match.captured(1).toInt() - 1;  // 0-based
       QTextBlock block = document()->findBlockByNumber(line);
       if (block.isValid()) {
         int blockPos = block.position();
-        int blockLen = block.length() - 1; // 去掉换行符
+        int blockLen = block.length() - 1;  // 去掉换行符
         if (blockLen > 0) {
           applyErrorUnderline(blockPos, blockLen, errMsg, m_errorSelections);
         }
@@ -790,9 +744,8 @@ QStringList CodeEditor::validateAc() {
  * @param tooltip 鼠标悬停时显示的提示信息
  * @param selections 输出参数，追加创建的 ExtraSelection
  */
-void CodeEditor::applyErrorUnderline(
-    int from, int length, const QString &tooltip,
-    QList<QTextEdit::ExtraSelection> &selections) {
+void CodeEditor::applyErrorUnderline(int from, int length, const QString &tooltip,
+                                     QList<QTextEdit::ExtraSelection> &selections) {
   QTextEdit::ExtraSelection sel;
   // 不设置下划线样式（由 paintEvent 自定义绘制超粗波浪线）
   // 只设置加粗字体和 Tooltip 提示
@@ -806,8 +759,7 @@ void CodeEditor::applyErrorUnderline(
   selections.append(sel);
 
   // 记录错误行号，用于行号区域红色显示
-  QTextBlock block =
-      document()->findBlock(qMin(from, document()->characterCount() - 1));
+  QTextBlock block = document()->findBlock(qMin(from, document()->characterCount() - 1));
   if (block.isValid()) {
     m_errorLines.insert(block.blockNumber());
   }
@@ -835,23 +787,20 @@ void CodeEditor::applyErrorUnderline(
  * - 颜色：Qt::red
  */
 void CodeEditor::paintEvent(QPaintEvent *event) {
-
   // 步骤1: 调用基类完成标准绘制
   // 这会绘制所有文本、背景、ExtraSelection（包括默认的细波浪线）
   QPlainTextEdit::paintEvent(event);
 
   // 步骤2: 如果没有错误标记，直接返回
-  if (m_errorRanges.isEmpty())
-    return;
+  if (m_errorRanges.isEmpty()) return;
 
   // 创建画笔用于绘制超粗波浪线
   QPainter painter(viewport());
-  painter.setRenderHint(QPainter::Antialiasing); // 启用抗锯齿，使线条平滑
-  painter.setPen(QPen(Qt::red, 1.5));            // 1.5 像素宽的红色画笔
+  painter.setRenderHint(QPainter::Antialiasing);  // 启用抗锯齿，使线条平滑
+  painter.setPen(QPen(Qt::red, 1.5));             // 1.5 像素宽的红色画笔
 
   // 步骤3: 遍历所有错误位置范围，为每个位置绘制超粗波浪线
   for (const auto &range : m_errorRanges) {
-
     int start = range.start;
     int end = start + range.length;
 
@@ -862,8 +811,7 @@ void CodeEditor::paintEvent(QPaintEvent *event) {
     // 遍历选区覆盖的所有文本块（可能跨多行）
     while (!cursor.atEnd() && cursor.position() <= end) {
       QTextBlock block = cursor.block();
-      QRect blockRect =
-          blockBoundingGeometry(block).translated(contentOffset()).toRect();
+      QRect blockRect = blockBoundingGeometry(block).translated(contentOffset()).toRect();
 
       // 计算当前块内需要绘制的字符范围
       int blockStart = block.position();
@@ -871,7 +819,6 @@ void CodeEditor::paintEvent(QPaintEvent *event) {
       int selEndInBlock = qMin(block.length() - 1, end - blockStart);
 
       if (selStartInBlock < selEndInBlock) {
-
         QTextLayout *layout = block.layout();
         if (!layout) {
           cursor.movePosition(QTextCursor::NextBlock);
@@ -892,8 +839,8 @@ void CodeEditor::paintEvent(QPaintEvent *event) {
         int y = blockRect.bottom() + 3;
 
         // 波浪线参数（集中定义，便于调整）
-        const double waveAmplitude = 1.5; // 振幅：波浪高度（px）
-        const double waveLength = 8.0;    // 波长：一个完整波形的宽度（px）
+        const double waveAmplitude = 1.5;  // 振幅：波浪高度（px）
+        const double waveLength = 8.0;     // 波长：一个完整波形的宽度（px）
 
         // 使用 QPainterPath 绘制连续的波浪线（避免 drawPoint 导致的糊状效果）
         QPainterPath path;
@@ -908,8 +855,7 @@ void CodeEditor::paintEvent(QPaintEvent *event) {
       }
 
       // 移动到下一个块
-      if (!cursor.movePosition(QTextCursor::NextBlock))
-        break;
+      if (!cursor.movePosition(QTextCursor::NextBlock)) break;
     }
   }
 }
@@ -930,7 +876,7 @@ bool CodeEditor::viewportEvent(QEvent *event) {
     QHelpEvent *helpEvent = static_cast<QHelpEvent *>(event);
     // 将鼠标屏幕坐标转换为文档中的光标位置
     QTextCursor cursor = cursorForPosition(helpEvent->pos());
-    int pos = cursor.position(); // 光标在文档中的位置
+    int pos = cursor.position();  // 光标在文档中的位置
 
     // 如果已有自定义弹窗，先隐藏
     hideErrorTooltip();
@@ -954,7 +900,7 @@ bool CodeEditor::viewportEvent(QEvent *event) {
 void CodeEditor::showErrorTooltip(const QPoint &pos, const QString &text) {
   hideErrorTooltip();
   auto *tip = new AuiErrorToolTip(text, this);
-  tip->move(pos + QPoint(1, 6)); // 略微偏移，避免遮挡代码
+  tip->move(pos + QPoint(1, 6));  // 略微偏移，避免遮挡代码
   tip->adjustSize();
   tip->show();
   m_errorTooltip = tip;
@@ -984,12 +930,10 @@ int CodeEditor::calculateNewLineIndent(const QString &linePrefix) const {
   }
 
   QString trimmed = linePrefix.trimmed();
-  if (trimmed.isEmpty())
-    return baseIndent;
+  if (trimmed.isEmpty()) return baseIndent;
 
   // ── AC / JSON：{ 结尾 → 加一级缩进 ──
-  if (trimmed.endsWith(QLatin1Char('{')))
-    return baseIndent + FormatCode::kIndentSize;
+  if (trimmed.endsWith(QLatin1Char('{'))) return baseIndent + FormatCode::kIndentSize;
 
   // ── JSON：[ 结尾 → 加一级缩进 ──
   if (m_validationMode == JsonValidation && trimmed.endsWith(QLatin1Char('[')))
@@ -997,16 +941,16 @@ int CodeEditor::calculateNewLineIndent(const QString &linePrefix) const {
 
   // ── TPL：${if ...} / ${each ...} 结尾 → 加一级缩进 ──
   if (m_validationMode == TemplateValidation) {
-    static const QRegularExpression openTplRe(
-        QStringLiteral(R"(\$\{(each\b|if\b)[^}]*\}$)"));
-    if (openTplRe.match(trimmed).hasMatch())
-      return baseIndent + FormatCode::kIndentSize;
+    static const QRegularExpression openTplRe(QStringLiteral("\\$\\{(") + kEachName +
+                                              QStringLiteral("\\b|") + kIfName +
+                                              QStringLiteral("\\b)[^}]*\\}$"));
+    if (openTplRe.match(trimmed).hasMatch()) return baseIndent + FormatCode::kIndentSize;
 
     // ${/each} / ${/if} 单独一行 → 减一级缩进
-    static const QRegularExpression closeTplRe(
-        QStringLiteral(R"(\$\{/(each|if)\}$)"));
-    if (closeTplRe.match(trimmed).hasMatch())
-      return qMax(0, baseIndent - FormatCode::kIndentSize);
+    static const QRegularExpression closeTplRe(QStringLiteral("\\$\\{/(") + kEachName +
+                                               QStringLiteral("|") + kIfName +
+                                               QStringLiteral(")\\}$"));
+    if (closeTplRe.match(trimmed).hasMatch()) return qMax(0, baseIndent - FormatCode::kIndentSize);
   }
 
   return baseIndent;
@@ -1016,29 +960,27 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
   // ── 补全器处于弹出状态时，优先由补全器处理 ──
   if (m_completer && m_completer->popup()->isVisible()) {
     switch (event->key()) {
-    case Qt::Key_Enter:
-    case Qt::Key_Return:
-    case Qt::Key_Tab: {
-      // 优先使用弹出列表中用户用方向键选中的行
-      QModelIndex idx = m_completer->popup()->currentIndex();
-      if (!idx.isValid())
-        idx = m_completer->currentIndex(); // 退回到默认第一行
-      if (idx.isValid())
-        m_completer->activated(idx.data().toString());
-      return;
-    }
-    case Qt::Key_Escape:
-      m_completer->popup()->hide();
-      return;
-    case Qt::Key_Up:
-    case Qt::Key_Down:
-    case Qt::Key_PageUp:
-    case Qt::Key_PageDown:
-      // 方向键让补全器自己处理
-      QPlainTextEdit::keyPressEvent(event);
-      return;
-    default:
-      break;
+      case Qt::Key_Enter:
+      case Qt::Key_Return:
+      case Qt::Key_Tab: {
+        // 优先使用弹出列表中用户用方向键选中的行
+        QModelIndex idx = m_completer->popup()->currentIndex();
+        if (!idx.isValid()) idx = m_completer->currentIndex();  // 退回到默认第一行
+        if (idx.isValid()) m_completer->activated(idx.data().toString());
+        return;
+      }
+      case Qt::Key_Escape:
+        m_completer->popup()->hide();
+        return;
+      case Qt::Key_Up:
+      case Qt::Key_Down:
+      case Qt::Key_PageUp:
+      case Qt::Key_PageDown:
+        // 方向键让补全器自己处理
+        QPlainTextEdit::keyPressEvent(event);
+        return;
+      default:
+        break;
     }
   }
 
@@ -1057,8 +999,7 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
       }
       if (remove > 0) {
         cursor.beginEditBlock();
-        for (int i = 0; i < remove; ++i)
-          cursor.deleteChar();
+        for (int i = 0; i < remove; ++i) cursor.deleteChar();
         cursor.endEditBlock();
       }
       return;
@@ -1075,8 +1016,7 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
       // 获取光标前一个字符（用于 " 的特殊判断）
       QTextCursor tc = textCursor();
       tc.movePosition(QTextCursor::Left, QTextCursor::KeepAnchor, 1);
-      QChar charBefore =
-          tc.selectedText().isEmpty() ? QChar() : tc.selectedText()[0];
+      QChar charBefore = tc.selectedText().isEmpty() ? QChar() : tc.selectedText()[0];
 
       if (FormatCode::shouldAutoPair(ch, charBefore)) {
         QChar close = FormatCode::matchingCloseChar(ch);
@@ -1113,13 +1053,11 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
 
       // 换行 + 缩进（块内）
       QPlainTextEdit::keyPressEvent(event);
-      if (indent > 0)
-        insertPlainText(QString(indent, QLatin1Char(' ')));
+      if (indent > 0) insertPlainText(QString(indent, QLatin1Char(' ')));
 
       // 再换行 + 反缩进 + 闭字符
       int closeIndent = qMax(0, indent - FormatCode::kIndentSize);
-      insertPlainText(QStringLiteral("\n") +
-                      QString(closeIndent, QLatin1Char(' ')) + nextChar);
+      insertPlainText(QStringLiteral("\n") + QString(closeIndent, QLatin1Char(' ')) + nextChar);
 
       // 光标回到中间行末尾
       QTextCursor back = textCursor();
@@ -1129,8 +1067,7 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
     } else {
       // 普通 Enter 自动缩进
       QPlainTextEdit::keyPressEvent(event);
-      if (indent > 0)
-        insertPlainText(QString(indent, QLatin1Char(' ')));
+      if (indent > 0) insertPlainText(QString(indent, QLatin1Char(' ')));
     }
     return;
   }
@@ -1147,8 +1084,7 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
         int currentIndent = beforeCursor.length();
         int correctIndent = qMax(0, currentIndent - FormatCode::kIndentSize);
         tc.removeSelectedText();
-        if (correctIndent > 0)
-          insertPlainText(QString(correctIndent, QLatin1Char(' ')));
+        if (correctIndent > 0) insertPlainText(QString(correctIndent, QLatin1Char(' ')));
         insertPlainText(QString(ch));
         return;
       }
@@ -1172,8 +1108,7 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
   }
 
   // ── 键入单词字符后弹出补全 ──
-  if (m_completer && event->text().length() == 1 &&
-      event->text()[0].isLetterOrNumber()) {
+  if (m_completer && event->text().length() == 1 && event->text()[0].isLetterOrNumber()) {
     showCompleter();
   }
 }
@@ -1190,16 +1125,14 @@ void CodeEditor::initCompleter(ValidationMode mode) {
     m_completer = nullptr;
   }
 
-  if (mode == NoValidation)
-    return;
+  if (mode == NoValidation) return;
 
   m_completer = GuessCode::createCompleter(static_cast<int>(mode), this);
-  if (!m_completer)
-    return;
+  if (!m_completer) return;
 
   m_completer->setWidget(this);
-  connect(m_completer, QOverload<const QString &>::of(&QCompleter::activated),
-          this, &CodeEditor::insertCompletion);
+  connect(m_completer, QOverload<const QString &>::of(&QCompleter::activated), this,
+          &CodeEditor::insertCompletion);
 }
 
 void CodeEditor::insertCompletion(const QString &completion) {
@@ -1208,9 +1141,7 @@ void CodeEditor::insertCompletion(const QString &completion) {
   int pos = tc.position();
   QString text = toPlainText();
   int start = pos;
-  while (start > 0 &&
-         (text[start - 1].isLetterOrNumber() || text[start - 1] == '_'))
-    --start;
+  while (start > 0 && (text[start - 1].isLetterOrNumber() || text[start - 1] == '_')) --start;
   if (start < pos) {
     tc.setPosition(start);
     tc.setPosition(pos, QTextCursor::KeepAnchor);
@@ -1219,8 +1150,7 @@ void CodeEditor::insertCompletion(const QString &completion) {
   // 插入补全后的文本
   insertPlainText(completion);
   // 关闭补全弹窗
-  if (m_completer)
-    m_completer->popup()->hide();
+  if (m_completer) m_completer->popup()->hide();
 }
 
 /// @brief 弹出补全建议列表
@@ -1233,8 +1163,7 @@ static void showCompleterInternal(QCompleter *c) {
 }
 
 void CodeEditor::showCompleter() {
-  if (!m_completer)
-    return;
+  if (!m_completer) return;
 
   // 手动从光标位置向左扫描，提取单词前缀
   // 不使用 QTextCursor::StartOfWord，因为它在某些标点后的位置行为不稳定
@@ -1242,9 +1171,7 @@ void CodeEditor::showCompleter() {
   QString text = toPlainText();
   int start = pos;
   // 从光标前一个字符开始向左扫描单词字符（字母、数字、下划线）
-  while (start > 0 &&
-         (text[start - 1].isLetterOrNumber() || text[start - 1] == '_'))
-    --start;
+  while (start > 0 && (text[start - 1].isLetterOrNumber() || text[start - 1] == '_')) --start;
   QString prefix = text.mid(start, pos - start);
 
   if (prefix.isEmpty()) {
@@ -1253,18 +1180,15 @@ void CodeEditor::showCompleter() {
   }
 
   // ── 合并静态词库 + 动态 let 变量 + new 后的原生类 ──
-  GuessCode::FileType ft =
-      GuessCode::validationModeToFileType(m_validationMode);
+  GuessCode::FileType ft = GuessCode::validationModeToFileType(m_validationMode);
   QStringList words = GuessCode::getAllCompletions(ft);
   words << GuessCode::extractLetVariables(toPlainText());
 
   // 仅当光标在 new 关键字之后时，才提示原生类名（如 DB）
   int ctxPos = start;
-  while (ctxPos > 0 && text[ctxPos - 1].isSpace())
-    --ctxPos;
-  if (ctxPos >= 3 &&
-      text.mid(ctxPos - 3, 3) == QString::fromLatin1(AcKeyword::kNew))
-    words << kAcClasses;
+  while (ctxPos > 0 && text[ctxPos - 1].isSpace()) --ctxPos;
+  if (ctxPos >= 3 && text.mid(ctxPos - 3, 3) == QString::fromLatin1(AcKeyword::kNew))
+    words << AcClass::kAll;
 
   words.removeDuplicates();
 
@@ -1315,22 +1239,21 @@ void CodeEditor::formatCode() {
   FormatCode::FormatMode mode;
 
   switch (m_validationMode) {
-  case JsonValidation:
-    mode = FormatCode::FormatJson;
-    break;
-  case AcValidation:
-    mode = FormatCode::FormatAc;
-    break;
-  case TemplateValidation:
-    mode = FormatCode::FormatTpl;
-    break;
-  default:
-    return; // 不支持的模式，不做格式化
+    case JsonValidation:
+      mode = FormatCode::FormatJson;
+      break;
+    case AcValidation:
+      mode = FormatCode::FormatAc;
+      break;
+    case TemplateValidation:
+      mode = FormatCode::FormatTpl;
+      break;
+    default:
+      return;  // 不支持的模式，不做格式化
   }
 
   QString formatted = FormatCode::format(src, mode);
-  if (formatted == src)
-    return;
+  if (formatted == src) return;
 
   // 替换文本，并保持光标位置
   int cursorPos = textCursor().position();

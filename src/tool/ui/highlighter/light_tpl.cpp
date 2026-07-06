@@ -4,7 +4,10 @@
  */
 
 #include "light_tpl.h"
+
 #include "light_color.h"
+#include "src/engine/ac_language.h"
+
 
 /**
  * @brief 构造函数
@@ -28,42 +31,45 @@ LightTpl::LightTpl(QTextDocument *parent) : QSyntaxHighlighter(parent) {
   QTextCharFormat keywordFormat;
   keywordFormat.setForeground(keyword);
   keywordFormat.setFontWeight(QFont::Bold);
-  m_rules.append({QRegularExpression(QStringLiteral(
-                      "\\$\\{(?:each|if|else|/each|/if)\\b[^}]*\\}")),
-                  keywordFormat});
+  m_rules.append(
+      {QRegularExpression(
+           QStringLiteral("\\$\\{(?:") + QString::fromLatin1(AcTemplate::kEachPrefix).trimmed() +
+           QStringLiteral("|") + QString::fromLatin1(AcTemplate::kIfPrefix).trimmed() +
+           QStringLiteral("|") + QString::fromLatin1(AcTemplate::kElse).mid(2, 4) +
+           QStringLiteral("|/") + QString::fromLatin1(AcTemplate::kEachPrefix).trimmed() +
+           QStringLiteral("|/") + QString::fromLatin1(AcTemplate::kIfPrefix).trimmed() +
+           QStringLiteral(")\\b[^}]*\\}")),
+       keywordFormat});
 
   // ── 2. 模板变量（绿色） ──
   QTextCharFormat variableFormat;
   variableFormat.setForeground(variable);
   m_rules.append(
-      {QRegularExpression(QStringLiteral("\\$\\{[^}]+\\}")), variableFormat});
+      {QRegularExpression(QString::fromLatin1(AcTemplate::kExprOpen) + QStringLiteral("[^}]+\\}")),
+       variableFormat});
 
   // ── 3. 算术运算符（红色加粗） ──
   QTextCharFormat operatorFormat;
   operatorFormat.setForeground(operator_);
   operatorFormat.setFontWeight(QFont::Bold);
-  m_rules.append(
-      {QRegularExpression(QStringLiteral("[+\\-*/]")), operatorFormat});
+  m_rules.append({QRegularExpression(QStringLiteral("[+\\-*/]")), operatorFormat});
 
   // ── 4. 注释（灰色斜体） ──
   QTextCharFormat commentFormat;
   commentFormat.setForeground(comment);
   commentFormat.setFontItalic(true);
-  m_rules.append(
-      {QRegularExpression(QStringLiteral("//[^\n]*")), commentFormat});
+  m_rules.append({QRegularExpression(QStringLiteral("//[^\n]*")), commentFormat});
 
   // ── 5. 字符串（橙色） ──
   QTextCharFormat stringFormat;
   stringFormat.setForeground(string_);
-  m_rules.append(
-      {QRegularExpression(QStringLiteral("\"[^\"]*\"|'[^']*'")), stringFormat});
+  m_rules.append({QRegularExpression(QStringLiteral("\"[^\"]*\"|'[^']*'")), stringFormat});
 
   // ── 6. 函数调用（紫色） ──
   // 匹配任何标识符后跟括号，如 render()、write()、readJson() 等
   QTextCharFormat callFormat;
   callFormat.setForeground(call);
-  m_rules.append(
-      {QRegularExpression(QStringLiteral("\\b\\w+(?=\\s*\\()")), callFormat});
+  m_rules.append({QRegularExpression(QStringLiteral("\\b\\w+(?=\\s*\\()")), callFormat});
 }
 
 /**
@@ -75,8 +81,7 @@ LightTpl::LightTpl(QTextDocument *parent) : QSyntaxHighlighter(parent) {
 void LightTpl::highlightBlock(const QString &text) {
   // 应用所有高亮规则
   for (const HighlightRule &rule : std::as_const(m_rules)) {
-    QRegularExpressionMatchIterator matchIterator =
-        rule.pattern.globalMatch(text);
+    QRegularExpressionMatchIterator matchIterator = rule.pattern.globalMatch(text);
     while (matchIterator.hasNext()) {
       QRegularExpressionMatch match = matchIterator.next();
       setFormat(match.capturedStart(), match.capturedLength(), rule.format);

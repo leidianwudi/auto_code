@@ -1,9 +1,11 @@
 {
-    "trae.safe-rm.enabled": false,
-    "terminal.integrated.env.windows": {
-        "SAFE_RM_ALLOWED_PATH": null,
-        "SAFE_RM_DENIED_PATH": null,
-        "SAFE_RM_AUTO_ADD_TEMP": null,
-        "SAFE_RM_PROTECTION_FLAG": null
+    "clang-format.executable": "D:\\tool\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\Llvm\\x64\\bin\\clang-format.exe",
+    "[cpp]": {
+        "editor.defaultFormatter": "xaver.clang-format",
+        "editor.formatOnSave": true
+    },
+    "[c]": {
+        "editor.defaultFormatter": "xaver.clang-format",
+        "editor.formatOnSave": true
     }
 }

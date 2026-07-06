@@ -2,17 +2,18 @@
  * @file ac_language.h
  * @brief .ac 脚本语言 — 关键字、内置函数、类定义集中声明
  *
- * 按调用方式分四大区，看一眼就能找到引擎支持的全部内容：
- * 0. kAcKeywords:   语言关键字       let  new  for  if  else  return  ...
- * 1. AcBuiltin:     一级函数          renderTpl(...)  write(...)  print(...)
- * 2. AcClass*:      new 实例化类     new DB({...})  → db.query(...)
- * 3. AcCall*:       call() 路由类    call("str", "toLowerCase", ...)
+ * 按调用方式分五大区，看一眼就能找到引擎支持的全部内容：
+ * 0. AcKeyword::kAll  语言关键字列表    let  new  for  if  else  return  ...
+ * 1. AcBuiltin::kAll  一级函数列表       renderTpl(...)  write(...)  print(...)
+ * 2. AcClass::kAll    new 实例化类列表   DB  File
+ * 3. AcCall*:          call() 路由类     call("str", "toLowerCase", ...)
  *
  * 新增函数/类/方法/关键字只需改此文件，脚本引擎、语法高亮、自动补全自动同步。
  */
 
 #pragma once
 
+#include <QJsonObject>
 #include <QString>
 #include <QStringList>
 
@@ -36,25 +37,16 @@ inline constexpr const char *kTrue = "true";
 inline constexpr const char *kFalse = "false";
 inline constexpr const char *kClass = "class";
 inline constexpr const char *kFunction = "function";
-} // namespace AcKeyword
 
-/// @brief .ac 语言关键字列表（供高亮、补全使用）
-inline const QStringList kAcKeywords = {
-    QString::fromLatin1(AcKeyword::kLet),
-    QString::fromLatin1(AcKeyword::kNew),
-    QString::fromLatin1(AcKeyword::kMain),
-    QString::fromLatin1(AcKeyword::kFor),
-    QString::fromLatin1(AcKeyword::kIn),
-    QString::fromLatin1(AcKeyword::kIf),
-    QString::fromLatin1(AcKeyword::kElse),
-    QString::fromLatin1(AcKeyword::kCall),
-    QString::fromLatin1(AcKeyword::kReturn),
-    QString::fromLatin1(AcKeyword::kThis),
-    QString::fromLatin1(AcKeyword::kTrue),
-    QString::fromLatin1(AcKeyword::kFalse),
-    QString::fromLatin1(AcKeyword::kClass),
-    QString::fromLatin1(AcKeyword::kFunction),
+/// @brief 关键字列表（供高亮、补全使用）
+inline const QStringList kAll = {
+    QString::fromLatin1(kLet),   QString::fromLatin1(kNew),      QString::fromLatin1(kMain),
+    QString::fromLatin1(kFor),   QString::fromLatin1(kIn),       QString::fromLatin1(kIf),
+    QString::fromLatin1(kElse),  QString::fromLatin1(kCall),     QString::fromLatin1(kReturn),
+    QString::fromLatin1(kThis),  QString::fromLatin1(kTrue),     QString::fromLatin1(kFalse),
+    QString::fromLatin1(kClass), QString::fromLatin1(kFunction),
 };
+}  // namespace AcKeyword
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 一、一级函数 — .ac 脚本直接调用，C++ 引擎后端实现
@@ -81,21 +73,14 @@ inline constexpr const char *kMerge = "merge";
 inline constexpr const char *kBasename = "basename";
 /// @brief 判断文件是否存在（模板专用）：fileExists("path.txt") → 返回 bool
 inline constexpr const char *kFileExists = "fileExists";
-} // namespace AcBuiltin
 
 /// @brief 一级函数名列表（供解析器校验、高亮、补全使用）
-inline const QStringList kAcBuiltins = {
-    QString(AcBuiltin::kCall),
-    QString(AcBuiltin::kReadJson),
-    QString(AcBuiltin::kReadFile),
-    QString(AcBuiltin::kRenderTpl),
-    QString(AcBuiltin::kWriteFile),
-    QString(AcBuiltin::kPrint),
-    QString(AcBuiltin::kGetCheckedFiles),
-    QString(AcBuiltin::kMerge),
-    QString(AcBuiltin::kBasename),
-    QString(AcBuiltin::kFileExists),
+inline const QStringList kAll = {
+    QString(kCall),      QString(kReadJson),   QString(kReadFile),        QString(kRenderTpl),
+    QString(kWriteFile), QString(kPrint),      QString(kGetCheckedFiles), QString(kMerge),
+    QString(kBasename),  QString(kFileExists),
 };
+}  // namespace AcBuiltin
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 二、new 实例化类 — new DB({...})  →  db.query(...)
@@ -112,13 +97,55 @@ inline constexpr const char *kQuery = "query";
 /// @brief 断开连接：db.disconnect()
 inline constexpr const char *kDisconnect = "disconnect";
 
+/// @brief DB 类内部 JSON 键名常量（DbConfig 依赖这些常量，必须在前）
+inline constexpr const char *kConnId = "connId";
+inline constexpr const char *kHost = "host";
+inline constexpr const char *kPort = "port";
+inline constexpr const char *kUser = "user";
+inline constexpr const char *kPassword = "password";
+inline constexpr const char *kDatabase = "database";
+inline constexpr const char *kConnected = "connected";
+inline constexpr const char *kTable = "table";
+inline constexpr const char *kSql = "sql";
+/// @brief tableSchema 返回的列信息 JSON 键名
+inline constexpr const char *kColName = "name";
+inline constexpr const char *kColType = "type";
+inline constexpr const char *kColNullable = "nullable";
+inline constexpr const char *kColKey = "key";
+inline constexpr const char *kColDefault = "default";
+inline constexpr const char *kColExtra = "extra";
+inline constexpr const char *kColComment = "comment";
+
+/// @brief 数据库连接配置 — 对应 new DB({host, port, user, password, database})
+struct DbConfig {
+  QString host;
+  int port = 3306;
+  QString user;
+  QString password;
+  QString database;
+
+  /// @brief 从 JSON 对象解析配置
+  static DbConfig fromJson(const QJsonObject &obj) {
+    DbConfig cfg;
+    cfg.host = obj.value(QString::fromLatin1(kHost)).toString();
+    cfg.port = obj.value(QString::fromLatin1(kPort)).toInt(3306);
+    cfg.user = obj.value(QString::fromLatin1(kUser)).toString();
+    cfg.password = obj.value(QString::fromLatin1(kPassword)).toString();
+    cfg.database = obj.value(QString::fromLatin1(kDatabase)).toString();
+    return cfg;
+  }
+
+  /// @brief 配置是否有效（必需的 host、user、database 均已填写）
+  bool isValid() const { return !host.isEmpty() && !user.isEmpty() && !database.isEmpty(); }
+};
+
 /// @brief DB 类所有方法名列表
 inline const QStringList kMethods = {
     QString::fromLatin1(kTableSchema),
     QString::fromLatin1(kQuery),
     QString::fromLatin1(kDisconnect),
 };
-} // namespace AcDB
+}  // namespace AcDB
 
 /// @brief File 文件类 — 类名与方法名常量
 namespace AcFile {
@@ -134,13 +161,15 @@ inline const QStringList kMethods = {
     QString::fromLatin1(kRead),
     QString::fromLatin1(kWrite),
 };
-} // namespace AcFile
+}  // namespace AcFile
 
 /// @brief 可实例化类名列表（供解释器注册、高亮、补全使用）
-inline const QStringList kAcClasses = {
+namespace AcClass {
+inline const QStringList kAll = {
     QString::fromLatin1(AcDB::kClassName),
     QString::fromLatin1(AcFile::kClassName),
 };
+}  // namespace AcClass
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 三、call() 路由类 — call("str", "toLowerCase", ...)
@@ -169,7 +198,7 @@ inline const QStringList kMethods = {
     QString::fromLatin1(kTrim),        QString::fromLatin1(kCapitalize),
     QString::fromLatin1(kSubstring),   QString::fromLatin1(kReplace),
 };
-} // namespace AcCallStr
+}  // namespace AcCallStr
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 四、运行时内部协议 — 实例对象标记、构造器入口、伪类名
@@ -182,7 +211,7 @@ inline constexpr const char *kClassKey = "__class__";
 inline constexpr const char *kConstructor = "__construct__";
 /// @brief 一级函数注册的伪类名：FunMgr::call("builtin", name, args)
 inline constexpr const char *kBuiltinClass = "builtin";
-} // namespace AcRuntime
+}  // namespace AcRuntime
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 五、模板语法标记 — ${...} 占位符、块标签
@@ -203,4 +232,4 @@ inline constexpr const char *kEachClose = "${/each}";
 inline constexpr const char *kElse = "${else}";
 /// @brief 循环当前元素的 context 键：${.} 或 ${this}
 inline constexpr const char *kCurrentItem = ".";
-} // namespace AcTemplate
+}  // namespace AcTemplate

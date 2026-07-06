@@ -73,7 +73,7 @@ QJsonValue FunBuiltin::renderTpl(const QJsonArray &args) {
 // ============================================================================
 
 QJsonValue FunBuiltin::readFile(const QJsonArray &args) {
-  return FunMgr::ins().call(QStringLiteral("File"), QStringLiteral("read"),
+  return FunMgr::ins().call(QString::fromLatin1(AcFile::kClassName), QString::fromLatin1(AcFile::kRead),
                             args);
 }
 
@@ -83,7 +83,7 @@ QJsonValue FunBuiltin::readFile(const QJsonArray &args) {
 
 QJsonValue FunBuiltin::writeFile(const QJsonArray &args) {
   QJsonValue r =
-      FunMgr::ins().call(QStringLiteral("File"), QStringLiteral("write"), args);
+      FunMgr::ins().call(QString::fromLatin1(AcFile::kClassName), QString::fromLatin1(AcFile::kWrite), args);
   if (r.toBool(false) && s_ctx.generatedFiles && !args.isEmpty())
     s_ctx.generatedFiles->append(QDir::toNativeSeparators(args[0].toString()));
   return r;

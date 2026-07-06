@@ -18,7 +18,7 @@ int TplBlock::findMatchingClose(const QString &block, int startPos,
                                 const QString &closeTag) {
   int depth = 1;
   int pos = startPos;
-  int openLen = 2 + openPrefix.length(); // "${" + prefix
+  int openLen = QString::fromLatin1(AcTemplate::kExprOpen).length() + openPrefix.length();
   int closeLen = closeTag.length();
 
   while (pos < block.length()) {

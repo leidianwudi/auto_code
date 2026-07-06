@@ -18,6 +18,9 @@
 
 #pragma once
 
+#include "../ac_language.h"
+
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonValue>
 #include <QString>
@@ -76,6 +79,6 @@ private:
   static MYSQL *getConnection(const QJsonObject &instance);
   /// 全局连接池：connId -> MYSQL*
   static QHash<QString, MYSQL *> s_connections;
-  /// 连接配置池：connId -> QJsonObject
-  static QHash<QString, QJsonObject> s_configs;
+  /// 连接配置池：connId -> DbConfig
+  static QHash<QString, AcDB::DbConfig> s_configs;
 };

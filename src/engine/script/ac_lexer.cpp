@@ -6,10 +6,29 @@
 #include "ac_lexer.h"
 #include "../ac_language.h"
 
+#include <QHash>
+
 /// @brief 跳过行注释（// 到行尾）
 void AcLexer::skipLineComment(const QString &source, int &pos) {
   while (pos < source.size() && source[pos] != '\n')
     ++pos;
+}
+
+/// @brief 关键字到 Token 类型的映射表
+static const QHash<QString, TokenType> &keywordMap() {
+  static const QHash<QString, TokenType> map = {
+      {QString::fromLatin1(AcKeyword::kFor), TOK_FOR},
+      {QString::fromLatin1(AcKeyword::kIn), TOK_IN},
+      {QString::fromLatin1(AcKeyword::kIf), TOK_IF},
+      {QString::fromLatin1(AcKeyword::kElse), TOK_ELSE},
+      {QString::fromLatin1(AcKeyword::kLet), TOK_LET},
+      {QString::fromLatin1(AcKeyword::kClass), TOK_CLASS},
+      {QString::fromLatin1(AcKeyword::kFunction), TOK_FUNCTION},
+      {QString::fromLatin1(AcKeyword::kNew), TOK_NEW},
+      {QString::fromLatin1(AcKeyword::kThis), TOK_THIS},
+      {QString::fromLatin1(AcKeyword::kReturn), TOK_RETURN},
+  };
+  return map;
 }
 
 /// @brief 将源码字符串拆分为 token 序列
@@ -132,26 +151,9 @@ QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
         while (i < n && (source[i].isLetterOrNumber() || source[i] == '_'))
           ++i;
         QString word = source.mid(start, i - start);
-        if (word == QString::fromLatin1(AcKeyword::kFor))
-          tokens.append({TOK_FOR, word, line});
-        else if (word == QString::fromLatin1(AcKeyword::kIn))
-          tokens.append({TOK_IN, word, line});
-        else if (word == QString::fromLatin1(AcKeyword::kIf))
-          tokens.append({TOK_IF, word, line});
-        else if (word == QString::fromLatin1(AcKeyword::kElse))
-          tokens.append({TOK_ELSE, word, line});
-        else if (word == QString::fromLatin1(AcKeyword::kLet))
-          tokens.append({TOK_LET, word, line});
-        else if (word == QString::fromLatin1(AcKeyword::kClass))
-          tokens.append({TOK_CLASS, word, line});
-        else if (word == QString::fromLatin1(AcKeyword::kFunction))
-          tokens.append({TOK_FUNCTION, word, line});
-        else if (word == QString::fromLatin1(AcKeyword::kNew))
-          tokens.append({TOK_NEW, word, line});
-        else if (word == QString::fromLatin1(AcKeyword::kThis))
-          tokens.append({TOK_THIS, word, line});
-        else if (word == QString::fromLatin1(AcKeyword::kReturn))
-          tokens.append({TOK_RETURN, word, line});
+        auto it = keywordMap().constFind(word);
+        if (it != keywordMap().constEnd())
+          tokens.append({*it, word, line});
         else
           tokens.append({TOK_IDENT, word, line});
       } else {

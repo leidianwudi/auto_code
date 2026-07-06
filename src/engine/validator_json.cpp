@@ -11,6 +11,24 @@
 #include <QJsonObject>
 #include <QRegularExpression>
 
+// ═════════════════════════════════════════════════════════════════════════════
+//  Schema JSON 键名常量（文件内部使用）
+// ═════════════════════════════════════════════════════════════════════════════
+
+namespace {
+inline constexpr const char *kSchemaProperties = "properties";
+inline constexpr const char *kSchemaType = "type";
+inline constexpr const char *kSchemaItems = "items";
+inline constexpr const char *kSchemaClass = "class";
+
+inline constexpr const char *kTypeInt = "int";
+inline constexpr const char *kTypeString = "string";
+inline constexpr const char *kTypeDouble = "double";
+inline constexpr const char *kTypeBool = "bool";
+inline constexpr const char *kTypeArray = "array";
+inline constexpr const char *kTypeObject = "object";
+} // namespace
+
 // load — 加载 schema 定义文件
 bool ValidatorJson::load(const QString &filePath) {
   // 打开文件
@@ -45,7 +63,7 @@ bool ValidatorJson::load(const QString &filePath) {
   for (auto it = root.begin(); it != root.end(); ++it) {
     QString className = it.key();
     QJsonObject classObj = it.value().toObject();
-    QJsonObject props = classObj.value(QStringLiteral("properties")).toObject();
+    QJsonObject props = classObj.value(QString::fromLatin1(kSchemaProperties)).toObject();
 
     ClassDef def;
     // 遍历该类的每个属性
@@ -54,9 +72,9 @@ bool ValidatorJson::load(const QString &filePath) {
       QJsonObject propDef = pit.value().toObject();
 
       PropertyDef pd;
-      pd.type = propDef.value(QStringLiteral("type")).toString();
-      pd.items = propDef.value(QStringLiteral("items")).toString();
-      pd.className = propDef.value(QStringLiteral("class")).toString();
+      pd.type = propDef.value(QString::fromLatin1(kSchemaType)).toString();
+      pd.items = propDef.value(QString::fromLatin1(kSchemaItems)).toString();
+      pd.className = propDef.value(QString::fromLatin1(kSchemaClass)).toString();
 
       def.properties[propName] = pd;
     }
@@ -99,19 +117,19 @@ QString ValidatorJson::validateObject(const ClassDef &def,
     QJsonValue val = obj.value(propName);
     QString childPath = path + QStringLiteral(".") + propName;
 
-    if (pd.type == QStringLiteral("int")) {
+    if (pd.type == QString::fromLatin1(kTypeInt)) {
       if (!val.isDouble())
         return QStringLiteral("'%1' should be int").arg(childPath);
-    } else if (pd.type == QStringLiteral("string")) {
+    } else if (pd.type == QString::fromLatin1(kTypeString)) {
       if (!val.isString())
         return QStringLiteral("'%1' should be string").arg(childPath);
-    } else if (pd.type == QStringLiteral("double")) {
+    } else if (pd.type == QString::fromLatin1(kTypeDouble)) {
       if (!val.isDouble())
         return QStringLiteral("'%1' should be double").arg(childPath);
-    } else if (pd.type == QStringLiteral("bool")) {
+    } else if (pd.type == QString::fromLatin1(kTypeBool)) {
       if (!val.isBool())
         return QStringLiteral("'%1' should be bool").arg(childPath);
-    } else if (pd.type == QStringLiteral("array")) {
+    } else if (pd.type == QString::fromLatin1(kTypeArray)) {
       if (!val.isArray())
         return QStringLiteral("'%1' should be array").arg(childPath);
 
@@ -136,7 +154,7 @@ QString ValidatorJson::validateObject(const ClassDef &def,
             return err;
         }
       }
-    } else if (pd.type == QStringLiteral("object")) {
+    } else if (pd.type == QString::fromLatin1(kTypeObject)) {
       if (!val.isObject())
         return QStringLiteral("'%1' should be object").arg(childPath);
 

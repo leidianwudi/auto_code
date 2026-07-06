@@ -66,7 +66,8 @@ bool BlockExpression::handle(const QString &block, int &pos,
   // === 策略 0: 内置函数调用 print(text) ===
   if (expr.startsWith(QString::fromLatin1(AcBuiltin::kPrint) + QLatin1Char('(')) &&
       expr.endsWith(QLatin1Char(')'))) {
-    QString arg = expr.mid(6, expr.length() - 7).trimmed();
+    int prefixLen = QString::fromLatin1(AcBuiltin::kPrint).length() + 1; // +1 for '('
+    QString arg = expr.mid(prefixLen, expr.length() - prefixLen - 1).trimmed();
     // 去掉可能的外层引号
     if ((arg.startsWith('\'') && arg.endsWith('\'')) ||
         (arg.startsWith('"') && arg.endsWith('"')))
@@ -84,7 +85,8 @@ bool BlockExpression::handle(const QString &block, int &pos,
   // === 策略 0: 内置函数调用 fileExists(path) ===
   if (expr.startsWith(QString::fromLatin1(AcBuiltin::kFileExists) + QLatin1Char('(')) &&
       expr.endsWith(QLatin1Char(')'))) {
-    QString arg = expr.mid(11, expr.length() - 12).trimmed();
+    int prefixLen = QString::fromLatin1(AcBuiltin::kFileExists).length() + 1; // +1 for '('
+    QString arg = expr.mid(prefixLen, expr.length() - prefixLen - 1).trimmed();
     // 去掉可能的外层引号
     if ((arg.startsWith('\'') && arg.endsWith('\'')) ||
         (arg.startsWith('"') && arg.endsWith('"')))
@@ -94,7 +96,7 @@ bool BlockExpression::handle(const QString &block, int &pos,
     if (!v.isNull() && !v.isUndefined())
       arg = v.toString();
     bool exists = QFileInfo::exists(arg);
-    result += exists ? QStringLiteral("true") : QStringLiteral("false");
+    result += exists ? QString::fromLatin1(AcKeyword::kTrue) : QString::fromLatin1(AcKeyword::kFalse);
     return true;
   }
 
@@ -115,7 +117,7 @@ bool BlockExpression::handle(const QString &block, int &pos,
     }
     if (v.isBool())
       return result +=
-             (v.toBool() ? QStringLiteral("true") : QStringLiteral("false")),
+             (v.toBool() ? QString::fromLatin1(AcKeyword::kTrue) : QString::fromLatin1(AcKeyword::kFalse)),
              true;
     return true;
   }
@@ -142,7 +144,7 @@ bool BlockExpression::handle(const QString &block, int &pos,
     result += (d == static_cast<int>(d)) ? QString::number(static_cast<int>(d))
                                          : QString::number(d);
   } else if (val.isBool())
-    result += val.toBool() ? QStringLiteral("true") : QStringLiteral("false");
+    result += val.toBool() ? QString::fromLatin1(AcKeyword::kTrue) : QString::fromLatin1(AcKeyword::kFalse);
   return true;
 }
 

@@ -4,12 +4,14 @@
  */
 
 #include "guess_code.h"
-#include "src/engine/ac_language.h"
+
 #include <QCompleter>
 #include <QListView>
 #include <QRegularExpression>
 #include <QStringListModel>
 #include <QStyleFactory>
+
+#include "src/engine/ac_language.h"
 
 // ──────────────────────────────────────────────────────────────
 //  补全词库
@@ -17,23 +19,29 @@
 
 QStringList GuessCode::getAllCompletions(FileType type) {
   switch (type) {
-  case AcFile: {
-    // 关键字和内置函数由 kAcKeywords / kAcBuiltins 统一定义
-    // 原生类（如 DB）仅在 new 后出现，由 showCompleter() 动态添加
-    return kAcKeywords + kAcBuiltins;
-  }
-  case TplFile:
-    return {
-        QStringLiteral("${if "),    QStringLiteral("${else}"),
-        QStringLiteral("${/if}"),   QStringLiteral("${each "),
-        QStringLiteral("${/each}"), QStringLiteral("${print("),
-    };
-  case JsonFile:
-    return {
-        QStringLiteral("true"),
-        QStringLiteral("false"),
-        QStringLiteral("null"),
-    };
+    case AcFile: {
+      // 关键字和内置函数由 AcKeyword::kAll / AcBuiltin::kAll 统一定义
+      // 原生类（如 DB）仅在 new 后出现，由 showCompleter() 动态添加
+      return AcKeyword::kAll + AcBuiltin::kAll;
+    }
+    case TplFile:
+      return {
+          QString::fromLatin1(AcTemplate::kExprOpen) +
+              QString::fromLatin1(AcTemplate::kIfPrefix).trimmed(),
+          QString::fromLatin1(AcTemplate::kElse),
+          QString::fromLatin1(AcTemplate::kIfClose),
+          QString::fromLatin1(AcTemplate::kExprOpen) +
+              QString::fromLatin1(AcTemplate::kEachPrefix).trimmed(),
+          QString::fromLatin1(AcTemplate::kEachClose),
+          QString::fromLatin1(AcTemplate::kExprOpen) + QString::fromLatin1(AcBuiltin::kPrint) +
+              QLatin1Char('('),
+      };
+    case JsonFile:
+      return {
+          QString::fromLatin1(AcKeyword::kTrue),
+          QString::fromLatin1(AcKeyword::kFalse),
+          QStringLiteral("null"),
+      };
   }
   return {};
 }
@@ -44,13 +52,12 @@ QStringList GuessCode::getAllCompletions(FileType type) {
 
 QCompleter *GuessCode::createCompleter(FileType type, QObject *parent) {
   QStringList words = getAllCompletions(type);
-  if (words.isEmpty())
-    return nullptr;
+  if (words.isEmpty()) return nullptr;
 
   auto *completer = new QCompleter(words, parent);
   completer->setCaseSensitivity(Qt::CaseInsensitive);
   completer->setCompletionMode(QCompleter::PopupCompletion);
-  completer->setFilterMode(Qt::MatchContains); // 包含匹配，更灵活
+  completer->setFilterMode(Qt::MatchContains);  // 包含匹配，更灵活
 
   // 弹出框样式：无圆角、紧凑间距
   // 方案：创建自定义 QListView，设置 Fusion 风格 + FramelessWindowHint，
@@ -65,19 +72,19 @@ QCompleter *GuessCode::createCompleter(FileType type, QObject *parent) {
   popupView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
   QStyle *fusionStyle = QStyleFactory::create(QStringLiteral("Fusion"));
-  if (fusionStyle)
-    popupView->setStyle(fusionStyle);
-  popupView->setStyleSheet(QStringLiteral("QListView {"
-                                          "  border: 1px solid #999;"
-                                          "  border-radius: 0px;"
-                                          "  padding: 0px;"
-                                          "  margin: 0px;"
-                                          "  background: white;"
-                                          "}"
-                                          "QListView::item {"
-                                          "  padding: 1px 4px;"
-                                          "  min-height: 18px;"
-                                          "}"));
+  if (fusionStyle) popupView->setStyle(fusionStyle);
+  popupView->setStyleSheet(
+      QStringLiteral("QListView {"
+                     "  border: 1px solid #999;"
+                     "  border-radius: 0px;"
+                     "  padding: 0px;"
+                     "  margin: 0px;"
+                     "  background: white;"
+                     "}"
+                     "QListView::item {"
+                     "  padding: 1px 4px;"
+                     "  min-height: 18px;"
+                     "}"));
 
   completer->setPopup(popupView);
   return completer;
@@ -91,15 +98,15 @@ QCompleter *GuessCode::createCompleter(int validationMode, QObject *parent) {
   // validationMode 对应 CodeEditor::ValidationMode 枚举值
   FileType ft = AcFile;
   switch (validationMode) {
-  case 1: // CodeEditor::JsonValidation
-    ft = JsonFile;
-    break;
-  case 2: // CodeEditor::TemplateValidation
-    ft = TplFile;
-    break;
-  default:
-    ft = AcFile;
-    break;
+    case 1:  // CodeEditor::JsonValidation
+      ft = JsonFile;
+      break;
+    case 2:  // CodeEditor::TemplateValidation
+      ft = TplFile;
+      break;
+    default:
+      ft = AcFile;
+      break;
   }
   return createCompleter(ft, parent);
 }
@@ -110,12 +117,12 @@ QCompleter *GuessCode::createCompleter(int validationMode, QObject *parent) {
 
 GuessCode::FileType GuessCode::validationModeToFileType(int validationMode) {
   switch (validationMode) {
-  case 1: // CodeEditor::JsonValidation
-    return JsonFile;
-  case 2: // CodeEditor::TemplateValidation
-    return TplFile;
-  default:
-    return AcFile;
+    case 1:  // CodeEditor::JsonValidation
+      return JsonFile;
+    case 2:  // CodeEditor::TemplateValidation
+      return TplFile;
+    default:
+      return AcFile;
   }
 }
 
@@ -126,8 +133,8 @@ GuessCode::FileType GuessCode::validationModeToFileType(int validationMode) {
 QStringList GuessCode::extractLetVariables(const QString &text) {
   QStringList vars;
   // 匹配 "let 变量名" 或 "let 变量名 = ..."
-  static const QRegularExpression re(
-      QStringLiteral("\\blet\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\b"));
+  static const QRegularExpression re(QStringLiteral("\\b") + QString::fromLatin1(AcKeyword::kLet) +
+                                     QStringLiteral("\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\b"));
   QRegularExpressionMatchIterator it = re.globalMatch(text);
   while (it.hasNext()) {
     QRegularExpressionMatch m = it.next();

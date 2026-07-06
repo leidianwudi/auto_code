@@ -5,16 +5,17 @@
 
 #include "ac_interpreter.h"
 
-#include "../ac_language.h"
-#include "../function/fun_builtin.h"
-#include "../function/fun_mgr.h"
-#include "../tpl/tpl_engine.h"
-
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+
+#include "../ac_language.h"
+#include "../function/fun_builtin.h"
+#include "../function/fun_mgr.h"
+#include "../tpl/tpl_engine.h"
+
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  表达式求值
@@ -22,192 +23,87 @@
 
 QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
   switch (expr.kind) {
-  case Expr::kString:
-    return QJsonValue(expr.strVal);
+    case Expr::kString:
+      return QJsonValue(expr.strVal);
 
-  case Expr::kNumber:
-    return QJsonValue(expr.numVal);
+    case Expr::kNumber:
+      return QJsonValue(expr.numVal);
 
-  case Expr::kThis:
-    return QJsonValue(m_currentThis);
+    case Expr::kThis:
+      return QJsonValue(m_currentThis);
 
-  case Expr::kIdent:
-    if (m_vars.contains(expr.ident))
-      return m_vars[expr.ident];
-    if (m_globals.contains(expr.ident))
-      return m_globals[expr.ident];
-    *m_error = QStringLiteral("undefined variable '%1'").arg(expr.ident);
-    return QJsonValue();
-
-  case Expr::kPropAccess: {
-    QJsonValue obj;
-    if (expr.ident == QString::fromLatin1(AcKeyword::kThis))
-      obj = QJsonValue(m_currentThis);
-    else if (m_vars.contains(expr.ident))
-      obj = m_vars[expr.ident];
-    else if (m_globals.contains(expr.ident))
-      obj = m_globals[expr.ident];
-    else {
+    case Expr::kIdent:
+      if (m_vars.contains(expr.ident)) return m_vars[expr.ident];
+      if (m_globals.contains(expr.ident)) return m_globals[expr.ident];
       *m_error = QStringLiteral("undefined variable '%1'").arg(expr.ident);
       return QJsonValue();
-    }
-    if (obj.isObject())
-      return obj.toObject().value(expr.prop);
-    if (obj.isArray()) {
-      bool ok = false;
-      int idx = expr.prop.toInt(&ok);
-      if (ok) {
-        QJsonArray arr = obj.toArray();
-        if (idx >= 0 && idx < arr.size())
-          return arr[idx];
+
+    case Expr::kPropAccess: {
+      QJsonValue obj = resolveVar(expr.ident);
+      if (obj.isNull() && expr.ident != QString::fromLatin1(AcKeyword::kThis)) {
+        *m_error = QStringLiteral("undefined variable '%1'").arg(expr.ident);
+        return QJsonValue();
       }
-    }
-    return QJsonValue();
-  }
-
-  case Expr::kIndexAccess: {
-    QJsonValue obj;
-    if (expr.ident == QString::fromLatin1(AcKeyword::kThis))
-      obj = QJsonValue(m_currentThis);
-    else if (m_vars.contains(expr.ident))
-      obj = m_vars[expr.ident];
-    else if (m_globals.contains(expr.ident))
-      obj = m_globals[expr.ident];
-    if (obj.isObject())
-      return obj.toObject().value(expr.indexKey);
-    if (obj.isArray()) {
-      bool ok = false;
-      int idx = expr.indexKey.toInt(&ok);
-      if (ok) {
-        QJsonArray arr = obj.toArray();
-        if (idx >= 0 && idx < arr.size())
-          return arr[idx];
-      }
-    }
-    *m_error = QStringLiteral("cannot access index '%1' on '%2'")
-                   .arg(expr.indexKey, expr.ident);
-    return QJsonValue();
-  }
-
-  case Expr::kObject: {
-    QJsonObject obj;
-    for (const auto &e : expr.objEntries)
-      obj[e.key] = evalExpr(*e.value);
-    return obj;
-  }
-
-  case Expr::kArray: {
-    QJsonArray arr;
-    for (auto *e : expr.arrItems)
-      arr.append(evalExpr(*e));
-    return arr;
-  }
-
-  case Expr::kFuncCall:
-    return callBuiltin(expr.funcCall.name, expr.funcCall.args);
-
-  case Expr::kMethodCall: {
-    QJsonValue objVal;
-    if (expr.methodCall.objName == QString::fromLatin1(AcKeyword::kThis))
-      objVal = QJsonValue(m_currentThis);
-    else if (m_vars.contains(expr.methodCall.objName))
-      objVal = m_vars[expr.methodCall.objName];
-    else if (m_globals.contains(expr.methodCall.objName))
-      objVal = m_globals[expr.methodCall.objName];
-    else {
-      *m_error = QStringLiteral("undefined variable '%1' in method call")
-                     .arg(expr.methodCall.objName);
-      return QJsonValue();
-    }
-
-    if (!objVal.isObject()) {
-      *m_error = QStringLiteral("cannot call method on non-object '%1'")
-                     .arg(expr.methodCall.objName);
-      return QJsonValue();
-    }
-
-    QJsonObject obj = objVal.toObject();
-    QString className = obj.value(QString::fromLatin1(AcRuntime::kClassKey)).toString();
-    if (className.isEmpty() || !m_classes.contains(className)) {
-      *m_error = QStringLiteral("object '%1' has no class information")
-                     .arg(expr.methodCall.objName);
-      return QJsonValue();
-    }
-
-    const ClassDef &cd = m_classes[className];
-
-    // 原生类：路由到 FunMgr（传入实例对象作为第一个参数）
-    if (cd.isNative) {
-      QJsonArray args;
-      args.append(QJsonValue(obj)); // 实例对象
-      for (auto *argExpr : expr.methodCall.args)
-        args.append(evalExpr(*argExpr));
-      return FunMgr::ins().call(className, expr.methodCall.methodName, args);
-    }
-
-    for (const auto &method : cd.methods) {
-      if (method.name == expr.methodCall.methodName) {
-        QJsonArray args;
-        for (auto *argExpr : expr.methodCall.args)
-          args.append(evalExpr(*argExpr));
-        QJsonValue result = execMethod(method, obj, QJsonValue(args));
-        if (expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis)) {
-          if (m_vars.contains(expr.methodCall.objName))
-            m_vars[expr.methodCall.objName] = QJsonValue(m_modifiedThis);
-          else if (m_globals.contains(expr.methodCall.objName))
-            m_globals[expr.methodCall.objName] = QJsonValue(m_modifiedThis);
+      if (obj.isObject()) return obj.toObject().value(expr.prop);
+      if (obj.isArray()) {
+        bool ok = false;
+        int idx = expr.prop.toInt(&ok);
+        if (ok) {
+          QJsonArray arr = obj.toArray();
+          if (idx >= 0 && idx < arr.size()) return arr[idx];
         }
-        return result;
       }
-    }
-
-    *m_error = QStringLiteral("method '%1' not found in class '%2'")
-                   .arg(expr.methodCall.methodName, className);
-    return QJsonValue();
-  }
-
-  case Expr::kNewInstance: {
-    if (!m_classes.contains(expr.className)) {
-      *m_error = QStringLiteral("undefined class '%1'").arg(expr.className);
       return QJsonValue();
     }
 
-    const ClassDef &cd = m_classes[expr.className];
-    QJsonObject instance;
-    instance[QString::fromLatin1(AcRuntime::kClassKey)] = expr.className;
-
-    // 原生类：调用 FunMgr 构造
-    if (cd.isNative) {
-      QJsonArray ctorArgs;
-      for (auto *arg : expr.constructorArgs)
-        ctorArgs.append(evalExpr(*arg));
-      QJsonValue ctorResult = FunMgr::ins().call(
-          expr.className, QString::fromLatin1(AcRuntime::kConstructor), ctorArgs);
-      if (ctorResult.isObject())
-        instance = ctorResult.toObject();
-      instance[QString::fromLatin1(AcRuntime::kClassKey)] = expr.className;
-      return QJsonValue(instance);
+    case Expr::kIndexAccess: {
+      QJsonValue obj = resolveVar(expr.ident);
+      if (obj.isNull() && expr.ident != QString::fromLatin1(AcKeyword::kThis)) {
+        *m_error = QStringLiteral("undefined variable '%1'").arg(expr.ident);
+        return QJsonValue();
+      }
+      if (obj.isObject()) return obj.toObject().value(expr.indexKey);
+      if (obj.isArray()) {
+        bool ok = false;
+        int idx = expr.indexKey.toInt(&ok);
+        if (ok) {
+          QJsonArray arr = obj.toArray();
+          if (idx >= 0 && idx < arr.size()) return arr[idx];
+        }
+      }
+      *m_error = QStringLiteral("cannot access index '%1' on '%2'").arg(expr.indexKey, expr.ident);
+      return QJsonValue();
     }
 
-    for (const auto &prop : cd.properties) {
-      if (prop.value)
-        instance[prop.key] = evalExpr(*prop.value);
-      else
-        instance[prop.key] = QJsonValue();
+    case Expr::kObject: {
+      QJsonObject obj;
+      for (const auto &e : expr.objEntries) obj[e.key] = evalExpr(*e.value);
+      return obj;
     }
 
-    return QJsonValue(instance);
-  }
+    case Expr::kArray: {
+      QJsonArray arr;
+      for (auto *e : expr.arrItems) arr.append(evalExpr(*e));
+      return arr;
+    }
 
-  case Expr::kBinary:
-    return evalBinary(expr);
+    case Expr::kFuncCall:
+      return callBuiltin(expr.funcCall.name, expr.funcCall.args);
+
+    case Expr::kMethodCall:
+      return evalMethodCall(expr);
+
+    case Expr::kNewInstance:
+      return evalNewInstance(expr);
+
+    case Expr::kBinary:
+      return evalBinary(expr);
   }
 
   return QJsonValue();
 }
 
-QJsonValue AcInterpreter::evalExprWithThis(const Expr &expr,
-                                           const QJsonObject &thisObj) {
+QJsonValue AcInterpreter::evalExprWithThis(const Expr &expr, const QJsonObject &thisObj) {
   QJsonObject oldThis = m_currentThis;
   m_currentThis = thisObj;
   QJsonValue result = evalExpr(expr);
@@ -224,37 +120,54 @@ QJsonValue AcInterpreter::evalBinary(const Expr &expr) {
   QJsonValue r = evalExpr(*expr.right);
 
   switch (expr.binOp) {
-  case Expr::kAdd:
-    if (l.isString() || r.isString()) {
-      QString ls = l.isString() ? l.toString() : QString::number(l.toDouble());
-      QString rs = r.isString() ? r.toString() : QString::number(r.toDouble());
-      return QJsonValue(ls + rs);
-    }
-    return QJsonValue(l.toDouble() + r.toDouble());
-  case Expr::kSub:
-    return QJsonValue(l.toDouble() - r.toDouble());
-  case Expr::kMul:
-    return QJsonValue(l.toDouble() * r.toDouble());
-  case Expr::kDiv:
-    if (r.toDouble() == 0.0) {
-      *m_error = QStringLiteral("division by zero");
-      return QJsonValue();
-    }
-    return QJsonValue(l.toDouble() / r.toDouble());
+    case Expr::kAdd:
+      if (l.isString() || r.isString()) {
+        QString ls = l.isString() ? l.toString() : QString::number(l.toDouble());
+        QString rs = r.isString() ? r.toString() : QString::number(r.toDouble());
+        return QJsonValue(ls + rs);
+      }
+      return QJsonValue(l.toDouble() + r.toDouble());
+    case Expr::kSub:
+      return QJsonValue(l.toDouble() - r.toDouble());
+    case Expr::kMul:
+      return QJsonValue(l.toDouble() * r.toDouble());
+    case Expr::kDiv:
+      if (r.toDouble() == 0.0) {
+        *m_error = QStringLiteral("division by zero");
+        return QJsonValue();
+      }
+      return QJsonValue(l.toDouble() / r.toDouble());
   }
   return QJsonValue();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  辅助方法
+// ═════════════════════════════════════════════════════════════════════════════
+
+QJsonValue AcInterpreter::resolveVar(const QString &name) const {
+  if (name == QString::fromLatin1(AcKeyword::kThis)) return QJsonValue(m_currentThis);
+  if (m_vars.contains(name)) return m_vars[name];
+  if (m_globals.contains(name)) return m_globals[name];
+  return QJsonValue();
+}
+
+bool AcInterpreter::isTruthy(const QJsonValue &cond) {
+  if (cond.isBool()) return cond.toBool();
+  if (cond.isString()) return !cond.toString().isEmpty();
+  if (cond.isDouble()) return cond.toDouble() != 0.0;
+  if (cond.isNull() || cond.isUndefined()) return false;
+  return true;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  内置函数 — 统一路由到 FunMgr
 // ═════════════════════════════════════════════════════════════════════════════
 
-QJsonValue AcInterpreter::callBuiltin(const QString &name,
-                                      const QVector<Expr *> &args) {
+QJsonValue AcInterpreter::callBuiltin(const QString &name, const QVector<Expr *> &args) {
   // 统一求值所有参数
   QJsonArray arr;
-  for (auto *a : args)
-    arr.append(evalExpr(*a));
+  for (auto *a : args) arr.append(evalExpr(*a));
 
   // call() 特殊处理：前两个参数是类名和函数名
   if (name == AcBuiltin::kCall) {
@@ -265,24 +178,102 @@ QJsonValue AcInterpreter::callBuiltin(const QString &name,
     QString cls = arr[0].toString();
     QString func = arr[1].toString();
     QJsonArray callArgs;
-    if (arr.size() >= 3)
-      callArgs.append(arr[2]);
+    if (arr.size() >= 3) callArgs.append(arr[2]);
     return FunMgr::ins().call(cls, func, callArgs);
   }
 
   // 其余内置函数：路由到 "builtin" 伪类
   QJsonValue r = FunMgr::ins().call(QString::fromLatin1(AcRuntime::kBuiltinClass), name, arr);
-  if (r.isNull())
-    *m_error = QStringLiteral("unknown function '%1'").arg(name);
+  if (r.isNull()) *m_error = QStringLiteral("unknown function '%1'").arg(name);
   return r;
+}
+
+QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
+  QJsonValue objVal = resolveVar(expr.methodCall.objName);
+  if (objVal.isNull() && expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis)) {
+    *m_error =
+        QStringLiteral("undefined variable '%1' in method call").arg(expr.methodCall.objName);
+    return QJsonValue();
+  }
+
+  if (!objVal.isObject()) {
+    *m_error = QStringLiteral("cannot call method on non-object '%1'").arg(expr.methodCall.objName);
+    return QJsonValue();
+  }
+
+  QJsonObject obj = objVal.toObject();
+  QString className = obj.value(QString::fromLatin1(AcRuntime::kClassKey)).toString();
+  if (className.isEmpty() || !m_classes.contains(className)) {
+    *m_error = QStringLiteral("object '%1' has no class information").arg(expr.methodCall.objName);
+    return QJsonValue();
+  }
+
+  const ClassDef &cd = m_classes[className];
+
+  // 原生类：路由到 FunMgr（传入实例对象作为第一个参数）
+  if (cd.isNative) {
+    QJsonArray args;
+    args.append(QJsonValue(obj));
+    for (auto *argExpr : expr.methodCall.args) args.append(evalExpr(*argExpr));
+    return FunMgr::ins().call(className, expr.methodCall.methodName, args);
+  }
+
+  for (const auto &method : cd.methods) {
+    if (method.name == expr.methodCall.methodName) {
+      QJsonArray args;
+      for (auto *argExpr : expr.methodCall.args) args.append(evalExpr(*argExpr));
+      QJsonValue result = execMethod(method, obj, QJsonValue(args));
+      if (expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis)) {
+        if (m_vars.contains(expr.methodCall.objName))
+          m_vars[expr.methodCall.objName] = QJsonValue(m_modifiedThis);
+        else if (m_globals.contains(expr.methodCall.objName))
+          m_globals[expr.methodCall.objName] = QJsonValue(m_modifiedThis);
+      }
+      return result;
+    }
+  }
+
+  *m_error = QStringLiteral("method '%1' not found in class '%2'")
+                 .arg(expr.methodCall.methodName, className);
+  return QJsonValue();
+}
+
+QJsonValue AcInterpreter::evalNewInstance(const Expr &expr) {
+  if (!m_classes.contains(expr.className)) {
+    *m_error = QStringLiteral("undefined class '%1'").arg(expr.className);
+    return QJsonValue();
+  }
+
+  const ClassDef &cd = m_classes[expr.className];
+  QJsonObject instance;
+  instance[QString::fromLatin1(AcRuntime::kClassKey)] = expr.className;
+
+  // 原生类：调用 FunMgr 构造
+  if (cd.isNative) {
+    QJsonArray ctorArgs;
+    for (auto *arg : expr.constructorArgs) ctorArgs.append(evalExpr(*arg));
+    QJsonValue ctorResult =
+        FunMgr::ins().call(expr.className, QString::fromLatin1(AcRuntime::kConstructor), ctorArgs);
+    if (ctorResult.isObject()) instance = ctorResult.toObject();
+    instance[QString::fromLatin1(AcRuntime::kClassKey)] = expr.className;
+    return QJsonValue(instance);
+  }
+
+  for (const auto &prop : cd.properties) {
+    if (prop.value)
+      instance[prop.key] = evalExpr(*prop.value);
+    else
+      instance[prop.key] = QJsonValue();
+  }
+
+  return QJsonValue(instance);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  类方法执行
 // ═════════════════════════════════════════════════════════════════════════════
 
-QJsonValue AcInterpreter::execMethod(const MethodDef &method,
-                                     const QJsonObject &thisObj,
+QJsonValue AcInterpreter::execMethod(const MethodDef &method, const QJsonObject &thisObj,
                                      const QJsonValue &callArgs) {
   QJsonObject oldThis = m_currentThis;
   bool oldHasReturned = m_hasReturned;
@@ -295,8 +286,7 @@ QJsonValue AcInterpreter::execMethod(const MethodDef &method,
   QHash<QString, QJsonValue> savedVars = m_vars;
   m_vars.clear();
 
-  for (auto it = thisObj.begin(); it != thisObj.end(); ++it)
-    m_vars[it.key()] = it.value();
+  for (auto it = thisObj.begin(); it != thisObj.end(); ++it) m_vars[it.key()] = it.value();
 
   QJsonArray argsArr = callArgs.toArray();
   for (int i = 0; i < method.params.size(); ++i) {
@@ -325,125 +315,99 @@ QJsonValue AcInterpreter::execMethod(const MethodDef &method,
 
 void AcInterpreter::execStmt(const Block::Stmt &stmt) {
   switch (stmt.kind) {
-  case Block::Stmt::kCall: {
-    QString cls = evalExpr(stmt.call.className).toString();
-    QString func = evalExpr(stmt.call.funcName).toString();
-    QJsonValue a =
-        stmt.call.args.kind != Expr::kString || !stmt.call.args.strVal.isEmpty()
-            ? evalExpr(stmt.call.args)
-            : QJsonValue();
-    QJsonArray callArgs;
-    if (a.isArray())
-      callArgs = a.toArray();
-    else if (!a.isNull() && !a.isUndefined())
-      callArgs.append(a);
-    FunMgr::ins().call(cls, func, callArgs);
-    break;
-  }
-
-  case Block::Stmt::kAssign: {
-    QJsonValue val = evalExpr(stmt.assign.value);
-    if (!stmt.assign.thisProp.isEmpty()) {
-      if (!m_currentThis.isEmpty()) {
-        QJsonObject updated = m_currentThis;
-        updated[stmt.assign.thisProp] = val;
-        m_currentThis = updated;
-      }
-    } else {
-      m_vars[stmt.assign.name] = val;
-      if (!m_currentThis.isEmpty() &&
-          m_currentThis.contains(stmt.assign.name)) {
-        QJsonObject updated = m_currentThis;
-        updated[stmt.assign.name] = val;
-        m_currentThis = updated;
-      }
-    }
-    break;
-  }
-
-  case Block::Stmt::kIndexAssign: {
-    QJsonValue objVal;
-    if (stmt.indexAssign.objName == QString::fromLatin1(AcKeyword::kThis))
-      objVal = QJsonValue(m_currentThis);
-    else
-      objVal = m_vars.value(stmt.indexAssign.objName);
-    QJsonObject obj = objVal.toObject();
-    obj[stmt.indexAssign.key] = evalExpr(stmt.indexAssign.value);
-    if (stmt.indexAssign.objName == QString::fromLatin1(AcKeyword::kThis))
-      m_currentThis = obj;
-    else
-      m_vars[stmt.indexAssign.objName] = obj;
-    break;
-  }
-
-  case Block::Stmt::kFor: {
-    QJsonValue arrVal = evalExpr(stmt.forStmt.arrayExpr);
-    QJsonArray arr = arrVal.toArray();
-    if (arr.isEmpty() && arrVal.isArray())
+    case Block::Stmt::kCall: {
+      QString cls = evalExpr(stmt.call.className).toString();
+      QString func = evalExpr(stmt.call.funcName).toString();
+      QJsonValue a = stmt.call.args.kind != Expr::kString || !stmt.call.args.strVal.isEmpty()
+                         ? evalExpr(stmt.call.args)
+                         : QJsonValue();
+      QJsonArray callArgs;
+      if (a.isArray())
+        callArgs = a.toArray();
+      else if (!a.isNull() && !a.isUndefined())
+        callArgs.append(a);
+      FunMgr::ins().call(cls, func, callArgs);
       break;
-    for (const QJsonValue &v : arr) {
-      m_vars[stmt.forStmt.varName] = v;
-      execBlock(stmt.forStmt.body);
-      if (!m_error->isEmpty())
-        return;
     }
-    break;
-  }
 
-  case Block::Stmt::kIf: {
-    QJsonValue cond = evalExpr(stmt.ifStmt.condition);
-    bool truthy = false;
-    if (cond.isBool())
-      truthy = cond.toBool();
-    else if (cond.isString())
-      truthy = !cond.toString().isEmpty();
-    else if (cond.isDouble())
-      truthy = cond.toDouble() != 0.0;
-    else if (cond.isNull() || cond.isUndefined())
-      truthy = false;
-    else
-      truthy = true;
+    case Block::Stmt::kAssign: {
+      QJsonValue val = evalExpr(stmt.assign.value);
+      if (!stmt.assign.thisProp.isEmpty()) {
+        if (!m_currentThis.isEmpty()) {
+          QJsonObject updated = m_currentThis;
+          updated[stmt.assign.thisProp] = val;
+          m_currentThis = updated;
+        }
+      } else {
+        m_vars[stmt.assign.name] = val;
+        if (!m_currentThis.isEmpty() && m_currentThis.contains(stmt.assign.name)) {
+          QJsonObject updated = m_currentThis;
+          updated[stmt.assign.name] = val;
+          m_currentThis = updated;
+        }
+      }
+      break;
+    }
 
-    if (truthy)
-      execBlock(stmt.ifStmt.thenBlock);
-    else if (stmt.ifStmt.hasElse)
-      execBlock(stmt.ifStmt.elseBlock);
-    break;
-  }
+    case Block::Stmt::kIndexAssign: {
+      QJsonValue objVal = resolveVar(stmt.indexAssign.objName);
+      QJsonObject obj = objVal.toObject();
+      obj[stmt.indexAssign.key] = evalExpr(stmt.indexAssign.value);
+      if (stmt.indexAssign.objName == QString::fromLatin1(AcKeyword::kThis))
+        m_currentThis = obj;
+      else
+        m_vars[stmt.indexAssign.objName] = obj;
+      break;
+    }
 
-  case Block::Stmt::kExpr:
-    evalExpr(stmt.exprStmt);
-    break;
+    case Block::Stmt::kFor: {
+      QJsonValue arrVal = evalExpr(stmt.forStmt.arrayExpr);
+      QJsonArray arr = arrVal.toArray();
+      if (arr.isEmpty() && arrVal.isArray()) break;
+      for (const QJsonValue &v : arr) {
+        m_vars[stmt.forStmt.varName] = v;
+        execBlock(stmt.forStmt.body);
+        if (!m_error->isEmpty()) return;
+      }
+      break;
+    }
 
-  case Block::Stmt::kClassDef:
-    m_classes[stmt.classDef.name] = stmt.classDef;
-    break;
+    case Block::Stmt::kIf:
+      if (isTruthy(evalExpr(stmt.ifStmt.condition)))
+        execBlock(stmt.ifStmt.thenBlock);
+      else if (stmt.ifStmt.hasElse)
+        execBlock(stmt.ifStmt.elseBlock);
+      break;
 
-  case Block::Stmt::kReturn:
-    m_hasReturned = true;
-    m_returnValue = evalExpr(stmt.returnValue);
-    break;
+    case Block::Stmt::kExpr:
+      evalExpr(stmt.exprStmt);
+      break;
+
+    case Block::Stmt::kClassDef:
+      m_classes[stmt.classDef.name] = stmt.classDef;
+      break;
+
+    case Block::Stmt::kReturn:
+      m_hasReturned = true;
+      m_returnValue = evalExpr(stmt.returnValue);
+      break;
   }
 }
 
 void AcInterpreter::execBlock(const Block &block) {
   for (const auto &stmt : block.stmts) {
     execStmt(stmt);
-    if (!m_error->isEmpty())
-      return;
-    if (m_hasReturned)
-      return;
+    if (!m_error->isEmpty()) return;
+    if (m_hasReturned) return;
   }
 }
 
-void AcInterpreter::execBlockWithThis(const Block &block,
-                                      const QJsonObject &thisObj,
+void AcInterpreter::execBlockWithThis(const Block &block, const QJsonObject &thisObj,
                                       QJsonValue &returnVal) {
   QJsonObject oldThis = m_currentThis;
   m_currentThis = thisObj;
   execBlock(block);
-  if (m_hasReturned)
-    returnVal = m_returnValue;
+  if (m_hasReturned) returnVal = m_returnValue;
   m_currentThis = oldThis;
 }
 
@@ -463,7 +427,7 @@ QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
   m_generatedFiles.clear();
 
   // 预先注册 C++ 原生类（供 new 语法创建）
-  for (const auto &name : kAcClasses) {
+  for (const auto &name : AcClass::kAll) {
     ClassDef nativeClass;
     nativeClass.name = name;
     nativeClass.isNative = true;
@@ -472,12 +436,10 @@ QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
 
   // 注入解释器上下文供 FunBuiltin 使用
   FunMgr::init();
-  FunBuiltin::setContext(
-      {m_scriptDir, m_rootDir, m_logCallback, &m_generatedFiles});
+  FunBuiltin::setContext({m_scriptDir, m_rootDir, m_logCallback, &m_generatedFiles});
 
   execBlock(program);
-  if (!m_error->isEmpty())
-    return QJsonValue();
+  if (!m_error->isEmpty()) return QJsonValue();
 
   return m_hasReturned ? m_returnValue : QJsonValue();
 }
@@ -486,8 +448,8 @@ QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
 //  未声明标识符验证
 // ═════════════════════════════════════════════════════════════════════════════
 
-QStringList AcInterpreter::validateUndeclaredIdents(
-    const Block &program, const QSet<QString> &declaredVars) const {
+QStringList AcInterpreter::validateUndeclaredIdents(const Block &program,
+                                                    const QSet<QString> &declaredVars) const {
   QStringList errors;
   QSet<QString> scopeVars = declaredVars;
   validateBlockIdents(program, errors, scopeVars);
@@ -496,121 +458,107 @@ QStringList AcInterpreter::validateUndeclaredIdents(
 
 void AcInterpreter::validateBlockIdents(const Block &block, QStringList &errors,
                                         const QSet<QString> &scopeVars) const {
-  for (const auto &stmt : block.stmts)
-    validateStmtIdents(stmt, errors, scopeVars);
+  for (const auto &stmt : block.stmts) validateStmtIdents(stmt, errors, scopeVars);
 }
 
-void AcInterpreter::validateStmtIdents(const Block::Stmt &stmt,
-                                       QStringList &errors,
+void AcInterpreter::validateStmtIdents(const Block::Stmt &stmt, QStringList &errors,
                                        const QSet<QString> &scopeVars) const {
   switch (stmt.kind) {
-  case Block::Stmt::kCall:
-    validateExprIdents(stmt.call.className, errors, scopeVars);
-    validateExprIdents(stmt.call.funcName, errors, scopeVars);
-    validateExprIdents(stmt.call.args, errors, scopeVars);
-    break;
-  case Block::Stmt::kAssign:
-    validateExprIdents(stmt.assign.value, errors, scopeVars);
-    break;
-  case Block::Stmt::kIndexAssign:
-    validateExprIdents(stmt.indexAssign.value, errors, scopeVars);
-    break;
-  case Block::Stmt::kFor: {
-    validateExprIdents(stmt.forStmt.arrayExpr, errors, scopeVars);
-    QSet<QString> bodyScope = scopeVars;
-    bodyScope.insert(stmt.forStmt.varName);
-    validateBlockIdents(stmt.forStmt.body, errors, bodyScope);
-    break;
-  }
-  case Block::Stmt::kIf:
-    validateExprIdents(stmt.ifStmt.condition, errors, scopeVars);
-    validateBlockIdents(stmt.ifStmt.thenBlock, errors, scopeVars);
-    if (stmt.ifStmt.hasElse)
-      validateBlockIdents(stmt.ifStmt.elseBlock, errors, scopeVars);
-    break;
-  case Block::Stmt::kExpr:
-    validateExprIdents(stmt.exprStmt, errors, scopeVars);
-    break;
-  case Block::Stmt::kClassDef: {
-    QSet<QString> classScope = scopeVars;
-    for (const auto &prop : stmt.classDef.properties) {
-      if (prop.value)
-        validateExprIdents(*prop.value, errors, classScope);
+    case Block::Stmt::kCall:
+      validateExprIdents(stmt.call.className, errors, scopeVars);
+      validateExprIdents(stmt.call.funcName, errors, scopeVars);
+      validateExprIdents(stmt.call.args, errors, scopeVars);
+      break;
+    case Block::Stmt::kAssign:
+      validateExprIdents(stmt.assign.value, errors, scopeVars);
+      break;
+    case Block::Stmt::kIndexAssign:
+      validateExprIdents(stmt.indexAssign.value, errors, scopeVars);
+      break;
+    case Block::Stmt::kFor: {
+      validateExprIdents(stmt.forStmt.arrayExpr, errors, scopeVars);
+      QSet<QString> bodyScope = scopeVars;
+      bodyScope.insert(stmt.forStmt.varName);
+      validateBlockIdents(stmt.forStmt.body, errors, bodyScope);
+      break;
     }
-    classScope.insert(QString::fromLatin1(AcKeyword::kThis));
-    for (const auto &prop : stmt.classDef.properties)
-      classScope.insert(prop.key);
-    for (const auto &method : stmt.classDef.methods) {
-      QSet<QString> methodScope = classScope;
-      for (const auto &param : method.params)
-        methodScope.insert(param);
-      validateBlockIdents(method.body, errors, methodScope);
+    case Block::Stmt::kIf:
+      validateExprIdents(stmt.ifStmt.condition, errors, scopeVars);
+      validateBlockIdents(stmt.ifStmt.thenBlock, errors, scopeVars);
+      if (stmt.ifStmt.hasElse) validateBlockIdents(stmt.ifStmt.elseBlock, errors, scopeVars);
+      break;
+    case Block::Stmt::kExpr:
+      validateExprIdents(stmt.exprStmt, errors, scopeVars);
+      break;
+    case Block::Stmt::kClassDef: {
+      QSet<QString> classScope = scopeVars;
+      for (const auto &prop : stmt.classDef.properties) {
+        if (prop.value) validateExprIdents(*prop.value, errors, classScope);
+      }
+      classScope.insert(QString::fromLatin1(AcKeyword::kThis));
+      for (const auto &prop : stmt.classDef.properties) classScope.insert(prop.key);
+      for (const auto &method : stmt.classDef.methods) {
+        QSet<QString> methodScope = classScope;
+        for (const auto &param : method.params) methodScope.insert(param);
+        validateBlockIdents(method.body, errors, methodScope);
+      }
+      break;
     }
-    break;
-  }
-  case Block::Stmt::kReturn:
-    validateExprIdents(stmt.returnValue, errors, scopeVars);
-    break;
+    case Block::Stmt::kReturn:
+      validateExprIdents(stmt.returnValue, errors, scopeVars);
+      break;
   }
 }
 
 void AcInterpreter::validateExprIdents(const Expr &expr, QStringList &errors,
                                        const QSet<QString> &scopeVars) const {
   switch (expr.kind) {
-  case Expr::kIdent:
-    if (!scopeVars.contains(expr.ident)) {
-      errors << QStringLiteral("undefined variable '%1' at line %2")
-                    .arg(expr.ident, QString::number(expr.line));
-    }
-    break;
-  case Expr::kPropAccess:
-    if (expr.ident != QString::fromLatin1(AcKeyword::kThis) &&
-        !scopeVars.contains(expr.ident)) {
-      errors << QStringLiteral("undefined variable '%1' at line %2")
-                    .arg(expr.ident, QString::number(expr.line));
-    }
-    break;
-  case Expr::kIndexAccess:
-    if (expr.ident != QString::fromLatin1(AcKeyword::kThis) &&
-        !scopeVars.contains(expr.ident)) {
-      errors << QStringLiteral("undefined variable '%1' at line %2")
-                    .arg(expr.ident, QString::number(expr.line));
-    }
-    break;
-  case Expr::kFuncCall:
-    for (const auto *arg : expr.funcCall.args)
-      validateExprIdents(*arg, errors, scopeVars);
-    break;
-  case Expr::kMethodCall:
-    if (expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis) &&
-        !scopeVars.contains(expr.methodCall.objName)) {
-      errors << QStringLiteral("undefined variable '%1' at line %2")
-                    .arg(expr.methodCall.objName, QString::number(expr.line));
-    }
-    for (const auto *arg : expr.methodCall.args)
-      validateExprIdents(*arg, errors, scopeVars);
-    break;
-  case Expr::kNewInstance:
-    break;
-  case Expr::kThis:
-    break;
-  case Expr::kObject:
-    for (const auto &entry : expr.objEntries) {
-      if (entry.value)
-        validateExprIdents(*entry.value, errors, scopeVars);
-    }
-    break;
-  case Expr::kArray:
-    for (const auto *item : expr.arrItems)
-      validateExprIdents(*item, errors, scopeVars);
-    break;
-  case Expr::kBinary:
-    if (expr.left)
-      validateExprIdents(*expr.left, errors, scopeVars);
-    if (expr.right)
-      validateExprIdents(*expr.right, errors, scopeVars);
-    break;
-  default:
-    break;
+    case Expr::kIdent:
+      if (!scopeVars.contains(expr.ident)) {
+        errors << QStringLiteral("undefined variable '%1' at line %2")
+                      .arg(expr.ident, QString::number(expr.line));
+      }
+      break;
+    case Expr::kPropAccess:
+      if (expr.ident != QString::fromLatin1(AcKeyword::kThis) && !scopeVars.contains(expr.ident)) {
+        errors << QStringLiteral("undefined variable '%1' at line %2")
+                      .arg(expr.ident, QString::number(expr.line));
+      }
+      break;
+    case Expr::kIndexAccess:
+      if (expr.ident != QString::fromLatin1(AcKeyword::kThis) && !scopeVars.contains(expr.ident)) {
+        errors << QStringLiteral("undefined variable '%1' at line %2")
+                      .arg(expr.ident, QString::number(expr.line));
+      }
+      break;
+    case Expr::kFuncCall:
+      for (const auto *arg : expr.funcCall.args) validateExprIdents(*arg, errors, scopeVars);
+      break;
+    case Expr::kMethodCall:
+      if (expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis) &&
+          !scopeVars.contains(expr.methodCall.objName)) {
+        errors << QStringLiteral("undefined variable '%1' at line %2")
+                      .arg(expr.methodCall.objName, QString::number(expr.line));
+      }
+      for (const auto *arg : expr.methodCall.args) validateExprIdents(*arg, errors, scopeVars);
+      break;
+    case Expr::kNewInstance:
+      break;
+    case Expr::kThis:
+      break;
+    case Expr::kObject:
+      for (const auto &entry : expr.objEntries) {
+        if (entry.value) validateExprIdents(*entry.value, errors, scopeVars);
+      }
+      break;
+    case Expr::kArray:
+      for (const auto *item : expr.arrItems) validateExprIdents(*item, errors, scopeVars);
+      break;
+    case Expr::kBinary:
+      if (expr.left) validateExprIdents(*expr.left, errors, scopeVars);
+      if (expr.right) validateExprIdents(*expr.right, errors, scopeVars);
+      break;
+    default:
+      break;
   }
 }

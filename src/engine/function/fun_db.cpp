@@ -19,7 +19,7 @@
 #include <mysql.h>
 
 QHash<QString, MYSQL *> FunDb::s_connections;
-QHash<QString, QJsonObject> FunDb::s_configs;
+QHash<QString, AcDB::DbConfig> FunDb::s_configs;
 
 // init — 注册所有数据库函数到 FunMgr
 void FunDb::init() {
@@ -47,7 +47,7 @@ void FunDb::cleanup() {
 
 // getConnection — 根据实例对象获取连接
 MYSQL *FunDb::getConnection(const QJsonObject &instance) {
-  const QString connId = instance.value(QStringLiteral("connId")).toString();
+  const QString connId = instance.value(QString::fromLatin1(AcDB::kConnId)).toString();
   return s_connections.value(connId, nullptr);
 }
 
@@ -56,14 +56,9 @@ QJsonValue FunDb::constructor(const QJsonArray &args) {
   if (args.isEmpty() || !args[0].isObject())
     return QJsonValue(false);
 
-  const QJsonObject cfg = args[0].toObject();
-  const QString host = cfg.value(QStringLiteral("host")).toString();
-  const int port = cfg.value(QStringLiteral("port")).toInt(3306);
-  const QString user = cfg.value(QStringLiteral("user")).toString();
-  const QString pass = cfg.value(QStringLiteral("password")).toString();
-  const QString dbName = cfg.value(QStringLiteral("database")).toString();
+  const AcDB::DbConfig cfg = AcDB::DbConfig::fromJson(args[0].toObject());
 
-  if (host.isEmpty() || user.isEmpty() || dbName.isEmpty())
+  if (!cfg.isValid())
     return QJsonValue(false);
 
   MYSQL *conn = mysql_init(nullptr);
@@ -73,9 +68,9 @@ QJsonValue FunDb::constructor(const QJsonArray &args) {
   unsigned int timeout = 5;
   mysql_options(conn, MYSQL_OPT_CONNECT_TIMEOUT, &timeout);
 
-  if (!mysql_real_connect(conn, host.toUtf8().constData(),
-                          user.toUtf8().constData(), pass.toUtf8().constData(),
-                          dbName.toUtf8().constData(), port, nullptr, 0)) {
+  if (!mysql_real_connect(conn, cfg.host.toUtf8().constData(),
+                          cfg.user.toUtf8().constData(), cfg.password.toUtf8().constData(),
+                          cfg.database.toUtf8().constData(), cfg.port, nullptr, 0)) {
     mysql_close(conn);
     return QJsonValue(false);
   }
@@ -87,8 +82,8 @@ QJsonValue FunDb::constructor(const QJsonArray &args) {
   s_configs[connId] = cfg;
 
   QJsonObject result;
-  result[QStringLiteral("connId")] = connId;
-  result[QStringLiteral("connected")] = true;
+  result[QString::fromLatin1(AcDB::kConnId)] = connId;
+  result[QString::fromLatin1(AcDB::kConnected)] = true;
   return QJsonValue(result);
 }
 
@@ -98,7 +93,7 @@ QJsonValue FunDb::disconnect(const QJsonArray &args) {
     return QJsonValue(false);
 
   const QJsonObject instance = args[0].toObject();
-  const QString connId = instance.value(QStringLiteral("connId")).toString();
+  const QString connId = instance.value(QString::fromLatin1(AcDB::kConnId)).toString();
   if (connId.isEmpty())
     return QJsonValue(false);
 
@@ -124,11 +119,9 @@ QJsonValue FunDb::tableSchema(const QJsonArray &args) {
   if (!conn)
     return QJsonValue();
 
-  const QString dbName =
-      s_configs.value(instance.value(QStringLiteral("connId")).toString())
-          .value(QStringLiteral("database"))
-          .toString();
-  const QString table = params.value(QStringLiteral("table")).toString();
+  const QString connId = instance.value(QString::fromLatin1(AcDB::kConnId)).toString();
+  const AcDB::DbConfig cfg = s_configs.value(connId);
+  const QString table = params.value(QString::fromLatin1(AcDB::kTable)).toString();
   if (table.isEmpty())
     return QJsonValue();
 
@@ -138,7 +131,7 @@ QJsonValue FunDb::tableSchema(const QJsonArray &args) {
                      "FROM INFORMATION_SCHEMA.COLUMNS "
                      "WHERE TABLE_SCHEMA = '%1' AND TABLE_NAME = '%2' "
                      "ORDER BY ORDINAL_POSITION")
-          .arg(dbName, table);
+          .arg(cfg.database, table);
 
   QJsonArray columns;
 
@@ -153,18 +146,18 @@ QJsonValue FunDb::tableSchema(const QJsonArray &args) {
   while ((row = mysql_fetch_row(result))) {
     QJsonObject col;
 
-    col[QStringLiteral("name")] =
+    col[QString::fromLatin1(AcDB::kColName)] =
         row[0] ? QString::fromUtf8(row[0]) : QString();
-    col[QStringLiteral("type")] =
+    col[QString::fromLatin1(AcDB::kColType)] =
         row[1] ? QString::fromUtf8(row[1]) : QString();
-    col[QStringLiteral("nullable")] =
+    col[QString::fromLatin1(AcDB::kColNullable)] =
         row[2] && QString::fromUtf8(row[2]).toUpper() == QStringLiteral("YES");
-    col[QStringLiteral("key")] = row[3] ? QString::fromUtf8(row[3]) : QString();
-    col[QStringLiteral("default")] =
+    col[QString::fromLatin1(AcDB::kColKey)] = row[3] ? QString::fromUtf8(row[3]) : QString();
+    col[QString::fromLatin1(AcDB::kColDefault)] =
         row[4] ? QJsonValue(QString::fromUtf8(row[4])) : QJsonValue();
-    col[QStringLiteral("extra")] =
+    col[QString::fromLatin1(AcDB::kColExtra)] =
         row[5] ? QString::fromUtf8(row[5]) : QString();
-    col[QStringLiteral("comment")] =
+    col[QString::fromLatin1(AcDB::kColComment)] =
         row[6] ? QString::fromUtf8(row[6]) : QString();
 
     columns.append(col);
@@ -186,7 +179,7 @@ QJsonValue FunDb::query(const QJsonArray &args) {
   if (!conn)
     return QJsonValue();
 
-  const QString sql = params.value(QStringLiteral("sql")).toString();
+  const QString sql = params.value(QString::fromLatin1(AcDB::kSql)).toString();
   if (sql.isEmpty())
     return QJsonValue();
 

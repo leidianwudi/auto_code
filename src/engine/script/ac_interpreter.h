@@ -43,7 +43,13 @@ private:
   QJsonValue evalExpr(const Expr &expr);
   QJsonValue evalExprWithThis(const Expr &expr, const QJsonObject &thisObj);
   QJsonValue evalBinary(const Expr &expr);
+  QJsonValue evalMethodCall(const Expr &expr);
+  QJsonValue evalNewInstance(const Expr &expr);
   QJsonValue callBuiltin(const QString &name, const QVector<Expr *> &args);
+
+  // ── 辅助方法 ──
+  QJsonValue resolveVar(const QString &name) const;
+  static bool isTruthy(const QJsonValue &cond);
 
   // ── 语句执行 ──
   void execStmt(const Block::Stmt &stmt);

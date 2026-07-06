@@ -4,7 +4,9 @@
  */
 
 #include "light_json.h"
+
 #include "light_color.h"
+#include "src/engine/ac_language.h"
 
 /**
  * @brief 构造函数
@@ -27,36 +29,34 @@ LightJson::LightJson(QTextDocument *parent) : QSyntaxHighlighter(parent) {
   QTextCharFormat keyFormat;
   keyFormat.setForeground(keyword);
   keyFormat.setFontWeight(QFont::Bold);
-  m_rules.append(
-      {QRegularExpression(QStringLiteral("\"[^\"]+\"\\s*:")), keyFormat});
+  m_rules.append({QRegularExpression(QStringLiteral("\"[^\"]+\"\\s*:")), keyFormat});
 
   // ── 2. JSON 字符串值（绿色） ──
   QTextCharFormat stringFormat;
   stringFormat.setForeground(variable);
-  m_rules.append(
-      {QRegularExpression(QStringLiteral("\"[^\"]*\"")), stringFormat});
+  m_rules.append({QRegularExpression(QStringLiteral("\"[^\"]*\"")), stringFormat});
 
   // ── 3. 数字（橙色加粗） ──
   QTextCharFormat numberFormat;
   numberFormat.setForeground(number);
   numberFormat.setFontWeight(QFont::Bold);
-  m_rules.append(
-      {QRegularExpression(QStringLiteral("\\b-?\\d+(?:\\.\\d+)?\\b")),
-       numberFormat});
+  m_rules.append({QRegularExpression(QStringLiteral("\\b-?\\d+(?:\\.\\d+)?\\b")), numberFormat});
 
   // ── 4. 布尔值（红色加粗） ──
   QTextCharFormat boolFormat;
   boolFormat.setForeground(boolean_);
   boolFormat.setFontWeight(QFont::Bold);
   m_rules.append(
-      {QRegularExpression(QStringLiteral("\\b(?:true|false)\\b")), boolFormat});
+      {QRegularExpression(QStringLiteral("\\b(?:") + QString::fromLatin1(AcKeyword::kTrue) +
+                          QStringLiteral("|") + QString::fromLatin1(AcKeyword::kFalse) +
+                          QStringLiteral(")\\b")),
+       boolFormat});
 
   // ── 5. null（紫色加粗） ──
   QTextCharFormat nullFormat;
   nullFormat.setForeground(builtin);
   nullFormat.setFontWeight(QFont::Bold);
-  m_rules.append(
-      {QRegularExpression(QStringLiteral("\\bnull\\b")), nullFormat});
+  m_rules.append({QRegularExpression(QStringLiteral("\\bnull\\b")), nullFormat});
 }
 
 /**
@@ -68,8 +68,7 @@ LightJson::LightJson(QTextDocument *parent) : QSyntaxHighlighter(parent) {
 void LightJson::highlightBlock(const QString &text) {
   // 应用所有高亮规则
   for (const HighlightRule &rule : std::as_const(m_rules)) {
-    QRegularExpressionMatchIterator matchIterator =
-        rule.pattern.globalMatch(text);
+    QRegularExpressionMatchIterator matchIterator = rule.pattern.globalMatch(text);
     while (matchIterator.hasNext()) {
       QRegularExpressionMatch match = matchIterator.next();
       setFormat(match.capturedStart(), match.capturedLength(), rule.format);
