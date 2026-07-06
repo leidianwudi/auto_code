@@ -42,6 +42,8 @@ qt_add_executable(auto_code
     src/engine/function/fun_db.cpp
     src/engine/function/fun_file.h
     src/engine/function/fun_file.cpp
+    src/engine/function/fun_json.h
+    src/engine/function/fun_json.cpp
     src/engine/function/fun_mgr.h
     src/engine/function/fun_mgr.cpp
     src/engine/function/fun_const.h

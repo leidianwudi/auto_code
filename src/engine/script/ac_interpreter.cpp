@@ -272,16 +272,11 @@ QJsonValue AcInterpreter::callBuiltin(const QString &name,
   }
 
   if (name == AcBuiltin::kReadJson) {
-    if (args.isEmpty()) {
-      *m_error = QStringLiteral("readJson() requires a path argument");
-      return QJsonValue();
-    }
-    QString path = evalExpr(*args[0]).toString();
-    QFile f(path);
-    if (!f.open(QIODevice::ReadOnly))
-      return QJsonObject();
-    QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
-    return doc.isObject() ? QJsonValue(doc.object()) : QJsonValue();
+    QJsonArray arr;
+    for (auto *a : args)
+      arr.append(evalExpr(*a));
+    return FunMgr::ins().callBuiltin(QString::fromLatin1(AcBuiltin::kReadJson),
+                                     arr);
   }
 
   if (name == AcBuiltin::kRenderTpl) {
