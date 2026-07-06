@@ -82,8 +82,8 @@ bool BlockExpression::handle(const QString &block, int &pos,
   }
 
   // === 策略 0: 内置函数调用 fileExists(path) ===
-  if (expr.startsWith(QStringLiteral("fileExists(")) &&
-      expr.endsWith(QStringLiteral(")"))) {
+  if (expr.startsWith(QString::fromLatin1(AcBuiltin::kFileExists) + QLatin1Char('(')) &&
+      expr.endsWith(QLatin1Char(')'))) {
     QString arg = expr.mid(11, expr.length() - 12).trimmed();
     // 去掉可能的外层引号
     if ((arg.startsWith('\'') && arg.endsWith('\'')) ||
@@ -102,8 +102,8 @@ bool BlockExpression::handle(const QString &block, int &pos,
   // 在 each 循环体内，当前元素存储在 context["."] 中。
   // 用户可以用 ${this} 或 ${.} 引用它（两种写法等价）。
   if (expr == QString::fromLatin1(AcKeyword::kThis) ||
-      expr == QString::fromLatin1(AcTpl::kCurrentItem)) {
-    QJsonValue v = context.value(QString::fromLatin1(AcTpl::kCurrentItem));
+      expr == QString::fromLatin1(AcTemplate::kCurrentItem)) {
+    QJsonValue v = context.value(QString::fromLatin1(AcTemplate::kCurrentItem));
     if (v.isString())
       return result += v.toString(), true;
     if (v.isDouble()) {

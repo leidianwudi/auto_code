@@ -72,8 +72,8 @@ bool BlockIf::handle(const QString &block, int &pos, const QString &expr,
   QJsonValue condVal = m_engine.resolvePath(condition, context);
 
   // 查找 ${else} 和 ${/if}
-  int closePos = TplBlock::findMatchingClose(block, pos, QStringLiteral("if "),
-                                             QStringLiteral("${/if}"));
+  int closePos = TplBlock::findMatchingClose(block, pos, QString::fromLatin1(AcTemplate::kIfPrefix),
+                                             QString::fromLatin1(AcTemplate::kIfClose));
   if (closePos == -1) {
     const_cast<TplEngine &>(m_engine).setError(
         QStringLiteral("Unclosed ${if ") + condition + QStringLiteral("}"));
@@ -81,7 +81,7 @@ bool BlockIf::handle(const QString &block, int &pos, const QString &expr,
   }
 
   // 在 ${if} 和 ${/if} 之间查找 ${else}
-  int elsePos = block.indexOf(QString::fromLatin1(AcTpl::kElse), pos);
+  int elsePos = block.indexOf(QString::fromLatin1(AcTemplate::kElse), pos);
 
   if (isTruthy(condVal)) {
     // 条件成立：渲染 then 部分

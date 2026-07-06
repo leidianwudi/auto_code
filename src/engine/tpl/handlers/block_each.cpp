@@ -38,7 +38,7 @@ bool BlockEach::handle(const QString &block, int &pos, const QString &expr,
 
   // 查找匹配的闭合标签 ${/each}
   int closePos = TplBlock::findMatchingClose(
-      block, pos, QStringLiteral("each "), QStringLiteral("${/each}"));
+      block, pos, QString::fromLatin1(AcTemplate::kEachPrefix), QString::fromLatin1(AcTemplate::kEachClose));
   if (closePos == -1) {
     const_cast<TplEngine &>(m_engine).setError(
         QStringLiteral("Unclosed ${each ") + varName + QStringLiteral("}"));
@@ -67,7 +67,7 @@ bool BlockEach::handle(const QString &block, int &pos, const QString &expr,
         itemContext[it.key()] = it.value();
     } else {
       // 基本类型值放在 "." 键下（与 ${.} 语法配合）
-      itemContext[QString::fromLatin1(AcTpl::kCurrentItem)] = item;
+      itemContext[QString::fromLatin1(AcTemplate::kCurrentItem)] = item;
       itemContext[varName] = item;
     }
     result += m_engine.renderBlock(body, itemContext);

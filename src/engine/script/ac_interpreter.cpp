@@ -174,7 +174,7 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
 
     const ClassDef &cd = m_classes[expr.className];
     QJsonObject instance;
-    instance[QStringLiteral("__class__")] = expr.className;
+    instance[QString::fromLatin1(AcRuntime::kClassKey)] = expr.className;
 
     // 原生类：调用 FunMgr 构造
     if (cd.isNative) {
@@ -182,10 +182,10 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
       for (auto *arg : expr.constructorArgs)
         ctorArgs.append(evalExpr(*arg));
       QJsonValue ctorResult = FunMgr::ins().call(
-          expr.className, QStringLiteral("__construct__"), ctorArgs);
+          expr.className, QString::fromLatin1(AcRuntime::kConstructor), ctorArgs);
       if (ctorResult.isObject())
         instance = ctorResult.toObject();
-      instance[QStringLiteral("__class__")] = expr.className;
+      instance[QString::fromLatin1(AcRuntime::kClassKey)] = expr.className;
       return QJsonValue(instance);
     }
 

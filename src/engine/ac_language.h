@@ -188,7 +188,7 @@ inline constexpr const char *kBuiltinClass = "builtin";
 // 五、模板语法标记 — ${...} 占位符、块标签
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace AcTpl {
+namespace AcTemplate {
 /// @brief 表达式开始标记：${variable}、${each items} 等
 inline constexpr const char *kExprOpen = "${";
 /// @brief if 块前缀：${if condition}
@@ -203,4 +203,4 @@ inline constexpr const char *kEachClose = "${/each}";
 inline constexpr const char *kElse = "${else}";
 /// @brief 循环当前元素的 context 键：${.} 或 ${this}
 inline constexpr const char *kCurrentItem = ".";
-} // namespace AcTpl
+} // namespace AcTemplate

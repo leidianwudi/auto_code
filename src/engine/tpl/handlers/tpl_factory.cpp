@@ -13,9 +13,9 @@
 // ── 类型检测 ──
 
 TplFactory::BlockType TplFactory::detectType(const QString &expr) {
-  if (expr.startsWith(QString::fromLatin1(AcTpl::kEachPrefix)))
+  if (expr.startsWith(QString::fromLatin1(AcTemplate::kEachPrefix)))
     return BlockType::Each;
-  if (expr.startsWith(QString::fromLatin1(AcTpl::kIfPrefix)))
+  if (expr.startsWith(QString::fromLatin1(AcTemplate::kIfPrefix)))
     return BlockType::If;
   return BlockType::Expression;
 }

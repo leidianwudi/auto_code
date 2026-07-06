@@ -23,7 +23,7 @@ int TplBlock::findMatchingClose(const QString &block, int startPos,
 
   while (pos < block.length()) {
     // 查找嵌套的开放标签
-    int nextOpen = block.indexOf(QString::fromLatin1(AcTpl::kExprOpen) + openPrefix, pos);
+    int nextOpen = block.indexOf(QString::fromLatin1(AcTemplate::kExprOpen) + openPrefix, pos);
     // 查找闭合标签
     int nextClose = block.indexOf(closeTag, pos);
 
