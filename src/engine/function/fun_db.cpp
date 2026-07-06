@@ -23,14 +23,15 @@ QHash<QString, QJsonObject> FunDb::s_configs;
 
 // init — 注册所有数据库函数到 FunMgr
 void FunDb::init() {
-  // 注册原生类 DB 的构造器和方法
+  // 注册原生类 DB 的构造器和方法（名称来自 fun_const.h）
   FunMgr::ins().registerFuncs(
-      QStringLiteral("DB"), {
-                                {QStringLiteral("__construct__"), constructor},
-                                {QStringLiteral("tableSchema"), tableSchema},
-                                {QStringLiteral("query"), query},
-                                {QStringLiteral("disconnect"), disconnect},
-                            });
+      QString::fromLatin1(kAcClassDB),
+      {
+          {QStringLiteral("__construct__"), constructor},
+          {QString::fromLatin1(AcDB::kTableSchema), tableSchema},
+          {QString::fromLatin1(AcDB::kQuery), query},
+          {QString::fromLatin1(AcDB::kDisconnect), disconnect},
+      });
 }
 
 // cleanup — 关闭所有连接

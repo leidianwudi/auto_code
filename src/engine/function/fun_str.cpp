@@ -11,14 +11,14 @@
 
 void FunStr::init() {
   FunMgr::ins().registerFuncs(
-      QString::fromLatin1(AcClasses::kClsStr),
+      QString::fromLatin1(kAcCallStr),
       {
-          {QString::fromLatin1(AcClasses::kToLowerCase), toLowerCase},
-          {QString::fromLatin1(AcClasses::kToUpperCase), toUpperCase},
-          {QString::fromLatin1(AcClasses::kTrim), trim},
-          {QString::fromLatin1(AcClasses::kCapitalize), capitalize},
-          {QString::fromLatin1(AcClasses::kSubstring), substring},
-          {QString::fromLatin1(AcClasses::kReplace), replace},
+          {QString::fromLatin1(AcCallStr::kToLowerCase), toLowerCase},
+          {QString::fromLatin1(AcCallStr::kToUpperCase), toUpperCase},
+          {QString::fromLatin1(AcCallStr::kTrim), trim},
+          {QString::fromLatin1(AcCallStr::kCapitalize), capitalize},
+          {QString::fromLatin1(AcCallStr::kSubstring), substring},
+          {QString::fromLatin1(AcCallStr::kReplace), replace},
       });
 }
 

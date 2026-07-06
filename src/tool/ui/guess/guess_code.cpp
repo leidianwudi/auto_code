@@ -25,9 +25,10 @@ QStringList GuessCode::getAllCompletions(FileType type) {
         QStringLiteral("if"),   QStringLiteral("else"),
         QStringLiteral("call"), QStringLiteral("return"),
         QStringLiteral("true"), QStringLiteral("false"),
+        QStringLiteral("new"),
     };
-    // 内置函数由 kAcBuiltinFunctions 统一定义，自动与解析器/高亮器同步
-    return kw + kAcBuiltinFunctions;
+    // 内置函数和原生类由 kAcBuiltinFunctions / kAcNativeClasses 统一定义
+    return kw + kAcBuiltinFunctions + kAcNativeClasses;
   }
   case TplFile:
     return {

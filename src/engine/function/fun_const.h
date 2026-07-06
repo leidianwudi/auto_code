@@ -1,13 +1,13 @@
 /**
  * @file fun_const.h
- * @brief 函数名称常量 — 集中管理所有支持的 C++ 函数名及子命令
+ * @brief .ac 脚本引擎 — 所有支持的外部函数名集中定义
  *
- * 分两类管理：
- * 1. AcBuiltin: .ac 脚本直接调用的顶级内置函数（C++ 后端实现）
- * 2. AcClasses: 通过 call("类名", "方法名") 调用的 C++ 类及其方法
+ * 按调用方式分三大区，看一眼就能找到引擎支持的所有外部函数：
+ * 1. AcBuiltin:   一级函数，直接调用     renderTpl(...)  write(...)  print(...)
+ * 2. AcClass*:    new 实例化类          new DB({...})  → db.query(...)
+ * 3. AcCall*:     call() 路由类         call("str", "toLowerCase", ...)
  *
- * 所有函数名称统一在此声明为 constexpr 常量，避免散布裸字符串，
- * 重命名时只需改此处，编译期即可发现所有引用点。
+ * 新增函数/类/方法只需改此文件，脚本引擎、语法高亮、自动补全自动同步。
  */
 
 #pragma once
@@ -15,10 +15,10 @@
 #include <QString>
 #include <QStringList>
 
-/// @brief .ac 脚本顶级内置函数（直接调用）常量
-///
-/// 所有可以在 .ac 脚本中直接写函数名调用的内置函数，
-/// 全部由 C++ 引擎后端直接实现，不需要通过 call() 路由。
+// ═════════════════════════════════════════════════════════════════════════════
+// 一、一级函数 — .ac 脚本直接调用，C++ 引擎后端实现
+// ═════════════════════════════════════════════════════════════════════════════
+
 namespace AcBuiltin {
 /// @brief 调用 C++ 注册函数：call("类名", "方法名", [参数])
 inline constexpr const char *kCall = "call";
@@ -26,22 +26,19 @@ inline constexpr const char *kCall = "call";
 inline constexpr const char *kReadJson = "readJson";
 /// @brief 渲染模板文件：renderTpl("template.tpl", data) → 返回渲染文本
 inline constexpr const char *kRenderTpl = "renderTpl";
-/// @brief 写入文本文件：write("path.txt", content) → 返回 bool 是否成功
+/// @brief 写入文本文件：write("path.txt", content) → 返回 bool
 inline constexpr const char *kWrite = "write";
 /// @brief 打印日志到控制台：print("message") → 无返回值
 inline constexpr const char *kPrint = "print";
 /// @brief 获取 tree.config 中勾选的文件列表：getCheckedFiles() → 返回字符串数组
 inline constexpr const char *kGetCheckedFiles = "getCheckedFiles";
-/// @brief 合并两个 JSON 对象：merge(obj1, obj2) → 返回新对象，后者覆盖前者
+/// @brief 合并两个 JSON 对象：merge(obj1, obj2) → 返回新对象
 inline constexpr const char *kMerge = "merge";
-/// @brief 获取文件的无后缀基名：basename("path/file.cpp") → 返回 "file"
+/// @brief 获取文件无后缀基名：basename("path/file.cpp") → 返回 "file"
 inline constexpr const char *kBasename = "basename";
 } // namespace AcBuiltin
 
-/// @brief .ac 支持的内置函数名列表（由 AcBuiltin 常量组装）
-///
-/// 供解析器校验、语法高亮、自动补全使用。新增函数只需改 AcBuiltin
-/// 命名空间和本列表，所有模块自动同步。
+/// @brief 一级函数名列表（供解析器校验、高亮、补全使用）
 inline const QStringList kAcBuiltinFunctions = {
     QString(AcBuiltin::kCall),      QString(AcBuiltin::kReadJson),
     QString(AcBuiltin::kRenderTpl), QString(AcBuiltin::kWrite),
@@ -49,40 +46,78 @@ inline const QStringList kAcBuiltinFunctions = {
     QString(AcBuiltin::kMerge),     QString(AcBuiltin::kBasename),
 };
 
-/// @brief C++ 类方法（需 call() 路由）常量
-///
-/// 所有可以通过 call("类名", "方法名") 调用的 C++ 类及其方法，
-/// 名称都在这里集中定义。新增类/方法只需改此处。
-struct AcClasses {
-  // ── 类名 ──
-  static constexpr const char *kClsStr = "str";   ///< 字符串处理类
-  static constexpr const char *kClsDb = "db";     ///< 数据库查询类
-  static constexpr const char *kClsFile = "file"; ///< 文件读写类
+// ═════════════════════════════════════════════════════════════════════════════
+// 二、new 实例化类 — new DB({...})  →  db.query(...)
+// ═════════════════════════════════════════════════════════════════════════════
 
-  // ── FunStr 子命令 ──
-  static constexpr const char *kToLowerCase = "toLowerCase"; ///< 转小写
-  static constexpr const char *kToUpperCase = "toUpperCase"; ///< 转大写
-  static constexpr const char *kTrim = "trim";               ///< 去首尾空白
-  static constexpr const char *kCapitalize = "capitalize";   ///< 首字母大写
-  static constexpr const char *kSubstring = "substring";     ///< 子串
-  static constexpr const char *kReplace = "replace";         ///< 替换
+/// @brief DB 类名常量
+inline constexpr const char *kAcClassDB = "DB";
 
-  /// 返回所有支持的字符串子命令列表
-  static QStringList stringMethods();
+/// @brief DB 数据库类 — 方法名常量
+namespace AcDB {
+/// @brief 获取表结构：db.tableSchema({table: "news"})
+inline constexpr const char *kTableSchema = "tableSchema";
+/// @brief 执行 SQL：db.query({sql: "SELECT * FROM t"})
+inline constexpr const char *kQuery = "query";
+/// @brief 断开连接：db.disconnect()
+inline constexpr const char *kDisconnect = "disconnect";
 
-  // ── FunDb 子命令 ──
-  static constexpr const char *kTableSchema = "tableSchema"; ///< 获取表结构
-  static constexpr const char *kQuery = "query";             ///< 执行 SQL
-  static constexpr const char *kConnect = "connect";         ///< 连接数据库
-  static constexpr const char *kDisconnect = "disconnect";   ///< 断开连接
-
-  /// 返回所有支持的数据库子命令列表
-  static QStringList dbMethods();
-
-  // ── FunFile 子命令 ──
-  static constexpr const char *kRead = "read";   ///< 读文件
-  static constexpr const char *kWrite = "write"; ///< 写文件
-
-  /// 返回所有支持的文件子命令列表
-  static QStringList fileMethods();
+/// @brief DB 类所有方法名列表
+inline const QStringList kMethods = {
+    QString::fromLatin1(kTableSchema),
+    QString::fromLatin1(kQuery),
+    QString::fromLatin1(kDisconnect),
 };
+} // namespace AcDB
+
+/// @brief 原生类名列表（供解释器自动注册、高亮、补全使用）
+inline const QStringList kAcNativeClasses = {
+    QString::fromLatin1(kAcClassDB),
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 三、call() 路由类 — call("str", "toLowerCase", ...)
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// @brief str 类名常量
+inline constexpr const char *kAcCallStr = "str";
+
+/// @brief str 字符串类 — 方法名常量
+namespace AcCallStr {
+/// @brief 转小写：call("str", "toLowerCase", "ABC") → "abc"
+inline constexpr const char *kToLowerCase = "toLowerCase";
+/// @brief 转大写：call("str", "toUpperCase", "abc") → "ABC"
+inline constexpr const char *kToUpperCase = "toUpperCase";
+/// @brief 去首尾空白：call("str", "trim", "  hi  ") → "hi"
+inline constexpr const char *kTrim = "trim";
+/// @brief 首字母大写：call("str", "capitalize", "hello") → "Hello"
+inline constexpr const char *kCapitalize = "capitalize";
+/// @brief 子串：call("str", "substring", "hello", 1, 3) → "el"
+inline constexpr const char *kSubstring = "substring";
+/// @brief 替换：call("str", "replace", "abc", "b", "x") → "axc"
+inline constexpr const char *kReplace = "replace";
+
+/// @brief str 类所有方法名列表
+inline const QStringList kMethods = {
+    QString::fromLatin1(kToLowerCase), QString::fromLatin1(kToUpperCase),
+    QString::fromLatin1(kTrim),        QString::fromLatin1(kCapitalize),
+    QString::fromLatin1(kSubstring),   QString::fromLatin1(kReplace),
+};
+} // namespace AcCallStr
+
+/// @brief file 类名常量
+inline constexpr const char *kAcCallFile = "file";
+
+/// @brief file 文件类 — 方法名常量
+namespace AcCallFile {
+/// @brief 读文件：call("file", "read", "path.txt") → 返回内容
+inline constexpr const char *kRead = "read";
+/// @brief 写文件：call("file", "write", "path.txt", content)
+inline constexpr const char *kWrite = "write";
+
+/// @brief file 类所有方法名列表
+inline const QStringList kMethods = {
+    QString::fromLatin1(kRead),
+    QString::fromLatin1(kWrite),
+};
+} // namespace AcCallFile

@@ -566,11 +566,11 @@ QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
   m_generatedFiles.clear();
 
   // 预先注册 C++ 原生类（供 new 语法创建）
-  {
-    ClassDef dbClass;
-    dbClass.name = QStringLiteral("DB");
-    dbClass.isNative = true;
-    m_classes[dbClass.name] = dbClass;
+  for (const auto &name : kAcNativeClasses) {
+    ClassDef nativeClass;
+    nativeClass.name = name;
+    nativeClass.isNative = true;
+    m_classes[name] = nativeClass;
   }
 
   execBlock(program);
