@@ -1,3 +1,16 @@
+/**
+ * @file ac_type.h
+ * @brief .ac 脚本语言的类型定义集合
+ *
+ * 包含词法分析阶段的 Token 类型和语法分析阶段的 AST 节点类型。
+ * 这些类型在词法分析器（AcLexer）、语法分析器（AcParser）和
+ * 解释执行器（AcInterpreter）之间共享。
+ *
+ * 类型分类：
+ * - 词法单元：TokenType, Token
+ * - AST 节点：Block, Expr, Stmt, ClassDef, FuncCall, MethodCall 等
+ */
+
 #pragma once
 
 #include <QHash>
@@ -8,8 +21,19 @@
 #include <QStringList>
 #include <QVector>
 
-/// @defgroup ac_ast .ac 脚本 AST 类型定义
+/// @defgroup ac_type .ac 脚本类型定义
 /// @{
+
+/// @brief .ac 脚本支持的内置函数名列表
+///
+/// 解析器（AcParser）用于校验函数名是否合法，语法高亮器（LightAc）
+/// 用于确定哪些标识符应着内置函数色。新增内置函数时只需改此处。
+inline const QStringList kAcBuiltinFunctions = {
+    QStringLiteral("call"),      QStringLiteral("readJson"),
+    QStringLiteral("renderTpl"), QStringLiteral("write"),
+    QStringLiteral("print"),     QStringLiteral("getCheckedFiles"),
+    QStringLiteral("merge"),     QStringLiteral("basename"),
+};
 
 // ── 前置声明 ──
 struct Expr;

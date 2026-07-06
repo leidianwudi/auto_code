@@ -43,7 +43,7 @@ public:
     NoValidation,       ///< 不做验证
     JsonValidation,     ///< JSON 语法验证（使用 QJsonDocument）
     TemplateValidation, ///< 模板标签 + 括号匹配验证
-    AcValidation        ///< AC 脚本语法验证（使用 ScriptParser）
+    AcValidation        ///< AC 脚本语法验证（使用 AcExecutor）
   };
 
   explicit CodeEditor(QWidget *parent = nullptr);
@@ -100,7 +100,7 @@ private:
   QStringList validateJson();
   /// 模板验证（4 步：括号匹配、${} 闭合、标签配对、方法检查），返回错误信息列表
   QStringList validateTemplate();
-  /// AC 脚本语法验证（使用 ScriptParser 解析），返回错误信息列表
+  /// AC 脚本语法验证（使用 AcExecutor 解析），返回错误信息列表
   QStringList validateAc();
   /// 将错误区间应用到 ExtraSelection 并标记红色波浪下划线
   void applyErrorUnderline(int from, int length, const QString &tooltip,

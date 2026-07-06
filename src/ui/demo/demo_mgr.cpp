@@ -6,7 +6,7 @@
 #include "demo_mgr.h"
 #include "demo_model.h"
 #include "demo_ui.h"
-#include "src/engine/engine_tpl.h"
+#include "src/engine/tpl/tpl_engine.h"
 #include "src/tool/ui/code_editor.h"
 #include "src/tool/ui/highlighter/light_json.h"
 #include "src/tool/ui/highlighter/light_tpl.h"
@@ -26,7 +26,7 @@
 QWidget *DemoMgr::onCreateWindow() {
   m_ui = new DemoUi;
   m_model = new DemoModel;
-  m_engine = new TemplateEngine;
+  m_engine = new TplEngine;
 
   m_ui->setupUI();
   m_ui->resize(1200, 750);

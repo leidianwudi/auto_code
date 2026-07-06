@@ -1,7 +1,12 @@
+/**
+ * @file ac_interpreter.cpp
+ * @brief 解释执行器实现文件
+ */
+
 #include "ac_interpreter.h"
 
-#include "../engine_tpl.h"
 #include "../function/fun_mgr.h"
+#include "../tpl/tpl_engine.h"
 
 #include <QDir>
 #include <QFile>
@@ -255,7 +260,7 @@ QJsonValue AcInterpreter::callBuiltin(const QString &name,
     return doc.isObject() ? QJsonValue(doc.object()) : QJsonValue();
   }
 
-  if (name == QStringLiteral("render")) {
+  if (name == QStringLiteral("renderTpl")) {
     if (args.size() < 2) {
       *m_error =
           QStringLiteral("render() requires template and data arguments");
@@ -271,12 +276,12 @@ QJsonValue AcInterpreter::callBuiltin(const QString &name,
       return QJsonValue();
     QString tpl = QString::fromUtf8(f.readAll());
 
-    TemplateEngine engine;
+    TplEngine engine;
     if (m_logCallback)
       engine.setLogCallback(m_logCallback);
     QJsonValue data = evalExpr(*args[1]);
     if (!data.isObject()) {
-      *m_error = QStringLiteral("render() data must be a JSON object");
+      *m_error = QStringLiteral("renderTpl() data must be a JSON object");
       return QJsonValue();
     }
     return QJsonValue(engine.render(tpl, data.toObject()));

@@ -1,6 +1,11 @@
+/**
+ * @file ac_parser.h
+ * @brief 语法分析器 — 将 Token 序列解析为 AST
+ */
+
 #pragma once
 
-#include "ac_ast.h"
+#include "ac_type.h"
 
 /// @brief 语法分析器 — 将 Token 序列解析为 AST
 class AcParser {

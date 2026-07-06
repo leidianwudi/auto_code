@@ -1,6 +1,11 @@
+/**
+ * @file ac_lexer.h
+ * @brief 词法分析器 — 将 .ac 源码拆分为 Token 序列
+ */
+
 #pragma once
 
-#include "ac_ast.h"
+#include "ac_type.h"
 
 /// @brief 词法分析器 — 将 .ac 源码拆分为 Token 序列
 class AcLexer {

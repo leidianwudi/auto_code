@@ -37,7 +37,7 @@ main {
     // 遍历每个模板
     for (cfg in templates) {
       combined["outputPath"] = basePath + "/" + name;
-      let result = render(cfg.tpl, combined);
+      let result = renderTpl(cfg.tpl, combined);
       print("sss" + combined["outputPath"]);
       if (result) {
         write(combined["outputPath"], result);

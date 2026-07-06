@@ -1,3 +1,8 @@
+/**
+ * @file ac_lexer.cpp
+ * @brief 词法分析器实现文件
+ */
+
 #include "ac_lexer.h"
 
 /// @brief 跳过行注释（// 到行尾）

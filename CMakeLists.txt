@@ -11,29 +11,31 @@ set(CMAKE_AUTOUIC OFF)
 qt_add_executable(auto_code
     WIN32 MACOSX_BUNDLE
     main.cpp
-    src/engine/engine_tpl.h
-    src/engine/engine_tpl.cpp
-    src/engine/engine_ac.h
-    src/engine/engine_ac.cpp
-    src/engine/ac_script/ac_ast.h
-    src/engine/ac_script/ac_lexer.h
-    src/engine/ac_script/ac_lexer.cpp
-    src/engine/ac_script/ac_parser.h
-    src/engine/ac_script/ac_parser.cpp
-    src/engine/ac_script/ac_interpreter.h
-    src/engine/ac_script/ac_interpreter.cpp
-    src/engine/ac_script/ac_engine.h
-    src/engine/ac_script/ac_engine.cpp
+    src/engine/script/ac_type.h
+    src/engine/script/ac_lexer.h
+    src/engine/script/ac_lexer.cpp
+    src/engine/script/ac_parser.h
+    src/engine/script/ac_parser.cpp
+    src/engine/script/ac_interpreter.h
+    src/engine/script/ac_interpreter.cpp
+    src/engine/script/ac_executor.h
+    src/engine/script/ac_executor.cpp
+    src/engine/script/ac_engine.h
+    src/engine/script/ac_engine.cpp
+    src/engine/tpl/tpl_engine.h
+    src/engine/tpl/tpl_engine.cpp
+    src/engine/tpl/handlers/tpl_block.h
+    src/engine/tpl/handlers/tpl_block.cpp
+    src/engine/tpl/handlers/tpl_factory.h
+    src/engine/tpl/handlers/tpl_factory.cpp
+    src/engine/tpl/handlers/block_each.h
+    src/engine/tpl/handlers/block_each.cpp
+    src/engine/tpl/handlers/block_if.h
+    src/engine/tpl/handlers/block_if.cpp
+    src/engine/tpl/handlers/block_expression.h
+    src/engine/tpl/handlers/block_expression.cpp
     src/engine/validator_json.h
     src/engine/validator_json.cpp
-    src/engine/tpl_hand/tpl_block.h
-    src/engine/tpl_hand/tpl_block.cpp
-    src/engine/tpl_hand/tpl_each_block.h
-    src/engine/tpl_hand/tpl_each_block.cpp
-    src/engine/tpl_hand/tpl_if_block.h
-    src/engine/tpl_hand/tpl_if_block.cpp
-    src/engine/tpl_hand/tpl_expression.h
-    src/engine/tpl_hand/tpl_expression.cpp
     src/engine/function/fun_str.h
     src/engine/function/fun_str.cpp
     src/engine/function/fun_db.h

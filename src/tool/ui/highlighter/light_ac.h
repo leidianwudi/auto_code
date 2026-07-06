@@ -5,8 +5,7 @@
  * 为 main.ac 脚本文件提供语法高亮，包括：
  * - 变量（绿色）: x, item, result 等普通标识符
  * - 关键字（蓝色加粗）: main, for, in, if, else, call, return
- * - 内置函数（紫色加粗）: readJson, merge, basename, render, write, print,
- * getCheckedFiles
+ * - 内置函数（紫色加粗）: 由 ac_type.h 中的 kAcBuiltinFunctions 统一定义
  * - 注释（灰色斜体）: //
  * - 字符串（橙色）: "..." 和 '...'
  * - 数字（橙色加粗）: 123, 3.14

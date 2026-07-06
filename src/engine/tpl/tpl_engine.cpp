@@ -1,20 +1,20 @@
 /**
- * @file engine_tpl.cpp
+ * @file tpl_engine.cpp
  * @brief 模板引擎实现
  *
- * TemplateEngine 的职责（精简后）：
+ * TplEngine 的职责（精简后）：
  * 1. render()       — 对外入口：清空错误，调用 renderBlock
- * 2. renderBlock()  — 递归扫描 ${...}，交给 HandlerFactory 创建处理器
+ * 2. renderBlock()  — 递归扫描 ${...}，交给 TplFactory 创建处理器
  * 3. resolvePath()  — 嵌套属性路径解析（共享工具，供 handler 调用）
  *
- * 算术表达式求值已移至 TplExpression。
+ * 算术表达式求值已移至 BlockExpression。
  */
 
-#include "engine_tpl.h"
+#include "tpl_engine.h"
 
-#include "function/fun_const.h"
-#include "function/fun_mgr.h"
-#include "validator_json.h"
+#include "../function/fun_const.h"
+#include "../function/fun_mgr.h"
+#include "../validator_json.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -25,27 +25,26 @@
 
 // 静态成员定义
 
-const ValidatorJson *TemplateEngine::sm_validator = nullptr;
-QString TemplateEngine::sm_schemaClass;
+const ValidatorJson *TplEngine::sm_validator = nullptr;
+QString TplEngine::sm_schemaClass;
 
-TemplateEngine::TemplateEngine() : m_handlerFactory(*this) {}
+TplEngine::TplEngine() : m_handlerFactory(*this) {}
 
 // setSchema — 设置 Schema 校验
-void TemplateEngine::setSchema(const QString &className,
-                               const ValidatorJson *validator) {
+void TplEngine::setSchema(const QString &className,
+                          const ValidatorJson *validator) {
   sm_schemaClass = className;
   sm_validator = validator;
 }
 
 // clearSchema — 清除 Schema 校验
-void TemplateEngine::clearSchema() {
+void TplEngine::clearSchema() {
   sm_schemaClass.clear();
   sm_validator = nullptr;
 }
 
 // render — 对外渲染入口
-QString TemplateEngine::render(const QString &tmpl,
-                               const QJsonObject &data) const {
+QString TplEngine::render(const QString &tmpl, const QJsonObject &data) const {
   m_lastError.clear();
 
   if (sm_validator && !sm_schemaClass.isEmpty()) {
@@ -61,8 +60,8 @@ QString TemplateEngine::render(const QString &tmpl,
 
 // renderBlock — 递归扫描 ${...} 并交给处理器
 
-QString TemplateEngine::renderBlock(const QString &block,
-                                    const QJsonObject &context) const {
+QString TplEngine::renderBlock(const QString &block,
+                               const QJsonObject &context) const {
   QString result;
   int pos = 0;
 
@@ -95,8 +94,8 @@ QString TemplateEngine::renderBlock(const QString &block,
 
 // resolvePath — 嵌套属性路径解析 + 通过 FunMgr 调用 C++ 函数
 
-QJsonValue TemplateEngine::resolvePath(const QString &path,
-                                       const QJsonObject &context) const {
+QJsonValue TplEngine::resolvePath(const QString &path,
+                                  const QJsonObject &context) const {
   // 检查是否是函数调用格式: funcName(...)
   // 例如: str.toLowerCase(Hello) 或 file.read(C:/data.txt)
   int parenPos = path.indexOf(QStringLiteral("("));
@@ -120,52 +119,61 @@ QJsonValue TemplateEngine::resolvePath(const QString &path,
       rawArgs.append(argsStr.mid(start).trimmed());
     }
 
-    // 解析类名.函数名
-    int dotPos = fullFunc.indexOf(QStringLiteral("."));
-    if (dotPos == -1)
-      return QJsonValue();
-
-    QString className = fullFunc.left(dotPos).trimmed();
-    QString funcName = fullFunc.mid(dotPos + 1).trimmed();
-
-    // 将参数解析为 QJsonArray
-    QJsonArray jsonArgs;
+    // 解析参数：递归调用 resolvePath 处理每个参数
+    QJsonArray evalArgs;
     for (const QString &raw : rawArgs) {
-      // 尝试解析为 JSON，否则当作字符串
-      QJsonDocument doc = QJsonDocument::fromJson(raw.toUtf8());
-      if (doc.isNull() || doc.isObject()) {
-        // 纯字符串
-        jsonArgs.append(QJsonValue(raw));
+      // 尝试作为数字解析
+      bool ok = false;
+      double num = raw.toDouble(&ok);
+      if (ok) {
+        evalArgs.append(num);
+      } else if ((raw.startsWith(QStringLiteral("\"")) &&
+                  raw.endsWith(QStringLiteral("\""))) ||
+                 (raw.startsWith(QStringLiteral("'")) &&
+                  raw.endsWith(QStringLiteral("'")))) {
+        // 字符串字面量
+        evalArgs.append(raw.mid(1, raw.length() - 2));
       } else {
-        jsonArgs.append(doc.array());
+        // 变量路径
+        evalArgs.append(resolvePath(raw, context));
       }
     }
 
-    // 通过 FunMgr 调用
-    return FunMgr::ins().call(className, funcName, jsonArgs);
-  }
-
-  // 普通属性路径: user.name.email 或 modelName.toLowerCase
-  QStringList parts = path.split(QStringLiteral("."));
-  QJsonValue current(context);
-
-  for (int i = 0; i < parts.size(); ++i) {
-    const QString &part = parts[i];
-
-    // 检查是否是 FunStr 字符串方法（如 toLowerCase、trim 等）
-    // 此时当前值应作为输入，应用方法后得到新值
-    if (FunConst::stringMethods().contains(part)) {
-      if (!current.isString())
-        return QJsonValue();
-      QJsonArray arr = {current.toString()};
-      return FunMgr::ins().call(QString::fromLatin1(FunConst::kClsStr), part,
-                                arr);
+    // 解析函数名：类名.函数名
+    int dotPos = fullFunc.indexOf(QStringLiteral("."));
+    if (dotPos != -1) {
+      QString clsName = fullFunc.left(dotPos);
+      QString funcName = fullFunc.mid(dotPos + 1);
+      return FunMgr::ins().call(clsName, funcName, evalArgs);
     }
 
-    if (!current.isObject())
-      return QJsonValue();
-    current = current.toObject().value(part);
+    m_lastError = QStringLiteral("invalid function call format: %1").arg(path);
+    return QJsonValue();
   }
 
-  return current;
+  // ── 变量路径解析：按点号分割逐层查找 ──
+  QStringList parts = path.split(QStringLiteral("."));
+  QJsonValue value = QJsonValue(context);
+
+  for (const QString &part : parts) {
+    if (value.isObject()) {
+      value = value.toObject().value(part);
+    } else if (value.isArray()) {
+      bool ok = false;
+      int idx = part.toInt(&ok);
+      if (ok) {
+        QJsonArray arr = value.toArray();
+        if (idx >= 0 && idx < arr.size())
+          value = arr[idx];
+        else
+          return QJsonValue();
+      } else {
+        return QJsonValue();
+      }
+    } else {
+      return QJsonValue();
+    }
+  }
+
+  return value;
 }

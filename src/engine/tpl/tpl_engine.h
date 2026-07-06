@@ -1,5 +1,5 @@
 /**
- * @file engine_tpl.h
+ * @file tpl_engine.h
  * @brief 模板引擎头文件
  *
  * 实现一个简单的模板引擎，支持：
@@ -9,7 +9,7 @@
  * - 算术运算: ${a + b * c}
  *
  * 具体的处理逻辑已提取到对应的 TplBlock 子类中。
- * TemplateEngine 作为协调者：提供 render 入口 + 共享工具方法。
+ * TplEngine 作为协调者：提供 render 入口 + 共享工具方法。
  */
 
 #pragma once
@@ -21,28 +21,28 @@
 
 #include <functional>
 
-#include "tpl_hand/tpl_block.h"
+#include "handlers/tpl_factory.h"
 
 class ValidatorJson;
 
 /**
- * @class TemplateEngine
+ * @class TplEngine
  * @brief 模板引擎类
  *
  * 核心职责（精简后）：
  * 1. render() — 对外渲染入口
- * 2. renderBlock() — 递归扫描 ${...} 并交给 HandlerFactory
+ * 2. renderBlock() — 递归扫描 ${...} 并交给 TplFactory
  * 3. resolvePath() — 嵌套属性解析（供 handler 共享调用）
  *
- * 算术表达式求值已移至 TplExpression 内部实现。
+ * 算术表达式求值已移至 BlockExpression 内部实现。
  * C++ 函数调用使用 FunMgr::call(类名, 函数名, 参数)。
  */
-class TemplateEngine {
+class TplEngine {
 public:
   /**
    * @brief 默认构造函数
    */
-  TemplateEngine();
+  TplEngine();
 
   /// 日志回调：模板中 ${print(...)} 的输出通过此回调通知 UI
   using LogCallback = std::function<void(const QString &text, bool isError)>;
@@ -101,7 +101,7 @@ public:
 
 private:
   /// Handler 工厂
-  mutable HandlerFactory m_handlerFactory;
+  mutable TplFactory m_handlerFactory;
 
   /// 最后一次错误信息
   mutable QString m_lastError;

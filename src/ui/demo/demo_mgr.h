@@ -16,7 +16,7 @@
 
 class DemoUi;
 class DemoModel;
-class TemplateEngine;
+class TplEngine;
 
 /**
  * @class DemoMgr
@@ -50,5 +50,5 @@ private:
 
   DemoUi *m_ui = nullptr;
   DemoModel *m_model = nullptr;
-  TemplateEngine *m_engine = nullptr;
+  TplEngine *m_engine = nullptr;
 };

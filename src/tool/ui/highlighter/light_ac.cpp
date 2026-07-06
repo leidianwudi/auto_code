@@ -5,6 +5,7 @@
 
 #include "light_ac.h"
 #include "light_color.h"
+#include "src/engine/script/ac_type.h"
 
 /**
  * @brief 构造函数
@@ -14,8 +15,7 @@
  * 1. 变量（绿色）：普通标识符
  * 2. 关键字（蓝色加粗）：let, main, for, in, if, else, call, return, class,
  * function, new, this
- * 3. 内置函数（紫色加粗）：readJson, merge, basename, render, write, print,
- * getCheckedFiles
+ * 3. 内置函数（紫色加粗）：由 kAcBuiltinFunctions 统一定义
  * 4. 注释（灰色斜体）：// 单行注释
  * 5. 字符串（橙色）："" 和 '' 字面量
  * 6. 数字（橙色加粗）：整数、浮点数
@@ -49,8 +49,9 @@ LightAc::LightAc(QTextDocument *parent) : QSyntaxHighlighter(parent) {
   builtinFormat.setForeground(builtin);
   builtinFormat.setFontWeight(QFont::Bold);
   m_rules.append(
-      {QRegularExpression(QStringLiteral("\\b(?:readJson|merge|basename|render|"
-                                         "write|print|getCheckedFiles)\\b")),
+      {QRegularExpression(QStringLiteral("\\b(?:") +
+                          kAcBuiltinFunctions.join(QStringLiteral("|")) +
+                          QStringLiteral(")\\b")),
        builtinFormat});
 
   // ── 3. 注释（灰色斜体） ──

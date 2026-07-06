@@ -1,11 +1,10 @@
 /**
- * @file engine_ac.cpp
- * @brief 脚本引擎实现文件
+ * @file ac_engine.cpp
+ * @brief .ac 脚本引擎实现文件
  */
 
-#include "engine_ac.h"
-
-#include "ac_script/ac_engine.h"
+#include "ac_engine.h"
+#include "ac_executor.h"
 
 #include <QFile>
 #include <QFileInfo>
@@ -16,10 +15,10 @@
  * 使用 C++11 线程安全的局部静态变量方式实现单例。
  * 在首次调用时创建唯一实例，程序退出时自动销毁。
  *
- * @return EngineAc 全局唯一实例的引用
+ * @return AcEngine 全局唯一实例的引用
  */
-EngineAc &EngineAc::ins() {
-  static EngineAc instance;
+AcEngine &AcEngine::ins() {
+  static AcEngine instance;
   return instance;
 }
 
@@ -31,7 +30,7 @@ EngineAc &EngineAc::ins() {
  * 打开文件后一次性读取全部字节，以 UTF-8 编码转为 QString。
  * 文件不存在或打开失败时返回空字符串。
  */
-QString EngineAc::readFileUtf8(const QString &path) {
+QString AcEngine::readFileUtf8(const QString &path) {
   QFile f(path);
   if (!f.open(QIODevice::ReadOnly))
     return {};
@@ -46,13 +45,13 @@ QString EngineAc::readFileUtf8(const QString &path) {
  * 执行流程：
  *   1. 读取 .ac 源文件，若文件为空则返回错误
  *   2. 获取 .ac 文件所在目录作为脚本目录
- *   3. 创建 ScriptParser 并配置环境
- *   4. 调用 parser.parse() 将源码解析为 AST
- *   5. 调用 parser.execute() 解释执行 AST
+ *   3. 创建 AcExecutor 并配置环境
+ *   4. 调用 executor.parse() 将源码解析为 AST
+ *   5. 调用 executor.execute() 解释执行 AST
  *   6. 收集生成的文件列表
  *   7. 返回解析或执行过程中的错误信息
  */
-QString EngineAc::execute(const QString &acFilePath) {
+QString AcEngine::execute(const QString &acFilePath) {
   // 步骤 1：读取 .ac 源文件
   QString source = readFileUtf8(acFilePath);
   if (source.isEmpty())
@@ -62,23 +61,23 @@ QString EngineAc::execute(const QString &acFilePath) {
   QFileInfo fi(acFilePath);
   QString dir = fi.absolutePath();
 
-  // 步骤 3：创建解析器并配置环境
-  ScriptParser parser;
-  parser.setScriptDir(dir);
+  // 步骤 3：创建执行器并配置环境
+  AcExecutor executor;
+  executor.setScriptDir(dir);
   if (!m_rootDir.isEmpty())
-    parser.setRootDir(m_rootDir);
+    executor.setRootDir(m_rootDir);
   if (m_logCallback)
-    parser.setLogCallback(m_logCallback);
+    executor.setLogCallback(m_logCallback);
 
   // 步骤 4：解析源码为 AST
-  if (!parser.parse(source))
-    return QStringLiteral("parse error: %1").arg(parser.error());
+  if (!executor.parse(source))
+    return QStringLiteral("parse error: %1").arg(executor.error());
 
   // 步骤 5：解释执行 AST 并收集生成的文件
-  QJsonValue result = parser.execute();
-  m_generatedFiles = parser.generatedFiles();
-  if (!parser.error().isEmpty())
-    return parser.error();
+  QJsonValue result = executor.execute();
+  m_generatedFiles = executor.generatedFiles();
+  if (!executor.error().isEmpty())
+    return executor.error();
 
   return {};
 }

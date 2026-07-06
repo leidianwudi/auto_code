@@ -1,15 +1,15 @@
 /**
- * @file engine_ac.h
- * @brief 脚本引擎头文件 — 解析并执行 .ac 脚本文件
+ * @file ac_engine.h
+ * @brief .ac 脚本引擎头文件 — 解析并执行 .ac 脚本文件
  *
- * EngineAc 是 auto_code 的脚本执行引擎，以单例模式对外提供服务。
+ * AcEngine 是 auto_code 的脚本执行引擎，以单例模式对外提供服务。
  * 核心流程：
  *   1. 设置项目根目录（setRootDir）
  *   2. 注册日志回调（setLogCallback）
  *   3. 调用 execute() 传入 .ac 文件路径，解析并执行脚本
  *   4. 通过 generatedFiles() 获取本次生成的文件列表
  *
- * 脚本解析和执行的具体工作委托给 ScriptParser 完成。
+ * 脚本解析和执行的具体工作委托给 AcExecutor 完成。
  */
 
 #pragma once
@@ -20,18 +20,18 @@
 #include <functional>
 
 /**
- * @class EngineAc
- * @brief 脚本引擎 — 解析并执行 .ac 脚本文件
+ * @class AcEngine
+ * @brief .ac 脚本引擎 — 解析并执行 .ac 脚本文件
  *
  * 单例类，负责整个脚本生命周期的管理：
  * - 读取 .ac 源文件
- * - 调用 ScriptParser 解析并执行脚本
+ * - 调用 AcExecutor 解析并执行脚本
  * - 收集执行过程中生成的文件列表
  * - 通过回调机制将 print() 输出传递给 UI
  *
  * 使用示例：
  * @code
- * EngineAc &engine = EngineAc::ins();
+ * AcEngine &engine = AcEngine::ins();
  * engine.setRootDir("/project/root");
  * engine.setLogCallback([](const QString &text, bool isError) {
  *   qDebug() << (isError ? "[ERR]" : "[LOG]") << text;
@@ -42,13 +42,13 @@
  * }
  * @endcode
  */
-class EngineAc {
+class AcEngine {
 public:
   /**
    * @brief 获取单例实例
-   * @return EngineAc 全局唯一实例的引用
+   * @return AcEngine 全局唯一实例的引用
    */
-  static EngineAc &ins();
+  static AcEngine &ins();
 
   /**
    * @brief 日志回调类型
@@ -80,9 +80,9 @@ public:
    *
    * 执行流程：
    *   1. 读取 .ac 文件内容
-   *   2. 创建 ScriptParser 并配置环境（脚本目录、根目录、日志回调）
-   *   3. 调用 parser.parse() 解析为 AST
-   *   4. 调用 parser.execute() 解释执行
+   *   2. 创建 AcExecutor 并配置环境（脚本目录、根目录、日志回调）
+   *   3. 调用 executor.parse() 解析为 AST
+   *   4. 调用 executor.execute() 解释执行
    *   5. 收集生成的文件列表到 m_generatedFiles
    *   6. 返回解析或执行过程中的错误信息
    */
@@ -99,7 +99,7 @@ public:
 
 private:
   /// @brief 构造函数私有化（单例模式）
-  EngineAc() = default;
+  AcEngine() = default;
 
   /**
    * @brief 以 UTF-8 编码读取文件全部内容

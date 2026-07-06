@@ -1,11 +1,11 @@
 /**
- * @file tpl_expression.h
+ * @file block_expression.h
  * @brief 表达式处理器 -- 处理普通 ${expression} 表达式求值
  *
  * 这是模板引擎中最复杂的处理器，承担三大职责：
  * 1. 循环变量替换：${this} / ${.} -- 取循环当前元素
  * 2. 算术表达式求值：内置递归下降解析器（eval* 系列）
- * 3. 变量路径解析：通过 TemplateEngine::resolvePath() 获取值
+ * 3. 变量路径解析：通过 TplEngine::resolvePath() 获取值
  *
  * 算术表达式支持的语法：
  * - 四则运算：+, -, *, /
@@ -21,22 +21,22 @@
 #include "tpl_block.h"
 
 /**
- * @class TplExpression
+ * @class BlockExpression
  * @brief 表达式处理器（兜底处理器）
  *
- * HandlerFactory 的默认处理器，处理所有非 "each " / "if "
+ * TplFactory 的默认处理器，处理所有非 "each " / "if "
  * 开头的表达式。是三个 handler 中唯一包含算术求值逻辑的类。
  *
  * 设计为自包含：算术解析器（4 个私有方法）完全封装在内部，
- * 不依赖外部计算库，TemplateEngine 只提供 resolvePath 共享工具。
+ * 不依赖外部计算库，TplEngine 只提供 resolvePath 共享工具。
  */
-class TplExpression : public TplBlock {
+class BlockExpression : public TplBlock {
 public:
   /**
    * @brief 构造函数
    * @param engine 模板引擎引用，用于调用 resolvePath 和 setError
    */
-  explicit TplExpression(const TemplateEngine &engine) : m_engine(engine) {}
+  explicit BlockExpression(const TplEngine &engine) : m_engine(engine) {}
 
   /**
    * @brief 处理普通表达式（分发入口）
@@ -105,10 +105,6 @@ private:
    * 左结合的乘法/除法运算。先解析左侧操作数（通过 evalPrimary），
    * 然后循环匹配后续的 * / 运算符。
    *
-   * 特殊处理：除零保护 -- 当右操作数为 0 时设置错误信息并返回 0。
-   *
-   * 示例：a * b / c 解析为 ((a * b) / c)
-   *
    * @param expr 表达式字符串
    * @param pos 当前解析位置（输入输出参数，随解析推进）
    * @param context 变量上下文
@@ -118,22 +114,21 @@ private:
                     const QJsonObject &context) const;
 
   /**
-   * @brief 解析基本元素（优先级最高，语法层面的"原子"单位）
+   * @brief 解析基本元素（优先级最高）
    *
-   * 支持四种基本元素：
-   * 1. 一元运算符：+x, -x -- 递归调用自身处理符号后的内容
-   * 2. 括号表达式：(a + b) -- 跳过左括号后回到 evalAddSub 处理内部
-   * 3. 数字字面量：123, 3.14, .5 -- 直接转为 double
-   * 4. 变量名：name, user.age -- 通过 resolvePath 获取值并转数字
+   * 处理单个"原子"元素，包括：
+   * - 一元运算符：+x, -x
+   * - 括号表达式：(subExpr)
+   * - 数字字面量：123, 3.14, .5
+   * - 变量引用：name, user.age（通过 resolvePath 取值）
    *
    * @param expr 表达式字符串
    * @param pos 当前解析位置（输入输出参数，随解析推进）
    * @param context 变量上下文
-   * @return 基本元素的数值，无法识别时返回 0
+   * @return 基本元素的计算结果
    */
   double evalPrimary(const QString &expr, int &pos,
                      const QJsonObject &context) const;
 
-  /** @brief 模板引擎引用（用于调用 resolvePath 和 setError） */
-  const TemplateEngine &m_engine;
+  const TplEngine &m_engine;
 };

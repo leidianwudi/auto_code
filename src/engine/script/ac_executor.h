@@ -1,23 +1,31 @@
+/**
+ * @file ac_executor.h
+ * @brief .ac 脚本执行器头文件 — 编排解析执行全流程
+ *
+ * AcExecutor 封装了词法分析 → 语法分析 → 语义验证 → 解释执行的完整流程，
+ * 作为 AcEngine 和三个子模块（AcLexer / AcParser /
+ * AcInterpreter）之间的编排层。
+ */
+
 #pragma once
 
-#include "ac_ast.h"
 #include "ac_interpreter.h"
 #include "ac_lexer.h"
 #include "ac_parser.h"
+#include "ac_type.h"
+
 
 #include <QString>
 #include <QStringList>
 #include <functional>
 
-/// @brief 脚本解析器 — 将 .ac 脚本解析为 AST 并解释执行
+/// @brief .ac 脚本执行器 — 将 .ac 脚本解析为 AST 并解释执行
 ///
 /// 封装了词法分析 → 语法分析 → 语义验证 → 解释执行的完整流程。
-/// 保持与原始 ScriptParser 完全一致的 public API。
-///
-/// 支持的语法和变量规则详见各个子模块的文档。
-class ScriptParser {
+/// 内部调用 AcLexer、AcParser、AcInterpreter 完成各阶段工作。
+class AcExecutor {
 public:
-  ScriptParser();
+  AcExecutor();
 
   QString error() const { return m_error; }
   void setScriptDir(const QString &dir) { m_scriptDir = dir; }

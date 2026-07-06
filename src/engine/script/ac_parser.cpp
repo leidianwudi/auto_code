@@ -1,3 +1,8 @@
+/**
+ * @file ac_parser.cpp
+ * @brief 语法分析器实现文件
+ */
+
 #include "ac_parser.h"
 
 // ── token 操作 ──
@@ -609,11 +614,8 @@ bool AcParser::parseArray(Expr &expr) {
 }
 
 bool AcParser::parseFuncCall(const QString &name, Expr &expr) {
-  static const QSet<QString> kBuiltins = {
-      QStringLiteral("call"),   QStringLiteral("readJson"),
-      QStringLiteral("render"), QStringLiteral("write"),
-      QStringLiteral("print"),  QStringLiteral("getCheckedFiles"),
-      QStringLiteral("merge"),  QStringLiteral("basename")};
+  const QSet<QString> kBuiltins(kAcBuiltinFunctions.begin(),
+                                kAcBuiltinFunctions.end());
   if (!kBuiltins.contains(name)) {
     *m_error = QStringLiteral("unknown function '%1' at line %2")
                    .arg(name, QString::number(peek().line));

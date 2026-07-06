@@ -1,6 +1,11 @@
+/**
+ * @file ac_interpreter.h
+ * @brief 解释执行器 — 执行 AST 并返回结果
+ */
+
 #pragma once
 
-#include "ac_ast.h"
+#include "ac_type.h"
 
 #include <QHash>
 #include <QJsonObject>
@@ -10,7 +15,7 @@
 #include <QStringList>
 #include <functional>
 
-class TemplateEngine;
+class TplEngine;
 
 /// @brief 解释执行器 — 执行 AST 并返回结果
 class AcInterpreter {

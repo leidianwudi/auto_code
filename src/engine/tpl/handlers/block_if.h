@@ -1,5 +1,5 @@
 /**
- * @file tpl_if_block.h
+ * @file block_if.h
  * @brief 条件块处理器 — 处理 ${if condition}...${else}...${/if} 语法
  */
 
@@ -7,13 +7,13 @@
 
 #include "tpl_block.h"
 
-class TplIfBlock : public TplBlock {
+class BlockIf : public TplBlock {
 public:
-  explicit TplIfBlock(const TemplateEngine &engine) : m_engine(engine) {}
+  explicit BlockIf(const TplEngine &engine) : m_engine(engine) {}
 
   bool handle(const QString &block, int &pos, const QString &expr,
               const QJsonObject &context, QString &result) const override;
 
 private:
-  const TemplateEngine &m_engine;
+  const TplEngine &m_engine;
 };

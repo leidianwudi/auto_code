@@ -7,8 +7,8 @@
 #include "aui_error_tool_tip.h"
 #include "format/format_code.h"
 #include "guess/guess_code.h"
-#include "src/engine/ac_script/ac_engine.h"
 #include "src/engine/function/fun_const.h"
+#include "src/engine/script/ac_executor.h"
 #include <QAbstractItemView>
 #include <QCompleter>
 #include <QContextMenuEvent>
@@ -25,7 +25,6 @@
 #include <QStack>
 #include <QStringListModel>
 #include <QTextBlock>
-
 
 // ──────────────────────────────────────────────────────────────
 //  构造 / 基本接口
@@ -728,7 +727,7 @@ QStringList CodeEditor::validateTemplate() {
 /**
  * @brief AC 脚本语法验证
  *
- * 使用 ScriptParser 解析器检查 AC 脚本语法，包括：
+ * 使用 AcExecutor 执行器检查 AC 脚本语法，包括：
  * - 变量必须先 let 声明才能赋值
  * - 括号匹配
  * - 语句块 {} 完整性
@@ -743,14 +742,14 @@ QStringList CodeEditor::validateAc() {
   if (text.trimmed().isEmpty())
     return errors;
 
-  ScriptParser parser;
-  parser.parse(text);
+  AcExecutor executor;
+  executor.parse(text);
 
   // 收集所有错误：先取解析错误，再取未声明变量错误
   QStringList allErrors;
-  if (!parser.error().isEmpty())
-    allErrors << parser.error();
-  allErrors << parser.validateUndeclaredIdents();
+  if (!executor.error().isEmpty())
+    allErrors << executor.error();
+  allErrors << executor.validateUndeclaredIdents();
 
   for (const QString &errMsg : allErrors) {
     if (errMsg.isEmpty())

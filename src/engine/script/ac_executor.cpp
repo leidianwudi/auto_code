@@ -1,9 +1,14 @@
-#include "ac_engine.h"
+/**
+ * @file ac_executor.cpp
+ * @brief .ac 脚本执行器实现文件
+ */
 
-ScriptParser::ScriptParser() = default;
+#include "ac_executor.h"
+
+AcExecutor::AcExecutor() = default;
 
 /// @brief 解析 .ac 源码：词法分析 → 语法分析
-bool ScriptParser::parse(const QString &source) {
+bool AcExecutor::parse(const QString &source) {
   m_error.clear();
   m_declaredVars.clear();
 
@@ -20,7 +25,7 @@ bool ScriptParser::parse(const QString &source) {
 }
 
 /// @brief 执行 AST：验证 → 解释执行
-QJsonValue ScriptParser::execute() {
+QJsonValue AcExecutor::execute() {
   m_error.clear();
 
   // 步骤 1：配置解释器

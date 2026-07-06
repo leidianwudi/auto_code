@@ -73,9 +73,3 @@ Trae IDE 默认启用了安全删除保护（safe-rm），会在终端注入 `SA
 ; .trae\build.bat
 ; echo "Hello"
 ```
-
-**备选方案（不一定会生效）**：在用户 settings.json 中添加：
-
-```json
-"trae.safe-rm.enabled": false
-```
