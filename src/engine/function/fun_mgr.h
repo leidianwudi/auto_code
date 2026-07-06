@@ -66,16 +66,14 @@ public:
    * @param className 类名（如 "builtin"、"str"、"DB"、"file"）
    * @param funcs     函数名 → 函数指针 映射表
    */
-  void registerFuncs(const QString &className,
-                     const std::map<QString, FunPtr> &funcs);
+  void registerFuncs(const QString &className, const std::map<QString, FunPtr> &funcs);
 
   /**
    * @brief 注册一个类的所有无参函数（自动包装为 FunPtr）
    * @param className 类名
    * @param funcs     函数名 → 无参函数指针 映射表
    */
-  void registerFuncs(const QString &className,
-                     const std::map<QString, FunPtrVoid> &funcs);
+  void registerFuncs(const QString &className, const std::map<QString, FunPtrVoid> &funcs);
 
   /**
    * @brief 调用已注册的类成员函数
@@ -84,13 +82,27 @@ public:
    * @param args      参数数组
    * @return 执行结果；未注册时返回 Null
    */
-  QJsonValue call(const QString &className, const QString &funcName,
-                  const QJsonArray &args);
+  QJsonValue call(const QString &className, const QString &funcName, const QJsonArray &args);
 
   /**
    * @brief 检查某类是否已注册
    */
   bool contains(const QString &className) const;
+
+  /**
+   * @brief 检查某类的某函数是否已注册
+   */
+  bool contains(const QString &className, const QString &funcName) const;
+
+  /**
+   * @brief 设置函数执行错误（由各函数实现调用）
+   */
+  static void setError(const QString &msg);
+
+  /**
+   * @brief 获取并清除最后一次函数执行错误
+   */
+  static QString takeError();
 
 private:
   FunMgr() = default;
@@ -100,4 +112,7 @@ private:
 
   /// 二级映射：className → (funcName → FunPtr)
   std::map<QString, std::map<QString, FunPtr>> m_registry;
+
+  /// 最后一次函数执行错误（单线程，每次执行前清空）
+  static QString s_lastError;
 };

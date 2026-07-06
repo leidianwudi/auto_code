@@ -1100,12 +1100,22 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
     showCompleter();
   }
 
-  // ── 键入非单词字符后自动关闭补全（Backspace 已单独处理） ──
+  // ── 键入非单词字符后自动关闭补全（Backspace / . 已单独处理） ──
   if (m_completer && m_completer->popup()->isVisible()) {
-    if (event->key() != Qt::Key_Backspace &&
+    if (event->key() != Qt::Key_Backspace && event->text() != QStringLiteral(".") &&
         (event->text().length() != 1 || !event->text()[0].isLetterOrNumber())) {
       m_completer->popup()->hide();
     }
+  }
+
+  // ── 键入 . 后弹出补全（对象方法访问） ──
+  if (m_completer && event->text() == QStringLiteral(".")) {
+    showCompleter();
+  }
+
+  // ── 键入空格后弹出补全（检测 new 上下文） ──
+  if (m_completer && event->key() == Qt::Key_Space) {
+    showCompleter();
   }
 
   // ── 键入单词字符后弹出补全 ──
@@ -1150,6 +1160,12 @@ void CodeEditor::insertCompletion(const QString &completion) {
   }
   // 插入补全后的文本
   insertPlainText(completion);
+  // 若补全内容以 () 结尾，光标移到括号中间
+  if (completion.endsWith(QStringLiteral("()"))) {
+    tc = textCursor();
+    tc.movePosition(QTextCursor::Left, QTextCursor::MoveAnchor, 1);
+    setTextCursor(tc);
+  }
   // 关闭补全弹窗
   if (m_completer) m_completer->popup()->hide();
 }
@@ -1175,21 +1191,69 @@ void CodeEditor::showCompleter() {
   while (start > 0 && (text[start - 1].isLetterOrNumber() || text[start - 1] == '_')) --start;
   QString prefix = text.mid(start, pos - start);
 
-  if (prefix.isEmpty()) {
-    m_completer->popup()->hide();
-    return;
+  // ── 检测点上下文：光标前是 obj. 模式 ──
+  bool isDotContext = false;
+  QString objName;
+  if (start > 0 && text[start - 1] == '.') {
+    // 提取 . 前面的对象名
+    int objStart = start - 2;
+    while (objStart >= 0 && (text[objStart].isLetterOrNumber() || text[objStart] == '_'))
+      --objStart;
+    objName = text.mid(objStart + 1, start - 2 - objStart);
+    isDotContext = !objName.isEmpty();
   }
 
-  // ── 合并静态词库 + 动态 let 变量 + new 后的原生类 ──
-  GuessCode::FileType ft = GuessCode::validationModeToFileType(m_validationMode);
-  QStringList words = GuessCode::getAllCompletions(ft);
-  words << GuessCode::extractLetVariables(toPlainText());
+  // ── 检测 new 上下文：光标前是 "new " 模式（中间可有空格） ──
+  bool isNewContext = false;
+  if (!isDotContext) {
+    int ctxPos = start;
+    // 跳过光标前的所有空白
+    while (ctxPos > 0 && text[ctxPos - 1].isSpace()) --ctxPos;
+    // 检查 "new" 关键字（前面必须是单词边界或行首）
+    if (ctxPos >= 3 && text.mid(ctxPos - 3, 3) == QString::fromLatin1(AcKeyword::kNew)) {
+      if (ctxPos == 3 || !(text[ctxPos - 4].isLetterOrNumber() || text[ctxPos - 4] == '_')) {
+        isNewContext = true;
+      }
+    }
+  }
 
-  // 仅当光标在 new 关键字之后时，才提示原生类名（如 DB）
-  int ctxPos = start;
-  while (ctxPos > 0 && text[ctxPos - 1].isSpace()) --ctxPos;
-  if (ctxPos >= 3 && text.mid(ctxPos - 3, 3) == QString::fromLatin1(AcKeyword::kNew))
-    words << AcClass::kAll;
+  // ── 点上下文：只显示该对象类型的方法 ──
+  QStringList words;
+  if (isDotContext) {
+    QHash<QString, QString> varTypes = GuessCode::extractVariableTypes(text);
+    QHash<QString, QStringList> classMethods = GuessCode::extractClassMethods(text);
+    QString typeName = varTypes.value(objName);
+    if (!typeName.isEmpty()) words = classMethods.value(typeName);
+    if (words.isEmpty()) {
+      m_completer->popup()->hide();
+      return;
+    }
+  } else {
+    // new 上下文中允许空前缀（刚敲 "new " 时空格后无单词字符）
+    if (prefix.isEmpty() && !isNewContext) {
+      m_completer->popup()->hide();
+      return;
+    }
+
+    // ── 合并静态词库 + 动态 let 变量 + 用户自定义函数/类 ──
+    GuessCode::FileType ft = GuessCode::validationModeToFileType(m_validationMode);
+    words = GuessCode::getAllCompletions(ft);
+    int cursorLine = textCursor().blockNumber() + 1;  // 行号从 1 开始
+    words << GuessCode::extractLetVariables(text, cursorLine);
+
+    if (ft == GuessCode::AcFile) {
+      // new 上下文：只提示类名（原生类 + 用户自定义类），名称带 ()
+      if (isNewContext) {
+        words.clear();
+        for (const auto &cls : AcClass::kAll) words << cls + QStringLiteral("()");
+        for (const auto &cls : GuessCode::extractUserClasses(text, cursorLine))
+          words << cls + QStringLiteral("()");
+      } else {
+        words << GuessCode::extractUserFunctions(text, cursorLine);
+        words << GuessCode::extractUserClasses(text, cursorLine);
+      }
+    }
+  }
 
   words.removeDuplicates();
 

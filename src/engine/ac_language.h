@@ -37,6 +37,7 @@ inline constexpr const char *kTrue = "true";
 inline constexpr const char *kFalse = "false";
 inline constexpr const char *kClass = "class";
 inline constexpr const char *kFunction = "function";
+inline constexpr const char *kStatic = "static";
 
 /// @brief 关键字列表（供高亮、补全使用）
 inline const QStringList kAll = {
@@ -44,7 +45,7 @@ inline const QStringList kAll = {
     QString::fromLatin1(kFor),   QString::fromLatin1(kIn),       QString::fromLatin1(kIf),
     QString::fromLatin1(kElse),  QString::fromLatin1(kCall),     QString::fromLatin1(kReturn),
     QString::fromLatin1(kThis),  QString::fromLatin1(kTrue),     QString::fromLatin1(kFalse),
-    QString::fromLatin1(kClass), QString::fromLatin1(kFunction),
+    QString::fromLatin1(kClass), QString::fromLatin1(kFunction), QString::fromLatin1(kStatic),
 };
 }  // namespace AcKeyword
 

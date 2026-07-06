@@ -45,7 +45,7 @@ private:
   QJsonValue evalBinary(const Expr &expr);
   QJsonValue evalMethodCall(const Expr &expr);
   QJsonValue evalNewInstance(const Expr &expr);
-  QJsonValue callBuiltin(const QString &name, const QVector<Expr *> &args);
+  QJsonValue callBuiltin(const QString &name, const QVector<Expr *> &args, int line = 0);
 
   // ── 辅助方法 ──
   QJsonValue resolveVar(const QString &name) const;
@@ -63,6 +63,10 @@ private:
   // ── 类方法执行 ──
   QJsonValue execMethod(const MethodDef &method, const QJsonObject &thisObj,
                         const QJsonValue &callArgs);
+  void initStaticVars(const ClassDef &cd);  ///< 初始化类的静态变量
+
+  // ── 顶层函数执行 ──
+  QJsonValue execUserFunction(const MethodDef &func, const QJsonValue &callArgs);
 
   // ── 验证 ──
   void validateExprIdents(const Expr &expr, QStringList &errors,
@@ -78,6 +82,9 @@ private:
   QString m_rootDir;
   QVector<QHash<QString, QJsonValue>> m_scopeStack;
   QHash<QString, ClassDef> m_classes;
+  QHash<QString, MethodDef> m_functions;
+  QHash<QString, QJsonObject> m_staticVars;  ///< 静态变量 storage per class
+  QSet<QString> m_staticInited;              ///< 已初始化的静态类
   QJsonObject m_currentThis;
   QJsonObject m_modifiedThis;
   bool m_hasReturned = false;

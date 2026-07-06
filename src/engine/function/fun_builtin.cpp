@@ -4,15 +4,16 @@
  */
 
 #include "fun_builtin.h"
-#include "../ac_language.h"
-#include "../tpl/tpl_engine.h"
-#include "fun_mgr.h"
 
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+
+#include "../ac_language.h"
+#include "../tpl/tpl_engine.h"
+#include "fun_mgr.h"
 
 // ============================================================================
 // 上下文
@@ -45,27 +46,31 @@ void FunBuiltin::init() {
 // ============================================================================
 
 QJsonValue FunBuiltin::renderTpl(const QJsonArray &args) {
-  if (args.size() < 2)
+  if (args.size() < 2) {
+    FunMgr::setError(
+        QStringLiteral("renderTpl() requires 2 arguments: template path and data object"));
     return QJsonValue();
+  }
 
   QString tplPath = args[0].toString();
   QFileInfo tplInfo(tplPath);
-  if (tplInfo.isRelative())
-    tplPath = s_ctx.scriptDir + QStringLiteral("/") + tplPath;
+  if (tplInfo.isRelative()) tplPath = s_ctx.scriptDir + QStringLiteral("/") + tplPath;
 
   QFile f(tplPath);
-  if (!f.open(QIODevice::ReadOnly))
+  if (!f.open(QIODevice::ReadOnly)) {
+    FunMgr::setError(QStringLiteral("template not found: '%1'").arg(tplPath));
     return QJsonValue();
+  }
 
   TplEngine engine;
-  if (s_ctx.logCallback)
-    engine.setLogCallback(s_ctx.logCallback);
+  if (s_ctx.logCallback) engine.setLogCallback(s_ctx.logCallback);
 
-  if (!args[1].isObject())
+  if (!args[1].isObject()) {
+    FunMgr::setError(QStringLiteral("renderTpl() second argument must be a data object"));
     return QJsonValue();
+  }
 
-  return QJsonValue(
-      engine.render(QString::fromUtf8(f.readAll()), args[1].toObject()));
+  return QJsonValue(engine.render(QString::fromUtf8(f.readAll()), args[1].toObject()));
 }
 
 // ============================================================================
@@ -73,8 +78,20 @@ QJsonValue FunBuiltin::renderTpl(const QJsonArray &args) {
 // ============================================================================
 
 QJsonValue FunBuiltin::readFile(const QJsonArray &args) {
-  return FunMgr::ins().call(QString::fromLatin1(AcFile::kClassName), QString::fromLatin1(AcFile::kRead),
-                            args);
+  // 参数校验：需要文件路径
+  if (args.isEmpty() || !args[0].isString()) {
+    FunMgr::setError(QStringLiteral("readFile() requires a file path argument"));
+    return QJsonValue();
+  }
+
+  // 检查文件是否存在
+  QString path = args[0].toString();
+  if (!QFileInfo::exists(path)) {
+    FunMgr::setError(QStringLiteral("file not found: '%1'").arg(path));
+    return QJsonValue();
+  }
+  return FunMgr::ins().call(QString::fromLatin1(AcFile::kClassName),
+                            QString::fromLatin1(AcFile::kRead), args);
 }
 
 // ============================================================================
@@ -82,8 +99,12 @@ QJsonValue FunBuiltin::readFile(const QJsonArray &args) {
 // ============================================================================
 
 QJsonValue FunBuiltin::writeFile(const QJsonArray &args) {
-  QJsonValue r =
-      FunMgr::ins().call(QString::fromLatin1(AcFile::kClassName), QString::fromLatin1(AcFile::kWrite), args);
+  if (args.size() < 2 || !args[0].isString()) {
+    FunMgr::setError(QStringLiteral("writeFile() requires 2 arguments: file path and content"));
+    return QJsonValue();
+  }
+  QJsonValue r = FunMgr::ins().call(QString::fromLatin1(AcFile::kClassName),
+                                    QString::fromLatin1(AcFile::kWrite), args);
   if (r.toBool(false) && s_ctx.generatedFiles && !args.isEmpty())
     s_ctx.generatedFiles->append(QDir::toNativeSeparators(args[0].toString()));
   return r;
@@ -94,12 +115,13 @@ QJsonValue FunBuiltin::writeFile(const QJsonArray &args) {
 // ============================================================================
 
 QJsonValue FunBuiltin::print(const QJsonArray &args) {
-  if (args.isEmpty())
-    return QJsonValue();
+  if (args.isEmpty()) return QJsonValue();
 
-  QString text = args[0].toString();
-  if (s_ctx.logCallback)
-    s_ctx.logCallback(text, false);
+  QString text;
+  for (const QJsonValue &v : args) {
+    text += v.isString() ? v.toString() : QString::number(v.toDouble());
+  }
+  if (s_ctx.logCallback) s_ctx.logCallback(text, false);
 
   return QJsonValue(true);
 }
@@ -109,21 +131,18 @@ QJsonValue FunBuiltin::print(const QJsonArray &args) {
 // ============================================================================
 
 QJsonValue FunBuiltin::getCheckedFiles(const QJsonArray & /*args*/) {
-  QString treePath = s_ctx.rootDir.isEmpty()
-                         ? s_ctx.scriptDir + QStringLiteral("/tree.config")
-                         : s_ctx.rootDir + QStringLiteral("/tree.config");
+  QString treePath = s_ctx.rootDir.isEmpty() ? s_ctx.scriptDir + QStringLiteral("/tree.config")
+                                             : s_ctx.rootDir + QStringLiteral("/tree.config");
   QFile f(treePath);
   QJsonArray result;
   if (f.open(QIODevice::ReadOnly)) {
     QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
-    QJsonArray checked =
-        doc.object().value(QStringLiteral("checked")).toArray();
+    QJsonArray checked = doc.object().value(QStringLiteral("checked")).toArray();
     for (const QJsonValue &v : checked) {
       if (v.isString())
-        result.append(QDir::cleanPath(
-            s_ctx.rootDir.isEmpty()
-                ? s_ctx.scriptDir
-                : s_ctx.rootDir + QStringLiteral("/") + v.toString()));
+        result.append(QDir::cleanPath(s_ctx.rootDir.isEmpty()
+                                          ? s_ctx.scriptDir
+                                          : s_ctx.rootDir + QStringLiteral("/") + v.toString()));
     }
   }
   return result;
@@ -134,13 +153,15 @@ QJsonValue FunBuiltin::getCheckedFiles(const QJsonArray & /*args*/) {
 // ============================================================================
 
 QJsonValue FunBuiltin::merge(const QJsonArray &args) {
-  if (args.size() < 2)
+  if (args.size() < 2) {
+    FunMgr::setError(
+        QStringLiteral("merge() requires 2 arguments: target object and source object"));
     return QJsonValue();
+  }
 
   QJsonObject result = args[0].toObject();
   QJsonObject ob = args[1].toObject();
-  for (auto it = ob.begin(); it != ob.end(); ++it)
-    result[it.key()] = it.value();
+  for (auto it = ob.begin(); it != ob.end(); ++it) result[it.key()] = it.value();
 
   return result;
 }
@@ -150,8 +171,10 @@ QJsonValue FunBuiltin::merge(const QJsonArray &args) {
 // ============================================================================
 
 QJsonValue FunBuiltin::basename(const QJsonArray &args) {
-  if (args.isEmpty())
+  if (args.isEmpty() || !args[0].isString()) {
+    FunMgr::setError(QStringLiteral("basename() requires a file path argument"));
     return QJsonValue();
+  }
 
   return QJsonValue(QFileInfo(args[0].toString()).completeBaseName());
 }

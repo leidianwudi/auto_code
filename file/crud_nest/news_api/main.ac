@@ -1,14 +1,118 @@
+// ── 顶层函数：在 main 外部定义，可以在 main 中调用 ──
+
+function add(a, b) {
+  
+  return a + b;
+}
+
+function multiply(a, b) {
+  return a * b;
+}
+
+function greet(name) {
+  return "Hello, " + name + "!";
+}
+
+// ── 顶层类：在 main 外部定义 ──
+
+class Engine {
+  
+  let type = "V8";
+  let horsepower = 400;
+
+  function start() {
+    print("Engine " + type + " started, horsepower: " + horsepower);
+  }
+
+  function getInfo() {
+    return type + " (" + horsepower + "hp)";
+    
+  }
+}
+
+class Car {
+  let brand = "Tesla";
+  let engine = new Engine();
+  let year = 2024;
+
+  function drive(speed) {
+    engine.start();
+    print(brand + " is driving at " + speed + " km/h");
+  }
+
+  function getDetails() {
+    let info = engine.getInfo();
+    return brand + " " + year + " with engine: " + info;
+  }
+}
+
+class Person {
+  let name = "default";
+  let age = 0;
+
+  function setName(n) {
+    this.name = n;
+  }
+
+  function setAge(a) {
+    this.age = a;
+  }
+
+  function introduce() {
+    return "Hi, I'm " + this.name + ", " + this.age + " years old";
+  }
+}
+
+// ── 静态类测试 ──
+
+class Counter {
+  static let count = 0
+  static let name = "Counter"
+
+  static function increment() {
+    Counter::count = Counter::count + 1
+  }
+
+  static function getCount() {
+    return Counter::count
+  }
+}
+
+// ── 主入口 ──
+
 main {
-  let a = 10;
-  let b = 3;
-  let sum = a + b * 2;      // 16（乘优先）
-  let result = (a + b) * 2; // 26（括号优先）
-  let neg = -a;             // -10
-  let msg = "count: " + a;  // "count: 10"（字符串拼接）
-  let msg1 = msg + "ssss111";
-  let div = a / b;          // 3.333...
-  print(msg1);
-  // 连接数据库
+  
+  //let a = readFile();
+  // 调用顶层函数
+  let sum = add(10, 20);
+  print("sum: " + sum);
+
+  let product = multiply(6, 7);
+  print("product: " + product);
+
+  let msg = greet("AutoCode");
+  print(msg);
+
+  // 使用顶层类
+  let myEngine = new Engine();
+  myEngine.start();
+  let engineInfo = myEngine.getInfo();
+  print("Engine info: " + engineInfo);
+
+  let myCar = new Car();
+  myCar.drive(1);
+  myCar.drive(120);
+  let details = myCar.getDetails();
+  print("Car details: " + details);
+
+  let person = new Person();
+  person.setName("Alice");
+  person.setAge(30);
+  let intro = person.introduce();
+  print(intro);
+
+  // ── 数据库操作 ──
+
   let db = new DB({
     host: "192.168.5.103",
     port: 3306,
@@ -18,118 +122,28 @@ main {
   });
 
   let basePath = "D:/output";
-  
-  // 模板配置列表：[模板文件, 输出后缀]
+
   let templates = [
-    { tpl: "1.tpl", suffix: ".ts" },    
+    { tpl: "1.tpl", suffix: ".ts" },
     { tpl: "2.tpl", suffix: ".ts" },
   ];
 
-  // 获取主界面勾选的 json 文件
-  let files = getCheckedFiles(); 
-  // 遍历每个 json 文件
+  let files = getCheckedFiles();
   for (file in files) {
     let json = readJson(file);
     let schema = db.tableSchema({ table: json.modelName });
     let combined = merge(json, schema);
     let name = basename(file);
 
-    // 遍历每个模板
     for (cfg in templates) {
       combined["outputPath"] = basePath + "/" + name;
       let result = renderTpl(cfg.tpl, combined);
-      print("sss" + combined["outputPath"]);
       if (result) {
         writeFile(combined["outputPath"], result);
       }
     }
   }
 
-  // ── 类与对象测试 ──
-
-  // 定义嵌套类：Engine 作为 Car 的属性
-  class Engine {
-    let type = "V8";
-    let horsepower = 400;
-
-    function start() {
-      print("Engine " + type + " started, horsepower: " + horsepower);
-    }
-
-    function getInfo() {
-      return type + " (" + horsepower + "hp)";
-    }
-  }
-
-  class Car {
-    let brand = "Tesla";
-    let engine = new Engine();
-    let year = 2024;
-
-    function drive(speed) {
-      engine.start();
-      print(brand + " is driving at " + speed + " km/h");
-    }
-
-    function getDetails() {
-      let info = engine.getInfo();
-      return brand + " " + year + " with engine: " + info;
-    }
-  }
-
-  // 测试类实例化和方法调用
-  let myEngine = new Engine();
-  myEngine.start();
-  let engineInfo = myEngine.getInfo();
-  print("Engine info: " + engineInfo);
-
-  // 测试嵌套类属性和返回值
-  let myCar = new Car();
-  myCar.drive(120);
-  let details = myCar.getDetails();
-  print("Car details: " + details);
-
-  // 测试 this 关键字
-  class Person {
-    let name = "default";
-    let age = 0;
-
-    function setName(n) {
-      this.name = n;
-    }
-
-    function setAge(a) {
-      this.age = a;
-    }
-
-    function introduce() {
-      return "Hi, I'm " + this.name + ", " + this.age + " years old";
-    }
-  }
-
-  let person = new Person();
-  person.setName("Alice");
-  person.setAge(30);
-  let intro = person.introduce();
-  print(intro);
-
-  // 测试数组操作
-  let testArr = [1, 2, 3, 4, 5];
-  let arrSum = 0;
-  for (i in testArr) {
-    arrSum = arrSum + i;
-  }
-  print("Array sum: " + arrSum);
-
-  // 测试对象属性访问
-  let appConfig = {
-    appName: "AutoCode",
-    version: 1.0,
-    features: ["templates", "classes", "arrays"]
-  };
-  print("App: " + appConfig.appName + " v" + appConfig.version);
-
-  // 断开数据库
   db.disconnect();
 
   // ── 作用域测试 ──
@@ -138,23 +152,46 @@ main {
   if (true) {
     let outer = 200;
     let inner = 300;
-    print("inner outer: " + outer);   // 200
-    print("inner inner: " + inner);   // 300
+    print("inner outer: " + outer);
+    print("inner inner: " + inner);
   }
-  print("outer after if: " + outer);  // 100（外层未被修改）
+  print("outer after if: " + outer);
 
-  let sum = 0;
+  let arrSum = 0;
   for (i in [1, 2, 3]) {
     let squared = i * i;
-    sum = sum + squared;
+    arrSum = arrSum + squared;
   }
-  print("sum of squares: " + sum);    // 14
+  print("sum of squares: " + arrSum);
 
   let flag = false;
   if (flag) {
-    print("不会执行");
+    print("not executed");
   } else {
     let elseVar = "else block";
-    print("elseVar: " + elseVar);     // "else block"
+    print("elseVar: " + elseVar);
   }
+
+  // ── 静态变量/函数测试 ──
+
+  print("--- 静态测试开始 ---");
+
+  let initCount = Counter::count;
+  print("初始静态 count: " + initCount);
+
+  Counter::increment();
+  let c1 = Counter::getCount();
+  print("第一次自增后: " + c1);
+
+  Counter::increment();
+  let c2 = Counter::getCount();
+  print("第二次自增后: " + c2);
+
+  let finalCount = Counter::count;
+  print("最终静态 count: " + finalCount);
+
+  let name = Counter::name;
+  print("静态名称: " + name);
+
+  print("--- 静态测试结束 ---");
 }

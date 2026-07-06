@@ -49,8 +49,31 @@ bool AcParser::parse(const QVector<Token> &tokens, Block &program, QString &erro
 }
 
 bool AcParser::parseProgram(Block &block) {
-  if (peek().type == TOK_IDENT && peek().text == QString::fromLatin1(AcKeyword::kMain)) advance();
-  return parseBlock(block);
+  while (peek().type != TOK_EOF) {
+    Token t = peek();
+
+    if (t.type == TOK_CLASS) {
+      advance();
+      Block::Stmt stmt;
+      stmt.kind = Block::Stmt::kClassDef;
+      if (!parseClassDef(stmt.classDef)) return false;
+      block.stmts.append(stmt);
+    } else if (t.type == TOK_FUNCTION) {
+      advance();
+      Block::Stmt stmt;
+      stmt.kind = Block::Stmt::kFuncDef;
+      if (!parseMethodDef(stmt.funcDef)) return false;
+      block.stmts.append(stmt);
+    } else if (t.type == TOK_IDENT && t.text == QString::fromLatin1(AcKeyword::kMain)) {
+      advance();
+      if (!parseBlock(block)) return false;
+    } else {
+      *m_error = QStringLiteral("expected 'class', 'function', or 'main' at top level at line %1")
+                     .arg(peek().line);
+      return false;
+    }
+  }
+  return true;
 }
 
 bool AcParser::parseBlock(Block &block) {
@@ -73,6 +96,12 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
     advance();
     stmt.kind = Block::Stmt::kClassDef;
     return parseClassDef(stmt.classDef);
+  }
+
+  if (t.type == TOK_FUNCTION) {
+    advance();
+    stmt.kind = Block::Stmt::kFuncDef;
+    return parseMethodDef(stmt.funcDef);
   }
 
   if (t.type == TOK_RETURN) {
@@ -114,6 +143,23 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
   }
 
   if (t.type == TOK_IDENT) {
+    // ClassName::prop = value  — 静态属性赋值
+    if (m_pos + 2 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_SCOPE &&
+        m_tokens[m_pos + 2].type == TOK_IDENT && m_pos + 3 < m_tokens.size() &&
+        m_tokens[m_pos + 3].type == TOK_EQUALS) {
+      stmt.kind = Block::Stmt::kAssign;
+      stmt.assign.isStatic = true;
+      stmt.assign.staticClassName = advance().text;
+      advance();                          // skip ::
+      stmt.assign.name = advance().text;  // member name
+      if (!expect(TOK_EQUALS, QStringLiteral("expected '='"))) return false;
+      return parseExpr(stmt.assign.value);
+    }
+    // ClassName::member() 或 ClassName::member  — 静态访问表达式语句
+    if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_SCOPE) {
+      stmt.kind = Block::Stmt::kExpr;
+      return parseExpr(stmt.exprStmt);
+    }
     if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_EQUALS) {
       if (!m_declaredVars->contains(t.text)) {
         *m_error = QStringLiteral(
@@ -236,6 +282,12 @@ bool AcParser::parseClassDef(ClassDef &cd) {
   if (!expect(TOK_LBRACE, QStringLiteral("expected '{' after class name"))) return false;
 
   while (peek().type != TOK_RBRACE && peek().type != TOK_EOF) {
+    bool isStatic = false;
+    if (peek().type == TOK_STATIC) {
+      isStatic = true;
+      advance();
+    }
+
     if (peek().type == TOK_LET) {
       advance();
       if (peek().type != TOK_IDENT) {
@@ -244,6 +296,7 @@ bool AcParser::parseClassDef(ClassDef &cd) {
       }
       ObjectEntry prop;
       prop.key = advance().text;
+      prop.isStatic = isStatic;
       prop.value = new Expr();
       if (peek().type == TOK_EQUALS) {
         advance();
@@ -261,9 +314,16 @@ bool AcParser::parseClassDef(ClassDef &cd) {
     if (peek().type == TOK_FUNCTION) {
       advance();
       MethodDef md;
+      md.isStatic = isStatic;
       if (!parseMethodDef(md)) return false;
       cd.methods.append(md);
       continue;
+    }
+
+    if (isStatic) {
+      *m_error =
+          QStringLiteral("expected 'let' or 'function' after 'static' at line %1").arg(peek().line);
+      return false;
     }
 
     *m_error = QStringLiteral("unexpected token '%1' in class body at line %2")
@@ -400,6 +460,7 @@ bool AcParser::parsePrimary(Expr &expr) {
       QString propName = advance().text;
       if (peek().type == TOK_LPAREN) {
         expr.kind = Expr::kMethodCall;
+        expr.line = peek().line;
         expr.methodCall.objName = QString::fromLatin1(AcKeyword::kThis);
         expr.methodCall.methodName = propName;
         advance();
@@ -490,6 +551,33 @@ bool AcParser::parsePrimary(Expr &expr) {
 
     case TOK_IDENT: {
       QString name = advance().text;
+      if (peek().type == TOK_SCOPE) {
+        int scopeLine = peek().line;
+        advance();
+        if (peek().type != TOK_IDENT) {
+          *m_error = QStringLiteral("expected member name after '::' at line %1").arg(peek().line);
+          return false;
+        }
+        QString member = advance().text;
+        expr.kind = Expr::kStaticAccess;
+        expr.line = scopeLine;
+        expr.className = name;
+        expr.prop = member;
+        if (peek().type == TOK_LPAREN) {
+          advance();
+          while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
+            auto *arg = new Expr();
+            if (!parseExpr(*arg)) {
+              delete arg;
+              return false;
+            }
+            expr.funcCall.args.append(arg);
+            if (peek().type == TOK_COMMA) advance();
+          }
+          return expect(TOK_RPAREN, QStringLiteral("expected ')' after static method call"));
+        }
+        return true;
+      }
       if (peek().type == TOK_DOT) {
         advance();
         if (peek().type != TOK_IDENT) {
@@ -499,6 +587,7 @@ bool AcParser::parsePrimary(Expr &expr) {
         QString propName = advance().text;
         if (peek().type == TOK_LPAREN) {
           expr.kind = Expr::kMethodCall;
+          expr.line = peek().line;
           expr.methodCall.objName = name;
           expr.methodCall.methodName = propName;
           advance();
@@ -589,15 +678,9 @@ bool AcParser::parseArray(Expr &expr) {
 }
 
 bool AcParser::parseFuncCall(const QString &name, Expr &expr) {
-  const QSet<QString> kBuiltins(AcBuiltin::kAll.begin(), AcBuiltin::kAll.end());
-  if (!kBuiltins.contains(name)) {
-    *m_error =
-        QStringLiteral("unknown function '%1' at line %2").arg(name, QString::number(peek().line));
-    return false;
-  }
-
   expr.kind = Expr::kFuncCall;
   expr.funcCall.name = name;
+  expr.line = peek().line;
   advance();
   while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
     auto *arg = new Expr();

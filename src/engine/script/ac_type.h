@@ -64,6 +64,8 @@ enum TokenType {
   TOK_RETURN,    ///< return 关键字（返回值）
   TOK_TRUE,      ///< true 布尔字面量
   TOK_FALSE,     ///< false 布尔字面量
+  TOK_SCOPE,     ///< ::（作用域解析）
+  TOK_STATIC,    ///< static 关键字（静态成员）
 };
 
 /// @brief 词法单元
@@ -87,6 +89,7 @@ struct Block {
 struct ObjectEntry {
   QString key;
   Expr *value = nullptr;
+  bool isStatic = false;  ///< 是否为静态属性
 };
 
 /// @brief 函数调用表达式：name(arg1, arg2, ...)
@@ -107,6 +110,7 @@ struct MethodDef {
   QString name;
   QStringList params;
   Block body;
+  bool isStatic = false;  ///< 是否为静态方法
 };
 
 /// @brief 类定义：class Name { let prop = val; function method(args) { ... } }
@@ -121,19 +125,20 @@ struct ClassDef {
 /// @brief 表达式节点 — AST 中的表达式
 struct Expr {
   enum Kind {
-    kString,       ///< 字符串字面量
-    kNumber,       ///< 数字字面量
-    kIdent,        ///< 变量引用
-    kPropAccess,   ///< 属性访问 obj.prop
-    kIndexAccess,  ///< 索引访问 obj["key"]
-    kObject,       ///< 对象字面量 { key: val }
-    kArray,        ///< 数组字面量 [item, ...]
-    kFuncCall,     ///< 函数调用 name(args)
-    kMethodCall,   ///< 方法调用 obj.method(args)
-    kNewInstance,  ///< new ClassName()
-    kThis,         ///< this 关键字
-    kBinary,       ///< 二元运算 left op right
-    kBool,         ///< 布尔字面量 true/false
+    kString,        ///< 字符串字面量
+    kNumber,        ///< 数字字面量
+    kIdent,         ///< 变量引用
+    kPropAccess,    ///< 属性访问 obj.prop
+    kIndexAccess,   ///< 索引访问 obj["key"]
+    kObject,        ///< 对象字面量 { key: val }
+    kArray,         ///< 数组字面量 [item, ...]
+    kFuncCall,      ///< 函数调用 name(args)
+    kMethodCall,    ///< 方法调用 obj.method(args)
+    kNewInstance,   ///< new ClassName()
+    kThis,          ///< this 关键字
+    kBinary,        ///< 二元运算 left op right
+    kBool,          ///< 布尔字面量 true/false
+    kStaticAccess,  ///< 静态访问 ClassName::member
   } kind = kString;
   int line = 0;                     ///< 源码行号（用于错误报告）
   QString strVal;                   ///< 字符串值
@@ -243,11 +248,13 @@ struct CallStmt {
   Expr args;
 };
 
-/// @brief 赋值语句：name = expr 或 this.prop = expr
+/// @brief 赋值语句：name = expr 或 this.prop = expr 或 ClassName::prop = expr
 struct AssignStmt {
   QString name;
   QString thisProp;
   Expr value;
+  bool isStatic = false;    ///< 是否为静态属性赋值
+  QString staticClassName;  ///< 静态类名（isStatic=true 时有效）
 };
 
 /// @brief 索引赋值语句：obj["key"] = expr
@@ -274,7 +281,17 @@ struct IfStmt {
 
 /// @brief 语句 — 包含调用、赋值、类定义、循环、条件、返回等类型
 struct Block::Stmt {
-  enum Kind { kCall, kAssign, kIndexAssign, kFor, kIf, kExpr, kClassDef, kReturn } kind = kCall;
+  enum Kind {
+    kCall,
+    kAssign,
+    kIndexAssign,
+    kFor,
+    kIf,
+    kExpr,
+    kClassDef,
+    kFuncDef,
+    kReturn
+  } kind = kCall;
   CallStmt call;
   AssignStmt assign;
   IndexAssignStmt indexAssign;
@@ -282,6 +299,7 @@ struct Block::Stmt {
   IfStmt ifStmt;
   Expr exprStmt;
   ClassDef classDef;
+  MethodDef funcDef;
   Expr returnValue;
 };
 

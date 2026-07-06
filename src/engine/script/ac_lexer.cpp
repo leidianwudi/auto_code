@@ -9,7 +9,6 @@
 
 #include "../ac_language.h"
 
-
 /// @brief 跳过行注释（// 到行尾）
 void AcLexer::skipLineComment(const QString &source, int &pos) {
   while (pos < source.size() && source[pos] != '\n') ++pos;
@@ -30,6 +29,7 @@ static const QHash<QString, TokenType> &keywordMap() {
       {QString::fromLatin1(AcKeyword::kReturn), TOK_RETURN},
       {QString::fromLatin1(AcKeyword::kTrue), TOK_TRUE},
       {QString::fromLatin1(AcKeyword::kFalse), TOK_FALSE},
+      {QString::fromLatin1(AcKeyword::kStatic), TOK_STATIC},
   };
   return map;
 }
@@ -88,8 +88,13 @@ QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
         ++i;
         break;
       case ':':
-        tokens.append({TOK_COLON, QStringLiteral(":"), line});
-        ++i;
+        if (i + 1 < n && source[i + 1] == ':') {
+          tokens.append({TOK_SCOPE, QStringLiteral("::"), line});
+          i += 2;
+        } else {
+          tokens.append({TOK_COLON, QStringLiteral(":"), line});
+          ++i;
+        }
         break;
       case '.':
         tokens.append({TOK_DOT, QStringLiteral("."), line});

@@ -33,10 +33,10 @@
  * 每个字段对应 AcInterpreter 的一个成员变量。
  */
 struct BuiltinContext {
-  QString scriptDir;                                      ///< 脚本所在目录
-  QString rootDir;                                        ///< 项目根目录
-  std::function<void(const QString &, bool)> logCallback; ///< print() 日志回调
-  QStringList *generatedFiles = nullptr; ///< write() 生成的文件列表
+  QString scriptDir;                                       ///< 脚本所在目录
+  QString rootDir;                                         ///< 项目根目录
+  std::function<void(const QString &, bool)> logCallback;  ///< print() 日志回调
+  QStringList *generatedFiles = nullptr;                   ///< write() 生成的文件列表
 };
 
 /**
