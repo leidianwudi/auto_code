@@ -12,12 +12,12 @@
 #include <QEvent>
 #include <QLabel>
 #include <QMainWindow>
-#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSplitter>
 #include <QTabWidget>
 
 #include "main_dev_ui_ext.h"
+#include "src/tool/ui/code_log.h"
 #include "src/tool/ui/tree_dir.h"
 
 // ════════════════════════════════════════════════════════════
@@ -81,7 +81,7 @@ public:
   void appendOutput(const QString &text, bool isError = false);
   /// 清空输出面板
   void clearOutput();
-  QPlainTextEdit *outputPanel() const { return m_outputPanel; }
+  CodeLog *outputPanel() const { return m_outputPanel; }
 
   // ════════════════════════════════════════════════════════════
   //  控件 getter
@@ -137,15 +137,6 @@ private:
   QPushButton *m_saveAllBtn = nullptr;  ///< 保存全部按钮
 
   // ── 输出面板 ──
-  QSplitter *m_contentSplitter = nullptr;   ///< 垂直分割器：编辑器 + 输出面板
-  QPlainTextEdit *m_outputPanel = nullptr;  ///< 脚本运行结果输出
-  QWidget *m_logLineArea = nullptr;         ///< 日志行号区域（独立绘制，不含在文本中）
-  int m_logLineNumber = 0;                  ///< 日志行号计数器，每追加一行 +1
-
-  /// 计算行号区域宽度
-  int logLineAreaWidth() const;
-  /// 重绘行号区域
-  void paintLogLineNumbers(QPaintEvent *event);
-  /// 更新输出面板的 viewport 边距，为行号区域腾出空间
-  void updateLogLineAreaWidth();
+  QSplitter *m_contentSplitter = nullptr;  ///< 垂直分割器：编辑器 + 输出面板
+  CodeLog *m_outputPanel = nullptr;        ///< 脚本运行结果输出（带行号）
 };

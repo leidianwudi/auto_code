@@ -38,6 +38,7 @@
 #include "src/tool/ui/aui_button.h"
 #include "src/tool/ui/aui_style.h"
 #include "src/tool/ui/code_editor.h"
+#include "src/tool/ui/code_log.h"
 #include "src/ui/demo/demo_mgr.h"
 
 #ifdef Q_OS_WIN
@@ -49,21 +50,6 @@
 // ════════════════════════════════════════════════════════════
 
 MainDevUi::MainDevUi(QWidget *parent) : QMainWindow(parent) {}
-
-// ──────────────────────────────────────────────────────────────
-//  日志输出面板子类（暴露 protected 方法给行号绘制使用）
-// ──────────────────────────────────────────────────────────────
-
-class LogOutputPanel : public QPlainTextEdit {
-public:
-  using QPlainTextEdit::QPlainTextEdit;
-  // 暴露 protected 成员，用于行号区域绘制
-  using QPlainTextEdit::blockBoundingGeometry;
-  using QPlainTextEdit::blockBoundingRect;
-  using QPlainTextEdit::contentOffset;
-  using QPlainTextEdit::firstVisibleBlock;
-  using QPlainTextEdit::setViewportMargins;
-};
 
 // ──────────────────────────────────────────────────────────────
 //  界面布局
@@ -234,28 +220,8 @@ void MainDevUi::setupUI() {
   // ════════════════════════════════════════════════════════════
   //  输出面板（编辑器下方，脚本运行结果）
   // ════════════════════════════════════════════════════════════
-  m_outputPanel = new LogOutputPanel;
-  m_outputPanel->setReadOnly(true);
-  m_outputPanel->setMaximumBlockCount(5000);        // 限制行数，防止内存溢出
-  m_outputPanel->document()->setDocumentMargin(0);  // 消除文档内边距，减少空白
-  m_outputPanel->setStyleSheet(
-      QStringLiteral("QPlainTextEdit { background: #ffffff; color: #333333; "
-                     "border: 1px solid #cccccc; "
-                     "padding: 0px; }"));
+  m_outputPanel = new CodeLog;
   m_outputPanel->installEventFilter(this);  // 监听按键事件（Backspace/Delete 清空）
-
-  // ── 日志行号区域（独立绘制在左侧，不进入文本，复制时不会带上） ──
-  m_logLineArea = new QWidget(m_outputPanel);
-  m_logLineArea->setObjectName(QStringLiteral("LogLineArea"));
-  m_logLineArea->installEventFilter(this);
-  // 输出面板滚动/重绘时同步刷新行号区域
-  connect(m_outputPanel, &QPlainTextEdit::updateRequest, this, [this](const QRect &rect, int dy) {
-    if (dy)
-      m_logLineArea->scroll(0, dy);
-    else
-      m_logLineArea->update(0, rect.y(), m_logLineArea->width(), rect.height());
-  });
-  updateLogLineAreaWidth();
 
   // ════════════════════════════════════════════════════════════
   //  右侧分割器（垂直：编辑器 + 输出面板）
@@ -512,135 +478,18 @@ void MainDevUi::applyTabDimming(QTabWidget *active) {
 //  输出面板
 // ══════════════════════════════════════════════════════════════
 
-/// @brief 向输出面板追加文本
+/// @brief 向输出面板追加文本（委托给 CodeLog）
 /// @param text 要显示的文本
 /// @param isError 是否为错误信息，错误信息显示红色
 void MainDevUi::appendOutput(const QString &text, bool isError) {
-  QTextDocument *doc = m_outputPanel->document();
-
-  // 去掉文本末尾的换行符，避免产生多余空行
-  QString cleanText = text;
-  while (cleanText.endsWith('\n')) cleanText.chop(1);
-
-  QTextCharFormat msgFmt;
-  if (isError) {
-    msgFmt.setForeground(QColor(QStringLiteral("#f44747")));  // 红色
-  } else {
-    msgFmt.setForeground(QColor(QStringLiteral("#333333")));  // 正常颜色
-  }
-
-  QTextCursor cursor(doc);
-  cursor.movePosition(QTextCursor::End);
-
-  // 如果文档末尾有空的尾随段落（QPlainTextEdit 默认行为），回退到前一个块
-  // 避免在空段落中插入 \n 产生额外空白块
-  QTextBlock lastBlock = doc->begin();
-  while (lastBlock.next().isValid()) lastBlock = lastBlock.next();
-  if (lastBlock.text().isEmpty() && doc->blockCount() > 1) {
-    cursor.movePosition(QTextCursor::PreviousBlock);
-    cursor.movePosition(QTextCursor::EndOfBlock);
-  }
-
-  // 非首条日志时，先插入换行再追加，保证末尾无多余空行
-  if (cursor.position() > 0) {
-    cursor.insertText(QStringLiteral("\n"), QTextCharFormat());
-  }
-
-  cursor.insertText(cleanText, msgFmt);
-
-  m_outputPanel->setTextCursor(cursor);
-  m_outputPanel->ensureCursorVisible();
-
-  // 累加行号并触发行号区域重绘
-  ++m_logLineNumber;
-  m_logLineArea->update();
-
-  // 行号位数变化时（10、100、1000…）自动扩展行号区域宽度
-  if (m_logLineNumber == 10 || m_logLineNumber == 100 || m_logLineNumber == 1000 ||
-      m_logLineNumber == 10000) {
-    updateLogLineAreaWidth();
-  }
+  m_outputPanel->append(text, isError);
 }
 
-/// @brief 清空输出面板（同时重置行号计数器）
-void MainDevUi::clearOutput() {
-  m_outputPanel->clear();
-  m_logLineNumber = 0;
-  updateLogLineAreaWidth();
-}
+/// @brief 清空输出面板（委托给 CodeLog）
+void MainDevUi::clearOutput() { m_outputPanel->clearLog(); }
 
-// ════════════════════════════════════════════════════════════
-//  日志行号区域
-// ════════════════════════════════════════════════════════════
-
-int MainDevUi::logLineAreaWidth() const {
-  // 根据最大行号计算宽度：1000 行需要 3 位，10000 行需要 4 位
-  int digits = 1;
-  int max = qMax(1, m_logLineNumber);
-  while (max >= 10) {
-    max /= 10;
-    ++digits;
-  }
-  // 宽度 = 左边距(3) + 数字宽度 × 位数 + 右边距(4)
-  return 3 + m_outputPanel->fontMetrics().horizontalAdvance(QLatin1Char('9')) * digits + 4;
-}
-
-void MainDevUi::updateLogLineAreaWidth() {
-  // 预留左侧空间给行号区域
-  auto *panel = static_cast<LogOutputPanel *>(m_outputPanel);
-  panel->setViewportMargins(logLineAreaWidth(), 0, 0, 0);
-  // 更新行号区域几何位置
-  QRect cr = m_outputPanel->contentsRect();
-  m_logLineArea->setGeometry(QRect(cr.left(), cr.top(), logLineAreaWidth(), cr.height()));
-}
-
-void MainDevUi::paintLogLineNumbers(QPaintEvent *event) {
-  auto *panel = static_cast<LogOutputPanel *>(m_outputPanel);
-
-  QPainter painter(m_logLineArea);
-  // 背景色 = 与编辑器行号区域一致
-  painter.fillRect(event->rect(), AuiStyle::lineNumberBackground());
-
-  // 获取第一个可见文本块
-  QTextBlock block = panel->firstVisibleBlock();
-  int blockNumber = block.blockNumber();
-  int top = qRound(panel->blockBoundingGeometry(block).translated(panel->contentOffset()).top());
-  int bottom = top + qRound(panel->blockBoundingRect(block).height());
-
-  painter.setFont(m_outputPanel->font());
-
-  // 遍历所有可见文本块，绘制对应的行号
-  while (block.isValid() && top <= event->rect().bottom()) {
-    if (block.isVisible() && bottom >= event->rect().top()) {
-      int lineNum = blockNumber + 1;
-      if (lineNum <= m_logLineNumber) {
-        painter.setPen(AuiStyle::textColor());
-        painter.drawText(0, top, m_logLineArea->width() - 4, painter.fontMetrics().height(),
-                         Qt::AlignRight, QString::number(lineNum));
-      }
-    }
-    block = block.next();
-    top = bottom;
-    bottom = top + qRound(panel->blockBoundingRect(block).height());
-    ++blockNumber;
-  }
-}
-
-/// @brief 事件过滤器 — 捕获输出面板的按键 / 行号绘制 / 大小变化
+/// @brief 事件过滤器 — Backspace/Delete 清空日志
 bool MainDevUi::eventFilter(QObject *obj, QEvent *ev) {
-  // 行号区域绘制
-  if (obj == m_logLineArea && ev->type() == QEvent::Paint) {
-    paintLogLineNumbers(static_cast<QPaintEvent *>(ev));
-    return true;
-  }
-
-  // 输出面板大小变化时重新定位行号区域
-  if (obj == m_outputPanel && ev->type() == QEvent::Resize) {
-    QRect cr = m_outputPanel->contentsRect();
-    m_logLineArea->setGeometry(QRect(cr.left(), cr.top(), logLineAreaWidth(), cr.height()));
-  }
-
-  // 输出面板 Backspace/Delete 清空
   if (obj == m_outputPanel && ev->type() == QEvent::KeyPress) {
     auto *keyEv = static_cast<QKeyEvent *>(ev);
     if (keyEv->key() == Qt::Key_Backspace || keyEv->key() == Qt::Key_Delete) {
