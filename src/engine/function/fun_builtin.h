@@ -37,6 +37,7 @@ struct BuiltinContext {
   QString rootDir;                                         ///< 项目根目录
   std::function<void(const QString &, bool)> logCallback;  ///< print() 日志回调
   QStringList *generatedFiles = nullptr;                   ///< write() 生成的文件列表
+  int currentLine = 0;                                     ///< 当前执行的 .ac 行号
 };
 
 /**
@@ -53,6 +54,9 @@ public:
 
   /// 注入解释器上下文（每次脚本执行前由 AcInterpreter 调用）
   static void setContext(const BuiltinContext &ctx);
+
+  /// 设置当前执行的行号（printLog/printError 输出时带上行号）
+  static void setCurrentLine(int line);
 
 private:
   static BuiltinContext s_ctx;

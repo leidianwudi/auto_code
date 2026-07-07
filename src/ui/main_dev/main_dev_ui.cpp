@@ -4,12 +4,6 @@
  */
 
 #include "main_dev_ui.h"
-#include "main_dev_ui_ext.h"
-
-#include "src/tool/ui/aui_button.h"
-#include "src/tool/ui/aui_style.h"
-#include "src/tool/ui/code_editor.h"
-#include "src/ui/demo/demo_mgr.h"
 
 #include <QApplication>
 #include <QCloseEvent>
@@ -22,19 +16,29 @@
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QKeySequence>
+#include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPixmap>
+#include <QPlainTextEdit>
+#include <QPointer>
+#include <QScrollBar>
 #include <QStatusBar>
 #include <QStyle>
 #include <QTabBar>
+#include <QTextBlock>
 #include <QTextCursor>
 #include <QToolButton>
 #include <QVBoxLayout>
 
+#include "main_dev_ui_ext.h"
+#include "src/tool/ui/aui_button.h"
+#include "src/tool/ui/aui_style.h"
+#include "src/tool/ui/code_editor.h"
+#include "src/ui/demo/demo_mgr.h"
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -45,6 +49,21 @@
 // ════════════════════════════════════════════════════════════
 
 MainDevUi::MainDevUi(QWidget *parent) : QMainWindow(parent) {}
+
+// ──────────────────────────────────────────────────────────────
+//  日志输出面板子类（暴露 protected 方法给行号绘制使用）
+// ──────────────────────────────────────────────────────────────
+
+class LogOutputPanel : public QPlainTextEdit {
+public:
+  using QPlainTextEdit::QPlainTextEdit;
+  // 暴露 protected 成员，用于行号区域绘制
+  using QPlainTextEdit::blockBoundingGeometry;
+  using QPlainTextEdit::blockBoundingRect;
+  using QPlainTextEdit::contentOffset;
+  using QPlainTextEdit::firstVisibleBlock;
+  using QPlainTextEdit::setViewportMargins;
+};
 
 // ──────────────────────────────────────────────────────────────
 //  界面布局
@@ -184,8 +203,7 @@ void MainDevUi::setupUI() {
   connect(m_splitBtn, &QPushButton::clicked, m_splitAction, &QAction::trigger);
 
   // ── 帮助 → 例子：弹出 Demo 窗口 ──
-  connect(m_helpExampleAction, &QAction::triggered, this,
-          []() { DemoMgr::ins().open(); });
+  connect(m_helpExampleAction, &QAction::triggered, this, []() { DemoMgr::ins().open(); });
 
   // ════════════════════════════════════════════════════════════
   //  左侧文件树
@@ -193,15 +211,13 @@ void MainDevUi::setupUI() {
   m_fileTree = new TreeDir;
 
   // ── 启动项变化时刷新下拉框 ──
-  connect(m_fileTree, &TreeDir::startupItemsChanged, this,
-          &MainDevUi::refreshStartupCombo);
+  connect(m_fileTree, &TreeDir::startupItemsChanged, this, &MainDevUi::refreshStartupCombo);
 
   // ── 下拉框切换时联动文件树的选中启动项 ──
-  connect(m_startupCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-          this, [this](int /*idx*/) {
+  connect(m_startupCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+          [this](int /*idx*/) {
             QString path = m_startupCombo->currentData().toString();
-            if (!path.isEmpty())
-              m_fileTree->setSelectedStartup(path);
+            if (!path.isEmpty()) m_fileTree->setSelectedStartup(path);
           });
 
   // ════════════════════════════════════════════════════════════
@@ -218,14 +234,28 @@ void MainDevUi::setupUI() {
   // ════════════════════════════════════════════════════════════
   //  输出面板（编辑器下方，脚本运行结果）
   // ════════════════════════════════════════════════════════════
-  m_outputPanel = new QPlainTextEdit;
+  m_outputPanel = new LogOutputPanel;
   m_outputPanel->setReadOnly(true);
-  m_outputPanel->setMaximumBlockCount(5000); // 限制行数，防止内存溢出
+  m_outputPanel->setMaximumBlockCount(5000);        // 限制行数，防止内存溢出
+  m_outputPanel->document()->setDocumentMargin(0);  // 消除文档内边距，减少空白
   m_outputPanel->setStyleSheet(
       QStringLiteral("QPlainTextEdit { background: #ffffff; color: #333333; "
-                     "border: 1px solid #cccccc; }"));
-  m_outputPanel->installEventFilter(
-      this); // 监听按键事件（Backspace/Delete 清空）
+                     "border: 1px solid #cccccc; "
+                     "padding: 0px; }"));
+  m_outputPanel->installEventFilter(this);  // 监听按键事件（Backspace/Delete 清空）
+
+  // ── 日志行号区域（独立绘制在左侧，不进入文本，复制时不会带上） ──
+  m_logLineArea = new QWidget(m_outputPanel);
+  m_logLineArea->setObjectName(QStringLiteral("LogLineArea"));
+  m_logLineArea->installEventFilter(this);
+  // 输出面板滚动/重绘时同步刷新行号区域
+  connect(m_outputPanel, &QPlainTextEdit::updateRequest, this, [this](const QRect &rect, int dy) {
+    if (dy)
+      m_logLineArea->scroll(0, dy);
+    else
+      m_logLineArea->update(0, rect.y(), m_logLineArea->width(), rect.height());
+  });
+  updateLogLineAreaWidth();
 
   // ════════════════════════════════════════════════════════════
   //  右侧分割器（垂直：编辑器 + 输出面板）
@@ -233,9 +263,9 @@ void MainDevUi::setupUI() {
   m_contentSplitter = new QSplitter(Qt::Vertical);
   m_contentSplitter->addWidget(m_editorSplitter);
   m_contentSplitter->addWidget(m_outputPanel);
-  m_contentSplitter->setStretchFactor(0, 1); // 编辑器可拉伸
-  m_contentSplitter->setStretchFactor(1, 0); // 输出面板固定高度
-  m_contentSplitter->setSizes({700, 120});   // 编辑器 700，输出面板 120
+  m_contentSplitter->setStretchFactor(0, 1);  // 编辑器可拉伸
+  m_contentSplitter->setStretchFactor(1, 0);  // 输出面板固定高度
+  m_contentSplitter->setSizes({700, 120});    // 编辑器 700，输出面板 120
 
   // ════════════════════════════════════════════════════════════
   //  主分割器（水平：文件树 + 右侧区域）
@@ -243,8 +273,8 @@ void MainDevUi::setupUI() {
   m_mainSplitter = new QSplitter(Qt::Horizontal);
   m_mainSplitter->addWidget(m_fileTree);
   m_mainSplitter->addWidget(m_contentSplitter);
-  m_mainSplitter->setStretchFactor(0, 0); // 左侧文件树固定宽度
-  m_mainSplitter->setStretchFactor(1, 1); // 右侧区域可拉伸
+  m_mainSplitter->setStretchFactor(0, 0);  // 左侧文件树固定宽度
+  m_mainSplitter->setStretchFactor(1, 1);  // 右侧区域可拉伸
   m_mainSplitter->setSizes({250, 1150});
 
   // ════════════════════════════════════════════════════════════
@@ -291,8 +321,7 @@ void MainDevUi::setupUI() {
 // ══════════════════════════════════════════════════════════════
 
 #if defined(Q_OS_WIN)
-bool MainDevUi::nativeEvent(const QByteArray &eventType, void *message,
-                            qintptr *result) {
+bool MainDevUi::nativeEvent(const QByteArray &eventType, void *message, qintptr *result) {
   Q_UNUSED(eventType)
   const auto *msg = static_cast<MSG *>(message);
 
@@ -310,7 +339,7 @@ bool MainDevUi::nativeEvent(const QByteArray &eventType, void *message,
     const int x = GET_X_LPARAM(msg->lParam);
     const int y = GET_Y_LPARAM(msg->lParam);
     const QPoint pt = mapFromGlobal(QPoint(x, y));
-    const int bw = 5; // 边框拉伸宽度
+    const int bw = 5;  // 边框拉伸宽度
 
     // ── 四角 ──
     bool left = pt.x() < bw;
@@ -353,8 +382,7 @@ bool MainDevUi::nativeEvent(const QByteArray &eventType, void *message,
 
     // ── 标题栏区域（排除按钮）→ HTCAPTION 实现原生拖拽 ──
     if (pt.y() < m_titleBar->height()) {
-      QWidget *child =
-          m_titleBar->childAt(m_titleBar->mapFromGlobal(QPoint(x, y)));
+      QWidget *child = m_titleBar->childAt(m_titleBar->mapFromGlobal(QPoint(x, y)));
       if (!child || child == m_titleBar) {
         *result = HTCAPTION;
         return true;
@@ -368,9 +396,7 @@ bool MainDevUi::nativeEvent(const QByteArray &eventType, void *message,
 // ══════════════════════════════════════════════════════════════
 //  窗口状态变化（最大化/还原更新按钮文字）
 // ══════════════════════════════════════════════════════════════
-void MainDevUi::updateMaximizeIcon() {
-  AuiButton::updateMaximizeIcon(m_maxBtn, isMaximized());
-}
+void MainDevUi::updateMaximizeIcon() { AuiButton::updateMaximizeIcon(m_maxBtn, isMaximized()); }
 
 void MainDevUi::changeEvent(QEvent *ev) {
   if (ev->type() == QEvent::WindowStateChange) {
@@ -398,8 +424,7 @@ QTabWidget *MainDevUi::createEditorPanel() {
   auto *tabs = new DimmableTabWidget;
   tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
   tabs->setContentsMargins(0, 0, 0, 0);
-  tabs->setStyleSheet(
-      QStringLiteral("QTabWidget::pane { margin: 0; border: none; }"));
+  tabs->setStyleSheet(QStringLiteral("QTabWidget::pane { margin: 0; border: none; }"));
   return tabs;
 }
 
@@ -431,23 +456,19 @@ int MainDevUi::editorPanelIndex(const QTabWidget *tabs) const {
 
 /// @brief  在分割器末尾添加一个新面板
 /// @param panel 待添加的 QTabWidget 面板
-void MainDevUi::addEditorPanel(QTabWidget *panel) {
-  m_editorSplitter->addWidget(panel);
-}
+void MainDevUi::addEditorPanel(QTabWidget *panel) { m_editorSplitter->addWidget(panel); }
 
 /// @brief  移除并销毁指定索引处的面板
 /// @param index 待移除的面板索引
 /// @note 面板对象通过 deleteLater 延迟销毁，内部标签页会连带释放
 void MainDevUi::removeEditorPanelAt(int index) {
   QWidget *w = m_editorSplitter->widget(index);
-  if (w)
-    w->deleteLater();
+  if (w) w->deleteLater();
 }
 
 void MainDevUi::setEditorPanelsUniformStretch() {
   int count = m_editorSplitter->count();
-  for (int i = 0; i < count; ++i)
-    m_editorSplitter->setStretchFactor(i, 1);
+  for (int i = 0; i < count; ++i) m_editorSplitter->setStretchFactor(i, 1);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -466,13 +487,9 @@ int MainDevUi::fileTreeWidth() const { return m_fileTree->width(); }
 // ══════════════════════════════════════════════════════════════
 //  状态栏
 // ══════════════════════════════════════════════════════════════
-void MainDevUi::setCursorStatusText(const QString &text) {
-  m_cursorPositionLabel->setText(text);
-}
+void MainDevUi::setCursorStatusText(const QString &text) { m_cursorPositionLabel->setText(text); }
 
-void MainDevUi::setErrorMessage(const QString &msg) {
-  m_errorLabel->setText(msg);
-}
+void MainDevUi::setErrorMessage(const QString &msg) { m_errorLabel->setText(msg); }
 
 // ══════════════════════════════════════════════════════════════
 //  标签页颜色
@@ -480,16 +497,14 @@ void MainDevUi::setErrorMessage(const QString &msg) {
 void MainDevUi::applyTabDimming(QTabWidget *active) {
   for (int i = 0; i < editorPanelCount(); ++i) {
     auto *tabs = editorPanelAt(i);
-    if (!tabs)
-      continue;
+    if (!tabs) continue;
 
     QTabBar *bar = tabs->tabBar();
     AuiStyle::ensureFusionTabBar(bar);
 
     bool isActive = (tabs == active);
     for (int j = 0; j < bar->count(); ++j)
-      bar->setTabTextColor(j,
-                           isActive ? QColor() : AuiStyle::inactiveTabColor());
+      bar->setTabTextColor(j, isActive ? QColor() : AuiStyle::inactiveTabColor());
   }
 }
 
@@ -501,35 +516,131 @@ void MainDevUi::applyTabDimming(QTabWidget *active) {
 /// @param text 要显示的文本
 /// @param isError 是否为错误信息，错误信息显示红色
 void MainDevUi::appendOutput(const QString &text, bool isError) {
-  // 超过 5000 行时清空旧日志
-  if (m_outputPanel->document()->blockCount() > 5000) {
-    m_outputPanel->clear();
+  QTextDocument *doc = m_outputPanel->document();
+
+  // 去掉文本末尾的换行符，避免产生多余空行
+  QString cleanText = text;
+  while (cleanText.endsWith('\n')) cleanText.chop(1);
+
+  QTextCharFormat msgFmt;
+  if (isError) {
+    msgFmt.setForeground(QColor(QStringLiteral("#f44747")));  // 红色
+  } else {
+    msgFmt.setForeground(QColor(QStringLiteral("#333333")));  // 正常颜色
   }
 
-  QTextCursor cursor = m_outputPanel->textCursor();
+  QTextCursor cursor(doc);
   cursor.movePosition(QTextCursor::End);
 
-  QTextCharFormat fmt;
-  if (isError) {
-    fmt.setForeground(QColor(QStringLiteral("#f44747"))); // 红色
-  } else {
-    fmt.setForeground(QColor(QStringLiteral("#333333"))); // 正常颜色
+  // 如果文档末尾有空的尾随段落（QPlainTextEdit 默认行为），回退到前一个块
+  // 避免在空段落中插入 \n 产生额外空白块
+  QTextBlock lastBlock = doc->begin();
+  while (lastBlock.next().isValid()) lastBlock = lastBlock.next();
+  if (lastBlock.text().isEmpty() && doc->blockCount() > 1) {
+    cursor.movePosition(QTextCursor::PreviousBlock);
+    cursor.movePosition(QTextCursor::EndOfBlock);
   }
 
-  cursor.insertText(text, fmt);
-  // 如果不是以换行结尾则追加换行
-  if (!text.endsWith('\n'))
-    cursor.insertText(QStringLiteral("\n"), fmt);
+  // 非首条日志时，先插入换行再追加，保证末尾无多余空行
+  if (cursor.position() > 0) {
+    cursor.insertText(QStringLiteral("\n"), QTextCharFormat());
+  }
+
+  cursor.insertText(cleanText, msgFmt);
 
   m_outputPanel->setTextCursor(cursor);
   m_outputPanel->ensureCursorVisible();
+
+  // 累加行号并触发行号区域重绘
+  ++m_logLineNumber;
+  m_logLineArea->update();
+
+  // 行号位数变化时（10、100、1000…）自动扩展行号区域宽度
+  if (m_logLineNumber == 10 || m_logLineNumber == 100 || m_logLineNumber == 1000 ||
+      m_logLineNumber == 10000) {
+    updateLogLineAreaWidth();
+  }
 }
 
-/// @brief 清空输出面板
-void MainDevUi::clearOutput() { m_outputPanel->clear(); }
+/// @brief 清空输出面板（同时重置行号计数器）
+void MainDevUi::clearOutput() {
+  m_outputPanel->clear();
+  m_logLineNumber = 0;
+  updateLogLineAreaWidth();
+}
 
-/// @brief 事件过滤器 — 捕获输出面板的 Backspace/Delete 按键以清空日志
+// ════════════════════════════════════════════════════════════
+//  日志行号区域
+// ════════════════════════════════════════════════════════════
+
+int MainDevUi::logLineAreaWidth() const {
+  // 根据最大行号计算宽度：1000 行需要 3 位，10000 行需要 4 位
+  int digits = 1;
+  int max = qMax(1, m_logLineNumber);
+  while (max >= 10) {
+    max /= 10;
+    ++digits;
+  }
+  // 宽度 = 左边距(3) + 数字宽度 × 位数 + 右边距(4)
+  return 3 + m_outputPanel->fontMetrics().horizontalAdvance(QLatin1Char('9')) * digits + 4;
+}
+
+void MainDevUi::updateLogLineAreaWidth() {
+  // 预留左侧空间给行号区域
+  auto *panel = static_cast<LogOutputPanel *>(m_outputPanel);
+  panel->setViewportMargins(logLineAreaWidth(), 0, 0, 0);
+  // 更新行号区域几何位置
+  QRect cr = m_outputPanel->contentsRect();
+  m_logLineArea->setGeometry(QRect(cr.left(), cr.top(), logLineAreaWidth(), cr.height()));
+}
+
+void MainDevUi::paintLogLineNumbers(QPaintEvent *event) {
+  auto *panel = static_cast<LogOutputPanel *>(m_outputPanel);
+
+  QPainter painter(m_logLineArea);
+  // 背景色 = 与编辑器行号区域一致
+  painter.fillRect(event->rect(), AuiStyle::lineNumberBackground());
+
+  // 获取第一个可见文本块
+  QTextBlock block = panel->firstVisibleBlock();
+  int blockNumber = block.blockNumber();
+  int top = qRound(panel->blockBoundingGeometry(block).translated(panel->contentOffset()).top());
+  int bottom = top + qRound(panel->blockBoundingRect(block).height());
+
+  painter.setFont(m_outputPanel->font());
+
+  // 遍历所有可见文本块，绘制对应的行号
+  while (block.isValid() && top <= event->rect().bottom()) {
+    if (block.isVisible() && bottom >= event->rect().top()) {
+      int lineNum = blockNumber + 1;
+      if (lineNum <= m_logLineNumber) {
+        painter.setPen(AuiStyle::textColor());
+        painter.drawText(0, top, m_logLineArea->width() - 4, painter.fontMetrics().height(),
+                         Qt::AlignRight, QString::number(lineNum));
+      }
+    }
+    block = block.next();
+    top = bottom;
+    bottom = top + qRound(panel->blockBoundingRect(block).height());
+    ++blockNumber;
+  }
+}
+
+/// @brief 事件过滤器 — 捕获输出面板的按键 / 行号绘制 / 大小变化
 bool MainDevUi::eventFilter(QObject *obj, QEvent *ev) {
+  // 行号区域绘制
+  if (obj == m_logLineArea && ev->type() == QEvent::Paint) {
+    paintLogLineNumbers(static_cast<QPaintEvent *>(ev));
+    return true;
+  }
+
+  // 输出面板大小变化时重新定位行号区域
+  if (obj == m_outputPanel && ev->type() == QEvent::Resize) {
+    QRect cr = m_outputPanel->contentsRect();
+    m_logLineArea->setGeometry(QRect(cr.left(), cr.top(), logLineAreaWidth(), cr.height()));
+  }
+
+  // 输出面板 Backspace/Delete 清空
   if (obj == m_outputPanel && ev->type() == QEvent::KeyPress) {
     auto *keyEv = static_cast<QKeyEvent *>(ev);
     if (keyEv->key() == Qt::Key_Backspace || keyEv->key() == Qt::Key_Delete) {
@@ -542,10 +653,9 @@ bool MainDevUi::eventFilter(QObject *obj, QEvent *ev) {
 
 /// @brief 刷新启动项下拉框 — 从文件树获取所有启动项并填充
 void MainDevUi::refreshStartupCombo() {
-  if (!m_startupCombo || !m_fileTree)
-    return;
+  if (!m_startupCombo || !m_fileTree) return;
 
-  m_startupCombo->blockSignals(true); // 避免触发 currentIndexChanged
+  m_startupCombo->blockSignals(true);  // 避免触发 currentIndexChanged
   QString prev = m_startupCombo->currentData().toString();
   m_startupCombo->clear();
 

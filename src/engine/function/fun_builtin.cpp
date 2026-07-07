@@ -23,6 +23,8 @@ BuiltinContext FunBuiltin::s_ctx;
 
 void FunBuiltin::setContext(const BuiltinContext &ctx) { s_ctx = ctx; }
 
+void FunBuiltin::setCurrentLine(int line) { s_ctx.currentLine = line; }
+
 // ============================================================================
 // init — 注册所有内置函数到 FunMgr 的 "builtin" 伪类
 // ============================================================================
@@ -122,7 +124,12 @@ QJsonValue FunBuiltin::printLog(const QJsonArray &args) {
   for (const QJsonValue &v : args) {
     text += v.isString() ? v.toString() : QString::number(v.toDouble());
   }
-  if (s_ctx.logCallback) s_ctx.logCallback(text, false);
+  if (s_ctx.logCallback) {
+    if (s_ctx.currentLine > 0) {
+      text = QStringLiteral("[%1] %2").arg(s_ctx.currentLine).arg(text);
+    }
+    s_ctx.logCallback(text, false);
+  }
 
   return QJsonValue(true);
 }
@@ -134,7 +141,12 @@ QJsonValue FunBuiltin::printError(const QJsonArray &args) {
   for (const QJsonValue &v : args) {
     text += v.isString() ? v.toString() : QString::number(v.toDouble());
   }
-  if (s_ctx.logCallback) s_ctx.logCallback(text, true);
+  if (s_ctx.logCallback) {
+    if (s_ctx.currentLine > 0) {
+      text = QStringLiteral("[%1] %2").arg(s_ctx.currentLine).arg(text);
+    }
+    s_ctx.logCallback(text, true);
+  }
 
   return QJsonValue(true);
 }

@@ -110,8 +110,7 @@ private:
   void changeEvent(QEvent *ev) override;
   bool eventFilter(QObject *obj, QEvent *ev) override;
 #if defined(Q_OS_WIN)
-  bool nativeEvent(const QByteArray &eventType, void *message,
-                   qintptr *result) override;
+  bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
 #endif
 
   TreeDir *m_fileTree = nullptr;
@@ -133,11 +132,20 @@ private:
   QPushButton *m_maxBtn = nullptr;
   QPushButton *m_closeBtn = nullptr;
   QPushButton *m_buildBtn = nullptr;
-  QComboBox *m_startupCombo = nullptr; ///< 启动项下拉框
-  QPushButton *m_saveBtn = nullptr;    ///< 保存按钮
-  QPushButton *m_saveAllBtn = nullptr; ///< 保存全部按钮
+  QComboBox *m_startupCombo = nullptr;  ///< 启动项下拉框
+  QPushButton *m_saveBtn = nullptr;     ///< 保存按钮
+  QPushButton *m_saveAllBtn = nullptr;  ///< 保存全部按钮
 
   // ── 输出面板 ──
-  QSplitter *m_contentSplitter = nullptr;  ///< 垂直分割器：编辑器 + 输出面板
-  QPlainTextEdit *m_outputPanel = nullptr; ///< 脚本运行结果输出
+  QSplitter *m_contentSplitter = nullptr;   ///< 垂直分割器：编辑器 + 输出面板
+  QPlainTextEdit *m_outputPanel = nullptr;  ///< 脚本运行结果输出
+  QWidget *m_logLineArea = nullptr;         ///< 日志行号区域（独立绘制，不含在文本中）
+  int m_logLineNumber = 0;                  ///< 日志行号计数器，每追加一行 +1
+
+  /// 计算行号区域宽度
+  int logLineAreaWidth() const;
+  /// 重绘行号区域
+  void paintLogLineNumbers(QPaintEvent *event);
+  /// 更新输出面板的 viewport 边距，为行号区域腾出空间
+  void updateLogLineAreaWidth();
 };

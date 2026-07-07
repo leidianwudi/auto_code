@@ -259,7 +259,10 @@ QJsonValue AcInterpreter::callBuiltin(const QString &name, const QVector<Expr *>
   // 其余内置函数：优先检查是否已注册，避免与 null 返回值混淆
   const QString builtinClass = QString::fromLatin1(AcRuntime::kBuiltinClass);
   if (FunMgr::ins().contains(builtinClass, name)) {
+    // 注入当前行号，printLog/printError 输出时带上行号
+    FunBuiltin::setCurrentLine(line);
     QJsonValue r = FunMgr::ins().call(builtinClass, name, arr);
+    FunBuiltin::setCurrentLine(0);
     // 检查内置函数是否设置了错误（如文件不存在）
     QString err = FunMgr::takeError();
     if (!err.isEmpty()) {
@@ -596,9 +599,9 @@ QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
     m_classes[name] = nativeClass;
   }
 
-  // 注入解释器上下文�?FunBuiltin 使用
+  // 注入解释器上下文给 FunBuiltin 使用
   FunMgr::init();
-  FunBuiltin::setContext({m_scriptDir, m_rootDir, m_logCallback, &m_generatedFiles});
+  FunBuiltin::setContext({m_scriptDir, m_rootDir, m_logCallback, &m_generatedFiles, 0});
 
   execBlock(program);
   if (!m_error->isEmpty()) return QJsonValue();
