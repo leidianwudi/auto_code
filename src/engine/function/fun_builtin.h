@@ -71,7 +71,11 @@ private:
 
   /// 打印日志到 UI 输出面板
   /// @param args [0] 要打印的文本
-  static QJsonValue print(const QJsonArray &args);
+  static QJsonValue printLog(const QJsonArray &args);
+
+  /// 打印错误到 UI 输出面板（红色显示）
+  /// @param args [0] 要打印的错误文本
+  static QJsonValue printError(const QJsonArray &args);
 
   /// 获取 tree.config 中勾选的文件列表（绝对路径）
   static QJsonValue getCheckedFiles(const QJsonArray &args);

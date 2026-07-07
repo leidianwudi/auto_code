@@ -614,72 +614,110 @@ QStringList AcInterpreter::validateUndeclaredIdents(const Block &program,
                                                     const QSet<QString> &declaredVars) const {
   QStringList errors;
   QSet<QString> scopeVars = declaredVars;
-  validateBlockIdents(program, errors, scopeVars);
+
+  // 预扫描 AST，收集类定义和 new 赋值信息
+  ValidationContext ctx;
+  collectValidationInfo(program, ctx);
+
+  validateBlockIdents(program, errors, scopeVars, ctx);
   return errors;
 }
 
+void AcInterpreter::collectValidationInfo(const Block &block, ValidationContext &ctx) const {
+  for (const auto &stmt : block.stmts) {
+    switch (stmt.kind) {
+      case Block::Stmt::kClassDef:
+        // 记录类 → 方法名
+        if (!stmt.classDef.name.isEmpty()) {
+          QStringList methods;
+          for (const auto &m : stmt.classDef.methods) methods.append(m.name);
+          ctx.classMethods.insert(stmt.classDef.name, methods);
+        }
+        break;
+      case Block::Stmt::kAssign:
+        // 记录 let x = new Car() → 变量→类名
+        if (!stmt.assign.name.isEmpty() && stmt.assign.value.kind == Expr::kNewInstance &&
+            !stmt.assign.value.className.isEmpty()) {
+          ctx.varClass.insert(stmt.assign.name, stmt.assign.value.className);
+        }
+        break;
+      default:
+        break;
+    }
+  }
+}
+
 void AcInterpreter::validateBlockIdents(const Block &block, QStringList &errors,
-                                        const QSet<QString> &scopeVars) const {
-  for (const auto &stmt : block.stmts) validateStmtIdents(stmt, errors, scopeVars);
+                                        QSet<QString> &scopeVars, ValidationContext &ctx) const {
+  for (const auto &stmt : block.stmts) validateStmtIdents(stmt, errors, scopeVars, ctx);
 }
 
 void AcInterpreter::validateStmtIdents(const Block::Stmt &stmt, QStringList &errors,
-                                       const QSet<QString> &scopeVars) const {
+                                       QSet<QString> &scopeVars, ValidationContext &ctx) const {
   switch (stmt.kind) {
     case Block::Stmt::kCall:
-      validateExprIdents(stmt.call.className, errors, scopeVars);
-      validateExprIdents(stmt.call.funcName, errors, scopeVars);
-      validateExprIdents(stmt.call.args, errors, scopeVars);
+      validateExprIdents(stmt.call.className, errors, scopeVars, ctx);
+      validateExprIdents(stmt.call.funcName, errors, scopeVars, ctx);
+      validateExprIdents(stmt.call.args, errors, scopeVars, ctx);
       break;
     case Block::Stmt::kAssign:
-      validateExprIdents(stmt.assign.value, errors, scopeVars);
+      validateExprIdents(stmt.assign.value, errors, scopeVars, ctx);
+      // 记录 let x = new Car() → 变量→类名
+      if (!stmt.assign.name.isEmpty() && stmt.assign.value.kind == Expr::kNewInstance &&
+          !stmt.assign.value.className.isEmpty()) {
+        ctx.varClass.insert(stmt.assign.name, stmt.assign.value.className);
+      }
+      scopeVars.insert(stmt.assign.name);
       break;
     case Block::Stmt::kIndexAssign:
-      validateExprIdents(stmt.indexAssign.value, errors, scopeVars);
+      validateExprIdents(stmt.indexAssign.value, errors, scopeVars, ctx);
       break;
     case Block::Stmt::kFor: {
-      validateExprIdents(stmt.forStmt.arrayExpr, errors, scopeVars);
+      validateExprIdents(stmt.forStmt.arrayExpr, errors, scopeVars, ctx);
       QSet<QString> bodyScope = scopeVars;
       bodyScope.insert(stmt.forStmt.varName);
-      validateBlockIdents(stmt.forStmt.body, errors, bodyScope);
+      validateBlockIdents(stmt.forStmt.body, errors, bodyScope, ctx);
       break;
     }
     case Block::Stmt::kIf:
-      validateExprIdents(stmt.ifStmt.condition, errors, scopeVars);
-      validateBlockIdents(stmt.ifStmt.thenBlock, errors, scopeVars);
-      if (stmt.ifStmt.hasElse) validateBlockIdents(stmt.ifStmt.elseBlock, errors, scopeVars);
+      validateExprIdents(stmt.ifStmt.condition, errors, scopeVars, ctx);
+      validateBlockIdents(stmt.ifStmt.thenBlock, errors, scopeVars, ctx);
+      if (stmt.ifStmt.hasElse) validateBlockIdents(stmt.ifStmt.elseBlock, errors, scopeVars, ctx);
       break;
     case Block::Stmt::kExpr:
-      validateExprIdents(stmt.exprStmt, errors, scopeVars);
+      validateExprIdents(stmt.exprStmt, errors, scopeVars, ctx);
       break;
     case Block::Stmt::kClassDef: {
       QSet<QString> classScope = scopeVars;
       for (const auto &prop : stmt.classDef.properties) {
-        if (prop.value) validateExprIdents(*prop.value, errors, classScope);
+        if (prop.value) validateExprIdents(*prop.value, errors, classScope, ctx);
       }
       classScope.insert(QString::fromLatin1(AcKeyword::kThis));
       for (const auto &prop : stmt.classDef.properties) classScope.insert(prop.key);
       for (const auto &method : stmt.classDef.methods) {
         QSet<QString> methodScope = classScope;
         for (const auto &param : method.params) methodScope.insert(param);
-        validateBlockIdents(method.body, errors, methodScope);
+        validateBlockIdents(method.body, errors, methodScope, ctx);
       }
       break;
     }
     case Block::Stmt::kFuncDef: {
       QSet<QString> funcScope = scopeVars;
+      funcScope.insert(stmt.funcDef.name);  // 函数体内允许递归调用
       for (const auto &param : stmt.funcDef.params) funcScope.insert(param);
-      validateBlockIdents(stmt.funcDef.body, errors, funcScope);
+      validateBlockIdents(stmt.funcDef.body, errors, funcScope, ctx);
+      scopeVars.insert(stmt.funcDef.name);  // 定义后后续语句可调用
       break;
     }
     case Block::Stmt::kReturn:
-      validateExprIdents(stmt.returnValue, errors, scopeVars);
+      validateExprIdents(stmt.returnValue, errors, scopeVars, ctx);
       break;
   }
 }
 
 void AcInterpreter::validateExprIdents(const Expr &expr, QStringList &errors,
-                                       const QSet<QString> &scopeVars) const {
+                                       QSet<QString> &scopeVars,
+                                       const ValidationContext &ctx) const {
   switch (expr.kind) {
     case Expr::kIdent:
       if (!scopeVars.contains(expr.ident)) {
@@ -705,7 +743,13 @@ void AcInterpreter::validateExprIdents(const Expr &expr, QStringList &errors,
       }
       break;
     case Expr::kFuncCall:
-      for (const auto *arg : expr.funcCall.args) validateExprIdents(*arg, errors, scopeVars);
+      for (const auto *arg : expr.funcCall.args) validateExprIdents(*arg, errors, scopeVars, ctx);
+      // 检查函数名是否已知（内置函数或用户自定义函数）
+      if (!AcBuiltin::kAll.contains(expr.funcCall.name) &&
+          !scopeVars.contains(expr.funcCall.name)) {
+        errors << QStringLiteral("unknown function '%1' at line %2")
+                      .arg(expr.funcCall.name, QString::number(expr.line));
+      }
       if (expr.funcCall.name == QString::fromLatin1(AcBuiltin::kReadFile) &&
           expr.funcCall.args.isEmpty()) {
         errors
@@ -718,24 +762,34 @@ void AcInterpreter::validateExprIdents(const Expr &expr, QStringList &errors,
         errors << QStringLiteral("undefined variable '%1' at line %2")
                       .arg(expr.methodCall.objName, QString::number(expr.line));
       }
-      for (const auto *arg : expr.methodCall.args) validateExprIdents(*arg, errors, scopeVars);
+      // 检查方法名是否在对应的类中定义
+      if (ctx.varClass.contains(expr.methodCall.objName)) {
+        QString clsName = ctx.varClass.value(expr.methodCall.objName);
+        if (ctx.classMethods.contains(clsName) &&
+            !ctx.classMethods[clsName].contains(expr.methodCall.methodName)) {
+          errors << QStringLiteral("class '%1' has no method '%2' at line %3")
+                        .arg(clsName, expr.methodCall.methodName, QString::number(expr.line));
+        }
+        // 如果类在 classMethods 中但无记录（空列表），说明是原生类，跳过方法名检查
+      }
+      for (const auto *arg : expr.methodCall.args) validateExprIdents(*arg, errors, scopeVars, ctx);
       break;
     case Expr::kNewInstance:
       break;
     case Expr::kStaticAccess:
-      for (const auto *arg : expr.funcCall.args) validateExprIdents(*arg, errors, scopeVars);
+      for (const auto *arg : expr.funcCall.args) validateExprIdents(*arg, errors, scopeVars, ctx);
       break;
     case Expr::kObject:
       for (const auto &entry : expr.objEntries) {
-        if (entry.value) validateExprIdents(*entry.value, errors, scopeVars);
+        if (entry.value) validateExprIdents(*entry.value, errors, scopeVars, ctx);
       }
       break;
     case Expr::kArray:
-      for (const auto *item : expr.arrItems) validateExprIdents(*item, errors, scopeVars);
+      for (const auto *item : expr.arrItems) validateExprIdents(*item, errors, scopeVars, ctx);
       break;
     case Expr::kBinary:
-      if (expr.left) validateExprIdents(*expr.left, errors, scopeVars);
-      if (expr.right) validateExprIdents(*expr.right, errors, scopeVars);
+      if (expr.left) validateExprIdents(*expr.left, errors, scopeVars, ctx);
+      if (expr.right) validateExprIdents(*expr.right, errors, scopeVars, ctx);
       break;
     default:
       break;

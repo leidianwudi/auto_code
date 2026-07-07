@@ -34,7 +34,8 @@ void FunBuiltin::init() {
           {QString::fromLatin1(AcBuiltin::kRenderTpl), renderTpl},
           {QString::fromLatin1(AcBuiltin::kReadFile), readFile},
           {QString::fromLatin1(AcBuiltin::kWriteFile), writeFile},
-          {QString::fromLatin1(AcBuiltin::kPrint), print},
+          {QString::fromLatin1(AcBuiltin::kPrintLog), printLog},
+          {QString::fromLatin1(AcBuiltin::kPrintError), printError},
           {QString::fromLatin1(AcBuiltin::kGetCheckedFiles), getCheckedFiles},
           {QString::fromLatin1(AcBuiltin::kMerge), merge},
           {QString::fromLatin1(AcBuiltin::kBasename), basename},
@@ -111,10 +112,10 @@ QJsonValue FunBuiltin::writeFile(const QJsonArray &args) {
 }
 
 // ============================================================================
-// print — 打印日志
+// printLog / printError — 打印日志/错误
 // ============================================================================
 
-QJsonValue FunBuiltin::print(const QJsonArray &args) {
+QJsonValue FunBuiltin::printLog(const QJsonArray &args) {
   if (args.isEmpty()) return QJsonValue();
 
   QString text;
@@ -122,6 +123,18 @@ QJsonValue FunBuiltin::print(const QJsonArray &args) {
     text += v.isString() ? v.toString() : QString::number(v.toDouble());
   }
   if (s_ctx.logCallback) s_ctx.logCallback(text, false);
+
+  return QJsonValue(true);
+}
+
+QJsonValue FunBuiltin::printError(const QJsonArray &args) {
+  if (args.isEmpty()) return QJsonValue();
+
+  QString text;
+  for (const QJsonValue &v : args) {
+    text += v.isString() ? v.toString() : QString::number(v.toDouble());
+  }
+  if (s_ctx.logCallback) s_ctx.logCallback(text, true);
 
   return QJsonValue(true);
 }

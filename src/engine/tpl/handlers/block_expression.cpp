@@ -12,10 +12,11 @@
  */
 
 #include "block_expression.h"
-#include "../../ac_language.h"
-#include "../tpl_engine.h"
 
 #include <QFileInfo>
+
+#include "../../ac_language.h"
+#include "../tpl_engine.h"
 
 namespace {
 
@@ -39,11 +40,10 @@ bool checkArithmetic(const QString &expr) {
       ++parenDepth;
     else if (ch == ')')
       --parenDepth;
-    else if ((ch == '+' || ch == '-' || ch == '*' || ch == '/') &&
-             parenDepth == 0) {
+    else if ((ch == '+' || ch == '-' || ch == '*' || ch == '/') && parenDepth == 0) {
       if ((ch == '+' || ch == '-') &&
-          (i == 0 || expr[i - 1] == '(' || expr[i - 1] == '+' ||
-           expr[i - 1] == '-' || expr[i - 1] == '*' || expr[i - 1] == '/'))
+          (i == 0 || expr[i - 1] == '(' || expr[i - 1] == '+' || expr[i - 1] == '-' ||
+           expr[i - 1] == '*' || expr[i - 1] == '/'))
         continue;
       return true;
     }
@@ -51,52 +51,47 @@ bool checkArithmetic(const QString &expr) {
   return false;
 }
 
-} // namespace
+}  // namespace
 
 // ====================================================================
 // BlockExpression::handle() -- 三策略分发
 // ====================================================================
 
-bool BlockExpression::handle(const QString &block, int &pos,
-                             const QString &expr, const QJsonObject &context,
-                             QString &result) const {
+bool BlockExpression::handle(const QString &block, int &pos, const QString &expr,
+                             const QJsonObject &context, QString &result) const {
   Q_UNUSED(block)
   Q_UNUSED(pos)
 
-  // === 策略 0: 内置函数调用 print(text) ===
-  if (expr.startsWith(QString::fromLatin1(AcBuiltin::kPrint) + QLatin1Char('(')) &&
+  // === 策略 0: 内置函数调用 printLog(text) ===
+  if (expr.startsWith(QString::fromLatin1(AcBuiltin::kPrintLog) + QLatin1Char('(')) &&
       expr.endsWith(QLatin1Char(')'))) {
-    int prefixLen = QString::fromLatin1(AcBuiltin::kPrint).length() + 1; // +1 for '('
+    int prefixLen = QString::fromLatin1(AcBuiltin::kPrintLog).length() + 1;  // +1 for '('
     QString arg = expr.mid(prefixLen, expr.length() - prefixLen - 1).trimmed();
     // 去掉可能的外层引号
-    if ((arg.startsWith('\'') && arg.endsWith('\'')) ||
-        (arg.startsWith('"') && arg.endsWith('"')))
+    if ((arg.startsWith('\'') && arg.endsWith('\'')) || (arg.startsWith('"') && arg.endsWith('"')))
       arg = arg.mid(1, arg.length() - 2);
     // 如果参数不是字面量，尝试从 context 解析变量
     QJsonValue v = m_engine.resolvePath(arg, context);
-    if (!v.isNull() && !v.isUndefined())
-      arg = v.toString();
+    if (!v.isNull() && !v.isUndefined()) arg = v.toString();
     auto cb = m_engine.logCallback();
-    if (cb)
-      cb(arg, false);
+    if (cb) cb(arg, false);
     return true;
   }
 
   // === 策略 0: 内置函数调用 fileExists(path) ===
   if (expr.startsWith(QString::fromLatin1(AcBuiltin::kFileExists) + QLatin1Char('(')) &&
       expr.endsWith(QLatin1Char(')'))) {
-    int prefixLen = QString::fromLatin1(AcBuiltin::kFileExists).length() + 1; // +1 for '('
+    int prefixLen = QString::fromLatin1(AcBuiltin::kFileExists).length() + 1;  // +1 for '('
     QString arg = expr.mid(prefixLen, expr.length() - prefixLen - 1).trimmed();
     // 去掉可能的外层引号
-    if ((arg.startsWith('\'') && arg.endsWith('\'')) ||
-        (arg.startsWith('"') && arg.endsWith('"')))
+    if ((arg.startsWith('\'') && arg.endsWith('\'')) || (arg.startsWith('"') && arg.endsWith('"')))
       arg = arg.mid(1, arg.length() - 2);
     // 如果参数不是字面量，尝试从 context 解析变量
     QJsonValue v = m_engine.resolvePath(arg, context);
-    if (!v.isNull() && !v.isUndefined())
-      arg = v.toString();
+    if (!v.isNull() && !v.isUndefined()) arg = v.toString();
     bool exists = QFileInfo::exists(arg);
-    result += exists ? QString::fromLatin1(AcKeyword::kTrue) : QString::fromLatin1(AcKeyword::kFalse);
+    result +=
+        exists ? QString::fromLatin1(AcKeyword::kTrue) : QString::fromLatin1(AcKeyword::kFalse);
     return true;
   }
 
@@ -106,18 +101,16 @@ bool BlockExpression::handle(const QString &block, int &pos,
   if (expr == QString::fromLatin1(AcKeyword::kThis) ||
       expr == QString::fromLatin1(AcTemplate::kCurrentItem)) {
     QJsonValue v = context.value(QString::fromLatin1(AcTemplate::kCurrentItem));
-    if (v.isString())
-      return result += v.toString(), true;
+    if (v.isString()) return result += v.toString(), true;
     if (v.isDouble()) {
       double d = v.toDouble();
-      result += (d == static_cast<int>(d))
-                    ? QString::number(static_cast<int>(d))
-                    : QString::number(d);
+      result +=
+          (d == static_cast<int>(d)) ? QString::number(static_cast<int>(d)) : QString::number(d);
       return true;
     }
     if (v.isBool())
-      return result +=
-             (v.toBool() ? QString::fromLatin1(AcKeyword::kTrue) : QString::fromLatin1(AcKeyword::kFalse)),
+      return result += (v.toBool() ? QString::fromLatin1(AcKeyword::kTrue)
+                                   : QString::fromLatin1(AcKeyword::kFalse)),
              true;
     return true;
   }
@@ -127,9 +120,8 @@ bool BlockExpression::handle(const QString &block, int &pos,
   // 避免对纯变量名也做完整的递归下降解析（性能优化）。
   if (checkArithmetic(expr)) {
     double val = evalExpression(expr, context);
-    result += (val == static_cast<int>(val))
-                  ? QString::number(static_cast<int>(val))
-                  : QString::number(val);
+    result += (val == static_cast<int>(val)) ? QString::number(static_cast<int>(val))
+                                             : QString::number(val);
     return true;
   }
 
@@ -141,10 +133,11 @@ bool BlockExpression::handle(const QString &block, int &pos,
     result += val.toString();
   else if (val.isDouble()) {
     double d = val.toDouble();
-    result += (d == static_cast<int>(d)) ? QString::number(static_cast<int>(d))
-                                         : QString::number(d);
+    result +=
+        (d == static_cast<int>(d)) ? QString::number(static_cast<int>(d)) : QString::number(d);
   } else if (val.isBool())
-    result += val.toBool() ? QString::fromLatin1(AcKeyword::kTrue) : QString::fromLatin1(AcKeyword::kFalse);
+    result += val.toBool() ? QString::fromLatin1(AcKeyword::kTrue)
+                           : QString::fromLatin1(AcKeyword::kFalse);
   return true;
 }
 
@@ -161,8 +154,7 @@ bool BlockExpression::handle(const QString &block, int &pos,
 //   evalPrimary: 处理原子元素（数字、变量、括号、一元符号）
 // ====================================================================
 
-double BlockExpression::evalExpression(const QString &expr,
-                                       const QJsonObject &context) const {
+double BlockExpression::evalExpression(const QString &expr, const QJsonObject &context) const {
   int pos = 0;
   return evalAddSub(expr, pos, context);
 }
@@ -171,10 +163,8 @@ double BlockExpression::evalAddSub(const QString &expr, int &pos,
                                    const QJsonObject &context) const {
   double left = evalMulDiv(expr, pos, context);
   while (pos < expr.length()) {
-    while (pos < expr.length() && expr[pos].isSpace())
-      ++pos;
-    if (pos >= expr.length())
-      break;
+    while (pos < expr.length() && expr[pos].isSpace()) ++pos;
+    if (pos >= expr.length()) break;
     QChar ch = expr[pos];
     if (ch == '+') {
       ++pos;
@@ -193,10 +183,8 @@ double BlockExpression::evalMulDiv(const QString &expr, int &pos,
                                    const QJsonObject &context) const {
   double left = evalPrimary(expr, pos, context);
   while (pos < expr.length()) {
-    while (pos < expr.length() && expr[pos].isSpace())
-      ++pos;
-    if (pos >= expr.length())
-      break;
+    while (pos < expr.length() && expr[pos].isSpace()) ++pos;
+    if (pos >= expr.length()) break;
     QChar ch = expr[pos];
     if (ch == '*') {
       ++pos;
@@ -218,41 +206,32 @@ double BlockExpression::evalMulDiv(const QString &expr, int &pos,
 
 double BlockExpression::evalPrimary(const QString &expr, int &pos,
                                     const QJsonObject &context) const {
-  while (pos < expr.length() && expr[pos].isSpace())
-    ++pos;
-  if (pos >= expr.length())
-    return 0;
+  while (pos < expr.length() && expr[pos].isSpace()) ++pos;
+  if (pos >= expr.length()) return 0;
   QChar ch = expr[pos];
-  if (ch == '+')
-    return ++pos, evalPrimary(expr, pos, context);
-  if (ch == '-')
-    return ++pos, -evalPrimary(expr, pos, context);
+  if (ch == '+') return ++pos, evalPrimary(expr, pos, context);
+  if (ch == '-') return ++pos, -evalPrimary(expr, pos, context);
   if (ch == '(') {
     ++pos;
     double result = evalAddSub(expr, pos, context);
-    while (pos < expr.length() && expr[pos].isSpace())
-      ++pos;
-    if (pos < expr.length() && expr[pos] == ')')
-      ++pos;
+    while (pos < expr.length() && expr[pos].isSpace()) ++pos;
+    if (pos < expr.length() && expr[pos] == ')') ++pos;
     return result;
   }
   if (ch.isDigit() || ch == '.') {
     int start = pos;
-    while (pos < expr.length() && (expr[pos].isDigit() || expr[pos] == '.'))
-      ++pos;
+    while (pos < expr.length() && (expr[pos].isDigit() || expr[pos] == '.')) ++pos;
     bool ok = false;
     double num = expr.mid(start, pos - start).toDouble(&ok);
     return ok ? num : 0;
   }
   if (ch.isLetter() || ch == '_') {
     int start = pos;
-    while (pos < expr.length() && (expr[pos].isLetterOrNumber() ||
-                                   expr[pos] == '.' || expr[pos] == '_'))
+    while (pos < expr.length() &&
+           (expr[pos].isLetterOrNumber() || expr[pos] == '.' || expr[pos] == '_'))
       ++pos;
-    QJsonValue val =
-        m_engine.resolvePath(expr.mid(start, pos - start), context);
-    if (val.isDouble())
-      return val.toDouble();
+    QJsonValue val = m_engine.resolvePath(expr.mid(start, pos - start), context);
+    if (val.isDouble()) return val.toDouble();
     return 0;
   }
   return 0;

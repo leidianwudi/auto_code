@@ -37,7 +37,7 @@ QStringList GuessCode::getAllCompletions(FileType type) {
           QString::fromLatin1(AcTemplate::kExprOpen) +
               QString::fromLatin1(AcTemplate::kEachPrefix).trimmed(),
           QString::fromLatin1(AcTemplate::kEachClose),
-          QString::fromLatin1(AcTemplate::kExprOpen) + QString::fromLatin1(AcBuiltin::kPrint) +
+          QString::fromLatin1(AcTemplate::kExprOpen) + QString::fromLatin1(AcBuiltin::kPrintLog) +
               QLatin1Char('('),
       };
     case JsonFile:

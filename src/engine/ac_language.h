@@ -87,8 +87,10 @@ inline constexpr const char *kReadFile = "readFile";
 inline constexpr const char *kRenderTpl = "renderTpl";
 /// @brief 写入文本文件：writeFile("path.txt", content) → 返回 bool
 inline constexpr const char *kWriteFile = "writeFile";
-/// @brief 打印日志到控制台：print("message") → 无返回值
-inline constexpr const char *kPrint = "print";
+/// @brief 打印日志到控制台：printLog("message") → 无返回值
+inline constexpr const char *kPrintLog = "printLog";
+/// @brief 打印错误到控制台：printError("message") → 无返回值（log 面板显示为红色）
+inline constexpr const char *kPrintError = "printError";
 /// @brief 获取 tree.config 中勾选的文件列表：getCheckedFiles() → 返回字符串数组
 inline constexpr const char *kGetCheckedFiles = "getCheckedFiles";
 /// @brief 合并两个 JSON 对象：merge(obj1, obj2) → 返回新对象
@@ -100,9 +102,9 @@ inline constexpr const char *kFileExists = "fileExists";
 
 /// @brief 一级函数名列表（供解析器校验、高亮、补全使用）
 inline const QStringList kAll = {
-    QString(kCall),      QString(kReadJson),   QString(kReadFile),        QString(kRenderTpl),
-    QString(kWriteFile), QString(kPrint),      QString(kGetCheckedFiles), QString(kMerge),
-    QString(kBasename),  QString(kFileExists),
+    QString(kCall),      QString(kReadJson), QString(kReadFile),   QString(kRenderTpl),
+    QString(kWriteFile), QString(kPrintLog), QString(kPrintError), QString(kGetCheckedFiles),
+    QString(kMerge),     QString(kBasename), QString(kFileExists),
 };
 }  // namespace AcBuiltin
 

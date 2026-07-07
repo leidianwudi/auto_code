@@ -21,7 +21,7 @@ class Engine {
   let horsepower = 400;
 
   function start() {
-    print("Engine " + type + " started, horsepower: " + horsepower);
+    printLog("Engine " + type + " started, horsepower: " + horsepower);
   }
 
   function getInfo() {
@@ -37,7 +37,7 @@ class Car {
 
   function drive(speed) {
     engine.start();
-    print(brand + " is driving at " + speed + " km/h");
+    printLog(brand + " is driving at " + speed + " km/h");
   }
 
   function getDetails() {
@@ -85,31 +85,31 @@ main {
   //let a = readFile();
   // 调用顶层函数
   let sum = add(10, 20);
-  print("sum: " + sum);
+  printLog("sum: " + sum);
 
   let product = multiply(6, 7);
-  print("product: " + product);
+  printLog("product: " + product);
 
   let msg = greet("AutoCode");
-  print(msg);
+  printLog(msg);
 
   // 使用顶层类
   let myEngine = new Engine();
   myEngine.start();
   let engineInfo = myEngine.getInfo();
-  print("Engine info: " + engineInfo);
+  printLog("Engine info: " + engineInfo);
 
   let myCar = new Car();
   myCar.drive(1);
   myCar.drive(120);
   let details = myCar.getDetails();
-  print("Car details: " + details);
+  printLog("Car details: " + details);
 
   let person = new Person();
   person.setName("Alice");
   person.setAge(30);
   let intro = person.introduce();
-  print(intro);
+  printLog(intro);
 
   // ── 数据库操作 ──
 
@@ -152,46 +152,46 @@ main {
   if (true) {
     let outer = 200;
     let inner = 300;
-    print("inner outer: " + outer);
-    print("inner inner: " + inner);
+    printLog("inner outer: " + outer);
+    printLog("inner inner: " + inner);
   }
-  print("outer after if: " + outer);
+  printLog("outer after if: " + outer);
 
   let arrSum = 0;
   for (i in [1, 2, 3]) {
     let squared = i * i;
     arrSum = arrSum + squared;
   }
-  print("sum of squares: " + arrSum);
+  printLog("sum of squares: " + arrSum);
 
   let flag = false;
   if (flag) {
-    print("not executed");
+    printLog("not executed");
   } else {
     let elseVar = "else block";
-    print("elseVar: " + elseVar);
+    printLog("elseVar: " + elseVar);
   }
 
   // ── 静态变量/函数测试 ──
 
-  print("--- 静态测试开始 ---");
+  printError("--- 静态测试开始 ---");
 
   let initCount = Counter::count;
-  print("初始静态 count: " + initCount);
+  printLog("初始静态 count: " + initCount);
 
   Counter::increment();
   let c1 = Counter::getCount();
-  print("第一次自增后: " + c1);
+  printLog("第一次自增后: " + c1);
 
   Counter::increment();
   let c2 = Counter::getCount();
-  print("第二次自增后: " + c2);
+  printLog("第二次自增后: " + c2);
 
   let finalCount = Counter::count;
-  print("最终静态 count: " + finalCount);
+  printLog("最终静态 count: " + finalCount);
 
   let name = Counter::name;
-  print("静态名称: " + name);
+  printLog("静态名称: " + name);
 
-  print("--- 静态测试结束 ---");
+  printLog("--- 静态测试结束 ---");
 }
