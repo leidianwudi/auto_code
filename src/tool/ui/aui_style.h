@@ -8,7 +8,10 @@
 #pragma once
 
 #include <QColor>
+#include <QFont>
+#include <QFontMetrics>
 #include <QString>
+#include <QTextBlockFormat>
 
 class QTabBar;
 
@@ -38,6 +41,47 @@ public:
 
   /// 错误文本颜色（输出面板用），红色
   static QColor errorTextColor() { return QColor(0xf4, 0x47, 0x47); }
+
+  // ════════════════════════════════════════════════════════════
+  //  编辑器 / 输出面板字体
+  // ════════════════════════════════════════════════════════════
+
+  /// 编辑器默认字体 family (等宽编程字体)
+  static QString editorFontFamily() { return QStringLiteral("Consolas"); }
+  /// 编辑器默认字体大小（磅值）
+  static int editorFontSize() { return 11; }
+  /// 创建编辑器默认字体对象
+  static QFont createEditorFont() {
+    QFont font;
+    font.setFamily(editorFontFamily());
+    font.setFixedPitch(true);
+    font.setPointSize(editorFontSize());
+    return font;
+  }
+  /// 创建日志面板字体对象 — 字号与编辑器相同，字间距归零
+  static QFont createLogFont() {
+    QFont font = createEditorFont();
+    font.setLetterSpacing(QFont::AbsoluteSpacing, 0.0);  // 列间距归零
+    font.setPointSize(editorFontSize());
+    return font;
+  }
+
+  /// 创建日志面板行块格式 — 行间隔为 0（只使用字体本身高度，无额外间距）
+  static QTextBlockFormat createLogBlockFormat(const QFont &font) {
+    QFontMetrics fm(font);
+    QTextBlockFormat fmt;
+    // 使用字体本身高度（ascent + descent），不加任何额外间距
+    fmt.setLineHeight(fm.height(), QTextBlockFormat::FixedHeight);
+    return fmt;
+  }
+
+  /// 日志面板完整样式表（背景色、文字色、边框色，统一由 AuiStyle 管理）
+  static QString logPanelStyleSheet() {
+    return QStringLiteral(
+               "QPlainTextEdit { background: %1; color: %2; "
+               "border: 1px solid %3; padding: 0px; }")
+        .arg(QStringLiteral("#ffffff"), textColor().name(), QStringLiteral("#c8c8c8"));
+  }
 
   // ════════════════════════════════════════════════════════════
   //  编辑器颜色

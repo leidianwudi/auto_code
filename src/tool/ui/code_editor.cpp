@@ -41,12 +41,8 @@ const QString kElseName = QString::fromLatin1(AcTemplate::kElse).mid(2, 4);
 
 CodeEditor::CodeEditor(QWidget *parent)
     : QPlainTextEdit(parent), m_lineNumberArea(new LineNumberArea(this)) {
-  // 设置等宽编程字体，确保代码对齐和可读性
-  QFont font;
-  font.setFamily("Consolas");
-  font.setFixedPitch(true);
-  font.setPointSize(11);
-  setFont(font);
+  // 设置等宽编程字体，确保代码对齐和可读性（使用 AuiStyle 统一字体）
+  setFont(AuiStyle::createEditorFont());
 
   // 去除文档外边距，使编辑区紧贴父容器
   document()->setDocumentMargin(0);

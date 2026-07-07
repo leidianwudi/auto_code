@@ -7,6 +7,7 @@
 
 #include <QPainter>
 #include <QTextBlock>
+#include <QTextBlockFormat>
 #include <QTextCursor>
 #include <QTextDocument>
 
@@ -21,13 +22,15 @@ CodeLog::CodeLog(QWidget *parent) : QPlainTextEdit(parent) {
   setMaximumBlockCount(5000);  // 限制行数，防止内存溢出
   document()->setDocumentMargin(0);
 
-  // 使用 AuiStyle 统一颜色构建样式表
-  const QString bgColor = QStringLiteral("#ffffff");
-  const QString fgColor = AuiStyle::textColor().name();
-  const QString brColor = QStringLiteral("#c8c8c8");
-  setStyleSheet(QStringLiteral("QPlainTextEdit { background: %1; color: %2; "
-                               "border: 1px solid %3; padding: 0px; }")
-                    .arg(bgColor, fgColor, brColor));
+  // 使用 AuiStyle 统一样式表
+  setStyleSheet(AuiStyle::logPanelStyleSheet());
+  // setFont(AuiStyle::createLogFont());  // 字体大小 10pt，等宽，列间距归零
+
+  // 行间隔为 0 — 只使用字体本身高度，无额外间距
+  QTextBlockFormat blockFmt = AuiStyle::createLogBlockFormat(font());
+  QTextCursor cur(document());
+  cur.movePosition(QTextCursor::Start);
+  cur.setBlockFormat(blockFmt);
 
   // 行号区域
   m_lineNumberArea = new LineNumberArea(this);
@@ -71,9 +74,10 @@ void CodeLog::append(const QString &text, bool isError) {
     cursor.movePosition(QTextCursor::EndOfBlock);
   }
 
-  // 非首条日志时，先插入换行再追加
+  // 非首条日志时，先插入新块再追加（同时指定行块格式）
   if (cursor.position() > 0) {
-    cursor.insertText(QStringLiteral("\n"), QTextCharFormat());
+    QTextBlockFormat lineBlockFmt = AuiStyle::createLogBlockFormat(font());
+    cursor.insertBlock(lineBlockFmt, QTextCharFormat());
   }
 
   cursor.insertText(cleanText, msgFmt);
