@@ -4,7 +4,9 @@
  */
 
 #include "light_ts.h"
+
 #include "light_color.h"
+
 
 /**
  * @brief 构造函数
@@ -51,20 +53,18 @@ LightTs::LightTs(QTextDocument *parent) : QSyntaxHighlighter(parent) {
 
   // TypeScript 关键字列表
   // 包含 ES6+ 关键字和 TypeScript 特有关键字
-  QStringList keywords = {
-      "export",    "import",  "from",       "class",    "interface", "type",
-      "enum",      "extends", "implements", "abstract", "public",    "private",
-      "protected", "static",  "readonly",   "async",    "await",     "function",
-      "const",     "let",     "var",        "if",       "else",      "for",
-      "while",     "do",      "switch",     "case",     "break",     "continue",
-      "return",    "throw",   "try",        "catch",    "finally",   "new",
-      "delete",    "typeof",  "instanceof", "in",       "of",        "this",
-      "super"};
+  QStringList keywords = {"export",    "import",  "from",       "class",    "interface", "type",
+                          "enum",      "extends", "implements", "abstract", "public",    "private",
+                          "protected", "static",  "readonly",   "async",    "await",     "function",
+                          "const",     "let",     "var",        "if",       "else",      "for",
+                          "while",     "do",      "switch",     "case",     "break",     "continue",
+                          "return",    "throw",   "try",        "catch",    "finally",   "new",
+                          "delete",    "typeof",  "instanceof", "in",       "of",        "this",
+                          "super"};
 
   // 为每个关键字注册正则规则（使用 \b 单词边界确保精确匹配）
   for (const QString &keyword : keywords) {
-    m_rules.append({QRegularExpression(QStringLiteral("\\b") + keyword +
-                                       QStringLiteral("\\b")),
+    m_rules.append({QRegularExpression(QStringLiteral("\\b") + keyword + QStringLiteral("\\b")),
                     keywordFormat});
   }
 
@@ -86,9 +86,8 @@ LightTs::LightTs(QTextDocument *parent) : QSyntaxHighlighter(parent) {
 
   // 为每个类型注册正则规则
   for (const QString &type : types) {
-    m_rules.append({QRegularExpression(QStringLiteral("\\b") + type +
-                                       QStringLiteral("\\b")),
-                    typeFormat});
+    m_rules.append(
+        {QRegularExpression(QStringLiteral("\\b") + type + QStringLiteral("\\b")), typeFormat});
   }
 
   // 字符串：单引号和双引号字符串
@@ -119,8 +118,7 @@ LightTs::LightTs(QTextDocument *parent) : QSyntaxHighlighter(parent) {
 void LightTs::highlightBlock(const QString &text) {
   // 应用所有高亮规则（单行匹配）
   for (const HighlightRule &rule : std::as_const(m_rules)) {
-    QRegularExpressionMatchIterator matchIterator =
-        rule.pattern.globalMatch(text);
+    QRegularExpressionMatchIterator matchIterator = rule.pattern.globalMatch(text);
     while (matchIterator.hasNext()) {
       QRegularExpressionMatch match = matchIterator.next();
       setFormat(match.capturedStart(), match.capturedLength(), rule.format);
@@ -129,7 +127,7 @@ void LightTs::highlightBlock(const QString &text) {
 
   // 处理多行注释 /* ... */
   // 使用 QSyntaxHighlighter 的状态机制跨行传递注释状态
-  setCurrentBlockState(0); // 默认不在注释中
+  setCurrentBlockState(0);  // 默认不在注释中
 
   // 如果上一行以未闭合的 /* 结束，则从行首开始高亮
   int startIndex = 0;
@@ -152,9 +150,8 @@ void LightTs::highlightBlock(const QString &text) {
       commentLength = endIndex - startIndex + 2;
     }
 
-    // 应用灰色斜体格式
     QTextCharFormat commentFormat;
-    commentFormat.setForeground(QColor("#808080"));
+    commentFormat.setForeground(LightColor::comment);
     commentFormat.setFontItalic(true);
     setFormat(startIndex, commentLength, commentFormat);
 

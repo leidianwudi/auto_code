@@ -40,8 +40,8 @@ void DemoUi::setupUI() {
   m_titleBar = new QWidget;
   m_titleBar->setObjectName(QStringLiteral("TitleBar"));
   auto *titleLayout = new QHBoxLayout(m_titleBar);
-  titleLayout->setContentsMargins(6, 2, 6, 2);
-  titleLayout->setSpacing(4);
+  titleLayout->setContentsMargins(AuiStyle::titleBarMargins());
+  titleLayout->setSpacing(AuiStyle::titleBarSpacing());
 
   // ── AC 程序图标 ──
   titleLayout->addWidget(AuiWindow::createAppIcon(nullptr, 20));
@@ -80,12 +80,7 @@ void DemoUi::setupUI() {
   auto *closeBtn = AuiButton::createCloseButton();
   connect(closeBtn, &QPushButton::clicked, this, &QMainWindow::close);
   connect(minBtn, &QPushButton::clicked, this, &QMainWindow::showMinimized);
-  connect(maxBtn, &QPushButton::clicked, this, [this]() {
-    if (isMaximized())
-      showNormal();
-    else
-      showMaximized();
-  });
+  connect(maxBtn, &QPushButton::clicked, this, [this]() { AuiWindow::toggleMaximize(this); });
   titleLayout->addWidget(minBtn);
   titleLayout->addWidget(maxBtn);
   titleLayout->addWidget(closeBtn);

@@ -10,6 +10,8 @@
 #include <QColor>
 #include <QFont>
 #include <QFontMetrics>
+#include <QMargins>
+#include <QSize>
 #include <QString>
 #include <QTextBlockFormat>
 
@@ -50,6 +52,24 @@ public:
 
   /// 面板背景色（白色），对应 #ffffff
   static QColor panelBackground() { return QColor(Qt::white); }
+
+  /// 图标按钮 hover 半透明背景色
+  static QColor iconButtonHoverBg() { return QColor(128, 128, 128, 40); }
+
+  /// 图标按钮 pressed 半透明背景色
+  static QColor iconButtonPressedBg() { return QColor(128, 128, 128, 80); }
+
+  /// Tab 未选中背景色，对应 #e8e8e8
+  static QColor tabUnselectedBackground() { return QColor(0xe8, 0xe8, 0xe8); }
+
+  /// Tab hover 背景色，对应 #dcdcdc
+  static QColor tabHoverBackground() { return QColor(0xdc, 0xdc, 0xdc); }
+
+  /// 错误提示弹窗背景色（淡黄），对应 #ffffcc
+  static QColor errorToolTipBackground() { return QColor(0xff, 0xff, 0xcc); }
+
+  /// 保存全部按钮背景层颜色（灰色），与 inactiveTabColor 值相同
+  static QColor saveAllButtonBgColor() { return inactiveTabColor(); }
 
   // ════════════════════════════════════════════════════════════
   //  编辑器 / 输出面板字体
@@ -107,6 +127,28 @@ public:
 
   /// 错误波浪线颜色（红色）
   static QColor errorUnderlineColor() { return QColor(Qt::red); }
+
+  // ════════════════════════════════════════════════════════════
+  //  布局尺寸常量
+  // ════════════════════════════════════════════════════════════
+
+  /// 标题栏按钮固定尺寸
+  static QSize titleBarButtonSize() { return QSize(36, 26); }
+
+  /// 标题栏布局边距（左6, 上2, 右6, 下2）
+  static QMargins titleBarMargins() { return QMargins(6, 2, 6, 2); }
+
+  /// 标题栏布局间距
+  static int titleBarSpacing() { return 4; }
+
+  /// 对话框字体大小（px）
+  static int dialogFontSize() { return 13; }
+
+  /// 标题栏标题字体大小（px）
+  static int titleFontSize() { return 12; }
+
+  /// QSizeGrip 固定尺寸
+  static QSize sizeGripSize() { return QSize(16, 16); }
 
   // ════════════════════════════════════════════════════════════
   //  全局样式表

@@ -68,7 +68,8 @@ void CreateUi::setupUI() {
   // ── 错误提示 ──
   m_errorLabel = new QLabel(this);
   m_errorLabel->setStyleSheet(
-      QStringLiteral("color: %1; font-size: 12px;").arg(AuiStyle::errorTextColor().name()));
+      QStringLiteral("color: %1; font-size: %2px;")
+          .arg(AuiStyle::errorTextColor().name(), QString::number(AuiStyle::titleFontSize())));
   m_errorLabel->hide();
   mainLayout->addWidget(m_errorLabel);
 

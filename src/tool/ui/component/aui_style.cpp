@@ -35,7 +35,7 @@
 QString AuiStyle::mainStyleSheet() {
   return QStringLiteral(
              "#TitleBar { background: %1; }"
-             "#TitleLabel { color: %2; font-size: 12px; }"
+             "#TitleLabel { color: %2; font-size: %5px; }"
              "QToolButton { color: %2; border: none; padding: 2px 6px; }"
              "QToolButton:hover { background: %3; }"
              "QPushButton { color: %2; border: none; }"
@@ -44,22 +44,23 @@ QString AuiStyle::mainStyleSheet() {
              "QStatusBar::item { border: none; }"
              "#WindowFrame { background: %1; border: 1px solid %4; }")
       .arg(barBackground().name(), textColor().name(), hoverBackground().name(),
-           borderDarkColor().name());
+           borderDarkColor().name(), QString::number(titleFontSize()));
 }
 
 QString AuiStyle::dialogStyleSheet() {
+  const QString fs = QString::number(dialogFontSize()) + QStringLiteral("px");
   return QStringLiteral(
              "QDialog { background: %1; }"
-             "QLabel { color: %2; font-size: 13px; }"
+             "QLabel { color: %2; font-size: %4; }"
              "QLineEdit {"
              "  border: 1px solid %3; border-radius: 3px;"
-             "  padding: 4px 6px; font-size: 13px;"
+             "  padding: 4px 6px; font-size: %4;"
              "}"
              "QPushButton {"
              "  border: 1px solid %3; border-radius: 3px;"
-             "  padding: 6px 20px; font-size: 13px;"
+             "  padding: 6px 20px; font-size: %4;"
              "}")
-      .arg(barBackground().name(), textColor().name(), borderColor().name());
+      .arg(barBackground().name(), textColor().name(), borderColor().name(), fs);
 }
 
 QString AuiStyle::tabBarStyleSheet() {
@@ -83,10 +84,8 @@ QString AuiStyle::tabBarStyleSheet() {
              "  padding: 0px;"
              "  margin: 0px;"
              "}")
-      .arg(borderColor().name(),              // 1: #c8c8c8
-           QColor(0xe8, 0xe8, 0xe8).name(),   // 2: tab 未选中背景
-           panelBackground().name(),          // 3: #ffffff
-           QColor(0xdc, 0xdc, 0xdc).name());  // 4: tab hover 背景
+      .arg(borderColor().name(), tabUnselectedBackground().name(), panelBackground().name(),
+           tabHoverBackground().name());
 }
 
 QString AuiStyle::popupListStyleSheet() {
@@ -113,8 +112,7 @@ QString AuiStyle::errorToolTipStyleSheet() {
              "  border-radius: 3px;"
              "  padding: 4px 8px;"
              "}")
-      .arg(QColor(0xff, 0xff, 0xcc).name(),  // #ffffcc 淡黄背景
-           borderDarkColor().name());
+      .arg(errorToolTipBackground().name(), borderDarkColor().name());
 }
 
 // ════════════════════════════════════════════════════════════

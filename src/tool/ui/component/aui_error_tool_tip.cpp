@@ -33,13 +33,9 @@ AuiErrorToolTip::AuiErrorToolTip(const QString &text, QWidget *parent)
   m_label = new QLabel(text);
   m_label->setWordWrap(false);
   m_label->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
-  m_label->setStyleSheet(QStringLiteral("color: red;"));
+  m_label->setStyleSheet(QStringLiteral("color: %1;").arg(AuiStyle::errorTextColor().name()));
   m_label->setCursor(Qt::IBeamCursor);
-  // 设置等宽字体便于阅读错误信息
-  QFont f = m_label->font();
-  f.setFamily(QStringLiteral("Consolas"));
-  f.setPointSize(11);  // 11px 字体，与 QToolTip 一致
-  m_label->setFont(f);
+  m_label->setFont(AuiStyle::createEditorFont());
   layout->addWidget(m_label);
 }
 

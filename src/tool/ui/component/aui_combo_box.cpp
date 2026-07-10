@@ -68,11 +68,11 @@ QComboBox *AuiComboBox::create(QWidget *parent) {
 }
 
 void AuiComboBox::applyStyle(QComboBox *combo) {
-  // ── 应用样式表（只负责框架，箭头由 AuiComboBoxWidget::paintEvent 绘制） ──
+  const QString fs = QString::number(AuiStyle::dialogFontSize()) + QStringLiteral("px");
   combo->setStyleSheet(QStringLiteral("QComboBox {"
                                       "  background: %1;"
                                       "  border: 1px solid %2; border-radius: 3px;"
-                                      "  padding: 4px 6px; font-size: 13px;"
+                                      "  padding: 4px 6px; font-size: %6;"
                                       "}"
                                       "QComboBox:hover {"
                                       "  border: 1px solid %3;"
@@ -86,9 +86,8 @@ void AuiComboBox::applyStyle(QComboBox *combo) {
                                       "  selection-background-color: %4;"
                                       "  selection-color: %5;"
                                       "}")
-                           .arg(AuiStyle::panelBackground().name(),  // 1: white
-                                AuiStyle::borderColor().name(),      // 2: #c8c8c8
-                                AuiStyle::borderDarkColor().name(),  // 3: #999
-                                AuiStyle::hoverBackground().name(),  // 4: #d0d0d0
-                                AuiStyle::textColor().name()));      // 5: #333
+                           .arg(AuiStyle::panelBackground().name(), AuiStyle::borderColor().name(),
+                                AuiStyle::borderDarkColor().name(),
+                                AuiStyle::hoverBackground().name(), AuiStyle::textColor().name(),
+                                fs));
 }

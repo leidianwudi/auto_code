@@ -44,13 +44,6 @@ public:
   /// @return 标题栏 QWidget 指针
   static QWidget *createTitleBar(QWidget *parent, const QString &title, bool showMinMax = true);
 
-  /// 获取标题栏中的关闭按钮
-  static QPushButton *closeButton(QWidget *titleBar);
-  /// 获取标题栏中的最小化按钮
-  static QPushButton *minButton(QWidget *titleBar);
-  /// 获取标题栏中的最大化按钮
-  static QPushButton *maxButton(QWidget *titleBar);
-
   /// 创建底部状态栏（状态文字 + QSizeGrip 可拖拽三角）
   /// @param parent 父控件
   /// @param text   初始状态文字（如 "就绪"）
@@ -73,6 +66,10 @@ public:
   /// @param window   窗口
   /// @param titleBar 标题栏（可为 nullptr）
   static void enableTitleBarDrag(QWidget *window, QWidget *titleBar);
+
+  /// 切换窗口最大化/还原状态
+  /// @param window 目标窗口
+  static void toggleMaximize(QWidget *window);
 
   /// 添加 Win32 拉伸边框支持（WS_THICKFRAME）
   static void enableWin32Resize(QWidget *window);

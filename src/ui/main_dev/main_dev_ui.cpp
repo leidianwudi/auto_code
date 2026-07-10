@@ -84,8 +84,8 @@ void MainDevUi::setupTitleBar() {
   m_titleBar = new QWidget;
   m_titleBar->setObjectName(QStringLiteral("TitleBar"));
   auto *titleLayout = new QHBoxLayout(m_titleBar);
-  titleLayout->setContentsMargins(6, 2, 6, 2);
-  titleLayout->setSpacing(4);
+  titleLayout->setContentsMargins(AuiStyle::titleBarMargins());
+  titleLayout->setSpacing(AuiStyle::titleBarSpacing());
 
   // ── 程序图标（AC 粗体字母） ──
   titleLayout->addWidget(AuiWindow::createAppIcon(nullptr, 20));
@@ -268,10 +268,7 @@ void MainDevUi::changeEvent(QEvent *ev) {
 }
 
 void MainDevUi::onMaximizeClicked() {
-  if (isMaximized())
-    showNormal();
-  else
-    showMaximized();
+  AuiWindow::toggleMaximize(this);
   updateMaximizeIcon();
 }
 

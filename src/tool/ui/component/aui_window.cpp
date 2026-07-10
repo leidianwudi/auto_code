@@ -91,8 +91,8 @@ QWidget *AuiWindow::createTitleBar(QWidget *parent, const QString &title, bool s
   auto *bar = new QWidget(parent);
   bar->setObjectName(QStringLiteral("TitleBar"));
   auto *layout = new QHBoxLayout(bar);
-  layout->setContentsMargins(6, 2, 6, 2);
-  layout->setSpacing(4);
+  layout->setContentsMargins(AuiStyle::titleBarMargins());
+  layout->setSpacing(AuiStyle::titleBarSpacing());
 
   // ── AC 图标 ──
   layout->addWidget(createAppIcon(bar, 20));
@@ -119,35 +119,6 @@ QWidget *AuiWindow::createTitleBar(QWidget *parent, const QString &title, bool s
 }
 
 // ════════════════════════════════════════════════════════════
-//  标题栏按钮获取
-// ════════════════════════════════════════════════════════════
-
-QPushButton *AuiWindow::closeButton(QWidget *titleBar) {
-  auto *layout = titleBar ? titleBar->findChild<QHBoxLayout *>() : nullptr;
-  if (!layout || layout->count() == 0) return nullptr;
-  auto *item = layout->itemAt(layout->count() - 1);
-  return item ? qobject_cast<QPushButton *>(item->widget()) : nullptr;
-}
-
-QPushButton *AuiWindow::minButton(QWidget *titleBar) {
-  auto *layout = titleBar ? titleBar->findChild<QHBoxLayout *>() : nullptr;
-  if (!layout) return nullptr;
-  int idx = layout->count() - 3;
-  if (idx < 0) return nullptr;
-  auto *item = layout->itemAt(idx);
-  return item ? qobject_cast<QPushButton *>(item->widget()) : nullptr;
-}
-
-QPushButton *AuiWindow::maxButton(QWidget *titleBar) {
-  auto *layout = titleBar ? titleBar->findChild<QHBoxLayout *>() : nullptr;
-  if (!layout) return nullptr;
-  int idx = layout->count() - 2;
-  if (idx < 0) return nullptr;
-  auto *item = layout->itemAt(idx);
-  return item ? qobject_cast<QPushButton *>(item->widget()) : nullptr;
-}
-
-// ════════════════════════════════════════════════════════════
 //  创建底部状态栏（状态文字 + QSizeGrip 可拖拽三角）
 // ════════════════════════════════════════════════════════════
 
@@ -166,7 +137,9 @@ QWidget *AuiWindow::createStatusBar(QWidget *parent, QWidget *content) {
   layout->addWidget(content, 1);
 
   auto *grip = new QSizeGrip(bar);
-  grip->setStyleSheet(QStringLiteral("QSizeGrip { width: 16px; height: 16px; }"));
+  const QSize gs = AuiStyle::sizeGripSize();
+  grip->setStyleSheet(
+      QStringLiteral("QSizeGrip { width: %1px; height: %2px; }").arg(gs.width()).arg(gs.height()));
   layout->addWidget(grip);
 
   return bar;
@@ -243,11 +216,7 @@ protected:
     if (event->type() == QEvent::MouseButtonDblClick) {
       auto *me = static_cast<QMouseEvent *>(event);
       if (me->button() == Qt::LeftButton) {
-        if (m_window->isMaximized()) {
-          m_window->showNormal();
-        } else {
-          m_window->showMaximized();
-        }
+        AuiWindow::toggleMaximize(m_window);
         return true;
       }
     }
@@ -263,6 +232,15 @@ void AuiWindow::enableTitleBarDrag(QWidget *window, QWidget *titleBar) {
   if (window && titleBar) {
     auto *filter = new TitleBarDragFilter(window, titleBar);
     titleBar->installEventFilter(filter);
+  }
+}
+
+void AuiWindow::toggleMaximize(QWidget *window) {
+  if (!window) return;
+  if (window->isMaximized()) {
+    window->showNormal();
+  } else {
+    window->showMaximized();
   }
 }
 
