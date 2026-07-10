@@ -52,16 +52,12 @@ QString AuiStyle::dialogStyleSheet() {
   const QString fs = QString::number(dialogFontSize()) + QStringLiteral("px");
   return QStringLiteral(
              "QDialog { background: %1; }"
-             "QLabel { color: %2; font-size: %4; }"
+             "QLabel { color: %2; font-size: %3; }"
              "QLineEdit {"
-             "  border: 1px solid %3; border-radius: 3px;"
-             "  padding: 4px 6px; font-size: %4;"
-             "}"
-             "QPushButton {"
-             "  border: 1px solid %3; border-radius: 3px;"
-             "  padding: 6px 20px; font-size: %4;"
+             "  border: 1px solid %4; border-radius: 3px;"
+             "  padding: 4px 6px; font-size: %3;"
              "}")
-      .arg(background().name(), textColor().name(), borderColor().name(), fs);
+      .arg(background().name(), textColor().name(), fs, borderColor().name());
 }
 
 QString AuiStyle::tabBarStyleSheet() {
@@ -136,8 +132,10 @@ void AuiStyle::ensureFusionTabBar(QTabBar *bar) {
 }
 
 void AuiStyle::applyTitleLabelStyle(QLabel *label) {
-  label->setStyleSheet(QStringLiteral("color: %1; font-size: %2px; background: transparent;")
+  label->setStyleSheet(QStringLiteral("color: %1; font-size: %2px; background: transparent;"
+                                      "padding: 0px 2px;")
                            .arg(textColor().name(), QString::number(titleFontSize())));
+  label->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
 }
 
 void AuiStyle::applyTitleBarStyle(QWidget *titleBar) {

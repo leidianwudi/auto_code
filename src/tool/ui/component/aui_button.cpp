@@ -51,6 +51,31 @@ void AuiButton::applyIconButtonStyle(QPushButton *btn) {
                               AuiStyle::borderColor().name()));
 }
 
+QString AuiButton::dialogButtonStyleSheet() {
+  const QString fs = QString::number(AuiStyle::dialogFontSize()) + QStringLiteral("px");
+  return QStringLiteral(
+             "QPushButton {"
+             "  background: %1; border: 1px solid %2; border-radius: 3px;"
+             "  padding: 6px 20px; font-size: %3;"
+             "}"
+             "QPushButton:hover {"
+             "  background: %4; border: 1px solid %2;"
+             "}"
+             "QPushButton:pressed {"
+             "  background: %5;"
+             "}"
+             "QPushButton:disabled {"
+             "  color: gray;"
+             "}")
+      .arg(AuiStyle::background().name(), AuiStyle::borderColor().name(), fs,
+           AuiStyle::hoverBackground().name(),
+           AuiStyle::iconButtonPressedBg().name(QColor::HexArgb));
+}
+
+void AuiButton::applyDialogButtonStyle(QPushButton *btn) {
+  btn->setStyleSheet(dialogButtonStyleSheet());
+}
+
 // ════════════════════════════════════════════════════════════
 //  工厂方法
 // ════════════════════════════════════════════════════════════

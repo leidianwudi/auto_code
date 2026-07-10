@@ -11,6 +11,7 @@
 #include <QVBoxLayout>
 
 #include "create_model.h"
+#include "src/tool/ui/component/aui_button.h"
 #include "src/tool/ui/component/aui_combo_box.h"
 #include "src/tool/ui/component/aui_style.h"
 #include "src/tool/ui/component/aui_window.h"
@@ -27,7 +28,7 @@ CreateUi::CreateUi(QWidget *parent) : QDialog(parent) { setupUI(); }
 
 void CreateUi::setupUI() {
   setWindowTitle(QStringLiteral("新建"));
-  setFixedSize(360, 220);
+  setFixedSize(400, 220);
   setModal(true);
 
   // ── 无边框对话框（保留 Qt::Dialog 标志，复用 AuiWindow 统一样式） ──
@@ -91,7 +92,11 @@ void CreateUi::setupUI() {
   btnLayout->addStretch();
   m_okBtn = new QPushButton(QStringLiteral("确定"), this);
   m_okBtn->setDefault(true);
+  m_okBtn->setMinimumWidth(80);
   m_cancelBtn = new QPushButton(QStringLiteral("取消"), this);
+  m_cancelBtn->setMinimumWidth(80);
+  AuiButton::applyDialogButtonStyle(m_okBtn);
+  AuiButton::applyDialogButtonStyle(m_cancelBtn);
   btnLayout->addWidget(m_okBtn);
   btnLayout->addWidget(m_cancelBtn);
   contentLayout->addLayout(btnLayout);

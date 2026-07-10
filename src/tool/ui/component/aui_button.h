@@ -23,6 +23,12 @@ public:
   /// 对按钮应用图标按钮通用样式（透明背景 + hover/pressed 半透明效果）
   static void applyIconButtonStyle(QPushButton *btn);
 
+  /// 对话框按钮样式表（QPushButton 边框 + hover/pressed/disabled，供 dialogStyleSheet 组合）
+  static QString dialogButtonStyleSheet();
+
+  /// 对单个对话框按钮应用样式
+  static void applyDialogButtonStyle(QPushButton *btn);
+
   // ════════════════════════════════════════════════════════════
   //  工厂方法
   // ════════════════════════════════════════════════════════════

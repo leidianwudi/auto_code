@@ -48,7 +48,7 @@ void AuiWindow::setupFramelessWindow(QWidget *window) {
 void AuiWindow::setupFramelessDialog(QDialog *dialog) {
   // 保留 Qt::Dialog 标志，否则 QDialog::exec() 无法正常显示
   dialog->setWindowFlags(dialog->windowFlags() | Qt::FramelessWindowHint);
-  dialog->setStyleSheet(AuiStyle::mainStyleSheet());
+  dialog->setStyleSheet(AuiStyle::mainStyleSheet() + AuiStyle::dialogStyleSheet());
   dialog->setWindowIcon(QIcon(appIconPixmap(256)));
 }
 
@@ -185,6 +185,7 @@ TitleBarResult AuiWindow::createTitleBar(QWidget *window, const TitleBarOptions 
   if (!options.title.isEmpty() && !options.titleRightAligned) {
     titleLabel = new QLabel(options.title);
     AuiStyle::applyTitleLabelStyle(titleLabel);
+    titleLabel->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Preferred);
     titleLayout->addWidget(titleLabel);
     result.contentInsertIndex = titleLayout->count();
   }
