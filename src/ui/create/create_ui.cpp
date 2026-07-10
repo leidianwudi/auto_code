@@ -13,6 +13,7 @@
 #include "create_model.h"
 #include "src/tool/ui/component/aui_combo_box.h"
 #include "src/tool/ui/component/aui_style.h"
+#include "src/tool/ui/component/aui_window.h"
 
 // ════════════════════════════════════════════════════════════
 //  构造
@@ -29,19 +30,12 @@ void CreateUi::setupUI() {
   setFixedSize(360, 200);
   setModal(true);
 
-  // ── 整体样式（复用 MainDevUi 的全局样式表） ──
-  setStyleSheet(AuiStyle::mainStyleSheet() +
-                QStringLiteral("QDialog { background: %1; }"
-                               "QLabel { color: %2; font-size: 13px; }"
-                               "QLineEdit {"
-                               "  border: 1px solid #c8c8c8; border-radius: 3px;"
-                               "  padding: 4px 6px; font-size: 13px;"
-                               "}"
-                               "QPushButton {"
-                               "  border: 1px solid #c8c8c8; border-radius: 3px;"
-                               "  padding: 6px 20px; font-size: 13px;"
-                               "}")
-                    .arg(AuiStyle::barBackground().name(), AuiStyle::textColor().name()));
+  // ── 应用统一样式（复用 AuiWindow）
+  // 保留原生标题栏，通过 DWM 设置标题栏颜色与窗口背景一致
+  AuiWindow::setupDialogStyle(this);
+
+  // ── 设置窗口图标为 AC 图标
+  setWindowIcon(QIcon(AuiWindow::appIconPixmap(16)));
 
   auto *mainLayout = new QVBoxLayout(this);
   mainLayout->setContentsMargins(16, 16, 16, 16);
@@ -102,16 +96,37 @@ void CreateUi::setupUI() {
 }
 
 // ════════════════════════════════════════════════════════════
-//  Getter
+//  文件类型切换 — 自动更新名称后缀提示
+// ════════════════════════════════════════════════════════════
+
+void CreateUi::onFileTypeChanged(int index) {
+  Q_UNUSED(index)
+  QString suffix = currentSuffix();
+  m_nameEdit->setPlaceholderText(
+      suffix.isEmpty() ? QStringLiteral("请输入文件夹名称")
+                       : QStringLiteral("请输入文件名称（自动添加 %1 后缀）").arg(suffix));
+}
+
+// ════════════════════════════════════════════════════════════
+//  确认按钮
+// ════════════════════════════════════════════════════════════
+
+void CreateUi::onAccept() {
+  QString name = m_nameEdit->text().trimmed();
+  if (name.isEmpty()) {
+    setError(QStringLiteral("名称不能为空"));
+    return;
+  }
+  accept();
+}
+
+// ════════════════════════════════════════════════════════════
+//  工具方法
 // ════════════════════════════════════════════════════════════
 
 int CreateUi::fileTypeIndex() const { return m_typeCombo->currentIndex(); }
 
 QString CreateUi::fileName() const { return m_nameEdit->text().trimmed(); }
-
-// ════════════════════════════════════════════════════════════
-//  错误提示
-// ════════════════════════════════════════════════════════════
 
 void CreateUi::setError(const QString &msg) {
   m_errorLabel->setText(msg);
@@ -123,29 +138,6 @@ void CreateUi::clearError() {
   m_errorLabel->hide();
 }
 
-// ════════════════════════════════════════════════════════════
-//  槽函数
-// ════════════════════════════════════════════════════════════
-
 QString CreateUi::currentSuffix() const {
   return CreateModel::suffix(static_cast<CreateModel::FileType>(m_typeCombo->currentIndex()));
-}
-
-void CreateUi::onFileTypeChanged(int index) {
-  Q_UNUSED(index);
-  clearError();
-
-  // 更新 placeholder 提示
-  QString suffix = currentSuffix();
-  if (suffix.isEmpty()) {
-    m_nameEdit->setPlaceholderText(QStringLiteral("请输入文件夹名称"));
-  } else {
-    m_nameEdit->setPlaceholderText(QStringLiteral("请输入文件名（自动追加 %1）").arg(suffix));
-  }
-}
-
-void CreateUi::onAccept() {
-  clearError();
-  // 验证由 CreateMgr 在调用端执行，此处直接接受
-  accept();
 }

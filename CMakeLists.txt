@@ -73,6 +73,8 @@ qt_add_executable(auto_code
     src/tool/ui/component/aui_icon.cpp
     src/tool/ui/component/aui_combo_box.h
     src/tool/ui/component/aui_combo_box.cpp
+    src/tool/ui/component/aui_window.h
+    src/tool/ui/component/aui_window.cpp
     src/tool/ui/component/aui_error_tool_tip.h
     src/tool/ui/component/aui_error_tool_tip.cpp
     src/tool/ui/code/format_code.h
@@ -117,6 +119,7 @@ target_link_libraries(auto_code
         Qt::Widgets
         Qt::Sql
         D:/tool/mysql9_0/lib/libmysql.lib
+        dwmapi.lib
 )
 
 # ── MySQL 运行时依赖自动部署（libmysql.dll + OpenSSL） ──

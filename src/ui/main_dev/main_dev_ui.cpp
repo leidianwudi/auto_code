@@ -39,12 +39,8 @@
 #include "src/tool/ui/code/code_log.h"
 #include "src/tool/ui/component/aui_button.h"
 #include "src/tool/ui/component/aui_style.h"
+#include "src/tool/ui/component/aui_window.h"
 #include "src/ui/demo/demo_mgr.h"
-
-#ifdef Q_OS_WIN
-#include <windows.h>
-#include <windowsx.h>
-#endif
 
 //  构造
 // ════════════════════════════════════════════════════════════
@@ -56,11 +52,8 @@ MainDevUi::MainDevUi(QWidget *parent) : QMainWindow(parent) {}
 // ──────────────────────────────────────────────────────────────
 
 void MainDevUi::setupUI() {
-  // ── 无边框窗口 ──
-  setWindowFlags(Qt::FramelessWindowHint | Qt::WindowMinMaxButtonsHint);
-
-  // 基础样式
-  setStyleSheet(AuiStyle::mainStyleSheet());
+  // ── 无边框窗口（复用 AuiWindow 统一样式） ──
+  AuiWindow::setupFramelessWindow(this);
 
   // ════════════════════════════════════════════════════════════
   //  自定义标题栏（单行：菜单 + 窗口标题 + 控制按钮）
@@ -72,25 +65,8 @@ void MainDevUi::setupUI() {
   titleLayout->setContentsMargins(6, 2, 6, 2);
   titleLayout->setSpacing(4);
 
-  // ── 程序图标（AC 粗体字母） ──
-  auto *appIconLabel = new QLabel;
-  {
-    QPixmap px(20, 20);
-    px.fill(Qt::transparent);
-    QPainter p(&px);
-    p.setRenderHint(QPainter::Antialiasing);
-    QPen pen(AuiStyle::textColor(), 2.0);
-    pen.setCapStyle(Qt::RoundCap);
-    p.setPen(pen);
-
-    QFont f(QStringLiteral("Consolas"), 11, QFont::Bold);
-    p.setFont(f);
-    p.drawText(QRectF(0, 0, 20, 20), Qt::AlignCenter, QStringLiteral("AC"));
-
-    p.end();
-    appIconLabel->setPixmap(px);
-  }
-  titleLayout->addWidget(appIconLabel);
+  // ── 程序图标（AC 粗体字母，复用 AuiWindow） ──
+  titleLayout->addWidget(AuiWindow::createAppIcon(nullptr, 20));
 
   // titleLayout->addSpacing(5);
 
@@ -244,30 +220,13 @@ void MainDevUi::setupUI() {
   m_mainSplitter->setSizes({250, 1150});
 
   // ════════════════════════════════════════════════════════════
-  //  外层 QFrame（2px 黑色边框）+ Windows DWM 阴影
+  //  外层 QFrame（2px 边框）+ 窗口框架
   // ════════════════════════════════════════════════════════════
 
-  auto *frame = new QFrame;
-  frame->setObjectName(QStringLiteral("WindowFrame"));
-  auto *frameLayout = new QVBoxLayout(frame);
-  frameLayout->setContentsMargins(2, 0, 2, 0);
-  frameLayout->setSpacing(0);
-  frameLayout->addWidget(m_titleBar);
-  frameLayout->addWidget(m_mainSplitter, 1);
-
-  setCentralWidget(frame);
+  AuiWindow::applyWindowFrame(this, m_titleBar, m_mainSplitter);
 
   // ── 通过 Win32 添加 WS_THICKFRAME 以支持拉伸 ──
-#if defined(Q_OS_WIN)
-  {
-    HWND hwnd = reinterpret_cast<HWND>(winId());
-    LONG_PTR style = GetWindowLongPtr(hwnd, GWL_STYLE);
-    style |= WS_THICKFRAME;
-    SetWindowLongPtr(hwnd, GWL_STYLE, style);
-    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
-                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
-  }
-#endif
+  AuiWindow::enableWin32Resize(this);
 
   // ════════════════════════════════════════════════════════════
   //  底部状态栏
@@ -288,72 +247,9 @@ void MainDevUi::setupUI() {
 
 #if defined(Q_OS_WIN)
 bool MainDevUi::nativeEvent(const QByteArray &eventType, void *message, qintptr *result) {
-  Q_UNUSED(eventType)
-  const auto *msg = static_cast<MSG *>(message);
-
-  // ── 抑制非客户区绘制，消除拉伸时黑色方块 ──
-  if (msg->message == WM_NCPAINT) {
-    *result = 0;
+  // 复用 AuiWindow 的通用处理（边框拉伸 + 标题栏拖拽）
+  if (AuiWindow::handleNativeEvent(this, m_titleBar, eventType, message, result)) {
     return true;
-  }
-  if (msg->message == WM_ERASEBKGND) {
-    *result = 1;
-    return true;
-  }
-
-  if (msg->message == WM_NCHITTEST) {
-    const int x = GET_X_LPARAM(msg->lParam);
-    const int y = GET_Y_LPARAM(msg->lParam);
-    const QPoint pt = mapFromGlobal(QPoint(x, y));
-    const int bw = 5;  // 边框拉伸宽度
-
-    // ── 四角 ──
-    bool left = pt.x() < bw;
-    bool right = pt.x() > width() - bw;
-    bool top = pt.y() < bw;
-    bool bottom = pt.y() > height() - bw;
-
-    if (top && left) {
-      *result = HTTOPLEFT;
-      return true;
-    }
-    if (top && right) {
-      *result = HTTOPRIGHT;
-      return true;
-    }
-    if (bottom && left) {
-      *result = HTBOTTOMLEFT;
-      return true;
-    }
-    if (bottom && right) {
-      *result = HTBOTTOMRIGHT;
-      return true;
-    }
-    if (top) {
-      *result = HTTOP;
-      return true;
-    }
-    if (bottom) {
-      *result = HTBOTTOM;
-      return true;
-    }
-    if (left) {
-      *result = HTLEFT;
-      return true;
-    }
-    if (right) {
-      *result = HTRIGHT;
-      return true;
-    }
-
-    // ── 标题栏区域（排除按钮）→ HTCAPTION 实现原生拖拽 ──
-    if (pt.y() < m_titleBar->height()) {
-      QWidget *child = m_titleBar->childAt(m_titleBar->mapFromGlobal(QPoint(x, y)));
-      if (!child || child == m_titleBar) {
-        *result = HTCAPTION;
-        return true;
-      }
-    }
   }
   return QMainWindow::nativeEvent(eventType, message, result);
 }
