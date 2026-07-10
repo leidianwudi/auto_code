@@ -15,9 +15,9 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
-#include "src/tool/ui/aui_button.h"
-#include "src/tool/ui/aui_style.h"
 #include "src/tool/ui/code/code_editor.h"
+#include "src/tool/ui/component/aui_button.h"
+#include "src/tool/ui/component/aui_style.h"
 
 
 // ──────────────────────────────────────────────────────────────

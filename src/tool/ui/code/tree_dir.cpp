@@ -25,9 +25,9 @@
 
 #include "src/engine/ac_language.h"
 #include "src/engine/script/ac_engine.h"
-#include "src/tool/ui/aui_button.h"
-#include "src/tool/ui/aui_icon.h"
-#include "src/tool/ui/aui_style.h"
+#include "src/tool/ui/component/aui_button.h"
+#include "src/tool/ui/component/aui_icon.h"
+#include "src/tool/ui/component/aui_style.h"
 #include "src/ui/create/create_mgr.h"
 
 // ──────────────────────────────────────────────────────────────

@@ -24,10 +24,10 @@
 
 #include "src/engine/ac_language.h"
 #include "src/engine/script/ac_executor.h"
-#include "src/tool/ui/aui_error_tool_tip.h"
-#include "src/tool/ui/aui_style.h"
-#include "src/tool/ui/format/format_code.h"
-#include "src/tool/ui/guess/guess_code.h"
+#include "src/tool/ui/code/format_code.h"
+#include "src/tool/ui/code/guess_code.h"
+#include "src/tool/ui/component/aui_error_tool_tip.h"
+#include "src/tool/ui/component/aui_style.h"
 
 
 // ──────────────────────────────────────────────────────────────

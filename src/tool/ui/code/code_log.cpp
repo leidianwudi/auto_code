@@ -11,7 +11,7 @@
 #include <QTextCursor>
 #include <QTextDocument>
 
-#include "src/tool/ui/aui_style.h"
+#include "src/tool/ui/component/aui_style.h"
 
 // ════════════════════════════════════════════════════════════════
 //  构造

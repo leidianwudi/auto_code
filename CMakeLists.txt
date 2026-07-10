@@ -65,20 +65,20 @@ qt_add_executable(auto_code
     src/tool/ui/highlighter/light_ac.h
     src/tool/ui/highlighter/light_ac.cpp
     src/tool/ui/aui_mgr.h
-    src/tool/ui/aui_style.h
-    src/tool/ui/aui_style.cpp
-    src/tool/ui/aui_button.h
-    src/tool/ui/aui_button.cpp
-    src/tool/ui/aui_icon.h
-    src/tool/ui/aui_icon.cpp
-    src/tool/ui/aui_combo_box.h
-    src/tool/ui/aui_combo_box.cpp
-    src/tool/ui/aui_error_tool_tip.h
-    src/tool/ui/aui_error_tool_tip.cpp
-    src/tool/ui/format/format_code.h
-    src/tool/ui/format/format_code.cpp
-    src/tool/ui/guess/guess_code.h
-    src/tool/ui/guess/guess_code.cpp
+    src/tool/ui/component/aui_style.h
+    src/tool/ui/component/aui_style.cpp
+    src/tool/ui/component/aui_button.h
+    src/tool/ui/component/aui_button.cpp
+    src/tool/ui/component/aui_icon.h
+    src/tool/ui/component/aui_icon.cpp
+    src/tool/ui/component/aui_combo_box.h
+    src/tool/ui/component/aui_combo_box.cpp
+    src/tool/ui/component/aui_error_tool_tip.h
+    src/tool/ui/component/aui_error_tool_tip.cpp
+    src/tool/ui/code/format_code.h
+    src/tool/ui/code/format_code.cpp
+    src/tool/ui/code/guess_code.h
+    src/tool/ui/code/guess_code.cpp
     src/ui/main_dev/main_dev_ui.h
     src/ui/main_dev/main_dev_ui.cpp
     src/ui/main_dev/main_dev_ui_ext.h

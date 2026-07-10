@@ -4,7 +4,6 @@
  */
 
 #include "main_dev_ui_ext.h"
-#include "src/tool/ui/aui_style.h"
 
 #include <QApplication>
 #include <QDrag>
@@ -17,6 +16,9 @@
 #include <QSplitter>
 #include <QStyleOptionTab>
 
+#include "src/tool/ui/component/aui_style.h"
+
+
 // ════════════════════════════════════════════════════════════
 //  DraggableTabBar 实现
 // ════════════════════════════════════════════════════════════
@@ -26,7 +28,7 @@ int DraggableTabBar::s_sourceIndex = -1;
 
 DraggableTabBar::DraggableTabBar(QWidget *parent) : QTabBar(parent) {
   setAcceptDrops(true);
-  setMovable(false); // 自行处理跨面板拖拽
+  setMovable(false);  // 自行处理跨面板拖拽
 }
 
 void DraggableTabBar::setTabModified(int index, bool modified) {
@@ -34,12 +36,10 @@ void DraggableTabBar::setTabModified(int index, bool modified) {
     m_modifiedTabs.insert(index);
   else
     m_modifiedTabs.remove(index);
-  update(); // 触发重绘
+  update();  // 触发重绘
 }
 
-bool DraggableTabBar::isTabModified(int index) const {
-  return m_modifiedTabs.contains(index);
-}
+bool DraggableTabBar::isTabModified(int index) const { return m_modifiedTabs.contains(index); }
 
 void DraggableTabBar::paintEvent(QPaintEvent *event) {
   // 先绘制默认标签栏
@@ -54,13 +54,11 @@ void DraggableTabBar::paintEvent(QPaintEvent *event) {
   painter.setFont(font);
 
   for (int i = 0; i < count(); ++i) {
-    if (!m_modifiedTabs.contains(i))
-      continue;
+    if (!m_modifiedTabs.contains(i)) continue;
     // 绘制在文字右侧，紧贴文字
     QStyleOptionTab opt;
     initStyleOption(&opt, i);
-    QRect textRect =
-        style()->subElementRect(QStyle::SE_TabBarTabText, &opt, this);
+    QRect textRect = style()->subElementRect(QStyle::SE_TabBarTabText, &opt, this);
     int starX = textRect.right() + 2;
     int starY = textRect.top() + font.pixelSize() - 2;
     painter.drawText(starX, starY, QStringLiteral("*"));
@@ -81,8 +79,7 @@ void DraggableTabBar::mouseMoveEvent(QMouseEvent *event) {
     return;
   }
 
-  if ((event->pos() - m_dragStartPos).manhattanLength() <
-      QApplication::startDragDistance()) {
+  if ((event->pos() - m_dragStartPos).manhattanLength() < QApplication::startDragDistance()) {
     QTabBar::mouseMoveEvent(event);
     return;
   }
@@ -112,28 +109,24 @@ void DraggableTabBar::mouseMoveEvent(QMouseEvent *event) {
 }
 
 void DraggableTabBar::dragEnterEvent(QDragEnterEvent *event) {
-  if (event->mimeData()->hasFormat(
-          QStringLiteral("application/x-auto-code-tab")))
+  if (event->mimeData()->hasFormat(QStringLiteral("application/x-auto-code-tab")))
     event->acceptProposedAction();
 }
 
 void DraggableTabBar::dragMoveEvent(QDragMoveEvent *event) {
-  if (event->mimeData()->hasFormat(
-          QStringLiteral("application/x-auto-code-tab")))
+  if (event->mimeData()->hasFormat(QStringLiteral("application/x-auto-code-tab")))
     event->acceptProposedAction();
 }
 
 void DraggableTabBar::dropEvent(QDropEvent *event) {
-  if (!event->mimeData()->hasFormat(
-          QStringLiteral("application/x-auto-code-tab")) ||
+  if (!event->mimeData()->hasFormat(QStringLiteral("application/x-auto-code-tab")) ||
       !s_sourceBar) {
     QTabBar::dropEvent(event);
     return;
   }
 
   int toIndex = tabAt(event->position().toPoint());
-  if (toIndex < 0)
-    toIndex = count(); // 追加到末尾
+  if (toIndex < 0) toIndex = count();  // 追加到末尾
 
   emit tabDropped(s_sourceIndex, s_sourceBar, toIndex);
   s_sourceBar = nullptr;
@@ -147,7 +140,7 @@ void DraggableTabBar::dropEvent(QDropEvent *event) {
 // ════════════════════════════════════════════════════════════
 
 DimmableTabWidget::DimmableTabWidget(QWidget *parent) : QTabWidget(parent) {
-  setAcceptDrops(true); // 内容区也接受拖放
+  setAcceptDrops(true);  // 内容区也接受拖放
 
   // 用 DraggableTabBar 替换默认标签栏
   auto *bar = new DraggableTabBar;
@@ -166,15 +159,12 @@ DimmableTabWidget::DimmableTabWidget(QWidget *parent) : QTabWidget(parent) {
   connect(bar, &DraggableTabBar::tabDropped, this,
           [this](int fromIndex, DraggableTabBar *fromBar, int toIndex) {
             // 定位源 DimmableTabWidget
-            auto *fromWidget =
-                qobject_cast<DimmableTabWidget *>(fromBar->parentWidget());
-            if (!fromWidget)
-              return;
+            auto *fromWidget = qobject_cast<DimmableTabWidget *>(fromBar->parentWidget());
+            if (!fromWidget) return;
 
             // 取出标签页内容
             QWidget *page = fromWidget->widget(fromIndex);
-            if (!page)
-              return;
+            if (!page) return;
 
             QString text = fromWidget->tabText(fromIndex);
             QString tip = fromWidget->tabToolTip(fromIndex);
@@ -185,17 +175,14 @@ DimmableTabWidget::DimmableTabWidget(QWidget *parent) : QTabWidget(parent) {
 
             // 源面板没有标签页且还有其它面板 → 自动销毁
             if (fromWidget->count() == 0 && fromWidget != this) {
-              auto *splitter =
-                  qobject_cast<QSplitter *>(fromWidget->parentWidget());
-              if (splitter && splitter->count() > 1)
-                fromWidget->deleteLater();
+              auto *splitter = qobject_cast<QSplitter *>(fromWidget->parentWidget());
+              if (splitter && splitter->count() > 1) fromWidget->deleteLater();
             }
 
             if (fromWidget == this) {
               // 同一面板内重新排序
               int insertIdx = toIndex;
-              if (insertIdx > fromIndex)
-                --insertIdx;
+              if (insertIdx > fromIndex) --insertIdx;
               int newIdx = insertTab(insertIdx, page, icon, text);
               setTabToolTip(newIdx, tip);
               setCurrentIndex(newIdx);
@@ -211,24 +198,21 @@ DimmableTabWidget::DimmableTabWidget(QWidget *parent) : QTabWidget(parent) {
 // 内容区拖放
 
 void DimmableTabWidget::dragEnterEvent(QDragEnterEvent *event) {
-  if (event->mimeData()->hasFormat(
-          QStringLiteral("application/x-auto-code-tab")))
+  if (event->mimeData()->hasFormat(QStringLiteral("application/x-auto-code-tab")))
     event->acceptProposedAction();
   else
     QTabWidget::dragEnterEvent(event);
 }
 
 void DimmableTabWidget::dragMoveEvent(QDragMoveEvent *event) {
-  if (event->mimeData()->hasFormat(
-          QStringLiteral("application/x-auto-code-tab")))
+  if (event->mimeData()->hasFormat(QStringLiteral("application/x-auto-code-tab")))
     event->acceptProposedAction();
   else
     QTabWidget::dragMoveEvent(event);
 }
 
 void DimmableTabWidget::dropEvent(QDropEvent *event) {
-  if (!event->mimeData()->hasFormat(
-          QStringLiteral("application/x-auto-code-tab"))) {
+  if (!event->mimeData()->hasFormat(QStringLiteral("application/x-auto-code-tab"))) {
     QTabWidget::dropEvent(event);
     return;
   }
@@ -237,17 +221,14 @@ void DimmableTabWidget::dropEvent(QDropEvent *event) {
   int fromIndex = DraggableTabBar::dragSourceIndex();
   DraggableTabBar::clearDragSource();
 
-  if (!fromBar)
-    return;
+  if (!fromBar) return;
 
   auto *fromWidget = qobject_cast<DimmableTabWidget *>(fromBar->parentWidget());
-  if (!fromWidget || fromIndex < 0)
-    return;
+  if (!fromWidget || fromIndex < 0) return;
 
   // 内容区域放下 = 追加到末尾
   QWidget *page = fromWidget->widget(fromIndex);
-  if (!page)
-    return;
+  if (!page) return;
 
   QString text = fromWidget->tabText(fromIndex);
   QString tip = fromWidget->tabToolTip(fromIndex);
@@ -258,8 +239,7 @@ void DimmableTabWidget::dropEvent(QDropEvent *event) {
   // 源面板没有标签页且还有其它面板 → 自动销毁
   if (fromWidget->count() == 0 && fromWidget != this) {
     auto *splitter = qobject_cast<QSplitter *>(fromWidget->parentWidget());
-    if (splitter && splitter->count() > 1)
-      fromWidget->deleteLater();
+    if (splitter && splitter->count() > 1) fromWidget->deleteLater();
   }
 
   int newIdx = addTab(page, icon, text);

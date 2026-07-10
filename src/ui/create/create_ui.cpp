@@ -11,8 +11,8 @@
 #include <QVBoxLayout>
 
 #include "create_model.h"
-#include "src/tool/ui/aui_combo_box.h"
-#include "src/tool/ui/aui_style.h"
+#include "src/tool/ui/component/aui_combo_box.h"
+#include "src/tool/ui/component/aui_style.h"
 
 // ════════════════════════════════════════════════════════════
 //  构造
