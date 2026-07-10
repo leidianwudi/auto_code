@@ -26,7 +26,7 @@
 #include <QPlainTextEdit>
 #include <QPointer>
 #include <QScrollBar>
-#include <QStatusBar>
+#include <QSizeGrip>
 #include <QStyle>
 #include <QTabBar>
 #include <QTextBlock>
@@ -220,25 +220,39 @@ void MainDevUi::setupUI() {
   m_mainSplitter->setSizes({250, 1150});
 
   // ════════════════════════════════════════════════════════════
+  //  内容容器（将主分割器 + 底部状态栏统一包裹在 WindowFrame 内）
+  // ════════════════════════════════════════════════════════════
+  auto *contentWidget = new QWidget;
+  auto *contentLayout = new QVBoxLayout(contentWidget);
+  contentLayout->addWidget(m_mainSplitter, 1);
+
+  // ── 底部状态栏 ──
+  {
+    auto *statusBarContent = new QWidget;
+    auto *statusBarContentLayout = new QHBoxLayout(statusBarContent);
+    statusBarContentLayout->setContentsMargins(4, 0, 4, 0);
+    statusBarContentLayout->setSpacing(0);
+
+    m_errorLabel = new QLabel;
+    m_errorLabel->setStyleSheet(QStringLiteral("QLabel { color: #f44747; }"));
+    statusBarContentLayout->addWidget(m_errorLabel, 1);
+
+    m_cursorPositionLabel = new QLabel(QStringLiteral("行: 1, 列: 1"));
+    m_cursorPositionLabel->setMinimumWidth(120);
+    m_cursorPositionLabel->setAlignment(Qt::AlignCenter);
+    statusBarContentLayout->addWidget(m_cursorPositionLabel);
+
+    contentLayout->addWidget(AuiWindow::createStatusBar(contentWidget, statusBarContent));
+  }
+
+  // ════════════════════════════════════════════════════════════
   //  外层 QFrame（2px 边框）+ 窗口框架
   // ════════════════════════════════════════════════════════════
 
-  AuiWindow::applyWindowFrame(this, m_titleBar, m_mainSplitter);
+  AuiWindow::applyWindowFrame(this, m_titleBar, contentWidget);
 
   // ── 通过 Win32 添加 WS_THICKFRAME 以支持拉伸 ──
   AuiWindow::enableWin32Resize(this);
-
-  // ════════════════════════════════════════════════════════════
-  //  底部状态栏
-  // ════════════════════════════════════════════════════════════
-  m_cursorPositionLabel = new QLabel(QStringLiteral("行: 1, 列: 1"));
-  m_cursorPositionLabel->setMinimumWidth(120);
-  m_cursorPositionLabel->setAlignment(Qt::AlignCenter);
-  statusBar()->addPermanentWidget(m_cursorPositionLabel);
-
-  m_errorLabel = new QLabel;
-  m_errorLabel->setStyleSheet(QStringLiteral("QLabel { color: #f44747; }"));
-  statusBar()->addWidget(m_errorLabel, 1);
 }
 
 // ══════════════════════════════════════════════════════════════

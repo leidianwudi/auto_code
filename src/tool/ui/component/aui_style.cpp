@@ -10,8 +10,28 @@
 #include <QTabBar>
 
 // ════════════════════════════════════════════════════════════
-//  全局样式表
+//  全局样式表 — 所有窗口共用
 // ════════════════════════════════════════════════════════════
+
+/// 返回项目中所有窗口公用的全局样式表，统一各窗口（MainDevUi、DemoUi、CreateUi）
+/// 的视觉风格，包括标题栏、按钮、状态栏和窗口边框。
+///
+/// 选择的颜色值：
+/// - #e0e0e0 — 浅灰背景（标题栏、状态栏、窗口框架）
+/// - #333    — 深灰文字，保证可读性
+/// - #d0d0d0 — hover 高亮底色
+/// - #999999 — 窗口外边框（1px 实线）
+///
+/// 各选择器说明：
+/// - #TitleBar       : 自定义标题栏背景
+/// - #TitleLabel     : 标题栏窗口标题文字
+/// - QToolButton     : 标题栏菜单按钮（文件/视图等）
+/// - QToolButton:hover : 菜单按钮鼠标悬停
+/// - QPushButton     : 通用按钮（窗口控制、生成按钮等）
+/// - QPushButton:hover : 按钮鼠标悬停
+/// - QStatusBar      : 底部状态栏
+/// - QStatusBar::item : 状态栏内部子控件之间的分隔线（去掉默认边框）
+/// - #WindowFrame    : applyWindowFrame() 创建的窗口外层框架
 QString AuiStyle::mainStyleSheet() {
   return QStringLiteral(
       "#TitleBar { background: #e0e0e0; }"
@@ -22,7 +42,7 @@ QString AuiStyle::mainStyleSheet() {
       "QPushButton:hover { background: #d0d0d0; }"
       "QStatusBar { background: #e0e0e0; color: #333; }"
       "QStatusBar::item { border: none; }"
-      "#WindowFrame { background: #e0e0e0; }");
+      "#WindowFrame { background: #e0e0e0; border: 1px solid #999999; }");
 }
 
 QString AuiStyle::tabBarStyleSheet() {

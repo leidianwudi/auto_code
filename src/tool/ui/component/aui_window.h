@@ -51,6 +51,18 @@ public:
   /// 获取标题栏中的最大化按钮
   static QPushButton *maxButton(QWidget *titleBar);
 
+  /// 创建底部状态栏（状态文字 + QSizeGrip 可拖拽三角）
+  /// @param parent 父控件
+  /// @param text   初始状态文字（如 "就绪"）
+  /// @return 状态栏 QWidget 指针，可直接添加到布局底部
+  static QWidget *createStatusBar(QWidget *parent, const QString &text = QStringLiteral("就绪"));
+
+  /// 创建底部状态栏（自定义内容控件 + QSizeGrip 可拖拽三角）
+  /// @param parent  父控件
+  /// @param content 内容控件（如包含多个标签的自定义 QWidget），会以 stretch=1 添加到布局中
+  /// @return 状态栏 QWidget 指针，可直接添加到布局底部
+  static QWidget *createStatusBar(QWidget *parent, QWidget *content);
+
   /// 创建窗口外层框架（2px 边框 QFrame），将内容控件包裹在内
   /// @param window   窗口
   /// @param titleBar 标题栏（可为 nullptr）

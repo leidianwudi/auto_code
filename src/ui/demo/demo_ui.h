@@ -58,13 +58,20 @@ signals:
   void saveOutputRequested();
 
 private:
-  CodeEditor *m_templateEdit = nullptr; ///< 模板编辑区
-  CodeEditor *m_dataEdit = nullptr;     ///< JSON 数据编辑区
-  CodeEditor *m_outputEdit = nullptr;   ///< 输出显示区
-  QLabel *m_statusLabel = nullptr;      ///< 状态栏标签
+  // ── 窗口事件 ──
+#if defined(Q_OS_WIN)
+  bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
+#endif
 
-  QAction *m_generateAction = nullptr;     ///< 生成代码动作
-  QAction *m_loadTemplateAction = nullptr; ///< 加载模板动作
-  QAction *m_loadDataAction = nullptr;     ///< 加载数据动作
-  QAction *m_saveOutputAction = nullptr;   ///< 保存结果动作
+  CodeEditor *m_templateEdit = nullptr;  ///< 模板编辑区
+  CodeEditor *m_dataEdit = nullptr;      ///< JSON 数据编辑区
+  CodeEditor *m_outputEdit = nullptr;    ///< 输出显示区
+  QLabel *m_statusLabel = nullptr;       ///< 状态栏标签
+
+  QAction *m_generateAction = nullptr;      ///< 生成代码动作
+  QAction *m_loadTemplateAction = nullptr;  ///< 加载模板动作
+  QAction *m_loadDataAction = nullptr;      ///< 加载数据动作
+  QAction *m_saveOutputAction = nullptr;    ///< 保存结果动作
+
+  QWidget *m_titleBar = nullptr;  ///< 自定义标题栏（用于 nativeEvent 拖拽）
 };

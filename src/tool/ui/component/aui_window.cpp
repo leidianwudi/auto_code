@@ -13,6 +13,7 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QPushButton>
+#include <QSizeGrip>
 #include <QStyle>
 #include <QVBoxLayout>
 
@@ -155,14 +156,46 @@ QPushButton *AuiWindow::maxButton(QWidget *titleBar) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  应用窗口框架（2px 边框 QFrame）
+//  创建底部状态栏（状态文字 + QSizeGrip 可拖拽三角）
+// ════════════════════════════════════════════════════════════
+
+QWidget *AuiWindow::createStatusBar(QWidget *parent, const QString &text) {
+  auto *label = new QLabel(text);
+  label->setContentsMargins(4, 0, 4, 0);
+  return createStatusBar(parent, label);
+}
+
+QWidget *AuiWindow::createStatusBar(QWidget *parent, QWidget *content) {
+  auto *bar = new QWidget(parent);
+  auto *layout = new QHBoxLayout(bar);
+  layout->setContentsMargins(0, 0, 0, 0);
+  layout->setSpacing(0);
+
+  layout->addWidget(content, 1);
+
+  auto *grip = new QSizeGrip(bar);
+  grip->setStyleSheet(QStringLiteral("QSizeGrip { width: 16px; height: 16px; }"));
+  layout->addWidget(grip);
+
+  return bar;
+}
+
+// ════════════════════════════════════════════════════════════
+//  应用窗口框架（1px 边框 QFrame）
 // ════════════════════════════════════════════════════════════
 
 void AuiWindow::applyWindowFrame(QWidget *window, QWidget *titleBar, QWidget *content) {
+  // 统一设置内容控件的布局参数：零边距、零间距
+  if (auto *cl = content->layout()) {
+    cl->setContentsMargins(0, 0, 0, 0);
+    cl->setSpacing(0);
+  }
+
   auto *frame = new QFrame(window);
   frame->setObjectName(QStringLiteral("WindowFrame"));
   auto *frameLayout = new QVBoxLayout(frame);
-  frameLayout->setContentsMargins(2, 0, 2, 2);
+  // 设置chuang口边框为 1px，顶部不需要额外边框（标题栏已经有间距）
+  frameLayout->setContentsMargins(1, 0, 1, 1);
   frameLayout->setSpacing(0);
 
   if (titleBar) {

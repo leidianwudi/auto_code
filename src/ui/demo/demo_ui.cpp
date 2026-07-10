@@ -11,14 +11,14 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPushButton>
-#include <QStatusBar>
+#include <QSizeGrip>
 #include <QTimer>
 #include <QVBoxLayout>
 
 #include "src/tool/ui/code/code_editor.h"
 #include "src/tool/ui/component/aui_button.h"
 #include "src/tool/ui/component/aui_style.h"
-
+#include "src/tool/ui/component/aui_window.h"
 
 // ──────────────────────────────────────────────────────────────
 //  DemoUi — 构造函数
@@ -31,20 +31,22 @@ DemoUi::DemoUi(QWidget *parent) : QMainWindow(parent) {}
 // ──────────────────────────────────────────────────────────────
 
 void DemoUi::setupUI() {
-  setWindowTitle(QStringLiteral("示例 - 模板代码生成"));
+  // ── 无边框窗口（复用 AuiWindow 统一样式） ──
+  AuiWindow::setupFramelessWindow(this);
 
-  // ── 中央区域 ──
-  auto *centralWidget = new QWidget;
-  auto *mainLayout = new QVBoxLayout(centralWidget);
-  mainLayout->setContentsMargins(0, 0, 0, 0);
-  mainLayout->setSpacing(0);
+  // ════════════════════════════════════════════════════════════
+  //  自定义标题栏（单行：AC 图标 + 菜单 + 生成按钮 + 窗口控制）
+  // ════════════════════════════════════════════════════════════
+  m_titleBar = new QWidget;
+  m_titleBar->setObjectName(QStringLiteral("TitleBar"));
+  auto *titleLayout = new QHBoxLayout(m_titleBar);
+  titleLayout->setContentsMargins(6, 2, 6, 2);
+  titleLayout->setSpacing(4);
 
-  // ── 顶部栏：菜单栏 + 生成按钮并排 ──
-  auto *topBar = new QWidget;
-  auto *topLayout = new QHBoxLayout(topBar);
-  topLayout->setContentsMargins(0, 0, 6, 0);
-  topLayout->setAlignment(Qt::AlignLeft);
+  // ── AC 程序图标 ──
+  titleLayout->addWidget(AuiWindow::createAppIcon(nullptr, 20));
 
+  // ── 菜单栏 ──
   auto *menuBar = new QMenuBar;
   menuBar->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
 
@@ -63,21 +65,36 @@ void DemoUi::setupUI() {
   m_generateAction = new QAction(QStringLiteral("生成代码(&G)"), this);
   m_generateAction->setShortcut(QKeySequence(QStringLiteral("F5")));
 
-  topLayout->addWidget(menuBar);
+  titleLayout->addWidget(menuBar);
 
-  // ── 生成按钮（大图标，紧接在文件菜单右边） ──
+  // ── 生成按钮 ──
   auto *genBtn = AuiButton::createBuildButton();
   connect(genBtn, &QPushButton::clicked, m_generateAction, &QAction::trigger);
-  topLayout->addWidget(genBtn);
-  topLayout->addStretch();
+  titleLayout->addWidget(genBtn);
 
-  mainLayout->addWidget(topBar);
+  titleLayout->addStretch();
 
-  // ── 内容区：上（模板 + 数据）下（输出），留边距 ──
+  // ── 窗口控制按钮 ──
+  auto *minBtn = AuiButton::createMinButton();
+  auto *maxBtn = AuiButton::createMaxButton();
+  auto *closeBtn = AuiButton::createCloseButton();
+  connect(closeBtn, &QPushButton::clicked, this, &QMainWindow::close);
+  connect(minBtn, &QPushButton::clicked, this, &QMainWindow::showMinimized);
+  connect(maxBtn, &QPushButton::clicked, this, [this]() {
+    if (isMaximized())
+      showNormal();
+    else
+      showMaximized();
+  });
+  titleLayout->addWidget(minBtn);
+  titleLayout->addWidget(maxBtn);
+  titleLayout->addWidget(closeBtn);
+
+  // ════════════════════════════════════════════════════════════
+  //  内容区域
+  // ════════════════════════════════════════════════════════════
   auto *contentWidget = new QWidget;
   auto *contentLayout = new QVBoxLayout(contentWidget);
-  contentLayout->setContentsMargins(8, 8, 8, 8);
-  contentLayout->setSpacing(6);
 
   // ── 上方分割器：左侧模板 / 右侧数据 ──
   auto *topSplitter = new QSplitter(Qt::Horizontal);
@@ -128,13 +145,15 @@ void DemoUi::setupUI() {
   outputLayout->addWidget(m_outputEdit);
   contentLayout->addWidget(outputPanel, 1);
 
-  mainLayout->addWidget(contentWidget, 1);
+  // ── 底部状态栏（放在内容区内，确保在 WindowFrame 边框内） ──
+  m_statusLabel = AuiWindow::createStatusBar(contentWidget)->findChild<QLabel *>();
+  contentLayout->addWidget(m_statusLabel->parentWidget());
 
-  setCentralWidget(centralWidget);
+  // ── 应用窗口框架（2px 边框，包裹标题栏 + 内容） ──
+  AuiWindow::applyWindowFrame(this, m_titleBar, contentWidget);
 
-  // ── 状态栏 ──
-  m_statusLabel = new QLabel(QStringLiteral("就绪"));
-  statusBar()->addWidget(m_statusLabel, 1);
+  // ── Win32 边框拉伸 ──
+  AuiWindow::enableWin32Resize(this);
 
   // ── 示例数据 ──
   m_templateEdit->setPlainText(
@@ -191,3 +210,16 @@ void DemoUi::setStatusText(const QString &text, int timeout) {
       if (m_statusLabel) m_statusLabel->setText(QStringLiteral("就绪"));
     });
 }
+
+// ════════════════════════════════════════════════════════════
+//  Win32 原生事件 — 边框拉伸 + 标题栏拖拽
+// ════════════════════════════════════════════════════════════
+
+#if defined(Q_OS_WIN)
+bool DemoUi::nativeEvent(const QByteArray &eventType, void *message, qintptr *result) {
+  if (AuiWindow::handleNativeEvent(this, m_titleBar, eventType, message, result)) {
+    return true;
+  }
+  return QMainWindow::nativeEvent(eventType, message, result);
+}
+#endif
