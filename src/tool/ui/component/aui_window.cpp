@@ -96,7 +96,7 @@ QPixmap AuiWindow::appIconPixmap(int size) {
   p.setPen(pen);
   QFont f(QStringLiteral("Consolas"), qMax(1, size * 12 / 20), QFont::Black);
   p.setFont(f);
-  p.drawText(QRectF(0, 0, size, size), Qt::AlignCenter, QStringLiteral("AC"));
+  p.drawText(QRectF(0, 0, size, size), Qt::AlignCenter, AuiStyle::appName());
   p.end();
   return px;
 }

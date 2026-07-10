@@ -1,5 +1,5 @@
 // User Model Template
-// 生成用户模型的 TypeScript 接口和服务类
+// 生成用户模型的 TypeScript 接口和服务类我
 
 export interface ${modelName} {
 ${each fields}

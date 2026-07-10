@@ -36,6 +36,9 @@ public:
   /// AC 程序图标颜色（蓝色）
   static QColor appIconColor() { return QColor(0x33, 0x33, 0x33); }
 
+  /// 应用程序简称（图标文字）
+  static QString appName() { return QStringLiteral("AC"); }
+
   /// 按钮 / 控件 hover 背景色
   static QColor hoverBackground() { return QColor(0xc0, 0xc0, 0xc0); }
 

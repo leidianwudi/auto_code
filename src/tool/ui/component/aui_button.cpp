@@ -46,7 +46,7 @@ void AuiButton::applyIconButtonStyle(QPushButton *btn) {
                                     "QPushButton:disabled {"
                                     "  color: transparent;"
                                     "}")
-                         .arg(AuiStyle::iconButtonHoverBg().name(QColor::HexArgb),
+                         .arg(AuiStyle::hoverBackground().name(),
                               AuiStyle::iconButtonPressedBg().name(QColor::HexArgb),
                               AuiStyle::borderColor().name()));
 }
