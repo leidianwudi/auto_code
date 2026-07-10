@@ -259,3 +259,14 @@ inline constexpr const char *kElse = "${else}";
 /// @brief 循环当前元素的 context 键：${.} 或 ${this}
 inline constexpr const char *kCurrentItem = ".";
 }  // namespace AcTemplate
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 六、文件后缀常量 — 统一管理，避免硬编码字符串
+// ═════════════════════════════════════════════════════════════════════════════
+
+namespace AcFileSuffix {
+inline constexpr const char *kAc = ".ac";
+inline constexpr const char *kTpl = ".tpl";
+inline constexpr const char *kTpljson = ".tpljson";
+inline constexpr const char *kJson = ".json";
+}  // namespace AcFileSuffix

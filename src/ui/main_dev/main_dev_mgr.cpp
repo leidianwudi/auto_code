@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file main_dev_mgr.cpp
  * @brief 代码编辑器控制器层实现（单例 UI 控制器）
  */
@@ -28,6 +28,7 @@
 #include "src/tool/ui/highlighter/light_ac.h"
 #include "src/tool/ui/highlighter/light_json.h"
 #include "src/tool/ui/highlighter/light_tpl.h"
+#include "src/engine/ac_language.h"
 
 
 // ──────────────────────────────────────────────────────────────
@@ -191,11 +192,11 @@ void MainDevMgr::loadFiles() {
 CodeEditor *MainDevMgr::createEditorForFile(const QString &filePath) {
   auto *editor = new CodeEditor;
 
-  if (filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive))
+  if (filePath.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive))
     new LightJson(editor->document());
-  else if (filePath.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive))
+  else if (filePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive))
     new LightAc(editor->document());
-  else if (filePath.endsWith(QStringLiteral(".tpl"), Qt::CaseInsensitive))
+  else if (filePath.endsWith(AcFileSuffix::kTpl, Qt::CaseInsensitive))
     new LightTpl(editor->document());
   else
     new LightTpl(editor->document());
@@ -234,11 +235,11 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
   CodeEditor *editor = createEditorForFile(filePath);
   editor->setPlainText(content);
 
-  if (filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive))
+  if (filePath.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive))
     editor->setValidationMode(CodeEditor::JsonValidation);
-  else if (filePath.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive))
+  else if (filePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive))
     editor->setValidationMode(CodeEditor::AcValidation);
-  else if (filePath.endsWith(QStringLiteral(".tpl"), Qt::CaseInsensitive))
+  else if (filePath.endsWith(AcFileSuffix::kTpl, Qt::CaseInsensitive))
     editor->setValidationMode(CodeEditor::TemplateValidation);
 
   // ── 获取 / 创建面板组 ──
@@ -520,13 +521,13 @@ void MainDevMgr::onSplitRight() {
     editor->setPlainText(current->toPlainText());
 
     QString filePath = current->objectName();
-    if (filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
+    if (filePath.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive)) {
       new LightJson(editor->document());
       editor->setValidationMode(CodeEditor::JsonValidation);
-    } else if (filePath.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive)) {
+    } else if (filePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive)) {
       new LightAc(editor->document());
       editor->setValidationMode(CodeEditor::AcValidation);
-    } else if (filePath.endsWith(QStringLiteral(".tpl"), Qt::CaseInsensitive)) {
+    } else if (filePath.endsWith(AcFileSuffix::kTpl, Qt::CaseInsensitive)) {
       new LightTpl(editor->document());
       editor->setValidationMode(CodeEditor::TemplateValidation);
     } else {

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file tree_dir.cpp
  * @brief 可打勾的文件树控件实现
  */
@@ -158,7 +158,7 @@ void TreeDir::onItemClicked(QTreeWidgetItem *item, int column) {
   }
 
   // 文件节点
-  if (filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
+  if (filePath.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive)) {
     if (m_lastClickOnCheckbox) {
       // 单击复选框 → Qt 已自动切换复选框，刷新状态
       updateParentCheckState(item);
@@ -191,7 +191,7 @@ void TreeDir::onItemChanged(QTreeWidgetItem *item, int column) {
 
   const QString filePath = item->data(0, Qt::UserRole + 1).toString();
 
-  if (!filePath.isEmpty() && filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
+  if (!filePath.isEmpty() && filePath.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive)) {
     // json 文件的复选框变化：更新父节点状态
     updateParentCheckState(item);
     saveState();
@@ -212,7 +212,7 @@ void TreeDir::addDirectoryToTree(QTreeWidgetItem *parentItem, const QString &dir
 
   int jsonCount = 0;
   for (const QFileInfo &info : files) {
-    if (info.fileName().endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) ++jsonCount;
+    if (info.fileName().endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive)) ++jsonCount;
   }
 
   // 子目录
@@ -248,7 +248,7 @@ void TreeDir::addDirectoryToTree(QTreeWidgetItem *parentItem, const QString &dir
     fileItem->setIcon(0, style()->standardIcon(QStyle::SP_FileIcon));
     fileItem->setData(0, Qt::UserRole + 1, info.absoluteFilePath());
 
-    if (info.fileName().endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
+    if (info.fileName().endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive)) {
       fileItem->setFlags(fileItem->flags() | Qt::ItemIsUserCheckable);
       fileItem->setCheckState(0, Qt::Unchecked);
     }
@@ -279,7 +279,7 @@ void TreeDir::setJsonChildrenCheckState(QTreeWidgetItem *item, Qt::CheckState st
     QTreeWidgetItem *child = item->child(i);
     QString filePath = child->data(0, Qt::UserRole + 1).toString();
 
-    if (!filePath.isEmpty() && filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive))
+    if (!filePath.isEmpty() && filePath.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive))
       child->setCheckState(0, state);
 
     setJsonChildrenCheckState(child, state);
@@ -436,7 +436,7 @@ QStringList TreeDir::checkedJsonFiles() const {
 void TreeDir::collectJsonFiles(QTreeWidgetItem *item, QStringList &files) const {
   // 检查当前节点本身（处理根目录下的 .json 文件）
   QString selfPath = item->data(0, Qt::UserRole + 1).toString();
-  if (!selfPath.isEmpty() && selfPath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
+  if (!selfPath.isEmpty() && selfPath.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive)) {
     if (item->checkState(0) == Qt::Checked) files.append(selfPath);
   }
 
@@ -456,7 +456,7 @@ static bool pathListContains(const QStringList &list, const QString &absPath) {
 void TreeDir::applyStateToTree(QTreeWidgetItem *item, const QStringList &checkedAbsPaths) {
   // 检查当前节点本身（处理根目录下的 .json 文件）
   QString selfPath = item->data(0, Qt::UserRole + 1).toString();
-  if (!selfPath.isEmpty() && selfPath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
+  if (!selfPath.isEmpty() && selfPath.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive)) {
     if (pathListContains(checkedAbsPaths, selfPath)) item->setCheckState(0, Qt::Checked);
     return;  // 文件节点无子节点，无需递归
   }
@@ -466,7 +466,7 @@ void TreeDir::applyStateToTree(QTreeWidgetItem *item, const QStringList &checked
     QTreeWidgetItem *child = item->child(i);
     QString filePath = child->data(0, Qt::UserRole + 1).toString();
 
-    if (!filePath.isEmpty() && filePath.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
+    if (!filePath.isEmpty() && filePath.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive)) {
       if (pathListContains(checkedAbsPaths, filePath)) child->setCheckState(0, Qt::Checked);
     }
 
@@ -499,7 +499,7 @@ void TreeDir::refreshStartupIcons() {
     for (int i = 0; i < item->childCount(); ++i) stack.append(item->child(i));
 
     QString filePath = item->data(0, Qt::UserRole + 1).toString();
-    if (!filePath.isEmpty() && filePath.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive)) {
+    if (!filePath.isEmpty() && filePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive)) {
       if (m_startupFiles.contains(filePath))
         item->setIcon(0, startupIcon);
       else
@@ -535,7 +535,7 @@ void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
   }
 
   QString filePath = item->data(0, Qt::UserRole + 1).toString();
-  if (filePath.isEmpty() || !filePath.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive)) {
+  if (filePath.isEmpty() || !filePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive)) {
     QTreeWidget::contextMenuEvent(event);
     return;
   }
