@@ -71,6 +71,8 @@ qt_add_executable(auto_code
     src/tool/ui/aui_button.cpp
     src/tool/ui/aui_icon.h
     src/tool/ui/aui_icon.cpp
+    src/tool/ui/aui_combo_box.h
+    src/tool/ui/aui_combo_box.cpp
     src/tool/ui/aui_error_tool_tip.h
     src/tool/ui/aui_error_tool_tip.cpp
     src/tool/ui/format/format_code.h
@@ -91,6 +93,12 @@ qt_add_executable(auto_code
     src/ui/demo/demo_mgr.cpp
     src/ui/demo/demo_model.h
     src/ui/demo/demo_model.cpp
+    src/ui/create/create_ui.h
+    src/ui/create/create_ui.cpp
+    src/ui/create/create_mgr.h
+    src/ui/create/create_mgr.cpp
+    src/ui/create/create_model.h
+    src/ui/create/create_model.cpp
 )
 
 target_include_directories(auto_code PRIVATE

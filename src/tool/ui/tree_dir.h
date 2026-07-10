@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file tree_dir.h
  * @brief 可打勾的文件树控件
  *
@@ -7,6 +7,7 @@
  * - 对 .json 文件自动添加复选框
  * - 文件夹级联选中/取消
  * - 打勾状态持久化到 file/tree.config
+ * - 文件夹右键新建/刷新
  */
 
 #pragma once
@@ -54,6 +55,9 @@ public:
   /// 将当前勾选状态保存到 file/tree.config
   void saveState();
 
+  /// 刷新当前目录树（重新扫描文件系统）
+  void refreshTree();
+
   /// 获取当前所有勾选的 json 文件绝对路径
   QStringList checkedJsonFiles() const;
 
@@ -95,8 +99,7 @@ private:
   void collectJsonFiles(QTreeWidgetItem *item, QStringList &files) const;
 
   /// 递归设置节点的勾选状态
-  void applyStateToTree(QTreeWidgetItem *item,
-                        const QStringList &checkedAbsPaths);
+  void applyStateToTree(QTreeWidgetItem *item, const QStringList &checkedAbsPaths);
 
   /// 为启动项创建带三角标记的图标
   QIcon makeStartupIcon() const;
@@ -107,15 +110,15 @@ private:
   /// 拦截鼠标释放以判断点击位置是否在复选框区域
   void mouseReleaseEvent(QMouseEvent *event) override;
 
-  /// 右键菜单：.ac 文件设为/取消启动项
+  /// 右键菜单：文件设为/取消启动项，文件夹新建/刷新
   void contextMenuEvent(QContextMenuEvent *event) override;
 
-  bool m_lastClickOnCheckbox = false; ///< 最近一次鼠标释放是否落在复选框区域
-  bool m_bulkUpdating = false;        ///< 批量更新中，抑制 itemChanged 级联
+  bool m_lastClickOnCheckbox = false;  ///< 最近一次鼠标释放是否落在复选框区域
+  bool m_bulkUpdating = false;         ///< 批量更新中，抑制 itemChanged 级联
 
-  QString m_rootPath;   ///< 当前展示的根目录
-  QString m_configPath; ///< tree.config 完整路径
+  QString m_rootPath;    ///< 当前展示的根目录
+  QString m_configPath;  ///< tree.config 完整路径
 
-  QSet<QString> m_startupFiles; ///< 被设为启动项的 .ac 文件绝对路径集合
-  QString m_selectedStartup;    ///< 当前下拉框选中的启动项路径
+  QSet<QString> m_startupFiles;  ///< 被设为启动项的 .ac 文件绝对路径集合
+  QString m_selectedStartup;     ///< 当前下拉框选中的启动项路径
 };

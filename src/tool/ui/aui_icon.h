@@ -20,8 +20,11 @@ public:
   /// @param baseIcon 基础图标
   /// @param size     图标像素尺寸
   /// @param triSize  三角形边长
-  static QIcon createStartupOverlayIcon(const QIcon &baseIcon, int size = 16,
-                                        int triSize = 9);
+  static QIcon createStartupOverlayIcon(const QIcon &baseIcon, int size = 16, int triSize = 9);
+
+  /// 创建下拉框向下箭头图标（用于 QComboBox::down-arrow）
+  /// @param size 图标像素尺寸
+  static QIcon createComboBoxDownArrow(int size = 16);
 
 private:
   AuiIcon() = delete;

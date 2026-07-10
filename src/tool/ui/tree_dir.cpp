@@ -28,6 +28,7 @@
 #include "src/tool/ui/aui_button.h"
 #include "src/tool/ui/aui_icon.h"
 #include "src/tool/ui/aui_style.h"
+#include "src/ui/create/create_mgr.h"
 
 // ──────────────────────────────────────────────────────────────
 //  ModifiedFileDelegate 实现
@@ -131,6 +132,15 @@ void TreeDir::buildTree(const QString &dirPath) {
 
   expandAll();
   loadState();
+}
+
+// ============================================================================
+// refreshTree — 刷新当前目录树
+// ============================================================================
+
+void TreeDir::refreshTree() {
+  if (m_rootPath.isEmpty()) return;
+  buildTree(m_rootPath);
 }
 
 // ============================================================================
@@ -523,8 +533,20 @@ void TreeDir::setSelectedStartup(const QString &path) {
   }
 }
 
+/// @brief 获取文件夹节点在目录树中的完整路径（相对于根目录）
+static QString buildFolderPath(QTreeWidgetItem *item, const QString &rootPath) {
+  QStringList parts;
+  QTreeWidgetItem *cur = item;
+  while (cur) {
+    QString text = cur->text(0);
+    if (!text.isEmpty()) parts.prepend(text);
+    cur = cur->parent();
+  }
+  return QDir::cleanPath(rootPath + QStringLiteral("/") + parts.join(QStringLiteral("/")));
+}
+
 // ============================================================================
-// 右键菜单 — .ac 文件设为/取消启动项
+// 右键菜单 — 文件设为/取消启动项，文件夹新建/刷新
 // ============================================================================
 
 void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
@@ -535,7 +557,24 @@ void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
   }
 
   QString filePath = item->data(0, Qt::UserRole + 1).toString();
-  if (filePath.isEmpty() || !filePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive)) {
+
+  if (filePath.isEmpty()) {
+    // 文件夹节点：显示 [新建] [刷新]
+    QMenu menu(this);
+    QAction *newAct = menu.addAction(QStringLiteral("新建"));
+    QAction *refreshAct = menu.addAction(QStringLiteral("刷新"));
+    QAction *chosen = menu.exec(event->globalPos());
+    if (chosen == newAct) {
+      QString dirPath = buildFolderPath(item, m_rootPath);
+      CreateMgr::createNew(dirPath, this);
+      refreshTree();
+    } else if (chosen == refreshAct) {
+      refreshTree();
+    }
+    return;
+  }
+
+  if (!filePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive)) {
     QTreeWidget::contextMenuEvent(event);
     return;
   }
