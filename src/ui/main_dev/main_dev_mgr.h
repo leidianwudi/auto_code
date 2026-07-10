@@ -6,15 +6,15 @@
  * MainDevUi 负责实际的界面呈现（QMainWindow）。
  *
  * 架构：
- *   MainDevMgr (控制器 + 单例) ─── 创建并管理 ──→ MainDevUi (视图 /
- * QMainWindow) │ └── 创建并管理 ──→ MainDevModel (数据)
+ *   MainDevMgr (控制器 + 单例) ─── 创建并管理 ──→ MainDevUi (视图)
+ *                                               └── 创建并读写 ──→ MainDevModel (数据)
  */
 
 #pragma once
 
-#include "src/tool/ui/aui_mgr.h"
-
 #include <QObject>
+
+#include "src/tool/ui/aui_mgr.h"
 
 class QTabWidget;
 class CodeEditor;
@@ -77,7 +77,7 @@ private:
   void loadFiles();
   /// 连接所有信号槽（在 onCreateWindow 中调用）
   void initUi();
-  /// 为文件路径创建编辑器实例（含高亮器）
+  /// 为文件路径创建编辑器实例（含高亮器 + 验证模式）
   CodeEditor *createEditorForFile(const QString &filePath);
   /// 在编辑器中打开文件（查重 → 读取 → 创建 → 显示）
   CodeEditor *openFileInEditor(const QString &filePath);
@@ -87,6 +87,10 @@ private:
   QTabWidget *currentTabWidget() const;
   /// 连接编辑器的光标位置信号
   void connectEditor(CodeEditor *editor);
+  /// 关闭指定面板中的指定标签页（不依赖 sender()）
+  void closeTab(QTabWidget *tabs, int index);
+  /// 检查所有编辑器的修改状态，更新保存按钮可用性
+  void updateSaveButtonState();
 
   MainDevUi *m_ui = nullptr;
   MainDevModel *m_model = nullptr;

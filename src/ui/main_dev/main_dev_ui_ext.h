@@ -55,7 +55,7 @@ public:
 private:
   int m_pressedIndex = -1;
   QPoint m_dragStartPos;
-  QSet<int> m_modifiedTabs; ///< 已修改标签页索引集合
+  QSet<int> m_modifiedTabs;  ///< 已修改标签页索引集合
 
   static DraggableTabBar *s_sourceBar;
   static int s_sourceIndex;

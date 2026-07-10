@@ -16,6 +16,8 @@
 #include <QSplitter>
 #include <QTabWidget>
 
+class QVBoxLayout;
+
 #include "main_dev_ui_ext.h"
 #include "src/tool/ui/code/code_log.h"
 #include "src/tool/ui/code/tree_dir.h"
@@ -31,31 +33,50 @@ public:
   explicit MainDevUi(QWidget *parent = nullptr);
   ~MainDevUi() override = default;
 
-  /// 初始化界面布局（菜单栏、文件树、编辑器区域、状态栏）
+  /// 初始化界面布局
   void setupUI();
+
+  // ──────────────────────────────────────────────────────────
+  //  窗口标题常量
+  // ──────────────────────────────────────────────────────────
+
+  static QString defaultTitle() { return QStringLiteral("Auto Code"); }
+  static QString devTitle() { return QStringLiteral("Auto Code - 开发模式"); }
+  static QString fileTitle(const QString &fileName) {
+    return QStringLiteral("Auto Code - %1").arg(fileName);
+  }
+  static QString cursorDefault() { return QStringLiteral("行: -, 列: -"); }
+
+  // ──────────────────────────────────────────────────────────
+  //  编辑器面板组
+  // ──────────────────────────────────────────────────────────
 
   /// 创建一个新的编辑器面板组
   QTabWidget *createEditorPanel();
 
-  // ════════════════════════════════════════════════════════════
-  //  文件树操作
-  // ════════════════════════════════════════════════════════════
-  TreeDir *fileTree() const { return m_fileTree; }
-
-  // ════════════════════════════════════════════════════════════
-  //  编辑器面板组操作
-  // ════════════════════════════════════════════════════════════
-
+  /// 获取编辑器面板数量
   int editorPanelCount() const;
+  /// 获取指定索引处的编辑器面板
   QTabWidget *editorPanelAt(int index) const;
+  /// 查找指定面板在分割器中的索引
   int editorPanelIndex(const QTabWidget *tabs) const;
+  /// 在分割器末尾添加一个新面板
   void addEditorPanel(QTabWidget *panel);
+  /// 移除并销毁指定索引处的面板
   void removeEditorPanelAt(int index);
+  /// 将所有面板设置为等宽拉伸
   void setEditorPanelsUniformStretch();
 
   // ════════════════════════════════════════════════════════════
-  //  主分割器操作
+  //  文件树
   // ════════════════════════════════════════════════════════════
+
+  TreeDir *fileTree() const { return m_fileTree; }
+
+  // ════════════════════════════════════════════════════════════
+  //  主分割器
+  // ════════════════════════════════════════════════════════════
+
   void adjustMainSplitter();
   int mainSplitterWidth() const;
   int fileTreeWidth() const;
@@ -77,15 +98,14 @@ public:
   //  输出面板
   // ════════════════════════════════════════════════════════════
 
-  /// 向输出面板追加文本，isError 为 true 时显示红色
   void appendOutput(const QString &text, bool isError = false);
-  /// 清空输出面板
   void clearOutput();
   CodeLog *outputPanel() const { return m_outputPanel; }
 
   // ════════════════════════════════════════════════════════════
   //  控件 getter
   // ════════════════════════════════════════════════════════════
+
   QSplitter *editorSplitter() const { return m_editorSplitter; }
   QAction *splitAction() const { return m_splitAction; }
   QAction *closeAction() const { return m_closeAction; }
@@ -97,10 +117,16 @@ public:
   QPushButton *saveBtn() const { return m_saveBtn; }
   QPushButton *saveAllBtn() const { return m_saveAllBtn; }
 
-  /// 刷新启动项下拉框（由外部在启动项变化后调用）
+  /// 刷新启动项下拉框
   void refreshStartupCombo();
 
 private:
+  /// 构建自定义标题栏
+  void setupTitleBar();
+  /// 构建编辑器区域（文件树 + 分割器 + 编辑器面板）
+  void setupEditorArea();
+  /// 构建底部状态栏并返回内容控件
+  void setupStatusBar(QWidget *contentWidget, QVBoxLayout *contentLayout);
   /// 更新最大化/还原按钮图标
   void updateMaximizeIcon();
 
@@ -113,6 +139,7 @@ private:
   bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
 #endif
 
+  // ── 成员变量 ──
   TreeDir *m_fileTree = nullptr;
   QSplitter *m_mainSplitter = nullptr;
   QSplitter *m_editorSplitter = nullptr;
@@ -132,11 +159,11 @@ private:
   QPushButton *m_maxBtn = nullptr;
   QPushButton *m_closeBtn = nullptr;
   QPushButton *m_buildBtn = nullptr;
-  QComboBox *m_startupCombo = nullptr;  ///< 启动项下拉框
-  QPushButton *m_saveBtn = nullptr;     ///< 保存按钮
-  QPushButton *m_saveAllBtn = nullptr;  ///< 保存全部按钮
+  QComboBox *m_startupCombo = nullptr;
+  QPushButton *m_saveBtn = nullptr;
+  QPushButton *m_saveAllBtn = nullptr;
 
   // ── 输出面板 ──
-  QSplitter *m_contentSplitter = nullptr;  ///< 垂直分割器：编辑器 + 输出面板
-  CodeLog *m_outputPanel = nullptr;        ///< 脚本运行结果输出（带行号）
+  QSplitter *m_contentSplitter = nullptr;
+  CodeLog *m_outputPanel = nullptr;
 };

@@ -49,33 +49,51 @@
 MainDevUi::MainDevUi(QWidget *parent) : QMainWindow(parent) {}
 
 // ──────────────────────────────────────────────────────────────
-//  界面布局
+//  界面布局 — 入口
 // ──────────────────────────────────────────────────────────────
 
 void MainDevUi::setupUI() {
-  // ── 无边框窗口（复用 AuiWindow 统一样式） ──
   AuiWindow::setupFramelessWindow(this);
 
-  // ════════════════════════════════════════════════════════════
-  //  自定义标题栏（单行：菜单 + 窗口标题 + 控制按钮）
-  // ════════════════════════════════════════════════════════════
+  // ── 标题栏 ──
+  setupTitleBar();
 
+  // ── 编辑器区域 ──
+  setupEditorArea();
+
+  // ── 内容容器（编辑器 + 状态栏） ──
+  auto *contentWidget = new QWidget;
+  auto *contentLayout = new QVBoxLayout(contentWidget);
+  contentLayout->setContentsMargins(0, 0, 0, 0);
+  contentLayout->setSpacing(0);
+  contentLayout->addWidget(m_mainSplitter, 1);
+
+  // ── 底部状态栏 ──
+  setupStatusBar(contentWidget, contentLayout);
+
+  // ── 外层 QFrame 窗口框架 ──
+  AuiWindow::applyWindowFrame(this, m_titleBar, contentWidget);
+  AuiWindow::enableWin32Resize(this);
+}
+
+// ──────────────────────────────────────────────────────────────
+//  构建自定义标题栏
+// ──────────────────────────────────────────────────────────────
+
+void MainDevUi::setupTitleBar() {
   m_titleBar = new QWidget;
   m_titleBar->setObjectName(QStringLiteral("TitleBar"));
   auto *titleLayout = new QHBoxLayout(m_titleBar);
   titleLayout->setContentsMargins(6, 2, 6, 2);
   titleLayout->setSpacing(4);
 
-  // ── 程序图标（AC 粗体字母，复用 AuiWindow） ──
+  // ── 程序图标（AC 粗体字母） ──
   titleLayout->addWidget(AuiWindow::createAppIcon(nullptr, 20));
 
-  // titleLayout->addSpacing(5);
-
-  // ── 左侧：文件菜单 ──
+  // ── 文件菜单 ──
   auto *fileMenu = new QMenu(m_titleBar);
   m_openAction = fileMenu->addAction(QStringLiteral("打开(&O)..."));
   m_openAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+O")));
-
   m_openFolderAction = fileMenu->addAction(QStringLiteral("打开文件夹(&F)..."));
 
   auto *fileBtn = new QToolButton;
@@ -84,12 +102,10 @@ void MainDevUi::setupUI() {
   fileBtn->setMenu(fileMenu);
   titleLayout->addWidget(fileBtn);
 
-  // ── 左侧：视图菜单 ──
+  // ── 视图菜单 ──
   auto *viewMenu = new QMenu(m_titleBar);
-
   m_splitAction = viewMenu->addAction(QStringLiteral("向右拆分编辑器"));
   m_splitAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+\\")));
-
   m_closeAction = viewMenu->addAction(QStringLiteral("关闭标签页"));
   m_closeAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+W")));
 
@@ -99,7 +115,7 @@ void MainDevUi::setupUI() {
   viewBtn->setMenu(viewMenu);
   titleLayout->addWidget(viewBtn);
 
-  // ── 右侧：帮助菜单 ──
+  // ── 帮助菜单 ──
   auto *helpMenu = new QMenu(m_titleBar);
   m_helpExampleAction = helpMenu->addAction(QStringLiteral("例子(&E)..."));
 
@@ -114,7 +130,7 @@ void MainDevUi::setupUI() {
   m_buildBtn->setToolTip(QStringLiteral("执行 (F5)"));
   titleLayout->addWidget(m_buildBtn);
 
-  // ── 启动项下拉框（浅色主题，复用 AuiComboBox 样式） ──
+  // ── 启动项下拉框 ──
   m_startupCombo = AuiComboBox::create();
   m_startupCombo->setMinimumWidth(120);
   m_startupCombo->setToolTip(QStringLiteral("选择启动项"));
@@ -132,21 +148,17 @@ void MainDevUi::setupUI() {
 
   titleLayout->addStretch();
 
-  // ── 右侧：窗口标题 + 控制按钮 ──
+  // ── 窗口标题 ──
   m_titleLabel = new QLabel(windowTitle());
   m_titleLabel->setObjectName(QStringLiteral("TitleLabel"));
   titleLayout->addWidget(m_titleLabel);
-
   titleLayout->addSpacing(8);
 
-  // ── 向右拆分按钮 ──
+  // ── 窗口控制按钮 ──
   m_splitBtn = AuiButton::createSplitButton();
-
   m_minBtn = AuiButton::createMinButton();
   m_maxBtn = AuiButton::createMaxButton();
   m_closeBtn = AuiButton::createCloseButton();
-
-  // 初始化为最大化图标
   updateMaximizeIcon();
 
   titleLayout->addWidget(m_splitBtn);
@@ -159,28 +171,27 @@ void MainDevUi::setupUI() {
   connect(m_maxBtn, &QPushButton::clicked, this, &MainDevUi::onMaximizeClicked);
   connect(m_splitBtn, &QPushButton::clicked, m_splitAction, &QAction::trigger);
 
-  // ── 帮助 → 例子：弹出 Demo 窗口 ──
+  // ── 帮助 → 例子 ──
   connect(m_helpExampleAction, &QAction::triggered, this, []() { DemoMgr::ins().open(); });
+}
 
-  // ════════════════════════════════════════════════════════════
-  //  左侧文件树
-  // ════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
+//  构建编辑器区域（文件树 + 分割器 + 编辑器面板）
+// ──────────────────────────────────────────────────────────────
+
+void MainDevUi::setupEditorArea() {
+  // ── 左侧文件树 ──
   m_fileTree = new TreeDir;
 
-  // ── 启动项变化时刷新下拉框 ──
   connect(m_fileTree, &TreeDir::startupItemsChanged, this, &MainDevUi::refreshStartupCombo);
 
-  // ── 下拉框切换时联动文件树的选中启动项 ──
   connect(m_startupCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
           [this](int /*idx*/) {
             QString path = m_startupCombo->currentData().toString();
             if (!path.isEmpty()) m_fileTree->setSelectedStartup(path);
           });
 
-  // ════════════════════════════════════════════════════════════
-  //  右侧编辑器区域
-  // ════════════════════════════════════════════════════════════
-
+  // ── 右侧编辑器分割器 ──
   m_editorSplitter = new QSplitter(Qt::Horizontal);
   m_editorSplitter->setChildrenCollapsible(false);
 
@@ -188,67 +199,48 @@ void MainDevUi::setupUI() {
   m_editorSplitter->addWidget(initialTabs);
   m_editorSplitter->setStretchFactor(0, 1);
 
-  // ════════════════════════════════════════════════════════════
-  //  输出面板（编辑器下方，脚本运行结果）
-  // ════════════════════════════════════════════════════════════
+  // ── 输出面板 ──
   m_outputPanel = new CodeLog;
-  m_outputPanel->installEventFilter(this);  // 监听按键事件（Backspace/Delete 清空）
+  m_outputPanel->installEventFilter(this);
 
-  // ════════════════════════════════════════════════════════════
-  //  右侧分割器（垂直：编辑器 + 输出面板）
-  // ════════════════════════════════════════════════════════════
+  // ── 垂直分割器：编辑器 + 输出面板 ──
   m_contentSplitter = new QSplitter(Qt::Vertical);
   m_contentSplitter->addWidget(m_editorSplitter);
   m_contentSplitter->addWidget(m_outputPanel);
-  m_contentSplitter->setStretchFactor(0, 1);  // 编辑器可拉伸
-  m_contentSplitter->setStretchFactor(1, 0);  // 输出面板固定高度
-  m_contentSplitter->setSizes({700, 120});    // 编辑器 700，输出面板 120
+  m_contentSplitter->setStretchFactor(0, 1);
+  m_contentSplitter->setStretchFactor(1, 0);
+  m_contentSplitter->setSizes({700, 120});
 
-  // ════════════════════════════════════════════════════════════
-  //  主分割器（水平：文件树 + 右侧区域）
-  // ════════════════════════════════════════════════════════════
+  // ── 主分割器：文件树 + 右侧区域 ──
   m_mainSplitter = new QSplitter(Qt::Horizontal);
   m_mainSplitter->addWidget(m_fileTree);
   m_mainSplitter->addWidget(m_contentSplitter);
-  m_mainSplitter->setStretchFactor(0, 0);  // 左侧文件树固定宽度
-  m_mainSplitter->setStretchFactor(1, 1);  // 右侧区域可拉伸
+  m_mainSplitter->setStretchFactor(0, 0);
+  m_mainSplitter->setStretchFactor(1, 1);
   m_mainSplitter->setSizes({250, 1150});
+}
 
-  // ════════════════════════════════════════════════════════════
-  //  内容容器（将主分割器 + 底部状态栏统一包裹在 WindowFrame 内）
-  // ════════════════════════════════════════════════════════════
-  auto *contentWidget = new QWidget;
-  auto *contentLayout = new QVBoxLayout(contentWidget);
-  contentLayout->addWidget(m_mainSplitter, 1);
+// ──────────────────────────────────────────────────────────────
+//  构建底部状态栏
+// ──────────────────────────────────────────────────────────────
 
-  // ── 底部状态栏 ──
-  {
-    auto *statusBarContent = new QWidget;
-    auto *statusBarContentLayout = new QHBoxLayout(statusBarContent);
-    statusBarContentLayout->setContentsMargins(4, 0, 4, 0);
-    statusBarContentLayout->setSpacing(0);
+void MainDevUi::setupStatusBar(QWidget *contentWidget, QVBoxLayout *contentLayout) {
+  auto *statusBarContent = new QWidget;
+  auto *statusBarContentLayout = new QHBoxLayout(statusBarContent);
+  statusBarContentLayout->setContentsMargins(4, 0, 4, 0);
+  statusBarContentLayout->setSpacing(0);
 
-    m_errorLabel = new QLabel;
-    m_errorLabel->setStyleSheet(
-        QStringLiteral("QLabel { color: %1; }").arg(AuiStyle::errorTextColor().name()));
-    statusBarContentLayout->addWidget(m_errorLabel, 1);
+  m_errorLabel = new QLabel;
+  m_errorLabel->setStyleSheet(
+      QStringLiteral("QLabel { color: %1; }").arg(AuiStyle::errorTextColor().name()));
+  statusBarContentLayout->addWidget(m_errorLabel, 1);
 
-    m_cursorPositionLabel = new QLabel(QStringLiteral("行: 1, 列: 1"));
-    m_cursorPositionLabel->setMinimumWidth(120);
-    m_cursorPositionLabel->setAlignment(Qt::AlignCenter);
-    statusBarContentLayout->addWidget(m_cursorPositionLabel);
+  m_cursorPositionLabel = new QLabel(QStringLiteral("行: 1, 列: 1"));
+  m_cursorPositionLabel->setMinimumWidth(120);
+  m_cursorPositionLabel->setAlignment(Qt::AlignCenter);
+  statusBarContentLayout->addWidget(m_cursorPositionLabel);
 
-    contentLayout->addWidget(AuiWindow::createStatusBar(contentWidget, statusBarContent));
-  }
-
-  // ════════════════════════════════════════════════════════════
-  //  外层 QFrame（2px 边框）+ 窗口框架
-  // ════════════════════════════════════════════════════════════
-
-  AuiWindow::applyWindowFrame(this, m_titleBar, contentWidget);
-
-  // ── 通过 Win32 添加 WS_THICKFRAME 以支持拉伸 ──
-  AuiWindow::enableWin32Resize(this);
+  contentLayout->addWidget(AuiWindow::createStatusBar(contentWidget, statusBarContent));
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -257,7 +249,6 @@ void MainDevUi::setupUI() {
 
 #if defined(Q_OS_WIN)
 bool MainDevUi::nativeEvent(const QByteArray &eventType, void *message, qintptr *result) {
-  // 复用 AuiWindow 的通用处理（边框拉伸 + 标题栏拖拽）
   if (AuiWindow::handleNativeEvent(this, m_titleBar, eventType, message, result)) {
     return true;
   }
@@ -266,23 +257,21 @@ bool MainDevUi::nativeEvent(const QByteArray &eventType, void *message, qintptr 
 #endif
 
 // ══════════════════════════════════════════════════════════════
-//  窗口状态变化（最大化/还原更新按钮文字）
+//  窗口状态变化
 // ══════════════════════════════════════════════════════════════
+
 void MainDevUi::updateMaximizeIcon() { AuiButton::updateMaximizeIcon(m_maxBtn, isMaximized()); }
 
 void MainDevUi::changeEvent(QEvent *ev) {
-  if (ev->type() == QEvent::WindowStateChange) {
-    updateMaximizeIcon();
-  }
+  if (ev->type() == QEvent::WindowStateChange) updateMaximizeIcon();
   QMainWindow::changeEvent(ev);
 }
 
 void MainDevUi::onMaximizeClicked() {
-  if (isMaximized()) {
+  if (isMaximized())
     showNormal();
-  } else {
+  else
     showMaximized();
-  }
   updateMaximizeIcon();
 }
 
@@ -290,8 +279,6 @@ void MainDevUi::onMaximizeClicked() {
 //  编辑器面板组创建
 // ──────────────────────────────────────────────────────────────
 
-/// @brief  创建新的编辑器面板（DimmableTabWidget）
-/// @return 新面板指针，已设置 Expanding 策略、去内外边距、最小宽度 60
 QTabWidget *MainDevUi::createEditorPanel() {
   auto *tabs = new DimmableTabWidget;
   tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -308,31 +295,19 @@ void MainDevUi::closeEvent(QCloseEvent *event) {
 // ══════════════════════════════════════════════════════════════
 //  编辑器面板组操作
 // ══════════════════════════════════════════════════════════════
-/// @brief  获取编辑器面板数量（即分割器中的子控件数）
-/// @return 当前 m_editorSplitter 中的面板个数
+
 int MainDevUi::editorPanelCount() const { return m_editorSplitter->count(); }
 
-/// @brief  获取指定索引处的编辑器面板
-/// @param index 面板索引（0 ~ count-1）
-/// @return 对应位置的 QTabWidget 指针，索引越界时返回 nullptr
 QTabWidget *MainDevUi::editorPanelAt(int index) const {
   return qobject_cast<QTabWidget *>(m_editorSplitter->widget(index));
 }
 
-/// @brief  查找指定面板在分割器中的索引
-/// @param tabs 待查找的面板指针
-/// @return 面板在 m_editorSplitter 中的位置，未找到时返回 -1
 int MainDevUi::editorPanelIndex(const QTabWidget *tabs) const {
   return m_editorSplitter->indexOf(const_cast<QTabWidget *>(tabs));
 }
 
-/// @brief  在分割器末尾添加一个新面板
-/// @param panel 待添加的 QTabWidget 面板
 void MainDevUi::addEditorPanel(QTabWidget *panel) { m_editorSplitter->addWidget(panel); }
 
-/// @brief  移除并销毁指定索引处的面板
-/// @param index 待移除的面板索引
-/// @note 面板对象通过 deleteLater 延迟销毁，内部标签页会连带释放
 void MainDevUi::removeEditorPanelAt(int index) {
   QWidget *w = m_editorSplitter->widget(index);
   if (w) w->deleteLater();
@@ -359,6 +334,7 @@ int MainDevUi::fileTreeWidth() const { return m_fileTree->width(); }
 // ══════════════════════════════════════════════════════════════
 //  状态栏
 // ══════════════════════════════════════════════════════════════
+
 void MainDevUi::setCursorStatusText(const QString &text) { m_cursorPositionLabel->setText(text); }
 
 void MainDevUi::setErrorMessage(const QString &msg) { m_errorLabel->setText(msg); }
@@ -366,6 +342,7 @@ void MainDevUi::setErrorMessage(const QString &msg) { m_errorLabel->setText(msg)
 // ══════════════════════════════════════════════════════════════
 //  标签页颜色
 // ══════════════════════════════════════════════════════════════
+
 void MainDevUi::applyTabDimming(QTabWidget *active) {
   for (int i = 0; i < editorPanelCount(); ++i) {
     auto *tabs = editorPanelAt(i);
@@ -384,17 +361,12 @@ void MainDevUi::applyTabDimming(QTabWidget *active) {
 //  输出面板
 // ══════════════════════════════════════════════════════════════
 
-/// @brief 向输出面板追加文本（委托给 CodeLog）
-/// @param text 要显示的文本
-/// @param isError 是否为错误信息，错误信息显示红色
 void MainDevUi::appendOutput(const QString &text, bool isError) {
   m_outputPanel->append(text, isError);
 }
 
-/// @brief 清空输出面板（委托给 CodeLog）
 void MainDevUi::clearOutput() { m_outputPanel->clearLog(); }
 
-/// @brief 事件过滤器 — Backspace/Delete 清空日志
 bool MainDevUi::eventFilter(QObject *obj, QEvent *ev) {
   if (obj == m_outputPanel && ev->type() == QEvent::KeyPress) {
     auto *keyEv = static_cast<QKeyEvent *>(ev);
@@ -406,11 +378,11 @@ bool MainDevUi::eventFilter(QObject *obj, QEvent *ev) {
   return QMainWindow::eventFilter(obj, ev);
 }
 
-/// @brief 刷新启动项下拉框 — 从文件树获取所有启动项并填充
+/// @brief 刷新启动项下拉框
 void MainDevUi::refreshStartupCombo() {
   if (!m_startupCombo || !m_fileTree) return;
 
-  m_startupCombo->blockSignals(true);  // 避免触发 currentIndexChanged
+  m_startupCombo->blockSignals(true);
   QString prev = m_startupCombo->currentData().toString();
   m_startupCombo->clear();
 
@@ -420,7 +392,6 @@ void MainDevUi::refreshStartupCombo() {
   for (const QString &path : files) {
     QFileInfo fi(path);
     m_startupCombo->addItem(fi.fileName(), path);
-    // 恢复上次选中或选中第一个
     if (path == m_fileTree->selectedStartup())
       m_startupCombo->setCurrentIndex(m_startupCombo->count() - 1);
   }
