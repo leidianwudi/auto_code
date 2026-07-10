@@ -8,11 +8,12 @@
 #include <QAction>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QMenuBar>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSizeGrip>
 #include <QTimer>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 #include "src/tool/ui/code/code_editor.h"
@@ -37,20 +38,12 @@ void DemoUi::setupUI() {
   // ════════════════════════════════════════════════════════════
   //  自定义标题栏（单行：AC 图标 + 菜单 + 生成按钮 + 窗口控制）
   // ════════════════════════════════════════════════════════════
-  m_titleBar = new QWidget;
-  m_titleBar->setObjectName(QStringLiteral("TitleBar"));
-  auto *titleLayout = new QHBoxLayout(m_titleBar);
-  titleLayout->setContentsMargins(AuiStyle::titleBarMargins());
-  titleLayout->setSpacing(AuiStyle::titleBarSpacing());
+  auto tb = AuiWindow::createTitleBar(this);
+  m_titleBar = tb.titleBar;
+  auto *titleLayout = qobject_cast<QHBoxLayout *>(tb.titleBar->layout());
 
-  // ── AC 程序图标 ──
-  titleLayout->addWidget(AuiWindow::createAppIcon(nullptr, 20));
-
-  // ── 菜单栏 ──
-  auto *menuBar = new QMenuBar;
-  menuBar->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
-
-  auto *fileMenu = menuBar->addMenu(QStringLiteral("文件(&F)"));
+  // ── 文件菜单 ──
+  auto *fileMenu = new QMenu(m_titleBar);
   m_loadTemplateAction = fileMenu->addAction(QStringLiteral("加载模板(&T)..."));
   m_loadTemplateAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+T")));
 
@@ -62,28 +55,20 @@ void DemoUi::setupUI() {
   m_saveOutputAction = fileMenu->addAction(QStringLiteral("保存结果(&S)..."));
   m_saveOutputAction->setShortcut(QKeySequence::Save);
 
+  auto *fileBtn = new QToolButton;
+  fileBtn->setText(QStringLiteral("文件(&F)"));
+  fileBtn->setPopupMode(QToolButton::InstantPopup);
+  fileBtn->setMenu(fileMenu);
+  titleLayout->insertWidget(tb.contentInsertIndex, fileBtn);
+  tb.contentInsertIndex++;
+
   m_generateAction = new QAction(QStringLiteral("生成代码(&G)"), this);
   m_generateAction->setShortcut(QKeySequence(QStringLiteral("F5")));
-
-  titleLayout->addWidget(menuBar);
 
   // ── 生成按钮 ──
   auto *genBtn = AuiButton::createBuildButton();
   connect(genBtn, &QPushButton::clicked, m_generateAction, &QAction::trigger);
-  titleLayout->addWidget(genBtn);
-
-  titleLayout->addStretch();
-
-  // ── 窗口控制按钮 ──
-  auto *minBtn = AuiButton::createMinButton();
-  auto *maxBtn = AuiButton::createMaxButton();
-  auto *closeBtn = AuiButton::createCloseButton();
-  connect(closeBtn, &QPushButton::clicked, this, &QMainWindow::close);
-  connect(minBtn, &QPushButton::clicked, this, &QMainWindow::showMinimized);
-  connect(maxBtn, &QPushButton::clicked, this, [this]() { AuiWindow::toggleMaximize(this); });
-  titleLayout->addWidget(minBtn);
-  titleLayout->addWidget(maxBtn);
-  titleLayout->addWidget(closeBtn);
+  titleLayout->insertWidget(tb.contentInsertIndex, genBtn);
 
   // ════════════════════════════════════════════════════════════
   //  内容区域

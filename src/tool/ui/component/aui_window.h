@@ -7,7 +7,7 @@
  *
  * 使用场景：
  * - 主窗口（QMainWindow）：setupFramelessWindow() + createTitleBar() + applyWindowFrame()
- * - 模态对话框（QDialog）：setupDialogStyle() 保留原生标题栏但颜色统一
+ * - 模态对话框（QDialog）：setupFramelessDialog() + createTitleBar() + applyWindowFrame()
  */
 
 #pragma once
@@ -19,20 +19,47 @@
 
 class QDialog;
 class QLabel;
-class QPushButton;
 class QVBoxLayout;
+
+/// 标题栏创建选项
+struct TitleBarOptions {
+  QString title;                   ///< 标题文字（空则不显示标题标签）
+  bool titleRightAligned = false;  ///< true = 标题在 stretch 之后（右对齐）
+  bool showMinButton = true;       ///< 显示最小化按钮
+  bool showMaxButton = true;       ///< 显示最大化按钮
+  bool showCloseButton = true;     ///< 显示关闭按钮
+  bool closeRejectsDialog =
+      false;  ///< true = 关闭按钮调用 QDialog::reject()（而非 QWidget::close()）
+};
+
+/// 标题栏创建结果
+struct TitleBarResult {
+  QWidget *titleBar = nullptr;   ///< 标题栏容器
+  QLabel *titleLabel = nullptr;  ///< 标题文字标签（可能为 nullptr）
+  int contentInsertIndex = 1;    ///< 自定义控件插入位置（AC 图标之后）
+};
 
 class AuiWindow {
 public:
   /// 无边框窗口基础设置：FramelessWindowHint + 基础样式表
   static void setupFramelessWindow(QWidget *window);
 
+  /// 无边框对话框设置：保留 Qt::Dialog 标志 + FramelessWindowHint + 基础样式表
+  /// @note QDialog 必须保留 Qt::Dialog 标志，否则 exec() 无法正常显示
+  static void setupFramelessDialog(QDialog *dialog);
+
   /// 模态对话框样式设置：应用统一样式表 + 设置 DWM 标题栏颜色
   /// @note QDialog 使用 exec() 必须保留原生标题栏，不能使用 FramelessWindowHint
   static void setupDialogStyle(QDialog *dialog);
 
-  /// 创建 AC 程序图标（20x20 的 Consolas 粗体字母标签）
-  static QLabel *createAppIcon(QWidget *parent = nullptr, int size = 20);
+  /// 创建标准标题栏（AC 图标 + 标题 + 窗口控制按钮）
+  /// @param window  窗口（用于连接按钮信号、监听窗口状态变化更新最大化图标）
+  /// @param options 标题栏选项
+  /// @return TitleBarResult 包含标题栏控件和插入位置
+  static TitleBarResult createTitleBar(QWidget *window, const TitleBarOptions &options = {});
+
+  /// 创建 AC 程序图标（24x24 的 Consolas 粗体字母标签）
+  static QLabel *createAppIcon(QWidget *parent = nullptr, int size = 24);
 
   /// 获取 AC 程序图标 Pixmap，可用于 setWindowIcon() 等场景
   static QPixmap appIconPixmap(int size = 20);
@@ -49,7 +76,7 @@ public:
   /// @return 状态栏 QWidget 指针，可直接添加到布局底部
   static QWidget *createStatusBar(QWidget *parent, QWidget *content);
 
-  /// 创建窗口外层框架（2px 边框 QFrame），将内容控件包裹在内
+  /// 创建窗口外层框架（1px 边框 QFrame），将内容控件包裹在内
   /// @param window   窗口
   /// @param titleBar 标题栏（可为 nullptr）
   /// @param content  内容控件（如 QSplitter、QWidget）

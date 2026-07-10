@@ -42,7 +42,18 @@ void AuiWindow::setupFramelessWindow(QWidget *window) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  模态对话框样式设置
+//  无边框对话框设置
+// ════════════════════════════════════════════════════════════
+
+void AuiWindow::setupFramelessDialog(QDialog *dialog) {
+  // 保留 Qt::Dialog 标志，否则 QDialog::exec() 无法正常显示
+  dialog->setWindowFlags(dialog->windowFlags() | Qt::FramelessWindowHint);
+  dialog->setStyleSheet(AuiStyle::mainStyleSheet());
+  dialog->setWindowIcon(QIcon(appIconPixmap(256)));
+}
+
+// ════════════════════════════════════════════════════════════
+//  模态对话框样式设置（保留原生标题栏）
 // ════════════════════════════════════════════════════════════
 
 void AuiWindow::setupDialogStyle(QDialog *dialog) {
@@ -51,8 +62,8 @@ void AuiWindow::setupDialogStyle(QDialog *dialog) {
   // 设置标题栏颜色与窗口背景一致（Windows DWM API）
 #ifdef Q_OS_WIN
   HWND hwnd = reinterpret_cast<HWND>(dialog->winId());
-  COLORREF captionColor = RGB(AuiStyle::barBackground().red(), AuiStyle::barBackground().green(),
-                              AuiStyle::barBackground().blue());
+  COLORREF captionColor = RGB(AuiStyle::background().red(), AuiStyle::background().green(),
+                              AuiStyle::background().blue());
   DwmSetWindowAttribute(hwnd, 35, &captionColor, sizeof(captionColor));
   COLORREF textColor =
       RGB(AuiStyle::textColor().red(), AuiStyle::textColor().green(), AuiStyle::textColor().blue());
@@ -73,17 +84,17 @@ QPixmap AuiWindow::appIconPixmap(int size) {
   QPainter p(&px);
   p.setRenderHint(QPainter::Antialiasing);
 
-  // ── 圆角背景 ──
+  // ── 标题栏背景色圆角矩形 ──
   const qreal r = size * 0.2;
   QPainterPath path;
   path.addRoundedRect(QRectF(0, 0, size, size), r, r);
-  p.fillPath(path, AuiStyle::barBackground());
+  p.fillPath(path, AuiStyle::titleBarBackground());
 
   // ── AC 文字 ──
-  QPen pen(AuiStyle::textColor(), qMax(1.0, size * 0.06));
+  QPen pen(AuiStyle::appIconColor(), qMax(1.0, size * 0.08));
   pen.setCapStyle(Qt::RoundCap);
   p.setPen(pen);
-  QFont f(QStringLiteral("Consolas"), qMax(1, size * 11 / 20), QFont::Bold);
+  QFont f(QStringLiteral("Consolas"), qMax(1, size * 12 / 20), QFont::Black);
   p.setFont(f);
   p.drawText(QRectF(0, 0, size, size), Qt::AlignCenter, QStringLiteral("AC"));
   p.end();
@@ -94,6 +105,136 @@ QLabel *AuiWindow::createAppIcon(QWidget *parent, int size) {
   auto *label = new QLabel(parent);
   label->setPixmap(appIconPixmap(size));
   return label;
+}
+
+// ════════════════════════════════════════════════════════════
+//  内部辅助类
+// ════════════════════════════════════════════════════════════
+
+namespace {
+class MaximizeButtonFilter : public QObject {
+public:
+  MaximizeButtonFilter(QWidget *window, QPushButton *maxBtn, QObject *parent = nullptr)
+      : QObject(parent), m_window(window), m_maxBtn(maxBtn) {}
+
+protected:
+  bool eventFilter(QObject *watched, QEvent *event) override {
+    if (watched == m_window && event->type() == QEvent::WindowStateChange) {
+      AuiButton::updateMaximizeIcon(m_maxBtn, m_window->isMaximized());
+    }
+    return false;
+  }
+
+private:
+  QWidget *m_window;
+  QPushButton *m_maxBtn;
+};
+
+class TitleBarDragFilter : public QObject {
+public:
+  explicit TitleBarDragFilter(QWidget *window, QObject *parent = nullptr)
+      : QObject(parent), m_window(window) {}
+
+protected:
+  bool eventFilter(QObject *watched, QEvent *event) override {
+    Q_UNUSED(watched)
+    if (event->type() == QEvent::MouseButtonPress) {
+      auto *me = static_cast<QMouseEvent *>(event);
+      if (me->button() == Qt::LeftButton) {
+        if (QWindow *hw = m_window->windowHandle()) {
+          hw->startSystemMove();
+        }
+        return true;
+      }
+    }
+    if (event->type() == QEvent::MouseButtonDblClick) {
+      auto *me = static_cast<QMouseEvent *>(event);
+      if (me->button() == Qt::LeftButton) {
+        AuiWindow::toggleMaximize(m_window);
+        return true;
+      }
+    }
+    return false;
+  }
+
+private:
+  QWidget *m_window;
+};
+}  // namespace
+
+// ════════════════════════════════════════════════════════════
+//  创建标准标题栏
+// ════════════════════════════════════════════════════════════
+
+TitleBarResult AuiWindow::createTitleBar(QWidget *window, const TitleBarOptions &options) {
+  TitleBarResult result;
+
+  auto *titleBar = new QWidget;
+  AuiStyle::applyTitleBarStyle(titleBar);
+  auto *titleLayout = new QHBoxLayout(titleBar);
+  titleLayout->setContentsMargins(AuiStyle::titleBarMargins());
+  titleLayout->setSpacing(AuiStyle::titleBarSpacing());
+  result.titleBar = titleBar;
+
+  // ── AC 程序图标 ──
+  titleLayout->addWidget(createAppIcon());
+  result.contentInsertIndex = titleLayout->count();
+
+  // ── 标题文字（左对齐模式：在 AC 图标之后、stretch 之前） ──
+  QLabel *titleLabel = nullptr;
+  if (!options.title.isEmpty() && !options.titleRightAligned) {
+    titleLabel = new QLabel(options.title);
+    AuiStyle::applyTitleLabelStyle(titleLabel);
+    titleLayout->addWidget(titleLabel);
+    result.contentInsertIndex = titleLayout->count();
+  }
+
+  // ── 弹性空间 ──
+  titleLayout->addStretch();
+
+  // ── 标题文字（右对齐模式：在 stretch 之后、控制按钮之前） ──
+  if (!options.title.isEmpty() && options.titleRightAligned) {
+    titleLabel = new QLabel(options.title);
+    AuiStyle::applyTitleLabelStyle(titleLabel);
+    titleLayout->addWidget(titleLabel);
+    titleLayout->addSpacing(8);
+  }
+  result.titleLabel = titleLabel;
+
+  // ── 窗口控制按钮 ──
+  QPushButton *maxBtn = nullptr;
+
+  if (options.showMinButton) {
+    auto *minBtn = AuiButton::createMinButton();
+    QObject::connect(minBtn, &QPushButton::clicked, window, &QWidget::showMinimized);
+    titleLayout->addWidget(minBtn);
+  }
+
+  if (options.showMaxButton) {
+    maxBtn = AuiButton::createMaxButton();
+    QObject::connect(maxBtn, &QPushButton::clicked, window, [window]() { toggleMaximize(window); });
+    titleLayout->addWidget(maxBtn);
+  }
+
+  if (options.showCloseButton) {
+    auto *closeBtn = AuiButton::createCloseButton();
+    if (options.closeRejectsDialog) {
+      QObject::connect(closeBtn, &QPushButton::clicked, window, [window]() {
+        if (auto *dlg = qobject_cast<QDialog *>(window)) dlg->reject();
+      });
+    } else {
+      QObject::connect(closeBtn, &QPushButton::clicked, window, &QWidget::close);
+    }
+    titleLayout->addWidget(closeBtn);
+  }
+
+  // ── 监听窗口状态变化，自动更新最大化按钮图标 ──
+  if (maxBtn) {
+    AuiButton::updateMaximizeIcon(maxBtn, window->isMaximized());
+    window->installEventFilter(new MaximizeButtonFilter(window, maxBtn));
+  }
+
+  return result;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -137,7 +278,7 @@ void AuiWindow::applyWindowFrame(QWidget *window, QWidget *titleBar, QWidget *co
   auto *frame = new QFrame(window);
   frame->setObjectName(QStringLiteral("WindowFrame"));
   auto *frameLayout = new QVBoxLayout(frame);
-  // 设置窗口边框为 1px，顶部不需要额外边框（标题栏已经有间距）
+  // 设置窗口边框：四周 1px，标题栏通过负 margin 覆盖左右边框区域
   frameLayout->setContentsMargins(1, 0, 1, 1);
   frameLayout->setSpacing(0);
 
@@ -168,43 +309,6 @@ void AuiWindow::applyWindowFrame(QWidget *window, QWidget *titleBar, QWidget *co
   // 启用标题栏拖拽（使用 startSystemMove 替代 HTCAPTION，避免模态对话框关闭后拖拽失效）
   enableTitleBarDrag(window, titleBar);
 }
-
-// ════════════════════════════════════════════════════════════
-//  标题栏拖拽（使用 Qt startSystemMove 替代 HTCAPTION）
-// ════════════════════════════════════════════════════════════
-
-namespace {
-class TitleBarDragFilter : public QObject {
-public:
-  explicit TitleBarDragFilter(QWidget *window, QObject *parent = nullptr)
-      : QObject(parent), m_window(window) {}
-
-protected:
-  bool eventFilter(QObject *watched, QEvent *event) override {
-    Q_UNUSED(watched)
-    if (event->type() == QEvent::MouseButtonPress) {
-      auto *me = static_cast<QMouseEvent *>(event);
-      if (me->button() == Qt::LeftButton) {
-        if (QWindow *hw = m_window->windowHandle()) {
-          hw->startSystemMove();
-        }
-        return true;
-      }
-    }
-    if (event->type() == QEvent::MouseButtonDblClick) {
-      auto *me = static_cast<QMouseEvent *>(event);
-      if (me->button() == Qt::LeftButton) {
-        AuiWindow::toggleMaximize(m_window);
-        return true;
-      }
-    }
-    return false;
-  }
-
-private:
-  QWidget *m_window;
-};
-}  // namespace
 
 void AuiWindow::enableTitleBarDrag(QWidget *window, QWidget *titleBar) {
   if (window && titleBar) {

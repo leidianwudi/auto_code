@@ -27,16 +27,29 @@ CreateUi::CreateUi(QWidget *parent) : QDialog(parent) { setupUI(); }
 
 void CreateUi::setupUI() {
   setWindowTitle(QStringLiteral("新建"));
-  setFixedSize(360, 200);
+  setFixedSize(360, 220);
   setModal(true);
 
-  // ── 应用统一样式（复用 AuiWindow）
-  // 保留原生标题栏，通过 DWM 设置标题栏颜色与窗口背景一致
-  AuiWindow::setupDialogStyle(this);
+  // ── 无边框对话框（保留 Qt::Dialog 标志，复用 AuiWindow 统一样式） ──
+  AuiWindow::setupFramelessDialog(this);
 
-  auto *mainLayout = new QVBoxLayout(this);
-  mainLayout->setContentsMargins(16, 16, 16, 16);
-  mainLayout->setSpacing(12);
+  // ════════════════════════════════════════════════════════════
+  //  自定义标题栏（AC 图标 + 标题文字 + 关闭按钮）
+  // ════════════════════════════════════════════════════════════
+  TitleBarOptions opts;
+  opts.title = QStringLiteral("新建");
+  opts.showMinButton = false;
+  opts.showMaxButton = false;
+  opts.closeRejectsDialog = true;
+  auto tb = AuiWindow::createTitleBar(this, opts);
+
+  // ════════════════════════════════════════════════════════════
+  //  内容区域
+  // ════════════════════════════════════════════════════════════
+  auto *contentWidget = new QWidget;
+  auto *contentLayout = new QVBoxLayout(contentWidget);
+  contentLayout->setContentsMargins(16, 8, 16, 16);
+  contentLayout->setSpacing(12);
 
   // ── 文件类型 ──
   auto *typeLayout = new QHBoxLayout;
@@ -50,7 +63,7 @@ void CreateUi::setupUI() {
   m_typeCombo->addItem(CreateModel::fileTypeLabel(CreateModel::Tpljson));
   typeLayout->addWidget(typeLabel);
   typeLayout->addWidget(m_typeCombo, 1);
-  mainLayout->addLayout(typeLayout);
+  contentLayout->addLayout(typeLayout);
 
   // ── 名称 ──
   auto *nameLayout = new QHBoxLayout;
@@ -60,7 +73,7 @@ void CreateUi::setupUI() {
   m_nameEdit->setPlaceholderText(QStringLiteral("请输入文件或文件夹名称"));
   nameLayout->addWidget(nameLabel);
   nameLayout->addWidget(m_nameEdit, 1);
-  mainLayout->addLayout(nameLayout);
+  contentLayout->addLayout(nameLayout);
 
   // ── 错误提示 ──
   m_errorLabel = new QLabel(this);
@@ -68,10 +81,10 @@ void CreateUi::setupUI() {
       QStringLiteral("color: %1; font-size: %2px;")
           .arg(AuiStyle::errorTextColor().name(), QString::number(AuiStyle::titleFontSize())));
   m_errorLabel->hide();
-  mainLayout->addWidget(m_errorLabel);
+  contentLayout->addWidget(m_errorLabel);
 
   // ── 弹性空间 ──
-  mainLayout->addStretch();
+  contentLayout->addStretch();
 
   // ── 按钮 ──
   auto *btnLayout = new QHBoxLayout;
@@ -81,7 +94,7 @@ void CreateUi::setupUI() {
   m_cancelBtn = new QPushButton(QStringLiteral("取消"), this);
   btnLayout->addWidget(m_okBtn);
   btnLayout->addWidget(m_cancelBtn);
-  mainLayout->addLayout(btnLayout);
+  contentLayout->addLayout(btnLayout);
 
   // ── 信号连接 ──
   connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
@@ -91,6 +104,13 @@ void CreateUi::setupUI() {
 
   // 初始焦点在名称输入框
   m_nameEdit->setFocus();
+
+  // ── 应用窗口框架（标题栏 + 内容 + 1px 边框） ──
+  AuiWindow::applyWindowFrame(this, tb.titleBar, contentWidget);
+
+  // applyWindowFrame 会重置内容布局的边距和间距，需要恢复
+  contentLayout->setContentsMargins(16, 8, 16, 16);
+  contentLayout->setSpacing(12);
 }
 
 // ════════════════════════════════════════════════════════════

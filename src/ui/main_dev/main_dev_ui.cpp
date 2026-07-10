@@ -81,14 +81,13 @@ void MainDevUi::setupUI() {
 // ──────────────────────────────────────────────────────────────
 
 void MainDevUi::setupTitleBar() {
-  m_titleBar = new QWidget;
-  m_titleBar->setObjectName(QStringLiteral("TitleBar"));
-  auto *titleLayout = new QHBoxLayout(m_titleBar);
-  titleLayout->setContentsMargins(AuiStyle::titleBarMargins());
-  titleLayout->setSpacing(AuiStyle::titleBarSpacing());
-
-  // ── 程序图标（AC 粗体字母） ──
-  titleLayout->addWidget(AuiWindow::createAppIcon(nullptr, 20));
+  TitleBarOptions opts;
+  opts.title = windowTitle();
+  opts.titleRightAligned = true;
+  auto tb = AuiWindow::createTitleBar(this, opts);
+  m_titleBar = tb.titleBar;
+  m_titleLabel = tb.titleLabel;
+  auto *titleLayout = qobject_cast<QHBoxLayout *>(tb.titleBar->layout());
 
   // ── 文件菜单 ──
   auto *fileMenu = new QMenu(m_titleBar);
@@ -100,7 +99,8 @@ void MainDevUi::setupTitleBar() {
   fileBtn->setText(QStringLiteral("文件(&F)"));
   fileBtn->setPopupMode(QToolButton::InstantPopup);
   fileBtn->setMenu(fileMenu);
-  titleLayout->addWidget(fileBtn);
+  titleLayout->insertWidget(tb.contentInsertIndex, fileBtn);
+  tb.contentInsertIndex++;
 
   // ── 视图菜单 ──
   auto *viewMenu = new QMenu(m_titleBar);
@@ -113,7 +113,8 @@ void MainDevUi::setupTitleBar() {
   viewBtn->setText(QStringLiteral("视图(&V)"));
   viewBtn->setPopupMode(QToolButton::InstantPopup);
   viewBtn->setMenu(viewMenu);
-  titleLayout->addWidget(viewBtn);
+  titleLayout->insertWidget(tb.contentInsertIndex, viewBtn);
+  tb.contentInsertIndex++;
 
   // ── 帮助菜单 ──
   auto *helpMenu = new QMenu(m_titleBar);
@@ -123,52 +124,38 @@ void MainDevUi::setupTitleBar() {
   helpBtn->setText(QStringLiteral("帮助(&H)"));
   helpBtn->setPopupMode(QToolButton::InstantPopup);
   helpBtn->setMenu(helpMenu);
-  titleLayout->addWidget(helpBtn);
+  titleLayout->insertWidget(tb.contentInsertIndex, helpBtn);
+  tb.contentInsertIndex++;
 
   // ── 执行按钮 ──
   m_buildBtn = AuiButton::createBuildButton();
   m_buildBtn->setToolTip(QStringLiteral("执行 (F5)"));
-  titleLayout->addWidget(m_buildBtn);
+  titleLayout->insertWidget(tb.contentInsertIndex, m_buildBtn);
+  tb.contentInsertIndex++;
 
   // ── 启动项下拉框 ──
   m_startupCombo = AuiComboBox::create();
   m_startupCombo->setMinimumWidth(120);
   m_startupCombo->setToolTip(QStringLiteral("选择启动项"));
-  titleLayout->addWidget(m_startupCombo);
+  titleLayout->insertWidget(tb.contentInsertIndex, m_startupCombo);
+  tb.contentInsertIndex++;
 
   // ── 保存按钮 ──
   m_saveBtn = AuiButton::createSaveButton();
   m_saveBtn->setEnabled(false);
-  titleLayout->addWidget(m_saveBtn);
+  titleLayout->insertWidget(tb.contentInsertIndex, m_saveBtn);
+  tb.contentInsertIndex++;
 
   // ── 保存全部按钮 ──
   m_saveAllBtn = AuiButton::createSaveAllButton();
   m_saveAllBtn->setEnabled(false);
-  titleLayout->addWidget(m_saveAllBtn);
+  titleLayout->insertWidget(tb.contentInsertIndex, m_saveAllBtn);
 
-  titleLayout->addStretch();
-
-  // ── 窗口标题 ──
-  m_titleLabel = new QLabel(windowTitle());
-  m_titleLabel->setObjectName(QStringLiteral("TitleLabel"));
-  titleLayout->addWidget(m_titleLabel);
-  titleLayout->addSpacing(8);
-
-  // ── 窗口控制按钮 ──
+  // ── 拆分按钮（在标题标签之前插入） ──
   m_splitBtn = AuiButton::createSplitButton();
-  m_minBtn = AuiButton::createMinButton();
-  m_maxBtn = AuiButton::createMaxButton();
-  m_closeBtn = AuiButton::createCloseButton();
-  updateMaximizeIcon();
+  int titleIdx = titleLayout->indexOf(m_titleLabel);
+  titleLayout->insertWidget(titleIdx, m_splitBtn);
 
-  titleLayout->addWidget(m_splitBtn);
-  titleLayout->addWidget(m_minBtn);
-  titleLayout->addWidget(m_maxBtn);
-  titleLayout->addWidget(m_closeBtn);
-
-  connect(m_closeBtn, &QPushButton::clicked, this, &QWidget::close);
-  connect(m_minBtn, &QPushButton::clicked, this, &QWidget::showMinimized);
-  connect(m_maxBtn, &QPushButton::clicked, this, &MainDevUi::onMaximizeClicked);
   connect(m_splitBtn, &QPushButton::clicked, m_splitAction, &QAction::trigger);
 
   // ── 帮助 → 例子 ──
@@ -258,17 +245,7 @@ bool MainDevUi::nativeEvent(const QByteArray &eventType, void *message, qintptr 
 //  窗口状态变化
 // ══════════════════════════════════════════════════════════════
 
-void MainDevUi::updateMaximizeIcon() { AuiButton::updateMaximizeIcon(m_maxBtn, isMaximized()); }
-
-void MainDevUi::changeEvent(QEvent *ev) {
-  if (ev->type() == QEvent::WindowStateChange) updateMaximizeIcon();
-  QMainWindow::changeEvent(ev);
-}
-
-void MainDevUi::onMaximizeClicked() {
-  AuiWindow::toggleMaximize(this);
-  updateMaximizeIcon();
-}
+void MainDevUi::changeEvent(QEvent *ev) { QMainWindow::changeEvent(ev); }
 
 // ──────────────────────────────────────────────────────────────
 //  编辑器面板组创建

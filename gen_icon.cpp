@@ -29,14 +29,15 @@ QPixmap createIconPixmap(int size) {
   const qreal r = size * 0.2;
   QPainterPath path;
   path.addRoundedRect(QRectF(0, 0, size, size), r, r);
-  p.fillPath(path, QColor(0xe0, 0xe0, 0xe0));
+  p.fillPath(path, QColor(0xd9, 0xd9, 0xd9));
 
   QPen pen(QColor(0x33, 0x33, 0x33), qMax(1.0, size * 0.06));
   pen.setCapStyle(Qt::RoundCap);
   p.setPen(pen);
-  QFont f(QStringLiteral("Consolas"), qMax(1, size * 11 / 20), QFont::Bold);
+  QFont f(QStringLiteral("Consolas"), qMax(1, size * 12 / 20), QFont::Black);
   p.setFont(f);
   p.drawText(QRectF(0, 0, size, size), Qt::AlignCenter, QStringLiteral("AC"));
+
   p.end();
   return px;
 }

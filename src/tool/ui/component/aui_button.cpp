@@ -21,17 +21,24 @@ void AuiButton::applyCommonStyle(QPushButton *btn) {
   btn->setFixedSize(AuiStyle::titleBarButtonSize());
   btn->setFlat(true);
   btn->setFocusPolicy(Qt::NoFocus);
+  btn->setStyleSheet(
+      QStringLiteral("QPushButton { background: transparent; border: 1px solid transparent; }"
+                     "QPushButton:hover { background: %1; border: 1px solid %2; }"
+                     "QPushButton:pressed { background: %3; }")
+          .arg(AuiStyle::hoverBackground().name(), AuiStyle::borderColor().name(),
+               AuiStyle::iconButtonPressedBg().name(QColor::HexArgb)));
 }
 
 void AuiButton::applyIconButtonStyle(QPushButton *btn) {
   btn->setStyleSheet(QStringLiteral("QPushButton {"
                                     "  background: transparent;"
-                                    "  border: none;"
+                                    "  border: 1px solid transparent;"
                                     "  margin: 2px 4px;"
                                     "  padding: 2px 4px;"
                                     "}"
                                     "QPushButton:hover {"
                                     "  background: %1;"
+                                    "  border: 1px solid %3;"
                                     "}"
                                     "QPushButton:pressed {"
                                     "  background: %2;"
@@ -40,7 +47,8 @@ void AuiButton::applyIconButtonStyle(QPushButton *btn) {
                                     "  color: transparent;"
                                     "}")
                          .arg(AuiStyle::iconButtonHoverBg().name(QColor::HexArgb),
-                              AuiStyle::iconButtonPressedBg().name(QColor::HexArgb)));
+                              AuiStyle::iconButtonPressedBg().name(QColor::HexArgb),
+                              AuiStyle::borderColor().name()));
 }
 
 // ════════════════════════════════════════════════════════════

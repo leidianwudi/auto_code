@@ -128,11 +128,7 @@ private:
   void setupEditorArea();
   /// 构建底部状态栏并返回内容控件
   void setupStatusBar(QWidget *contentWidget, QVBoxLayout *contentLayout);
-  /// 更新最大化/还原按钮图标
-  void updateMaximizeIcon();
-
   // ── 窗口事件 ──
-  void onMaximizeClicked();
   void showEvent(QShowEvent *event) override;
   void closeEvent(QCloseEvent *event) override;
   void changeEvent(QEvent *ev) override;
@@ -157,9 +153,6 @@ private:
   QWidget *m_titleBar = nullptr;
   QLabel *m_titleLabel = nullptr;
   QPushButton *m_splitBtn = nullptr;
-  QPushButton *m_minBtn = nullptr;
-  QPushButton *m_maxBtn = nullptr;
-  QPushButton *m_closeBtn = nullptr;
   QPushButton *m_buildBtn = nullptr;
   QComboBox *m_startupCombo = nullptr;
   QPushButton *m_saveBtn = nullptr;
