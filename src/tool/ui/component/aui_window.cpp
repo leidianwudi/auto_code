@@ -11,12 +11,14 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMainWindow>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPixmap>
 #include <QPushButton>
 #include <QSizeGrip>
 #include <QStyle>
 #include <QVBoxLayout>
+#include <QWindow>
 
 #include "aui_button.h"
 #include "aui_style.h"
@@ -211,6 +213,57 @@ void AuiWindow::applyWindowFrame(QWidget *window, QWidget *titleBar, QWidget *co
     winLayout->setSpacing(0);
     winLayout->addWidget(frame);
   }
+
+  // 启用标题栏拖拽（使用 startSystemMove 替代 HTCAPTION，避免模态对话框关闭后拖拽失效）
+  enableTitleBarDrag(window, titleBar);
+}
+
+// ════════════════════════════════════════════════════════════
+//  标题栏拖拽（使用 Qt startSystemMove 替代 HTCAPTION）
+// ════════════════════════════════════════════════════════════
+
+namespace {
+class TitleBarDragFilter : public QObject {
+public:
+  explicit TitleBarDragFilter(QWidget *window, QObject *parent = nullptr)
+      : QObject(parent), m_window(window) {}
+
+protected:
+  bool eventFilter(QObject *watched, QEvent *event) override {
+    Q_UNUSED(watched)
+    if (event->type() == QEvent::MouseButtonPress) {
+      auto *me = static_cast<QMouseEvent *>(event);
+      if (me->button() == Qt::LeftButton) {
+        if (QWindow *hw = m_window->windowHandle()) {
+          hw->startSystemMove();
+        }
+        return true;
+      }
+    }
+    if (event->type() == QEvent::MouseButtonDblClick) {
+      auto *me = static_cast<QMouseEvent *>(event);
+      if (me->button() == Qt::LeftButton) {
+        if (m_window->isMaximized()) {
+          m_window->showNormal();
+        } else {
+          m_window->showMaximized();
+        }
+        return true;
+      }
+    }
+    return false;
+  }
+
+private:
+  QWidget *m_window;
+};
+}  // namespace
+
+void AuiWindow::enableTitleBarDrag(QWidget *window, QWidget *titleBar) {
+  if (window && titleBar) {
+    auto *filter = new TitleBarDragFilter(window, titleBar);
+    titleBar->installEventFilter(filter);
+  }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -295,15 +348,12 @@ bool AuiWindow::handleNativeEvent(QWidget *window, QWidget *titleBar, const QByt
       return true;
     }
 
-    // ── 标题栏区域（排除按钮 / 下拉框等交互控件）→ HTCAPTION 实现原生拖拽 ──
+    // ── 标题栏区域 → HTCLIENT（由 TitleBarDragFilter 通过 startSystemMove 实现拖拽）──
+    // 不使用 HTCAPTION：模态对话框关闭后 Windows 原生 HTCAPTION 拖拽机制会失效。
+    // 返回 HTCLIENT 让 Qt 接收鼠标事件，由事件过滤器调用 startSystemMove() 启动拖拽。
     if (titleBar && pt.y() < titleBar->height()) {
-      QWidget *child = titleBar->childAt(titleBar->mapFromGlobal(QPoint(x, y)));
-      // 没有子控件，或者子控件不是交互控件（按钮、下拉框），则视为标题栏拖拽区域
-      if (!child || child == titleBar ||
-          (!qobject_cast<QAbstractButton *>(child) && !qobject_cast<QComboBox *>(child))) {
-        *result = HTCAPTION;
-        return true;
-      }
+      *result = HTCLIENT;
+      return true;
     }
   }
   return false;

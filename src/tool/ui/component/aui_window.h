@@ -69,6 +69,11 @@ public:
   /// @param content  内容控件（如 QSplitter、QWidget）
   static void applyWindowFrame(QWidget *window, QWidget *titleBar, QWidget *content);
 
+  /// 启用标题栏拖拽（使用 Qt startSystemMove 替代 HTCAPTION，避免模态对话框关闭后拖拽失效）
+  /// @param window   窗口
+  /// @param titleBar 标题栏（可为 nullptr）
+  static void enableTitleBarDrag(QWidget *window, QWidget *titleBar);
+
   /// 添加 Win32 拉伸边框支持（WS_THICKFRAME）
   static void enableWin32Resize(QWidget *window);
 
