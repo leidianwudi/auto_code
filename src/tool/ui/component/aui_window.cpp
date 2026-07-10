@@ -5,6 +5,7 @@
 
 #include "aui_window.h"
 
+#include <QComboBox>
 #include <QDialog>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -52,18 +53,7 @@ void AuiWindow::setupDialogStyle(QDialog *dialog) {
 #endif
 
   // 应用统一样式表，确保颜色与 MainDevUi 一致
-  dialog->setStyleSheet(AuiStyle::mainStyleSheet() +
-                        QStringLiteral("QDialog { background: %1; }"
-                                       "QLabel { color: %2; font-size: 13px; }"
-                                       "QLineEdit {"
-                                       "  border: 1px solid #c8c8c8; border-radius: 3px;"
-                                       "  padding: 4px 6px; font-size: 13px;"
-                                       "}"
-                                       "QPushButton {"
-                                       "  border: 1px solid #c8c8c8; border-radius: 3px;"
-                                       "  padding: 6px 20px; font-size: 13px;"
-                                       "}")
-                            .arg(AuiStyle::barBackground().name(), AuiStyle::textColor().name()));
+  dialog->setStyleSheet(AuiStyle::mainStyleSheet() + AuiStyle::dialogStyleSheet());
 }
 
 // ════════════════════════════════════════════════════════════
@@ -305,10 +295,12 @@ bool AuiWindow::handleNativeEvent(QWidget *window, QWidget *titleBar, const QByt
       return true;
     }
 
-    // ── 标题栏区域（排除按钮）→ HTCAPTION 实现原生拖拽 ──
+    // ── 标题栏区域（排除按钮 / 下拉框等交互控件）→ HTCAPTION 实现原生拖拽 ──
     if (titleBar && pt.y() < titleBar->height()) {
       QWidget *child = titleBar->childAt(titleBar->mapFromGlobal(QPoint(x, y)));
-      if (!child || child == titleBar) {
+      // 没有子控件，或者子控件不是交互控件（按钮、下拉框），则视为标题栏拖拽区域
+      if (!child || child == titleBar ||
+          (!qobject_cast<QAbstractButton *>(child) && !qobject_cast<QComboBox *>(child))) {
         *result = HTCAPTION;
         return true;
       }

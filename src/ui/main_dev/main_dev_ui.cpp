@@ -38,6 +38,7 @@
 #include "src/tool/ui/code/code_editor.h"
 #include "src/tool/ui/code/code_log.h"
 #include "src/tool/ui/component/aui_button.h"
+#include "src/tool/ui/component/aui_combo_box.h"
 #include "src/tool/ui/component/aui_style.h"
 #include "src/tool/ui/component/aui_window.h"
 #include "src/ui/demo/demo_mgr.h"
@@ -113,16 +114,10 @@ void MainDevUi::setupUI() {
   m_buildBtn->setToolTip(QStringLiteral("执行 (F5)"));
   titleLayout->addWidget(m_buildBtn);
 
-  // ── 启动项下拉框 ──
-  m_startupCombo = new QComboBox;
+  // ── 启动项下拉框（浅色主题，复用 AuiComboBox 样式） ──
+  m_startupCombo = AuiComboBox::create();
   m_startupCombo->setMinimumWidth(120);
   m_startupCombo->setToolTip(QStringLiteral("选择启动项"));
-  m_startupCombo->setStyleSheet(
-      QStringLiteral("QComboBox { background: #3c3c3c; color: #d4d4d4; "
-                     "border: 1px solid #555; padding: 2px 6px; }"
-                     "QComboBox::drop-down { border: none; }"
-                     "QComboBox QAbstractItemView { background: #3c3c3c; "
-                     "color: #d4d4d4; selection-background-color: #264f78; }"));
   titleLayout->addWidget(m_startupCombo);
 
   // ── 保存按钮 ──
@@ -234,7 +229,8 @@ void MainDevUi::setupUI() {
     statusBarContentLayout->setSpacing(0);
 
     m_errorLabel = new QLabel;
-    m_errorLabel->setStyleSheet(QStringLiteral("QLabel { color: #f44747; }"));
+    m_errorLabel->setStyleSheet(
+        QStringLiteral("QLabel { color: %1; }").arg(AuiStyle::errorTextColor().name()));
     statusBarContentLayout->addWidget(m_errorLabel, 1);
 
     m_cursorPositionLabel = new QLabel(QStringLiteral("行: 1, 列: 1"));

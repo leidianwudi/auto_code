@@ -42,6 +42,15 @@ public:
   /// 错误文本颜色（输出面板用），红色
   static QColor errorTextColor() { return QColor(0xf4, 0x47, 0x47); }
 
+  /// 通用边框颜色（浅灰），对应 #c8c8c8
+  static QColor borderColor() { return QColor(0xc8, 0xc8, 0xc8); }
+
+  /// 深边框颜色（中灰），对应 #999 / #999999
+  static QColor borderDarkColor() { return QColor(0x99, 0x99, 0x99); }
+
+  /// 面板背景色（白色），对应 #ffffff
+  static QColor panelBackground() { return QColor(Qt::white); }
+
   // ════════════════════════════════════════════════════════════
   //  编辑器 / 输出面板字体
   // ════════════════════════════════════════════════════════════
@@ -80,7 +89,7 @@ public:
     return QStringLiteral(
                "QPlainTextEdit { background: %1; color: %2; "
                "border: 1px solid %3; padding: 0px; }")
-        .arg(QStringLiteral("#ffffff"), textColor().name(), QStringLiteral("#c8c8c8"));
+        .arg(panelBackground().name(), textColor().name(), borderColor().name());
   }
 
   // ════════════════════════════════════════════════════════════
@@ -104,6 +113,9 @@ public:
   // ════════════════════════════════════════════════════════════
   /// @brief 主窗口全局样式表
   static QString mainStyleSheet();
+
+  /// @brief 对话框专用样式表（QDialog + QLabel + QLineEdit + QPushButton）
+  static QString dialogStyleSheet();
 
   // ════════════════════════════════════════════════════════════
   //  风格适配（跨平台兼容）

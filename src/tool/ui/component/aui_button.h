@@ -20,6 +20,9 @@ public:
   /// 对按钮应用标题栏按钮通用样式
   static void applyCommonStyle(QPushButton *btn);
 
+  /// 对按钮应用图标按钮通用样式（透明背景 + hover/pressed 半透明效果）
+  static void applyIconButtonStyle(QPushButton *btn);
+
   // ════════════════════════════════════════════════════════════
   //  工厂方法
   // ════════════════════════════════════════════════════════════

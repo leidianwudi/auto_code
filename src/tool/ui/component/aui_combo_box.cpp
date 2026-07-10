@@ -70,21 +70,25 @@ QComboBox *AuiComboBox::create(QWidget *parent) {
 void AuiComboBox::applyStyle(QComboBox *combo) {
   // ── 应用样式表（只负责框架，箭头由 AuiComboBoxWidget::paintEvent 绘制） ──
   combo->setStyleSheet(QStringLiteral("QComboBox {"
-                                      "  background: white;"
-                                      "  border: 1px solid #c8c8c8; border-radius: 3px;"
+                                      "  background: %1;"
+                                      "  border: 1px solid %2; border-radius: 3px;"
                                       "  padding: 4px 6px; font-size: 13px;"
                                       "}"
                                       "QComboBox:hover {"
-                                      "  border: 1px solid #999;"
+                                      "  border: 1px solid %3;"
                                       "}"
                                       "QComboBox::drop-down {"
                                       "  border: none; width: 24px;"
                                       "}"
                                       "QComboBox QAbstractItemView {"
-                                      "  background: white;"
-                                      "  border: 1px solid #c8c8c8;"
-                                      "  selection-background-color: %1;"
-                                      "  selection-color: %2;"
+                                      "  background: %1;"
+                                      "  border: 1px solid %2;"
+                                      "  selection-background-color: %4;"
+                                      "  selection-color: %5;"
                                       "}")
-                           .arg(AuiStyle::hoverBackground().name(), AuiStyle::textColor().name()));
+                           .arg(AuiStyle::panelBackground().name(),  // 1: white
+                                AuiStyle::borderColor().name(),      // 2: #c8c8c8
+                                AuiStyle::borderDarkColor().name(),  // 3: #999
+                                AuiStyle::hoverBackground().name(),  // 4: #d0d0d0
+                                AuiStyle::textColor().name()));      // 5: #333
 }

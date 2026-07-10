@@ -4,13 +4,14 @@
  */
 
 #include "aui_button.h"
-#include "aui_icon.h"
-#include "aui_style.h"
 
 #include <QPainter>
 #include <QPainterPath>
 #include <QPixmap>
 #include <QPolygonF>
+
+#include "aui_icon.h"
+#include "aui_style.h"
 
 // ════════════════════════════════════════════════════════════
 //  通用按钮样式
@@ -20,6 +21,25 @@ void AuiButton::applyCommonStyle(QPushButton *btn) {
   btn->setFixedSize(36, 26);
   btn->setFlat(true);
   btn->setFocusPolicy(Qt::NoFocus);
+}
+
+void AuiButton::applyIconButtonStyle(QPushButton *btn) {
+  btn->setStyleSheet(
+      QStringLiteral("QPushButton {"
+                     "  background: transparent;"
+                     "  border: none;"
+                     "  margin: 2px 4px;"
+                     "  padding: 2px 4px;"
+                     "}"
+                     "QPushButton:hover {"
+                     "  background: rgba(128, 128, 128, 40);"
+                     "}"
+                     "QPushButton:pressed {"
+                     "  background: rgba(128, 128, 128, 80);"
+                     "}"
+                     "QPushButton:disabled {"
+                     "  color: transparent;"
+                     "}"));
 }
 
 // ════════════════════════════════════════════════════════════
@@ -33,8 +53,8 @@ QPushButton *AuiButton::createSplitButton() {
     QPainter p(&px);
     p.setRenderHint(QPainter::Antialiasing);
     p.setPen(QPen(AuiStyle::textColor(), 1.5));
-    p.drawRect(2, 3, 16, 14);                    // 外框
-    p.drawLine(QPointF(10, 3), QPointF(10, 17)); // 中分线
+    p.drawRect(2, 3, 16, 14);                     // 外框
+    p.drawLine(QPointF(10, 3), QPointF(10, 17));  // 中分线
     p.end();
     btn->setIcon(QIcon(px));
     btn->setIconSize(QSize(20, 20));
@@ -45,7 +65,7 @@ QPushButton *AuiButton::createSplitButton() {
 }
 
 QPushButton *AuiButton::createMinButton() {
-  auto *btn = new QPushButton(QStringLiteral("\u2014")); // em dash
+  auto *btn = new QPushButton(QStringLiteral("\u2014"));  // em dash
   applyCommonStyle(btn);
   return btn;
 }
@@ -58,7 +78,7 @@ QPushButton *AuiButton::createMaxButton() {
 }
 
 QPushButton *AuiButton::createCloseButton() {
-  auto *btn = new QPushButton(QStringLiteral("\u2715")); // multiplication sign
+  auto *btn = new QPushButton(QStringLiteral("\u2715"));  // multiplication sign
   applyCommonStyle(btn);
   return btn;
 }
@@ -73,18 +93,7 @@ QPushButton *AuiButton::createBuildButton(int size) {
   btn->setIconSize(QSize(size, size));
   btn->setCursor(Qt::PointingHandCursor);
   btn->setFocusPolicy(Qt::NoFocus);
-  btn->setStyleSheet(QStringLiteral("QPushButton {"
-                                    "  background: transparent;"
-                                    "  border: none;"
-                                    "  margin: 2px 4px;"
-                                    "  padding: 2px 4px;"
-                                    "}"
-                                    "QPushButton:hover {"
-                                    "  background: rgba(128, 128, 128, 40);"
-                                    "}"
-                                    "QPushButton:pressed {"
-                                    "  background: rgba(128, 128, 128, 80);"
-                                    "}"));
+  applyIconButtonStyle(btn);
   return btn;
 }
 
@@ -101,7 +110,7 @@ QPushButton *AuiButton::createSaveButton(int size) {
   p.setRenderHint(QPainter::Antialiasing);
   p.setPen(QPen(AuiStyle::textColor(), 1.2));
 
-  int m = 2; // margin
+  int m = 2;  // margin
   // 软盘外框
   p.drawRect(m, m, size - 2 * m, size - 2 * m);
   // 软盘标签（上部小矩形）
@@ -115,21 +124,8 @@ QPushButton *AuiButton::createSaveButton(int size) {
   btn->setCursor(Qt::PointingHandCursor);
   btn->setFocusPolicy(Qt::NoFocus);
   btn->setToolTip(QStringLiteral("保存 (Ctrl+S)"));
-  btn->setStyleSheet(QStringLiteral("QPushButton {"
-                                    "  background: transparent;"
-                                    "  border: none;"
-                                    "  margin: 2px 4px;"
-                                    "  padding: 2px 4px;"
-                                    "}"
-                                    "QPushButton:hover {"
-                                    "  background: rgba(128, 128, 128, 40);"
-                                    "}"
-                                    "QPushButton:pressed {"
-                                    "  background: rgba(128, 128, 128, 80);"
-                                    "}"
-                                    "QPushButton:disabled {"
-                                    "  color: transparent;"
-                                    "}"));
+  applyIconButtonStyle(btn);
+  btn->setEnabled(false);
   return btn;
 }
 
@@ -144,14 +140,14 @@ QPushButton *AuiButton::createSaveAllButton(int size) {
   QPainter p(&px);
   p.setRenderHint(QPainter::Antialiasing);
 
-  QColor fg = AuiStyle::textColor(); // 前景 #333
-  QColor bg(0x88, 0x88, 0x88);       // 背景浅灰
-  int d = 2;                         // 偏移量
+  QColor fg = AuiStyle::textColor();  // 前景 #333
+  QColor bg(0x88, 0x88, 0x88);        // 背景浅灰
+  int d = 2;                          // 偏移量
 
   // 绘制软盘图标（与 createSaveButton 相同样式）
   auto drawDisk = [&](int ox, int oy, const QColor &color) {
     p.setPen(QPen(color, 1.2));
-    int m = 1 + d; // 留出偏移空间
+    int m = 1 + d;  // 留出偏移空间
     int x = m + ox;
     int y = m + oy;
     int w = size - 2 * m;
@@ -172,21 +168,7 @@ QPushButton *AuiButton::createSaveAllButton(int size) {
   btn->setCursor(Qt::PointingHandCursor);
   btn->setFocusPolicy(Qt::NoFocus);
   btn->setToolTip(QStringLiteral("保存全部"));
-  btn->setStyleSheet(QStringLiteral("QPushButton {"
-                                    "  background: transparent;"
-                                    "  border: none;"
-                                    "  margin: 2px 4px;"
-                                    "  padding: 2px 4px;"
-                                    "}"
-                                    "QPushButton:hover {"
-                                    "  background: rgba(128, 128, 128, 40);"
-                                    "}"
-                                    "QPushButton:pressed {"
-                                    "  background: rgba(128, 128, 128, 80);"
-                                    "}"
-                                    "QPushButton:disabled {"
-                                    "  color: transparent;"
-                                    "}"));
+  applyIconButtonStyle(btn);
   return btn;
 }
 
