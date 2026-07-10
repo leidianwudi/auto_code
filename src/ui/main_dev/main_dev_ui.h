@@ -13,6 +13,7 @@
 #include <QLabel>
 #include <QMainWindow>
 #include <QPushButton>
+#include <QShowEvent>
 #include <QSplitter>
 #include <QTabWidget>
 
@@ -132,6 +133,7 @@ private:
 
   // ── 窗口事件 ──
   void onMaximizeClicked();
+  void showEvent(QShowEvent *event) override;
   void closeEvent(QCloseEvent *event) override;
   void changeEvent(QEvent *ev) override;
   bool eventFilter(QObject *obj, QEvent *ev) override;

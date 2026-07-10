@@ -141,8 +141,9 @@ void DemoUi::setupUI() {
   contentLayout->addWidget(outputPanel, 1);
 
   // ── 底部状态栏（放在内容区内，确保在 WindowFrame 边框内） ──
-  m_statusLabel = AuiWindow::createStatusBar(contentWidget)->findChild<QLabel *>();
-  contentLayout->addWidget(m_statusLabel->parentWidget());
+  m_statusLabel = new QLabel(QStringLiteral("就绪"));
+  m_statusLabel->setContentsMargins(4, 0, 4, 0);
+  contentLayout->addWidget(AuiWindow::createStatusBar(contentWidget, m_statusLabel));
 
   // ── 应用窗口框架（2px 边框，包裹标题栏 + 内容） ──
   AuiWindow::applyWindowFrame(this, m_titleBar, contentWidget);
@@ -151,6 +152,14 @@ void DemoUi::setupUI() {
   AuiWindow::enableWin32Resize(this);
 
   // ── 示例数据 ──
+  loadExampleData();
+}
+
+// ──────────────────────────────────────────────────────────────
+//  loadExampleData — 加载示例模板和数据
+// ──────────────────────────────────────────────────────────────
+
+void DemoUi::loadExampleData() {
   m_templateEdit->setPlainText(
       "// ${modelName} Model\n"
       "export interface ${modelName} {\n"

@@ -209,7 +209,6 @@ void MainDevUi::setupEditorArea() {
   m_contentSplitter->addWidget(m_outputPanel);
   m_contentSplitter->setStretchFactor(0, 1);
   m_contentSplitter->setStretchFactor(1, 0);
-  m_contentSplitter->setSizes({700, 120});
 
   // ── 主分割器：文件树 + 右侧区域 ──
   m_mainSplitter = new QSplitter(Qt::Horizontal);
@@ -217,7 +216,6 @@ void MainDevUi::setupEditorArea() {
   m_mainSplitter->addWidget(m_contentSplitter);
   m_mainSplitter->setStretchFactor(0, 0);
   m_mainSplitter->setStretchFactor(1, 1);
-  m_mainSplitter->setSizes({250, 1150});
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -282,6 +280,20 @@ QTabWidget *MainDevUi::createEditorPanel() {
   tabs->setContentsMargins(0, 0, 0, 0);
   tabs->setStyleSheet(QStringLiteral("QTabWidget::pane { margin: 0; border: none; }"));
   return tabs;
+}
+
+void MainDevUi::showEvent(QShowEvent *event) {
+  QMainWindow::showEvent(event);
+  // 仅在首次显示时设置分割器初始比例
+  static bool firstShow = true;
+  if (firstShow) {
+    firstShow = false;
+    const int w = width();
+    const int h = height();
+    m_mainSplitter->setSizes(
+        {qMax(TreeDir::kMinWidth, w / 5), w - qMax(TreeDir::kMinWidth, w / 5)});
+    m_contentSplitter->setSizes({h - 120, 120});
+  }
 }
 
 void MainDevUi::closeEvent(QCloseEvent *event) {

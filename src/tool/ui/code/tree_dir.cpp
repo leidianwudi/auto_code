@@ -24,8 +24,6 @@
 #include <QTreeWidgetItemIterator>
 
 #include "src/engine/ac_language.h"
-#include "src/engine/script/ac_engine.h"
-#include "src/tool/ui/component/aui_button.h"
 #include "src/tool/ui/component/aui_icon.h"
 #include "src/tool/ui/component/aui_style.h"
 #include "src/ui/create/create_mgr.h"
@@ -79,8 +77,8 @@ void ModifiedFileDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
 
 TreeDir::TreeDir(QWidget *parent) : QTreeWidget(parent) {
   setHeaderLabel(QStringLiteral("文件"));
-  setMinimumWidth(200);
-  setMaximumWidth(400);
+  setMinimumWidth(kMinWidth);
+  setMaximumWidth(kMaxWidth);
   setAnimated(true);
   setIndentation(16);
   setSortingEnabled(false);

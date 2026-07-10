@@ -37,13 +37,6 @@ public:
   /// 获取 AC 程序图标 Pixmap，可用于 setWindowIcon() 等场景
   static QPixmap appIconPixmap(int size = 20);
 
-  /// 创建标准标题栏（AC 图标 + 标题文字 + 最小化/最大化/关闭按钮）
-  /// @param parent     父控件
-  /// @param title      窗口标题
-  /// @param showMinMax 是否显示最小化/最大化按钮（默认 true）
-  /// @return 标题栏 QWidget 指针
-  static QWidget *createTitleBar(QWidget *parent, const QString &title, bool showMinMax = true);
-
   /// 创建底部状态栏（状态文字 + QSizeGrip 可拖拽三角）
   /// @param parent 父控件
   /// @param text   初始状态文字（如 "就绪"）

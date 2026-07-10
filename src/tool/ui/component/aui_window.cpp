@@ -84,41 +84,6 @@ QLabel *AuiWindow::createAppIcon(QWidget *parent, int size) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  创建标准标题栏
-// ════════════════════════════════════════════════════════
-
-QWidget *AuiWindow::createTitleBar(QWidget *parent, const QString &title, bool showMinMax) {
-  auto *bar = new QWidget(parent);
-  bar->setObjectName(QStringLiteral("TitleBar"));
-  auto *layout = new QHBoxLayout(bar);
-  layout->setContentsMargins(AuiStyle::titleBarMargins());
-  layout->setSpacing(AuiStyle::titleBarSpacing());
-
-  // ── AC 图标 ──
-  layout->addWidget(createAppIcon(bar, 20));
-
-  // ── 标题文字 ──
-  auto *titleLabel = new QLabel(title, bar);
-  titleLabel->setObjectName(QStringLiteral("TitleLabel"));
-  layout->addWidget(titleLabel);
-
-  layout->addStretch();
-
-  // ── 窗口控制按钮 ──
-  if (showMinMax) {
-    auto *minBtn = AuiButton::createMinButton();
-    layout->addWidget(minBtn);
-    auto *maxBtn = AuiButton::createMaxButton();
-    layout->addWidget(maxBtn);
-  }
-
-  auto *closeBtn = AuiButton::createCloseButton();
-  layout->addWidget(closeBtn);
-
-  return bar;
-}
-
-// ════════════════════════════════════════════════════════════
 //  创建底部状态栏（状态文字 + QSizeGrip 可拖拽三角）
 // ════════════════════════════════════════════════════════════
 
@@ -159,7 +124,7 @@ void AuiWindow::applyWindowFrame(QWidget *window, QWidget *titleBar, QWidget *co
   auto *frame = new QFrame(window);
   frame->setObjectName(QStringLiteral("WindowFrame"));
   auto *frameLayout = new QVBoxLayout(frame);
-  // 设置chuang口边框为 1px，顶部不需要额外边框（标题栏已经有间距）
+  // 设置窗口边框为 1px，顶部不需要额外边框（标题栏已经有间距）
   frameLayout->setContentsMargins(1, 0, 1, 1);
   frameLayout->setSpacing(0);
 

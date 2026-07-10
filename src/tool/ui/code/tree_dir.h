@@ -38,6 +38,10 @@ class TreeDir : public QTreeWidget {
   Q_OBJECT
 
 public:
+  static constexpr int kMinWidth = 200;
+  static constexpr int kMaxWidth = 400;
+
+public:
   explicit TreeDir(QWidget *parent = nullptr);
 
   /// 扫描 dirPath 并构建文件树（自动加载已有勾选状态）

@@ -58,6 +58,9 @@ signals:
   void saveOutputRequested();
 
 private:
+  /// 加载示例模板和数据到编辑区
+  void loadExampleData();
+
   // ── 窗口事件 ──
 #if defined(Q_OS_WIN)
   bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
