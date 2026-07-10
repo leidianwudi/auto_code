@@ -9,10 +9,12 @@
 #include <QDialog>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QLabel>
 #include <QMainWindow>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPixmap>
 #include <QPushButton>
 #include <QSizeGrip>
@@ -36,6 +38,7 @@
 void AuiWindow::setupFramelessWindow(QWidget *window) {
   window->setWindowFlags(Qt::FramelessWindowHint | Qt::WindowMinMaxButtonsHint);
   window->setStyleSheet(AuiStyle::mainStyleSheet());
+  window->setWindowIcon(QIcon(appIconPixmap(256)));
 }
 
 // ════════════════════════════════════════════════════════════
@@ -43,6 +46,8 @@ void AuiWindow::setupFramelessWindow(QWidget *window) {
 // ════════════════════════════════════════════════════════════
 
 void AuiWindow::setupDialogStyle(QDialog *dialog) {
+  dialog->setWindowIcon(QIcon(appIconPixmap(256)));
+
   // 设置标题栏颜色与窗口背景一致（Windows DWM API）
 #ifdef Q_OS_WIN
   HWND hwnd = reinterpret_cast<HWND>(dialog->winId());
@@ -67,10 +72,18 @@ QPixmap AuiWindow::appIconPixmap(int size) {
   px.fill(Qt::transparent);
   QPainter p(&px);
   p.setRenderHint(QPainter::Antialiasing);
-  QPen pen(AuiStyle::textColor(), 2.0);
+
+  // ── 圆角背景 ──
+  const qreal r = size * 0.2;
+  QPainterPath path;
+  path.addRoundedRect(QRectF(0, 0, size, size), r, r);
+  p.fillPath(path, AuiStyle::barBackground());
+
+  // ── AC 文字 ──
+  QPen pen(AuiStyle::textColor(), qMax(1.0, size * 0.06));
   pen.setCapStyle(Qt::RoundCap);
   p.setPen(pen);
-  QFont f(QStringLiteral("Consolas"), 11, QFont::Bold);
+  QFont f(QStringLiteral("Consolas"), qMax(1, size * 11 / 20), QFont::Bold);
   p.setFont(f);
   p.drawText(QRectF(0, 0, size, size), Qt::AlignCenter, QStringLiteral("AC"));
   p.end();

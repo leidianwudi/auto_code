@@ -11,6 +11,7 @@ set(CMAKE_AUTOUIC OFF)
 qt_add_executable(auto_code
     WIN32 MACOSX_BUNDLE
     main.cpp
+    res/app_icon.rc
     src/engine/script/ac_type.h
     src/engine/script/ac_lexer.h
     src/engine/script/ac_lexer.cpp
@@ -163,3 +164,14 @@ qt_generate_deploy_app_script(
     NO_UNSUPPORTED_PLATFORM_ERROR
 )
 install(SCRIPT ${deploy_script})
+
+# ════════════════════════════════════════════════════════════
+#  构建时生成 app_icon.ico（嵌入到 exe 中，影响 Windows 任务管理器图标）
+# ════════════════════════════════════════════════════════════
+
+# gen_icon 工具：编译后手动运行一次生成 res/app_icon.ico
+#   build> gen_icon.exe D:/work/github/auto_code/res/app_icon.ico
+# 生成后 .rc 文件会自动将其嵌入到 auto_code.exe 中
+qt_add_executable(gen_icon EXCLUDE_FROM_ALL gen_icon.cpp)
+target_include_directories(gen_icon PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(gen_icon PRIVATE Qt::Core Qt::Widgets)

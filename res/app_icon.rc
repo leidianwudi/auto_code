@@ -1,0 +1,5 @@
+// Windows 资源文件 — 嵌入应用程序图标
+// 将 res/app_icon.ico 嵌入到 auto_code.exe 中，
+// 使 Windows 任务管理器和文件资源管理器显示 AC 图标。
+
+1 ICON "app_icon.ico"

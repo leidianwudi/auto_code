@@ -8,10 +8,11 @@
  * 采用单例 + MVC 架构，由 MainDevMgr 充当主窗口和控制器。
  */
 
-#include "src/engine/function/fun_mgr.h"
-#include "src/ui/main_dev/main_dev_mgr.h"
-
 #include <QApplication>
+
+#include "src/engine/function/fun_mgr.h"
+#include "src/tool/ui/component/aui_window.h"
+#include "src/ui/main_dev/main_dev_mgr.h"
 
 /**
  * @brief 应用程序主函数
@@ -21,6 +22,9 @@
  */
 int main(int argc, char *argv[]) {
   QApplication a(argc, argv);
+
+  // 设置应用程序级图标（影响 Windows 任务管理器进程图标）
+  a.setWindowIcon(QIcon(AuiWindow::appIconPixmap(256)));
 
   // 注册所有 C++ 函数到 FunMgr（模板引擎 ${...} 调用基础）
   FunMgr::init();

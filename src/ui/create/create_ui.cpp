@@ -34,9 +34,6 @@ void CreateUi::setupUI() {
   // 保留原生标题栏，通过 DWM 设置标题栏颜色与窗口背景一致
   AuiWindow::setupDialogStyle(this);
 
-  // ── 设置窗口图标为 AC 图标
-  setWindowIcon(QIcon(AuiWindow::appIconPixmap(16)));
-
   auto *mainLayout = new QVBoxLayout(this);
   mainLayout->setContentsMargins(16, 16, 16, 16);
   mainLayout->setSpacing(12);
