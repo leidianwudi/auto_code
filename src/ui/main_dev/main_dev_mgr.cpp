@@ -23,13 +23,12 @@
 #include "main_dev_model.h"
 #include "main_dev_ui.h"
 #include "main_dev_ui_ext.h"
+#include "src/engine/ac_language.h"
 #include "src/engine/script/ac_engine.h"
-#include "src/tool/ui/code_editor.h"
+#include "src/tool/ui/code/code_editor.h"
 #include "src/tool/ui/highlighter/light_ac.h"
 #include "src/tool/ui/highlighter/light_json.h"
 #include "src/tool/ui/highlighter/light_tpl.h"
-#include "src/engine/ac_language.h"
-
 
 // ──────────────────────────────────────────────────────────────
 //  静态方法（通过单例转发）

@@ -17,8 +17,8 @@
 #include <QTabWidget>
 
 #include "main_dev_ui_ext.h"
-#include "src/tool/ui/code_log.h"
-#include "src/tool/ui/tree_dir.h"
+#include "src/tool/ui/code/code_log.h"
+#include "src/tool/ui/code/tree_dir.h"
 
 // ════════════════════════════════════════════════════════════
 //  MainDevUi

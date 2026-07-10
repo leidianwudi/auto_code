@@ -4,12 +4,8 @@
  */
 
 #include "demo_ui.h"
-#include "src/tool/ui/aui_button.h"
-#include "src/tool/ui/aui_style.h"
-#include "src/tool/ui/code_editor.h"
 
 #include <QAction>
-
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMenuBar>
@@ -18,6 +14,11 @@
 #include <QStatusBar>
 #include <QTimer>
 #include <QVBoxLayout>
+
+#include "src/tool/ui/aui_button.h"
+#include "src/tool/ui/aui_style.h"
+#include "src/tool/ui/code/code_editor.h"
+
 
 // ──────────────────────────────────────────────────────────────
 //  DemoUi — 构造函数
@@ -184,11 +185,9 @@ void DemoUi::setupUI() {
 // ──────────────────────────────────────────────────────────────
 
 void DemoUi::setStatusText(const QString &text, int timeout) {
-  if (m_statusLabel)
-    m_statusLabel->setText(text);
+  if (m_statusLabel) m_statusLabel->setText(text);
   if (timeout > 0)
     QTimer::singleShot(timeout, this, [this]() {
-      if (m_statusLabel)
-        m_statusLabel->setText(QStringLiteral("就绪"));
+      if (m_statusLabel) m_statusLabel->setText(QStringLiteral("就绪"));
     });
 }

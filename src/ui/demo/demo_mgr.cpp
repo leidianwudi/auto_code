@@ -4,13 +4,6 @@
  */
 
 #include "demo_mgr.h"
-#include "demo_model.h"
-#include "demo_ui.h"
-#include "src/engine/tpl/tpl_engine.h"
-#include "src/tool/ui/code_editor.h"
-#include "src/tool/ui/highlighter/light_json.h"
-#include "src/tool/ui/highlighter/light_tpl.h"
-#include "src/tool/ui/highlighter/light_ts.h"
 
 #include <QFile>
 #include <QFileDialog>
@@ -18,6 +11,15 @@
 #include <QJsonObject>
 #include <QMessageBox>
 #include <QTextStream>
+
+#include "demo_model.h"
+#include "demo_ui.h"
+#include "src/engine/tpl/tpl_engine.h"
+#include "src/tool/ui/code/code_editor.h"
+#include "src/tool/ui/highlighter/light_json.h"
+#include "src/tool/ui/highlighter/light_tpl.h"
+#include "src/tool/ui/highlighter/light_ts.h"
+
 
 // ──────────────────────────────────────────────────────────────
 //  onCreateWindow — 创建 DemoUi 窗口（open() 时调用）
@@ -46,14 +48,10 @@ QWidget *DemoMgr::onCreateWindow() {
 // ──────────────────────────────────────────────────────────────
 
 void DemoMgr::initUi() {
-  connect(m_ui->generateAction(), &QAction::triggered, this,
-          &DemoMgr::onGenerate);
-  connect(m_ui->loadTemplateAction(), &QAction::triggered, this,
-          &DemoMgr::onLoadTemplate);
-  connect(m_ui->loadDataAction(), &QAction::triggered, this,
-          &DemoMgr::onLoadData);
-  connect(m_ui->saveOutputAction(), &QAction::triggered, this,
-          &DemoMgr::onSaveOutput);
+  connect(m_ui->generateAction(), &QAction::triggered, this, &DemoMgr::onGenerate);
+  connect(m_ui->loadTemplateAction(), &QAction::triggered, this, &DemoMgr::onLoadTemplate);
+  connect(m_ui->loadDataAction(), &QAction::triggered, this, &DemoMgr::onLoadData);
+  connect(m_ui->saveOutputAction(), &QAction::triggered, this, &DemoMgr::onSaveOutput);
 
   // UI 发射的自定义信号
   connect(m_ui, &DemoUi::generateRequested, this, &DemoMgr::onGenerate);
@@ -72,21 +70,17 @@ void DemoMgr::onGenerate() {
 
   // 解析 JSON
   QJsonParseError error;
-  QJsonDocument doc =
-      QJsonDocument::fromJson(m_model->getJsonData().toUtf8(), &error);
+  QJsonDocument doc = QJsonDocument::fromJson(m_model->getJsonData().toUtf8(), &error);
 
   if (error.error != QJsonParseError::NoError) {
-    m_model->setError(
-        QStringLiteral("JSON 解析错误: %1").arg(error.errorString()));
-    QMessageBox::warning(m_ui, QStringLiteral("JSON 解析错误"),
-                         m_model->error());
+    m_model->setError(QStringLiteral("JSON 解析错误: %1").arg(error.errorString()));
+    QMessageBox::warning(m_ui, QStringLiteral("JSON 解析错误"), m_model->error());
     return;
   }
 
   if (!doc.isObject()) {
     m_model->setError(QStringLiteral("JSON 数据必须是一个对象"));
-    QMessageBox::warning(m_ui, QStringLiteral("JSON 格式错误"),
-                         m_model->error());
+    QMessageBox::warning(m_ui, QStringLiteral("JSON 格式错误"), m_model->error());
     return;
   }
 
@@ -99,8 +93,7 @@ void DemoMgr::onGenerate() {
 
   if (!m_engine->lastError().isEmpty()) {
     m_model->setError(m_engine->lastError());
-    QMessageBox::warning(m_ui, QStringLiteral("模板渲染错误"),
-                         m_model->error());
+    QMessageBox::warning(m_ui, QStringLiteral("模板渲染错误"), m_model->error());
     return;
   }
 
@@ -114,12 +107,11 @@ void DemoMgr::onGenerate() {
 // ──────────────────────────────────────────────────────────────
 
 void DemoMgr::onLoadTemplate() {
-  QString fileName = QFileDialog::getOpenFileName(
-      m_ui, QStringLiteral("加载模板文件"), QString(),
-      QStringLiteral("模板文件 (*.tmpl *.txt);;所有文件 (*)"));
+  QString fileName =
+      QFileDialog::getOpenFileName(m_ui, QStringLiteral("加载模板文件"), QString(),
+                                   QStringLiteral("模板文件 (*.tmpl *.txt);;所有文件 (*)"));
 
-  if (fileName.isEmpty())
-    return;
+  if (fileName.isEmpty()) return;
 
   QFile file(fileName);
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -143,12 +135,11 @@ void DemoMgr::onLoadTemplate() {
 // ──────────────────────────────────────────────────────────────
 
 void DemoMgr::onLoadData() {
-  QString fileName = QFileDialog::getOpenFileName(
-      m_ui, QStringLiteral("加载数据文件"), QString(),
-      QStringLiteral("JSON 文件 (*.json);;所有文件 (*)"));
+  QString fileName =
+      QFileDialog::getOpenFileName(m_ui, QStringLiteral("加载数据文件"), QString(),
+                                   QStringLiteral("JSON 文件 (*.json);;所有文件 (*)"));
 
-  if (fileName.isEmpty())
-    return;
+  if (fileName.isEmpty()) return;
 
   QFile file(fileName);
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -173,17 +164,15 @@ void DemoMgr::onLoadData() {
 void DemoMgr::onSaveOutput() {
   QString output = m_ui->outputEdit()->toPlainText();
   if (output.isEmpty()) {
-    QMessageBox::information(m_ui, QStringLiteral("提示"),
-                             QStringLiteral("没有可保存的内容"));
+    QMessageBox::information(m_ui, QStringLiteral("提示"), QStringLiteral("没有可保存的内容"));
     return;
   }
 
-  QString fileName = QFileDialog::getSaveFileName(
-      m_ui, QStringLiteral("保存结果"), QString(),
-      QStringLiteral("TypeScript 文件 (*.ts);;所有文件 (*)"));
+  QString fileName =
+      QFileDialog::getSaveFileName(m_ui, QStringLiteral("保存结果"), QString(),
+                                   QStringLiteral("TypeScript 文件 (*.ts);;所有文件 (*)"));
 
-  if (fileName.isEmpty())
-    return;
+  if (fileName.isEmpty()) return;
 
   QFile file(fileName);
   if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {

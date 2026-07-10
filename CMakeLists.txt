@@ -49,12 +49,12 @@ qt_add_executable(auto_code
     src/engine/function/fun_builtin.h
     src/engine/function/fun_builtin.cpp
     src/engine/ac_language.h
-    src/tool/ui/tree_dir.h
-    src/tool/ui/tree_dir.cpp
-    src/tool/ui/code_editor.h
-    src/tool/ui/code_editor.cpp
-    src/tool/ui/code_log.h
-    src/tool/ui/code_log.cpp
+    src/tool/ui/code/tree_dir.h
+    src/tool/ui/code/tree_dir.cpp
+    src/tool/ui/code/code_editor.h
+    src/tool/ui/code/code_editor.cpp
+    src/tool/ui/code/code_log.h
+    src/tool/ui/code/code_log.cpp
     src/tool/ui/highlighter/light_color.h
     src/tool/ui/highlighter/light_tpl.h
     src/tool/ui/highlighter/light_tpl.cpp
