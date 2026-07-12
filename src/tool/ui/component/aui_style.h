@@ -81,6 +81,9 @@ public:
   /// 保存全部按钮背景层颜色（灰色），与 inactiveTabColor 值相同
   static QColor saveAllButtonBgColor() { return inactiveTabColor(); }
 
+  /// 模态对话框遮罩颜色（半透明黑色，覆盖父窗口形成"变暗"效果）
+  static QColor modalOverlayColor() { return QColor(0, 0, 0, 80); }
+
   // ════════════════════════════════════════════════════════════
   //  编辑器 / 输出面板字体
   // ════════════════════════════════════════════════════════════

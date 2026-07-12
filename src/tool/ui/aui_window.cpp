@@ -345,6 +345,32 @@ void AuiWindow::enableWin32Resize(QWidget *window) {
 }
 
 // ════════════════════════════════════════════════════════════
+//  模态对话框遮罩层
+// ════════════════════════════════════════════════════════════
+
+QWidget *AuiWindow::installModalOverlay(QDialog *dialog) {
+  if (!dialog) return nullptr;
+  // 使用 window() 获取顶层窗口，确保遮罩覆盖整个 exe 而非仅直接父控件
+  QWidget *topWindow = dialog->parentWidget() ? dialog->parentWidget()->window() : nullptr;
+  if (!topWindow) return nullptr;
+
+  auto *overlay = new QWidget(topWindow);
+  overlay->setStyleSheet(
+      QStringLiteral("background: %1;").arg(AuiStyle::modalOverlayColor().name(QColor::HexArgb)));
+  overlay->setGeometry(topWindow->rect());
+  overlay->show();
+  overlay->raise();
+  return overlay;
+}
+
+void AuiWindow::removeModalOverlay(QWidget *overlay) {
+  if (overlay) {
+    overlay->hide();
+    overlay->deleteLater();
+  }
+}
+
+// ════════════════════════════════════════════════════════════
 //  Win32 原生事件处理
 // ════════════════════════════════════════════════════════════
 

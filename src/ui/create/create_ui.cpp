@@ -16,7 +16,6 @@
 #include "src/tool/ui/component/aui_combo_box.h"
 #include "src/tool/ui/component/aui_style.h"
 
-
 // ════════════════════════════════════════════════════════════
 //  构造
 // ════════════════════════════════════════════════════════════
@@ -164,4 +163,23 @@ void CreateUi::clearError() {
 
 QString CreateUi::currentSuffix() const {
   return CreateModel::suffix(static_cast<CreateModel::FileType>(m_typeCombo->currentIndex()));
+}
+
+// ════════════════════════════════════════════════════════════
+//  showEvent — 显示时安装遮罩层
+// ════════════════════════════════════════════════════════════
+
+void CreateUi::showEvent(QShowEvent *event) {
+  QDialog::showEvent(event);
+  m_overlay = AuiWindow::installModalOverlay(this);
+}
+
+// ════════════════════════════════════════════════════════════
+//  done — 关闭时移除遮罩层
+// ════════════════════════════════════════════════════════════
+
+void CreateUi::done(int r) {
+  AuiWindow::removeModalOverlay(m_overlay);
+  m_overlay = nullptr;
+  QDialog::done(r);
 }

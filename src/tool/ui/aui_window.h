@@ -94,6 +94,17 @@ public:
   /// 添加 Win32 拉伸边框支持（WS_THICKFRAME）
   static void enableWin32Resize(QWidget *window);
 
+  /// 为模态对话框安装父窗口遮罩层
+  /// 在对话框显示前调用，父窗口会被半透明遮罩覆盖，形成"变暗"效果
+  /// @param dialog 模态对话框（必须有 parentWidget）
+  /// @return 遮罩 QWidget 指针，对话框关闭后传给 removeModalOverlay 移除
+  static QWidget *installModalOverlay(QDialog *dialog);
+
+  /// 移除父窗口遮罩层
+  /// 在对话框关闭时调用
+  /// @param overlay installModalOverlay 返回的遮罩指针
+  static void removeModalOverlay(QWidget *overlay);
+
 #if defined(Q_OS_WIN)
   /// Win32 原生事件处理（WM_NCHITTEST 边框拉伸 + 标题栏拖拽）
   /// @param window    窗口实例

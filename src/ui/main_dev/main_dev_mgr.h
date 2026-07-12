@@ -71,6 +71,8 @@ private slots:
   void onFocusChanged(QWidget *oldFocus, QWidget *newFocus);
   /// 编辑器验证结果变化时，更新状态栏错误信息
   void onValidationMessage(const QString &msg);
+  /// 处理文件/文件夹重命名请求
+  void onRenameFile(const QString &oldPath, const QString &newName);
 
 private:
   /// 查找并加载 file/ 目录

@@ -76,6 +76,8 @@ qt_add_executable(auto_code
     src/tool/ui/component/aui_combo_box.cpp
     src/tool/ui/aui_window.h
     src/tool/ui/aui_window.cpp
+    src/tool/ui/rename_dialog.h
+    src/tool/ui/rename_dialog.cpp
     src/tool/ui/component/aui_error_tool_tip.h
     src/tool/ui/component/aui_error_tool_tip.cpp
     src/tool/ui/code/format_code.h

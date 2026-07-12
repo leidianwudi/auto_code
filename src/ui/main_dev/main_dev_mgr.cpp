@@ -90,6 +90,7 @@ void MainDevMgr::initUi() {
   connect(m_ui->splitAction(), &QAction::triggered, this, &MainDevMgr::onSplitRight);
   connect(m_ui->closeAction(), &QAction::triggered, this, &MainDevMgr::onCloseEditor);
   connect(m_ui->fileTree(), &TreeDir::fileActivated, this, &MainDevMgr::openFileInEditor);
+  connect(m_ui->fileTree(), &TreeDir::renameRequested, this, &MainDevMgr::onRenameFile);
   connect(qApp, &QApplication::focusChanged, this, &MainDevMgr::onFocusChanged);
 
   // ── 保存按钮 ──
@@ -516,4 +517,109 @@ void MainDevMgr::onCloseEditor() {
 void MainDevMgr::updateSaveButtonState() {
   m_ui->saveBtn()->setEnabled(currentEditor() && currentEditor()->document()->isModified());
   m_ui->saveAllBtn()->setEnabled(m_model->hasAnyModified());
+}
+
+// ──────────────────────────────────────────────────────────────
+//  重命名
+// ──────────────────────────────────────────────────────────────
+
+void MainDevMgr::onRenameFile(const QString &oldPath, const QString &newName) {
+  // 校验新名称
+  if (newName.isEmpty()) return;
+
+  static const QString kInvalidChars = QStringLiteral("\\/:*?\"<>|");
+  for (const QChar &c : newName) {
+    if (kInvalidChars.contains(c)) {
+      QMessageBox::warning(m_ui, QStringLiteral("重命名失败"),
+                           QStringLiteral("文件名不能包含以下字符: %1").arg(kInvalidChars));
+      return;
+    }
+  }
+
+  QFileInfo oldInfo(oldPath);
+  QString parentDir = oldInfo.absolutePath();
+  QString newPath = QDir::cleanPath(parentDir + QStringLiteral("/") + newName);
+
+  // 同名检查
+  if (QFileInfo::exists(newPath)) {
+    QMessageBox::warning(m_ui, QStringLiteral("重命名失败"),
+                         QStringLiteral("已存在同名文件或文件夹: %1").arg(newName));
+    return;
+  }
+
+  bool isDir = oldInfo.isDir();
+
+  if (isDir) {
+    // 文件夹重命名
+    QDir dir(parentDir);
+    if (!dir.rename(oldInfo.fileName(), newName)) {
+      QMessageBox::warning(m_ui, QStringLiteral("重命名失败"),
+                           QStringLiteral("无法重命名文件夹: %1").arg(oldInfo.fileName()));
+      return;
+    }
+
+    // 更新所有以旧路径开头的已打开文件
+    QString oldDirPath = QDir::cleanPath(oldPath);
+    for (const QString &filePath : m_model->openFilePaths()) {
+      if (filePath.startsWith(oldDirPath + QStringLiteral("/"))) {
+        QString newFilePath = newPath + filePath.mid(oldDirPath.length());
+        CodeEditor *editor = m_model->openFiles.value(filePath);
+        if (editor) {
+          editor->setObjectName(newFilePath);
+          // 更新 tab 标题和 tooltip
+          for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
+            auto *tabs = m_ui->editorPanelAt(pi);
+            if (!tabs) continue;
+            for (int ti = 0; ti < tabs->count(); ++ti) {
+              if (tabs->widget(ti) == editor) {
+                tabs->setTabText(ti, QFileInfo(newFilePath).fileName());
+                tabs->setTabToolTip(ti, newFilePath);
+                break;
+              }
+            }
+          }
+        }
+        // 更新 model 中的注册信息
+        QString content = m_model->fileContents.value(filePath);
+        m_model->openFiles.remove(filePath);
+        m_model->fileContents.remove(filePath);
+        m_model->openFiles.insert(newFilePath, editor);
+        m_model->fileContents.insert(newFilePath, content);
+      }
+    }
+  } else {
+    // 文件重命名
+    QFile file(oldPath);
+    if (!file.rename(newPath)) {
+      QMessageBox::warning(m_ui, QStringLiteral("重命名失败"),
+                           QStringLiteral("无法重命名文件: %1").arg(oldInfo.fileName()));
+      return;
+    }
+
+    // 更新已打开的编辑器
+    CodeEditor *editor = m_model->openFiles.value(oldPath);
+    if (editor) {
+      editor->setObjectName(newPath);
+      for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
+        auto *tabs = m_ui->editorPanelAt(pi);
+        if (!tabs) continue;
+        for (int ti = 0; ti < tabs->count(); ++ti) {
+          if (tabs->widget(ti) == editor) {
+            tabs->setTabText(ti, newName);
+            tabs->setTabToolTip(ti, newPath);
+            break;
+          }
+        }
+      }
+      // 更新 model 中的注册信息
+      QString content = m_model->fileContents.value(oldPath);
+      m_model->openFiles.remove(oldPath);
+      m_model->fileContents.remove(oldPath);
+      m_model->openFiles.insert(newPath, editor);
+      m_model->fileContents.insert(newPath, content);
+    }
+  }
+
+  // 刷新树
+  m_ui->fileTree()->refreshTree();
 }

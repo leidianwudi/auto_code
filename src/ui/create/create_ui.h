@@ -13,6 +13,9 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QShowEvent>
+
+class QWidget;
 
 /**
  * @class CreateUi
@@ -20,6 +23,7 @@
  *
  * MVC 中的视图层，负责界面布局和用户交互。
  * 用户确认后通过 CreateMgr 执行创建逻辑。
+ * 弹出时自动为父窗口安装半透明遮罩层，关闭时自动移除。
  */
 class CreateUi : public QDialog {
   Q_OBJECT
@@ -38,6 +42,10 @@ public:
   /// 清除错误提示
   void clearError();
 
+protected:
+  void showEvent(QShowEvent *event) override;
+  void done(int r) override;
+
 private slots:
   /// 文件类型切换时自动更新名称后缀提示
   void onFileTypeChanged(int index);
@@ -55,4 +63,5 @@ private:
   QLabel *m_errorLabel = nullptr;      ///< 错误提示标签
   QPushButton *m_okBtn = nullptr;      ///< 确定按钮
   QPushButton *m_cancelBtn = nullptr;  ///< 取消按钮
+  QWidget *m_overlay = nullptr;        ///< 父窗口遮罩层
 };

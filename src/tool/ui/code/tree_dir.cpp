@@ -26,6 +26,7 @@
 #include "src/engine/ac_language.h"
 #include "src/tool/ui/component/aui_icon.h"
 #include "src/tool/ui/component/aui_style.h"
+#include "src/tool/ui/rename_dialog.h"
 #include "src/ui/create/create_mgr.h"
 
 // ──────────────────────────────────────────────────────────────
@@ -188,6 +189,9 @@ void TreeDir::onItemDoubleClicked(QTreeWidgetItem *item, int column) {
   const QString filePath = item->data(0, Qt::UserRole + 1).toString();
   if (!filePath.isEmpty()) emit fileActivated(filePath);
 }
+
+/// 获取文件夹节点在目录树中的完整路径（相对于根目录）
+static QString buildFolderPath(QTreeWidgetItem *item, const QString &rootPath);
 
 // ============================================================================
 // onItemChanged — 复选框状态变化时级联更新
@@ -557,48 +561,57 @@ void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
   QString filePath = item->data(0, Qt::UserRole + 1).toString();
 
   if (filePath.isEmpty()) {
-    // 文件夹节点：显示 [新建] [刷新]
+    // 文件夹节点：显示 [新建] [重命名] [刷新]
     QMenu menu(this);
     QAction *newAct = menu.addAction(QStringLiteral("新建"));
+    QAction *renameAct = menu.addAction(QStringLiteral("重命名"));
+    menu.addSeparator();
     QAction *refreshAct = menu.addAction(QStringLiteral("刷新"));
     QAction *chosen = menu.exec(event->globalPos());
     if (chosen == newAct) {
       QString dirPath = buildFolderPath(item, m_rootPath);
       CreateMgr::createNew(dirPath, this);
       refreshTree();
+    } else if (chosen == renameAct) {
+      bool ok;
+      QString newName = RenameDialog::getNewName(this, item->text(0), &ok);
+      if (ok) {
+        QString oldPath = buildFolderPath(item, m_rootPath);
+        emit renameRequested(oldPath, newName);
+      }
     } else if (chosen == refreshAct) {
       refreshTree();
     }
     return;
   }
 
-  if (!filePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive)) {
-    QTreeWidget::contextMenuEvent(event);
-    return;
-  }
-
-  bool isStartup = m_startupFiles.contains(filePath);
-
+  // 文件节点：.ac 文件显示 [重命名] + [设为/取消启动项]，其他文件显示 [重命名]
   QMenu menu(this);
-  if (isStartup) {
-    QAction *act = menu.addAction(QStringLiteral("取消启动项"));
-    if (menu.exec(event->globalPos()) == act) {
+  QAction *renameAct = menu.addAction(QStringLiteral("重命名"));
+  if (filePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive)) {
+    menu.addSeparator();
+    if (m_startupFiles.contains(filePath))
+      menu.addAction(QStringLiteral("取消启动项"));
+    else
+      menu.addAction(QStringLiteral("设为启动项"));
+  }
+  QAction *chosen = menu.exec(event->globalPos());
+  if (chosen == renameAct) {
+    bool ok;
+    QString newName = RenameDialog::getNewName(this, item->text(0), &ok);
+    if (ok) {
+      QString oldPath = item->data(0, Qt::UserRole + 1).toString();
+      emit renameRequested(oldPath, newName);
+    }
+  } else if (chosen && !filePath.isEmpty() &&
+             filePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive)) {
+    if (m_startupFiles.contains(filePath))
       m_startupFiles.remove(filePath);
-      if (m_selectedStartup == filePath) m_selectedStartup.clear();
-      refreshStartupIcons();
-      saveState();
-      emit startupItemsChanged();
-    }
-  } else {
-    QAction *act = menu.addAction(QStringLiteral("设为启动项"));
-    if (menu.exec(event->globalPos()) == act) {
+    else
       m_startupFiles.insert(filePath);
-      // 如果此前没有选中的启动项，自动选中第一个
-      if (m_selectedStartup.isEmpty()) m_selectedStartup = filePath;
-      refreshStartupIcons();
-      saveState();
-      emit startupItemsChanged();
-    }
+    refreshStartupIcons();
+    saveState();
+    emit startupItemsChanged();
   }
 }
 

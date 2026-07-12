@@ -7,7 +7,7 @@
  * - 对 .json 文件自动添加复选框
  * - 文件夹级联选中/取消
  * - 打勾状态持久化到 file/tree.config
- * - 文件夹右键新建/刷新
+ * - 文件夹右键新建/刷新/重命名，文件右键重命名
  */
 
 #pragma once
@@ -80,6 +80,8 @@ signals:
   void fileActivated(const QString &filePath);
   /// 启动项列表变化时发射
   void startupItemsChanged();
+  /// 请求重命名，携带旧绝对路径和新文件名（仅文件名，不含目录）
+  void renameRequested(const QString &oldPath, const QString &newName);
 
 private slots:
   /// 单击节点
@@ -114,7 +116,7 @@ private:
   /// 拦截鼠标释放以判断点击位置是否在复选框区域
   void mouseReleaseEvent(QMouseEvent *event) override;
 
-  /// 右键菜单：文件设为/取消启动项，文件夹新建/刷新
+  /// 右键菜单：文件设为/取消启动项，文件夹新建/刷新/重命名，文件重命名
   void contextMenuEvent(QContextMenuEvent *event) override;
 
   bool m_lastClickOnCheckbox = false;  ///< 最近一次鼠标释放是否落在复选框区域
