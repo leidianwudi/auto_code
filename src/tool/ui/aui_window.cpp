@@ -5,6 +5,7 @@
 
 #include "aui_window.h"
 
+#include <QApplication>
 #include <QComboBox>
 #include <QDialog>
 #include <QFrame>
@@ -348,25 +349,110 @@ void AuiWindow::enableWin32Resize(QWidget *window) {
 //  模态对话框遮罩层
 // ════════════════════════════════════════════════════════════
 
+namespace {
+
+/// 单个窗口的遮罩层 — 覆盖一个应用窗口形成"变暗"效果
+///
+/// 为应用程序的每个非对话框顶层窗口创建一个遮罩。
+/// 遮罩使用 Qt::WindowStaysOnTopHint 保证可见性，
+/// 对话框通过 SetWindowPos 放在遮罩之上。
+class WindowOverlay : public QWidget {
+public:
+  WindowOverlay(QDialog *dialog, const QRect &windowGeometry)
+      : QWidget(nullptr, Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint), m_dialog(dialog) {
+    setStyleSheet(QStringLiteral("background: black;"));
+    setWindowOpacity(AuiStyle::modalOverlayColor().alphaF());
+    setCursor(Qt::ForbiddenCursor);
+    setGeometry(windowGeometry);
+    show();
+  }
+
+#ifdef Q_OS_WIN
+  bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override {
+    const auto *msg = static_cast<MSG *>(message);
+    if (msg->message == WM_MOUSEACTIVATE) {
+      *result = MA_NOACTIVATE;
+      return true;
+    }
+    return QWidget::nativeEvent(eventType, message, result);
+  }
+#endif
+
+protected:
+  void mousePressEvent(QMouseEvent *event) override {
+    QWidget::mousePressEvent(event);
+    m_dialog->raise();
+    m_dialog->activateWindow();
+  }
+
+private:
+  QDialog *m_dialog;
+};
+
+/// 遮罩组 — 管理所有窗口的遮罩层
+///
+/// 为应用程序的每个非对话框顶层窗口创建一个 WindowOverlay，统一管理生命周期。
+/// 删除时自动销毁所有子遮罩。
+class OverlayGroup : public QObject {
+public:
+  OverlayGroup(QDialog *dialog, QObject *parent = nullptr) : QObject(parent), m_dialog(dialog) {}
+
+  ~OverlayGroup() {
+    for (auto *overlay : m_overlays) {
+      delete overlay;
+    }
+  }
+
+  void addWindowOverlay(const QRect &windowGeometry) {
+    auto *overlay = new WindowOverlay(m_dialog, windowGeometry);
+    m_overlays.append(overlay);
+  }
+
+  const QList<WindowOverlay *> &overlays() const { return m_overlays; }
+
+private:
+  QDialog *m_dialog;
+  QList<WindowOverlay *> m_overlays;
+};
+
+}  // namespace
+
 QWidget *AuiWindow::installModalOverlay(QDialog *dialog) {
   if (!dialog) return nullptr;
-  // 使用 window() 获取顶层窗口，确保遮罩覆盖整个 exe 而非仅直接父控件
-  QWidget *topWindow = dialog->parentWidget() ? dialog->parentWidget()->window() : nullptr;
-  if (!topWindow) return nullptr;
 
-  auto *overlay = new QWidget(topWindow);
-  overlay->setStyleSheet(
-      QStringLiteral("background: %1;").arg(AuiStyle::modalOverlayColor().name(QColor::HexArgb)));
-  overlay->setGeometry(topWindow->rect());
-  overlay->show();
-  overlay->raise();
-  return overlay;
+  auto *group = new OverlayGroup(dialog);
+
+  // 为应用程序的每个可见非对话框顶层窗口创建遮罩
+  const auto topLevels = QApplication::topLevelWidgets();
+  for (auto *widget : topLevels) {
+    if (widget == dialog) continue;
+    if (!widget->isVisible()) continue;
+    if (qobject_cast<QDialog *>(widget)) continue;
+    group->addWindowOverlay(widget->frameGeometry());
+  }
+
+#ifdef Q_OS_WIN
+  // 将对话框设为 TOPMOST，并放在所有遮罩之上
+  // Z 轴顺序：应用窗口 < 遮罩(TOPMOST) < 对话框(TOPMOST)
+  HWND dialogHwnd = reinterpret_cast<HWND>(dialog->winId());
+  SetWindowPos(dialogHwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+  for (auto *overlay : group->overlays()) {
+    HWND overlayHwnd = reinterpret_cast<HWND>(overlay->winId());
+    SetWindowPos(dialogHwnd, overlayHwnd, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+  }
+#endif
+
+  dialog->activateWindow();
+
+  // 返回一个不可见的 QWidget 作为句柄，OverlayGroup 作为其子对象自动管理生命周期
+  auto *handle = new QWidget;
+  group->setParent(handle);
+  return handle;
 }
 
 void AuiWindow::removeModalOverlay(QWidget *overlay) {
   if (overlay) {
-    overlay->hide();
-    overlay->deleteLater();
+    delete overlay;
   }
 }
 

@@ -561,10 +561,11 @@ void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
   QString filePath = item->data(0, Qt::UserRole + 1).toString();
 
   if (filePath.isEmpty()) {
-    // 文件夹节点：显示 [新建] [重命名] [刷新]
+    // 文件夹节点：显示 [新建] [重命名] [删除] [刷新]
     QMenu menu(this);
     QAction *newAct = menu.addAction(QStringLiteral("新建"));
     QAction *renameAct = menu.addAction(QStringLiteral("重命名"));
+    QAction *deleteAct = menu.addAction(QStringLiteral("删除"));
     menu.addSeparator();
     QAction *refreshAct = menu.addAction(QStringLiteral("刷新"));
     QAction *chosen = menu.exec(event->globalPos());
@@ -579,15 +580,19 @@ void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
         QString oldPath = buildFolderPath(item, m_rootPath);
         emit renameRequested(oldPath, newName);
       }
+    } else if (chosen == deleteAct) {
+      QString dirPath = buildFolderPath(item, m_rootPath);
+      emit deleteRequested(dirPath);
     } else if (chosen == refreshAct) {
       refreshTree();
     }
     return;
   }
 
-  // 文件节点：.ac 文件显示 [重命名] + [设为/取消启动项]，其他文件显示 [重命名]
+  // 文件节点：[重命名] [删除]，.ac 文件额外显示 [设为/取消启动项]
   QMenu menu(this);
   QAction *renameAct = menu.addAction(QStringLiteral("重命名"));
+  QAction *deleteAct = menu.addAction(QStringLiteral("删除"));
   if (filePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive)) {
     menu.addSeparator();
     if (m_startupFiles.contains(filePath))
@@ -603,6 +608,8 @@ void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
       QString oldPath = item->data(0, Qt::UserRole + 1).toString();
       emit renameRequested(oldPath, newName);
     }
+  } else if (chosen == deleteAct) {
+    emit deleteRequested(filePath);
   } else if (chosen && !filePath.isEmpty() &&
              filePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive)) {
     if (m_startupFiles.contains(filePath))

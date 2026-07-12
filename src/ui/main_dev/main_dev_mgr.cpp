@@ -91,6 +91,7 @@ void MainDevMgr::initUi() {
   connect(m_ui->closeAction(), &QAction::triggered, this, &MainDevMgr::onCloseEditor);
   connect(m_ui->fileTree(), &TreeDir::fileActivated, this, &MainDevMgr::openFileInEditor);
   connect(m_ui->fileTree(), &TreeDir::renameRequested, this, &MainDevMgr::onRenameFile);
+  connect(m_ui->fileTree(), &TreeDir::deleteRequested, this, &MainDevMgr::onDeleteFile);
   connect(qApp, &QApplication::focusChanged, this, &MainDevMgr::onFocusChanged);
 
   // ── 保存按钮 ──
@@ -617,6 +618,84 @@ void MainDevMgr::onRenameFile(const QString &oldPath, const QString &newName) {
       m_model->fileContents.remove(oldPath);
       m_model->openFiles.insert(newPath, editor);
       m_model->fileContents.insert(newPath, content);
+    }
+  }
+
+  // 刷新树
+  m_ui->fileTree()->refreshTree();
+}
+
+void MainDevMgr::onDeleteFile(const QString &path) {
+  QFileInfo info(path);
+  if (!info.exists()) return;
+
+  bool isDir = info.isDir();
+  QString name = info.fileName();
+
+  // 确认对话框
+  int ret = QMessageBox::question(
+      m_ui, QStringLiteral("确认删除"),
+      isDir ? QStringLiteral("确定要删除文件夹 \"%1\" 及其所有内容吗？").arg(name)
+            : QStringLiteral("确定要删除文件 \"%1\" 吗？").arg(name),
+      QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+  if (ret != QMessageBox::Yes) return;
+
+  if (isDir) {
+    // 删除文件夹前，关闭所有以该路径开头的已打开文件
+    QString dirPath = QDir::cleanPath(path);
+    QStringList toClose;
+    for (const QString &filePath : m_model->openFilePaths()) {
+      if (filePath.startsWith(dirPath + QStringLiteral("/"))) {
+        toClose.append(filePath);
+      }
+    }
+    for (const QString &filePath : toClose) {
+      CodeEditor *editor = m_model->openFiles.value(filePath);
+      if (editor) {
+        for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
+          auto *tabs = m_ui->editorPanelAt(pi);
+          if (!tabs) continue;
+          for (int ti = 0; ti < tabs->count(); ++ti) {
+            if (tabs->widget(ti) == editor) {
+              closeTab(tabs, ti);
+              break;
+            }
+          }
+        }
+        m_model->openFiles.remove(filePath);
+        m_model->fileContents.remove(filePath);
+      }
+    }
+
+    QDir dir(path);
+    if (!dir.removeRecursively()) {
+      QMessageBox::warning(m_ui, QStringLiteral("删除失败"),
+                           QStringLiteral("无法删除文件夹: %1").arg(name));
+      return;
+    }
+  } else {
+    // 删除文件前，关闭已打开的编辑器
+    CodeEditor *editor = m_model->openFiles.value(path);
+    if (editor) {
+      for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
+        auto *tabs = m_ui->editorPanelAt(pi);
+        if (!tabs) continue;
+        for (int ti = 0; ti < tabs->count(); ++ti) {
+          if (tabs->widget(ti) == editor) {
+            closeTab(tabs, ti);
+            break;
+          }
+        }
+      }
+      m_model->openFiles.remove(path);
+      m_model->fileContents.remove(path);
+    }
+
+    QFile file(path);
+    if (!file.remove()) {
+      QMessageBox::warning(m_ui, QStringLiteral("删除失败"),
+                           QStringLiteral("无法删除文件: %1").arg(name));
+      return;
     }
   }
 

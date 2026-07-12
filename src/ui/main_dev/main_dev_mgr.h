@@ -73,6 +73,8 @@ private slots:
   void onValidationMessage(const QString &msg);
   /// 处理文件/文件夹重命名请求
   void onRenameFile(const QString &oldPath, const QString &newName);
+  /// 处理文件/文件夹删除请求
+  void onDeleteFile(const QString &path);
 
 private:
   /// 查找并加载 file/ 目录

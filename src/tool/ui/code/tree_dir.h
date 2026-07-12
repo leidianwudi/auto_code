@@ -82,6 +82,8 @@ signals:
   void startupItemsChanged();
   /// 请求重命名，携带旧绝对路径和新文件名（仅文件名，不含目录）
   void renameRequested(const QString &oldPath, const QString &newName);
+  /// 请求删除，携带待删除的绝对路径
+  void deleteRequested(const QString &path);
 
 private slots:
   /// 单击节点

@@ -29,7 +29,8 @@ CreateUi::CreateUi(QWidget *parent) : QDialog(parent) { setupUI(); }
 void CreateUi::setupUI() {
   setWindowTitle(QStringLiteral("新建"));
   setFixedSize(400, 220);
-  setModal(true);
+  // 不调用 setModal(true)，避免 Qt 禁用父窗口导致鼠标消息被 Windows 丢弃
+  // 模态效果由遮罩层 + 事件过滤器实现
 
   // ── 无边框对话框（保留 Qt::Dialog 标志，复用 AuiWindow 统一样式） ──
   AuiWindow::setupFramelessDialog(this);
