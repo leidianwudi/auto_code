@@ -27,7 +27,7 @@ CreateUi::CreateUi(QWidget *parent) : QDialog(parent) { setupUI(); }
 
 void CreateUi::setupUI() {
   setWindowTitle(QStringLiteral("新建"));
-  setFixedSize(400, 220);
+  setFixedSize(400, 180);
   // 不调用 setModal(true)，避免 Qt 禁用父窗口导致鼠标消息被 Windows 丢弃
   // 模态效果由遮罩层 + 事件过滤器实现
 
@@ -98,7 +98,9 @@ void CreateUi::setupUI() {
   AuiButton::applyDialogButtonStyle(m_okBtn);
   AuiButton::applyDialogButtonStyle(m_cancelBtn);
   btnLayout->addWidget(m_okBtn);
+  btnLayout->addSpacing(12);
   btnLayout->addWidget(m_cancelBtn);
+  btnLayout->addStretch();
   contentLayout->addLayout(btnLayout);
 
   // ── 信号连接 ──

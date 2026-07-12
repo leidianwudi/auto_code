@@ -27,7 +27,7 @@ RenameDialog::RenameDialog(const QString &oldName, QWidget *parent)
 
 void RenameDialog::setupUI() {
   setWindowTitle(QStringLiteral("重命名"));
-  setFixedSize(360, 180);
+  setFixedSize(360, 150);
   setWindowModality(Qt::WindowModal);  // 只禁用父窗口，不禁用整个应用
 
   // ── 无边框对话框 ──
@@ -77,7 +77,9 @@ void RenameDialog::setupUI() {
   AuiButton::applyDialogButtonStyle(m_okBtn);
   AuiButton::applyDialogButtonStyle(cancelBtn);
   btnLayout->addWidget(m_okBtn);
+  btnLayout->addSpacing(12);
   btnLayout->addWidget(cancelBtn);
+  btnLayout->addStretch();
   contentLayout->addLayout(btnLayout);
 
   // ── 信号连接 ──
