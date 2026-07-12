@@ -63,29 +63,12 @@ private:
     label->setAlignment(Qt::AlignCenter);
     contentLayout->addWidget(label, 1);
 
-    auto *btnLayout = new QHBoxLayout;
-    btnLayout->addStretch();
+    auto btns = AuiButton::createDialogButtons(this, m_showCancel);
+    connect(btns.okBtn, &QPushButton::clicked, this, &QDialog::accept);
+    if (btns.cancelBtn) connect(btns.cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
+    contentLayout->addLayout(btns.layout);
 
-    auto *okBtn = new QPushButton(QStringLiteral("确定"), this);
-    okBtn->setDefault(true);
-    okBtn->setMinimumWidth(80);
-    AuiButton::applyDialogButtonStyle(okBtn);
-    connect(okBtn, &QPushButton::clicked, this, &QDialog::accept);
-    btnLayout->addWidget(okBtn);
-
-    if (m_showCancel) {
-      btnLayout->addSpacing(12);
-      auto *cancelBtn = new QPushButton(QStringLiteral("取消"), this);
-      cancelBtn->setMinimumWidth(80);
-      AuiButton::applyDialogButtonStyle(cancelBtn);
-      connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
-      btnLayout->addWidget(cancelBtn);
-    }
-
-    btnLayout->addStretch();
-    contentLayout->addLayout(btnLayout);
-
-    okBtn->setFocus();
+    btns.okBtn->setFocus();
 
     AuiWindow::applyWindowFrame(this, tb.titleBar, contentWidget);
 

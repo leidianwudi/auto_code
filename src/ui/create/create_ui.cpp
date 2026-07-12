@@ -88,20 +88,10 @@ void CreateUi::setupUI() {
   contentLayout->addStretch();
 
   // ── 按钮 ──
-  auto *btnLayout = new QHBoxLayout;
-  btnLayout->addStretch();
-  m_okBtn = new QPushButton(QStringLiteral("确定"), this);
-  m_okBtn->setDefault(true);
-  m_okBtn->setMinimumWidth(80);
-  m_cancelBtn = new QPushButton(QStringLiteral("取消"), this);
-  m_cancelBtn->setMinimumWidth(80);
-  AuiButton::applyDialogButtonStyle(m_okBtn);
-  AuiButton::applyDialogButtonStyle(m_cancelBtn);
-  btnLayout->addWidget(m_okBtn);
-  btnLayout->addSpacing(12);
-  btnLayout->addWidget(m_cancelBtn);
-  btnLayout->addStretch();
-  contentLayout->addLayout(btnLayout);
+  auto btns = AuiButton::createDialogButtons(this);
+  m_okBtn = btns.okBtn;
+  m_cancelBtn = btns.cancelBtn;
+  contentLayout->addLayout(btns.layout);
 
   // ── 信号连接 ──
   connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,

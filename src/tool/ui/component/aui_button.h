@@ -7,9 +7,17 @@
 
 #pragma once
 
+#include <QHBoxLayout>
 #include <QIcon>
 #include <QPushButton>
 #include <QString>
+
+/// 对话框按钮行创建结果
+struct DialogButtons {
+  QPushButton *okBtn;      ///< "确定"按钮
+  QPushButton *cancelBtn;  ///< "取消"按钮（可能为 nullptr）
+  QHBoxLayout *layout;     ///< 已排好的水平布局（居中，可直接加入 contentLayout）
+};
 
 class AuiButton {
 public:
@@ -52,6 +60,12 @@ public:
 
   /// 创建「保存全部」按钮（QPushButton，软盘图标 + 全部标记）
   static QPushButton *createSaveAllButton(int size = 20);
+
+  /// 创建对话框按钮行（居中布局，确定 + 可选取消）
+  /// @param parent  按钮的父控件
+  /// @param showCancel  是否显示"取消"按钮
+  /// @return 包含按钮指针和布局的结构体
+  static DialogButtons createDialogButtons(QWidget *parent, bool showCancel = true);
 
   // ════════════════════════════════════════════════════════════
   //  图标更新

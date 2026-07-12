@@ -207,6 +207,37 @@ QPushButton *AuiButton::createSaveAllButton(int size) {
 }
 
 // ════════════════════════════════════════════════════════════
+//  对话框按钮行
+// ════════════════════════════════════════════════════════════
+
+DialogButtons AuiButton::createDialogButtons(QWidget *parent, bool showCancel) {
+  DialogButtons result;
+  result.okBtn = nullptr;
+  result.cancelBtn = nullptr;
+  result.layout = new QHBoxLayout;
+
+  result.layout->addStretch();
+
+  result.okBtn = new QPushButton(QStringLiteral("确定"), parent);
+  result.okBtn->setDefault(true);
+  result.okBtn->setMinimumWidth(80);
+  applyDialogButtonStyle(result.okBtn);
+  result.layout->addWidget(result.okBtn);
+
+  if (showCancel) {
+    result.layout->addSpacing(12);
+    result.cancelBtn = new QPushButton(QStringLiteral("取消"), parent);
+    result.cancelBtn->setMinimumWidth(80);
+    applyDialogButtonStyle(result.cancelBtn);
+    result.layout->addWidget(result.cancelBtn);
+  }
+
+  result.layout->addStretch();
+
+  return result;
+}
+
+// ════════════════════════════════════════════════════════════
 //  图标更新
 // ════════════════════════════════════════════════════════════
 void AuiButton::updateMaximizeIcon(QPushButton *btn, bool isMaximized) {
