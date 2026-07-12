@@ -55,13 +55,13 @@ private:
 
     auto *contentWidget = new QWidget;
     auto *contentLayout = new QVBoxLayout(contentWidget);
-    contentLayout->setContentsMargins(16, 12, 16, 16);
+    contentLayout->setContentsMargins(16, 12, 16, 24);
     contentLayout->setSpacing(10);
 
     auto *label = new QLabel(text, this);
     label->setWordWrap(true);
-    contentLayout->addWidget(label);
-    contentLayout->addStretch();
+    label->setAlignment(Qt::AlignCenter);
+    contentLayout->addWidget(label, 1);
 
     auto *btnLayout = new QHBoxLayout;
     btnLayout->addStretch();
@@ -74,6 +74,7 @@ private:
     btnLayout->addWidget(okBtn);
 
     if (m_showCancel) {
+      btnLayout->addSpacing(12);
       auto *cancelBtn = new QPushButton(QStringLiteral("取消"), this);
       cancelBtn->setMinimumWidth(80);
       AuiButton::applyDialogButtonStyle(cancelBtn);
@@ -81,11 +82,16 @@ private:
       btnLayout->addWidget(cancelBtn);
     }
 
+    btnLayout->addStretch();
     contentLayout->addLayout(btnLayout);
 
     okBtn->setFocus();
 
     AuiWindow::applyWindowFrame(this, tb.titleBar, contentWidget);
+
+    // applyWindowFrame 会重置内容布局的边距和间距，需要恢复
+    contentLayout->setContentsMargins(16, 12, 16, 12);
+    contentLayout->setSpacing(5);
   }
 
   bool m_showCancel;
