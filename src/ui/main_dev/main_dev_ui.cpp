@@ -35,13 +35,14 @@
 #include <QVBoxLayout>
 
 #include "main_dev_ui_ext.h"
+#include "src/tool/ui/aui_window.h"
 #include "src/tool/ui/code/code_editor.h"
 #include "src/tool/ui/code/code_log.h"
 #include "src/tool/ui/component/aui_button.h"
 #include "src/tool/ui/component/aui_combo_box.h"
 #include "src/tool/ui/component/aui_style.h"
-#include "src/tool/ui/component/aui_window.h"
 #include "src/ui/demo/demo_mgr.h"
+
 
 //  构造
 // ════════════════════════════════════════════════════════════

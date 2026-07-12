@@ -11,7 +11,7 @@
 #include <QApplication>
 
 #include "src/engine/function/fun_mgr.h"
-#include "src/tool/ui/component/aui_window.h"
+#include "src/tool/ui/aui_window.h"
 #include "src/ui/main_dev/main_dev_mgr.h"
 
 /**

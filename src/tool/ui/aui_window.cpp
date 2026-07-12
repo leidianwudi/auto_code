@@ -22,8 +22,8 @@
 #include <QVBoxLayout>
 #include <QWindow>
 
-#include "aui_button.h"
-#include "aui_style.h"
+#include "component/aui_button.h"
+#include "component/aui_style.h"
 
 #ifdef Q_OS_WIN
 #include <dwmapi.h>
