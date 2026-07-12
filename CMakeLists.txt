@@ -80,6 +80,8 @@ qt_add_executable(auto_code
     src/tool/ui/rename_dialog.cpp
     src/tool/ui/component/aui_error_tool_tip.h
     src/tool/ui/component/aui_error_tool_tip.cpp
+    src/tool/ui/component/aui_message_box.h
+    src/tool/ui/component/aui_message_box.cpp
     src/tool/ui/code/format_code.h
     src/tool/ui/code/format_code.cpp
     src/tool/ui/code/guess_code.h

@@ -9,7 +9,6 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMenu>
-#include <QMessageBox>
 #include <QPushButton>
 #include <QSizeGrip>
 #include <QTimer>
@@ -20,7 +19,6 @@
 #include "src/tool/ui/code/code_editor.h"
 #include "src/tool/ui/component/aui_button.h"
 #include "src/tool/ui/component/aui_style.h"
-
 
 // ──────────────────────────────────────────────────────────────
 //  DemoUi — 构造函数

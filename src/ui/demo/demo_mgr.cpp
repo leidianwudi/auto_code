@@ -9,17 +9,16 @@
 #include <QFileDialog>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QMessageBox>
 #include <QTextStream>
 
 #include "demo_model.h"
 #include "demo_ui.h"
 #include "src/engine/tpl/tpl_engine.h"
 #include "src/tool/ui/code/code_editor.h"
+#include "src/tool/ui/component/aui_message_box.h"
 #include "src/tool/ui/highlighter/light_json.h"
 #include "src/tool/ui/highlighter/light_tpl.h"
 #include "src/tool/ui/highlighter/light_ts.h"
-
 
 // ──────────────────────────────────────────────────────────────
 //  onCreateWindow — 创建 DemoUi 窗口（open() 时调用）
@@ -74,13 +73,13 @@ void DemoMgr::onGenerate() {
 
   if (error.error != QJsonParseError::NoError) {
     m_model->setError(QStringLiteral("JSON 解析错误: %1").arg(error.errorString()));
-    QMessageBox::warning(m_ui, QStringLiteral("JSON 解析错误"), m_model->error());
+    AuiMessageBox::show(m_ui, QStringLiteral("JSON 解析错误"), m_model->error());
     return;
   }
 
   if (!doc.isObject()) {
     m_model->setError(QStringLiteral("JSON 数据必须是一个对象"));
-    QMessageBox::warning(m_ui, QStringLiteral("JSON 格式错误"), m_model->error());
+    AuiMessageBox::show(m_ui, QStringLiteral("JSON 格式错误"), m_model->error());
     return;
   }
 
@@ -93,7 +92,7 @@ void DemoMgr::onGenerate() {
 
   if (!m_engine->lastError().isEmpty()) {
     m_model->setError(m_engine->lastError());
-    QMessageBox::warning(m_ui, QStringLiteral("模板渲染错误"), m_model->error());
+    AuiMessageBox::show(m_ui, QStringLiteral("模板渲染错误"), m_model->error());
     return;
   }
 
@@ -115,8 +114,8 @@ void DemoMgr::onLoadTemplate() {
 
   QFile file(fileName);
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-    QMessageBox::warning(m_ui, QStringLiteral("错误"),
-                         QStringLiteral("无法打开文件: %1").arg(fileName));
+    AuiMessageBox::show(m_ui, QStringLiteral("错误"),
+                        QStringLiteral("无法打开文件: %1").arg(fileName));
     return;
   }
 
@@ -143,8 +142,8 @@ void DemoMgr::onLoadData() {
 
   QFile file(fileName);
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-    QMessageBox::warning(m_ui, QStringLiteral("错误"),
-                         QStringLiteral("无法打开文件: %1").arg(fileName));
+    AuiMessageBox::show(m_ui, QStringLiteral("错误"),
+                        QStringLiteral("无法打开文件: %1").arg(fileName));
     return;
   }
 
@@ -164,7 +163,7 @@ void DemoMgr::onLoadData() {
 void DemoMgr::onSaveOutput() {
   QString output = m_ui->outputEdit()->toPlainText();
   if (output.isEmpty()) {
-    QMessageBox::information(m_ui, QStringLiteral("提示"), QStringLiteral("没有可保存的内容"));
+    AuiMessageBox::show(m_ui, QStringLiteral("提示"), QStringLiteral("没有可保存的内容"));
     return;
   }
 
@@ -176,8 +175,8 @@ void DemoMgr::onSaveOutput() {
 
   QFile file(fileName);
   if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-    QMessageBox::warning(m_ui, QStringLiteral("错误"),
-                         QStringLiteral("无法保存文件: %1").arg(fileName));
+    AuiMessageBox::show(m_ui, QStringLiteral("错误"),
+                        QStringLiteral("无法保存文件: %1").arg(fileName));
     return;
   }
 

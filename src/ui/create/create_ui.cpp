@@ -7,7 +7,6 @@
 
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QMessageBox>
 #include <QVBoxLayout>
 
 #include "create_model.h"

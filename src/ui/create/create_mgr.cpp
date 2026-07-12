@@ -8,10 +8,10 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QMessageBox>
 
 #include "create_model.h"
 #include "create_ui.h"
+#include "src/tool/ui/component/aui_message_box.h"
 
 // ════════════════════════════════════════════════════════════
 //  onCreateWindow — AuiMgr 接口
@@ -42,7 +42,7 @@ bool CreateMgr::createNew(const QString &parentDir, QWidget *parentWidget) {
   // ── 3. 验证 ──
   QString error;
   if (!model.validate(error)) {
-    QMessageBox::warning(parentWidget, QStringLiteral("创建失败"), error);
+    AuiMessageBox::show(parentWidget, QStringLiteral("创建失败"), error);
     return false;
   }
 
@@ -63,8 +63,8 @@ bool CreateMgr::createNew(const QString &parentDir, QWidget *parentWidget) {
   }
 
   if (!ok) {
-    QMessageBox::warning(parentWidget, QStringLiteral("创建失败"),
-                         QStringLiteral("无法创建: %1").arg(fullPath));
+    AuiMessageBox::show(parentWidget, QStringLiteral("创建失败"),
+                        QStringLiteral("无法创建: %1").arg(fullPath));
     return false;
   }
 

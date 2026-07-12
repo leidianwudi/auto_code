@@ -13,7 +13,6 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
-#include <QMessageBox>
 #include <QShortcut>
 #include <QStatusBar>
 #include <QTabWidget>
@@ -26,6 +25,7 @@
 #include "src/engine/ac_language.h"
 #include "src/engine/script/ac_engine.h"
 #include "src/tool/ui/code/code_editor.h"
+#include "src/tool/ui/component/aui_message_box.h"
 #include "src/tool/ui/highlighter/light_ac.h"
 #include "src/tool/ui/highlighter/light_json.h"
 #include "src/tool/ui/highlighter/light_tpl.h"
@@ -209,8 +209,8 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
   // ── 读取文件 ──
   QFile file(filePath);
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-    QMessageBox::warning(m_ui, QStringLiteral("打开失败"),
-                         QStringLiteral("无法打开文件: %1").arg(filePath));
+    AuiMessageBox::show(m_ui, QStringLiteral("打开失败"),
+                        QStringLiteral("无法打开文件: %1").arg(filePath));
     return nullptr;
   }
   QTextStream in(&file);
@@ -531,8 +531,8 @@ void MainDevMgr::onRenameFile(const QString &oldPath, const QString &newName) {
   static const QString kInvalidChars = QStringLiteral("\\/:*?\"<>|");
   for (const QChar &c : newName) {
     if (kInvalidChars.contains(c)) {
-      QMessageBox::warning(m_ui, QStringLiteral("重命名失败"),
-                           QStringLiteral("文件名不能包含以下字符: %1").arg(kInvalidChars));
+      AuiMessageBox::show(m_ui, QStringLiteral("重命名失败"),
+                          QStringLiteral("文件名不能包含以下字符: %1").arg(kInvalidChars));
       return;
     }
   }
@@ -543,8 +543,8 @@ void MainDevMgr::onRenameFile(const QString &oldPath, const QString &newName) {
 
   // 同名检查
   if (QFileInfo::exists(newPath)) {
-    QMessageBox::warning(m_ui, QStringLiteral("重命名失败"),
-                         QStringLiteral("已存在同名文件或文件夹: %1").arg(newName));
+    AuiMessageBox::show(m_ui, QStringLiteral("重命名失败"),
+                        QStringLiteral("已存在同名文件或文件夹: %1").arg(newName));
     return;
   }
 
@@ -554,8 +554,8 @@ void MainDevMgr::onRenameFile(const QString &oldPath, const QString &newName) {
     // 文件夹重命名
     QDir dir(parentDir);
     if (!dir.rename(oldInfo.fileName(), newName)) {
-      QMessageBox::warning(m_ui, QStringLiteral("重命名失败"),
-                           QStringLiteral("无法重命名文件夹: %1").arg(oldInfo.fileName()));
+      AuiMessageBox::show(m_ui, QStringLiteral("重命名失败"),
+                          QStringLiteral("无法重命名文件夹: %1").arg(oldInfo.fileName()));
       return;
     }
 
@@ -592,8 +592,8 @@ void MainDevMgr::onRenameFile(const QString &oldPath, const QString &newName) {
     // 文件重命名
     QFile file(oldPath);
     if (!file.rename(newPath)) {
-      QMessageBox::warning(m_ui, QStringLiteral("重命名失败"),
-                           QStringLiteral("无法重命名文件: %1").arg(oldInfo.fileName()));
+      AuiMessageBox::show(m_ui, QStringLiteral("重命名失败"),
+                          QStringLiteral("无法重命名文件: %1").arg(oldInfo.fileName()));
       return;
     }
 
@@ -633,12 +633,12 @@ void MainDevMgr::onDeleteFile(const QString &path) {
   QString name = info.fileName();
 
   // 确认对话框
-  int ret = QMessageBox::question(
-      m_ui, QStringLiteral("确认删除"),
-      isDir ? QStringLiteral("确定要删除文件夹 \"%1\" 及其所有内容吗？").arg(name)
-            : QStringLiteral("确定要删除文件 \"%1\" 吗？").arg(name),
-      QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-  if (ret != QMessageBox::Yes) return;
+  if (!AuiMessageBox::confirm(
+          m_ui, QStringLiteral("确认删除"),
+          isDir ? QStringLiteral("确定要删除文件夹 \"%1\" 及其所有内容吗？").arg(name)
+                : QStringLiteral("确定要删除文件 \"%1\" 吗？").arg(name))) {
+    return;
+  }
 
   if (isDir) {
     // 删除文件夹前，关闭所有以该路径开头的已打开文件
@@ -669,8 +669,8 @@ void MainDevMgr::onDeleteFile(const QString &path) {
 
     QDir dir(path);
     if (!dir.removeRecursively()) {
-      QMessageBox::warning(m_ui, QStringLiteral("删除失败"),
-                           QStringLiteral("无法删除文件夹: %1").arg(name));
+      AuiMessageBox::show(m_ui, QStringLiteral("删除失败"),
+                          QStringLiteral("无法删除文件夹: %1").arg(name));
       return;
     }
   } else {
@@ -693,8 +693,8 @@ void MainDevMgr::onDeleteFile(const QString &path) {
 
     QFile file(path);
     if (!file.remove()) {
-      QMessageBox::warning(m_ui, QStringLiteral("删除失败"),
-                           QStringLiteral("无法删除文件: %1").arg(name));
+      AuiMessageBox::show(m_ui, QStringLiteral("删除失败"),
+                          QStringLiteral("无法删除文件: %1").arg(name));
       return;
     }
   }
