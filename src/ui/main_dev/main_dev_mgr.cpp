@@ -140,6 +140,11 @@ void MainDevMgr::initUi() {
     if (tabs) {
       connect(tabs, &QTabWidget::tabCloseRequested, this, &MainDevMgr::onTabCloseRequested);
       connect(tabs, &QTabWidget::currentChanged, this, &MainDevMgr::onCurrentTabChanged);
+      auto *bar = qobject_cast<DraggableTabBar *>(tabs->tabBar());
+      if (bar) {
+        connect(bar, &DraggableTabBar::closeOthersRequested, this, &MainDevMgr::onCloseOthers);
+        connect(bar, &DraggableTabBar::closeAllRequested, this, &MainDevMgr::onCloseAll);
+      }
     }
   }
 }
@@ -456,6 +461,14 @@ void MainDevMgr::onSplitRight() {
   connect(newPanel, &QTabWidget::currentChanged, this, &MainDevMgr::onCurrentTabChanged);
 
   {
+    auto *bar = qobject_cast<DraggableTabBar *>(newPanel->tabBar());
+    if (bar) {
+      connect(bar, &DraggableTabBar::closeOthersRequested, this, &MainDevMgr::onCloseOthers);
+      connect(bar, &DraggableTabBar::closeAllRequested, this, &MainDevMgr::onCloseAll);
+    }
+  }
+
+  {
     // 复用 createEditorForFile 创建高亮器 + 验证模式一致的编辑器
     QString filePath = current->objectName();
     auto *editor = createEditorForFile(filePath);
@@ -716,4 +729,28 @@ void MainDevMgr::onDeleteFile(const QString &path) {
 
   // 刷新树
   m_ui->fileTree()->refreshTree();
+}
+
+// ──────────────────────────────────────────────────────────────
+//  右键菜单：关闭其它 / 关闭全部
+// ──────────────────────────────────────────────────────────────
+
+void MainDevMgr::onCloseOthers(int index) {
+  auto *bar = qobject_cast<DraggableTabBar *>(sender());
+  if (!bar) return;
+  auto *tabs = qobject_cast<QTabWidget *>(bar->parentWidget());
+  if (!tabs) return;
+  for (int i = tabs->count() - 1; i >= 0; --i) {
+    if (i != index) closeTab(tabs, i);
+  }
+}
+
+void MainDevMgr::onCloseAll() {
+  auto *bar = qobject_cast<DraggableTabBar *>(sender());
+  if (!bar) return;
+  auto *tabs = qobject_cast<QTabWidget *>(bar->parentWidget());
+  if (!tabs) return;
+  while (tabs->count() > 0) {
+    closeTab(tabs, 0);
+  }
 }

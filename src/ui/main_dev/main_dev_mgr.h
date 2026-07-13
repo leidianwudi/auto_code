@@ -75,6 +75,10 @@ private slots:
   void onRenameFile(const QString &oldPath, const QString &newName);
   /// 处理文件/文件夹删除请求
   void onDeleteFile(const QString &path);
+  /// 右键菜单：关闭其它标签页
+  void onCloseOthers(int index);
+  /// 右键菜单：关闭所有标签页
+  void onCloseAll();
 
 private:
   /// 查找并加载 file/ 目录

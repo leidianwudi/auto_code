@@ -36,6 +36,11 @@ signals:
   /// 标签从 fromBar(fromIndex) 拖拽到此 bar 的 toIndex 位置
   void tabDropped(int fromIndex, DraggableTabBar *fromBar, int toIndex);
 
+  /// 右键菜单：关闭其它标签页
+  void closeOthersRequested(int index);
+  /// 右键菜单：关闭所有标签页
+  void closeAllRequested();
+
 protected:
   void mousePressEvent(QMouseEvent *event) override;
   void mouseMoveEvent(QMouseEvent *event) override;

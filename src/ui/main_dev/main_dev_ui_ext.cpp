@@ -9,6 +9,7 @@
 #include <QDrag>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QMenu>
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
@@ -17,7 +18,6 @@
 #include <QStyleOptionTab>
 
 #include "src/tool/ui/component/aui_style.h"
-
 
 // ════════════════════════════════════════════════════════════
 //  DraggableTabBar 实现
@@ -66,6 +66,21 @@ void DraggableTabBar::paintEvent(QPaintEvent *event) {
 }
 
 void DraggableTabBar::mousePressEvent(QMouseEvent *event) {
+  if (event->button() == Qt::RightButton) {
+    int index = tabAt(event->pos());
+    if (index >= 0) {
+      QMenu menu(this);
+      QAction *closeOthers = menu.addAction(QStringLiteral("关闭其它"));
+      QAction *closeAll = menu.addAction(QStringLiteral("关闭全部"));
+      QAction *chosen = menu.exec(event->globalPos());
+      if (chosen == closeOthers) {
+        emit closeOthersRequested(index);
+      } else if (chosen == closeAll) {
+        emit closeAllRequested();
+      }
+    }
+    return;
+  }
   if (event->button() == Qt::LeftButton) {
     m_pressedIndex = tabAt(event->pos());
     m_dragStartPos = event->pos();
