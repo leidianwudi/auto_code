@@ -621,6 +621,21 @@ void MainDevMgr::onRenameFile(const QString &oldPath, const QString &newName) {
     }
   }
 
+  // 更新启动项数据（文件重命名或文件夹重命名中的 .ac 文件路径）
+  if (isDir) {
+    QString oldDirPath = QDir::cleanPath(oldPath);
+    QList<QPair<QString, QString>> renames;
+    for (const QString &sp : m_ui->fileTree()->startupFiles()) {
+      if (sp.startsWith(oldDirPath + QStringLiteral("/"))) {
+        QString newSp = newPath + sp.mid(oldDirPath.length());
+        renames.append({sp, newSp});
+      }
+    }
+    m_ui->fileTree()->renameStartupPaths(renames);
+  } else {
+    m_ui->fileTree()->renameStartupPath(oldPath, newPath);
+  }
+
   // 刷新树
   m_ui->fileTree()->refreshTree();
 }

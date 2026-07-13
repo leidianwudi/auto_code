@@ -535,6 +535,53 @@ void TreeDir::setSelectedStartup(const QString &path) {
   }
 }
 
+/// @brief 重命名路径时更新启动项数据
+void TreeDir::renameStartupPath(const QString &oldPath, const QString &newPath) {
+  bool changed = false;
+
+  if (m_startupFiles.contains(oldPath)) {
+    m_startupFiles.remove(oldPath);
+    m_startupFiles.insert(newPath);
+    changed = true;
+  }
+
+  if (m_selectedStartup == oldPath) {
+    m_selectedStartup = newPath;
+    changed = true;
+  }
+
+  if (changed) {
+    saveState();
+    emit startupItemsChanged();
+  }
+}
+
+/// @brief 批量重命名启动项路径
+void TreeDir::renameStartupPaths(const QList<QPair<QString, QString>> &renames) {
+  bool changed = false;
+
+  for (const auto &pair : renames) {
+    const QString &oldP = pair.first;
+    const QString &newP = pair.second;
+
+    if (m_startupFiles.contains(oldP)) {
+      m_startupFiles.remove(oldP);
+      m_startupFiles.insert(newP);
+      changed = true;
+    }
+
+    if (m_selectedStartup == oldP) {
+      m_selectedStartup = newP;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    saveState();
+    emit startupItemsChanged();
+  }
+}
+
 /// @brief 获取文件夹节点在目录树中的完整路径（相对于根目录）
 static QString buildFolderPath(QTreeWidgetItem *item, const QString &rootPath) {
   QStringList parts;

@@ -72,6 +72,12 @@ public:
   /// 设置当前选中的启动项（由外部下拉框联动）
   void setSelectedStartup(const QString &path);
 
+  /// 重命名路径时更新启动项数据（m_startupFiles 和 m_selectedStartup）
+  void renameStartupPath(const QString &oldPath, const QString &newPath);
+
+  /// 批量重命名启动项路径（文件夹重命名时使用，只触发一次信号和保存）
+  void renameStartupPaths(const QList<QPair<QString, QString>> &renames);
+
   /// 设置文件的修改状态（树节点文本追加/移除 " *"）
   void setFileModified(const QString &filePath, bool modified);
 
