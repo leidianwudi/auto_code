@@ -43,6 +43,9 @@ public:
   /// @return 文件路径列表
   QStringList generatedFiles() const { return m_generatedFiles; }
 
+  /// @brief 获取已解析的类定义集合（供类型检查器使用）
+  const QHash<QString, ClassDef> &classes() const { return m_classes; }
+
   // ── 辅助 ──
   /// @brief 校验表达式中是否有未声明的标识符
   QStringList validateUndeclaredIdents(const Block &program,

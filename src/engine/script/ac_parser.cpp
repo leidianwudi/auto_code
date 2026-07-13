@@ -297,6 +297,13 @@ bool AcParser::parseClassDef(ClassDef &cd) {
       ObjectEntry prop;
       prop.key = advance().text;
       prop.isStatic = isStatic;
+      // 可选类型注解：prop : Type
+      if (peek().type == TOK_COLON) {
+        advance();  // 跳过 ':'
+        prop.type = parseType();
+      } else {
+        prop.type = AcType::any();
+      }
       prop.value = new Expr();
       if (peek().type == TOK_EQUALS) {
         advance();
@@ -344,11 +351,28 @@ bool AcParser::parseMethodDef(MethodDef &md) {
   if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after method name"))) return false;
 
   while (peek().type == TOK_IDENT) {
-    md.params.append(advance().text);
+    ParamDef pd;
+    pd.name = advance().text;
+    // 可选类型注解：name : Type
+    if (peek().type == TOK_COLON) {
+      advance();  // 跳过 ':'
+      pd.type = parseType();
+    } else {
+      pd.type = AcType::any();
+    }
+    md.params.append(pd);
     if (peek().type == TOK_COMMA) advance();
   }
 
   if (!expect(TOK_RPAREN, QStringLiteral("expected ')' after parameters"))) return false;
+
+  // 可选返回类型注解
+  if (peek().type == TOK_COLON) {
+    advance();  // 跳过 ':'
+    md.returnType = parseType();
+  } else {
+    md.returnType = AcType::any();
+  }
 
   return parseBlock(md.body);
 }
@@ -369,6 +393,7 @@ bool AcParser::parseExpr(Expr &expr) { return parseAddSub(expr); }
 bool AcParser::parseAddSub(Expr &expr) {
   if (!parseMulDiv(expr)) return false;
   while (peek().type == TOK_PLUS || peek().type == TOK_MINUS) {
+    Token opToken = peek();
     Expr::BinaryOp op;
     if (peek().type == TOK_PLUS) {
       op = Expr::kAdd;
@@ -386,6 +411,7 @@ bool AcParser::parseAddSub(Expr &expr) {
     }
     Expr binary;
     binary.kind = Expr::kBinary;
+    binary.line = opToken.line;
     binary.binOp = op;
     binary.left = left;
     binary.right = right;
@@ -397,6 +423,7 @@ bool AcParser::parseAddSub(Expr &expr) {
 bool AcParser::parseMulDiv(Expr &expr) {
   if (!parsePrimary(expr)) return false;
   while (peek().type == TOK_MUL || peek().type == TOK_DIV) {
+    Token opToken = peek();
     Expr::BinaryOp op;
     if (peek().type == TOK_MUL) {
       op = Expr::kMul;
@@ -414,6 +441,7 @@ bool AcParser::parseMulDiv(Expr &expr) {
     }
     Expr binary;
     binary.kind = Expr::kBinary;
+    binary.line = opToken.line;
     binary.binOp = op;
     binary.left = left;
     binary.right = right;
@@ -692,4 +720,35 @@ bool AcParser::parseFuncCall(const QString &name, Expr &expr) {
     if (peek().type == TOK_COMMA) advance();
   }
   return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
+}
+
+// ── 类型解析 ──
+
+AcType AcParser::parseType() {
+  // 类型必须以标识符开头（内建类型名或自定义类名）
+  if (peek().type != TOK_IDENT) {
+    *m_error = QStringLiteral("expected type name at line %1").arg(peek().line);
+    return AcType::any();
+  }
+  QString name = advance().text;
+
+  // 支持 Type[] 数组语法
+  if (peek().type == TOK_LBRACKET) {
+    advance();  // 跳过 '['
+    if (!expect(TOK_RBRACKET, QStringLiteral("expected ']' after '[' in array type")))
+      return AcType::any();
+    return AcType::arrayOf(resolveTypeName(name));
+  }
+
+  return resolveTypeName(name);
+}
+
+AcType AcParser::resolveTypeName(const QString &name) {
+  if (name == QStringLiteral("Number")) return AcType::number();
+  if (name == QStringLiteral("String")) return AcType::string();
+  if (name == QStringLiteral("Bool")) return AcType::boolean();
+  if (name == QStringLiteral("Any")) return AcType::any();
+  if (name == QStringLiteral("Void")) return AcType::voidType();
+  // 否则视为自定义类名
+  return AcType::classType(name);
 }

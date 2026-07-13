@@ -49,9 +49,39 @@ bool AcExecutor::parse(const QString &source) {
   return true;
 }
 
-/// @brief 执行 AST：验证 → 解释执行
+QStringList AcExecutor::validateTypes() {
+  m_typeErrors.clear();
+
+  // 从 AST 中提取类定义和函数定义
+  QHash<QString, ClassDef> classes;
+  QHash<QString, MethodDef> functions;
+  for (const auto &stmt : m_program.stmts) {
+    if (stmt.kind == Block::Stmt::kClassDef) {
+      classes.insert(stmt.classDef.name, stmt.classDef);
+    } else if (stmt.kind == Block::Stmt::kFuncDef) {
+      functions.insert(stmt.funcDef.name, stmt.funcDef);
+    }
+  }
+
+  // 注册 C++ 原生类（DB、File 等），确保类型检查器能识别它们
+  for (const auto &name : AcClass::kAll) {
+    if (!classes.contains(name)) {
+      ClassDef nativeClass;
+      nativeClass.name = name;
+      nativeClass.isNative = true;
+      classes.insert(name, nativeClass);
+    }
+  }
+
+  AcTypeChecker typeChecker;
+  typeChecker.check(m_program, m_declaredVars, classes, functions, m_typeErrors);
+  return m_typeErrors;
+}
+
+/// @brief 执行 AST：验证 → 类型检查 → 解释执行
 QJsonValue AcExecutor::execute() {
   m_error.clear();
+  m_typeErrors.clear();
 
   // 步骤 1：配置解释器
   m_interpreter.setScriptDir(m_scriptDir);
@@ -65,7 +95,14 @@ QJsonValue AcExecutor::execute() {
     return QJsonValue();
   }
 
-  // 步骤 3：执行
+  // 步骤 3：静态类型检查
+  QStringList typeErrors = validateTypes();
+  if (!typeErrors.isEmpty()) {
+    m_error = typeErrors.join(QStringLiteral("\n"));
+    return QJsonValue();
+  }
+
+  // 步骤 4：执行
   QJsonValue result = m_interpreter.execute(m_program, m_error);
   if (!m_error.isEmpty()) return QJsonValue();
 

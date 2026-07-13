@@ -45,6 +45,12 @@ private:
   bool parseFuncCall(const QString &name, Expr &expr);
   bool parseMethodDef(MethodDef &md);
 
+  // ── 类型解析 ──
+  /// @brief 解析类型注解（: TypeExpr），返回类型结构
+  AcType parseType();
+  /// @brief 将类型名称解析为 AcType（内建类型 / 自定义类名）
+  AcType resolveTypeName(const QString &name);
+
   // ── 内部状态 ──
   int m_pos = 0;
   QVector<Token> m_tokens;

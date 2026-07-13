@@ -20,6 +20,7 @@
 #include "ac_lexer.h"
 #include "ac_parser.h"
 #include "ac_type.h"
+#include "ac_type_checker.h"
 
 /// @brief .ac 脚本执行器 — 将 .ac 脚本解析为 AST 并解释执行
 ///
@@ -48,6 +49,10 @@ public:
   QStringList validateUndeclaredIdents() const {
     return m_interpreter.validateUndeclaredIdents(m_program, m_declaredVars);
   }
+
+  /// @brief 解析后调用，运行静态类型检查
+  /// @return 类型错误信息列表
+  QStringList validateTypes();
 
 private:
   // ── 预处理（#include / #path） ──
@@ -80,5 +85,6 @@ private:
   QVector<Token> m_tokens;       ///< 词法分析结果
   QSet<QString> m_declaredVars;  ///< 已用 let 声明的变量名
   Block m_program;               ///< 解析后的 AST 根节点
+  QStringList m_typeErrors;      ///< 类型检查错误列表
   LogCallback m_logCallback;
 };

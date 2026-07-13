@@ -575,7 +575,7 @@ QJsonValue AcInterpreter::execMethod(const MethodDef &method, const QJsonObject 
 
   QJsonArray argsArr = callArgs.toArray();
   for (int i = 0; i < method.params.size(); ++i) {
-    setVar(method.params[i], i < argsArr.size() ? argsArr[i] : QJsonValue());
+    setVar(method.params[i].name, i < argsArr.size() ? argsArr[i] : QJsonValue());
   }
 
   execBlock(method.body);
@@ -622,7 +622,7 @@ QJsonValue AcInterpreter::execUserFunction(const MethodDef &func, const QJsonVal
 
   QJsonArray argsArr = callArgs.toArray();
   for (int i = 0; i < func.params.size(); ++i) {
-    setVar(func.params[i], i < argsArr.size() ? argsArr[i] : QJsonValue());
+    setVar(func.params[i].name, i < argsArr.size() ? argsArr[i] : QJsonValue());
   }
 
   execBlock(func.body);
@@ -915,7 +915,7 @@ void AcInterpreter::validateStmtIdents(const Block::Stmt &stmt, QStringList &err
       for (const auto &prop : stmt.classDef.properties) classScope.insert(prop.key);
       for (const auto &method : stmt.classDef.methods) {
         QSet<QString> methodScope = classScope;
-        for (const auto &param : method.params) methodScope.insert(param);
+        for (const auto &param : method.params) methodScope.insert(param.name);
         validateBlockIdents(method.body, errors, methodScope, ctx);
       }
       break;
@@ -923,7 +923,7 @@ void AcInterpreter::validateStmtIdents(const Block::Stmt &stmt, QStringList &err
     case Block::Stmt::kFuncDef: {
       QSet<QString> funcScope = scopeVars;
       funcScope.insert(stmt.funcDef.name);  // 函数体内允许递归调用
-      for (const auto &param : stmt.funcDef.params) funcScope.insert(param);
+      for (const auto &param : stmt.funcDef.params) funcScope.insert(param.name);
       validateBlockIdents(stmt.funcDef.body, errors, funcScope, ctx);
       scopeVars.insert(stmt.funcDef.name);  // 定义后后续语句可调用
       break;

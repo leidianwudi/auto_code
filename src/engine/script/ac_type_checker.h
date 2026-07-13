@@ -1,0 +1,65 @@
+/**
+ * @file ac_type_checker.h
+ * @brief 类型检查器 — 在解析阶段对 AST 进行静态类型检查
+ *
+ * 在代码执行前检查类型错误，确保：
+ * - 参数类型与实际传入的实参类型匹配
+ * - 返回类型与实际 return 表达式类型匹配
+ * - 赋值类型兼容
+ * - 二元运算操作数类型兼容
+ * - 数组索引类型正确
+ * - 类属性类型与赋值兼容
+ */
+
+#pragma once
+
+#include <QHash>
+#include <QSet>
+#include <QString>
+#include <QStringList>
+
+#include "ac_type.h"
+
+/// @brief 类型检查器 — 编译期静态类型检查
+class AcTypeChecker {
+public:
+  /// @brief 对 AST 进行类型检查
+  /// @param program    解析后的 AST 根节点
+  /// @param declaredVars 已声明的变量名集合
+  /// @param classes    已定义的类集合（含原生类）
+  /// @param functions  已定义的顶层函数集合
+  /// @param[out] errors 类型错误列表
+  void check(const Block &program, const QSet<QString> &declaredVars,
+             const QHash<QString, ClassDef> &classes, const QHash<QString, MethodDef> &functions,
+             QStringList &errors);
+
+private:
+  /// @brief 类型环境 — 变量名 → 类型映射
+  struct TypeEnv {
+    QHash<QString, AcType> varTypes;   ///< 变量名 → 类型
+    QHash<QString, AcType> propTypes;  ///< this 的属性名 → 类型（当前类上下文）
+    QString className;                 ///< 当前所在类名（空表示不在类中）
+  };
+
+  // ── 内部状态 ──
+  TypeEnv m_env;
+  const QHash<QString, ClassDef> *m_classes = nullptr;
+  const QHash<QString, MethodDef> *m_functions = nullptr;
+  QStringList *m_errors = nullptr;
+
+  // ── 核心检查 ──
+  void checkBlock(const Block &block, TypeEnv &env);
+  void checkStmt(const Block::Stmt &stmt, TypeEnv &env);
+  AcType checkExpr(const Expr &expr, const TypeEnv &env);
+  void checkAssign(const AssignStmt &as, const TypeEnv &env);
+  void checkCallStmt(const CallStmt &cs, const TypeEnv &env);
+
+  // ── 类型兼容性 ──
+  /// @brief 检查 from 类型是否能赋值给 to 类型
+  bool isCompatible(const AcType &from, const AcType &to) const;
+  /// @brief 将类型转为可读字符串
+  QString typeToString(const AcType &type) const;
+
+  // ── 错误报告 ──
+  void reportError(const QString &msg, int line);
+};

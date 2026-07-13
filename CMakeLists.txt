@@ -23,6 +23,8 @@ qt_add_executable(auto_code
     src/engine/script/ac_object_manager.cpp
     src/engine/script/ac_executor.h
     src/engine/script/ac_executor.cpp
+    src/engine/script/ac_type_checker.h
+    src/engine/script/ac_type_checker.cpp
     src/engine/script/ac_engine.h
     src/engine/script/ac_engine.cpp
     src/engine/tpl/tpl_engine.h

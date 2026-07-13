@@ -17,6 +17,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QSharedPointer>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -79,6 +80,74 @@ struct Token {
 //  AST 节点类型
 // ═════════════════════════════════════════════════════════════════════════════
 
+// ═════════════════════════════════════════════════════════════════════════════
+//  类型系统
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// @brief 类型表示 — 参数注解、返回类型、属性类型的统一表示
+struct AcType {
+  enum Kind {
+    kNumber,  ///< 数字
+    kString,  ///< 字符串
+    kBool,    ///< 布尔
+    kAny,     ///< 任意类型（不检查）
+    kVoid,    ///< 无返回值
+    kArray,   ///< 数组（elementType 表示元素类型）
+    kClass,   ///< 用户自定义类（className 表示类名）
+    kNull,    ///< 未知/未推导
+  } kind = kAny;
+
+  QString className;                   ///< kClass 时有效
+  QSharedPointer<AcType> elementType;  ///< kArray 时有效
+
+  /// @name 内置类型工厂方法
+  /// @{
+  static AcType number() {
+    AcType t;
+    t.kind = kNumber;
+    return t;
+  }
+  static AcType string() {
+    AcType t;
+    t.kind = kString;
+    return t;
+  }
+  static AcType boolean() {
+    AcType t;
+    t.kind = kBool;
+    return t;
+  }
+  static AcType any() {
+    AcType t;
+    t.kind = kAny;
+    return t;
+  }
+  static AcType voidType() {
+    AcType t;
+    t.kind = kVoid;
+    return t;
+  }
+  static AcType arrayOf(const AcType &elem) {
+    AcType t;
+    t.kind = kArray;
+    t.elementType = QSharedPointer<AcType>::create(elem);
+    return t;
+  }
+  static AcType classType(const QString &name) {
+    AcType t;
+    t.kind = kClass;
+    t.className = name;
+    return t;
+  }
+  /// @}
+};
+
+/// @brief 参数定义：带可选类型注解
+struct ParamDef {
+  QString name;  ///< 参数名
+  AcType type;   ///< 类型（默认 Any，无注解时）
+};
+
 /// @brief 语句块 — 由 { } 包裹的一组语句
 struct Block {
   struct Stmt;
@@ -88,6 +157,7 @@ struct Block {
 /// @brief 对象字面量中的键值对
 struct ObjectEntry {
   QString key;
+  AcType type;  ///< 属性类型（默认 Any，无注解时）
   Expr *value = nullptr;
   bool isStatic = false;  ///< 是否为静态属性
 };
@@ -108,7 +178,8 @@ struct MethodCall {
 /// @brief 方法定义：function name(params) { body }
 struct MethodDef {
   QString name;
-  QStringList params;
+  QVector<ParamDef> params;  ///< 参数列表（带类型注解）
+  AcType returnType;         ///< 返回类型（默认 Any，无注解时）
   Block body;
   bool isStatic = false;  ///< 是否为静态方法
 };
@@ -186,8 +257,14 @@ private:
     ident = other.ident;
     prop = other.prop;
     indexKey = other.indexKey;
-    for (const auto &e : other.objEntries)
-      objEntries.append({e.key, e.value ? new Expr(*e.value) : nullptr});
+    for (const auto &e : other.objEntries) {
+      ObjectEntry oe;
+      oe.key = e.key;
+      oe.type = e.type;
+      oe.value = e.value ? new Expr(*e.value) : nullptr;
+      oe.isStatic = e.isStatic;
+      objEntries.append(oe);
+    }
     for (auto *e : other.arrItems) arrItems.append(e ? new Expr(*e) : nullptr);
     funcCall.name = other.funcCall.name;
     for (auto *e : other.funcCall.args) funcCall.args.append(e ? new Expr(*e) : nullptr);

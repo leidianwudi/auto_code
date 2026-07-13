@@ -29,7 +29,6 @@
 #include "src/tool/ui/component/aui_error_tool_tip.h"
 #include "src/tool/ui/component/aui_style.h"
 
-
 // ──────────────────────────────────────────────────────────────
 //  构造 / 基本接口
 // ──────────────────────────────────────────────────────────────
@@ -699,10 +698,11 @@ QStringList CodeEditor::validateAc() {
   AcExecutor executor;
   executor.parse(text);
 
-  // 收集所有错误：先取解析错误，再取未声明变量错误
+  // 收集所有错误：先取解析错误，再取未声明变量错误，再取类型错误
   QStringList allErrors;
   if (!executor.error().isEmpty()) allErrors << executor.error();
   allErrors << executor.validateUndeclaredIdents();
+  allErrors << executor.validateTypes();
 
   for (const QString &errMsg : allErrors) {
     if (errMsg.isEmpty()) continue;
