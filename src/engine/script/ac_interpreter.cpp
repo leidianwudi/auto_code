@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file ac_interpreter.cpp
  * @brief 解释执行器实现文�?
  */
@@ -239,6 +239,8 @@ void AcInterpreter::popScope() {
   for (auto it = scope.begin(); it != scope.end(); ++it) {
     releaseDeep(it.value());
   }
+  // 标记-清扫：回收循环引用垃圾
+  collectCycles();
 }
 
 bool AcInterpreter::containsVar(const QString &name) const {
@@ -274,26 +276,32 @@ void AcInterpreter::releaseIfInstanceWithDestruct(const QJsonValue &val) {
   // 处理所有待析构的实例
   QVector<AcObjectManager::DestructInfo> pending = AcObjectManager::ins().takePendingDestructs();
   for (const auto &info : pending) {
-    // 先递归释放实例内部属性持有的引用（如 this.data = new Xxx()）
-    for (auto it = info.instance.begin(); it != info.instance.end(); ++it) {
-      if (it.key() == QString::fromLatin1(AcRuntime::kClassKey) ||
-          it.key() == QString::fromLatin1(AcRuntime::kObjId))
-        continue;
-      releaseDeep(it.value());
-    }
-    // 原生类：路由到 FunMgr 的 __destruct__
-    if (FunMgr::ins().contains(info.className, QString::fromLatin1(AcRuntime::kDestructor))) {
-      QJsonArray args;
-      args.append(QJsonValue(info.instance));
-      FunMgr::ins().call(info.className, QString::fromLatin1(AcRuntime::kDestructor), args);
-    }
-    // 用户自定义类：执行 __destruct__ AST
-    else if (m_classes.contains(info.className) && !m_classes[info.className].isNative) {
-      for (const auto &method : m_classes[info.className].methods) {
-        if (method.name == QString::fromLatin1(AcRuntime::kDestructor)) {
-          execMethod(method, info.instance, QJsonValue(QJsonArray()));
-          break;
-        }
+    processDestructInfo(info);
+  }
+}
+
+/// 执行单个实例的析构：释放属性引用 + 调用 __destruct__
+void AcInterpreter::processDestructInfo(const AcObjectManager::DestructInfo &info) {
+  // 先递归释放实例内部属性持有的引用（如 this.data = new Xxx()）
+  QJsonObject obj = info.instance;
+  for (auto it = obj.begin(); it != obj.end(); ++it) {
+    if (it.key() == QString::fromLatin1(AcRuntime::kClassKey) ||
+        it.key() == QString::fromLatin1(AcRuntime::kObjId))
+      continue;
+    releaseDeep(it.value());
+  }
+  // 原生类：路由到 FunMgr 的 __destruct__
+  if (FunMgr::ins().contains(info.className, QString::fromLatin1(AcRuntime::kDestructor))) {
+    QJsonArray args;
+    args.append(QJsonValue(info.instance));
+    FunMgr::ins().call(info.className, QString::fromLatin1(AcRuntime::kDestructor), args);
+  }
+  // 用户自定义类：执行 __destruct__ AST
+  else if (m_classes.contains(info.className) && !m_classes[info.className].isNative) {
+    for (const auto &method : m_classes[info.className].methods) {
+      if (method.name == QString::fromLatin1(AcRuntime::kDestructor)) {
+        execMethod(method, info.instance, QJsonValue(QJsonArray()));
+        break;
       }
     }
   }
@@ -325,9 +333,86 @@ void AcInterpreter::releaseDeep(const QJsonValue &val) {
   }
 }
 
-// ════════════════════════════════════════════════════════════════════════════�?
-//  内置函数 �?统一路由�?FunMgr
-// ════════════════════════════════════════════════════════════════════════════�?
+// ── 标记-清扫（处理循环引用） ──
+
+void AcInterpreter::markFromValue(const QJsonValue &val) {
+  auto &mgr = AcObjectManager::ins();
+
+  if (AcObjectManager::isManagedInstance(val)) {
+    QString objId = AcObjectManager::getObjId(val);
+    // 已标记或不在管理器中（已被 release 回收），跳过
+    if (mgr.isMarked(objId) || !mgr.contains(objId)) return;
+    mgr.mark(objId);
+    // 递归标记实例的所有属性
+    QJsonObject obj = mgr.getObject(objId);
+    for (auto it = obj.begin(); it != obj.end(); ++it) {
+      if (it.key() == QString::fromLatin1(AcRuntime::kClassKey) ||
+          it.key() == QString::fromLatin1(AcRuntime::kObjId))
+        continue;
+      markFromValue(it.value());
+    }
+    return;
+  }
+  if (val.isArray()) {
+    for (const QJsonValue &item : val.toArray()) {
+      markFromValue(item);
+    }
+    return;
+  }
+  if (val.isObject()) {
+    QJsonObject obj = val.toObject();
+    for (auto it = obj.begin(); it != obj.end(); ++it) {
+      if (it.key() == QString::fromLatin1(AcRuntime::kClassKey) ||
+          it.key() == QString::fromLatin1(AcRuntime::kObjId))
+        continue;
+      markFromValue(it.value());
+    }
+  }
+}
+
+void AcInterpreter::collectCycles() {
+  auto &mgr = AcObjectManager::ins();
+  if (mgr.objectCount() == 0) return;
+
+  // 1. 清除旧标记
+  mgr.clearMarks();
+
+  // 2. 从所有存活作用域出发标记
+  for (const auto &scope : m_scopeStack) {
+    for (auto it = scope.begin(); it != scope.end(); ++it) {
+      markFromValue(it.value());
+    }
+  }
+  // 3. 从静态变量出发标记
+  for (auto it = m_staticVars.begin(); it != m_staticVars.end(); ++it) {
+    for (auto pit = it.value().begin(); pit != it.value().end(); ++pit) {
+      markFromValue(pit.value());
+    }
+  }
+  // 4. 从当前 this 出发标记
+  if (!m_currentThis.isEmpty()) {
+    for (auto it = m_currentThis.begin(); it != m_currentThis.end(); ++it) {
+      if (it.key() == QString::fromLatin1(AcRuntime::kClassKey) ||
+          it.key() == QString::fromLatin1(AcRuntime::kObjId))
+        continue;
+      markFromValue(it.value());
+    }
+  }
+  if (!m_modifiedThis.isEmpty()) {
+    for (auto it = m_modifiedThis.begin(); it != m_modifiedThis.end(); ++it) {
+      if (it.key() == QString::fromLatin1(AcRuntime::kClassKey) ||
+          it.key() == QString::fromLatin1(AcRuntime::kObjId))
+        continue;
+      markFromValue(it.value());
+    }
+  }
+
+  // 5. 清扫未标记的实例（循环引用垃圾）
+  QVector<AcObjectManager::DestructInfo> cycles = mgr.collectUnmarked();
+  for (const auto &info : cycles) {
+    processDestructInfo(info);
+  }
+}
 
 QJsonValue AcInterpreter::callBuiltin(const QString &name, const QVector<Expr *> &args, int line) {
   // 统一求值所有参�?

@@ -13,6 +13,7 @@
 #include <QStringList>
 #include <functional>
 
+#include "ac_object_manager.h"
 #include "ac_type.h"
 
 class TplEngine;
@@ -76,6 +77,14 @@ private:
   void releaseIfInstanceWithDestruct(const QJsonValue &val);
   /// 递归释放值中的所有受管理实例（数组/对象内部的实例）
   void releaseDeep(const QJsonValue &val);
+
+  // ── 标记-清扫（处理循环引用） ──
+  /// 从根（存活作用域、静态变量）出发标记所有可达实例，回收未标记的循环引用垃圾
+  void collectCycles();
+  /// 递归标记 QJsonValue 中所有可达的受管理实例
+  void markFromValue(const QJsonValue &val);
+  /// 执行单个实例的析构（释放属性引用 + 调用 __destruct__）
+  void processDestructInfo(const AcObjectManager::DestructInfo &info);
 
   // ── 类方法执行 ──
   QJsonValue execMethod(const MethodDef &method, const QJsonObject &thisObj,

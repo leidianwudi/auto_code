@@ -15,6 +15,7 @@
 #include <QHash>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QSet>
 #include <QString>
 #include <QVector>
 
@@ -68,6 +69,36 @@ public:
    */
   QVector<DestructInfo> takePendingDestructs();
 
+  // ── 标记-清扫（处理循环引用） ──
+
+  /// @brief 清除所有标记
+  void clearMarks();
+
+  /// @brief 标记实例为"可达"
+  void mark(const QString &objId);
+
+  /// @brief 检查实例是否已被标记
+  bool isMarked(const QString &objId) const;
+
+  /// @brief 检查 objId 是否仍在管理器中
+  bool contains(const QString &objId) const;
+
+  /// @brief 获取实例数据（用于遍历属性）
+  QJsonObject getObject(const QString &objId) const;
+
+  /**
+   * @brief 收集所有未标记的实例（循环引用垃圾）
+   *
+   * 从管理器中移除未标记的实例并返回，由 AcInterpreter 执行析构。
+   * 不经过 pendingDestructs，直接返回列表。
+   */
+  QVector<DestructInfo> collectUnmarked();
+
+  /**
+   * @brief 获取实例数量
+   */
+  int objectCount() const { return m_objects.size(); }
+
   /**
    * @brief 清理所有实例（程序退出时调用）
    */
@@ -83,4 +114,5 @@ private:
   QHash<QString, QJsonObject> m_objects;     ///< objId → 实例数据
   QHash<QString, QString> m_classNames;      ///< objId → 类名
   QVector<DestructInfo> m_pendingDestructs;  ///< 待析构列表
+  QSet<QString> m_marked;                    ///< 标记-清扫的标记集合
 };

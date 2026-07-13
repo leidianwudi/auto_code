@@ -69,4 +69,37 @@ void AcObjectManager::cleanup() {
   m_objects.clear();
   m_classNames.clear();
   m_pendingDestructs.clear();
+  m_marked.clear();
+}
+
+// ── 标记-清扫（处理循环引用） ──
+
+void AcObjectManager::clearMarks() { m_marked.clear(); }
+
+void AcObjectManager::mark(const QString &objId) { m_marked.insert(objId); }
+
+bool AcObjectManager::isMarked(const QString &objId) const { return m_marked.contains(objId); }
+
+bool AcObjectManager::contains(const QString &objId) const { return m_objects.contains(objId); }
+
+QJsonObject AcObjectManager::getObject(const QString &objId) const {
+  return m_objects.value(objId);
+}
+
+QVector<AcObjectManager::DestructInfo> AcObjectManager::collectUnmarked() {
+  QVector<DestructInfo> result;
+  // 遍历所有实例，收集未标记的（循环引用垃圾）
+  for (auto it = m_objects.begin(); it != m_objects.end(); ++it) {
+    if (!m_marked.contains(it.key())) {
+      result.append({it.value(), m_classNames.value(it.key())});
+    }
+  }
+  // 从管理器中移除所有未标记实例
+  for (const auto &info : result) {
+    QString objId = getObjId(QJsonValue(info.instance));
+    m_refCount.remove(objId);
+    m_objects.remove(objId);
+    m_classNames.remove(objId);
+  }
+  return result;
 }
