@@ -47,7 +47,7 @@ void AuiWindow::setupFramelessWindow(QWidget *window) {
 // ════════════════════════════════════════════════════════════
 
 void AuiWindow::setupFramelessDialog(QDialog *dialog) {
-  // 保留 Qt::Dialog 标志，否则 QDialog::exec() 无法正常显示
+  dialog->setWindowModality(Qt::WindowModal);
   dialog->setWindowFlags(dialog->windowFlags() | Qt::FramelessWindowHint);
   dialog->setStyleSheet(AuiStyle::mainStyleSheet() + AuiStyle::dialogStyleSheet());
   dialog->setWindowIcon(QIcon(appIconPixmap(256)));

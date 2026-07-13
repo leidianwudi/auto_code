@@ -42,7 +42,6 @@ private:
   void setupUI(const QString &title, const QString &text) {
     setWindowTitle(title);
     setFixedSize(360, 180);
-    setWindowModality(Qt::WindowModal);
 
     AuiWindow::setupFramelessDialog(this);
 
