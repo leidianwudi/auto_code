@@ -23,7 +23,10 @@
 #include <QTextBlock>
 
 #include "src/engine/ac_language.h"
-#include "src/engine/script/ac_executor.h"
+#include "src/engine/json_validator.h"
+#include "src/engine/script/ac_validator.h"
+#include "src/engine/tpl/tpl_validator.h"
+#include "src/engine/validation_result.h"
 #include "src/tool/ui/code/format_code.h"
 #include "src/tool/ui/code/guess_code.h"
 #include "src/tool/ui/component/aui_error_tool_tip.h"
@@ -32,12 +35,6 @@
 // ──────────────────────────────────────────────────────────────
 //  构造 / 基本接口
 // ──────────────────────────────────────────────────────────────
-
-namespace {
-const QString kEachName = QString::fromLatin1(AcTemplate::kEachPrefix).trimmed();
-const QString kIfName = QString::fromLatin1(AcTemplate::kIfPrefix).trimmed();
-const QString kElseName = QString::fromLatin1(AcTemplate::kElse).mid(2, 4);
-}  // namespace
 
 CodeEditor::CodeEditor(QWidget *parent)
     : QPlainTextEdit(parent), m_lineNumberArea(new LineNumberArea(this)) {
@@ -311,21 +308,25 @@ void CodeEditor::performValidation() {
   m_errorLines.clear();
   m_errorRanges.clear();  // 清除错误位置范围（供 paintEvent 使用）
 
-  // 根据验证模式调用不同的验证函数
-  QStringList errors;
-  if (m_validationMode == JsonValidation) {
-    errors = validateJson();
-  } else if (m_validationMode == TemplateValidation) {
-    errors = validateTemplate();
-  } else if (m_validationMode == AcValidation) {
-    errors = validateAc();
-  }
-
-  // 发出验证结果信号（无错误时传空字符串）
-  if (errors.isEmpty()) {
-    emit validationMessage(QString());
-  } else {
-    emit validationMessage(errors.first());
+  // 根据验证模式创建对应的验证器，使用统一的 IValidator 接口
+  switch (m_validationMode) {
+    case JsonValidation: {
+      JsonValidator validator;
+      validateWithValidator(&validator);
+      break;
+    }
+    case TemplateValidation: {
+      TplValidator validator;
+      validateWithValidator(&validator);
+      break;
+    }
+    case AcValidation: {
+      AcValidator validator;
+      validateWithValidator(&validator);
+      break;
+    }
+    default:
+      break;
   }
 
   // 刷新 ExtraSelections（重新绘制行高亮 + 括号匹配 + 错误标记）
@@ -340,391 +341,59 @@ void CodeEditor::performValidation() {
 }
 
 // ──────────────────────────────────────────────────────────────
-//  JSON 验证
+//  统一验证（使用 IValidator 接口）
 // ──────────────────────────────────────────────────────────────
 
 /**
- * @brief JSON 语法验证
+ * @brief 使用统一的 IValidator 接口执行验证
  *
- * 使用 QJsonDocument::fromJson 解析文本。
- * 如果解析失败，将错误偏移量转换为行列号，并在对应位置标记红色波浪下划线。
+ * 替换原来的三个独立验证方法（validateJson/validateTemplate/validateAc），
+ * 所有验证器都实现 IValidator 接口，返回统一的 ValidationResult 列表。
  *
- * 偏移量到行列号的转换：遍历文本块，累加每个块的长度，
- * 直到找到包含偏移量的块，然后计算该块内的行列位置。
+ * 验证流程：
+ * 1. 调用 validator->validate() 获取验证结果
+ * 2. 将每个 ValidationResult 映射为错误字符串
+ * 3. 在对应位置标记红色波浪下划线
+ * 4. 发出验证结果信号
  */
-QStringList CodeEditor::validateJson() {
-  QStringList errors;
+void CodeEditor::validateWithValidator(IValidator *validator) {
   QString text = toPlainText();
+  if (text.trimmed().isEmpty()) return;
 
-  if (text.trimmed().isEmpty()) {
-    return errors;
-  }
+  QVector<ValidationResult> results = validator->validate(text);
 
-  // 使用 Qt 内置的 JSON 解析器
-  QJsonParseError parseError;
-  QJsonDocument::fromJson(text.toUtf8(), &parseError);
-
-  if (parseError.error != QJsonParseError::NoError) {
-    int offset = parseError.offset;
-    // 将偏移量转换为 block/position
-    QTextBlock block = document()->begin();
-    int blockStart = 0;
-    // 累加每个块的长度，找到包含偏移量的块
-    while (block.isValid() && blockStart + block.length() <= offset) {
-      blockStart += block.length();
-      block = block.next();
+  // 收集错误信息字符串
+  QStringList errors;
+  for (const auto &result : results) {
+    QString msg = result.message;
+    if (result.line > 0) {
+      msg += QStringLiteral(" at line %1").arg(result.line);
     }
-
-    // 计算行列号（1-based）
-    int line = block.isValid() ? block.blockNumber() + 1 : 1;
-    int col = block.isValid() ? offset - blockStart + 1 : 1;
-
-    // 格式化错误信息
-    QString msg =
-        QStringLiteral("行 %1, 列 %2: %3").arg(line).arg(col).arg(parseError.errorString());
     errors << msg;
 
-    // 标记错误位置（红色波浪下划线）
-    // QJsonParseError::offset 指向解析器停止位置（即错误字符的下一位），
-    // 因此需要 -1 才能定位到实际错误字符
-    int markPos = qMin(offset, text.length()) - 1;
-    if (markPos < 0) markPos = 0;
-    applyErrorUnderline(markPos, 1, msg, m_errorSelections);
-  }
-
-  return errors;
-}
-
-// ──────────────────────────────────────────────────────────────
-//  模板验证（括号 + 标签匹配）
-// ──────────────────────────────────────────────────────────────
-
-/**
- * @brief 模板标签和括号匹配验证
- *
- * 执行 4 步验证，全面检测模板语法错误：
- * 1. 普通括号 () [] {} 匹配 — 使用栈平衡算法
- * 2. ${...} 闭合检查 — 确保所有模板表达式正确闭合
- * 3. ${each}/${if} 标签配对 — 检查控制流标签的嵌套
- * 4. 表达式方法调用检查 — 检测不支持的方法名
- *
- * 验证过程中会自动跳过字符串字面量、注释和 ${...} 内部的括号，
- * 避免误报。
- */
-QStringList CodeEditor::validateTemplate() {
-  QStringList errors;
-  QString text = toPlainText();
-  int len = text.length();
-
-  if (text.isEmpty()) return errors;
-
-  // ====================================================================
-  // 第 1 步：检查普通括号 () [] {} 匹配
-  // ====================================================================
-  // 使用栈（Stack）来跟踪开括号，遇到闭括号时弹出栈顶检查是否匹配
-  // 为提高效率，同时跳过字符串字面量、注释和 ${...} 内部的括号
-  struct BracketInfo {
-    QChar ch;
-    int pos;
-  };
-  QStack<BracketInfo> stack;
-  bool inString = false;        // 是否在字符串字面量内
-  bool inTemplateExpr = false;  // 是否在 ${...} 表达式内
-  int templateExprDepth = 0;    // 模板表达式嵌套深度（支持嵌套 {}）
-
-  for (int i = 0; i < len; ++i) {
-    QChar ch = text[i];
-
-    // 跟踪 ${...} 表达式内部（检测 entry 而非 exit）
-    if (ch == '$' && i + 1 < len && text[i + 1] == '{') {
-      inTemplateExpr = true;
-      templateExprDepth++;
-      i++;  // 跳过 '{'
-      continue;
-    }
-    // 在 ${...} 内部，跟踪嵌套的 {} 深度
-    if (inTemplateExpr) {
-      if (ch == '{') {
-        templateExprDepth++;
-      } else if (ch == '}') {
-        templateExprDepth--;
-        if (templateExprDepth <= 0) {
-          // 深度归零，退出模板表达式
-          inTemplateExpr = false;
-          templateExprDepth = 0;
-        }
-      }
-      continue;  // 跳过 ${...} 内部的括号，不参与匹配
-    }
-
-    // 跟踪字符串字面量内部（支持转义）
-    if ((ch == '"' || ch == '\'') && (i == 0 || text[i - 1] != '\\')) {
-      inString = !inString;
-      continue;
-    }
-    if (inString) continue;  // 字符串内部的括号不参与匹配
-
-    // 跳过单行注释（// 到行尾）
-    if (ch == '/' && i + 1 < len && text[i + 1] == '/') {
-      while (i < len && text[i] != '\n') ++i;
-      continue;
-    }
-
-    // 栈匹配：开括号压栈，闭括号检查栈顶
-    if (ch == '(' || ch == '[') {
-      stack.push({ch, i});
-    } else if (ch == ')' || ch == ']') {
-      QChar expected = (ch == ')') ? '(' : '[';
-      if (stack.isEmpty()) {
-        // 多余的闭括号
-        QString msg = QStringLiteral("多余的 '%1' 在位置 %2").arg(ch).arg(i + 1);
-        errors << msg;
-        applyErrorUnderline(i, 1, msg, m_errorSelections);
-      } else if (stack.top().ch != expected) {
-        // 括号类型不匹配
-        QString msg = QStringLiteral("括号不匹配: '%1' 在位置 %2，期望 '%3'")
-                          .arg(ch)
-                          .arg(i + 1)
-                          .arg(expected);
-        errors << msg;
-        applyErrorUnderline(i, 1, msg, m_errorSelections);
-        // 弹出直到找到匹配的（错误恢复）
-        while (!stack.isEmpty() && stack.top().ch != expected) {
-          stack.pop();
-        }
-        if (!stack.isEmpty()) stack.pop();
+    // 将错误位置标记为红色波浪下划线
+    // 定位到文档中的对应行
+    QTextBlock block = document()->findBlockByNumber(result.line - 1);
+    if (block.isValid()) {
+      int blockPos = block.position();
+      int length = result.length > 0 ? result.length : block.length() - 1;
+      if (result.column > 0) {
+        // 有精确列号，从指定列开始标记
+        applyErrorUnderline(blockPos + result.column - 1, length, result.message,
+                            m_errorSelections);
       } else {
-        // 正常匹配，弹出栈顶
-        stack.pop();
+        // 没有列号，标记整行
+        applyErrorUnderline(blockPos, length, result.message, m_errorSelections);
       }
     }
   }
 
-  // 检查未闭合的开括号
-  while (!stack.isEmpty()) {
-    auto info = stack.pop();
-    QString msg = QStringLiteral("未闭合的 '%1' 在位置 %2").arg(info.ch).arg(info.pos + 1);
-    errors << msg;
-    applyErrorUnderline(info.pos, 1, msg, m_errorSelections);
+  // 发出验证结果信号（无错误时传空字符串）
+  if (errors.isEmpty()) {
+    emit validationMessage(QString());
+  } else {
+    emit validationMessage(errors.first());
   }
-
-  // ====================================================================
-  // 第 2 步：检查 ${...} 是否闭合
-  // ====================================================================
-  // 扫描所有 ${ 标记，确保每个都有对应的 }
-  for (int i = 0; i < len; ++i) {
-    if (text[i] == '$' && i + 1 < len && text[i + 1] == '{') {
-      int depth = 1;
-      int start = i;
-      i += 2;
-      // 追踪嵌套的 {}，深度归零时表示闭合
-      while (i < len && depth > 0) {
-        if (text[i] == '{')
-          depth++;
-        else if (text[i] == '}')
-          depth--;
-        if (depth > 0) i++;
-      }
-      if (depth > 0) {
-        // 扫描到文档末尾仍未闭合
-        QString msg = QStringLiteral("未闭合的 ${ 在位置 %1").arg(start + 1);
-        errors << msg;
-        applyErrorUnderline(start, 2, msg, m_errorSelections);
-      }
-    }
-  }
-
-  // ====================================================================
-  // 第 3 步：检查 ${each}/${if} 标签配对
-  // ====================================================================
-  // 使用栈匹配控制流标签，确保 each/if 与 /each//if 正确配对
-  // 正则匹配所有控制流标签：${each}, ${if}, ${else}, ${/each}, ${/if}
-  static const QRegularExpression tagRegex(
-      QStringLiteral("\\$\\{(") + kEachName + QStringLiteral("|") + kIfName + QStringLiteral("|") +
-      kElseName + QStringLiteral("|/") + kEachName + QStringLiteral("|/") + kIfName +
-      QStringLiteral(")\\b[^}]*\\}"));
-
-  struct TagInfo {
-    QString tag;
-    int pos;
-    int length;
-  };
-  QStack<TagInfo> tagStack;
-
-  auto it = tagRegex.globalMatch(text);
-  while (it.hasNext()) {
-    auto match = it.next();
-    QString tag = match.captured(1);
-    int pos = match.capturedStart();
-    int tagLen = match.capturedLength();
-
-    if (tag == kEachName || tag == kIfName) {
-      // 开标签压栈
-      tagStack.push({tag, pos, tagLen});
-    } else if (tag == QLatin1Char('/') + kEachName || tag == QLatin1Char('/') + kIfName) {
-      // 闭标签需要匹配栈顶的开标签
-      QString openTag = tag.mid(1);  // "each" or "if"
-      if (tagStack.isEmpty()) {
-        // 多余的闭标签
-        QString msg = QStringLiteral("多余的 ${/%1} 在位置 %2").arg(openTag).arg(pos + 1);
-        errors << msg;
-        applyErrorUnderline(pos, tagLen, msg, m_errorSelections);
-      } else if (tagStack.top().tag != openTag) {
-        // 标签类型不匹配（如 ${if} 被 ${/each} 关闭）
-        QString msg = QStringLiteral("标签不匹配: ${/%1} 在位置 %2，期望 ${/%3}")
-                          .arg(openTag)
-                          .arg(pos + 1)
-                          .arg(tagStack.top().tag);
-        errors << msg;
-        applyErrorUnderline(pos, tagLen, msg, m_errorSelections);
-        // 错误恢复：弹出直到找到匹配的
-        while (!tagStack.isEmpty() && tagStack.top().tag != openTag) {
-          auto unmatched = tagStack.pop();
-          QString unMsg =
-              QStringLiteral("未闭合的 ${%1} 在位置 %2").arg(unmatched.tag).arg(unmatched.pos + 1);
-          errors << unMsg;
-          applyErrorUnderline(unmatched.pos, unmatched.length, unMsg, m_errorSelections);
-        }
-        if (!tagStack.isEmpty()) tagStack.pop();
-      } else {
-        // 正常匹配
-        tagStack.pop();
-      }
-    }
-    // ${else} 不压栈也不弹出，仅作为语法标记
-  }
-
-  // 检查未闭合的标签
-  while (!tagStack.isEmpty()) {
-    auto info = tagStack.pop();
-    QString msg = QStringLiteral("未闭合的 ${%1} 在位置 %2").arg(info.tag).arg(info.pos + 1);
-    errors << msg;
-    applyErrorUnderline(info.pos, info.length, msg, m_errorSelections);
-  }
-
-  // ====================================================================
-  // 第 4 步：检查 ${...} 表达式中不支持的方法调用
-  // ====================================================================
-  // 模板引擎支持 4 个字符串方法：toLowerCase, toUpperCase, trim, capitalize
-  // 检查 ${...} 中的点号分隔段，检测是否有不支持的方法名
-  static const QStringList supportedMethods = {
-      QString::fromLatin1(AcCallStr::kToLowerCase), QString::fromLatin1(AcCallStr::kToUpperCase),
-      QString::fromLatin1(AcCallStr::kTrim), QString::fromLatin1(AcCallStr::kCapitalize)};
-  // 匹配 ${...} 中的普通表达式（排除 each/if/else//each//if 标签）
-  static const QRegularExpression exprRegex(
-      QStringLiteral("\\$\\{(?!(?:") + kEachName + QStringLiteral("|") + kIfName +
-      QStringLiteral("|") + kElseName + QStringLiteral("|/") + kEachName + QStringLiteral("|/") +
-      kIfName + QStringLiteral(")\\b)[^}]+\\}"));
-  // 合法标识符：字母或下划线开头，只含字母、数字、下划线
-  static const QRegularExpression identRegex(QStringLiteral(R"(^[a-zA-Z_][a-zA-Z0-9_]*$)"));
-  // 判断段是否含有方法调用特征（含大写字母，或以数字/非字母开头）
-  // 大写字母开头通常表示类名或方法名（驼峰命名）
-  auto looksLikeMethod = [](const QString &seg) -> bool {
-    if (seg.isEmpty()) return false;
-    if (!seg[0].isLetter() && seg[0] != '_') return true;
-    for (const QChar &c : seg) {
-      if (c.isUpper()) return true;
-    }
-    return false;
-  };
-
-  auto exprIt = exprRegex.globalMatch(text);
-  while (exprIt.hasNext()) {
-    auto exprMatch = exprIt.next();
-
-    // 跳过注释中的表达式（避免误报）
-    int lineStart = text.lastIndexOf(QLatin1Char('\n'), exprMatch.capturedStart());
-    if (lineStart == -1) lineStart = 0;
-    QString linePrefix = text.mid(lineStart, exprMatch.capturedStart() - lineStart);
-    if (linePrefix.contains(QStringLiteral("//"))) continue;
-
-    // 去掉 ${ 和 } 取表达式内容
-    QString exprContent = exprMatch.captured().mid(2, exprMatch.capturedLength() - 3);
-    int exprStart = exprMatch.capturedStart() + 2;  // 表达式内容在文本中的起始位置
-
-    // 按点号分割路径段（如 user.address.city.toLowerCase）
-    QStringList segments = exprContent.split(QLatin1Char('.'));
-    if (segments.size() < 2) continue;  // 没有点号，跳过
-
-    // 第一段是变量名，后续段可能是属性或方法
-    int segPos = exprStart;
-    segPos += segments[0].length() + 1;  // 跳过第一段和点号
-
-    for (int s = 1; s < segments.size(); ++s) {
-      QString seg = segments[s].trimmed();
-
-      if (looksLikeMethod(seg) && !supportedMethods.contains(seg)) {
-        // 方法名风格且不在支持列表
-        QString msg = QStringLiteral("不支持的方法 '%1'，支持: %2")
-                          .arg(seg, supportedMethods.join(QStringLiteral(", ")));
-        errors << msg;
-        applyErrorUnderline(segPos, seg.length(), msg, m_errorSelections);
-      } else if (!identRegex.match(seg).hasMatch() && !supportedMethods.contains(seg)) {
-        // 不是合法标识符也不是已知方法
-        QString msg = QStringLiteral("无效的标识符 '%1'").arg(seg);
-        errors << msg;
-        applyErrorUnderline(segPos, seg.length(), msg, m_errorSelections);
-      }
-
-      // 跳到下一个段
-      if (s + 1 < segments.size()) segPos += seg.length() + 1;
-    }
-  }
-
-  return errors;
-}
-
-// ──────────────────────────────────────────────────────────────
-//  AC 脚本语法验证
-// ──────────────────────────────────────────────────────────────
-
-/**
- * @brief AC 脚本语法验证
- *
- * 使用 AcExecutor 执行器检查 AC 脚本语法，包括：
- * - 变量必须先 let 声明才能赋值
- * - 括号匹配
- * - 语句块 {} 完整性
- * - 关键字使用正确性
- *
- * 解析失败时提取错误信息中的行号，在该行标记红色波浪下划线。
- */
-QStringList CodeEditor::validateAc() {
-  QStringList errors;
-  QString text = toPlainText();
-
-  if (text.trimmed().isEmpty()) return errors;
-
-  AcExecutor executor;
-  executor.parse(text);
-
-  // 收集所有错误：先取解析错误，再取未声明变量错误，再取类型错误
-  QStringList allErrors;
-  if (!executor.error().isEmpty()) allErrors << executor.error();
-  allErrors << executor.validateUndeclaredIdents();
-  allErrors << executor.validateTypes();
-
-  for (const QString &errMsg : allErrors) {
-    if (errMsg.isEmpty()) continue;
-    errors << errMsg;
-
-    // 从错误信息中提取行号，格式如 "... at line 5"
-    static const QRegularExpression lineRegex(QStringLiteral("at line (\\d+)"));
-    auto match = lineRegex.match(errMsg);
-    if (match.hasMatch()) {
-      int line = match.captured(1).toInt() - 1;  // 0-based
-      QTextBlock block = document()->findBlockByNumber(line);
-      if (block.isValid()) {
-        int blockPos = block.position();
-        int blockLen = block.length() - 1;  // 去掉换行符
-        if (blockLen > 0) {
-          applyErrorUnderline(blockPos, blockLen, errMsg, m_errorSelections);
-        }
-      }
-    }
-  }
-
-  return errors;
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -939,6 +608,8 @@ int CodeEditor::calculateNewLineIndent(const QString &linePrefix) const {
 
   // ── TPL：${if ...} / ${each ...} 结尾 → 加一级缩进 ──
   if (m_validationMode == TemplateValidation) {
+    QString kEachName = QString::fromLatin1(AcTemplate::kEachPrefix).trimmed();
+    QString kIfName = QString::fromLatin1(AcTemplate::kIfPrefix).trimmed();
     static const QRegularExpression openTplRe(QStringLiteral("\\$\\{(") + kEachName +
                                               QStringLiteral("\\b|") + kIfName +
                                               QStringLiteral("\\b)[^}]*\\}$"));

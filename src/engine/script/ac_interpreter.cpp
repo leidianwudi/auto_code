@@ -1,6 +1,6 @@
 ﻿/**
  * @file ac_interpreter.cpp
- * @brief 解释执行器实现文�?
+ * @brief 解释执行器实现文件
  */
 
 #include "ac_interpreter.h"
@@ -17,9 +17,9 @@
 #include "../tpl/tpl_engine.h"
 #include "ac_object_manager.h"
 
-// ════════════════════════════════════════════════════════════════════════════�?
-//  表达式求�?
-// ════════════════════════════════════════════════════════════════════════════�?
+// ═════════════════════════════════════════════════════════════════════════════
+//  表达式求值
+// ═════════════════════════════════════════════════════════════════════════════
 
 QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
   switch (expr.kind) {
@@ -167,7 +167,7 @@ QJsonValue AcInterpreter::evalExprWithThis(const Expr &expr, const QJsonObject &
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  二元运算
-// ════════════════════════════════════════════════════════════════════════════�?
+// ═════════════════════════════════════════════════════════════════════════════
 
 QJsonValue AcInterpreter::evalBinary(const Expr &expr) {
   QJsonValue l = evalExpr(*expr.left);
@@ -195,9 +195,9 @@ QJsonValue AcInterpreter::evalBinary(const Expr &expr) {
   return QJsonValue();
 }
 
-// ════════════════════════════════════════════════════════════════════════════�?
+// ═════════════════════════════════════════════════════════════════════════════
 //  辅助方法
-// ════════════════════════════════════════════════════════════════════════════�?
+// ═════════════════════════════════════════════════════════════════════════════
 
 QJsonValue AcInterpreter::resolveVar(const QString &name) const {
   if (name == QString::fromLatin1(AcKeyword::kThis)) return QJsonValue(m_currentThis);
@@ -205,6 +205,8 @@ QJsonValue AcInterpreter::resolveVar(const QString &name) const {
     auto it = m_scopeStack[i].find(name);
     if (it != m_scopeStack[i].end()) return it.value();
   }
+  // 在方法内部，未在作用域中找到的变量回退到 this 实例的属性
+  if (!m_currentThis.isEmpty() && m_currentThis.contains(name)) return m_currentThis[name];
   return QJsonValue();
 }
 
@@ -223,6 +225,12 @@ void AcInterpreter::setVar(const QString &name, const QJsonValue &val) {
       retainIfInstance(val);
       return;
     }
+  }
+  // 在方法内部，未在作用域中找到的变量回退到 this 实例的属性
+  if (!m_currentThis.isEmpty() && m_currentThis.contains(name)) {
+    m_currentThis[name] = val;
+    m_modifiedThis = m_currentThis;
+    return;
   }
   // 新变量
   retainIfInstance(val);
@@ -247,6 +255,8 @@ bool AcInterpreter::containsVar(const QString &name) const {
   for (int i = m_scopeStack.size() - 1; i >= 0; --i) {
     if (m_scopeStack[i].contains(name)) return true;
   }
+  // 在方法内部，未在作用域中找到的变量回退到 this 实例的属性
+  if (!m_currentThis.isEmpty() && m_currentThis.contains(name)) return true;
   return false;
 }
 
@@ -415,11 +425,11 @@ void AcInterpreter::collectCycles() {
 }
 
 QJsonValue AcInterpreter::callBuiltin(const QString &name, const QVector<Expr *> &args, int line) {
-  // 统一求值所有参�?
+  // 统一求值所有参数
   QJsonArray arr;
   for (auto *a : args) arr.append(evalExpr(*a));
 
-  // call() 特殊处理：前两个参数是类名和函数�?
+  // call() 特殊处理：前两个参数是类名和函数名
   if (name == AcBuiltin::kCall) {
     if (arr.size() < 2) {
       *m_error = QStringLiteral("call() requires at least 2 arguments");
@@ -440,6 +450,9 @@ QJsonValue AcInterpreter::callBuiltin(const QString &name, const QVector<Expr *>
 
   // 其余内置函数：优先检查是否已注册，避免与 null 返回值混淆
   const QString builtinClass = QString::fromLatin1(AcRuntime::kBuiltinClass);
+  qDebug() << "[callBuiltin] name:" << name
+           << "contains:" << FunMgr::ins().contains(builtinClass, name) << "args:" << arr
+           << "line:" << line;
   if (FunMgr::ins().contains(builtinClass, name)) {
     // 注入当前行号，printLog/printError 输出时带上行号
     FunBuiltin::setCurrentLine(line);
@@ -451,6 +464,7 @@ QJsonValue AcInterpreter::callBuiltin(const QString &name, const QVector<Expr *>
       *m_error = QStringLiteral("%1 at line %2").arg(err).arg(line);
       return QJsonValue();
     }
+    qDebug() << "[callBuiltin] call result:" << r;
     return r;
   }
 
@@ -502,11 +516,14 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
     if (method.name == expr.methodCall.methodName) {
       QJsonArray args;
       for (auto *argExpr : expr.methodCall.args) args.append(evalExpr(*argExpr));
+      // 保存当前 m_modifiedThis，execMethod 内部会修改它，返回后写回变量再恢复
+      QJsonObject savedModifiedThis = m_modifiedThis;
       QJsonValue result = execMethod(method, obj, QJsonValue(args));
       if (expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis)) {
         if (containsVar(expr.methodCall.objName))
           setVar(expr.methodCall.objName, QJsonValue(m_modifiedThis));
       }
+      m_modifiedThis = savedModifiedThis;
       return result;
     }
   }
@@ -555,43 +572,45 @@ QJsonValue AcInterpreter::evalNewInstance(const Expr &expr) {
   return QJsonValue(instance);
 }
 
-// ════════════════════════════════════════════════════════════════════════════�?
-//  类方法执�?
-// ════════════════════════════════════════════════════════════════════════════�?
+// ═════════════════════════════════════════════════════════════════════════════
+//  类方法执行
+// ═════════════════════════════════════════════════════════════════════════════
 
 QJsonValue AcInterpreter::execMethod(const MethodDef &method, const QJsonObject &thisObj,
                                      const QJsonValue &callArgs) {
+  QJsonArray argsArr = callArgs.toArray();
   QJsonObject oldThis = m_currentThis;
-  bool oldHasReturned = m_hasReturned;
-  QJsonValue oldReturnValue = m_returnValue;
 
-  m_currentThis = thisObj;
+  // 保存调用方的 hasReturned/returnValue 状态，方法返回后恢复
+  bool savedReturned = m_hasReturned;
+  QJsonValue savedReturnValue = m_returnValue;
   m_hasReturned = false;
   m_returnValue = QJsonValue();
 
+  m_currentThis = thisObj;
+  m_modifiedThis = thisObj;
+
   pushScope();
 
-  for (auto it = thisObj.begin(); it != thisObj.end(); ++it) setVar(it.key(), it.value());
-
-  QJsonArray argsArr = callArgs.toArray();
+  // 绑定参数：形参名 → 实参值
   for (int i = 0; i < method.params.size(); ++i) {
     setVar(method.params[i].name, i < argsArr.size() ? argsArr[i] : QJsonValue());
   }
 
   execBlock(method.body);
 
-  QJsonValue result = m_hasReturned ? m_returnValue : QJsonValue();
-  m_modifiedThis = m_currentThis;
-
   popScope();
-  m_currentThis = oldThis;
-  m_hasReturned = oldHasReturned;
-  m_returnValue = oldReturnValue;
 
+  QJsonValue result = m_hasReturned ? m_returnValue : QJsonValue();
+
+  // 恢复调用方的 hasReturned/returnValue 状态
+  m_hasReturned = savedReturned;
+  m_returnValue = savedReturnValue;
+
+  m_currentThis = oldThis;
+  // m_modifiedThis 不恢复，由调用方 evalMethodCall 在写回变量后自行恢复
   return result;
 }
-
-// ── 静态变量初始化 ──
 
 void AcInterpreter::initStaticVars(const ClassDef &cd) {
   if (m_staticInited.contains(cd.name)) return;
@@ -599,28 +618,34 @@ void AcInterpreter::initStaticVars(const ClassDef &cd) {
 
   QJsonObject sv;
   for (const auto &prop : cd.properties) {
-    if (prop.isStatic && prop.value) {
-      QJsonValue v = evalExpr(*prop.value);
-      if (!m_error->isEmpty()) {
-        v = QJsonValue();
+    if (prop.isStatic) {
+      if (prop.value) {
+        QJsonValue v = evalExpr(*prop.value);
+        retainIfInstance(v);
+        sv[prop.key] = v;
+      } else {
+        sv[prop.key] = QJsonValue();
       }
-      sv.insert(prop.key, v);
     }
   }
-  m_staticVars.insert(cd.name, sv);
+  m_staticVars[cd.name] = sv;
 }
 
-// ── 顶层函数执行 ──
+// ═════════════════════════════════════════════════════════════════════════════
+//  顶层函数执行
+// ═════════════════════════════════════════════════════════════════════════════
 
 QJsonValue AcInterpreter::execUserFunction(const MethodDef &func, const QJsonValue &callArgs) {
-  bool oldHasReturned = m_hasReturned;
-  QJsonValue oldReturnValue = m_returnValue;
+  QJsonArray argsArr = callArgs.toArray();
+
+  // 保存调用方的 hasReturned/returnValue 状态，函数返回后恢复
+  bool savedReturned = m_hasReturned;
+  QJsonValue savedReturnValue = m_returnValue;
   m_hasReturned = false;
   m_returnValue = QJsonValue();
 
   pushScope();
 
-  QJsonArray argsArr = callArgs.toArray();
   for (int i = 0; i < func.params.size(); ++i) {
     setVar(func.params[i].name, i < argsArr.size() ? argsArr[i] : QJsonValue());
   }
@@ -630,73 +655,68 @@ QJsonValue AcInterpreter::execUserFunction(const MethodDef &func, const QJsonVal
   QJsonValue result = m_hasReturned ? m_returnValue : QJsonValue();
 
   popScope();
-  m_hasReturned = oldHasReturned;
-  m_returnValue = oldReturnValue;
+
+  // 恢复调用方的 hasReturned/returnValue 状态，避免函数内的 return 影响上层
+  m_hasReturned = savedReturned;
+  m_returnValue = savedReturnValue;
 
   return result;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  语句执行
-// ════════════════════════════════════════════════════════════════════════════�?
+// ═════════════════════════════════════════════════════════════════════════════
 
 void AcInterpreter::execStmt(const Block::Stmt &stmt) {
   switch (stmt.kind) {
     case Block::Stmt::kCall: {
-      QString cls = evalExpr(stmt.call.className).toString();
-      QString func = evalExpr(stmt.call.funcName).toString();
-      QJsonValue a = stmt.call.args.kind != Expr::kString || !stmt.call.args.strVal.isEmpty()
-                         ? evalExpr(stmt.call.args)
-                         : QJsonValue();
-      QJsonArray callArgs;
-      if (a.isArray())
-        callArgs = a.toArray();
-      else if (!a.isNull() && !a.isUndefined())
-        callArgs.append(a);
-      FunMgr::ins().call(cls, func, callArgs);
+      QJsonValue cls = evalExpr(stmt.call.className);
+      QJsonValue func = evalExpr(stmt.call.funcName);
+      QJsonValue args = evalExpr(stmt.call.args);
+      if (!m_error->isEmpty()) return;
+      QString clsName = cls.toString();
+      QString funcName = func.toString();
+      QJsonArray argsArr = args.toArray();
+
+      // call() 语句：调用 C++ 注册函数
+      FunMgr::ins().call(clsName, funcName, argsArr);
       QString err = FunMgr::takeError();
       if (!err.isEmpty()) {
-        *m_error = QStringLiteral("%1").arg(err);
-        return;
+        *m_error = QStringLiteral("%1 at line %2").arg(err).arg(stmt.call.className.line);
       }
       break;
     }
 
     case Block::Stmt::kAssign: {
       QJsonValue val = evalExpr(stmt.assign.value);
+      if (!m_error->isEmpty()) return;
+
+      // 静态属性赋值：ClassName::prop = value
       if (stmt.assign.isStatic) {
-        // ClassName::prop = value
-        QString cn = stmt.assign.staticClassName;
-        if (!m_staticInited.contains(cn)) {
-          if (m_classes.contains(cn)) initStaticVars(m_classes[cn]);
-        }
-        QJsonObject sv = m_staticVars.value(cn);
-        // release 旧值，retain 新值
-        if (sv.contains(stmt.assign.name)) {
-          releaseIfInstanceWithDestruct(sv.value(stmt.assign.name));
-        }
-        retainIfInstance(val);
-        sv[stmt.assign.name] = val;
-        m_staticVars[cn] = sv;
-      } else if (!stmt.assign.thisProp.isEmpty()) {
-        if (!m_currentThis.isEmpty()) {
-          QJsonObject updated = m_currentThis;
-          // release 旧值，retain 新值
-          if (updated.contains(stmt.assign.thisProp)) {
-            releaseIfInstanceWithDestruct(updated.value(stmt.assign.thisProp));
+        if (m_staticVars.contains(stmt.assign.staticClassName)) {
+          QJsonObject sv = m_staticVars[stmt.assign.staticClassName];
+          // release 旧值
+          if (sv.contains(stmt.assign.name)) {
+            releaseIfInstanceWithDestruct(sv.value(stmt.assign.name));
           }
           retainIfInstance(val);
-          updated[stmt.assign.thisProp] = val;
-          m_currentThis = updated;
+          sv[stmt.assign.name] = val;
+          m_staticVars[stmt.assign.staticClassName] = sv;
         }
-      } else {
-        setVar(stmt.assign.name, val);
-        if (!m_currentThis.isEmpty() && m_currentThis.contains(stmt.assign.name)) {
-          QJsonObject updated = m_currentThis;
-          updated[stmt.assign.name] = val;
-          m_currentThis = updated;
-        }
+        break;
       }
+
+      // this.prop = value
+      if (!stmt.assign.thisProp.isEmpty()) {
+        QJsonValue old = m_currentThis.value(stmt.assign.thisProp);
+        releaseIfInstanceWithDestruct(old);
+        retainIfInstance(val);
+        m_currentThis[stmt.assign.thisProp] = val;
+        break;
+      }
+
+      // name = value
+      setVar(stmt.assign.name, val);
       break;
     }
 
@@ -765,9 +785,15 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
 }
 
 void AcInterpreter::execBlock(const Block &block) {
-  for (const auto &stmt : block.stmts) {
+  qDebug() << "[execBlock] stmts count:" << block.stmts.size();
+  for (int i = 0; i < block.stmts.size(); ++i) {
+    const auto &stmt = block.stmts[i];
+    qDebug() << "[execBlock] stmt" << i << "kind:" << (int)stmt.kind;
     execStmt(stmt);
-    if (!m_error->isEmpty()) return;
+    if (!m_error->isEmpty()) {
+      qDebug() << "[execBlock] error after stmt" << i << ":" << *m_error;
+      return;
+    }
     if (m_hasReturned) return;
   }
 }
@@ -781,9 +807,9 @@ void AcInterpreter::execBlockWithThis(const Block &block, const QJsonObject &thi
   m_currentThis = oldThis;
 }
 
-// ════════════════════════════════════════════════════════════════════════════�?
+// ═════════════════════════════════════════════════════════════════════════════
 //  执行入口
-// ════════════════════════════════════════════════════════════════════════════�?
+// ═════════════════════════════════════════════════════════════════════════════
 
 QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
   m_error = &error;
@@ -795,10 +821,10 @@ QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
   m_returnValue = QJsonValue();
   m_generatedFiles.clear();
 
-  // 全局作用�?
+  // 全局作用域
   pushScope();
 
-  // 预先注册 C++ 原生类（�?new 语法创建�?
+  // 预先注册 C++ 原生类（供 new 语法使用）
   for (const auto &name : AcClass::kAll) {
     ClassDef nativeClass;
     nativeClass.name = name;
@@ -808,6 +834,8 @@ QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
 
   // 注入解释器上下文给 FunBuiltin 使用
   FunMgr::init();
+  qDebug() << "[AcInterpreter::execute] m_logCallback is null:" << !m_logCallback
+           << "m_scriptDir:" << m_scriptDir << "m_rootDir:" << m_rootDir;
   FunBuiltin::setContext({m_scriptDir, m_rootDir, m_logCallback, &m_generatedFiles, 0});
 
   execBlock(program);
@@ -823,194 +851,4 @@ QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
   }
 
   return m_hasReturned ? m_returnValue : QJsonValue();
-}
-
-// ════════════════════════════════════════════════════════════════════════════�?
-//  未声明标识符验证
-// ════════════════════════════════════════════════════════════════════════════�?
-
-QStringList AcInterpreter::validateUndeclaredIdents(const Block &program,
-                                                    const QSet<QString> &declaredVars) const {
-  QStringList errors;
-  QSet<QString> scopeVars = declaredVars;
-
-  // 预扫描 AST，收集类定义和 new 赋值信息
-  ValidationContext ctx;
-  collectValidationInfo(program, ctx);
-
-  validateBlockIdents(program, errors, scopeVars, ctx);
-  return errors;
-}
-
-void AcInterpreter::collectValidationInfo(const Block &block, ValidationContext &ctx) const {
-  for (const auto &stmt : block.stmts) {
-    switch (stmt.kind) {
-      case Block::Stmt::kClassDef:
-        // 记录类 → 方法名
-        if (!stmt.classDef.name.isEmpty()) {
-          QStringList methods;
-          for (const auto &m : stmt.classDef.methods) methods.append(m.name);
-          ctx.classMethods.insert(stmt.classDef.name, methods);
-        }
-        break;
-      case Block::Stmt::kAssign:
-        // 记录 let x = new Car() → 变量→类名
-        if (!stmt.assign.name.isEmpty() && stmt.assign.value.kind == Expr::kNewInstance &&
-            !stmt.assign.value.className.isEmpty()) {
-          ctx.varClass.insert(stmt.assign.name, stmt.assign.value.className);
-        }
-        break;
-      default:
-        break;
-    }
-  }
-}
-
-void AcInterpreter::validateBlockIdents(const Block &block, QStringList &errors,
-                                        QSet<QString> &scopeVars, ValidationContext &ctx) const {
-  for (const auto &stmt : block.stmts) validateStmtIdents(stmt, errors, scopeVars, ctx);
-}
-
-void AcInterpreter::validateStmtIdents(const Block::Stmt &stmt, QStringList &errors,
-                                       QSet<QString> &scopeVars, ValidationContext &ctx) const {
-  switch (stmt.kind) {
-    case Block::Stmt::kCall:
-      validateExprIdents(stmt.call.className, errors, scopeVars, ctx);
-      validateExprIdents(stmt.call.funcName, errors, scopeVars, ctx);
-      validateExprIdents(stmt.call.args, errors, scopeVars, ctx);
-      break;
-    case Block::Stmt::kAssign:
-      validateExprIdents(stmt.assign.value, errors, scopeVars, ctx);
-      // 记录 let x = new Car() → 变量→类名
-      if (!stmt.assign.name.isEmpty() && stmt.assign.value.kind == Expr::kNewInstance &&
-          !stmt.assign.value.className.isEmpty()) {
-        ctx.varClass.insert(stmt.assign.name, stmt.assign.value.className);
-      }
-      scopeVars.insert(stmt.assign.name);
-      break;
-    case Block::Stmt::kIndexAssign:
-      validateExprIdents(stmt.indexAssign.value, errors, scopeVars, ctx);
-      break;
-    case Block::Stmt::kFor: {
-      validateExprIdents(stmt.forStmt.arrayExpr, errors, scopeVars, ctx);
-      QSet<QString> bodyScope = scopeVars;
-      bodyScope.insert(stmt.forStmt.varName);
-      validateBlockIdents(stmt.forStmt.body, errors, bodyScope, ctx);
-      break;
-    }
-    case Block::Stmt::kIf:
-      validateExprIdents(stmt.ifStmt.condition, errors, scopeVars, ctx);
-      validateBlockIdents(stmt.ifStmt.thenBlock, errors, scopeVars, ctx);
-      if (stmt.ifStmt.hasElse) validateBlockIdents(stmt.ifStmt.elseBlock, errors, scopeVars, ctx);
-      break;
-    case Block::Stmt::kExpr:
-      validateExprIdents(stmt.exprStmt, errors, scopeVars, ctx);
-      break;
-    case Block::Stmt::kClassDef: {
-      QSet<QString> classScope = scopeVars;
-      for (const auto &prop : stmt.classDef.properties) {
-        if (prop.value) validateExprIdents(*prop.value, errors, classScope, ctx);
-      }
-      classScope.insert(QString::fromLatin1(AcKeyword::kThis));
-      for (const auto &prop : stmt.classDef.properties) classScope.insert(prop.key);
-      for (const auto &method : stmt.classDef.methods) {
-        QSet<QString> methodScope = classScope;
-        for (const auto &param : method.params) methodScope.insert(param.name);
-        validateBlockIdents(method.body, errors, methodScope, ctx);
-      }
-      break;
-    }
-    case Block::Stmt::kFuncDef: {
-      QSet<QString> funcScope = scopeVars;
-      funcScope.insert(stmt.funcDef.name);  // 函数体内允许递归调用
-      for (const auto &param : stmt.funcDef.params) funcScope.insert(param.name);
-      validateBlockIdents(stmt.funcDef.body, errors, funcScope, ctx);
-      scopeVars.insert(stmt.funcDef.name);  // 定义后后续语句可调用
-      break;
-    }
-    case Block::Stmt::kReturn:
-      validateExprIdents(stmt.returnValue, errors, scopeVars, ctx);
-      break;
-  }
-}
-
-void AcInterpreter::validateExprIdents(const Expr &expr, QStringList &errors,
-                                       QSet<QString> &scopeVars,
-                                       const ValidationContext &ctx) const {
-  switch (expr.kind) {
-    case Expr::kIdent:
-      if (!scopeVars.contains(expr.ident)) {
-        errors << QStringLiteral("undefined variable '%1' at line %2")
-                      .arg(expr.ident, QString::number(expr.line));
-      }
-      break;
-    case Expr::kBool:
-    case Expr::kString:
-    case Expr::kNumber:
-    case Expr::kThis:
-      break;
-    case Expr::kPropAccess:
-      if (expr.ident != QString::fromLatin1(AcKeyword::kThis) && !scopeVars.contains(expr.ident)) {
-        errors << QStringLiteral("undefined variable '%1' at line %2")
-                      .arg(expr.ident, QString::number(expr.line));
-      }
-      break;
-    case Expr::kIndexAccess:
-      if (expr.ident != QString::fromLatin1(AcKeyword::kThis) && !scopeVars.contains(expr.ident)) {
-        errors << QStringLiteral("undefined variable '%1' at line %2")
-                      .arg(expr.ident, QString::number(expr.line));
-      }
-      break;
-    case Expr::kFuncCall:
-      for (const auto *arg : expr.funcCall.args) validateExprIdents(*arg, errors, scopeVars, ctx);
-      // 检查函数名是否已知（内置函数或用户自定义函数）
-      if (!AcBuiltin::kAll.contains(expr.funcCall.name) &&
-          !scopeVars.contains(expr.funcCall.name)) {
-        errors << QStringLiteral("unknown function '%1' at line %2")
-                      .arg(expr.funcCall.name, QString::number(expr.line));
-      }
-      if (expr.funcCall.name == QString::fromLatin1(AcBuiltin::kReadFile) &&
-          expr.funcCall.args.isEmpty()) {
-        errors
-            << QStringLiteral("readFile() requires a file path argument at line %1").arg(expr.line);
-      }
-      break;
-    case Expr::kMethodCall:
-      if (expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis) &&
-          !scopeVars.contains(expr.methodCall.objName)) {
-        errors << QStringLiteral("undefined variable '%1' at line %2")
-                      .arg(expr.methodCall.objName, QString::number(expr.line));
-      }
-      // 检查方法名是否在对应的类中定义
-      if (ctx.varClass.contains(expr.methodCall.objName)) {
-        QString clsName = ctx.varClass.value(expr.methodCall.objName);
-        if (ctx.classMethods.contains(clsName) &&
-            !ctx.classMethods[clsName].contains(expr.methodCall.methodName)) {
-          errors << QStringLiteral("class '%1' has no method '%2' at line %3")
-                        .arg(clsName, expr.methodCall.methodName, QString::number(expr.line));
-        }
-        // 如果类在 classMethods 中但无记录（空列表），说明是原生类，跳过方法名检查
-      }
-      for (const auto *arg : expr.methodCall.args) validateExprIdents(*arg, errors, scopeVars, ctx);
-      break;
-    case Expr::kNewInstance:
-      break;
-    case Expr::kStaticAccess:
-      for (const auto *arg : expr.funcCall.args) validateExprIdents(*arg, errors, scopeVars, ctx);
-      break;
-    case Expr::kObject:
-      for (const auto &entry : expr.objEntries) {
-        if (entry.value) validateExprIdents(*entry.value, errors, scopeVars, ctx);
-      }
-      break;
-    case Expr::kArray:
-      for (const auto *item : expr.arrItems) validateExprIdents(*item, errors, scopeVars, ctx);
-      break;
-    case Expr::kBinary:
-      if (expr.left) validateExprIdents(*expr.left, errors, scopeVars, ctx);
-      if (expr.right) validateExprIdents(*expr.right, errors, scopeVars, ctx);
-      break;
-    default:
-      break;
-  }
 }

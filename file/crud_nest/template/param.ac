@@ -1,0 +1,12 @@
+//生成代码的所有全局参数
+class Param {
+  let entityClass = ""; //实体名字,EnInfoNews
+  let tableName = ""; //表名,info_news
+  let tableDesc = "";//表说明
+  let tableCols = [];//数组，表的列
+  
+  function setTableData(data)
+  {
+    
+  }
+}

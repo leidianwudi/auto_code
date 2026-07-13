@@ -46,11 +46,6 @@ public:
   /// @brief 获取已解析的类定义集合（供类型检查器使用）
   const QHash<QString, ClassDef> &classes() const { return m_classes; }
 
-  // ── 辅助 ──
-  /// @brief 校验表达式中是否有未声明的标识符
-  QStringList validateUndeclaredIdents(const Block &program,
-                                       const QSet<QString> &declaredVars) const;
-
 private:
   // ── 执行 ──
   void execBlock(const Block &block);
@@ -96,23 +91,6 @@ private:
 
   // ── 顶层函数执行 ──
   QJsonValue execUserFunction(const MethodDef &func, const QJsonValue &callArgs);
-
-  // ── 验证 ──
-  /// @brief 验证辅助数据结构：类方法名列表 + 变量→类名映射
-  struct ValidationContext {
-    QHash<QString, QStringList> classMethods;  ///< 类名 → 方法名列表
-    QHash<QString, QString> varClass;          ///< 变量名 → 类名（let x = new Car()）
-  };
-
-  /// @brief 预扫描 AST，收集类定义和 new 赋值信息
-  void collectValidationInfo(const Block &block, ValidationContext &ctx) const;
-
-  void validateExprIdents(const Expr &expr, QStringList &errors, QSet<QString> &scopeVars,
-                          const ValidationContext &ctx) const;
-  void validateStmtIdents(const Block::Stmt &stmt, QStringList &errors, QSet<QString> &scopeVars,
-                          ValidationContext &ctx) const;
-  void validateBlockIdents(const Block &block, QStringList &errors, QSet<QString> &scopeVars,
-                           ValidationContext &ctx) const;
 
   // ── 运行状态 ──
   QString *m_error = nullptr;

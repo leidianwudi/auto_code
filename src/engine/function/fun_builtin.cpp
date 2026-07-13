@@ -124,11 +124,15 @@ QJsonValue FunBuiltin::printLog(const QJsonArray &args) {
   for (const QJsonValue &v : args) {
     text += v.isString() ? v.toString() : QString::number(v.toDouble());
   }
+  qDebug() << "[FunBuiltin::printLog] text:" << text << "hasCallback:" << (bool)s_ctx.logCallback
+           << "currentLine:" << s_ctx.currentLine;
   if (s_ctx.logCallback) {
     if (s_ctx.currentLine > 0) {
       text = QStringLiteral("[%1] %2").arg(s_ctx.currentLine).arg(text);
     }
     s_ctx.logCallback(text, false);
+  } else {
+    qDebug() << "[FunBuiltin::printLog] WARNING: logCallback is null!";
   }
 
   return QJsonValue(true);

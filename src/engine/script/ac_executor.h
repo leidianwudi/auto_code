@@ -44,12 +44,6 @@ public:
   bool parse(const QString &source);
   QJsonValue execute();
 
-  /// @brief 解析后调用，检查所有未声明的标识符
-  /// @return 错误信息列表，每个元素格式 "undefined variable 'xxx' at line N"
-  QStringList validateUndeclaredIdents() const {
-    return m_interpreter.validateUndeclaredIdents(m_program, m_declaredVars);
-  }
-
   /// @brief 解析后调用，运行静态类型检查
   /// @return 类型错误信息列表
   QStringList validateTypes();

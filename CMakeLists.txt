@@ -27,8 +27,16 @@ qt_add_executable(auto_code
     src/engine/script/ac_type_checker.cpp
     src/engine/script/ac_engine.h
     src/engine/script/ac_engine.cpp
+    src/engine/script/ast_visitor.h
+    src/engine/script/ast_visitor.cpp
+    src/engine/script/undeclared_ident_validator.h
+    src/engine/script/undeclared_ident_validator.cpp
+    src/engine/script/ac_validator.h
+    src/engine/script/ac_validator.cpp
     src/engine/tpl/tpl_engine.h
     src/engine/tpl/tpl_engine.cpp
+    src/engine/tpl/tpl_validator.h
+    src/engine/tpl/tpl_validator.cpp
     src/engine/tpl/handlers/tpl_block.h
     src/engine/tpl/handlers/tpl_block.cpp
     src/engine/tpl/handlers/tpl_factory.h
@@ -41,6 +49,9 @@ qt_add_executable(auto_code
     src/engine/tpl/handlers/block_expression.cpp
     src/engine/validator_json.h
     src/engine/validator_json.cpp
+    src/engine/validation_result.h
+    src/engine/json_validator.h
+    src/engine/json_validator.cpp
     src/engine/function/fun_str.h
     src/engine/function/fun_str.cpp
     src/engine/function/fun_db.h

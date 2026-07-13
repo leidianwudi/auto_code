@@ -90,9 +90,11 @@ QString AcEngine::execute(const QString &acFilePath) {
   executor.setIncludePaths(m_includePaths);
   if (!m_rootDir.isEmpty()) executor.setRootDir(m_rootDir);
   if (m_logCallback) executor.setLogCallback(m_logCallback);
+  qDebug() << "[AcEngine::execute] m_logCallback is null:" << !m_logCallback;
 
   // 步骤 4：解析源码为 AST
   if (!executor.parse(source)) return QStringLiteral("parse error: %1").arg(executor.error());
+  qDebug() << "[AcEngine::execute] parse succeeded";
 
   // 步骤 5：解释执行 AST 并收集生成的文件
   QJsonValue result = executor.execute();

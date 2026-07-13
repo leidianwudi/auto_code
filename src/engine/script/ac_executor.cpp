@@ -10,6 +10,7 @@
 #include <QRegularExpression>
 
 #include "../ac_language.h"
+#include "undeclared_ident_validator.h"
 
 AcExecutor::AcExecutor() = default;
 
@@ -88,24 +89,37 @@ QJsonValue AcExecutor::execute() {
   m_interpreter.setRootDir(m_rootDir);
   m_interpreter.setLogCallback(m_logCallback);
 
+  qDebug() << "[AcExecutor::execute] m_logCallback is null:" << !m_logCallback;
+
   // 步骤 2：验证未声明的标识符
-  QStringList undeclared = m_interpreter.validateUndeclaredIdents(m_program, m_declaredVars);
+  UndeclaredIdentValidator undeclaredValidator;
+  QStringList undeclared;
+  undeclaredValidator.validate(m_program, m_declaredVars, undeclared);
   if (!undeclared.isEmpty()) {
     m_error = undeclared.join(QStringLiteral("\n"));
+    qDebug() << "[AcExecutor::execute] undeclared errors:" << m_error;
     return QJsonValue();
   }
+  qDebug() << "[AcExecutor::execute] undeclared check passed, program stmts:"
+           << m_program.stmts.size();
 
   // 步骤 3：静态类型检查
   QStringList typeErrors = validateTypes();
   if (!typeErrors.isEmpty()) {
     m_error = typeErrors.join(QStringLiteral("\n"));
+    qDebug() << "[AcExecutor::execute] type errors:" << m_error;
     return QJsonValue();
   }
+  qDebug() << "[AcExecutor::execute] type check passed";
 
   // 步骤 4：执行
   QJsonValue result = m_interpreter.execute(m_program, m_error);
-  if (!m_error.isEmpty()) return QJsonValue();
+  if (!m_error.isEmpty()) {
+    qDebug() << "[AcExecutor::execute] execution error:" << m_error;
+    return QJsonValue();
+  }
 
+  qDebug() << "[AcExecutor::execute] execution completed, result:" << result;
   return result;
 }
 

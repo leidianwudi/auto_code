@@ -21,7 +21,8 @@ class QPaintEvent;
 class QResizeEvent;
 class QWidget;
 class QCompleter;
-class AuiErrorToolTip; ///< 自定义可选中/复制的错误提示弹窗
+class AuiErrorToolTip;  ///< 自定义可选中/复制的错误提示弹窗
+class IValidator;       ///< 统一验证器接口
 
 /**
  * @class CodeEditor
@@ -40,10 +41,10 @@ class CodeEditor : public QPlainTextEdit {
 public:
   /// 验证模式枚举
   enum ValidationMode {
-    NoValidation,       ///< 不做验证
-    JsonValidation,     ///< JSON 语法验证（使用 QJsonDocument）
-    TemplateValidation, ///< 模板标签 + 括号匹配验证
-    AcValidation        ///< AC 脚本语法验证（使用 AcExecutor）
+    NoValidation,        ///< 不做验证
+    JsonValidation,      ///< JSON 语法验证（使用 QJsonDocument）
+    TemplateValidation,  ///< 模板标签 + 括号匹配验证
+    AcValidation         ///< AC 脚本语法验证（使用 AcExecutor）
   };
 
   explicit CodeEditor(QWidget *parent = nullptr);
@@ -96,12 +97,8 @@ private slots:
 private:
   /// 刷新 ExtraSelection 列表（行高亮 + 括号匹配 + 错误标记）
   void refreshExtraSelections();
-  /// JSON 验证，返回错误信息列表
-  QStringList validateJson();
-  /// 模板验证（4 步：括号匹配、${} 闭合、标签配对、方法检查），返回错误信息列表
-  QStringList validateTemplate();
-  /// AC 脚本语法验证（使用 AcExecutor 解析），返回错误信息列表
-  QStringList validateAc();
+  /// 使用统一的 IValidator 接口执行验证
+  void validateWithValidator(IValidator *validator);
   /// 将错误区间应用到 ExtraSelection 并标记红色波浪下划线
   void applyErrorUnderline(int from, int length, const QString &tooltip,
                            QList<QTextEdit::ExtraSelection> &selections);
@@ -122,22 +119,21 @@ private:
   void showCompleter();
 
   ValidationMode m_validationMode = NoValidation;
-  QTimer m_validationTimer;                           ///< 防抖定时器（500ms）
-  QList<QTextEdit::ExtraSelection> m_errorSelections; ///< 持久化的错误标记
-  QSet<int> m_errorLines;                             ///< 有错误的行号集合
-  QWidget *m_lineNumberArea;                          ///< 行号显示区域
-  QPointer<AuiErrorToolTip> m_errorTooltip;           ///< 自定义错误提示弹窗
-  QCompleter *m_completer = nullptr;                  ///< 代码补全器
+  QTimer m_validationTimer;                            ///< 防抖定时器（500ms）
+  QList<QTextEdit::ExtraSelection> m_errorSelections;  ///< 持久化的错误标记
+  QSet<int> m_errorLines;                              ///< 有错误的行号集合
+  QWidget *m_lineNumberArea;                           ///< 行号显示区域
+  QPointer<AuiErrorToolTip> m_errorTooltip;            ///< 自定义错误提示弹窗
+  QCompleter *m_completer = nullptr;                   ///< 代码补全器
 
   /// 错误位置列表（用于 paintEvent 自定义绘制，避免 cursor 失效）
   struct ErrorRange {
-    int start;       ///< 起始位置
-    int length;      ///< 长度
-    QString tooltip; ///< 错误提示文本
-    ErrorRange(int s, int l, const QString &t)
-        : start(s), length(l), tooltip(t) {}
+    int start;        ///< 起始位置
+    int length;       ///< 长度
+    QString tooltip;  ///< 错误提示文本
+    ErrorRange(int s, int l, const QString &t) : start(s), length(l), tooltip(t) {}
   };
-  QVector<ErrorRange> m_errorRanges; ///< 所有错误的位置范围
+  QVector<ErrorRange> m_errorRanges;  ///< 所有错误的位置范围
 };
 
 /**
@@ -146,12 +142,9 @@ private:
  */
 class LineNumberArea : public QWidget {
 public:
-  explicit LineNumberArea(CodeEditor *editor)
-      : QWidget(editor), m_codeEditor(editor) {}
+  explicit LineNumberArea(CodeEditor *editor) : QWidget(editor), m_codeEditor(editor) {}
 
-  QSize sizeHint() const override {
-    return QSize(m_codeEditor->lineNumberAreaWidth(), 0);
-  }
+  QSize sizeHint() const override { return QSize(m_codeEditor->lineNumberAreaWidth(), 0); }
 
 protected:
   void paintEvent(QPaintEvent *event) override {

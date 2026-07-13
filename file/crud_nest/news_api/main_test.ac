@@ -81,7 +81,7 @@ class Counter {
 // ── 主入口 ──
 
 main {
-  
+  printLog(8);
   //let a = readFile();
   // 调用顶层函数
   let sum = add(10, 20);
