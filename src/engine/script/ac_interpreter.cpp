@@ -15,6 +15,7 @@
 #include "../function/fun_builtin.h"
 #include "../function/fun_mgr.h"
 #include "../tpl/tpl_engine.h"
+#include "ac_object_manager.h"
 
 // ════════════════════════════════════════════════════════════════════════════�?
 //  表达式求�?
@@ -78,13 +79,23 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
 
     case Expr::kObject: {
       QJsonObject obj;
-      for (const auto &e : expr.objEntries) obj[e.key] = evalExpr(*e.value);
+      for (const auto &e : expr.objEntries) {
+        QJsonValue v = evalExpr(*e.value);
+        // 对象属性持有实例引用时 retain
+        retainIfInstance(v);
+        obj[e.key] = v;
+      }
       return obj;
     }
 
     case Expr::kArray: {
       QJsonArray arr;
-      for (auto *e : expr.arrItems) arr.append(evalExpr(*e));
+      for (auto *e : expr.arrItems) {
+        QJsonValue item = evalExpr(*e);
+        // 数组持有实例引用时 retain
+        retainIfInstance(item);
+        arr.append(item);
+      }
       return arr;
     }
 
@@ -200,17 +211,34 @@ QJsonValue AcInterpreter::resolveVar(const QString &name) const {
 void AcInterpreter::setVar(const QString &name, const QJsonValue &val) {
   for (int i = m_scopeStack.size() - 1; i >= 0; --i) {
     if (m_scopeStack[i].contains(name)) {
+      const QJsonValue &old = m_scopeStack[i][name];
+      // 同一个受管理实例赋值时跳过 release/retain，避免误析构
+      if (AcObjectManager::isManagedInstance(old) && AcObjectManager::isManagedInstance(val) &&
+          AcObjectManager::getObjId(old) == AcObjectManager::getObjId(val)) {
+        m_scopeStack[i][name] = val;
+        return;
+      }
+      releaseIfInstanceWithDestruct(old);
       m_scopeStack[i][name] = val;
+      retainIfInstance(val);
       return;
     }
   }
+  // 新变量
+  retainIfInstance(val);
   m_scopeStack.last()[name] = val;
 }
 
 void AcInterpreter::pushScope() { m_scopeStack.append(QHash<QString, QJsonValue>()); }
 
 void AcInterpreter::popScope() {
-  if (!m_scopeStack.isEmpty()) m_scopeStack.removeLast();
+  if (m_scopeStack.isEmpty()) return;
+  // 先从栈中取出作用域（detach），避免 releaseDeep 触发 __destruct__ 时
+  // pushScope/popScope 修改 m_scopeStack 导致引用失效
+  auto scope = m_scopeStack.takeLast();
+  for (auto it = scope.begin(); it != scope.end(); ++it) {
+    releaseDeep(it.value());
+  }
 }
 
 bool AcInterpreter::containsVar(const QString &name) const {
@@ -226,6 +254,75 @@ bool AcInterpreter::isTruthy(const QJsonValue &cond) {
   if (cond.isDouble()) return cond.toDouble() != 0.0;
   if (cond.isNull() || cond.isUndefined()) return false;
   return true;
+}
+
+// ── 引用计数辅助 ──
+
+void AcInterpreter::retainIfInstance(const QJsonValue &val) {
+  if (!AcObjectManager::isManagedInstance(val)) return;
+  AcObjectManager::ins().retain(AcObjectManager::getObjId(val));
+}
+
+void AcInterpreter::releaseIfInstance(const QJsonValue &val) {
+  if (!AcObjectManager::isManagedInstance(val)) return;
+  AcObjectManager::ins().release(AcObjectManager::getObjId(val));
+}
+
+void AcInterpreter::releaseIfInstanceWithDestruct(const QJsonValue &val) {
+  if (!AcObjectManager::isManagedInstance(val)) return;
+  AcObjectManager::ins().release(AcObjectManager::getObjId(val));
+  // 处理所有待析构的实例
+  QVector<AcObjectManager::DestructInfo> pending = AcObjectManager::ins().takePendingDestructs();
+  for (const auto &info : pending) {
+    // 先递归释放实例内部属性持有的引用（如 this.data = new Xxx()）
+    for (auto it = info.instance.begin(); it != info.instance.end(); ++it) {
+      if (it.key() == QString::fromLatin1(AcRuntime::kClassKey) ||
+          it.key() == QString::fromLatin1(AcRuntime::kObjId))
+        continue;
+      releaseDeep(it.value());
+    }
+    // 原生类：路由到 FunMgr 的 __destruct__
+    if (FunMgr::ins().contains(info.className, QString::fromLatin1(AcRuntime::kDestructor))) {
+      QJsonArray args;
+      args.append(QJsonValue(info.instance));
+      FunMgr::ins().call(info.className, QString::fromLatin1(AcRuntime::kDestructor), args);
+    }
+    // 用户自定义类：执行 __destruct__ AST
+    else if (m_classes.contains(info.className) && !m_classes[info.className].isNative) {
+      for (const auto &method : m_classes[info.className].methods) {
+        if (method.name == QString::fromLatin1(AcRuntime::kDestructor)) {
+          execMethod(method, info.instance, QJsonValue(QJsonArray()));
+          break;
+        }
+      }
+    }
+  }
+}
+
+void AcInterpreter::releaseDeep(const QJsonValue &val) {
+  if (AcObjectManager::isManagedInstance(val)) {
+    releaseIfInstanceWithDestruct(val);
+    return;
+  }
+  // 递归释放数组中的实例
+  if (val.isArray()) {
+    for (const QJsonValue &item : val.toArray()) {
+      releaseDeep(item);
+    }
+    return;
+  }
+  // 递归释放对象属性中的实例（跳过 __class__ 和 __objId__ 内部键）
+  // ⚠️ 必须先把 toObject() 存到局部变量，再对局部变量取 begin()/end()，
+  //    否则 toObject() 返回的临时对象在分号处销毁，迭代器变为悬垂指针。
+  if (val.isObject()) {
+    QJsonObject obj = val.toObject();
+    for (auto it = obj.begin(); it != obj.end(); ++it) {
+      if (it.key() == QString::fromLatin1(AcRuntime::kClassKey) ||
+          it.key() == QString::fromLatin1(AcRuntime::kObjId))
+        continue;
+      releaseDeep(it.value());
+    }
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════�?
@@ -344,7 +441,7 @@ QJsonValue AcInterpreter::evalNewInstance(const Expr &expr) {
   QJsonObject instance;
   instance[QString::fromLatin1(AcRuntime::kClassKey)] = expr.className;
 
-  // 原生类：调用 FunMgr 构�?
+  // 原生类：调用 FunMgr 构造器
   if (cd.isNative) {
     QJsonArray ctorArgs;
     for (auto *arg : expr.constructorArgs) ctorArgs.append(evalExpr(*arg));
@@ -352,16 +449,24 @@ QJsonValue AcInterpreter::evalNewInstance(const Expr &expr) {
         FunMgr::ins().call(expr.className, QString::fromLatin1(AcRuntime::kConstructor), ctorArgs);
     if (ctorResult.isObject()) instance = ctorResult.toObject();
     instance[QString::fromLatin1(AcRuntime::kClassKey)] = expr.className;
+    // 注册到对象管理器，分配唯一ID并设置初始引用计数
+    instance = AcObjectManager::ins().registerInstance(instance, expr.className);
     return QJsonValue(instance);
   }
 
   for (const auto &prop : cd.properties) {
-    if (prop.value)
-      instance[prop.key] = evalExpr(*prop.value);
-    else
+    if (prop.value) {
+      QJsonValue v = evalExpr(*prop.value);
+      // 属性值如果是受管理实例，retain 使其引用计数 +1
+      retainIfInstance(v);
+      instance[prop.key] = v;
+    } else {
       instance[prop.key] = QJsonValue();
+    }
   }
 
+  // 用户自定义类也注册到对象管理器
+  instance = AcObjectManager::ins().registerInstance(instance, expr.className);
   return QJsonValue(instance);
 }
 
@@ -481,11 +586,21 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
           if (m_classes.contains(cn)) initStaticVars(m_classes[cn]);
         }
         QJsonObject sv = m_staticVars.value(cn);
+        // release 旧值，retain 新值
+        if (sv.contains(stmt.assign.name)) {
+          releaseIfInstanceWithDestruct(sv.value(stmt.assign.name));
+        }
+        retainIfInstance(val);
         sv[stmt.assign.name] = val;
         m_staticVars[cn] = sv;
       } else if (!stmt.assign.thisProp.isEmpty()) {
         if (!m_currentThis.isEmpty()) {
           QJsonObject updated = m_currentThis;
+          // release 旧值，retain 新值
+          if (updated.contains(stmt.assign.thisProp)) {
+            releaseIfInstanceWithDestruct(updated.value(stmt.assign.thisProp));
+          }
+          retainIfInstance(val);
           updated[stmt.assign.thisProp] = val;
           m_currentThis = updated;
         }
@@ -503,7 +618,14 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
     case Block::Stmt::kIndexAssign: {
       QJsonValue objVal = resolveVar(stmt.indexAssign.objName);
       QJsonObject obj = objVal.toObject();
-      obj[stmt.indexAssign.key] = evalExpr(stmt.indexAssign.value);
+      // release 旧值（如果属性已存在且是受管理实例）
+      if (obj.contains(stmt.indexAssign.key)) {
+        releaseIfInstanceWithDestruct(obj.value(stmt.indexAssign.key));
+      }
+      QJsonValue newVal = evalExpr(stmt.indexAssign.value);
+      // retain 新值
+      retainIfInstance(newVal);
+      obj[stmt.indexAssign.key] = newVal;
       if (stmt.indexAssign.objName == QString::fromLatin1(AcKeyword::kThis))
         m_currentThis = obj;
       else
@@ -604,7 +726,16 @@ QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
   FunBuiltin::setContext({m_scriptDir, m_rootDir, m_logCallback, &m_generatedFiles, 0});
 
   execBlock(program);
-  if (!m_error->isEmpty()) return QJsonValue();
+  if (!m_error->isEmpty()) {
+    // 出错时也要清理对象管理器，避免资源泄漏
+    AcObjectManager::ins().cleanup();
+    return QJsonValue();
+  }
+
+  // 执行完毕，释放全局作用域中所有受管理的实例
+  while (!m_scopeStack.isEmpty()) {
+    popScope();
+  }
 
   return m_hasReturned ? m_returnValue : QJsonValue();
 }

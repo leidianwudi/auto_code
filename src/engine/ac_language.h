@@ -235,6 +235,10 @@ namespace AcRuntime {
 inline constexpr const char *kClassKey = "__class__";
 /// @brief 构造方法名：new DB({...}) 自动调用 __construct__
 inline constexpr const char *kConstructor = "__construct__";
+/// @brief 析构方法名：引用计数归零时自动调用 __destruct__
+inline constexpr const char *kDestructor = "__destruct__";
+/// @brief 实例对象中标记唯一ID的内部键：instance["__objId__"] = "uuid"
+inline constexpr const char *kObjId = "__objId__";
 /// @brief 一级函数注册的伪类名：FunMgr::call("builtin", name, args)
 inline constexpr const char *kBuiltinClass = "builtin";
 }  // namespace AcRuntime

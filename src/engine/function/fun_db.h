@@ -18,12 +18,13 @@
 
 #pragma once
 
-#include "../ac_language.h"
-
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonValue>
 #include <QString>
+
+#include "../ac_language.h"
+
 
 struct MYSQL;
 
@@ -52,6 +53,14 @@ public:
    * @return 返回连接实例对象：{ connId: uuid, connected: bool }
    */
   static QJsonValue constructor(const QJsonArray &args);
+
+  /**
+   * @brief 析构 DB 实例（引用计数归零时自动调用）
+   *
+   * 关闭 MySQL 连接并释放资源，与 disconnect() 逻辑相同。
+   * args[0] JSON: DB 实例对象
+   */
+  static QJsonValue destructor(const QJsonArray &args);
 
   /**
    * @brief 断开数据库连接并释放资源

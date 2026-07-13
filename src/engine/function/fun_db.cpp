@@ -24,10 +24,11 @@ QHash<QString, AcDB::DbConfig> FunDb::s_configs;
 
 // init — 注册所有数据库函数到 FunMgr
 void FunDb::init() {
-  // 注册原生类 DB 的构造器和方法（名称来自 ac_language.h）
+  // 注册原生类 DB 的构造器、析构器和方法（名称来自 ac_language.h）
   FunMgr::ins().registerFuncs(QString::fromLatin1(AcDB::kClassName),
                               {
                                   {QString::fromLatin1(AcRuntime::kConstructor), constructor},
+                                  {QString::fromLatin1(AcRuntime::kDestructor), destructor},
                                   {QString::fromLatin1(AcDB::kTableSchema), tableSchema},
                                   {QString::fromLatin1(AcDB::kQuery), query},
                                   {QString::fromLatin1(AcDB::kDisconnect), disconnect},
@@ -95,6 +96,21 @@ QJsonValue FunDb::constructor(const QJsonArray &args) {
   result[QString::fromLatin1(AcDB::kConnId)] = connId;
   result[QString::fromLatin1(AcDB::kConnected)] = true;
   return QJsonValue(result);
+}
+
+// destructor — 引用计数归零时自动调用，关闭 MySQL 连接
+QJsonValue FunDb::destructor(const QJsonArray &args) {
+  if (args.isEmpty() || !args[0].isObject()) return QJsonValue(false);
+  const QJsonObject instance = args[0].toObject();
+  const QString connId = instance.value(QString::fromLatin1(AcDB::kConnId)).toString();
+  if (connId.isEmpty()) return QJsonValue(false);
+  if (s_connections.contains(connId)) {
+    MYSQL *conn = s_connections[connId];
+    if (conn) mysql_close(conn);
+    s_connections.remove(connId);
+    s_configs.remove(connId);
+  }
+  return QJsonValue(true);
 }
 
 // disconnect — 断开连接

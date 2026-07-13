@@ -19,6 +19,8 @@ qt_add_executable(auto_code
     src/engine/script/ac_parser.cpp
     src/engine/script/ac_interpreter.h
     src/engine/script/ac_interpreter.cpp
+    src/engine/script/ac_object_manager.h
+    src/engine/script/ac_object_manager.cpp
     src/engine/script/ac_executor.h
     src/engine/script/ac_executor.cpp
     src/engine/script/ac_engine.h

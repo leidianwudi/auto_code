@@ -67,6 +67,16 @@ private:
   void popScope();
   static bool isTruthy(const QJsonValue &cond);
 
+  // ── 引用计数辅助 ──
+  /// 如果值是受管理的实例，retain
+  void retainIfInstance(const QJsonValue &val);
+  /// 如果值是受管理的实例，release（引用计数归零时触发析构）
+  void releaseIfInstance(const QJsonValue &val);
+  /// 如果值是受管理的实例，release（用户自定义类需执行 __destruct__ AST）
+  void releaseIfInstanceWithDestruct(const QJsonValue &val);
+  /// 递归释放值中的所有受管理实例（数组/对象内部的实例）
+  void releaseDeep(const QJsonValue &val);
+
   // ── 类方法执行 ──
   QJsonValue execMethod(const MethodDef &method, const QJsonObject &thisObj,
                         const QJsonValue &callArgs);
