@@ -412,19 +412,34 @@ void TreeDir::loadState() {
   // ── 恢复启动项 ──
   QJsonArray startupArr = obj[QStringLiteral("startup")].toArray();
   m_startupFiles.clear();
+  bool startupPruned = false;
   for (const QJsonValue &v : startupArr) {
     if (v.isString()) {
       QString abs = QDir::cleanPath(m_rootPath + QStringLiteral("/") + v.toString());
-      m_startupFiles.insert(abs);
+      if (QFileInfo::exists(abs)) {
+        m_startupFiles.insert(abs);
+      } else {
+        startupPruned = true;
+      }
     }
   }
 
   // ── 恢复当前选中的启动项 ──
   QString selRel = obj[QStringLiteral("startupSelected")].toString();
-  if (!selRel.isEmpty())
-    m_selectedStartup = QDir::cleanPath(m_rootPath + QStringLiteral("/") + selRel);
-  else
+  if (!selRel.isEmpty()) {
+    QString abs = QDir::cleanPath(m_rootPath + QStringLiteral("/") + selRel);
+    if (QFileInfo::exists(abs)) {
+      m_selectedStartup = abs;
+    } else {
+      m_selectedStartup.clear();
+      startupPruned = true;
+    }
+  } else {
     m_selectedStartup.clear();
+  }
+
+  // 有不存在的文件被过滤掉时，更新配置文件
+  if (startupPruned) saveState();
 
   // 刷新启动项图标
   refreshStartupIcons();
