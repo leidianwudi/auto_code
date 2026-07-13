@@ -700,3 +700,32 @@ void TreeDir::setFileModified(const QString &filePath, bool modified) {
     ++it;
   }
 }
+
+// ════════════════════════════════════════════════════════════
+//  locateFile — 定位到指定文件路径的节点
+// ════════════════════════════════════════════════════════════
+
+void TreeDir::locateFile(const QString &filePath) {
+  if (filePath.isEmpty()) return;
+
+  QString cleanTarget = QDir::cleanPath(filePath);
+
+  QTreeWidgetItemIterator it(this);
+  while (*it) {
+    QTreeWidgetItem *item = *it;
+    QString itemPath = QDir::cleanPath(item->data(0, Qt::UserRole + 1).toString());
+    if (itemPath == cleanTarget) {
+      // 展开所有父节点
+      QTreeWidgetItem *parent = item->parent();
+      while (parent) {
+        parent->setExpanded(true);
+        parent = parent->parent();
+      }
+      // 选中并滚动到可见
+      setCurrentItem(item);
+      scrollToItem(item, QAbstractItemView::PositionAtCenter);
+      return;
+    }
+    ++it;
+  }
+}

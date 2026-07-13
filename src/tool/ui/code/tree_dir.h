@@ -81,6 +81,9 @@ public:
   /// 设置文件的修改状态（树节点文本追加/移除 " *"）
   void setFileModified(const QString &filePath, bool modified);
 
+  /// 定位到指定文件路径的节点（选中 + 展开父节点 + 滚动到可见）
+  void locateFile(const QString &filePath);
+
 signals:
   /// 双击非 json 文件时发射，携带文件绝对路径
   void fileActivated(const QString &filePath);

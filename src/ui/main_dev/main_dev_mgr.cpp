@@ -343,7 +343,14 @@ void MainDevMgr::onFocusChanged(QWidget * /*oldFocus*/, QWidget *newFocus) {
     w = w->parentWidget();
   }
 
-  if (foundEditor) connectEditor(foundEditor);
+  if (foundEditor) {
+    connectEditor(foundEditor);
+    // 焦点切换到编辑器时，同步定位树形目录到当前文件（处理拆分面板间切换的场景）
+    QString filePath = foundEditor->objectName();
+    if (!filePath.isEmpty()) {
+      m_ui->fileTree()->locateFile(filePath);
+    }
+  }
 
   // 找出焦点所在的面板组 → 应用 dimming
   QTabWidget *activeTabs = nullptr;
@@ -439,6 +446,8 @@ void MainDevMgr::onCurrentTabChanged(int index) {
   if (!fullPath.isEmpty()) {
     QFileInfo fi(fullPath);
     m_ui->setWindowTitle(MainDevUi::fileTitle(fi.fileName()));
+    // 标签页切换时，同步定位树形目录到当前文件
+    m_ui->fileTree()->locateFile(fullPath);
   }
 
   connectEditor(currentEditor());
