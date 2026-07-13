@@ -65,6 +65,8 @@ private slots:
   void onTabCloseRequested(int index);
   /// 当前标签页切换时更新窗口标题
   void onCurrentTabChanged(int index);
+  /// 标签栏被点击时激活对应面板（处理点击已选中标签的场景）
+  void onTabBarClicked(int index);
   /// 更新状态栏光标位置（从当前焦点编辑器读取）
   void updateCursorPosition();
   /// 应用程序焦点变化时，连接新焦点的编辑器信号

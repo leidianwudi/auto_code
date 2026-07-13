@@ -144,6 +144,7 @@ void MainDevMgr::initUi() {
       if (bar) {
         connect(bar, &DraggableTabBar::closeOthersRequested, this, &MainDevMgr::onCloseOthers);
         connect(bar, &DraggableTabBar::closeAllRequested, this, &MainDevMgr::onCloseAll);
+        connect(bar, &QTabBar::tabBarClicked, this, &MainDevMgr::onTabBarClicked);
       }
     }
   }
@@ -455,6 +456,18 @@ void MainDevMgr::onCurrentTabChanged(int index) {
   m_ui->applyTabDimming(tabs);
 }
 
+void MainDevMgr::onTabBarClicked(int index) {
+  // 点击已选中的标签时 currentChanged 不会触发，需要手动激活该面板
+  auto *bar = qobject_cast<QTabBar *>(sender());
+  if (!bar) return;
+  auto *tabs = qobject_cast<QTabWidget *>(bar->parentWidget());
+  if (!tabs || index < 0 || index >= tabs->count()) return;
+
+  // 将焦点设置到当前编辑器，触发 onFocusChanged 完成面板切换
+  auto *editor = qobject_cast<CodeEditor *>(tabs->widget(index));
+  if (editor) editor->setFocus();
+}
+
 // ──────────────────────────────────────────────────────────────
 //  拆分 / 关闭标签页
 // ──────────────────────────────────────────────────────────────
@@ -474,6 +487,7 @@ void MainDevMgr::onSplitRight() {
     if (bar) {
       connect(bar, &DraggableTabBar::closeOthersRequested, this, &MainDevMgr::onCloseOthers);
       connect(bar, &DraggableTabBar::closeAllRequested, this, &MainDevMgr::onCloseAll);
+      connect(bar, &QTabBar::tabBarClicked, this, &MainDevMgr::onTabBarClicked);
     }
   }
 
