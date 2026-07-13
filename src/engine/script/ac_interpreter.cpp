@@ -205,8 +205,6 @@ QJsonValue AcInterpreter::resolveVar(const QString &name) const {
     auto it = m_scopeStack[i].find(name);
     if (it != m_scopeStack[i].end()) return it.value();
   }
-  // 在方法内部，未在作用域中找到的变量回退到 this 实例的属性
-  if (!m_currentThis.isEmpty() && m_currentThis.contains(name)) return m_currentThis[name];
   return QJsonValue();
 }
 
@@ -225,12 +223,6 @@ void AcInterpreter::setVar(const QString &name, const QJsonValue &val) {
       retainIfInstance(val);
       return;
     }
-  }
-  // 在方法内部，未在作用域中找到的变量回退到 this 实例的属性
-  if (!m_currentThis.isEmpty() && m_currentThis.contains(name)) {
-    m_currentThis[name] = val;
-    m_modifiedThis = m_currentThis;
-    return;
   }
   // 新变量
   retainIfInstance(val);
@@ -255,8 +247,6 @@ bool AcInterpreter::containsVar(const QString &name) const {
   for (int i = m_scopeStack.size() - 1; i >= 0; --i) {
     if (m_scopeStack[i].contains(name)) return true;
   }
-  // 在方法内部，未在作用域中找到的变量回退到 this 实例的属性
-  if (!m_currentThis.isEmpty() && m_currentThis.contains(name)) return true;
   return false;
 }
 
@@ -477,22 +467,35 @@ QJsonValue AcInterpreter::callBuiltin(const QString &name, const QVector<Expr *>
 }
 
 QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
-  QJsonValue objVal = resolveVar(expr.methodCall.objName);
-  if (objVal.isNull() && expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis)) {
-    *m_error =
-        QStringLiteral("undefined variable '%1' in method call").arg(expr.methodCall.objName);
-    return QJsonValue();
+  QJsonValue objVal;
+  bool isChained = (expr.methodCall.object != nullptr);
+  if (isChained) {
+    // 链式访问：this.engine.start() → 先计算 this.engine 表达式
+    objVal = evalExpr(*expr.methodCall.object);
+    if (objVal.isNull()) {
+      *m_error = QStringLiteral("method call on null value at line %1").arg(expr.line);
+      return QJsonValue();
+    }
+  } else {
+    objVal = resolveVar(expr.methodCall.objName);
+    if (objVal.isNull() && expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis)) {
+      *m_error =
+          QStringLiteral("undefined variable '%1' in method call").arg(expr.methodCall.objName);
+      return QJsonValue();
+    }
   }
 
   if (!objVal.isObject()) {
-    *m_error = QStringLiteral("cannot call method on non-object '%1'").arg(expr.methodCall.objName);
+    QString name = isChained ? QStringLiteral("chain expression") : expr.methodCall.objName;
+    *m_error = QStringLiteral("cannot call method on non-object '%1'").arg(name);
     return QJsonValue();
   }
 
   QJsonObject obj = objVal.toObject();
   QString className = obj.value(QString::fromLatin1(AcRuntime::kClassKey)).toString();
   if (className.isEmpty() || !m_classes.contains(className)) {
-    *m_error = QStringLiteral("object '%1' has no class information").arg(expr.methodCall.objName);
+    QString name = isChained ? QStringLiteral("chain expression") : expr.methodCall.objName;
+    *m_error = QStringLiteral("object '%1' has no class information").arg(name);
     return QJsonValue();
   }
 
@@ -519,7 +522,8 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
       // 保存当前 m_modifiedThis，execMethod 内部会修改它，返回后写回变量再恢复
       QJsonObject savedModifiedThis = m_modifiedThis;
       QJsonValue result = execMethod(method, obj, QJsonValue(args));
-      if (expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis)) {
+      // 非链式调用且对象名不是 this 时，将修改写回变量
+      if (!isChained && expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis)) {
         if (containsVar(expr.methodCall.objName))
           setVar(expr.methodCall.objName, QJsonValue(m_modifiedThis));
       }

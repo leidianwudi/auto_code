@@ -112,8 +112,8 @@ void AcTypeChecker::checkStmt(const Block::Stmt &stmt, TypeEnv &env) {
           methodEnv.varTypes.insert(param.name, param.type);
         }
         // this 关键字指向当前类
-        env.varTypes.insert(QString::fromLatin1(AcKeyword::kThis),
-                            AcType::classType(classEnv.className));
+        methodEnv.varTypes.insert(QString::fromLatin1(AcKeyword::kThis),
+                                  AcType::classType(classEnv.className));
         // 检查方法体
         checkBlock(method.body, methodEnv);
         // 检查返回类型
@@ -323,44 +323,47 @@ AcType AcTypeChecker::checkExpr(const Expr &expr, const TypeEnv &env) {
 
     case Expr::kMethodCall: {
       // obj.method(args)
-      // 检查方法是否存在
-      if (env.varTypes.contains(expr.methodCall.objName)) {
-        AcType objType = env.varTypes[expr.methodCall.objName];
-        if (objType.kind == AcType::kClass && m_classes->contains(objType.className)) {
-          const ClassDef &cd = (*m_classes)[objType.className];
-          for (const auto &method : cd.methods) {
-            if (method.name == expr.methodCall.methodName) {
-              // 检查参数个数
-              int argCount = expr.methodCall.args.size();
-              int paramCount = method.params.size();
-              if (argCount != paramCount) {
-                reportError(
-                    QStringLiteral("method '%1' of class '%2' expects %3 arguments but got %4")
-                        .arg(method.name, cd.name)
-                        .arg(paramCount)
-                        .arg(argCount),
-                    expr.line);
-              }
-              // 检查参数类型
-              for (int i = 0; i < qMin(argCount, paramCount); ++i) {
-                AcType argType = checkExpr(*expr.methodCall.args[i], env);
-                if (!isCompatible(argType, method.params[i].type)) {
-                  reportError(
-                      QStringLiteral(
-                          "type mismatch in argument %1 of '%2.%3': expected '%4' but got '%5'")
-                          .arg(i + 1)
-                          .arg(cd.name, method.name)
-                          .arg(typeToString(method.params[i].type), typeToString(argType)),
-                      expr.methodCall.args[i]->line);
-                }
-              }
-              return method.returnType;
+      AcType objType;
+      if (expr.methodCall.object) {
+        // 链式访问：先计算对象表达式类型
+        objType = checkExpr(*expr.methodCall.object, env);
+      } else if (env.varTypes.contains(expr.methodCall.objName)) {
+        objType = env.varTypes[expr.methodCall.objName];
+      }
+      if (objType.kind == AcType::kClass && m_classes->contains(objType.className)) {
+        const ClassDef &cd = (*m_classes)[objType.className];
+        for (const auto &method : cd.methods) {
+          if (method.name == expr.methodCall.methodName) {
+            // 检查参数个数
+            int argCount = expr.methodCall.args.size();
+            int paramCount = method.params.size();
+            if (argCount != paramCount) {
+              reportError(
+                  QStringLiteral("method '%1' of class '%2' expects %3 arguments but got %4")
+                      .arg(method.name, cd.name)
+                      .arg(paramCount)
+                      .arg(argCount),
+                  expr.line);
             }
+            // 检查参数类型
+            for (int i = 0; i < qMin(argCount, paramCount); ++i) {
+              AcType argType = checkExpr(*expr.methodCall.args[i], env);
+              if (!isCompatible(argType, method.params[i].type)) {
+                reportError(
+                    QStringLiteral(
+                        "type mismatch in argument %1 of '%2.%3': expected '%4' but got '%5'")
+                        .arg(i + 1)
+                        .arg(cd.name, method.name)
+                        .arg(typeToString(method.params[i].type), typeToString(argType)),
+                    expr.methodCall.args[i]->line);
+              }
+            }
+            return method.returnType;
           }
-          reportError(QStringLiteral("class '%1' has no method named '%2'")
-                          .arg(objType.className, expr.methodCall.methodName),
-                      expr.line);
         }
+        reportError(QStringLiteral("class '%1' has no method named '%2'")
+                        .arg(objType.className, expr.methodCall.methodName),
+                    expr.line);
       }
       for (auto *arg : expr.methodCall.args) checkExpr(*arg, env);
       return AcType::any();

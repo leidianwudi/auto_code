@@ -188,19 +188,38 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
 
   if (t.type == TOK_THIS) {
     if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_DOT) {
-      advance();
-      advance();
+      advance();  // skip this
+      advance();  // skip .
       if (peek().type != TOK_IDENT) {
         *m_error =
             QStringLiteral("expected property name after 'this.' at line %1").arg(peek().line);
         return false;
       }
-      stmt.assign.thisProp = advance().text;
-      if (!expect(TOK_EQUALS,
-                  QStringLiteral("expected '=' after 'this.%1'").arg(stmt.assign.thisProp)))
-        return false;
-      stmt.kind = Block::Stmt::kAssign;
-      return parseExpr(stmt.assign.value);
+      QString prop = peek().text;
+      // 检查 this.prop 后面是否跟着 '='，如果是则走赋值，否则走表达式语句
+      if (m_pos + 2 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_DOT &&
+          m_tokens[m_pos + 2].type == TOK_IDENT && m_pos + 3 < m_tokens.size() &&
+          m_tokens[m_pos + 3].type == TOK_EQUALS) {
+        advance();  // skip property name
+        stmt.assign.thisProp = prop;
+        if (!expect(TOK_EQUALS,
+                    QStringLiteral("expected '=' after 'this.%1'").arg(stmt.assign.thisProp)))
+          return false;
+        stmt.kind = Block::Stmt::kAssign;
+        return parseExpr(stmt.assign.value);
+      }
+      // this.prop = value 的简单检测
+      if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_EQUALS) {
+        advance();  // skip property name
+        stmt.assign.thisProp = prop;
+        advance();  // skip =
+        stmt.kind = Block::Stmt::kAssign;
+        return parseExpr(stmt.assign.value);
+      }
+      // 不是赋值，回退走表达式语句
+      m_pos -= 2;  // 回退到 this 位置
+      stmt.kind = Block::Stmt::kExpr;
+      return parseExpr(stmt.exprStmt);
     }
     stmt.kind = Block::Stmt::kExpr;
     return parseExpr(stmt.exprStmt);
@@ -446,6 +465,42 @@ bool AcParser::parseMulDiv(Expr &expr) {
     binary.left = left;
     binary.right = right;
     expr = std::move(binary);
+  }
+  // 处理链式访问：expr.prop 或 expr.method()
+  if (peek().type == TOK_DOT) {
+    advance();
+    if (peek().type != TOK_IDENT) {
+      *m_error = QStringLiteral("expected property name after '.' at line %1").arg(peek().line);
+      return false;
+    }
+    QString memberName = advance().text;
+    if (peek().type == TOK_LPAREN) {
+      // 链式方法调用：expr.method()
+      advance();
+      Expr chained;
+      chained.kind = Expr::kMethodCall;
+      chained.line = peek().line;
+      chained.methodCall.methodName = memberName;
+      chained.methodCall.object = new Expr(std::move(expr));
+      while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
+        auto *arg = new Expr();
+        if (!parseExpr(*arg)) {
+          delete arg;
+          return false;
+        }
+        chained.methodCall.args.append(arg);
+        if (peek().type == TOK_COMMA) advance();
+      }
+      if (!expect(TOK_RPAREN,
+                  QStringLiteral("expected ')' after method call at line %1").arg(peek().line)))
+        return false;
+      expr = std::move(chained);
+    } else {
+      // 链式属性访问：expr.prop（暂不支持深层链式）
+      *m_error = QStringLiteral("chained property access is not supported yet at line %1")
+                     .arg(peek().line);
+      return false;
+    }
   }
   return true;
 }

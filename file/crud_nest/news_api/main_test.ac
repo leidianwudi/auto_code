@@ -21,12 +21,11 @@ class Engine {
   let horsepower = 400;
 
   function start() {
-    printLog("Engine " + type + " started, horsepower: " + horsepower);
+    printLog("Engine " + this.type + " started, horsepower: " + this.horsepower);
   }
 
   function getInfo() {
-    return type + " (" + horsepower + "hp)";
-    
+    return this.type + " (" + this.horsepower + "hp)";
   }
 }
 
@@ -36,13 +35,13 @@ class Car {
   let year = 2024;
 
   function drive(speed) {
-    engine.start();
-    printLog(brand + " is driving at " + speed + " km/h");
+    this.engine.start();
+    printLog(this.brand + " is driving at " + speed + " km/h");
   }
 
   function getDetails() {
-    let info = engine.getInfo();
-    return brand + " " + year + " with engine: " + info;
+    let info = this.engine.getInfo();
+    return this.brand + " " + this.year + " with engine: " + info;
   }
 }
 

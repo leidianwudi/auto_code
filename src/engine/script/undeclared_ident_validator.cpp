@@ -161,23 +161,29 @@ void UndeclaredIdentValidator::visitFuncCallExpr(const Expr &expr) {
 }
 
 void UndeclaredIdentValidator::visitMethodCallExpr(const Expr &expr) {
-  // 检查对象变量是否已声明
-  if (expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis) &&
-      !m_scopeVars.contains(expr.methodCall.objName)) {
-    if (m_errors) {
-      m_errors->append(QStringLiteral("undefined variable '%1' at line %2")
-                           .arg(expr.methodCall.objName, QString::number(expr.line)));
-    }
-  }
-
-  // 检查方法名是否在对应的类中定义
-  if (m_ctx.varClass.contains(expr.methodCall.objName)) {
-    QString clsName = m_ctx.varClass.value(expr.methodCall.objName);
-    if (m_ctx.classMethods.contains(clsName) &&
-        !m_ctx.classMethods[clsName].contains(expr.methodCall.methodName)) {
+  if (expr.methodCall.object) {
+    // 链式访问：this.engine.start() → 访问对象表达式
+    visitExpr(*expr.methodCall.object);
+  } else {
+    // 检查对象变量是否已声明
+    if (expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis) &&
+        !m_scopeVars.contains(expr.methodCall.objName)) {
       if (m_errors) {
-        m_errors->append(QStringLiteral("class '%1' has no method '%2' at line %3")
-                             .arg(clsName, expr.methodCall.methodName, QString::number(expr.line)));
+        m_errors->append(QStringLiteral("undefined variable '%1' at line %2")
+                             .arg(expr.methodCall.objName, QString::number(expr.line)));
+      }
+    }
+
+    // 检查方法名是否在对应的类中定义
+    if (m_ctx.varClass.contains(expr.methodCall.objName)) {
+      QString clsName = m_ctx.varClass.value(expr.methodCall.objName);
+      if (m_ctx.classMethods.contains(clsName) &&
+          !m_ctx.classMethods[clsName].contains(expr.methodCall.methodName)) {
+        if (m_errors) {
+          m_errors->append(
+              QStringLiteral("class '%1' has no method '%2' at line %3")
+                  .arg(clsName, expr.methodCall.methodName, QString::number(expr.line)));
+        }
       }
     }
   }

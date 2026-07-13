@@ -170,9 +170,11 @@ struct FuncCall {
 
 /// @brief 方法调用表达式：obj.method(arg1, arg2, ...)
 struct MethodCall {
-  QString objName;       ///< 对象变量名
+  QString objName;       ///< 对象变量名（用于简单变量）
   QString methodName;    ///< 方法名
   QVector<Expr *> args;  ///< 参数列表
+  Expr *object =
+      nullptr;  ///< 对象表达式（用于链式访问，如 this.engine.start()，优先级高于 objName）
 };
 
 /// @brief 方法定义：function name(params) { body }
@@ -271,6 +273,7 @@ private:
     methodCall.objName = other.methodCall.objName;
     methodCall.methodName = other.methodCall.methodName;
     for (auto *e : other.methodCall.args) methodCall.args.append(e ? new Expr(*e) : nullptr);
+    methodCall.object = other.methodCall.object ? new Expr(*other.methodCall.object) : nullptr;
     className = other.className;
     for (auto *e : other.constructorArgs) constructorArgs.append(e ? new Expr(*e) : nullptr);
     binOp = other.binOp;
@@ -290,6 +293,7 @@ private:
     arrItems = std::move(other.arrItems);
     funcCall = std::move(other.funcCall);
     methodCall = std::move(other.methodCall);
+    other.methodCall.object = nullptr;
     className = std::move(other.className);
     constructorArgs = std::move(other.constructorArgs);
     binOp = other.binOp;
@@ -309,6 +313,8 @@ private:
     funcCall.args.clear();
     for (auto *e : methodCall.args) delete e;
     methodCall.args.clear();
+    delete methodCall.object;
+    methodCall.object = nullptr;
     for (auto *e : constructorArgs) delete e;
     constructorArgs.clear();
     delete left;
