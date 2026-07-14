@@ -85,8 +85,10 @@ public:
   // ====================================================================
 
   /**
-   * @brief 解析嵌套属性路径
-   * @param path 属性路径，如 "user.name.email"
+   * @brief 解析路径（函数调用或嵌套属性）
+   *
+   * 自动判断 path 是函数调用（含括号）还是变量路径，分发到对应解析器。
+   * @param path 路径，如 "user.name" 或 "str.toLowerCase(Hello)"
    * @param context JSON 上下文
    * @return 解析后的值，未找到返回 Null
    */
@@ -98,6 +100,21 @@ public:
   QString renderBlock(const QString &block, const QJsonObject &context) const;
 
 private:
+  /**
+   * @brief 解析函数调用路径（如 "str.toLowerCase(Hello)"）
+   *
+   * 拆分为 类名.函数名(参数) 格式，通过 FunMgr::call 执行。
+   * 参数支持数字字面量、字符串字面量、变量路径（递归 resolvePath）。
+   */
+  QJsonValue resolveFuncCall(const QString &path, const QJsonObject &context) const;
+
+  /**
+   * @brief 解析嵌套变量路径（如 "user.name.email"）
+   *
+   * 按点号分割逐层查找 JSON 对象/数组的属性。
+   */
+  QJsonValue resolveVarPath(const QString &path, const QJsonObject &context) const;
+
   /// Handler 工厂
   mutable TplFactory m_handlerFactory;
 

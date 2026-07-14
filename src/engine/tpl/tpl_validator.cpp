@@ -213,9 +213,8 @@ void TplValidator::checkTags(const QString &text, QVector<ValidationResult> &res
 // ═════════════════════════════════════════════════════════════════════════════
 
 void TplValidator::checkMethods(const QString &text, QVector<ValidationResult> &results) {
-  static const QStringList supportedMethods = {
-      QString::fromLatin1(AcCallStr::kToLowerCase), QString::fromLatin1(AcCallStr::kToUpperCase),
-      QString::fromLatin1(AcCallStr::kTrim), QString::fromLatin1(AcCallStr::kCapitalize)};
+  // 从 ac_language.h 获取所有支持的 call 路由方法（不再硬编码）
+  static const QStringList supportedMethods = AcCallStr::kMethods;
 
   static const QRegularExpression exprRegex(
       QStringLiteral("\\$\\{(?!(?:") + kEachName + QStringLiteral("|") + kIfName +
@@ -223,15 +222,6 @@ void TplValidator::checkMethods(const QString &text, QVector<ValidationResult> &
       kIfName + QStringLiteral(")\\b)[^}]+\\}"));
 
   static const QRegularExpression identRegex(QStringLiteral(R"(^[a-zA-Z_][a-zA-Z0-9_]*$)"));
-
-  auto looksLikeMethod = [](const QString &seg) -> bool {
-    if (seg.isEmpty()) return false;
-    if (!seg[0].isLetter() && seg[0] != '_') return true;
-    for (const QChar &c : seg) {
-      if (c.isUpper()) return true;
-    }
-    return false;
-  };
 
   auto exprIt = exprRegex.globalMatch(text);
   while (exprIt.hasNext()) {
@@ -255,11 +245,18 @@ void TplValidator::checkMethods(const QString &text, QVector<ValidationResult> &
     for (int s = 1; s < segments.size(); ++s) {
       QString seg = segments[s].trimmed();
 
-      if (looksLikeMethod(seg) && !supportedMethods.contains(seg)) {
-        results.append(ValidationResult(
-            offsetToLine(text, segPos), 0, seg.length(),
-            QStringLiteral("不支持的方法 '%1'，支持: %2").arg(seg, supportedMethods.join(", "))));
+      // 判断是否为方法调用：段内含 '(' 说明带参数列表
+      int parenIdx = seg.indexOf(QLatin1Char('('));
+      if (parenIdx != -1) {
+        // 方法调用：取 '(' 前的方法名进行校验
+        QString methodName = seg.left(parenIdx).trimmed();
+        if (!methodName.isEmpty() && !supportedMethods.contains(methodName)) {
+          results.append(ValidationResult(offsetToLine(text, segPos), 0, methodName.length(),
+                                          QStringLiteral("不支持的方法 '%1'，支持: %2")
+                                              .arg(methodName, supportedMethods.join(", "))));
+        }
       } else if (!identRegex.match(seg).hasMatch() && !supportedMethods.contains(seg)) {
+        // 属性访问：检查是否为合法标识符
         results.append(ValidationResult(offsetToLine(text, segPos), 0, seg.length(),
                                         QStringLiteral("无效的标识符 '%1'").arg(seg)));
       }

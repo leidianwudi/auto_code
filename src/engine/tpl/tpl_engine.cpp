@@ -90,63 +90,67 @@ QString TplEngine::renderBlock(const QString &block, const QJsonObject &context)
   return result;
 }
 
-// resolvePath — 嵌套属性路径解析 + 通过 FunMgr 调用 C++ 函数
+// resolvePath — 路径解析入口（函数调用 / 变量路径分发）
 
 QJsonValue TplEngine::resolvePath(const QString &path, const QJsonObject &context) const {
-  // 检查是否是函数调用格式: funcName(...)
-  // 例如: str.toLowerCase(Hello) 或 file.read(C:/data.txt)
-  int parenPos = path.indexOf(QStringLiteral("("));
-  if (parenPos != -1 && path.endsWith(QStringLiteral(")"))) {
-    // 拆分为 类名.函数名(参数)
-    QString fullFunc = path.left(parenPos);
-    QString argsStr = path.mid(parenPos + 1);
-    argsStr.chop(1);  // 去掉尾部的 )
+  int parenPos = path.indexOf(QLatin1Char('('));
+  if (parenPos != -1 && path.endsWith(QLatin1Char(')'))) {
+    return resolveFuncCall(path, context);
+  }
+  return resolveVarPath(path, context);
+}
 
-    // 解析参数：逗号分隔，去除首尾空白
-    QStringList rawArgs;
-    if (!argsStr.isEmpty()) {
-      // 简单逗号分割（不考虑转义逗号）
-      int start = 0;
-      for (int i = 0; i < argsStr.length(); ++i) {
-        if (argsStr[i] == QLatin1Char(',')) {
-          rawArgs.append(argsStr.mid(start, i - start).trimmed());
-          start = i + 1;
-        }
-      }
-      rawArgs.append(argsStr.mid(start).trimmed());
-    }
+// resolveFuncCall — 函数调用解析（类名.函数名(参数)）
 
-    // 解析参数：递归调用 resolvePath 处理每个参数
-    QJsonArray evalArgs;
-    for (const QString &raw : rawArgs) {
-      // 尝试作为数字解析
-      bool ok = false;
-      double num = raw.toDouble(&ok);
-      if (ok) {
-        evalArgs.append(num);
-      } else if ((raw.startsWith(QStringLiteral("\"")) && raw.endsWith(QStringLiteral("\""))) ||
-                 (raw.startsWith(QStringLiteral("'")) && raw.endsWith(QStringLiteral("'")))) {
-        // 字符串字面量
-        evalArgs.append(raw.mid(1, raw.length() - 2));
-      } else {
-        // 变量路径
-        evalArgs.append(resolvePath(raw, context));
+QJsonValue TplEngine::resolveFuncCall(const QString &path, const QJsonObject &context) const {
+  int parenPos = path.indexOf(QLatin1Char('('));
+  QString fullFunc = path.left(parenPos);
+  QString argsStr = path.mid(parenPos + 1);
+  argsStr.chop(1);  // 去掉尾部的 )
+
+  // 解析参数：逗号分隔，去除首尾空白
+  QStringList rawArgs;
+  if (!argsStr.isEmpty()) {
+    int start = 0;
+    for (int i = 0; i < argsStr.length(); ++i) {
+      if (argsStr[i] == QLatin1Char(',')) {
+        rawArgs.append(argsStr.mid(start, i - start).trimmed());
+        start = i + 1;
       }
     }
-
-    // 解析函数名：类名.函数名
-    int dotPos = fullFunc.indexOf(QStringLiteral("."));
-    if (dotPos != -1) {
-      QString clsName = fullFunc.left(dotPos);
-      QString funcName = fullFunc.mid(dotPos + 1);
-      return FunMgr::ins().call(clsName, funcName, evalArgs);
-    }
-
-    m_lastError = QStringLiteral("invalid function call format: %1").arg(path);
-    return QJsonValue();
+    rawArgs.append(argsStr.mid(start).trimmed());
   }
 
-  // ── 变量路径解析：按点号分割逐层查找 ──
+  // 解析参数：递归调用 resolvePath 处理每个参数
+  QJsonArray evalArgs;
+  for (const QString &raw : rawArgs) {
+    bool ok = false;
+    double num = raw.toDouble(&ok);
+    if (ok) {
+      evalArgs.append(num);
+    } else if ((raw.startsWith(QStringLiteral("\"")) && raw.endsWith(QStringLiteral("\""))) ||
+               (raw.startsWith(QStringLiteral("'")) && raw.endsWith(QStringLiteral("'")))) {
+      evalArgs.append(raw.mid(1, raw.length() - 2));
+    } else {
+      evalArgs.append(resolvePath(raw, context));
+    }
+  }
+
+  // 解析函数名：类名.函数名
+  int dotPos = fullFunc.indexOf(QLatin1Char('.'));
+  if (dotPos != -1) {
+    QString clsName = fullFunc.left(dotPos);
+    QString funcName = fullFunc.mid(dotPos + 1);
+    return FunMgr::ins().call(clsName, funcName, evalArgs);
+  }
+
+  m_lastError = QStringLiteral("invalid function call format: %1").arg(path);
+  return QJsonValue();
+}
+
+// resolveVarPath — 嵌套属性路径解析（按点号逐层查找）
+
+QJsonValue TplEngine::resolveVarPath(const QString &path, const QJsonObject &context) const {
   QStringList parts = path.split(QStringLiteral("."));
   QJsonValue value = QJsonValue(context);
 

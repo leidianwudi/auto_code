@@ -14,6 +14,7 @@
 #include "block_expression.h"
 
 #include <QFileInfo>
+#include <optional>
 
 #include "../../ac_language.h"
 #include "../tpl_engine.h"
@@ -51,6 +52,50 @@ bool checkArithmetic(const QString &expr) {
   return false;
 }
 
+/**
+ * @brief 解析函数调用表达式，提取参数字符串
+ *
+ * 检查 expr 是否为 "funcName(arg)" 格式，如果是则返回括号内的参数（已 trim）。
+ * 例如 parseFuncArg("printLog(hello)", "printLog") => "hello"
+ *
+ * @param expr 表达式字符串
+ * @param funcName 函数名（不含括号）
+ * @return 参数字符串，不匹配时返回 nullopt
+ */
+std::optional<QString> parseFuncArg(const QString &expr, const QString &funcName) {
+  QString prefix = funcName + QLatin1Char('(');
+  if (!expr.startsWith(prefix) || !expr.endsWith(QLatin1Char(')'))) return std::nullopt;
+  return expr.mid(prefix.length(), expr.length() - prefix.length() - 1).trimmed();
+}
+
+/**
+ * @brief 去掉字符串字面量的外层引号
+ *
+ * 如果 s 被单引号或双引号包裹，去掉首尾引号；否则原样返回。
+ */
+QString stripQuotes(const QString &s) {
+  if (s.length() >= 2 &&
+      ((s.startsWith('\'') && s.endsWith('\'')) || (s.startsWith('"') && s.endsWith('"')))) {
+    return s.mid(1, s.length() - 2);
+  }
+  return s;
+}
+
+/**
+ * @brief 解析函数调用的字符串参数
+ *
+ * 处理流程：去引号 → 若非字面量则尝试 resolvePath 解析变量。
+ * 如果参数带引号（字面量），直接返回去引号后的内容。
+ * 如果参数不带引号，尝试从 context 解析变量，解析失败则原样返回。
+ */
+QString resolveStringArg(const QString &raw, const QJsonObject &context, const TplEngine &engine) {
+  QString stripped = stripQuotes(raw);
+  if (stripped != raw) return stripped;  // 原值带引号，是字面量
+  QJsonValue v = engine.resolvePath(raw, context);
+  if (!v.isNull() && !v.isUndefined()) return v.toString();
+  return raw;
+}
+
 }  // namespace
 
 // ====================================================================
@@ -62,34 +107,18 @@ bool BlockExpression::handle(const QString &block, int &pos, const QString &expr
   Q_UNUSED(block)
   Q_UNUSED(pos)
 
-  // === 策略 0: 内置函数调用 printLog(text) ===
-  if (expr.startsWith(QString::fromLatin1(AcBuiltin::kPrintLog) + QLatin1Char('(')) &&
-      expr.endsWith(QLatin1Char(')'))) {
-    int prefixLen = QString::fromLatin1(AcBuiltin::kPrintLog).length() + 1;  // +1 for '('
-    QString arg = expr.mid(prefixLen, expr.length() - prefixLen - 1).trimmed();
-    // 去掉可能的外层引号
-    if ((arg.startsWith('\'') && arg.endsWith('\'')) || (arg.startsWith('"') && arg.endsWith('"')))
-      arg = arg.mid(1, arg.length() - 2);
-    // 如果参数不是字面量，尝试从 context 解析变量
-    QJsonValue v = m_engine.resolvePath(arg, context);
-    if (!v.isNull() && !v.isUndefined()) arg = v.toString();
+  // === 策略 0a: 内置函数调用 printLog(text) ===
+  if (auto arg = parseFuncArg(expr, QString::fromLatin1(AcBuiltin::kPrintLog))) {
+    QString resolved = resolveStringArg(*arg, context, m_engine);
     auto cb = m_engine.logCallback();
-    if (cb) cb(arg, false);
+    if (cb) cb(resolved, false);
     return true;
   }
 
-  // === 策略 0: 内置函数调用 fileExists(path) ===
-  if (expr.startsWith(QString::fromLatin1(AcBuiltin::kFileExists) + QLatin1Char('(')) &&
-      expr.endsWith(QLatin1Char(')'))) {
-    int prefixLen = QString::fromLatin1(AcBuiltin::kFileExists).length() + 1;  // +1 for '('
-    QString arg = expr.mid(prefixLen, expr.length() - prefixLen - 1).trimmed();
-    // 去掉可能的外层引号
-    if ((arg.startsWith('\'') && arg.endsWith('\'')) || (arg.startsWith('"') && arg.endsWith('"')))
-      arg = arg.mid(1, arg.length() - 2);
-    // 如果参数不是字面量，尝试从 context 解析变量
-    QJsonValue v = m_engine.resolvePath(arg, context);
-    if (!v.isNull() && !v.isUndefined()) arg = v.toString();
-    bool exists = QFileInfo::exists(arg);
+  // === 策略 0b: 内置函数调用 fileExists(path) ===
+  if (auto arg = parseFuncArg(expr, QString::fromLatin1(AcBuiltin::kFileExists))) {
+    QString resolved = resolveStringArg(*arg, context, m_engine);
+    bool exists = QFileInfo::exists(resolved);
     result +=
         exists ? QString::fromLatin1(AcKeyword::kTrue) : QString::fromLatin1(AcKeyword::kFalse);
     return true;
