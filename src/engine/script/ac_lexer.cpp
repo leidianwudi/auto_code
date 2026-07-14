@@ -38,6 +38,9 @@ static const QHash<QString, TokenType> &keywordMap() {
       {QString::fromLatin1(AcKeyword::kInterface), TOK_INTERFACE},
       {QString::fromLatin1(AcKeyword::kImplements), TOK_IMPLEMENTS},
       {QString::fromLatin1(AcKeyword::kSuper), TOK_SUPER},
+      {QString::fromLatin1(AcKeyword::kExport), TOK_EXPORT},
+      {QString::fromLatin1(AcKeyword::kImport), TOK_IMPORT},
+      {QString::fromLatin1(AcKeyword::kFrom), TOK_FROM},
   };
   return map;
 }

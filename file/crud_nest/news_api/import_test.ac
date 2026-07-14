@@ -1,0 +1,22 @@
+// ── 测试 import/export 功能 ──
+
+import { add, multiply, PI, Calculator } from "lib/math_utils.ac";
+
+main {
+  // 使用导入的函数
+  let sum = add(10, 20);
+  printLog("sum: " + sum);
+
+  let product = multiply(6, 7);
+  printLog("product: " + product);
+
+  // 使用导入的常量
+  printLog("PI: " + PI);
+
+  // 使用导入的类
+  let calc = new Calculator();
+  let r1 = calc.add(3, 4);
+  printLog("calc.add(3,4): " + r1);
+  let r2 = calc.multiply(5, 6);
+  printLog("calc.multiply(5,6): " + r2);
+}

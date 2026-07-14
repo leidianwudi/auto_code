@@ -868,6 +868,10 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       m_hasReturned = true;
       m_returnValue = evalExpr(stmt.returnValue);
       break;
+
+    case Block::Stmt::kImport:
+      // import 语句在模块链接阶段已处理，此处忽略
+      break;
   }
 }
 

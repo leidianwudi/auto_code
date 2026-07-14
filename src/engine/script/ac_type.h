@@ -78,6 +78,9 @@ enum TokenType {
   TOK_INTERFACE,   ///< interface 关键字（接口定义）
   TOK_IMPLEMENTS,  ///< implements 关键字（接口实现）
   TOK_SUPER,       ///< super 关键字（父类引用）
+  TOK_EXPORT,      ///< export 关键字（导出）
+  TOK_IMPORT,      ///< import 关键字（导入）
+  TOK_FROM,        ///< from 关键字（import ... from "file"）
 };
 
 /// @brief 词法单元
@@ -206,6 +209,7 @@ struct MethodDef {
   bool isStatic = false;                      ///< 是否为静态方法
   AccessLevel access = AccessLevel::kPublic;  ///< 访问级别
   bool isOverride = false;                    ///< 是否重写父类方法
+  bool isExported = false;                    ///< 是否导出（仅顶层函数有效）
 };
 
 /// @brief 接口方法签名
@@ -220,6 +224,7 @@ struct InterfaceDef {
   QString name;
   QVector<InterfaceMethod> methods;
   QStringList baseInterfaces;  ///< 接口继承的父接口列表
+  bool isExported = false;     ///< 是否导出
 };
 
 /// @brief 类定义：class Name extends Base implements I1, I2 { ... }
@@ -230,7 +235,8 @@ struct ClassDef {
   QStringList interfaces;  ///< 实现的接口列表
   QVector<ObjectEntry> properties;
   QVector<MethodDef> methods;
-  bool isNative = false;  ///< 是否为 C++ 原生类（非 AC 脚本定义）
+  bool isNative = false;    ///< 是否为 C++ 原生类（非 AC 脚本定义）
+  bool isExported = false;  ///< 是否导出
 };
 
 /// @brief 表达式节点 — AST 中的表达式
@@ -378,6 +384,7 @@ struct AssignStmt {
   QString staticClassName;         ///< 静态类名（isStatic=true 时有效）
   AcType typeAnnotation;           ///< let 声明时的类型注解（如 let x: Number = 1）
   bool hasTypeAnnotation = false;  ///< 是否有类型注解
+  bool isExported = false;         ///< 是否导出
 };
 
 /// @brief 索引赋值语句：obj["key"] = expr
@@ -402,6 +409,12 @@ struct IfStmt {
   bool hasElse = false;
 };
 
+/// @brief 导入语句：import { A, B } from "file"
+struct ImportStmt {
+  QStringList names;  ///< 导入的符号名列表
+  QString filePath;   ///< 源文件路径（相对或绝对）
+};
+
 /// @brief 语句 — 包含调用、赋值、类定义、循环、条件、返回等类型
 struct Block::Stmt {
   enum Kind {
@@ -414,7 +427,8 @@ struct Block::Stmt {
     kClassDef,
     kInterfaceDef,
     kFuncDef,
-    kReturn
+    kReturn,
+    kImport
   } kind = kCall;
   CallStmt call;
   AssignStmt assign;
@@ -426,6 +440,7 @@ struct Block::Stmt {
   InterfaceDef interfaceDef;
   MethodDef funcDef;
   Expr returnValue;
+  ImportStmt importStmt;
 };
 
 /// @}

@@ -116,6 +116,13 @@ void UndeclaredIdentValidator::visitReturnStmt(const Expr &retExpr) { visitExpr(
 
 void UndeclaredIdentValidator::visitExprStmt(const Expr &expr) { visitExpr(expr); }
 
+void UndeclaredIdentValidator::visitImportStmt(const ImportStmt &imp) {
+  // import 语句中的符号名由模块链接器注册，此处无需额外处理
+  for (const auto &name : imp.names) {
+    m_scopeVars.insert(name);
+  }
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // 表达式 — 重写 AstVisitor
 // ═════════════════════════════════════════════════════════════════════════════

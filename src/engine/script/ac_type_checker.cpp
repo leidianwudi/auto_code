@@ -167,6 +167,10 @@ void AcTypeChecker::checkStmt(const Block::Stmt &stmt, TypeEnv &env) {
       checkExpr(stmt.returnValue, env);
       break;
     }
+
+    case Block::Stmt::kImport:
+      // import 语句在模块链接阶段已处理，此处忽略
+      break;
   }
 }
 

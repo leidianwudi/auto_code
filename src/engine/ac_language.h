@@ -46,29 +46,9 @@ inline constexpr const char *kOverride = "override";
 inline constexpr const char *kInterface = "interface";
 inline constexpr const char *kImplements = "implements";
 inline constexpr const char *kSuper = "super";
-/// @brief include 预处理指令：#include "file.ac"
-///
-/// 在词法分析之前将指定文件内容拼入当前源码，类似 C/C++ 的 #include。
-/// 支持两种引用方式：
-///   - `#include "relative/path.ac"`   — 相对当前 .ac 文件所在目录
-///   - `#include <filename.ac>`        — 在搜索路径中查找
-///
-/// #include <...> 的查找顺序（按优先级从高到低）：
-///   1. 当前脚本目录
-///   2. 当前脚本目录/inc/
-///   3. 脚本内 #path 声明的路径
-///   4. 项目根目录
-///   5. C++ API 注册的路径
-inline constexpr const char *kInclude = "#include";
-/// @brief path 预处理指令：#path "dir" — 添加搜索路径
-///
-/// 为当前文件（及其后续 #include 引用链）添加搜索路径。
-/// #path 声明的路径仅影响 <...> 方式（尖括号）的查找。
-/// 路径相对当前 .ac 文件所在目录，支持引号包裹。
-/// 示例：#path "mylib"  或  #path mylib
-inline constexpr const char *kPath = "#path";
-/// @brief 默认 inc 子目录名（约定目录）
-inline constexpr const char *kIncDir = "inc";
+inline constexpr const char *kExport = "export";
+inline constexpr const char *kImport = "import";
+inline constexpr const char *kFrom = "from";
 
 /// @brief 关键字列表（供高亮、补全使用）
 inline const QStringList kAll = {
@@ -83,7 +63,8 @@ inline const QStringList kAll = {
     QString::fromLatin1(kProtected), QString::fromLatin1(kPrivate),
     QString::fromLatin1(kExtends),   QString::fromLatin1(kOverride),
     QString::fromLatin1(kInterface), QString::fromLatin1(kImplements),
-    QString::fromLatin1(kSuper),
+    QString::fromLatin1(kSuper),     QString::fromLatin1(kExport),
+    QString::fromLatin1(kImport),    QString::fromLatin1(kFrom),
 };
 }  // namespace AcKeyword
 

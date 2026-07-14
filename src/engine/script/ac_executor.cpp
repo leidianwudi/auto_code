@@ -7,44 +7,50 @@
 
 #include <QDir>
 #include <QFile>
-#include <QRegularExpression>
 
 #include "../ac_language.h"
 #include "undeclared_ident_validator.h"
 
 AcExecutor::AcExecutor() = default;
 
-/// @brief 在错误信息中提取行号，附加源文件路径（前向声明）
-static QString augmentErrorLine(const QString &error,
-                                const QVector<QPair<int, QString>> &lineRanges);
-
 /**
- * @brief 解析 .ac 源码：预处理 → 词法分析 → 语法分析
+ * @brief 解析 .ac 源码：词法分析 → 语法分析 → 模块链接
  *
- * 预处理阶段处理 #include 和 #path 指令，将引用的文件内容拼入源码，
- * 并建立行号→源文件的映射用于错误提示增强。
+ * 先解析当前文件，然后处理 import 语句：加载目标文件，
+ * 独立解析，提取 export 符号注入当前程序。
  */
 bool AcExecutor::parse(const QString &source) {
   m_error.clear();
   m_declaredVars.clear();
 
-  // ── 步骤 0：预处理 — 解析 #include / #path 指令 ──
-  QSet<QString> visited;
-  QVector<QPair<int, QString>> lineRanges;
-  int currentLine = 1;
-  QString processed = preprocess(source, m_scriptDir, visited, lineRanges, currentLine);
-
   // ── 步骤 1：词法分析 ──
-  m_tokens = m_lexer.tokenize(processed, m_error);
-  if (!m_error.isEmpty()) {
-    m_error = augmentErrorLine(m_error, lineRanges);
-    return false;
-  }
+  m_tokens = m_lexer.tokenize(source, m_error);
+  if (!m_error.isEmpty()) return false;
 
   // ── 步骤 2：语法分析 ──
-  if (!m_parser.parse(m_tokens, m_program, m_error, m_declaredVars)) {
-    m_error = augmentErrorLine(m_error, lineRanges);
-    return false;
+  if (!m_parser.parse(m_tokens, m_program, m_error, m_declaredVars)) return false;
+
+  // 步骤 3：模块链接 — 处理 import 语句
+  if (!linkImports()) return false;
+
+  qDebug() << "[AcExecutor::parse] after linkImports, declaredVars:" << m_declaredVars;
+  qDebug() << "[AcExecutor::parse] program stmts:" << m_program.stmts.size();
+  for (int i = 0; i < m_program.stmts.size(); ++i) {
+    const auto &s = m_program.stmts[i];
+    QString desc;
+    if (s.kind == Block::Stmt::kAssign)
+      desc = "assign:" + s.assign.name;
+    else if (s.kind == Block::Stmt::kClassDef)
+      desc = "class:" + s.classDef.name;
+    else if (s.kind == Block::Stmt::kFuncDef)
+      desc = "func:" + s.funcDef.name;
+    else if (s.kind == Block::Stmt::kInterfaceDef)
+      desc = "iface:" + s.interfaceDef.name;
+    else if (s.kind == Block::Stmt::kImport)
+      desc = "import";
+    else
+      desc = "kind:" + QString::number((int)s.kind);
+    qDebug() << "  [" << i << "]" << desc;
   }
 
   return true;
@@ -122,7 +128,7 @@ QJsonValue AcExecutor::execute() {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 辅助函数
+// 模块链接
 // ═════════════════════════════════════════════════════════════════════════════
 
 /// @brief 读取文件全部内容（UTF-8）
@@ -132,160 +138,167 @@ static QString readFileUtf8(const QString &path) {
   return QString::fromUtf8(f.readAll());
 }
 
-/// @brief 在错误信息中提取行号，附加源文件路径
-static QString augmentErrorLine(const QString &error,
-                                const QVector<QPair<int, QString>> &lineRanges) {
-  QRegularExpression re(QStringLiteral("at line (\\d+)"));
-  auto match = re.match(error);
-  if (!match.hasMatch()) return error;
-
-  int line = match.captured(1).toInt();
-
-  // 从后往前查找包含该行号的段
-  for (int i = lineRanges.size() - 1; i >= 0; --i) {
-    int startLine = lineRanges[i].first;
-    if (startLine <= 0) continue;
-    if (line >= startLine) {
-      // 确认此行号在本段范围内（本段起始行 ≤ line < 下一段起始行）
-      if (i + 1 >= lineRanges.size() || lineRanges[i + 1].first <= 0 ||
-          line < lineRanges[i + 1].first) {
-        QString filePath = lineRanges[i].second;
-        int origLine = line - startLine + 1;
-        return error + QStringLiteral(" (file: %1, line: %2)").arg(filePath).arg(origLine);
-      }
-    }
-  }
-  return error;
+/**
+ * @brief 处理 import 语句，加载并链接导出符号
+ *
+ * 遍历 AST 中的 import 语句：
+ * 1. 解析文件路径（相对当前脚本目录）
+ * 2. 读取并独立解析目标文件
+ * 3. 从目标 AST 中提取 export 符号
+ * 4. 将导出的定义注入当前程序的 AST
+ * 5. 将导入的变量名注册到 declaredVars
+ *
+ * 循环引用保护：已处理的文件路径记录在 visited 集合中。
+ */
+bool AcExecutor::linkImports() {
+  QSet<QString> visited;
+  return linkImportsRecursive(m_program, m_scriptDir, visited);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 预处理 — #include / #path 指令
-// ═════════════════════════════════════════════════════════════════════════════
-
-/**
- * @brief 递归预处理源码
- *
- * 逐行扫描源码：
- * - `#include "file.ac"` → 读取文件，递归预处理，拼入结果
- * - `#include <file.ac>` → 在搜索路径中查找文件，递归预处理
- * - `#path "dir"`       → 将路径加入搜索列表（不输出到结果）
- * - 其他行               → 原样保留
- *
- * @param source     当前文件源码
- * @param filePath   当前文件路径（绝对或相对）
- * @param visited    已处理文件集合（循环引用保护）
- * @param lineRanges [out] 行号→源文件映射
- * @param currentLine [in/out] 当前在输出结果中的行号（1-based）
- * @return 预处理后的源码
- */
-QString AcExecutor::preprocess(const QString &source, const QString &filePath,
-                               QSet<QString> &visited, QVector<QPair<int, QString>> &lineRanges,
-                               int &currentLine) {
-  QString absPath = QFileInfo(filePath).absoluteFilePath();
-
-  // 循环引用保护
-  if (visited.contains(absPath)) return {};
-  visited.insert(absPath);
-
-  // 记录当前文件段在输出中的起始行号
-  int startLine = currentLine;
-  lineRanges.append(qMakePair(startLine, absPath));
-
-  // 拆分按行处理
-  QStringList lines = source.split(QStringLiteral("\n"));
-  QStringList resultParts;
-  QStringList extraPaths;  // 当前文件内 #path 声明的路径（仅影响当前文件）
-
-  // 构建搜索路径：约定目录 + 用户配置
-  QString baseDir = QFileInfo(absPath).absolutePath();
-  QStringList searchPaths;
-  if (!baseDir.isEmpty()) searchPaths.append(baseDir);
-  if (!baseDir.isEmpty())
-    searchPaths.append(baseDir + QStringLiteral("/") + QString::fromLatin1(AcKeyword::kIncDir));
-  // 用户通过 C++ API 设置的路径
-  for (const auto &p : m_includePaths) searchPaths.append(p);
-  // 项目根目录
-  if (!m_rootDir.isEmpty() && m_rootDir != baseDir) searchPaths.append(m_rootDir);
-
-  for (int i = 0; i < lines.size(); ++i) {
-    const QString &line = lines[i];
-    QString trimmed = line.trimmed();
-
-    // ── #include 指令 ──
-    if (trimmed.startsWith(QString::fromLatin1(AcKeyword::kInclude))) {
-      // 解析路径：#include "path" 或 #include <path>
-      int quoteStart = trimmed.indexOf(QChar('"'));
-      int angleStart = trimmed.indexOf(QChar('<'));
-      QString incPath;
-
-      if (quoteStart >= 0) {
-        // #include "path" — 相对当前文件目录
-        int quoteEnd = trimmed.indexOf(QChar('"'), quoteStart + 1);
-        if (quoteEnd > quoteStart) {
-          QString relPath = trimmed.mid(quoteStart + 1, quoteEnd - quoteStart - 1);
-          incPath = QFileInfo(baseDir + QStringLiteral("/") + relPath).absoluteFilePath();
-        }
-      } else if (angleStart >= 0) {
-        // #include <path> — 在搜索路径中查找
-        int angleEnd = trimmed.indexOf(QChar('>'), angleStart + 1);
-        if (angleEnd > angleStart) {
-          QString fileName = trimmed.mid(angleStart + 1, angleEnd - angleStart - 1);
-          // 合并搜索路径（约定 + 配置 + 当前文件 #path 声明的）
-          QStringList combined = searchPaths;
-          for (const auto &ep : extraPaths) combined.append(ep);
-          for (const auto &dir : combined) {
-            QString fullPath = dir + QStringLiteral("/") + fileName;
-            if (QFileInfo::exists(fullPath)) {
-              incPath = QFileInfo(fullPath).absoluteFilePath();
-              break;
-            }
-          }
-        }
-      }
-
-      if (!incPath.isEmpty()) {
-        QString incContent = readFileUtf8(incPath);
-        if (!incContent.isEmpty()) {
-          // 递归预处理引用的文件
-          QString processed = preprocess(incContent, incPath, visited, lineRanges, currentLine);
-          if (!processed.isEmpty()) {
-            resultParts.append(processed);
-            // 确保末尾有换行
-            if (!processed.endsWith(QChar('\n'))) resultParts.last().append(QChar('\n'));
-          }
-          // 如果递归返回空（循环引用或文件为空），不输出
-        } else {
-          // 文件存在但为空，保留原行
-          resultParts.append(line);
-          ++currentLine;
-        }
-      } else {
-        // 找不到文件，保留原行（词法分析或运行时才能报错）
-        resultParts.append(line);
-        ++currentLine;
-      }
-      continue;
+bool AcExecutor::linkImportsRecursive(Block &program, const QString &baseDir,
+                                      QSet<QString> &visited) {
+  // 收集所有 import 语句
+  QVector<int> importIndices;
+  for (int i = 0; i < program.stmts.size(); ++i) {
+    if (program.stmts[i].kind == Block::Stmt::kImport) {
+      importIndices.append(i);
     }
-
-    // ── #path 指令 — 声明搜索路径 ──
-    if (trimmed.startsWith(QString::fromLatin1(AcKeyword::kPath))) {
-      QString pathStr = trimmed.mid(QString::fromLatin1(AcKeyword::kPath).length()).trimmed();
-      // 去掉引号
-      if (pathStr.startsWith(QChar('"')) && pathStr.endsWith(QChar('"')))
-        pathStr = pathStr.mid(1, pathStr.length() - 2);
-      if (!pathStr.isEmpty()) {
-        // 相对当前文件所在目录
-        QString fullPath = QDir(baseDir).absoluteFilePath(pathStr);
-        if (!extraPaths.contains(fullPath)) extraPaths.append(fullPath);
-      }
-      // #path 行不输出到最终源码
-      continue;
-    }
-
-    // ── 普通行：原样保留 ──
-    resultParts.append(line);
-    ++currentLine;
   }
 
-  return resultParts.join(QStringLiteral("\n"));
+  // 收集所有导入的符号定义（最终插入到 program 开头）
+  QVector<Block::Stmt> importedStmts;
+
+  for (int idx : importIndices) {
+    const ImportStmt &imp = program.stmts[idx].importStmt;
+
+    // 解析文件路径
+    QString absPath = QDir(baseDir).absoluteFilePath(imp.filePath);
+    absPath = QFileInfo(absPath).absoluteFilePath();
+
+    if (!QFileInfo::exists(absPath)) {
+      m_error = QStringLiteral("import: file not found '%1'").arg(imp.filePath);
+      return false;
+    }
+
+    // 循环引用保护
+    if (visited.contains(absPath)) continue;
+    visited.insert(absPath);
+
+    // 读取并解析目标文件
+    QString source = readFileUtf8(absPath);
+    if (source.isEmpty()) {
+      m_error = QStringLiteral("import: cannot read file '%1'").arg(imp.filePath);
+      return false;
+    }
+
+    AcLexer lexer;
+    AcParser parser;
+    Block moduleAst;
+    QSet<QString> moduleVars;
+    QString moduleError;
+    QVector<Token> tokens = lexer.tokenize(source, moduleError);
+    if (!moduleError.isEmpty()) {
+      m_error = QStringLiteral("import: parse error in '%1': %2").arg(imp.filePath, moduleError);
+      return false;
+    }
+    if (!parser.parse(tokens, moduleAst, moduleError, moduleVars)) {
+      m_error = QStringLiteral("import: parse error in '%1': %2").arg(imp.filePath, moduleError);
+      return false;
+    }
+
+    // 递归处理目标文件中的 import
+    QString moduleDir = QFileInfo(absPath).absolutePath();
+    if (!linkImportsRecursive(moduleAst, moduleDir, visited)) return false;
+
+    // 从目标 AST 中提取 export 符号并注入当前程序
+    qDebug() << "[linkImports] module" << imp.filePath << "has" << moduleAst.stmts.size()
+             << "stmts, importing:" << imp.names;
+    for (const auto &stmt : moduleAst.stmts) {
+      bool isExported = false;
+
+      if (stmt.kind == Block::Stmt::kAssign && stmt.assign.isExported) {
+        isExported = true;
+      } else if (stmt.kind == Block::Stmt::kClassDef && stmt.classDef.isExported) {
+        isExported = true;
+      } else if (stmt.kind == Block::Stmt::kFuncDef && stmt.funcDef.isExported) {
+        isExported = true;
+      } else if (stmt.kind == Block::Stmt::kInterfaceDef && stmt.interfaceDef.isExported) {
+        isExported = true;
+      }
+
+      // 调试输出
+      QString stmtName;
+      if (stmt.kind == Block::Stmt::kAssign)
+        stmtName = stmt.assign.name;
+      else if (stmt.kind == Block::Stmt::kClassDef)
+        stmtName = stmt.classDef.name;
+      else if (stmt.kind == Block::Stmt::kFuncDef)
+        stmtName = stmt.funcDef.name;
+      else if (stmt.kind == Block::Stmt::kInterfaceDef)
+        stmtName = stmt.interfaceDef.name;
+      qDebug() << "  stmt kind:" << (int)stmt.kind << "name:" << stmtName
+               << "isExported:" << isExported;
+
+      if (!isExported) continue;
+
+      // 检查是否在 import 列表中
+      QString exportName;
+      if (stmt.kind == Block::Stmt::kAssign) {
+        exportName = stmt.assign.name;
+      } else if (stmt.kind == Block::Stmt::kClassDef) {
+        exportName = stmt.classDef.name;
+      } else if (stmt.kind == Block::Stmt::kFuncDef) {
+        exportName = stmt.funcDef.name;
+      } else if (stmt.kind == Block::Stmt::kInterfaceDef) {
+        exportName = stmt.interfaceDef.name;
+      }
+
+      if (!imp.names.contains(exportName)) continue;
+
+      // 注入到当前程序（插入到开头，确保定义在 main 块语句之前执行）
+      importedStmts.append(stmt);
+
+      // 注册变量名
+      m_declaredVars.insert(exportName);
+      qDebug() << "[linkImports] injected" << exportName << "into program";
+    }
+
+    // 检查所有导入名是否都找到了
+    QSet<QString> foundNames;
+    for (const auto &stmt : moduleAst.stmts) {
+      QString name;
+      if (stmt.kind == Block::Stmt::kAssign && stmt.assign.isExported)
+        name = stmt.assign.name;
+      else if (stmt.kind == Block::Stmt::kClassDef && stmt.classDef.isExported)
+        name = stmt.classDef.name;
+      else if (stmt.kind == Block::Stmt::kFuncDef && stmt.funcDef.isExported)
+        name = stmt.funcDef.name;
+      else if (stmt.kind == Block::Stmt::kInterfaceDef && stmt.interfaceDef.isExported)
+        name = stmt.interfaceDef.name;
+      if (!name.isEmpty()) foundNames.insert(name);
+    }
+
+    for (const auto &name : imp.names) {
+      if (!foundNames.contains(name)) {
+        m_error = QStringLiteral("import: '%1' is not exported from '%2'").arg(name, imp.filePath);
+        return false;
+      }
+    }
+  }
+
+  // 移除 import 语句（已处理完毕），并将导入的符号定义插入到开头
+  QVector<Block::Stmt> filtered;
+  // 先放入导入的符号定义（函数/类/变量），确保在 main 块语句之前注册
+  for (auto &stmt : importedStmts) {
+    filtered.append(std::move(stmt));
+  }
+  // 再放入原有语句（跳过 import 语句）
+  for (auto &stmt : program.stmts) {
+    if (stmt.kind != Block::Stmt::kImport) {
+      filtered.append(std::move(stmt));
+    }
+  }
+  program.stmts = std::move(filtered);
+
+  return true;
 }

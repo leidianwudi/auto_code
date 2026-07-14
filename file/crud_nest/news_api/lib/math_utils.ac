@@ -1,0 +1,30 @@
+// ── 导出模块：math_utils.ac ──
+
+export function add(a, b) {
+  return a + b;
+}
+
+export function multiply(a, b) {
+  return a * b;
+}
+
+// 不导出的内部函数
+function internalHelper() {
+  return 42;
+}
+
+export let PI = 3.14159;
+
+export class Calculator {
+  public let lastResult = 0;
+
+  public function add(a, b) {
+    this.lastResult = a + b;
+    return this.lastResult;
+  }
+
+  public function multiply(a, b) {
+    this.lastResult = a * b;
+    return this.lastResult;
+  }
+}

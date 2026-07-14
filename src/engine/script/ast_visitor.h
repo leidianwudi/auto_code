@@ -46,6 +46,7 @@ public:
   virtual void visitFuncDef(const MethodDef &md);
   virtual void visitReturnStmt(const Expr &retExpr);
   virtual void visitExprStmt(const Expr &expr);
+  virtual void visitImportStmt(const ImportStmt &imp);
   /// @}
 
   /// @name 表达式类型（由 visitExpr 分发）

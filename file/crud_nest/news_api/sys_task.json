@@ -1,0 +1,6 @@
+{
+    "modelName": "sys\\sys_task", // 模块名字，多级文件夹用 \\ 隔开
+    tableName: 'sys_task', // 表名
+    selColsLike: ['code','name'], // 模糊查询
+    selColsSort: { code: 'ASC' }, // 默认排序, 照code升序
+}

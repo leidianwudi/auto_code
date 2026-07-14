@@ -45,6 +45,9 @@ void AstVisitor::visitStmt(const Block::Stmt &stmt) {
     case Block::Stmt::kExpr:
       visitExprStmt(stmt.exprStmt);
       break;
+    case Block::Stmt::kImport:
+      visitImportStmt(stmt.importStmt);
+      break;
   }
 }
 
@@ -136,6 +139,8 @@ void AstVisitor::visitFuncDef(const MethodDef &md) { visitBlock(md.body); }
 void AstVisitor::visitReturnStmt(const Expr &retExpr) { visitExpr(retExpr); }
 
 void AstVisitor::visitExprStmt(const Expr &expr) { visitExpr(expr); }
+
+void AstVisitor::visitImportStmt(const ImportStmt &imp) { Q_UNUSED(imp); }
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 表达式 — 默认实现：递归遍历子节点

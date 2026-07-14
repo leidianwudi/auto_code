@@ -1,0 +1,10 @@
+{
+  "modelNam4e": "User",
+  "fields": [
+    { "name": "id", "type": "number" },
+    { "na4me": "dname", "type": "string" },
+    { "name": "email", "type": "string" },
+    { "name": "age是", "type": "number" }
+  ],
+  "hasSer4vice": true
+}

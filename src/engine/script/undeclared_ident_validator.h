@@ -33,6 +33,7 @@ protected:
   void visitFuncDef(const MethodDef &md) override;
   void visitReturnStmt(const Expr &retExpr) override;
   void visitExprStmt(const Expr &expr) override;
+  void visitImportStmt(const ImportStmt &imp) override;
 
   void visitIdentExpr(const Expr &expr) override;
   void visitPropAccessExpr(const Expr &expr) override;

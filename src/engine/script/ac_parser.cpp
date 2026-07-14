@@ -52,6 +52,29 @@ bool AcParser::parseProgram(Block &block) {
   while (peek().type != TOK_EOF) {
     Token t = peek();
 
+    // import { A, B } from "file"
+    if (t.type == TOK_IMPORT) {
+      advance();
+      Block::Stmt stmt;
+      stmt.kind = Block::Stmt::kImport;
+      if (!parseImportStmt(stmt.importStmt)) return false;
+      block.stmts.append(stmt);
+      if (!expect(TOK_SEMI, QStringLiteral("expected ';' after import statement"))) return false;
+      continue;
+    }
+
+    // export let / export class / export function / export interface
+    if (t.type == TOK_EXPORT) {
+      Block::Stmt stmt;
+      if (!parseStmt(stmt)) return false;
+      block.stmts.append(stmt);
+      if (stmt.kind != Block::Stmt::kClassDef && stmt.kind != Block::Stmt::kInterfaceDef &&
+          stmt.kind != Block::Stmt::kFuncDef) {
+        if (!expect(TOK_SEMI, QStringLiteral("expected ';' after statement"))) return false;
+      }
+      continue;
+    }
+
     if (t.type == TOK_CLASS) {
       advance();
       Block::Stmt stmt;
@@ -70,12 +93,25 @@ bool AcParser::parseProgram(Block &block) {
       stmt.kind = Block::Stmt::kFuncDef;
       if (!parseMethodDef(stmt.funcDef)) return false;
       block.stmts.append(stmt);
+    } else if (t.type == TOK_LET) {
+      advance();
+      if (peek().type != TOK_IDENT) {
+        *m_error = QStringLiteral("expected variable name after 'let' at line %1").arg(peek().line);
+        return false;
+      }
+      m_declaredVars->insert(peek().text);
+      Block::Stmt stmt;
+      stmt.kind = Block::Stmt::kAssign;
+      if (!parseAssignStmt(stmt.assign)) return false;
+      block.stmts.append(stmt);
+      if (!expect(TOK_SEMI, QStringLiteral("expected ';' after statement"))) return false;
     } else if (t.type == TOK_IDENT && t.text == QString::fromLatin1(AcKeyword::kMain)) {
       advance();
       if (!parseBlock(block)) return false;
     } else {
       *m_error = QStringLiteral(
-                     "expected 'class', 'interface', 'function', or 'main' at top level at line %1")
+                     "expected 'import', 'export', 'class', 'interface', 'function', 'let', or "
+                     "'main' at top level at line %1")
                      .arg(peek().line);
       return false;
     }
@@ -103,6 +139,62 @@ bool AcParser::parseBlock(Block &block) {
 
 bool AcParser::parseStmt(Block::Stmt &stmt) {
   Token t = peek();
+
+  // ── import { A, B } from "file" ──
+  if (t.type == TOK_IMPORT) {
+    advance();
+    stmt.kind = Block::Stmt::kImport;
+    return parseImportStmt(stmt.importStmt);
+  }
+
+  // ── export let / export class / export function / export interface ──
+  if (t.type == TOK_EXPORT) {
+    advance();
+    Token next = peek();
+
+    if (next.type == TOK_LET) {
+      advance();
+      if (peek().type != TOK_IDENT) {
+        *m_error =
+            QStringLiteral("expected variable name after 'export let' at line %1").arg(peek().line);
+        return false;
+      }
+      m_declaredVars->insert(peek().text);
+      stmt.kind = Block::Stmt::kAssign;
+      if (!parseAssignStmt(stmt.assign)) return false;
+      stmt.assign.isExported = true;
+      return true;
+    }
+
+    if (next.type == TOK_CLASS) {
+      advance();
+      stmt.kind = Block::Stmt::kClassDef;
+      if (!parseClassDef(stmt.classDef)) return false;
+      stmt.classDef.isExported = true;
+      return true;
+    }
+
+    if (next.type == TOK_FUNCTION) {
+      advance();
+      stmt.kind = Block::Stmt::kFuncDef;
+      if (!parseMethodDef(stmt.funcDef)) return false;
+      stmt.funcDef.isExported = true;
+      return true;
+    }
+
+    if (next.type == TOK_INTERFACE) {
+      advance();
+      stmt.kind = Block::Stmt::kInterfaceDef;
+      if (!parseInterfaceDef(stmt.interfaceDef)) return false;
+      stmt.interfaceDef.isExported = true;
+      return true;
+    }
+
+    *m_error = QStringLiteral(
+                   "expected 'let', 'class', 'function', or 'interface' after 'export' at line %1")
+                   .arg(next.line);
+    return false;
+  }
 
   if (t.type == TOK_CLASS) {
     advance();
@@ -317,6 +409,39 @@ bool AcParser::parseIfStmt(IfStmt &is) {
     is.hasElse = true;
     return parseBlock(is.elseBlock);
   }
+  return true;
+}
+
+bool AcParser::parseImportStmt(ImportStmt &imp) {
+  // import { A, B } from "file"
+  if (!expect(TOK_LBRACE, QStringLiteral("expected '{' after 'import'"))) return false;
+
+  do {
+    if (peek().type != TOK_IDENT) {
+      *m_error = QStringLiteral("expected identifier in import list at line %1").arg(peek().line);
+      return false;
+    }
+    imp.names.append(advance().text);
+    if (peek().type != TOK_COMMA) break;
+    advance();
+  } while (true);
+
+  if (!expect(TOK_RBRACE, QStringLiteral("expected '}' in import statement"))) return false;
+
+  // from 关键字
+  if (peek().type != TOK_FROM) {
+    *m_error = QStringLiteral("expected 'from' after import list at line %1").arg(peek().line);
+    return false;
+  }
+  advance();
+
+  // 文件路径（字符串）
+  if (peek().type != TOK_STRING) {
+    *m_error = QStringLiteral("expected file path string after 'from' at line %1").arg(peek().line);
+    return false;
+  }
+  imp.filePath = advance().text;
+
   return true;
 }
 
