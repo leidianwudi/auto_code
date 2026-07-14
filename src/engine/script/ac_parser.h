@@ -35,6 +35,7 @@ private:
   bool parseForStmt(ForStmt &fs);
   bool parseIfStmt(IfStmt &is);
   bool parseClassDef(ClassDef &cd);
+  bool parseInterfaceDef(InterfaceDef &iface);
   bool parseReturnStmt(Expr &retVal);
   bool parseExpr(Expr &expr);
   bool parseAddSub(Expr &expr);

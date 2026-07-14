@@ -29,6 +29,7 @@ protected:
   void visitAssignStmt(const AssignStmt &as) override;
   void visitForStmt(const ForStmt &fs) override;
   void visitClassDef(const ClassDef &cd) override;
+  void visitInterfaceDef(const InterfaceDef &iface) override;
   void visitFuncDef(const MethodDef &md) override;
   void visitReturnStmt(const Expr &retExpr) override;
   void visitExprStmt(const Expr &expr) override;

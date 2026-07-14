@@ -84,6 +84,11 @@ void UndeclaredIdentValidator::visitClassDef(const ClassDef &cd) {
   classScope.insert(QString::fromLatin1(AcKeyword::kThis));
   for (const auto &prop : cd.properties) classScope.insert(prop.key);
 
+  // 继承：子类可访问父类属性
+  if (!cd.baseClass.isEmpty()) {
+    classScope.insert(QStringLiteral("super"));
+  }
+
   for (const auto &method : cd.methods) {
     QSet<QString> methodScope = classScope;
     for (const auto &param : method.params) methodScope.insert(param.name);
@@ -93,6 +98,8 @@ void UndeclaredIdentValidator::visitClassDef(const ClassDef &cd) {
     m_scopeVars = savedScope;
   }
 }
+
+void UndeclaredIdentValidator::visitInterfaceDef(const InterfaceDef &iface) { Q_UNUSED(iface); }
 
 void UndeclaredIdentValidator::visitFuncDef(const MethodDef &md) {
   QSet<QString> funcScope = m_scopeVars;
@@ -167,6 +174,7 @@ void UndeclaredIdentValidator::visitMethodCallExpr(const Expr &expr) {
   } else {
     // 检查对象变量是否已声明
     if (expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis) &&
+        expr.methodCall.objName != QString::fromLatin1(AcKeyword::kSuper) &&
         !m_scopeVars.contains(expr.methodCall.objName)) {
       if (m_errors) {
         m_errors->append(QStringLiteral("undefined variable '%1' at line %2")

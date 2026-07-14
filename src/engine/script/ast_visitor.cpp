@@ -33,6 +33,9 @@ void AstVisitor::visitStmt(const Block::Stmt &stmt) {
     case Block::Stmt::kClassDef:
       visitClassDef(stmt.classDef);
       break;
+    case Block::Stmt::kInterfaceDef:
+      visitInterfaceDef(stmt.interfaceDef);
+      break;
     case Block::Stmt::kFuncDef:
       visitFuncDef(stmt.funcDef);
       break;
@@ -125,6 +128,8 @@ void AstVisitor::visitClassDef(const ClassDef &cd) {
     visitBlock(method.body);
   }
 }
+
+void AstVisitor::visitInterfaceDef(const InterfaceDef &iface) { Q_UNUSED(iface); }
 
 void AstVisitor::visitFuncDef(const MethodDef &md) { visitBlock(md.body); }
 

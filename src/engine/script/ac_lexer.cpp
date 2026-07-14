@@ -30,6 +30,14 @@ static const QHash<QString, TokenType> &keywordMap() {
       {QString::fromLatin1(AcKeyword::kTrue), TOK_TRUE},
       {QString::fromLatin1(AcKeyword::kFalse), TOK_FALSE},
       {QString::fromLatin1(AcKeyword::kStatic), TOK_STATIC},
+      {QString::fromLatin1(AcKeyword::kPublic), TOK_PUBLIC},
+      {QString::fromLatin1(AcKeyword::kProtected), TOK_PROTECTED},
+      {QString::fromLatin1(AcKeyword::kPrivate), TOK_PRIVATE},
+      {QString::fromLatin1(AcKeyword::kExtends), TOK_EXTENDS},
+      {QString::fromLatin1(AcKeyword::kOverride), TOK_OVERRIDE},
+      {QString::fromLatin1(AcKeyword::kInterface), TOK_INTERFACE},
+      {QString::fromLatin1(AcKeyword::kImplements), TOK_IMPLEMENTS},
+      {QString::fromLatin1(AcKeyword::kSuper), TOK_SUPER},
   };
   return map;
 }

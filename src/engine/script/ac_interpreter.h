@@ -89,6 +89,10 @@ private:
                         const QJsonValue &callArgs);
   void initStaticVars(const ClassDef &cd);
 
+  // ── 继承辅助 ──
+  const MethodDef *findMethod(const QString &className, const QString &methodName) const;
+  QJsonObject createBaseInstance(const QString &baseClassName);
+
   // ── 顶层函数执行 ──
   QJsonValue execUserFunction(const MethodDef &func, const QJsonValue &callArgs);
 

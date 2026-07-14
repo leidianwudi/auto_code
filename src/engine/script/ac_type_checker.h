@@ -46,6 +46,7 @@ private:
   const QHash<QString, ClassDef> *m_classes = nullptr;
   const QHash<QString, MethodDef> *m_functions = nullptr;
   QStringList *m_errors = nullptr;
+  QHash<QString, InterfaceDef> m_interfaces;  ///< 接口定义集合
 
   // ── 核心检查 ──
   void checkBlock(const Block &block, TypeEnv &env);
@@ -54,10 +55,16 @@ private:
   void checkAssign(const AssignStmt &as, const TypeEnv &env);
   void checkCallStmt(const CallStmt &cs, const TypeEnv &env);
 
+  // ── 继承与接口检查 ──
+  void checkImplements(const ClassDef &cd);
+  void checkOverride(const ClassDef &cd);
+  void checkAccessInClass(const ClassDef &cd);
+  bool isSignatureCompatible(const MethodDef &method, const InterfaceMethod &iface) const;
+  bool isSubclassOf(const QString &sub, const QString &base) const;
+  bool classImplementsInterface(const QString &className, const QString &ifaceName) const;
+
   // ── 类型兼容性 ──
-  /// @brief 检查 from 类型是否能赋值给 to 类型
   bool isCompatible(const AcType &from, const AcType &to) const;
-  /// @brief 将类型转为可读字符串
   QString typeToString(const AcType &type) const;
 
   // ── 错误报告 ──

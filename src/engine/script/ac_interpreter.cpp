@@ -42,7 +42,8 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
 
     case Expr::kPropAccess: {
       QJsonValue obj = resolveVar(expr.ident);
-      if (obj.isNull() && expr.ident != QString::fromLatin1(AcKeyword::kThis)) {
+      if (obj.isNull() && expr.ident != QString::fromLatin1(AcKeyword::kThis) &&
+          expr.ident != QString::fromLatin1(AcKeyword::kSuper)) {
         *m_error = QStringLiteral("undefined variable '%1'").arg(expr.ident);
         return QJsonValue();
       }
@@ -201,6 +202,7 @@ QJsonValue AcInterpreter::evalBinary(const Expr &expr) {
 
 QJsonValue AcInterpreter::resolveVar(const QString &name) const {
   if (name == QString::fromLatin1(AcKeyword::kThis)) return QJsonValue(m_currentThis);
+  if (name == QString::fromLatin1(AcKeyword::kSuper)) return QJsonValue(m_currentThis);
   for (int i = m_scopeStack.size() - 1; i >= 0; --i) {
     auto it = m_scopeStack[i].find(name);
     if (it != m_scopeStack[i].end()) return it.value();
@@ -469,13 +471,17 @@ QJsonValue AcInterpreter::callBuiltin(const QString &name, const QVector<Expr *>
 QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
   QJsonValue objVal;
   bool isChained = (expr.methodCall.object != nullptr);
+  bool isSuper = (expr.methodCall.objName == QString::fromLatin1(AcKeyword::kSuper));
+
   if (isChained) {
-    // 链式访问：this.engine.start() → 先计算 this.engine 表达式
     objVal = evalExpr(*expr.methodCall.object);
     if (objVal.isNull()) {
       *m_error = QStringLiteral("method call on null value at line %1").arg(expr.line);
       return QJsonValue();
     }
+  } else if (isSuper) {
+    // super.method() → 使用当前 this 对象，但方法查找从父类开始
+    objVal = QJsonValue(m_currentThis);
   } else {
     objVal = resolveVar(expr.methodCall.objName);
     if (objVal.isNull() && expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis)) {
@@ -515,21 +521,48 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
     return r;
   }
 
-  for (const auto &method : cd.methods) {
-    if (method.name == expr.methodCall.methodName) {
-      QJsonArray args;
-      for (auto *argExpr : expr.methodCall.args) args.append(evalExpr(*argExpr));
-      // 保存当前 m_modifiedThis，execMethod 内部会修改它，返回后写回变量再恢复
-      QJsonObject savedModifiedThis = m_modifiedThis;
-      QJsonValue result = execMethod(method, obj, QJsonValue(args));
-      // 非链式调用且对象名不是 this 时，将修改写回变量
-      if (!isChained && expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis)) {
-        if (containsVar(expr.methodCall.objName))
-          setVar(expr.methodCall.objName, QJsonValue(m_modifiedThis));
-      }
-      m_modifiedThis = savedModifiedThis;
-      return result;
+  // super.method() → 从父类开始查找方法
+  QString searchClassName = className;
+  if (isSuper) {
+    if (cd.baseClass.isEmpty()) {
+      *m_error = QStringLiteral("cannot use 'super' in class without base class at line %1")
+                     .arg(expr.line);
+      return QJsonValue();
     }
+    searchClassName = cd.baseClass;
+  }
+
+  // 在当前类（或父类）中查找方法
+  const MethodDef *foundMethod = nullptr;
+  if (!isSuper) {
+    // 先在当前类查找
+    for (const auto &method : cd.methods) {
+      if (method.name == expr.methodCall.methodName) {
+        foundMethod = &method;
+        break;
+      }
+    }
+    // 当前类未找到，递归父类查找
+    if (!foundMethod) {
+      foundMethod = findMethod(className, expr.methodCall.methodName);
+    }
+  } else {
+    // super → 从父类开始查找
+    foundMethod = findMethod(searchClassName, expr.methodCall.methodName);
+  }
+
+  if (foundMethod) {
+    QJsonArray args;
+    for (auto *argExpr : expr.methodCall.args) args.append(evalExpr(*argExpr));
+    QJsonObject savedModifiedThis = m_modifiedThis;
+    QJsonValue result = execMethod(*foundMethod, obj, QJsonValue(args));
+    if (!isChained && !isSuper &&
+        expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis)) {
+      if (containsVar(expr.methodCall.objName))
+        setVar(expr.methodCall.objName, QJsonValue(m_modifiedThis));
+    }
+    m_modifiedThis = savedModifiedThis;
+    return result;
   }
 
   *m_error = QStringLiteral("method '%1' not found in class '%2'")
@@ -545,7 +578,6 @@ QJsonValue AcInterpreter::evalNewInstance(const Expr &expr) {
 
   const ClassDef &cd = m_classes[expr.className];
   QJsonObject instance;
-  instance[QString::fromLatin1(AcRuntime::kClassKey)] = expr.className;
 
   // 原生类：调用 FunMgr 构造器
   if (cd.isNative) {
@@ -555,21 +587,28 @@ QJsonValue AcInterpreter::evalNewInstance(const Expr &expr) {
         FunMgr::ins().call(expr.className, QString::fromLatin1(AcRuntime::kConstructor), ctorArgs);
     if (ctorResult.isObject()) instance = ctorResult.toObject();
     instance[QString::fromLatin1(AcRuntime::kClassKey)] = expr.className;
-    // 注册到对象管理器，分配唯一ID并设置初始引用计数
     instance = AcObjectManager::ins().registerInstance(instance, expr.className);
     return QJsonValue(instance);
   }
 
+  // 继承：先初始化父类属性
+  if (!cd.baseClass.isEmpty()) {
+    instance = createBaseInstance(cd.baseClass);
+  }
+
+  // 初始化当前类属性（覆盖父类同名属性）
   for (const auto &prop : cd.properties) {
     if (prop.value) {
       QJsonValue v = evalExpr(*prop.value);
-      // 属性值如果是受管理实例，retain 使其引用计数 +1
       retainIfInstance(v);
       instance[prop.key] = v;
     } else {
       instance[prop.key] = QJsonValue();
     }
   }
+
+  // 设置 __class__ 为当前类名（放在属性初始化之后，确保不被 createBaseInstance 覆盖）
+  instance[QString::fromLatin1(AcRuntime::kClassKey)] = expr.className;
 
   // 用户自定义类也注册到对象管理器
   instance = AcObjectManager::ins().registerInstance(instance, expr.className);
@@ -620,7 +659,16 @@ void AcInterpreter::initStaticVars(const ClassDef &cd) {
   if (m_staticInited.contains(cd.name)) return;
   m_staticInited.insert(cd.name);
 
+  // 继承：先初始化父类静态变量
+  if (!cd.baseClass.isEmpty() && m_classes.contains(cd.baseClass)) {
+    initStaticVars(m_classes[cd.baseClass]);
+  }
+
   QJsonObject sv;
+  // 继承父类静态变量
+  if (!cd.baseClass.isEmpty() && m_staticVars.contains(cd.baseClass)) {
+    sv = m_staticVars[cd.baseClass];
+  }
   for (const auto &prop : cd.properties) {
     if (prop.isStatic) {
       if (prop.value) {
@@ -633,6 +681,38 @@ void AcInterpreter::initStaticVars(const ClassDef &cd) {
     }
   }
   m_staticVars[cd.name] = sv;
+}
+
+const MethodDef *AcInterpreter::findMethod(const QString &className,
+                                           const QString &methodName) const {
+  if (!m_classes.contains(className)) return nullptr;
+  const ClassDef &cd = m_classes[className];
+  for (const auto &m : cd.methods) {
+    if (m.name == methodName) return &m;
+  }
+  if (!cd.baseClass.isEmpty()) {
+    return findMethod(cd.baseClass, methodName);
+  }
+  return nullptr;
+}
+
+QJsonObject AcInterpreter::createBaseInstance(const QString &baseClassName) {
+  if (!m_classes.contains(baseClassName)) return QJsonObject();
+  const ClassDef &cd = m_classes[baseClassName];
+  QJsonObject instance;
+  if (!cd.baseClass.isEmpty()) {
+    instance = createBaseInstance(cd.baseClass);
+  }
+  for (const auto &prop : cd.properties) {
+    if (prop.value) {
+      QJsonValue v = evalExpr(*prop.value);
+      retainIfInstance(v);
+      instance[prop.key] = v;
+    } else {
+      instance[prop.key] = QJsonValue();
+    }
+  }
+  return instance;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -774,7 +854,10 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
 
     case Block::Stmt::kClassDef:
       m_classes[stmt.classDef.name] = stmt.classDef;
-      initStaticVars(stmt.classDef);  // 初始化静态变量
+      initStaticVars(stmt.classDef);
+      break;
+
+    case Block::Stmt::kInterfaceDef:
       break;
 
     case Block::Stmt::kFuncDef:

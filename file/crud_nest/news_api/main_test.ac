@@ -1,7 +1,16 @@
-// ── 顶层函数：在 main 外部定义，可以在 main 中调用 ──
+// ── 接口定义 ──
+
+interface Drivable {
+  function drive(speed);
+}
+
+interface Printable {
+  function toString();
+}
+
+// ── 顶层函数 ──
 
 function add(a, b) {
-  
   return a + b;
 }
 
@@ -13,52 +22,62 @@ function greet(name) {
   return "Hello, " + name + "!";
 }
 
-// ── 顶层类：在 main 外部定义 ──
+// ── 类定义（带访问控制） ──
 
 class Engine {
-  
-  let type = "V8";
-  let horsepower = 400;
+  private let type = "V8";
+  protected let horsepower = 400;
 
-  function start() {
+  public function start() {
     printLog("Engine " + this.type + " started, horsepower: " + this.horsepower);
   }
 
-  function getInfo() {
+  public function getInfo() {
     return this.type + " (" + this.horsepower + "hp)";
   }
 }
 
-class Car {
-  let brand = "Tesla";
-  let engine = new Engine();
-  let year = 2024;
+// ── 继承 ──
 
-  function drive(speed) {
+class Car extends Engine implements Drivable {
+  public let brand = "Tesla";
+  public let engine = new Engine();
+  public let year = 2024;
+
+  public override function start() {
+    super.start();
+    printLog(this.brand + " engine started");
+  }
+
+  public function drive(speed) {
     this.engine.start();
     printLog(this.brand + " is driving at " + speed + " km/h");
   }
 
-  function getDetails() {
+  public function getDetails() {
     let info = this.engine.getInfo();
     return this.brand + " " + this.year + " with engine: " + info;
   }
 }
 
-class Person {
-  let name = "default";
-  let age = 0;
+class Person implements Printable {
+  public let name = "default";
+  private let age = 0;
 
-  function setName(n) {
+  public function setName(n) {
     this.name = n;
   }
 
-  function setAge(a) {
+  public function setAge(a) {
     this.age = a;
   }
 
-  function introduce() {
+  public function introduce() {
     return "Hi, I'm " + this.name + ", " + this.age + " years old";
+  }
+
+  public function toString() {
+    return this.name + " (" + this.age + ")";
   }
 }
 
@@ -81,8 +100,7 @@ class Counter {
 
 main {
   printLog(8);
-  //let a = readFile();
-  // 调用顶层函数
+
   let sum = add(10, 20);
   printLog("sum: " + sum);
 
@@ -92,14 +110,14 @@ main {
   let msg = greet("AutoCode");
   printLog(msg);
 
-  // 使用顶层类
+  // 使用带继承的类
   let myEngine = new Engine();
   myEngine.start();
   let engineInfo = myEngine.getInfo();
   printLog("Engine info: " + engineInfo);
 
   let myCar = new Car();
-  myCar.drive(1);
+  myCar.start();
   myCar.drive(120);
   let details = myCar.getDetails();
   printLog("Car details: " + details);

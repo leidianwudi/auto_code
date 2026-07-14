@@ -38,6 +38,14 @@ inline constexpr const char *kFalse = "false";
 inline constexpr const char *kClass = "class";
 inline constexpr const char *kFunction = "function";
 inline constexpr const char *kStatic = "static";
+inline constexpr const char *kPublic = "public";
+inline constexpr const char *kProtected = "protected";
+inline constexpr const char *kPrivate = "private";
+inline constexpr const char *kExtends = "extends";
+inline constexpr const char *kOverride = "override";
+inline constexpr const char *kInterface = "interface";
+inline constexpr const char *kImplements = "implements";
+inline constexpr const char *kSuper = "super";
 /// @brief include 预处理指令：#include "file.ac"
 ///
 /// 在词法分析之前将指定文件内容拼入当前源码，类似 C/C++ 的 #include。
@@ -64,11 +72,18 @@ inline constexpr const char *kIncDir = "inc";
 
 /// @brief 关键字列表（供高亮、补全使用）
 inline const QStringList kAll = {
-    QString::fromLatin1(kLet),   QString::fromLatin1(kNew),      QString::fromLatin1(kMain),
-    QString::fromLatin1(kFor),   QString::fromLatin1(kIn),       QString::fromLatin1(kIf),
-    QString::fromLatin1(kElse),  QString::fromLatin1(kCall),     QString::fromLatin1(kReturn),
-    QString::fromLatin1(kThis),  QString::fromLatin1(kTrue),     QString::fromLatin1(kFalse),
-    QString::fromLatin1(kClass), QString::fromLatin1(kFunction), QString::fromLatin1(kStatic),
+    QString::fromLatin1(kLet),       QString::fromLatin1(kNew),
+    QString::fromLatin1(kMain),      QString::fromLatin1(kFor),
+    QString::fromLatin1(kIn),        QString::fromLatin1(kIf),
+    QString::fromLatin1(kElse),      QString::fromLatin1(kCall),
+    QString::fromLatin1(kReturn),    QString::fromLatin1(kThis),
+    QString::fromLatin1(kTrue),      QString::fromLatin1(kFalse),
+    QString::fromLatin1(kClass),     QString::fromLatin1(kFunction),
+    QString::fromLatin1(kStatic),    QString::fromLatin1(kPublic),
+    QString::fromLatin1(kProtected), QString::fromLatin1(kPrivate),
+    QString::fromLatin1(kExtends),   QString::fromLatin1(kOverride),
+    QString::fromLatin1(kInterface), QString::fromLatin1(kImplements),
+    QString::fromLatin1(kSuper),
 };
 }  // namespace AcKeyword
 

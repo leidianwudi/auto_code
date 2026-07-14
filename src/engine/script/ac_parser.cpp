@@ -58,6 +58,12 @@ bool AcParser::parseProgram(Block &block) {
       stmt.kind = Block::Stmt::kClassDef;
       if (!parseClassDef(stmt.classDef)) return false;
       block.stmts.append(stmt);
+    } else if (t.type == TOK_INTERFACE) {
+      advance();
+      Block::Stmt stmt;
+      stmt.kind = Block::Stmt::kInterfaceDef;
+      if (!parseInterfaceDef(stmt.interfaceDef)) return false;
+      block.stmts.append(stmt);
     } else if (t.type == TOK_FUNCTION) {
       advance();
       Block::Stmt stmt;
@@ -68,7 +74,8 @@ bool AcParser::parseProgram(Block &block) {
       advance();
       if (!parseBlock(block)) return false;
     } else {
-      *m_error = QStringLiteral("expected 'class', 'function', or 'main' at top level at line %1")
+      *m_error = QStringLiteral(
+                     "expected 'class', 'interface', 'function', or 'main' at top level at line %1")
                      .arg(peek().line);
       return false;
     }
@@ -96,6 +103,12 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
     advance();
     stmt.kind = Block::Stmt::kClassDef;
     return parseClassDef(stmt.classDef);
+  }
+
+  if (t.type == TOK_INTERFACE) {
+    advance();
+    stmt.kind = Block::Stmt::kInterfaceDef;
+    return parseInterfaceDef(stmt.interfaceDef);
   }
 
   if (t.type == TOK_FUNCTION) {
@@ -225,6 +238,11 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
     return parseExpr(stmt.exprStmt);
   }
 
+  if (t.type == TOK_SUPER) {
+    stmt.kind = Block::Stmt::kExpr;
+    return parseExpr(stmt.exprStmt);
+  }
+
   *m_error =
       QStringLiteral("unexpected token '%1' at line %2").arg(t.text, QString::number(t.line));
   return false;
@@ -298,16 +316,73 @@ bool AcParser::parseClassDef(ClassDef &cd) {
   }
   cd.name = advance().text;
 
-  if (!expect(TOK_LBRACE, QStringLiteral("expected '{' after class name"))) return false;
+  // extends BaseClass
+  if (peek().type == TOK_EXTENDS) {
+    advance();
+    if (peek().type != TOK_IDENT) {
+      *m_error =
+          QStringLiteral("expected base class name after 'extends' at line %1").arg(peek().line);
+      return false;
+    }
+    cd.baseClass = advance().text;
+  }
+
+  // implements I1, I2, ...
+  if (peek().type == TOK_IMPLEMENTS) {
+    advance();
+    do {
+      if (peek().type != TOK_IDENT) {
+        *m_error = QStringLiteral("expected interface name after 'implements' at line %1")
+                       .arg(peek().line);
+        return false;
+      }
+      cd.interfaces.append(advance().text);
+      if (peek().type == TOK_COMMA)
+        advance();
+      else
+        break;
+    } while (true);
+  }
+
+  if (!expect(TOK_LBRACE, QStringLiteral("expected '{' after class declaration"))) return false;
 
   while (peek().type != TOK_RBRACE && peek().type != TOK_EOF) {
+    // 收集修饰符前缀：public/private/protected/static/override
+    AccessLevel access = AccessLevel::kPublic;
     bool isStatic = false;
-    if (peek().type == TOK_STATIC) {
-      isStatic = true;
-      advance();
+    bool isOverride = false;
+
+    while (true) {
+      if (peek().type == TOK_PUBLIC) {
+        access = AccessLevel::kPublic;
+        advance();
+        continue;
+      }
+      if (peek().type == TOK_PRIVATE) {
+        access = AccessLevel::kPrivate;
+        advance();
+        continue;
+      }
+      if (peek().type == TOK_PROTECTED) {
+        access = AccessLevel::kProtected;
+        advance();
+        continue;
+      }
+      if (peek().type == TOK_STATIC) {
+        isStatic = true;
+        advance();
+        continue;
+      }
+      if (peek().type == TOK_OVERRIDE) {
+        isOverride = true;
+        advance();
+        continue;
+      }
+      break;
     }
 
     if (peek().type == TOK_LET) {
+      // let 声明（兼容旧语法）
       advance();
       if (peek().type != TOK_IDENT) {
         *m_error = QStringLiteral("expected property name in class at line %1").arg(peek().line);
@@ -316,9 +391,9 @@ bool AcParser::parseClassDef(ClassDef &cd) {
       ObjectEntry prop;
       prop.key = advance().text;
       prop.isStatic = isStatic;
-      // 可选类型注解：prop : Type
+      prop.access = access;
       if (peek().type == TOK_COLON) {
-        advance();  // 跳过 ':'
+        advance();
         prop.type = parseType();
       } else {
         prop.type = AcType::any();
@@ -341,15 +416,37 @@ bool AcParser::parseClassDef(ClassDef &cd) {
       advance();
       MethodDef md;
       md.isStatic = isStatic;
+      md.access = access;
+      md.isOverride = isOverride;
       if (!parseMethodDef(md)) return false;
       cd.methods.append(md);
       continue;
     }
 
-    if (isStatic) {
-      *m_error =
-          QStringLiteral("expected 'let' or 'function' after 'static' at line %1").arg(peek().line);
-      return false;
+    // TS 风格属性：public brand = "Tesla"（无 let 关键字）
+    if (peek().type == TOK_IDENT) {
+      ObjectEntry prop;
+      prop.key = advance().text;
+      prop.isStatic = isStatic;
+      prop.access = access;
+      if (peek().type == TOK_COLON) {
+        advance();
+        prop.type = parseType();
+      } else {
+        prop.type = AcType::any();
+      }
+      prop.value = new Expr();
+      if (peek().type == TOK_EQUALS) {
+        advance();
+        if (!parseExpr(*prop.value)) {
+          delete prop.value;
+          prop.value = nullptr;
+          return false;
+        }
+      }
+      cd.properties.append(prop);
+      if (peek().type == TOK_SEMI) advance();
+      continue;
     }
 
     *m_error = QStringLiteral("unexpected token '%1' in class body at line %2")
@@ -358,6 +455,80 @@ bool AcParser::parseClassDef(ClassDef &cd) {
   }
 
   return expect(TOK_RBRACE, QStringLiteral("expected '}' after class body"));
+}
+
+// ── 接口定义解析 ──
+
+bool AcParser::parseInterfaceDef(InterfaceDef &iface) {
+  if (peek().type != TOK_IDENT) {
+    *m_error = QStringLiteral("expected interface name at line %1").arg(peek().line);
+    return false;
+  }
+  iface.name = advance().text;
+
+  // 接口继承：interface A extends B, C
+  if (peek().type == TOK_EXTENDS) {
+    advance();
+    do {
+      if (peek().type != TOK_IDENT) {
+        *m_error =
+            QStringLiteral("expected interface name after 'extends' at line %1").arg(peek().line);
+        return false;
+      }
+      iface.baseInterfaces.append(advance().text);
+      if (peek().type == TOK_COMMA)
+        advance();
+      else
+        break;
+    } while (true);
+  }
+
+  if (!expect(TOK_LBRACE, QStringLiteral("expected '{' after interface name"))) return false;
+
+  while (peek().type != TOK_RBRACE && peek().type != TOK_EOF) {
+    if (peek().type == TOK_FUNCTION) {
+      advance();
+      InterfaceMethod im;
+      if (peek().type != TOK_IDENT) {
+        *m_error = QStringLiteral("expected method name in interface at line %1").arg(peek().line);
+        return false;
+      }
+      im.name = advance().text;
+
+      if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after method name"))) return false;
+
+      while (peek().type == TOK_IDENT) {
+        ParamDef pd;
+        pd.name = advance().text;
+        if (peek().type == TOK_COLON) {
+          advance();
+          pd.type = parseType();
+        } else {
+          pd.type = AcType::any();
+        }
+        im.params.append(pd);
+        if (peek().type == TOK_COMMA) advance();
+      }
+
+      if (!expect(TOK_RPAREN, QStringLiteral("expected ')' after parameters"))) return false;
+
+      if (peek().type == TOK_COLON) {
+        advance();
+        im.returnType = parseType();
+      } else {
+        im.returnType = AcType::any();
+      }
+
+      if (peek().type == TOK_SEMI) advance();
+      iface.methods.append(im);
+      continue;
+    }
+
+    *m_error = QStringLiteral("expected 'function' in interface body at line %1").arg(peek().line);
+    return false;
+  }
+
+  return expect(TOK_RBRACE, QStringLiteral("expected '}' after interface body"));
 }
 
 bool AcParser::parseMethodDef(MethodDef &md) {
@@ -575,6 +746,41 @@ bool AcParser::parsePrimary(Expr &expr) {
       return expect(TOK_RBRACKET, QStringLiteral("expected ']'"));
     }
     expr.kind = Expr::kThis;
+    return true;
+  }
+
+  if (t.type == TOK_SUPER) {
+    advance();
+    if (peek().type != TOK_DOT) {
+      *m_error = QStringLiteral("expected '.' after 'super' at line %1").arg(peek().line);
+      return false;
+    }
+    advance();
+    if (peek().type != TOK_IDENT) {
+      *m_error = QStringLiteral("expected method name after 'super.' at line %1").arg(peek().line);
+      return false;
+    }
+    QString methodName = advance().text;
+    if (peek().type == TOK_LPAREN) {
+      expr.kind = Expr::kMethodCall;
+      expr.line = peek().line;
+      expr.methodCall.objName = QString::fromLatin1(AcKeyword::kSuper);
+      expr.methodCall.methodName = methodName;
+      advance();
+      while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
+        auto *arg = new Expr();
+        if (!parseExpr(*arg)) {
+          delete arg;
+          return false;
+        }
+        expr.methodCall.args.append(arg);
+        if (peek().type == TOK_COMMA) advance();
+      }
+      return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
+    }
+    expr.kind = Expr::kPropAccess;
+    expr.ident = QString::fromLatin1(AcKeyword::kSuper);
+    expr.prop = methodName;
     return true;
   }
 

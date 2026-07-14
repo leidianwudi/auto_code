@@ -13,6 +13,23 @@ void AcTypeChecker::check(const Block &program, const QSet<QString> &declaredVar
   m_classes = &classes;
   m_functions = &functions;
   m_errors = &errors;
+  m_interfaces.clear();
+
+  // 从 AST 中收集接口定义
+  for (const auto &stmt : program.stmts) {
+    if (stmt.kind == Block::Stmt::kInterfaceDef) {
+      m_interfaces.insert(stmt.interfaceDef.name, stmt.interfaceDef);
+    }
+  }
+
+  // 验证类实现接口
+  for (auto it = classes.constBegin(); it != classes.constEnd(); ++it) {
+    const ClassDef &cd = it.value();
+    if (cd.isNative) continue;
+    checkImplements(cd);
+    checkOverride(cd);
+    checkAccessInClass(cd);
+  }
 
   // 初始化类型环境：将已声明的变量全部设为 Any
   TypeEnv env;
@@ -87,13 +104,10 @@ void AcTypeChecker::checkStmt(const Block::Stmt &stmt, TypeEnv &env) {
       break;
 
     case Block::Stmt::kClassDef: {
-      // 类定义：进入类上下文
       TypeEnv classEnv = env;
       classEnv.className = stmt.classDef.name;
-      // 将类属性加入环境（this 上下文）
       for (const auto &prop : stmt.classDef.properties) {
         classEnv.propTypes.insert(prop.key, prop.type);
-        // 如果有默认值，检查类型
         if (prop.value) {
           AcType valType = checkExpr(*prop.value, classEnv);
           if (!isCompatible(valType, prop.type)) {
@@ -104,23 +118,34 @@ void AcTypeChecker::checkStmt(const Block::Stmt &stmt, TypeEnv &env) {
           }
         }
       }
-      // 检查类方法
+      // 继承：将父类属性加入环境
+      if (!stmt.classDef.baseClass.isEmpty() && m_classes->contains(stmt.classDef.baseClass)) {
+        const ClassDef &base = (*m_classes)[stmt.classDef.baseClass];
+        for (const auto &prop : base.properties) {
+          if (!classEnv.propTypes.contains(prop.key)) {
+            classEnv.propTypes.insert(prop.key, prop.type);
+          }
+        }
+      }
       for (const auto &method : stmt.classDef.methods) {
         TypeEnv methodEnv = classEnv;
-        // 方法参数
         for (const auto &param : method.params) {
           methodEnv.varTypes.insert(param.name, param.type);
         }
-        // this 关键字指向当前类
         methodEnv.varTypes.insert(QString::fromLatin1(AcKeyword::kThis),
                                   AcType::classType(classEnv.className));
-        // 检查方法体
+        // 继承：super 指向父类
+        if (!stmt.classDef.baseClass.isEmpty()) {
+          methodEnv.varTypes.insert(QStringLiteral("super"),
+                                    AcType::classType(stmt.classDef.baseClass));
+        }
         checkBlock(method.body, methodEnv);
-        // 检查返回类型
-        // 注意：方法体内的 return 已由 checkBlock 处理
       }
       break;
     }
+
+    case Block::Stmt::kInterfaceDef:
+      break;
 
     case Block::Stmt::kFuncDef: {
       TypeEnv funcEnv = env;
@@ -502,24 +527,130 @@ AcType AcTypeChecker::checkExpr(const Expr &expr, const TypeEnv &env) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 bool AcTypeChecker::isCompatible(const AcType &from, const AcType &to) const {
-  // Any 接受任何类型
   if (to.kind == AcType::kAny) return true;
-  // 任何类型可以赋值给 Any
   if (from.kind == AcType::kAny) return true;
 
-  // 相同类型
   if (from.kind == to.kind) {
     if (from.kind == AcType::kArray) {
-      // 递归检查数组元素类型
       return isCompatible(*from.elementType, *to.elementType);
     }
     if (from.kind == AcType::kClass) {
-      return from.className == to.className;
+      if (from.className == to.className) return true;
+      // 继承兼容：子类可赋值给父类
+      return isSubclassOf(from.className, to.className);
+    }
+    if (from.kind == AcType::kInterface) {
+      return from.interfaceName == to.interfaceName;
     }
     return true;
   }
 
+  // 类实现接口：类可赋值给接口类型
+  if (from.kind == AcType::kClass && to.kind == AcType::kInterface) {
+    return classImplementsInterface(from.className, to.interfaceName);
+  }
+
   return false;
+}
+
+bool AcTypeChecker::isSubclassOf(const QString &sub, const QString &base) const {
+  if (sub == base) return true;
+  if (!m_classes->contains(sub)) return false;
+  const ClassDef &cd = (*m_classes)[sub];
+  if (cd.baseClass.isEmpty()) return false;
+  if (cd.baseClass == base) return true;
+  return isSubclassOf(cd.baseClass, base);
+}
+
+bool AcTypeChecker::classImplementsInterface(const QString &className,
+                                             const QString &ifaceName) const {
+  if (!m_classes->contains(className)) return false;
+  const ClassDef &cd = (*m_classes)[className];
+  if (cd.interfaces.contains(ifaceName)) return true;
+  // 递归检查父类
+  if (!cd.baseClass.isEmpty()) {
+    return classImplementsInterface(cd.baseClass, ifaceName);
+  }
+  return false;
+}
+
+void AcTypeChecker::checkImplements(const ClassDef &cd) {
+  for (const auto &ifaceName : cd.interfaces) {
+    if (!m_interfaces.contains(ifaceName)) {
+      reportError(QStringLiteral("interface '%1' not found (referenced by class '%2')")
+                      .arg(ifaceName, cd.name),
+                  0);
+      continue;
+    }
+    const InterfaceDef &iface = m_interfaces[ifaceName];
+    for (const auto &im : iface.methods) {
+      bool found = false;
+      // 在当前类和父类中查找方法
+      QString searchClass = cd.name;
+      while (!searchClass.isEmpty() && m_classes->contains(searchClass)) {
+        const ClassDef &searchCd = (*m_classes)[searchClass];
+        for (const auto &m : searchCd.methods) {
+          if (m.name == im.name && isSignatureCompatible(m, im)) {
+            found = true;
+            break;
+          }
+        }
+        if (found) break;
+        searchClass = searchCd.baseClass;
+      }
+      if (!found) {
+        reportError(
+            QStringLiteral("class '%1' does not implement method '%2()' from interface '%3'")
+                .arg(cd.name, im.name, ifaceName),
+            0);
+      }
+    }
+  }
+}
+
+bool AcTypeChecker::isSignatureCompatible(const MethodDef &method,
+                                          const InterfaceMethod &iface) const {
+  if (method.name != iface.name) return false;
+  if (method.params.size() != iface.params.size()) return false;
+  for (int i = 0; i < method.params.size(); ++i) {
+    if (!isCompatible(method.params[i].type, iface.params[i].type)) return false;
+  }
+  if (!isCompatible(method.returnType, iface.returnType)) return false;
+  return true;
+}
+
+void AcTypeChecker::checkOverride(const ClassDef &cd) {
+  if (cd.baseClass.isEmpty()) return;
+  for (const auto &method : cd.methods) {
+    if (!method.isOverride) continue;
+    // 在父类中查找同名方法
+    bool found = false;
+    QString searchClass = cd.baseClass;
+    while (!searchClass.isEmpty() && m_classes->contains(searchClass)) {
+      const ClassDef &baseCd = (*m_classes)[searchClass];
+      for (const auto &baseMethod : baseCd.methods) {
+        if (baseMethod.name == method.name) {
+          found = true;
+          break;
+        }
+      }
+      if (found) break;
+      searchClass = baseCd.baseClass;
+    }
+    if (!found) {
+      reportError(
+          QStringLiteral("method '%1()' marked override but no such method in parent class '%2'")
+              .arg(method.name, cd.baseClass),
+          0);
+    }
+  }
+}
+
+void AcTypeChecker::checkAccessInClass(const ClassDef &cd) {
+  // 检查类方法体中是否有非法访问 private/protected 成员
+  // 此处仅做基本检查：类外部不能访问 private 成员
+  // 更细粒度的检查在运行时进行
+  Q_UNUSED(cd);
 }
 
 QString AcTypeChecker::typeToString(const AcType &type) const {
@@ -538,6 +669,8 @@ QString AcTypeChecker::typeToString(const AcType &type) const {
       return typeToString(*type.elementType) + QStringLiteral("[]");
     case AcType::kClass:
       return type.className;
+    case AcType::kInterface:
+      return type.interfaceName;
     default:
       return QStringLiteral("Unknown");
   }

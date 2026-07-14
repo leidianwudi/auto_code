@@ -32,41 +32,52 @@ struct Expr;
 //  词法单元
 // ═════════════════════════════════════════════════════════════════════════════
 
+/// @brief 访问级别
+enum class AccessLevel { kPublic, kProtected, kPrivate };
+
 /// @brief 词法单元类型
 enum TokenType {
-  TOK_EOF,       ///< 输入结束
-  TOK_IDENT,     ///< 标识符（变量名、函数名、方法名）
-  TOK_STRING,    ///< 字符串字面量 "hello"
-  TOK_NUMBER,    ///< 数字字面量 123
-  TOK_LBRACE,    ///< {
-  TOK_RBRACE,    ///< }
-  TOK_LPAREN,    ///< (
-  TOK_RPAREN,    ///< )
-  TOK_LBRACKET,  ///< [
-  TOK_RBRACKET,  ///< ]
-  TOK_COMMA,     ///< ,
-  TOK_COLON,     ///< :
-  TOK_DOT,       ///< .（属性访问）
-  TOK_EQUALS,    ///< =（赋值）
-  TOK_PLUS,      ///< +
-  TOK_MINUS,     ///< -
-  TOK_MUL,       ///< *
-  TOK_DIV,       ///< /
-  TOK_SEMI,      ///< ;（语句结束）
-  TOK_FOR,       ///< for 关键字
-  TOK_IN,        ///< in 关键字
-  TOK_IF,        ///< if 关键字
-  TOK_ELSE,      ///< else 关键字
-  TOK_LET,       ///< let 关键字（变量声明）
-  TOK_CLASS,     ///< class 关键字（类定义）
-  TOK_FUNCTION,  ///< function 关键字（方法定义）
-  TOK_NEW,       ///< new 关键字（实例化）
-  TOK_THIS,      ///< this 关键字（当前实例引用）
-  TOK_RETURN,    ///< return 关键字（返回值）
-  TOK_TRUE,      ///< true 布尔字面量
-  TOK_FALSE,     ///< false 布尔字面量
-  TOK_SCOPE,     ///< ::（作用域解析）
-  TOK_STATIC,    ///< static 关键字（静态成员）
+  TOK_EOF,         ///< 输入结束
+  TOK_IDENT,       ///< 标识符（变量名、函数名、方法名）
+  TOK_STRING,      ///< 字符串字面量 "hello"
+  TOK_NUMBER,      ///< 数字字面量 123
+  TOK_LBRACE,      ///< {
+  TOK_RBRACE,      ///< }
+  TOK_LPAREN,      ///< (
+  TOK_RPAREN,      ///< )
+  TOK_LBRACKET,    ///< [
+  TOK_RBRACKET,    ///< ]
+  TOK_COMMA,       ///< ,
+  TOK_COLON,       ///< :
+  TOK_DOT,         ///< .（属性访问）
+  TOK_EQUALS,      ///< =（赋值）
+  TOK_PLUS,        ///< +
+  TOK_MINUS,       ///< -
+  TOK_MUL,         ///< *
+  TOK_DIV,         ///< /
+  TOK_SEMI,        ///< ;（语句结束）
+  TOK_FOR,         ///< for 关键字
+  TOK_IN,          ///< in 关键字
+  TOK_IF,          ///< if 关键字
+  TOK_ELSE,        ///< else 关键字
+  TOK_LET,         ///< let 关键字（变量声明）
+  TOK_CLASS,       ///< class 关键字（类定义）
+  TOK_FUNCTION,    ///< function 关键字（方法定义）
+  TOK_NEW,         ///< new 关键字（实例化）
+  TOK_THIS,        ///< this 关键字（当前实例引用）
+  TOK_RETURN,      ///< return 关键字（返回值）
+  TOK_TRUE,        ///< true 布尔字面量
+  TOK_FALSE,       ///< false 布尔字面量
+  TOK_SCOPE,       ///< ::（作用域解析）
+  TOK_STATIC,      ///< static 关键字（静态成员）
+  TOK_PUBLIC,      ///< public 访问修饰符
+  TOK_PROTECTED,   ///< protected 访问修饰符
+  TOK_PRIVATE,     ///< private 访问修饰符
+  TOK_EXTENDS,     ///< extends 关键字（继承）
+  TOK_OVERRIDE,    ///< override 关键字（重写标注）
+  TOK_INTERFACE,   ///< interface 关键字（接口定义）
+  TOK_IMPLEMENTS,  ///< implements 关键字（接口实现）
+  TOK_SUPER,       ///< super 关键字（父类引用）
 };
 
 /// @brief 词法单元
@@ -87,17 +98,19 @@ struct Token {
 /// @brief 类型表示 — 参数注解、返回类型、属性类型的统一表示
 struct AcType {
   enum Kind {
-    kNumber,  ///< 数字
-    kString,  ///< 字符串
-    kBool,    ///< 布尔
-    kAny,     ///< 任意类型（不检查）
-    kVoid,    ///< 无返回值
-    kArray,   ///< 数组（elementType 表示元素类型）
-    kClass,   ///< 用户自定义类（className 表示类名）
-    kNull,    ///< 未知/未推导
+    kNumber,     ///< 数字
+    kString,     ///< 字符串
+    kBool,       ///< 布尔
+    kAny,        ///< 任意类型（不检查）
+    kVoid,       ///< 无返回值
+    kArray,      ///< 数组（elementType 表示元素类型）
+    kClass,      ///< 用户自定义类（className 表示类名）
+    kInterface,  ///< 接口类型（interfaceName 表示接口名）
+    kNull,       ///< 未知/未推导
   } kind = kAny;
 
   QString className;                   ///< kClass 时有效
+  QString interfaceName;               ///< kInterface 时有效
   QSharedPointer<AcType> elementType;  ///< kArray 时有效
 
   /// @name 内置类型工厂方法
@@ -139,6 +152,12 @@ struct AcType {
     t.className = name;
     return t;
   }
+  static AcType interfaceType(const QString &name) {
+    AcType t;
+    t.kind = kInterface;
+    t.interfaceName = name;
+    return t;
+  }
   /// @}
 };
 
@@ -159,7 +178,8 @@ struct ObjectEntry {
   QString key;
   AcType type;  ///< 属性类型（默认 Any，无注解时）
   Expr *value = nullptr;
-  bool isStatic = false;  ///< 是否为静态属性
+  bool isStatic = false;                      ///< 是否为静态属性
+  AccessLevel access = AccessLevel::kPublic;  ///< 访问级别
 };
 
 /// @brief 函数调用表达式：name(arg1, arg2, ...)
@@ -183,13 +203,31 @@ struct MethodDef {
   QVector<ParamDef> params;  ///< 参数列表（带类型注解）
   AcType returnType;         ///< 返回类型（默认 Any，无注解时）
   Block body;
-  bool isStatic = false;  ///< 是否为静态方法
+  bool isStatic = false;                      ///< 是否为静态方法
+  AccessLevel access = AccessLevel::kPublic;  ///< 访问级别
+  bool isOverride = false;                    ///< 是否重写父类方法
 };
 
-/// @brief 类定义：class Name { let prop = val; function method(args) { ... } }
+/// @brief 接口方法签名
+struct InterfaceMethod {
+  QString name;
+  QVector<ParamDef> params;
+  AcType returnType;
+};
+
+/// @brief 接口定义：interface Name { function method(); }
+struct InterfaceDef {
+  QString name;
+  QVector<InterfaceMethod> methods;
+  QStringList baseInterfaces;  ///< 接口继承的父接口列表
+};
+
+/// @brief 类定义：class Name extends Base implements I1, I2 { ... }
 /// 也支持 C++ 原生类（isNative=true），通过 FunMgr 路由方法调用
 struct ClassDef {
   QString name;
+  QString baseClass;       ///< 父类名（空表示无继承）
+  QStringList interfaces;  ///< 实现的接口列表
   QVector<ObjectEntry> properties;
   QVector<MethodDef> methods;
   bool isNative = false;  ///< 是否为 C++ 原生类（非 AC 脚本定义）
@@ -372,6 +410,7 @@ struct Block::Stmt {
     kIf,
     kExpr,
     kClassDef,
+    kInterfaceDef,
     kFuncDef,
     kReturn
   } kind = kCall;
@@ -382,6 +421,7 @@ struct Block::Stmt {
   IfStmt ifStmt;
   Expr exprStmt;
   ClassDef classDef;
+  InterfaceDef interfaceDef;
   MethodDef funcDef;
   Expr returnValue;
 };

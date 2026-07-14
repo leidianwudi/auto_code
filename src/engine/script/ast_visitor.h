@@ -42,6 +42,7 @@ public:
   virtual void visitForStmt(const ForStmt &fs);
   virtual void visitIfStmt(const IfStmt &is);
   virtual void visitClassDef(const ClassDef &cd);
+  virtual void visitInterfaceDef(const InterfaceDef &iface);
   virtual void visitFuncDef(const MethodDef &md);
   virtual void visitReturnStmt(const Expr &retExpr);
   virtual void visitExprStmt(const Expr &expr);

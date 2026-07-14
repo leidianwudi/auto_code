@@ -53,7 +53,6 @@ bool AcExecutor::parse(const QString &source) {
 QStringList AcExecutor::validateTypes() {
   m_typeErrors.clear();
 
-  // 从 AST 中提取类定义和函数定义
   QHash<QString, ClassDef> classes;
   QHash<QString, MethodDef> functions;
   for (const auto &stmt : m_program.stmts) {
@@ -64,7 +63,6 @@ QStringList AcExecutor::validateTypes() {
     }
   }
 
-  // 注册 C++ 原生类（DB、File 等），确保类型检查器能识别它们
   for (const auto &name : AcClass::kAll) {
     if (!classes.contains(name)) {
       ClassDef nativeClass;
