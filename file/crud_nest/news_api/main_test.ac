@@ -84,15 +84,15 @@ class Person implements Printable {
 // ── 静态类测试 ──
 
 class Counter {
-  static let count = 0
-  static let name = "Counter"
+  static let count = 0;
+  static let name = "Counter";
 
   static function increment() {
-    Counter::count = Counter::count + 1
+    Counter::count = Counter::count + 1;
   }
 
   static function getCount() {
-    return Counter::count
+    return Counter::count;
   }
 }
 

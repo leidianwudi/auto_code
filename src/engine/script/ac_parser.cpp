@@ -89,7 +89,12 @@ bool AcParser::parseBlock(Block &block) {
     Block::Stmt stmt;
     if (!parseStmt(stmt)) return false;
     block.stmts.append(stmt);
-    if (peek().type == TOK_SEMI) advance();
+    // class/interface/function 定义以 } 结尾，不需要分号
+    if (stmt.kind != Block::Stmt::kClassDef && stmt.kind != Block::Stmt::kInterfaceDef &&
+        stmt.kind != Block::Stmt::kFuncDef && stmt.kind != Block::Stmt::kIf &&
+        stmt.kind != Block::Stmt::kFor) {
+      if (!expect(TOK_SEMI, QStringLiteral("expected ';' after statement"))) return false;
+    }
   }
   return expect(TOK_RBRACE, QStringLiteral("expected '}'"));
 }
@@ -408,7 +413,8 @@ bool AcParser::parseClassDef(ClassDef &cd) {
         }
       }
       cd.properties.append(prop);
-      if (peek().type == TOK_SEMI) advance();
+      if (!expect(TOK_SEMI, QStringLiteral("expected ';' after property declaration")))
+        return false;
       continue;
     }
 
@@ -445,7 +451,8 @@ bool AcParser::parseClassDef(ClassDef &cd) {
         }
       }
       cd.properties.append(prop);
-      if (peek().type == TOK_SEMI) advance();
+      if (!expect(TOK_SEMI, QStringLiteral("expected ';' after property declaration")))
+        return false;
       continue;
     }
 
@@ -519,7 +526,8 @@ bool AcParser::parseInterfaceDef(InterfaceDef &iface) {
         im.returnType = AcType::any();
       }
 
-      if (peek().type == TOK_SEMI) advance();
+      if (!expect(TOK_SEMI, QStringLiteral("expected ';' after interface method signature")))
+        return false;
       iface.methods.append(im);
       continue;
     }
