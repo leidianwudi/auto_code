@@ -374,8 +374,10 @@ struct AssignStmt {
   QString name;
   QString thisProp;
   Expr value;
-  bool isStatic = false;    ///< 是否为静态属性赋值
-  QString staticClassName;  ///< 静态类名（isStatic=true 时有效）
+  bool isStatic = false;           ///< 是否为静态属性赋值
+  QString staticClassName;         ///< 静态类名（isStatic=true 时有效）
+  AcType typeAnnotation;           ///< let 声明时的类型注解（如 let x: Number = 1）
+  bool hasTypeAnnotation = false;  ///< 是否有类型注解
 };
 
 /// @brief 索引赋值语句：obj["key"] = expr

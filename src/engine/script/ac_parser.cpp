@@ -266,6 +266,14 @@ bool AcParser::parseCallStmt(CallStmt &cs) {
 
 bool AcParser::parseAssignStmt(AssignStmt &as) {
   as.name = advance().text;
+
+  // 可选类型注解：let name: Type = value
+  if (peek().type == TOK_COLON) {
+    advance();
+    as.typeAnnotation = parseType();
+    as.hasTypeAnnotation = true;
+  }
+
   if (!expect(TOK_EQUALS, QStringLiteral("expected '='"))) return false;
   return parseExpr(as.value);
 }

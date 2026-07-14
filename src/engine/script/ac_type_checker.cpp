@@ -217,7 +217,16 @@ void AcTypeChecker::checkAssign(const AssignStmt &as, const TypeEnv &env) {
   }
 
   // name = value
-  if (env.varTypes.contains(as.name)) {
+  if (as.hasTypeAnnotation) {
+    // let x: Type = value — 使用类型注解
+    if (!isCompatible(valType, as.typeAnnotation)) {
+      reportError(QStringLiteral("type mismatch: variable '%1' annotated as '%2' but got '%3'")
+                      .arg(as.name, typeToString(as.typeAnnotation), typeToString(valType)),
+                  as.value.line);
+    }
+    // 用注解类型更新环境（首次声明时覆盖 Any）
+    const_cast<TypeEnv &>(env).varTypes.insert(as.name, as.typeAnnotation);
+  } else if (env.varTypes.contains(as.name)) {
     AcType varType = env.varTypes[as.name];
     if (!isCompatible(valType, varType)) {
       reportError(QStringLiteral("type mismatch: variable '%1' expects '%2' but got '%3'")
