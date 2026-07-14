@@ -8,7 +8,6 @@
 #include "../../ac_language.h"
 #include "../tpl_engine.h"
 
-
 /**
  * @brief 判断 JSON 值是否为 truthy（JavaScript 风格）
  *
@@ -73,8 +72,17 @@ bool BlockIf::handle(const QString &block, int &pos, const QString &expr,
   // 提取条件表达式（去掉 "if " 前缀）
   QString condition = expr.mid(3).trimmed();
 
+  // 支持 ! 取反：${if !fileExists(path)} 表示"不存在"
+  bool negate = false;
+  if (condition.startsWith(QLatin1Char('!'))) {
+    negate = true;
+    condition = condition.mid(1).trimmed();
+  }
+
   // 解析条件值
   QJsonValue condVal = m_engine.resolvePath(condition, context);
+  bool truthy = isTruthy(condVal);
+  if (negate) truthy = !truthy;
 
   // 查找 ${else} 和 ${/if}
   int closePos = TplBlock::findMatchingClose(block, pos, QString::fromLatin1(AcTemplate::kIfPrefix),
@@ -88,7 +96,7 @@ bool BlockIf::handle(const QString &block, int &pos, const QString &expr,
   // 在 ${if} 和 ${/if} 之间查找 ${else}
   int elsePos = block.indexOf(QString::fromLatin1(AcTemplate::kElse), pos);
 
-  if (isTruthy(condVal)) {
+  if (truthy) {
     // 条件成立：渲染 then 部分
     QString thenBody;
     if (elsePos != -1 && elsePos < closePos)

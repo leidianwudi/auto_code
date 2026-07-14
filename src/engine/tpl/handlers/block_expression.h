@@ -18,6 +18,8 @@
 
 #pragma once
 
+#include <QJsonValue>
+
 #include "tpl_block.h"
 
 /**
@@ -56,8 +58,8 @@ public:
    * @param result 渲染结果输出（追加模式）
    * @return 始终返回 true -- 表达式求值不会导致模板解析失败
    */
-  bool handle(const QString &block, int &pos, const QString &expr,
-              const QJsonObject &context, QString &result) const override;
+  bool handle(const QString &block, int &pos, const QString &expr, const QJsonObject &context,
+              QString &result) const override;
 
 private:
   // ====================================================================
@@ -73,15 +75,15 @@ private:
   // ====================================================================
 
   /**
-   * @brief 算术表达式求值入口
+   * @brief 表达式求值入口
    *
    * 初始化位置指针后委托给 evalAddSub 开始自顶向下解析。
    *
    * @param expr 表达式字符串（如 "price * 1.13 + tax"）
    * @param context 变量上下文（用于解析表达式中引用的变量名）
-   * @return 计算结果（double），解析失败时返回 0
+   * @return 计算结果（QJsonValue，可能是数字或字符串）
    */
-  double evalExpression(const QString &expr, const QJsonObject &context) const;
+  QJsonValue evalExpression(const QString &expr, const QJsonObject &context) const;
 
   /**
    * @brief 解析加减法表达式（优先级最低）
@@ -89,29 +91,28 @@ private:
    * 左结合的加法/减法运算。先解析左侧操作数（通过 evalMulDiv），
    * 然后循环匹配后续的 + / - 运算符。
    *
-   * 示例：a + b - c + d 解析为 (((a + b) - c) + d)
+   * 加法支持双语义：任一操作数为字符串时执行拼接，否则数字加法。
+   * 减法仅支持数字运算。
    *
    * @param expr 表达式字符串
    * @param pos 当前解析位置（输入输出参数，随解析推进）
    * @param context 变量上下文
    * @return 加减法子表达式的计算结果
    */
-  double evalAddSub(const QString &expr, int &pos,
-                    const QJsonObject &context) const;
+  QJsonValue evalAddSub(const QString &expr, int &pos, const QJsonObject &context) const;
 
   /**
    * @brief 解析乘除法表达式（优先级中等）
    *
    * 左结合的乘法/除法运算。先解析左侧操作数（通过 evalPrimary），
-   * 然后循环匹配后续的 * / 运算符。
+   * 然后循环匹配后续的 * / 运算符。仅支持数字运算。
    *
    * @param expr 表达式字符串
    * @param pos 当前解析位置（输入输出参数，随解析推进）
    * @param context 变量上下文
    * @return 乘除法子表达式的计算结果
    */
-  double evalMulDiv(const QString &expr, int &pos,
-                    const QJsonObject &context) const;
+  QJsonValue evalMulDiv(const QString &expr, int &pos, const QJsonObject &context) const;
 
   /**
    * @brief 解析基本元素（优先级最高）
@@ -120,6 +121,7 @@ private:
    * - 一元运算符：+x, -x
    * - 括号表达式：(subExpr)
    * - 数字字面量：123, 3.14, .5
+   * - 字符串字面量："hello", 'world'
    * - 变量引用：name, user.age（通过 resolvePath 取值）
    *
    * @param expr 表达式字符串
@@ -127,8 +129,7 @@ private:
    * @param context 变量上下文
    * @return 基本元素的计算结果
    */
-  double evalPrimary(const QString &expr, int &pos,
-                     const QJsonObject &context) const;
+  QJsonValue evalPrimary(const QString &expr, int &pos, const QJsonObject &context) const;
 
   const TplEngine &m_engine;
 };

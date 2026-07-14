@@ -144,6 +144,11 @@ QJsonValue TplEngine::resolveFuncCall(const QString &path, const QJsonObject &co
     return FunMgr::ins().call(clsName, funcName, evalArgs);
   }
 
+  // 无类名前缀：尝试作为一级内置函数（注册在 "builtin" 伪类下）
+  if (FunMgr::ins().contains(QString::fromLatin1(AcRuntime::kBuiltinClass), fullFunc)) {
+    return FunMgr::ins().call(QString::fromLatin1(AcRuntime::kBuiltinClass), fullFunc, evalArgs);
+  }
+
   m_lastError = QStringLiteral("invalid function call format: %1").arg(path);
   return QJsonValue();
 }

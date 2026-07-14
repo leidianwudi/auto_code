@@ -96,6 +96,26 @@ QString resolveStringArg(const QString &raw, const QJsonObject &context, const T
   return raw;
 }
 
+/**
+ * @brief 将 QJsonValue 转为字符串（用于拼接和输出）
+ *
+ * - 字符串：原样返回
+ * - 数字：整数不显示小数点，小数正常显示
+ * - 布尔：true / false
+ * - 其他：空字符串
+ */
+QString valueToString(const QJsonValue &v) {
+  if (v.isString()) return v.toString();
+  if (v.isDouble()) {
+    double d = v.toDouble();
+    return (d == static_cast<int>(d)) ? QString::number(static_cast<int>(d)) : QString::number(d);
+  }
+  if (v.isBool())
+    return v.toBool() ? QString::fromLatin1(AcKeyword::kTrue)
+                      : QString::fromLatin1(AcKeyword::kFalse);
+  return {};
+}
+
 }  // namespace
 
 // ====================================================================
@@ -148,9 +168,8 @@ bool BlockExpression::handle(const QString &block, int &pos, const QString &expr
   // 先用 checkArithmetic 快速判断是否需要走算术解析器，
   // 避免对纯变量名也做完整的递归下降解析（性能优化）。
   if (checkArithmetic(expr)) {
-    double val = evalExpression(expr, context);
-    result += (val == static_cast<int>(val)) ? QString::number(static_cast<int>(val))
-                                             : QString::number(val);
+    QJsonValue val = evalExpression(expr, context);
+    result += valueToString(val);
     return true;
   }
 
@@ -158,15 +177,7 @@ bool BlockExpression::handle(const QString &block, int &pos, const QString &expr
   // 兜底分支：通过 TplEngine::resolvePath 获取 JSON 值并转为字符串。
   // 支持嵌套属性（如 user.email）和方法后缀（如 .toLowerCase）。
   QJsonValue val = m_engine.resolvePath(expr, context);
-  if (val.isString())
-    result += val.toString();
-  else if (val.isDouble()) {
-    double d = val.toDouble();
-    result +=
-        (d == static_cast<int>(d)) ? QString::number(static_cast<int>(d)) : QString::number(d);
-  } else if (val.isBool())
-    result += val.toBool() ? QString::fromLatin1(AcKeyword::kTrue)
-                           : QString::fromLatin1(AcKeyword::kFalse);
+  result += valueToString(val);
   return true;
 }
 
@@ -183,24 +194,31 @@ bool BlockExpression::handle(const QString &block, int &pos, const QString &expr
 //   evalPrimary: 处理原子元素（数字、变量、括号、一元符号）
 // ====================================================================
 
-double BlockExpression::evalExpression(const QString &expr, const QJsonObject &context) const {
+QJsonValue BlockExpression::evalExpression(const QString &expr, const QJsonObject &context) const {
   int pos = 0;
   return evalAddSub(expr, pos, context);
 }
 
-double BlockExpression::evalAddSub(const QString &expr, int &pos,
-                                   const QJsonObject &context) const {
-  double left = evalMulDiv(expr, pos, context);
+QJsonValue BlockExpression::evalAddSub(const QString &expr, int &pos,
+                                       const QJsonObject &context) const {
+  QJsonValue left = evalMulDiv(expr, pos, context);
   while (pos < expr.length()) {
     while (pos < expr.length() && expr[pos].isSpace()) ++pos;
     if (pos >= expr.length()) break;
     QChar ch = expr[pos];
     if (ch == '+') {
       ++pos;
-      left += evalMulDiv(expr, pos, context);
+      QJsonValue right = evalMulDiv(expr, pos, context);
+      // 加法双语义：任一为字符串则拼接，否则数字加法
+      if (left.isString() || right.isString()) {
+        left = QJsonValue(valueToString(left) + valueToString(right));
+      } else {
+        left = QJsonValue(left.toDouble() + right.toDouble());
+      }
     } else if (ch == '-') {
       ++pos;
-      left -= evalMulDiv(expr, pos, context);
+      QJsonValue right = evalMulDiv(expr, pos, context);
+      left = QJsonValue(left.toDouble() - right.toDouble());
     } else {
       break;
     }
@@ -208,24 +226,25 @@ double BlockExpression::evalAddSub(const QString &expr, int &pos,
   return left;
 }
 
-double BlockExpression::evalMulDiv(const QString &expr, int &pos,
-                                   const QJsonObject &context) const {
-  double left = evalPrimary(expr, pos, context);
+QJsonValue BlockExpression::evalMulDiv(const QString &expr, int &pos,
+                                       const QJsonObject &context) const {
+  QJsonValue left = evalPrimary(expr, pos, context);
   while (pos < expr.length()) {
     while (pos < expr.length() && expr[pos].isSpace()) ++pos;
     if (pos >= expr.length()) break;
     QChar ch = expr[pos];
     if (ch == '*') {
       ++pos;
-      left *= evalPrimary(expr, pos, context);
+      QJsonValue right = evalPrimary(expr, pos, context);
+      left = QJsonValue(left.toDouble() * right.toDouble());
     } else if (ch == '/') {
       ++pos;
-      double right = evalPrimary(expr, pos, context);
-      if (right == 0) {
+      QJsonValue right = evalPrimary(expr, pos, context);
+      if (right.toDouble() == 0) {
         m_engine.setError(QStringLiteral("Division by zero"));
-        return 0;
+        return QJsonValue();
       }
-      left /= right;
+      left = QJsonValue(left.toDouble() / right.toDouble());
     } else {
       break;
     }
@@ -233,35 +252,43 @@ double BlockExpression::evalMulDiv(const QString &expr, int &pos,
   return left;
 }
 
-double BlockExpression::evalPrimary(const QString &expr, int &pos,
-                                    const QJsonObject &context) const {
+QJsonValue BlockExpression::evalPrimary(const QString &expr, int &pos,
+                                        const QJsonObject &context) const {
   while (pos < expr.length() && expr[pos].isSpace()) ++pos;
-  if (pos >= expr.length()) return 0;
+  if (pos >= expr.length()) return QJsonValue();
   QChar ch = expr[pos];
   if (ch == '+') return ++pos, evalPrimary(expr, pos, context);
-  if (ch == '-') return ++pos, -evalPrimary(expr, pos, context);
+  if (ch == '-') return ++pos, QJsonValue(-evalPrimary(expr, pos, context).toDouble());
   if (ch == '(') {
     ++pos;
-    double result = evalAddSub(expr, pos, context);
+    QJsonValue result = evalAddSub(expr, pos, context);
     while (pos < expr.length() && expr[pos].isSpace()) ++pos;
     if (pos < expr.length() && expr[pos] == ')') ++pos;
     return result;
+  }
+  // 字符串字面量："..." 或 '...'
+  if (ch == '"' || ch == '\'') {
+    QChar quote = ch;
+    ++pos;
+    int start = pos;
+    while (pos < expr.length() && expr[pos] != quote) ++pos;
+    QString str = expr.mid(start, pos - start);
+    if (pos < expr.length()) ++pos;  // 跳过闭合引号
+    return QJsonValue(str);
   }
   if (ch.isDigit() || ch == '.') {
     int start = pos;
     while (pos < expr.length() && (expr[pos].isDigit() || expr[pos] == '.')) ++pos;
     bool ok = false;
     double num = expr.mid(start, pos - start).toDouble(&ok);
-    return ok ? num : 0;
+    return ok ? QJsonValue(num) : QJsonValue();
   }
   if (ch.isLetter() || ch == '_') {
     int start = pos;
     while (pos < expr.length() &&
            (expr[pos].isLetterOrNumber() || expr[pos] == '.' || expr[pos] == '_'))
       ++pos;
-    QJsonValue val = m_engine.resolvePath(expr.mid(start, pos - start), context);
-    if (val.isDouble()) return val.toDouble();
-    return 0;
+    return m_engine.resolvePath(expr.mid(start, pos - start), context);
   }
-  return 0;
+  return QJsonValue();
 }
