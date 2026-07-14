@@ -4,8 +4,10 @@
  */
 
 #include "block_if.h"
+
 #include "../../ac_language.h"
 #include "../tpl_engine.h"
+
 
 /**
  * @brief 判断 JSON 值是否为 truthy（JavaScript 风格）
@@ -29,19 +31,22 @@
  * @return true 表示条件成立，false 表示条件不成立
  */
 static bool isTruthy(const QJsonValue &val) {
-  if (val.isBool())
-    return val.toBool();
-  if (val.isString())
-    return !val.toString().isEmpty();
-  if (val.isDouble()) {
-    double d = val.toDouble();
-    return d != 0.0 && !std::isnan(d);
+  switch (val.type()) {
+    case QJsonValue::Bool:
+      return val.toBool();
+    case QJsonValue::String:
+      return !val.toString().isEmpty();
+    case QJsonValue::Double: {
+      double d = val.toDouble();
+      return d != 0.0 && !std::isnan(d);
+    }
+    case QJsonValue::Array:
+      return !val.toArray().isEmpty();
+    case QJsonValue::Object:
+      return true;
+    default:  // Null / Undefined
+      return false;
   }
-  if (val.isArray())
-    return !val.toArray().isEmpty();
-  if (val.isObject())
-    return true;
-  return false;
 }
 
 /**
@@ -75,8 +80,8 @@ bool BlockIf::handle(const QString &block, int &pos, const QString &expr,
   int closePos = TplBlock::findMatchingClose(block, pos, QString::fromLatin1(AcTemplate::kIfPrefix),
                                              QString::fromLatin1(AcTemplate::kIfClose));
   if (closePos == -1) {
-    const_cast<TplEngine &>(m_engine).setError(
-        QStringLiteral("Unclosed ${if ") + condition + QStringLiteral("}"));
+    const_cast<TplEngine &>(m_engine).setError(QStringLiteral("Unclosed ${if ") + condition +
+                                               QStringLiteral("}"));
     return false;
   }
 
@@ -97,6 +102,6 @@ bool BlockIf::handle(const QString &block, int &pos, const QString &expr,
     result += m_engine.renderBlock(elseBody, context);
   }
 
-  pos = closePos + 6; // 跳过 ${/if}
+  pos = closePos + 6;  // 跳过 ${/if}
   return true;
 }
