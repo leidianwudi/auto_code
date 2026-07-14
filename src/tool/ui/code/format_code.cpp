@@ -13,6 +13,7 @@
 #include <QStringList>
 
 #include "src/engine/ac_language.h"
+#include "src/tool/common/tool_json.h"
 
 // ──────────────────────────────────────────────────────────────
 //  公共接口
@@ -140,7 +141,7 @@ static void serializeJsonValue(const QJsonValue &v, QStringList &lines, int inde
 
 QString FormatCode::formatJson(const QString &input) {
   QJsonParseError err;
-  QJsonDocument doc = QJsonDocument::fromJson(input.toUtf8(), &err);
+  QJsonDocument doc = ToolJson::fromJson(input, &err);
   if (err.error != QJsonParseError::NoError) return input;  // 解析失败，返回原始文本
 
   QStringList lines;

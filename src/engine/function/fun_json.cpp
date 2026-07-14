@@ -5,14 +5,14 @@
 
 #include "fun_json.h"
 
-#include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonParseError>
 #include <QString>
 
 #include "../ac_language.h"
 #include "fun_mgr.h"
-
+#include "src/tool/common/tool_json.h"
 
 // init — 注册 JSON 函数到 FunMgr（builtin 伪类）
 void FunJson::init() {
@@ -27,13 +27,14 @@ QJsonValue FunJson::readJson(const QJsonArray &args) {
     return QJsonObject();
   }
 
-  QFile f(args[0].toString());
-  if (!f.open(QIODevice::ReadOnly)) {
-    FunMgr::setError(QStringLiteral("readJson() cannot open file: '%1'").arg(args[0].toString()));
+  QJsonParseError parseError;
+  QJsonDocument doc = ToolJson::loadFile(args[0].toString(), &parseError);
+  if (parseError.error != QJsonParseError::NoError || doc.isNull()) {
+    FunMgr::setError(
+        QStringLiteral("readJson() cannot open or parse file: '%1'").arg(args[0].toString()));
     return QJsonObject();
   }
 
-  QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
   if (!doc.isObject()) {
     FunMgr::setError(QStringLiteral("readJson() file is not a valid JSON object"));
     return QJsonValue();

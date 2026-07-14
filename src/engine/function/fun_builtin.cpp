@@ -8,12 +8,12 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QJsonDocument>
 #include <QJsonObject>
 
 #include "../ac_language.h"
 #include "../tpl/tpl_engine.h"
 #include "fun_mgr.h"
+#include "src/tool/common/tool_json.h"
 
 // ============================================================================
 // 上下文
@@ -162,10 +162,9 @@ QJsonValue FunBuiltin::printError(const QJsonArray &args) {
 QJsonValue FunBuiltin::getCheckedFiles(const QJsonArray & /*args*/) {
   QString treePath = s_ctx.rootDir.isEmpty() ? s_ctx.scriptDir + QStringLiteral("/tree.config")
                                              : s_ctx.rootDir + QStringLiteral("/tree.config");
-  QFile f(treePath);
   QJsonArray result;
-  if (f.open(QIODevice::ReadOnly)) {
-    QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+  QJsonDocument doc = ToolJson::loadFile(treePath);
+  if (!doc.isNull()) {
     QJsonArray checked = doc.object().value(QStringLiteral("checked")).toArray();
     for (const QJsonValue &v : checked) {
       if (v.isString())

@@ -14,6 +14,7 @@
 #include "demo_model.h"
 #include "demo_ui.h"
 #include "src/engine/tpl/tpl_engine.h"
+#include "src/tool/common/tool_json.h"
 #include "src/tool/ui/code/code_editor.h"
 #include "src/tool/ui/component/aui_message_box.h"
 #include "src/tool/ui/highlighter/light_json.h"
@@ -69,7 +70,7 @@ void DemoMgr::onGenerate() {
 
   // 解析 JSON
   QJsonParseError error;
-  QJsonDocument doc = QJsonDocument::fromJson(m_model->getJsonData().toUtf8(), &error);
+  QJsonDocument doc = ToolJson::fromJson(m_model->getJsonData(), &error);
 
   if (error.error != QJsonParseError::NoError) {
     m_model->setError(QStringLiteral("JSON 解析错误: %1").arg(error.errorString()));

@@ -12,10 +12,6 @@
 
 #include "tpl_engine.h"
 
-#include "../ac_language.h"
-#include "../function/fun_mgr.h"
-#include "../validator_json.h"
-
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -23,16 +19,19 @@
 #include <QRegularExpression>
 #include <QString>
 
+#include "../ac_language.h"
+#include "../function/fun_mgr.h"
+#include "../schema_validator.h"
+
 // 静态成员定义
 
-const ValidatorJson *TplEngine::sm_validator = nullptr;
+const SchemaValidator *TplEngine::sm_validator = nullptr;
 QString TplEngine::sm_schemaClass;
 
 TplEngine::TplEngine() : m_handlerFactory(*this) {}
 
 // setSchema — 设置 Schema 校验
-void TplEngine::setSchema(const QString &className,
-                          const ValidatorJson *validator) {
+void TplEngine::setSchema(const QString &className, const SchemaValidator *validator) {
   sm_schemaClass = className;
   sm_validator = validator;
 }
@@ -60,8 +59,7 @@ QString TplEngine::render(const QString &tmpl, const QJsonObject &data) const {
 
 // renderBlock — 递归扫描 ${...} 并交给处理器
 
-QString TplEngine::renderBlock(const QString &block,
-                               const QJsonObject &context) const {
+QString TplEngine::renderBlock(const QString &block, const QJsonObject &context) const {
   QString result;
   int pos = 0;
 
@@ -94,8 +92,7 @@ QString TplEngine::renderBlock(const QString &block,
 
 // resolvePath — 嵌套属性路径解析 + 通过 FunMgr 调用 C++ 函数
 
-QJsonValue TplEngine::resolvePath(const QString &path,
-                                  const QJsonObject &context) const {
+QJsonValue TplEngine::resolvePath(const QString &path, const QJsonObject &context) const {
   // 检查是否是函数调用格式: funcName(...)
   // 例如: str.toLowerCase(Hello) 或 file.read(C:/data.txt)
   int parenPos = path.indexOf(QStringLiteral("("));
@@ -103,7 +100,7 @@ QJsonValue TplEngine::resolvePath(const QString &path,
     // 拆分为 类名.函数名(参数)
     QString fullFunc = path.left(parenPos);
     QString argsStr = path.mid(parenPos + 1);
-    argsStr.chop(1); // 去掉尾部的 )
+    argsStr.chop(1);  // 去掉尾部的 )
 
     // 解析参数：逗号分隔，去除首尾空白
     QStringList rawArgs;
@@ -127,10 +124,8 @@ QJsonValue TplEngine::resolvePath(const QString &path,
       double num = raw.toDouble(&ok);
       if (ok) {
         evalArgs.append(num);
-      } else if ((raw.startsWith(QStringLiteral("\"")) &&
-                  raw.endsWith(QStringLiteral("\""))) ||
-                 (raw.startsWith(QStringLiteral("'")) &&
-                  raw.endsWith(QStringLiteral("'")))) {
+      } else if ((raw.startsWith(QStringLiteral("\"")) && raw.endsWith(QStringLiteral("\""))) ||
+                 (raw.startsWith(QStringLiteral("'")) && raw.endsWith(QStringLiteral("'")))) {
         // 字符串字面量
         evalArgs.append(raw.mid(1, raw.length() - 2));
       } else {

@@ -1,5 +1,5 @@
 /**
- * @file validator_json.h
+ * @file schema_validator.h
  * @brief JSON 数据 Schema 校验器
  *
  * 从 JSON 文件加载类定义，校验 JSON 数据是否符合指定类的属性约束。
@@ -15,18 +15,18 @@
 #include <QStringList>
 
 /**
- * @class ValidatorJson
+ * @class SchemaValidator
  * @brief 基于类定义的 JSON 数据校验器
  *
  * 使用方式：
- *   1. ValidatorJson v;
+ *   1. SchemaValidator v;
  *   2. v.load("schema/user.json");
  *   3. QString err = v.validate("User", data);
  *      if (!err.isEmpty()) { ... }
  */
-class ValidatorJson {
+class SchemaValidator {
 public:
-  ValidatorJson() = default;
+  SchemaValidator() = default;
 
   /**
    * @brief 加载 schema 定义文件
@@ -55,17 +55,16 @@ public:
 
 private:
   struct PropertyDef {
-    QString type;      // int / string / double / bool / array / object
-    QString items;     // type=array 时，元素类名
-    QString className; // type=object 时，嵌套类名
+    QString type;       // int / string / double / bool / array / object
+    QString items;      // type=array 时，元素类名
+    QString className;  // type=object 时，嵌套类名
   };
 
   struct ClassDef {
     QMap<QString, PropertyDef> properties;
   };
 
-  QString validateObject(const ClassDef &def, const QJsonObject &obj,
-                         const QString &path) const;
+  QString validateObject(const ClassDef &def, const QJsonObject &obj, const QString &path) const;
 
   QMap<QString, ClassDef> m_classes;
 };

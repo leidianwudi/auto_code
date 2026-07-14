@@ -1,15 +1,16 @@
 /**
- * @file validator_json.cpp
- * @brief ValidatorJson 实现
+ * @file schema_validator.cpp
+ * @brief SchemaValidator 实现
  */
 
-#include "validator_json.h"
+#include "schema_validator.h"
 
-#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QRegularExpression>
+#include <QJsonParseError>
+
+#include "src/tool/common/tool_json.h"
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  Schema JSON 键名常量（文件内部使用）
@@ -27,34 +28,17 @@ inline constexpr const char *kTypeDouble = "double";
 inline constexpr const char *kTypeBool = "bool";
 inline constexpr const char *kTypeArray = "array";
 inline constexpr const char *kTypeObject = "object";
-} // namespace
+}  // namespace
 
 // load — 加载 schema 定义文件
-bool ValidatorJson::load(const QString &filePath) {
-  // 打开文件
-  QFile file(filePath);
-  if (!file.open(QIODevice::ReadOnly))
-    return false;
-
-  // 读取文件内容并去掉注释（支持 // 行注释和 /* */ 块注释）
-  QByteArray data = file.readAll();
-  QString text = QString::fromUtf8(data);
-  // 去掉行注释和块注释
-  text.replace(QRegularExpression(QStringLiteral("//[^\\n]*")), QString());
-  // 去掉块注释
-  text.replace(
-      QRegularExpression(QStringLiteral("/\\*[^*]*\\*+(?:[^/*][^*]*\\*+)*/")),
-      QString());
-
-  // 解析 JSON
+bool SchemaValidator::load(const QString &filePath) {
+  // 使用 ToolJson 加载（支持 // 行注释和 /* */ 块注释）
   QJsonParseError err;
-  QJsonDocument doc = QJsonDocument::fromJson(text.toUtf8(), &err);
-  if (err.error != QJsonParseError::NoError)
-    return false;
+  QJsonDocument doc = ToolJson::loadFile(filePath, &err);
+  if (err.error != QJsonParseError::NoError || doc.isNull()) return false;
 
   // 根节点必须是对象
-  if (!doc.isObject())
-    return false;
+  if (!doc.isObject()) return false;
 
   QJsonObject root = doc.object();
   m_classes.clear();
@@ -86,19 +70,16 @@ bool ValidatorJson::load(const QString &filePath) {
 }
 
 // validate — 校验入口
-QString ValidatorJson::validate(const QString &className,
-                                const QJsonObject &data) const {
+QString SchemaValidator::validate(const QString &className, const QJsonObject &data) const {
   auto it = m_classes.find(className);
-  if (it == m_classes.end())
-    return QStringLiteral("Schema class '%1' not defined").arg(className);
+  if (it == m_classes.end()) return QStringLiteral("Schema class '%1' not defined").arg(className);
 
   return validateObject(it.value(), data, className);
 }
 
 // validateObject — 递归校验对象
-QString ValidatorJson::validateObject(const ClassDef &def,
-                                      const QJsonObject &obj,
-                                      const QString &path) const {
+QString SchemaValidator::validateObject(const ClassDef &def, const QJsonObject &obj,
+                                        const QString &path) const {
   // 检查是否有未定义的属性
   for (auto it = obj.begin(); it != obj.end(); ++it) {
     const QString &key = it.key();
@@ -111,62 +92,48 @@ QString ValidatorJson::validateObject(const ClassDef &def,
     const QString &propName = it.key();
     const PropertyDef &pd = it.value();
 
-    if (!obj.contains(propName))
-      continue; // 可选属性，跳过
+    if (!obj.contains(propName)) continue;  // 可选属性，跳过
 
     QJsonValue val = obj.value(propName);
     QString childPath = path + QStringLiteral(".") + propName;
 
     if (pd.type == QString::fromLatin1(kTypeInt)) {
-      if (!val.isDouble())
-        return QStringLiteral("'%1' should be int").arg(childPath);
+      if (!val.isDouble()) return QStringLiteral("'%1' should be int").arg(childPath);
     } else if (pd.type == QString::fromLatin1(kTypeString)) {
-      if (!val.isString())
-        return QStringLiteral("'%1' should be string").arg(childPath);
+      if (!val.isString()) return QStringLiteral("'%1' should be string").arg(childPath);
     } else if (pd.type == QString::fromLatin1(kTypeDouble)) {
-      if (!val.isDouble())
-        return QStringLiteral("'%1' should be double").arg(childPath);
+      if (!val.isDouble()) return QStringLiteral("'%1' should be double").arg(childPath);
     } else if (pd.type == QString::fromLatin1(kTypeBool)) {
-      if (!val.isBool())
-        return QStringLiteral("'%1' should be bool").arg(childPath);
+      if (!val.isBool()) return QStringLiteral("'%1' should be bool").arg(childPath);
     } else if (pd.type == QString::fromLatin1(kTypeArray)) {
-      if (!val.isArray())
-        return QStringLiteral("'%1' should be array").arg(childPath);
+      if (!val.isArray()) return QStringLiteral("'%1' should be array").arg(childPath);
 
       if (!pd.items.isEmpty()) {
         // 数组元素为指定类，逐个校验
         QJsonArray arr = val.toArray();
         auto itemIt = m_classes.find(pd.items);
         if (itemIt == m_classes.end())
-          return QStringLiteral("'%1' item class '%2' not defined")
-              .arg(childPath, pd.items);
+          return QStringLiteral("'%1' item class '%2' not defined").arg(childPath, pd.items);
 
         for (int i = 0; i < arr.size(); ++i) {
           if (!arr[i].isObject())
-            return QStringLiteral("'%1[%2]' should be object")
-                .arg(childPath)
-                .arg(i);
+            return QStringLiteral("'%1[%2]' should be object").arg(childPath).arg(i);
 
-          QString err =
-              validateObject(itemIt.value(), arr[i].toObject(),
-                             childPath + QStringLiteral("[%1]").arg(i));
-          if (!err.isEmpty())
-            return err;
+          QString err = validateObject(itemIt.value(), arr[i].toObject(),
+                                       childPath + QStringLiteral("[%1]").arg(i));
+          if (!err.isEmpty()) return err;
         }
       }
     } else if (pd.type == QString::fromLatin1(kTypeObject)) {
-      if (!val.isObject())
-        return QStringLiteral("'%1' should be object").arg(childPath);
+      if (!val.isObject()) return QStringLiteral("'%1' should be object").arg(childPath);
 
       if (!pd.className.isEmpty()) {
         auto clsIt = m_classes.find(pd.className);
         if (clsIt == m_classes.end())
-          return QStringLiteral("'%1' class '%2' not defined")
-              .arg(childPath, pd.className);
+          return QStringLiteral("'%1' class '%2' not defined").arg(childPath, pd.className);
 
         QString err = validateObject(clsIt.value(), val.toObject(), childPath);
-        if (!err.isEmpty())
-          return err;
+        if (!err.isEmpty()) return err;
       }
     }
   }
@@ -175,9 +142,9 @@ QString ValidatorJson::validateObject(const ClassDef &def,
 }
 
 // classNames — 所有已注册类名
-QStringList ValidatorJson::classNames() const { return m_classes.keys(); }
+QStringList SchemaValidator::classNames() const { return m_classes.keys(); }
 
 // hasClass — 判断类是否已注册
-bool ValidatorJson::hasClass(const QString &className) const {
+bool SchemaValidator::hasClass(const QString &className) const {
   return m_classes.contains(className);
 }

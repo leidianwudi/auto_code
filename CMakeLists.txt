@@ -47,8 +47,8 @@ qt_add_executable(auto_code
     src/engine/tpl/handlers/block_if.cpp
     src/engine/tpl/handlers/block_expression.h
     src/engine/tpl/handlers/block_expression.cpp
-    src/engine/validator_json.h
-    src/engine/validator_json.cpp
+    src/engine/schema_validator.h
+    src/engine/schema_validator.cpp
     src/engine/validation_result.h
     src/engine/json_validator.h
     src/engine/json_validator.cpp
@@ -65,6 +65,8 @@ qt_add_executable(auto_code
     src/engine/function/fun_builtin.h
     src/engine/function/fun_builtin.cpp
     src/engine/ac_language.h
+    src/tool/common/tool_json.h
+    src/tool/common/tool_json.cpp
     src/tool/ui/code/tree_dir.h
     src/tool/ui/code/tree_dir.cpp
     src/tool/ui/code/code_editor.h

@@ -5,9 +5,10 @@
 
 #include "json_validator.h"
 
-#include <QJsonDocument>
 #include <QJsonParseError>
 #include <QTextBlock>
+
+#include "src/tool/common/tool_json.h"
 
 QVector<ValidationResult> JsonValidator::validate(const QString &source) {
   QVector<ValidationResult> results;
@@ -15,7 +16,7 @@ QVector<ValidationResult> JsonValidator::validate(const QString &source) {
   if (source.trimmed().isEmpty()) return results;
 
   QJsonParseError parseError;
-  QJsonDocument::fromJson(source.toUtf8(), &parseError);
+  ToolJson::fromJson(source, &parseError);
 
   if (parseError.error != QJsonParseError::NoError) {
     int offset = parseError.offset;

@@ -12,7 +12,6 @@
 #include <QHeaderView>
 #include <QIcon>
 #include <QJsonArray>
-#include <QJsonDocument>
 #include <QJsonObject>
 #include <QMenu>
 #include <QMouseEvent>
@@ -24,6 +23,7 @@
 #include <QTreeWidgetItemIterator>
 
 #include "src/engine/ac_language.h"
+#include "src/tool/common/tool_json.h"
 #include "src/tool/ui/component/aui_icon.h"
 #include "src/tool/ui/component/aui_style.h"
 #include "src/tool/ui/rename_dialog.h"
@@ -381,11 +381,7 @@ void TreeDir::saveState() {
 void TreeDir::loadState() {
   if (m_configPath.isEmpty()) return;
 
-  QFile file(m_configPath);
-  if (!file.open(QIODevice::ReadOnly)) return;
-
-  QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-  file.close();
+  QJsonDocument doc = ToolJson::loadFile(m_configPath);
   if (doc.isNull() || !doc.isObject()) return;
 
   QJsonObject obj = doc.object();
