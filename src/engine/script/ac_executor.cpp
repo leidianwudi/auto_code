@@ -152,6 +152,10 @@ static QString readFileUtf8(const QString &path) {
  */
 bool AcExecutor::linkImports() {
   QSet<QString> visited;
+  // 将入口文件加入导入链，检测 a→b→a 类循环
+  if (!m_scriptFile.isEmpty()) {
+    visited.insert(QFileInfo(m_scriptFile).absoluteFilePath());
+  }
   return linkImportsRecursive(m_program, m_scriptDir, visited);
 }
 
@@ -180,8 +184,13 @@ bool AcExecutor::linkImportsRecursive(Block &program, const QString &baseDir,
       return false;
     }
 
-    // 循环引用保护
-    if (visited.contains(absPath)) continue;
+    // 循环导入检测：如果当前文件已在导入链中，说明存在循环
+    if (visited.contains(absPath)) {
+      m_error = QStringLiteral("circular import detected: '%1'").arg(imp.filePath);
+      return false;
+    }
+
+    // 标记当前文件正在处理（进入导入链）
     visited.insert(absPath);
 
     // 读取并解析目标文件
@@ -209,6 +218,9 @@ bool AcExecutor::linkImportsRecursive(Block &program, const QString &baseDir,
     // 递归处理目标文件中的 import
     QString moduleDir = QFileInfo(absPath).absolutePath();
     if (!linkImportsRecursive(moduleAst, moduleDir, visited)) return false;
+
+    // 回溯：从导入链中移除当前文件，允许其他分支导入同一文件（菱形导入）
+    visited.remove(absPath);
 
     // 从目标 AST 中提取 export 符号并注入当前程序
     qDebug() << "[linkImports] module" << imp.filePath << "has" << moduleAst.stmts.size()

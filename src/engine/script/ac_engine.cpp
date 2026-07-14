@@ -30,6 +30,7 @@ QString AcEngine::execute(const QString &acFilePath) {
 
   AcExecutor executor;
   executor.setScriptDir(dir);
+  executor.setScriptFile(fi.absoluteFilePath());
   if (!m_rootDir.isEmpty()) executor.setRootDir(m_rootDir);
   if (m_logCallback) executor.setLogCallback(m_logCallback);
   qDebug() << "[AcEngine::execute] m_logCallback is null:" << !m_logCallback;

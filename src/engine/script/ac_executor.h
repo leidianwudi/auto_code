@@ -29,6 +29,7 @@ public:
 
   QString error() const { return m_error; }
   void setScriptDir(const QString &dir) { m_scriptDir = dir; }
+  void setScriptFile(const QString &path) { m_scriptFile = path; }
   void setRootDir(const QString &dir) { m_rootDir = dir; }
   void setJsonFile(const QString &path) { m_jsonPath = path; }
   QStringList generatedFiles() const { return m_interpreter.generatedFiles(); }
@@ -61,6 +62,7 @@ private:
 
   // ── 状态 ──
   QString m_scriptDir;           ///< .ac 文件所在目录
+  QString m_scriptFile;          ///< .ac 入口文件绝对路径（循环导入检测用）
   QString m_rootDir;             ///< 项目根目录
   QString m_jsonPath;            ///< 当前处理的 JSON 文件路径（保留但未使用）
   QString m_error;               ///< 错误信息
