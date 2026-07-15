@@ -3,7 +3,7 @@
 import { add, multiply, PI, Calculator } from "lib/math_utils.ac";
 
 main {
-  // 使用导入的函数
+  // 使用导入的函数我1q2 666
   let sum = add(10, 20);
   printLog("sum: " + sum);
 
@@ -20,3 +20,4 @@ main {
   let r2 = calc.multiply(5, 6);
   printLog("calc.multiply(5,6): " + r2);
 }
+

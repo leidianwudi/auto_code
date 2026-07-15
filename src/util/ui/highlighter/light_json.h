@@ -2,12 +2,13 @@
  * @file light_json.h
  * @brief JSON 语法高亮器
  *
- * 为 JSON 编辑器提供语法高亮，包括：
- * - 键名（蓝色）: "key"
- * - 字符串值（绿色）: "value"
- * - 数字（橙色）: 123, 3.14
- * - 布尔值（红色）: true, false
- * - null（紫色）: null
+ * 为 JSON 编辑器提供语法高亮功能。
+ * 注释显示风格与 AC 脚本高亮器保持一致（灰色斜体）。
+ *
+ * 支持的语法元素：
+ * - 单行注释（//）
+ * - 块注释（/&#42; &#42;/，支持跨行）
+ * - JSON 键名、字符串值、数字、布尔值、null
  */
 
 #pragma once
@@ -16,12 +17,6 @@
 #include <QSyntaxHighlighter>
 #include <QTextCharFormat>
 
-/**
- * @class LightJson
- * @brief JSON 语法高亮器
- *
- * 对 JSON 文本进行语法高亮着色，使 JSON 结构清晰易读。
- */
 class LightJson : public QSyntaxHighlighter {
   Q_OBJECT
 
@@ -29,20 +24,16 @@ public:
   explicit LightJson(QTextDocument *parent = nullptr);
 
 protected:
-  /**
-   * @brief 对单个文本块进行高亮处理
-   * @param text 文本内容
-   */
   void highlightBlock(const QString &text) override;
 
 private:
-  /**
-   * @brief 高亮规则
-   */
   struct HighlightRule {
-    QRegularExpression pattern; ///< 匹配模式
-    QTextCharFormat format;     ///< 文本格式
+    QRegularExpression pattern;
+    QTextCharFormat format;
   };
 
-  QVector<HighlightRule> m_rules; ///< 高亮规则列表
+  void highlightBlockHelper(const QString &text);
+
+  QVector<HighlightRule> m_rules;
+  QTextCharFormat m_commentFormat;
 };
