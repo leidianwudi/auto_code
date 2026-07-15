@@ -457,11 +457,14 @@ bool AcParser::parseCallStmt(CallStmt &cs) {
 bool AcParser::parseAssignStmt(AssignStmt &as) {
   as.name = advance().text;
 
-  // 可选类型注解：let name: Type = value
+  // 类型注解：let name: Type = value（可选，省略时由右侧表达式推导）
   if (peek().type == TOK_COLON) {
     advance();
     as.typeAnnotation = parseType();
     as.hasTypeAnnotation = true;
+  } else {
+    as.typeAnnotation = AcType::any();
+    as.hasTypeAnnotation = false;
   }
 
   // 检查复合赋值运算符
@@ -730,7 +733,7 @@ bool AcParser::parseClassDef(ClassDef &cd) {
       continue;
     }
 
-    // TS 风格属性：public brand = "Tesla"（无 let 关键字）
+    // TS 风格属性：public brand: String = "Tesla"（无 let 关键字，类型注解可选）
     if (peek().type == TOK_IDENT) {
       ObjectEntry prop;
       prop.key = advance().text;
@@ -808,24 +811,30 @@ bool AcParser::parseInterfaceDef(InterfaceDef &iface) {
       while (peek().type == TOK_IDENT) {
         ParamDef pd;
         pd.name = advance().text;
-        if (peek().type == TOK_COLON) {
-          advance();
-          pd.type = parseType();
-        } else {
-          pd.type = AcType::any();
+        if (peek().type != TOK_COLON) {
+          *m_error =
+              QStringLiteral("parameter '%1' requires a type annotation (e.g. %1: Type) at line %2")
+                  .arg(pd.name)
+                  .arg(peek().line);
+          return false;
         }
+        advance();
+        pd.type = parseType();
         im.params.append(pd);
         if (peek().type == TOK_COMMA) advance();
       }
 
       if (!expect(TOK_RPAREN, QStringLiteral("expected ')' after parameters"))) return false;
 
-      if (peek().type == TOK_COLON) {
-        advance();
-        im.returnType = parseType();
-      } else {
-        im.returnType = AcType::any();
+      if (peek().type != TOK_COLON) {
+        *m_error =
+            QStringLiteral("method '%1' requires a return type annotation (e.g. : Type) at line %2")
+                .arg(im.name)
+                .arg(peek().line);
+        return false;
       }
+      advance();
+      im.returnType = parseType();
 
       if (!expect(TOK_SEMI, QStringLiteral("expected ';' after interface method signature")))
         return false;
@@ -852,26 +861,32 @@ bool AcParser::parseMethodDef(MethodDef &md) {
   while (peek().type == TOK_IDENT) {
     ParamDef pd;
     pd.name = advance().text;
-    // 可选类型注解：name : Type
-    if (peek().type == TOK_COLON) {
-      advance();  // 跳过 ':'
-      pd.type = parseType();
-    } else {
-      pd.type = AcType::any();
+    // 强制类型注解：name : Type（必须写类型）
+    if (peek().type != TOK_COLON) {
+      *m_error =
+          QStringLiteral("parameter '%1' requires a type annotation (e.g. %1: Type) at line %2")
+              .arg(pd.name)
+              .arg(peek().line);
+      return false;
     }
+    advance();  // 跳过 ':'
+    pd.type = parseType();
     md.params.append(pd);
     if (peek().type == TOK_COMMA) advance();
   }
 
   if (!expect(TOK_RPAREN, QStringLiteral("expected ')' after parameters"))) return false;
 
-  // 可选返回类型注解
-  if (peek().type == TOK_COLON) {
-    advance();  // 跳过 ':'
-    md.returnType = parseType();
-  } else {
-    md.returnType = AcType::any();
+  // 强制返回类型注解
+  if (peek().type != TOK_COLON) {
+    *m_error =
+        QStringLiteral("function '%1' requires a return type annotation (e.g. : Type) at line %2")
+            .arg(md.name)
+            .arg(peek().line);
+    return false;
   }
+  advance();  // 跳过 ':'
+  md.returnType = parseType();
 
   return parseBlock(md.body);
 }

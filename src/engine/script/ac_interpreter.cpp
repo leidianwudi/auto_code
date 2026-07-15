@@ -257,6 +257,21 @@ int AcInterpreter::compareValues(const QJsonValue &l, const QJsonValue &r) {
   return ls.compare(rs);
 }
 
+QString AcInterpreter::inferTypeName(const QJsonValue &val) {
+  if (val.isBool()) return QStringLiteral("Boolean");
+  if (val.isDouble()) return QStringLiteral("Number");
+  if (val.isString()) return QStringLiteral("String");
+  if (val.isArray()) return QStringLiteral("Array");
+  if (val.isObject()) {
+    if (val.toObject().contains(QStringLiteral("__class__"))) {
+      return val.toObject().value(QStringLiteral("__class__")).toString();
+    }
+    return QStringLiteral("Object");
+  }
+  if (val.isNull()) return QStringLiteral("Null");
+  return QStringLiteral("Any");
+}
+
 QJsonValue AcInterpreter::evalUnary(const Expr &expr) {
   QJsonValue val = evalExpr(*expr.operand);
   switch (expr.unaryOp) {
@@ -925,6 +940,10 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
 
       // name = value
       setVar(stmt.assign.name, val);
+      // 记录推导类型（仅当未显式标注类型时）
+      if (!stmt.assign.hasTypeAnnotation) {
+        m_inferredTypes[stmt.assign.name] = inferTypeName(val);
+      }
       break;
     }
 

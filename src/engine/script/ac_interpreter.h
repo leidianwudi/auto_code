@@ -72,6 +72,7 @@ private:
   void popScope();
   static bool isTruthy(const QJsonValue &cond);
   static int compareValues(const QJsonValue &l, const QJsonValue &r);
+  static QString inferTypeName(const QJsonValue &val);
 
   // ── 引用计数辅助 ──
   /// 如果值是受管理的实例，retain
@@ -114,6 +115,7 @@ private:
   QSet<QString> m_staticInited;
   QJsonObject m_currentThis;
   QJsonObject m_modifiedThis;
+  QHash<QString, QString> m_inferredTypes;  ///< 推导类型映射：变量名 → 类型名
   bool m_hasReturned = false;
   bool m_hasBreak = false;
   bool m_hasContinue = false;
