@@ -7,8 +7,10 @@
  */
 
 #include "block_each.h"
+
 #include "../../ac_language.h"
 #include "../tpl_engine.h"
+
 
 /**
  * @brief 处理 ${each varName}...${/each} 循环块
@@ -37,23 +39,23 @@ bool BlockEach::handle(const QString &block, int &pos, const QString &expr,
   QString varName = expr.mid(5).trimmed();
 
   // 查找匹配的闭合标签 ${/each}
-  int closePos = TplBlock::findMatchingClose(
-      block, pos, QString::fromLatin1(AcTemplate::kEachPrefix), QString::fromLatin1(AcTemplate::kEachClose));
+  int closePos =
+      TplBlock::findMatchingClose(block, pos, QString::fromLatin1(AcTemplate::kEachPrefix),
+                                  QString::fromLatin1(AcTemplate::kEachClose));
   if (closePos == -1) {
-    const_cast<TplEngine &>(m_engine).setError(
-        QStringLiteral("Unclosed ${each ") + varName + QStringLiteral("}"));
+    const_cast<TplEngine &>(m_engine).setError(QStringLiteral("Unclosed ${each ") + varName +
+                                               QStringLiteral("}"));
     return false;
   }
 
   // 提取循环体内容
   QString body = block.mid(pos, closePos - pos);
-  pos = closePos + 7; // 跳过 ${/each}
+  pos = closePos + QString::fromLatin1(AcTemplate::kEachClose).length();
 
   // 获取数组数据
   QJsonValue arrVal = m_engine.resolvePath(varName, context);
   if (!arrVal.isArray()) {
-    const_cast<TplEngine &>(m_engine).setError(
-        QStringLiteral("'%1' is not an array").arg(varName));
+    const_cast<TplEngine &>(m_engine).setError(QStringLiteral("'%1' is not an array").arg(varName));
     return false;
   }
 
@@ -63,8 +65,7 @@ bool BlockEach::handle(const QString &block, int &pos, const QString &expr,
     QJsonObject itemContext = context;
     if (item.isObject()) {
       QJsonObject itemObj = item.toObject();
-      for (auto it = itemObj.begin(); it != itemObj.end(); ++it)
-        itemContext[it.key()] = it.value();
+      for (auto it = itemObj.begin(); it != itemObj.end(); ++it) itemContext[it.key()] = it.value();
     } else {
       // 基本类型值放在 "." 键下（与 ${.} 语法配合）
       itemContext[QString::fromLatin1(AcTemplate::kCurrentItem)] = item;

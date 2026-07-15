@@ -913,25 +913,35 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
         } else {
           currentVal = resolveVar(stmt.assign.name);
         }
-        double left = currentVal.toDouble();
-        double right = val.toDouble();
-        switch (stmt.assign.compoundOp) {
-          case 1:
-            val = QJsonValue(left + right);
-            break;  // +=
-          case 2:
-            val = QJsonValue(left - right);
-            break;  // -=
-          case 3:
-            val = QJsonValue(left * right);
-            break;  // *=
-          case 4:
-            if (right == 0) {
-              *m_error = QStringLiteral("division by zero at line %1").arg(stmt.assign.value.line);
-              return;
-            }
-            val = QJsonValue(left / right);
-            break;  // /=
+        // 复合赋值 +=：字符串类型做拼接，数值类型做加法
+        if (stmt.assign.compoundOp == 1) {
+          if (currentVal.isString() || val.isString()) {
+            QString ls = currentVal.isString() ? currentVal.toString()
+                                               : QString::number(currentVal.toDouble());
+            QString rs = val.isString() ? val.toString() : QString::number(val.toDouble());
+            val = QJsonValue(ls + rs);
+          } else {
+            val = QJsonValue(currentVal.toDouble() + val.toDouble());
+          }
+        } else {
+          double left = currentVal.toDouble();
+          double right = val.toDouble();
+          switch (stmt.assign.compoundOp) {
+            case 2:
+              val = QJsonValue(left - right);
+              break;  // -=
+            case 3:
+              val = QJsonValue(left * right);
+              break;  // *=
+            case 4:
+              if (right == 0) {
+                *m_error =
+                    QStringLiteral("division by zero at line %1").arg(stmt.assign.value.line);
+                return;
+              }
+              val = QJsonValue(left / right);
+              break;  // /=
+          }
         }
       }
 
@@ -1203,9 +1213,9 @@ QJsonValue AcInterpreter::evalStringBuiltin(const QString &obj, const QString &m
   if (method == QStringLiteral("trim")) {
     return QJsonValue(obj.trimmed());
   }
-  if (method == QStringLiteral("contains")) {
+  if (method == QStringLiteral("includes")) {
     if (args.isEmpty()) {
-      *m_error = QStringLiteral("string.contains() requires 1 argument at line %1").arg(line);
+      *m_error = QStringLiteral("string.includes() requires 1 argument at line %1").arg(line);
       return QJsonValue();
     }
     QJsonValue arg = evalExpr(*args[0]);
@@ -1380,9 +1390,9 @@ QJsonValue AcInterpreter::evalArrayBuiltin(const QJsonArray &arr, const QString 
     }
     return QJsonValue(-1);
   }
-  if (method == QStringLiteral("contains") || method == QStringLiteral("includes")) {
+  if (method == QStringLiteral("includes")) {
     if (args.isEmpty()) {
-      *m_error = QStringLiteral("array.%1() requires 1 argument at line %2").arg(method).arg(line);
+      *m_error = QStringLiteral("array.includes() requires 1 argument at line %1").arg(line);
       return QJsonValue();
     }
     QJsonValue target = evalExpr(*args[0]);

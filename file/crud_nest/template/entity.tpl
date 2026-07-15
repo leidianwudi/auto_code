@@ -1,4 +1,4 @@
-${if !fileExists(outputPath)}
+﻿${if !fileExists(outputPath)}
 // 此代码为AutoCode框架生成，请勿手动修改
 import {
   Entity,
@@ -17,37 +17,25 @@ import { ToolStr } from '@/common/tool/tool_str';
 import { Coin, COIN_PRECISION, COIN_SCALE } from '@/common/tool/coin';
 import { CoinTransformer } from '@/common/tool/coin_transformer';
 import { Transform } from 'class-transformer';
-${each imports}${imports}
+${each imports}${imports};
 ${/each}
 
-// ${tableDesc}(${tableName}) 实体
+// ${tableDesc} 实体
 @Entity('${tableName}')
-export class ${entityClass} {
-
-${each fields}
-${if isPrimary}
+export class ${entityClass} {${each fields}${if isPrimary}
   @ApiProperty({ description: '${comment}' })
   @PrimaryGeneratedColumn()
-  ${name}: ${tsType};
-${else}
-${if isCoin}
+  ${name}: ${tsType};${else}${if isCoin}
   @ApiProperty({ description: '${comment}' })
   @Column(${columnOptions})
   @Transform(({ value }) => value.toJSON())
-  ${name}: ${tsType};
-${else}
+  ${name}: ${tsType};${else}
   @ApiProperty({ description: '${comment}' })
   @Column(${columnOptions})
-  ${name}: ${tsType};
-${/if}
-${/if}
-${/each}
-
+  ${name}: ${tsType};${/if}${/if}${/each}
 ${each relations}
-	@${decoratorType}(() => ${targetEntity}, (${propertyName}) => ${propertyName}.${inverseProperty})
-	${propertyName}: ${targetEntity}[];
-
-${/each}
+  @${decoratorType}(() => ${targetEntity}, (${propertyName}) => ${propertyName}.${inverseProperty})
+  ${propertyName}: ${targetEntity}[];${/each}
 
   static getTableName() {
     return '${tableName}';

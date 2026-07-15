@@ -1,0 +1,78 @@
+import { Param } from "../template/param.ac";
+
+main {
+
+  let db = new DB({
+    host: "192.168.5.103",
+    port: 3306,
+    user: "root",
+    password: "123456",
+    database: "news"
+  });
+
+  let basePath : String = "D:/output";
+
+  let templates = [
+    { tpl: "../template/entity.tpl", suffix: ".ts" },
+  ];
+
+  let files = getCheckedFiles();
+  let filesLen = files.length;
+  printLog("files count: " + filesLen);
+  for (file in files) {
+    let json = readJson(file);
+    printLog("json tableName: " + json.tableName);
+
+    let schema = db.tableSchema({ table: json.tableName });
+    let schemaLen = schema.length;
+    printLog("schema count: " + schemaLen);
+
+    // 合并 JSON 配置和数据库 schema
+    let combined = merge(json, schema);
+    combined["columns"] = schema; // 表字段信息
+    combined["tableDesc"] = "用户表(" + json.tableName + ")"; // 表说明
+
+    // 使用 Param 类预处理数据
+    let param = new Param();
+    param.setTableData(combined);
+    printLog("entityClass: " + param.entityClass);
+    let fields = param.fields;
+    let fieldsLen = fields.length;
+    printLog("fields count: " + fieldsLen);
+
+    // 调试：打印第一个字段的 columnOptions
+    if (fieldsLen > 0) {
+      let firstField = fields[0];
+      printLog("first field columnOptions: " + firstField.columnOptions);
+      printLog("first field colType: " + firstField.colType);
+      printLog("first field tsType: " + firstField.tsType);
+    }
+
+    // 准备模板数据
+    let tplData = {};
+    tplData["entityClass"] = param.entityClass;
+    tplData["tableName"] = param.tableName;
+    tplData["tableDesc"] = combined["tableDesc"];
+    tplData["fields"] = param.fields;
+    tplData["imports"] = param.imports;
+    tplData["relations"] = param.relations;
+
+    let name = basename(file);
+    tplData["outputPath"] = basePath + "/" + name + ".entity.ts";
+
+    for (cfg in templates) {
+      printLog("tpl path: " + cfg.tpl);
+      let result = renderTpl(cfg.tpl, tplData);
+      let resultLen = result.length;
+      printLog("result length: " + resultLen);
+      if (result) {
+        writeFile(tplData["outputPath"], result);
+        printLog("生成文件: " + tplData["outputPath"]);
+      }
+    }
+  }
+
+  db.disconnect();
+
+  printLog("--- 代码生成结束 ---");
+}

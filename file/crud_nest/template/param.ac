@@ -11,23 +11,23 @@ export class Param {
   function mapType(colType: String): String {
     let t = colType.toLowerCase();
     // 整数类型
-    if (t.contains("int") || t.contains("tinyint") || t.contains("smallint") || t.contains("bigint")) {
+    if (t.includes("int") || t.includes("tinyint") || t.includes("smallint") || t.includes("bigint")) {
       return "number";
     }
     // 浮点/小数类型
-    if (t.contains("decimal") || t.contains("float") || t.contains("double")) {
+    if (t.includes("decimal") || t.includes("float") || t.includes("double")) {
       return "Coin";
     }
     // 字符串类型
-    if (t.contains("varchar") || t.contains("char") || t.contains("text")) {
+    if (t.includes("varchar") || t.includes("char") || t.includes("text")) {
       return "string";
     }
     // 日期时间类型
-    if (t.contains("datetime") || t.contains("timestamp")) {
+    if (t.includes("datetime") || t.includes("timestamp")) {
       return "Date";
     }
     // 布尔类型
-    if (t.contains("boolean") || t.contains("bool") || t.contains("tinyint(1)")) {
+    if (t.includes("boolean") || t.includes("bool") || t.includes("tinyint(1)")) {
       return "boolean";
     }
     // 默认返回 string
@@ -41,28 +41,31 @@ export class Param {
 
   // 判断是否为自增列
   function isAutoIncrement(extra: String): Bool {
-    return extra.toLowerCase().contains("auto_increment");
+    return extra.toLowerCase().includes("auto_increment");
   }
 
   // 判断是否为 decimal/Coin 类型
   function isCoinType(colType: String): Bool {
     let t = colType.toLowerCase();
-    return t.contains("decimal") || t.contains("float") || t.contains("double");
+    return t.includes("decimal") || t.includes("float") || t.includes("double");
   }
 
   // 获取 Column 装饰器参数
   function getColumnOptions(field: Object): String {
     let colType = field.colType;
     let colDefault = field.colDefault;
-    let options = "{ type: '" + this.mapTypeToOrm(colType) + "'";
+
+    // 直接构建 type 部分
+    let ormType = this.mapTypeToOrm(colType);
+    let options = "{ type: '" + ormType + "'";
 
     // 设置默认值
     if (!this.isPrimaryKey(field.colKey)) {
       if (this.isCoinType(colType)) {
         options += ", default: 0.00, precision: COIN_PRECISION, scale: COIN_SCALE, transformer: new CoinTransformer()";
-      } else if (colType.contains("varchar") || colType.contains("char")) {
+      } else if (colType.includes("varchar") || colType.includes("char")) {
         options += ", default: ''";
-      } else if (colType.contains("int") && !this.isAutoIncrement(field.extra)) {
+      } else if (colType.includes("int") && !this.isAutoIncrement(field.extra)) {
         options += ", default: 0";
       }
     }
@@ -74,19 +77,19 @@ export class Param {
   // 映射到 ORM 的 type 值
   function mapTypeToOrm(colType: String): String {
     let t = colType.toLowerCase();
-    if (t.contains("varchar") || t.contains("char") || t.contains("text")) {
+    if (t.includes("varchar") || t.includes("char") || t.includes("text")) {
       return "varchar";
     }
-    if (t.contains("int") || t.contains("tinyint") || t.contains("smallint") || t.contains("bigint")) {
+    if (t.includes("int") || t.includes("tinyint") || t.includes("smallint") || t.includes("bigint")) {
       return "int";
     }
-    if (t.contains("decimal") || t.contains("float") || t.contains("double")) {
+    if (t.includes("decimal") || t.includes("float") || t.includes("double")) {
       return "decimal";
     }
-    if (t.contains("datetime") || t.contains("timestamp")) {
+    if (t.includes("datetime") || t.includes("timestamp")) {
       return "datetime";
     }
-    if (t.contains("boolean") || t.contains("bool")) {
+    if (t.includes("boolean") || t.includes("bool")) {
       return "boolean";
     }
     return "varchar";
