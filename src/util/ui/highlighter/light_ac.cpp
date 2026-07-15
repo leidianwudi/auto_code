@@ -21,12 +21,13 @@ LightAc::LightAc(QTextDocument *parent) : QSyntaxHighlighter(parent) {
   m_rules.append({QRegularExpression(QStringLiteral("\\b[a-zA-Z_]\\w*\\b")), variableFormat});
 
   // ── 1. 关键字（蓝色加粗） ──
+  // 使用 (?<!\.) 负向后顾，排除属性访问（如 col.default）中的关键字高亮
   QTextCharFormat keywordFormat;
   keywordFormat.setForeground(keyword);
   keywordFormat.setFontWeight(QFont::Bold);
   m_rules.append(
-      {QRegularExpression(QStringLiteral("\\b(?:") + AcKeyword::kAll.join(QStringLiteral("|")) +
-                          QStringLiteral(")\\b")),
+      {QRegularExpression(QStringLiteral("(?<![\\.\\w])\\b(?:") +
+                          AcKeyword::kAll.join(QStringLiteral("|")) + QStringLiteral(")\\b")),
        keywordFormat});
 
   // ── 2. 内置函数（紫色加粗） ──
