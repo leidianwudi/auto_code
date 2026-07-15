@@ -139,21 +139,166 @@ static void serializeJsonValue(const QJsonValue &v, QStringList &lines, int inde
   }
 }
 
+// JsonCommentInfo — 记录一条注释信息
+struct JsonCommentInfo {
+  int line;       // 注释所在行号（0-based）
+  int col;        // 注释起始列号（该行内的字符位置）
+  QString text;   // 注释完整内容（包含 // 或 /* */）
+  bool isInline;  // 是否为行内注释（同一行有代码内容）
+};
+
+// extractJsonComments — 从原始 JSON 文本中提取所有注释
+// 返回按行号排序的注释列表
+static QVector<JsonCommentInfo> extractJsonComments(const QString &input) {
+  QVector<JsonCommentInfo> comments;
+  QStringList srcLines = input.split(QLatin1Char('\n'));
+
+  for (int lineIdx = 0; lineIdx < srcLines.size(); ++lineIdx) {
+    const QString &line = srcLines[lineIdx];
+    enum State { kNormal, kString, kLineComment, kBlockComment };
+    State state = kNormal;
+    int commentStart = -1;
+    QString commentText;
+
+    for (int i = 0; i < line.size(); ++i) {
+      const QChar ch = line[i];
+
+      switch (state) {
+        case kNormal:
+          if (ch == QLatin1Char('"')) {
+            state = kString;
+          } else if (ch == QLatin1Char('/') && i + 1 < line.size()) {
+            const QChar next = line[i + 1];
+            if (next == QLatin1Char('/')) {
+              state = kLineComment;
+              commentStart = i;
+              commentText = line.mid(i);
+              break;
+            } else if (next == QLatin1Char('*')) {
+              state = kBlockComment;
+              commentStart = i;
+              commentText += ch;
+              ++i;
+            }
+          }
+          break;
+
+        case kString:
+          if (ch == QLatin1Char('\\') && i + 1 < line.size()) {
+            ++i;
+          } else if (ch == QLatin1Char('"')) {
+            state = kNormal;
+          }
+          break;
+
+        case kBlockComment:
+          commentText += ch;
+          if (ch == QLatin1Char('*') && i + 1 < line.size() && line[i + 1] == QLatin1Char('/')) {
+            commentText += QLatin1Char('/');
+            ++i;
+            state = kNormal;
+          }
+          break;
+
+        default:
+          break;
+      }
+    }
+
+    if (!commentText.isEmpty() && commentStart >= 0) {
+      JsonCommentInfo info;
+      info.line = lineIdx;
+      info.col = commentStart;
+      info.isInline = (commentStart > 0 && line.left(commentStart).trimmed().isEmpty() == false);
+
+      // 处理跨行块注释
+      if (state == kBlockComment) {
+        info.text = commentText + QLatin1Char('\n');
+        for (int j = lineIdx + 1; j < srcLines.size(); ++j) {
+          const QString &blockLine = srcLines[j];
+          int endPos = blockLine.indexOf(QLatin1String("*/"));
+          if (endPos != -1) {
+            info.text += blockLine.left(endPos + 2);
+            break;
+          } else {
+            info.text += blockLine + QLatin1Char('\n');
+          }
+        }
+      } else {
+        info.text = commentText;
+      }
+
+      comments.append(info);
+    }
+  }
+
+  return comments;
+}
+
 QString FormatCode::formatJson(const QString &input) {
   QJsonParseError err;
   QJsonDocument doc = UtilJson::fromJson(input, &err);
-  if (err.error != QJsonParseError::NoError) return input;  // 解析失败，返回原始文本
+  if (err.error != QJsonParseError::NoError) return input;
+
+  QVector<JsonCommentInfo> allComments = extractJsonComments(input);
+
+  // 分离行内注释和独立注释
+  QVector<JsonCommentInfo> inlineComments;      // 行内注释（与代码同行）
+  QVector<JsonCommentInfo> standaloneComments;  // 独立注释行
+
+  for (const JsonCommentInfo &cmt : allComments) {
+    if (cmt.isInline) {
+      inlineComments.append(cmt);
+    } else {
+      standaloneComments.append(cmt);
+    }
+  }
 
   QStringList lines;
   lines.append(QString());
   serializeJsonValue(doc.isObject() ? QJsonValue(doc.object()) : QJsonValue(doc.array()), lines, 0,
                      true);
 
-  // 去除首尾空行
   while (!lines.isEmpty() && lines.first().trimmed().isEmpty()) lines.removeFirst();
   while (!lines.isEmpty() && lines.last().trimmed().isEmpty()) lines.removeLast();
 
-  return lines.join(QLatin1Char('\n')) + QLatin1Char('\n');
+  // 将行内注释分散到对应的值行（"key": value 格式的行）末尾
+  QStringList resultLines;
+  int inlineIdx = 0;
+
+  for (int i = 0; i < lines.size(); ++i) {
+    QString line = lines[i];
+
+    // 只对包含键值对的行（有引号且不是纯括号行）追加行内注释
+    bool isValueLine = line.contains(QLatin1Char('"')) &&
+                       !line.trimmed().startsWith(QLatin1Char('{')) &&
+                       !line.trimmed().startsWith(QLatin1Char('[')) &&
+                       !line.trimmed().startsWith(QLatin1Char('}')) &&
+                       !line.trimmed().startsWith(QLatin1Char(']'));
+
+    if (isValueLine && inlineIdx < inlineComments.size()) {
+      line += QLatin1Char(' ') + inlineComments[inlineIdx].text.trimmed();
+      ++inlineIdx;
+    }
+
+    resultLines.append(line);
+
+    // 在当前行后插入独立注释（如果有）
+    // 简单策略：把独立注释均匀分布在输出中或集中放在末尾
+  }
+
+  // 追加剩余未分配的行内注释
+  while (inlineIdx < inlineComments.size()) {
+    resultLines.append(inlineComments[inlineIdx].text.trimmed());
+    ++inlineIdx;
+  }
+
+  // 追加所有独立注释到末尾
+  for (const JsonCommentInfo &cmt : standaloneComments) {
+    resultLines.append(cmt.text.trimmed());
+  }
+
+  return resultLines.join(QLatin1Char('\n')) + QLatin1Char('\n');
 }
 
 // ──────────────────────────────────────────────────────────────

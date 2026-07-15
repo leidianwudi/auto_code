@@ -1,5 +1,4 @@
 {
-  ///sss
-    "modelName": "sys\\sys_1111task", //模块11名字，多级文件夹用 \\ 隔开1
-    "tableName": "sys_task"  // 表名
+  "modelName": "syssys_1111task", //模块11名字，多级文件夹用 \\ 隔开1 // 表名 //啊啊 //嘶嘶声
+  "tableName": "sys_task" //aaaaaaaa
 }
