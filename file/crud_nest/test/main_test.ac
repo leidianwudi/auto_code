@@ -81,7 +81,7 @@ class Person implements Printable {
   }
 }
 
-// ── 静态类测试 ──
+// ── 静态类测试  1 ──
 
 class Counter {
   static let count = 0;

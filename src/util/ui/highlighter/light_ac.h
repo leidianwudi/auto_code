@@ -44,5 +44,8 @@ private:
     QTextCharFormat format;      ///< 文本格式
   };
 
-  QVector<HighlightRule> m_rules;  ///< 高亮规则列表
+  void highlightNonCommentText(const QString &text);
+
+  QVector<HighlightRule> m_rules;
+  QTextCharFormat m_commentFormat;
 };
