@@ -23,12 +23,13 @@
 #include <QTreeWidgetItemIterator>
 
 #include "src/engine/ac_language.h"
-#include "src/tool/common/file_util.h"
-#include "src/tool/common/tool_json.h"
-#include "src/tool/ui/component/aui_icon.h"
-#include "src/tool/ui/component/aui_style.h"
-#include "src/tool/ui/rename_dialog.h"
 #include "src/ui/create/create_mgr.h"
+#include "src/util/common/file_util.h"
+#include "src/util/common/tool_json.h"
+#include "src/util/ui/component/aui_icon.h"
+#include "src/util/ui/component/aui_style.h"
+#include "src/util/ui/rename_dialog.h"
+
 
 // ──────────────────────────────────────────────────────────────
 //  ModifiedFileDelegate 实现

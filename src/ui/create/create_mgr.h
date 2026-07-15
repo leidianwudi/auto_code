@@ -11,8 +11,7 @@
 
 #include <QObject>
 
-#include "src/tool/ui/aui_mgr.h"
-
+#include "src/util/ui/aui_mgr.h"
 
 class QWidget;
 

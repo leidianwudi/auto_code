@@ -14,12 +14,12 @@
 #include "demo_model.h"
 #include "demo_ui.h"
 #include "src/engine/tpl/tpl_engine.h"
-#include "src/tool/common/tool_json.h"
-#include "src/tool/ui/code/code_editor.h"
-#include "src/tool/ui/component/aui_message_box.h"
-#include "src/tool/ui/highlighter/light_json.h"
-#include "src/tool/ui/highlighter/light_tpl.h"
-#include "src/tool/ui/highlighter/light_ts.h"
+#include "src/util/common/tool_json.h"
+#include "src/util/ui/code/code_editor.h"
+#include "src/util/ui/component/aui_message_box.h"
+#include "src/util/ui/highlighter/light_json.h"
+#include "src/util/ui/highlighter/light_tpl.h"
+#include "src/util/ui/highlighter/light_ts.h"
 
 // ──────────────────────────────────────────────────────────────
 //  onCreateWindow — 创建 DemoUi 窗口（open() 时调用）

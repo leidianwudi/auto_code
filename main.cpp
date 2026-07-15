@@ -11,8 +11,9 @@
 #include <QApplication>
 
 #include "src/engine/function/fun_mgr.h"
-#include "src/tool/ui/aui_window.h"
 #include "src/ui/main_dev/main_dev_mgr.h"
+#include "src/util/ui/aui_window.h"
+
 
 /**
  * @brief 应用程序主函数

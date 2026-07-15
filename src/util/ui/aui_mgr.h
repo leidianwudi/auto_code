@@ -25,7 +25,7 @@
 #include <QObject>
 #include <QWidget>
 
-#include "src/tool/design/Singleton.h"
+#include "src/util/design/Singleton.h"
 
 /**
  * @class AuiMgr

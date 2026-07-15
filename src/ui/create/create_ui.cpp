@@ -10,10 +10,10 @@
 #include <QVBoxLayout>
 
 #include "create_model.h"
-#include "src/tool/ui/aui_window.h"
-#include "src/tool/ui/component/aui_button.h"
-#include "src/tool/ui/component/aui_combo_box.h"
-#include "src/tool/ui/component/aui_style.h"
+#include "src/util/ui/aui_window.h"
+#include "src/util/ui/component/aui_button.h"
+#include "src/util/ui/component/aui_combo_box.h"
+#include "src/util/ui/component/aui_style.h"
 
 // ════════════════════════════════════════════════════════════
 //  构造

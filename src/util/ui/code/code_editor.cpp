@@ -27,10 +27,10 @@
 #include "src/engine/script/ac_validator.h"
 #include "src/engine/tpl/tpl_validator.h"
 #include "src/engine/validation_result.h"
-#include "src/tool/ui/code/format_code.h"
-#include "src/tool/ui/code/guess_code.h"
-#include "src/tool/ui/component/aui_error_tool_tip.h"
-#include "src/tool/ui/component/aui_style.h"
+#include "src/util/ui/code/format_code.h"
+#include "src/util/ui/code/guess_code.h"
+#include "src/util/ui/component/aui_error_tool_tip.h"
+#include "src/util/ui/component/aui_style.h"
 
 // ──────────────────────────────────────────────────────────────
 //  构造 / 基本接口

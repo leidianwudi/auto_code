@@ -13,7 +13,7 @@
 #include <QStringList>
 
 #include "src/engine/ac_language.h"
-#include "src/tool/common/tool_json.h"
+#include "src/util/common/tool_json.h"
 
 // ──────────────────────────────────────────────────────────────
 //  公共接口

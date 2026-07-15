@@ -24,11 +24,11 @@
 #include "main_dev_ui_ext.h"
 #include "src/engine/ac_language.h"
 #include "src/engine/script/ac_engine.h"
-#include "src/tool/ui/code/code_editor.h"
-#include "src/tool/ui/component/aui_message_box.h"
-#include "src/tool/ui/highlighter/light_ac.h"
-#include "src/tool/ui/highlighter/light_json.h"
-#include "src/tool/ui/highlighter/light_tpl.h"
+#include "src/util/ui/code/code_editor.h"
+#include "src/util/ui/component/aui_message_box.h"
+#include "src/util/ui/highlighter/light_ac.h"
+#include "src/util/ui/highlighter/light_json.h"
+#include "src/util/ui/highlighter/light_tpl.h"
 
 // ──────────────────────────────────────────────────────────────
 //  静态方法（通过单例转发）

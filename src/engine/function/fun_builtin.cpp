@@ -13,7 +13,7 @@
 #include "../ac_language.h"
 #include "../tpl/tpl_engine.h"
 #include "fun_mgr.h"
-#include "src/tool/common/tool_json.h"
+#include "src/util/common/tool_json.h"
 
 // ============================================================================
 // 上下文

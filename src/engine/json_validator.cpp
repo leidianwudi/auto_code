@@ -8,7 +8,7 @@
 #include <QJsonParseError>
 #include <QTextBlock>
 
-#include "src/tool/common/tool_json.h"
+#include "src/util/common/tool_json.h"
 
 QVector<ValidationResult> JsonValidator::validate(const QString &source) {
   QVector<ValidationResult> results;

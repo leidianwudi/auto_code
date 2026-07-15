@@ -17,8 +17,8 @@
 #include <QSplitter>
 #include <QStyleOptionTab>
 
-#include "src/tool/common/file_util.h"
-#include "src/tool/ui/component/aui_style.h"
+#include "src/util/common/file_util.h"
+#include "src/util/ui/component/aui_style.h"
 
 // ════════════════════════════════════════════════════════════
 //  DraggableTabBar 实现

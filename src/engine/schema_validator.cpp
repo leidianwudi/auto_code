@@ -10,7 +10,7 @@
 #include <QJsonObject>
 #include <QJsonParseError>
 
-#include "src/tool/common/tool_json.h"
+#include "src/util/common/tool_json.h"
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  Schema JSON 键名常量（文件内部使用）

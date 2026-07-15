@@ -13,8 +13,7 @@
 
 #include "src/engine/ac_language.h"
 #include "src/engine/script/ac_lexer.h"
-#include "src/tool/ui/component/aui_style.h"
-
+#include "src/util/ui/component/aui_style.h"
 
 // ──────────────────────────────────────────────────────────────
 //  补全词库

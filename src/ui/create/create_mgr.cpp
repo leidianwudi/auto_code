@@ -11,7 +11,7 @@
 
 #include "create_model.h"
 #include "create_ui.h"
-#include "src/tool/ui/component/aui_message_box.h"
+#include "src/util/ui/component/aui_message_box.h"
 
 // ════════════════════════════════════════════════════════════
 //  onCreateWindow — AuiMgr 接口

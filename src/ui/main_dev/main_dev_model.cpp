@@ -8,7 +8,7 @@
 #include <QFile>
 #include <QTextStream>
 
-#include "src/tool/ui/code/code_editor.h"
+#include "src/util/ui/code/code_editor.h"
 
 // ──────────────────────────────────────────────────────────────
 //  查询方法

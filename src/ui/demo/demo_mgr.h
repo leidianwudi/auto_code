@@ -10,9 +10,10 @@
 
 #pragma once
 
-#include "src/tool/ui/aui_mgr.h"
-
 #include <QObject>
+
+#include "src/util/ui/aui_mgr.h"
+
 
 class DemoUi;
 class DemoModel;

@@ -12,7 +12,7 @@
 
 #include "../ac_language.h"
 #include "fun_mgr.h"
-#include "src/tool/common/tool_json.h"
+#include "src/util/common/tool_json.h"
 
 // init — 注册 JSON 函数到 FunMgr（builtin 伪类）
 void FunJson::init() {

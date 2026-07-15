@@ -1,0 +1,40 @@
+[1mdiff --git a/src/engine/script/ac_interpreter.h b/src/engine/script/ac_interpreter.h[m
+[1mindex 8bfd105..8253ffc 100644[m
+[1m--- a/src/engine/script/ac_interpreter.h[m
+[1m+++ b/src/engine/script/ac_interpreter.h[m
+[36m@@ -46,11 +46,6 @@[m [mpublic:[m
+   /// @brief 获取已解析的类定义集合（供类型检查器使用）[m
+   const QHash<QString, ClassDef> &classes() const { return m_classes; }[m
+ [m
+[31m-  // ── 辅助 ──[m
+[31m-  /// @brief 校验表达式中是否有未声明的标识符[m
+[31m-  QStringList validateUndeclaredIdents(const Block &program,[m
+[31m-                                       const QSet<QString> &declaredVars) const;[m
+[31m-[m
+ private:[m
+   // ── 执行 ──[m
+   void execBlock(const Block &block);[m
+[36m@@ -97,23 +92,6 @@[m [mprivate:[m
+   // ── 顶层函数执行 ──[m
+   QJsonValue execUserFunction(const MethodDef &func, const QJsonValue &callArgs);[m
+ [m
+[31m-  // ── 验证 ──[m
+[31m-  /// @brief 验证辅助数据结构：类方法名列表 + 变量→类名映射[m
+[31m-  struct ValidationContext {[m
+[31m-    QHash<QString, QStringList> classMethods;  ///< 类名 → 方法名列表[m
+[31m-    QHash<QString, QString> varClass;          ///< 变量名 → 类名（let x = new Car()）[m
+[31m-  };[m
+[31m-[m
+[31m-  /// @brief 预扫描 AST，收集类定义和 new 赋值信息[m
+[31m-  void collectValidationInfo(const Block &block, ValidationContext &ctx) const;[m
+[31m-[m
+[31m-  void validateExprIdents(const Expr &expr, QStringList &errors, QSet<QString> &scopeVars,[m
+[31m-                          const ValidationContext &ctx) const;[m
+[31m-  void validateStmtIdents(const Block::Stmt &stmt, QStringList &errors, QSet<QString> &scopeVars,[m
+[31m-                          ValidationContext &ctx) const;[m
+[31m-  void validateBlockIdents(const Block &block, QStringList &errors, QSet<QString> &scopeVars,[m
+[31m-                           ValidationContext &ctx) const;[m
+[31m-[m
+   // ── 运行状态 ──[m
+   QString *m_error = nullptr;[m
+   QString m_scriptDir;[m
