@@ -1,0 +1,5 @@
+{
+  ///sss
+    "modelName": "sys\\sys_1111task", //模块11名字，多级文件夹用 \\ 隔开1
+    "tableName": "sys_task"  // 表名
+}

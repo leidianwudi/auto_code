@@ -44,9 +44,17 @@ public:
   static QString stripComments(const QString &text);
 
   /**
-   * @brief 解析 JSON 字符串（自动剥离注释）
+   * @brief 剥离 JSON 文本中的注释，同时记录位置映射
+   * @param text 包含注释的 JSON 文本
+   * @param offsetMap 输出参数，存储"剥离后文本索引 → 原始文本索引"的映射
+   * @return 剥离注释后的纯 JSON 文本
+   */
+  static QString stripCommentsWithMap(const QString &text, QVector<int> &offsetMap);
+
+  /**
+   * @brief 解析 JSON 字符串（自动剥离注释），错误位置已映射回原始文本
    * @param text JSON 文本（可包含注释）
-   * @param error 解析错误信息（可选，传入则填充）
+   * @param error 解析错误信息（可选，传入则填充，offset 已修正为原始文本位置）
    * @return 解析得到的 JSON 文档
    */
   static QJsonDocument fromJson(const QString &text, QJsonParseError *error = nullptr);
