@@ -88,6 +88,16 @@ void AcValidator::collectClassesAndFunctions(const Block &program) {
       m_classes.insert(stmt.classDef.name, stmt.classDef);
     } else if (stmt.kind == Block::Stmt::kFuncDef) {
       m_functions.insert(stmt.funcDef.name, stmt.funcDef);
+    } else if (stmt.kind == Block::Stmt::kImport) {
+      // import 的符号名在编辑器校验时视为已知类/函数，避免误报 unknown class
+      for (const auto &name : stmt.importStmt.names) {
+        if (!m_classes.contains(name)) {
+          ClassDef importedClass;
+          importedClass.name = name;
+          importedClass.isNative = true;
+          m_classes.insert(name, importedClass);
+        }
+      }
     }
   }
 }

@@ -218,6 +218,8 @@ void MainDevUi::setupStatusBar(QWidget *contentWidget, QVBoxLayout *contentLayou
   m_errorLabel = new QLabel;
   m_errorLabel->setStyleSheet(
       QStringLiteral("QLabel { color: %1; }").arg(AuiStyle::errorTextColor().name()));
+  m_errorLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+  m_errorLabel->setCursor(Qt::IBeamCursor);
   statusBarContentLayout->addWidget(m_errorLabel, 1);
 
   m_cursorPositionLabel = new QLabel(QStringLiteral("行: 1, 列: 1"));
