@@ -12,7 +12,7 @@
 
 #include "../ac_language.h"
 #include "fun_mgr.h"
-#include "src/util/common/tool_json.h"
+#include "src/util/common/util_json.h"
 
 // init — 注册 JSON 函数到 FunMgr（builtin 伪类）
 void FunJson::init() {
@@ -28,7 +28,7 @@ QJsonValue FunJson::readJson(const QJsonArray &args) {
   }
 
   QJsonParseError parseError;
-  QJsonDocument doc = ToolJson::loadFile(args[0].toString(), &parseError);
+  QJsonDocument doc = UtilJson::loadFile(args[0].toString(), &parseError);
   if (parseError.error != QJsonParseError::NoError || doc.isNull()) {
     FunMgr::setError(
         QStringLiteral("readJson() cannot open or parse file: '%1'").arg(args[0].toString()));

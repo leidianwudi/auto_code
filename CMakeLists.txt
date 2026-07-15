@@ -65,10 +65,10 @@ qt_add_executable(auto_code
     src/engine/function/fun_builtin.h
     src/engine/function/fun_builtin.cpp
     src/engine/ac_language.h
-    src/util/common/tool_json.h
-    src/util/common/tool_json.cpp
-    src/util/common/file_util.h
-    src/util/common/file_util.cpp
+    src/util/common/util_json.h
+    src/util/common/util_json.cpp
+    src/util/common/util_file.h
+    src/util/common/util_file.cpp
     src/util/ui/code/tree_dir.h
     src/util/ui/code/tree_dir.cpp
     src/util/ui/code/code_editor.h

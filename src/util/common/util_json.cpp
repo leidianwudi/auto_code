@@ -1,9 +1,9 @@
 /**
- * @file tool_json.cpp
+ * @file util_json.cpp
  * @brief JSON 解析工具类实现
  */
 
-#include "tool_json.h"
+#include "util_json.h"
 
 #include <QFile>
 
@@ -16,7 +16,7 @@
 //   - kBlockComment:块注释，直到 "*/" 结束
 //
 // 保留换行符以维持行号一致，便于解析错误定位。
-QString ToolJson::stripComments(const QString &text) {
+QString UtilJson::stripComments(const QString &text) {
   QString result;
   result.reserve(text.size());
 
@@ -80,20 +80,20 @@ QString ToolJson::stripComments(const QString &text) {
 }
 
 // fromJson — 解析 JSON 字符串（自动剥离注释）
-QJsonDocument ToolJson::fromJson(const QString &text, QJsonParseError *error) {
+QJsonDocument UtilJson::fromJson(const QString &text, QJsonParseError *error) {
   QString stripped = stripComments(text);
   return QJsonDocument::fromJson(stripped.toUtf8(), error);
 }
 
 // fromJson — 解析 JSON 字节数组（自动剥离注释）
-QJsonDocument ToolJson::fromJson(const QByteArray &data, QJsonParseError *error) {
+QJsonDocument UtilJson::fromJson(const QByteArray &data, QJsonParseError *error) {
   QString text = QString::fromUtf8(data);
   QString stripped = stripComments(text);
   return QJsonDocument::fromJson(stripped.toUtf8(), error);
 }
 
 // loadFile — 从文件加载并解析 JSON（自动剥离注释）
-QJsonDocument ToolJson::loadFile(const QString &filePath, QJsonParseError *error) {
+QJsonDocument UtilJson::loadFile(const QString &filePath, QJsonParseError *error) {
   QFile f(filePath);
   if (!f.open(QIODevice::ReadOnly)) {
     if (error) error->error = QJsonParseError::NoError;

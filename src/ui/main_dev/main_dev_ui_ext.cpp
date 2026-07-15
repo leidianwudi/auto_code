@@ -17,7 +17,7 @@
 #include <QSplitter>
 #include <QStyleOptionTab>
 
-#include "src/util/common/file_util.h"
+#include "src/util/common/util_file.h"
 #include "src/util/ui/component/aui_style.h"
 
 // ════════════════════════════════════════════════════════════
@@ -80,7 +80,7 @@ void DraggableTabBar::mousePressEvent(QMouseEvent *event) {
         auto *tw = qobject_cast<QTabWidget *>(parentWidget());
         if (tw) {
           QString path = tw->tabToolTip(index);
-          if (!path.isEmpty()) FileUtil::showInExplorer(path);
+          if (!path.isEmpty()) UtilFile::showInExplorer(path);
         }
       } else if (chosen == closeOthers) {
         emit closeOthersRequested(index);

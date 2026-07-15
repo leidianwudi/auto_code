@@ -1,12 +1,12 @@
-#ifndef FILE_UTIL_H
-#define FILE_UTIL_H
+#ifndef UTIL_FILE_H
+#define UTIL_FILE_H
 
 #include <QString>
 
 /**
  * @brief 文件系统通用工具
  */
-class FileUtil {
+class UtilFile {
 public:
   /**
    * @brief 在文件资源管理器中显示文件或文件夹
@@ -20,4 +20,4 @@ public:
   static void showInExplorer(const QString &path);
 };
 
-#endif  // FILE_UTIL_H
+#endif  // UTIL_FILE_H

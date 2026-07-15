@@ -15,7 +15,7 @@
 
 /// @brief JSON 语法验证器 — 实现 IValidator 接口
 ///
-/// 使用 ToolJson::fromJson 解析文本（支持注释），
+/// 使用 UtilJson::fromJson 解析文本（支持注释），
 /// 将解析错误（偏移量）转换为行列号。
 class JsonValidator : public IValidator {
 public:

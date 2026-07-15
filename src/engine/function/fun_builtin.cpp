@@ -13,7 +13,7 @@
 #include "../ac_language.h"
 #include "../tpl/tpl_engine.h"
 #include "fun_mgr.h"
-#include "src/util/common/tool_json.h"
+#include "src/util/common/util_json.h"
 
 // ============================================================================
 // 上下文
@@ -163,7 +163,7 @@ QJsonValue FunBuiltin::getCheckedFiles(const QJsonArray & /*args*/) {
   QString treePath = s_ctx.rootDir.isEmpty() ? s_ctx.scriptDir + QStringLiteral("/tree.config")
                                              : s_ctx.rootDir + QStringLiteral("/tree.config");
   QJsonArray result;
-  QJsonDocument doc = ToolJson::loadFile(treePath);
+  QJsonDocument doc = UtilJson::loadFile(treePath);
   if (!doc.isNull()) {
     QJsonArray checked = doc.object().value(QStringLiteral("checked")).toArray();
     for (const QJsonValue &v : checked) {

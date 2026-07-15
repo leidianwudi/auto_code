@@ -10,7 +10,7 @@
 #include <QJsonObject>
 #include <QJsonParseError>
 
-#include "src/util/common/tool_json.h"
+#include "src/util/common/util_json.h"
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  Schema JSON 键名常量（文件内部使用）
@@ -32,9 +32,9 @@ inline constexpr const char *kTypeObject = "object";
 
 // load — 加载 schema 定义文件
 bool SchemaValidator::load(const QString &filePath) {
-  // 使用 ToolJson 加载（支持 // 行注释和 /* */ 块注释）
+  // 使用 UtilJson 加载（支持 // 行注释和 /* */ 块注释）
   QJsonParseError err;
-  QJsonDocument doc = ToolJson::loadFile(filePath, &err);
+  QJsonDocument doc = UtilJson::loadFile(filePath, &err);
   if (err.error != QJsonParseError::NoError || doc.isNull()) return false;
 
   // 根节点必须是对象

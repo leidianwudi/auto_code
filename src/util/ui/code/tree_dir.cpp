@@ -24,12 +24,11 @@
 
 #include "src/engine/ac_language.h"
 #include "src/ui/create/create_mgr.h"
-#include "src/util/common/file_util.h"
-#include "src/util/common/tool_json.h"
+#include "src/util/common/util_file.h"
+#include "src/util/common/util_json.h"
 #include "src/util/ui/component/aui_icon.h"
 #include "src/util/ui/component/aui_style.h"
 #include "src/util/ui/rename_dialog.h"
-
 
 // ──────────────────────────────────────────────────────────────
 //  ModifiedFileDelegate 实现
@@ -383,7 +382,7 @@ void TreeDir::saveState() {
 void TreeDir::loadState() {
   if (m_configPath.isEmpty()) return;
 
-  QJsonDocument doc = ToolJson::loadFile(m_configPath);
+  QJsonDocument doc = UtilJson::loadFile(m_configPath);
   if (doc.isNull() || !doc.isObject()) return;
 
   QJsonObject obj = doc.object();
@@ -632,7 +631,7 @@ void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
     QAction *refreshAct = menu.addAction(QStringLiteral("刷新"));
     QAction *chosen = menu.exec(event->globalPos());
     if (chosen == showInExplorerAct) {
-      FileUtil::showInExplorer(buildFolderPath(item, m_rootPath));
+      UtilFile::showInExplorer(buildFolderPath(item, m_rootPath));
     } else if (chosen == newAct) {
       QString dirPath = buildFolderPath(item, m_rootPath);
       CreateMgr::createNew(dirPath, this);
@@ -668,7 +667,7 @@ void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
   }
   QAction *chosen = menu.exec(event->globalPos());
   if (chosen == showInExplorerAct) {
-    FileUtil::showInExplorer(filePath);
+    UtilFile::showInExplorer(filePath);
   } else if (chosen == renameAct) {
     bool ok;
     QString newName = RenameDialog::getNewName(this, item->text(0), &ok);

@@ -1,5 +1,5 @@
 /**
- * @file tool_json.h
+ * @file util_json.h
  * @brief JSON 解析工具类 — 支持注释剥离
  *
  * 基于 Qt 官方 QJsonDocument 解析，在解析前自动剥离行注释和块注释。
@@ -14,7 +14,7 @@
 #include <QString>
 
 /**
- * @class ToolJson
+ * @class UtilJson
  * @brief JSON 解析工具类，统一支持注释
  *
  * Qt 官方 QJsonDocument 严格遵循 RFC 8259，不支持注释。
@@ -23,14 +23,14 @@
  * 使用方式：
  * @code
  *   QJsonParseError err;
- *   QJsonDocument doc = ToolJson::fromJson(text, &err);
+ *   QJsonDocument doc = UtilJson::fromJson(text, &err);
  *   if (err.error != QJsonParseError::NoError) { ... }
  *
  *   // 或直接从文件加载
- *   QJsonDocument doc = ToolJson::loadFile("data.json", &err);
+ *   QJsonDocument doc = UtilJson::loadFile("data.json", &err);
  * @endcode
  */
-class ToolJson {
+class UtilJson {
 public:
   /**
    * @brief 剥离 JSON 文本中的注释
