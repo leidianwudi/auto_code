@@ -23,6 +23,7 @@
 #include <QTreeWidgetItemIterator>
 
 #include "src/engine/ac_language.h"
+#include "src/tool/common/file_util.h"
 #include "src/tool/common/tool_json.h"
 #include "src/tool/ui/component/aui_icon.h"
 #include "src/tool/ui/component/aui_style.h"
@@ -619,15 +620,19 @@ void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
   QString filePath = item->data(0, Qt::UserRole + 1).toString();
 
   if (filePath.isEmpty()) {
-    // 文件夹节点：显示 [新建] [重命名] [删除] [刷新]
+    // 文件夹节点：[在文件资源管理器中显示] [新建] [重命名] [删除] [刷新]
     QMenu menu(this);
+    QAction *showInExplorerAct = menu.addAction(QStringLiteral("在文件资源管理器中显示"));
+    menu.addSeparator();
     QAction *newAct = menu.addAction(QStringLiteral("新建"));
     QAction *renameAct = menu.addAction(QStringLiteral("重命名"));
     QAction *deleteAct = menu.addAction(QStringLiteral("删除"));
     menu.addSeparator();
     QAction *refreshAct = menu.addAction(QStringLiteral("刷新"));
     QAction *chosen = menu.exec(event->globalPos());
-    if (chosen == newAct) {
+    if (chosen == showInExplorerAct) {
+      FileUtil::showInExplorer(buildFolderPath(item, m_rootPath));
+    } else if (chosen == newAct) {
       QString dirPath = buildFolderPath(item, m_rootPath);
       CreateMgr::createNew(dirPath, this);
       refreshTree();
@@ -647,8 +652,10 @@ void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
     return;
   }
 
-  // 文件节点：[重命名] [删除]，.ac 文件额外显示 [设为/取消启动项]
+  // 文件节点：[在文件资源管理器中显示] [重命名] [删除]，.ac 文件额外显示 [设为/取消启动项]
   QMenu menu(this);
+  QAction *showInExplorerAct = menu.addAction(QStringLiteral("在文件资源管理器中显示"));
+  menu.addSeparator();
   QAction *renameAct = menu.addAction(QStringLiteral("重命名"));
   QAction *deleteAct = menu.addAction(QStringLiteral("删除"));
   if (filePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive)) {
@@ -659,7 +666,9 @@ void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
       menu.addAction(QStringLiteral("设为启动项"));
   }
   QAction *chosen = menu.exec(event->globalPos());
-  if (chosen == renameAct) {
+  if (chosen == showInExplorerAct) {
+    FileUtil::showInExplorer(filePath);
+  } else if (chosen == renameAct) {
     bool ok;
     QString newName = RenameDialog::getNewName(this, item->text(0), &ok);
     if (ok) {

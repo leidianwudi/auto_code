@@ -17,6 +17,7 @@
 #include <QSplitter>
 #include <QStyleOptionTab>
 
+#include "src/tool/common/file_util.h"
 #include "src/tool/ui/component/aui_style.h"
 
 // ════════════════════════════════════════════════════════════
@@ -70,10 +71,18 @@ void DraggableTabBar::mousePressEvent(QMouseEvent *event) {
     int index = tabAt(event->pos());
     if (index >= 0) {
       QMenu menu(this);
+      QAction *showInExplorerAct = menu.addAction(QStringLiteral("在文件资源管理器中显示"));
+      menu.addSeparator();
       QAction *closeOthers = menu.addAction(QStringLiteral("关闭其它"));
       QAction *closeAll = menu.addAction(QStringLiteral("关闭全部"));
       QAction *chosen = menu.exec(event->globalPos());
-      if (chosen == closeOthers) {
+      if (chosen == showInExplorerAct) {
+        auto *tw = qobject_cast<QTabWidget *>(parentWidget());
+        if (tw) {
+          QString path = tw->tabToolTip(index);
+          if (!path.isEmpty()) FileUtil::showInExplorer(path);
+        }
+      } else if (chosen == closeOthers) {
         emit closeOthersRequested(index);
       } else if (chosen == closeAll) {
         emit closeAllRequested();

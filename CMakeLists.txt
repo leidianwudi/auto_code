@@ -67,6 +67,8 @@ qt_add_executable(auto_code
     src/engine/ac_language.h
     src/tool/common/tool_json.h
     src/tool/common/tool_json.cpp
+    src/tool/common/file_util.h
+    src/tool/common/file_util.cpp
     src/tool/ui/code/tree_dir.h
     src/tool/ui/code/tree_dir.cpp
     src/tool/ui/code/code_editor.h
