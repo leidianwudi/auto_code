@@ -153,6 +153,8 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
 
     case Expr::kBinary:
       return evalBinary(expr);
+    case Expr::kUnary:
+      return evalUnary(expr);
   }
 
   return QJsonValue();
@@ -192,6 +194,19 @@ QJsonValue AcInterpreter::evalBinary(const Expr &expr) {
         return QJsonValue();
       }
       return QJsonValue(l.toDouble() / r.toDouble());
+    case Expr::kOr:
+      return QJsonValue(isTruthy(l) || isTruthy(r));
+    case Expr::kAnd:
+      return QJsonValue(isTruthy(l) && isTruthy(r));
+  }
+  return QJsonValue();
+}
+
+QJsonValue AcInterpreter::evalUnary(const Expr &expr) {
+  QJsonValue val = evalExpr(*expr.operand);
+  switch (expr.unaryOp) {
+    case Expr::kNot:
+      return QJsonValue(!isTruthy(val));
   }
   return QJsonValue();
 }

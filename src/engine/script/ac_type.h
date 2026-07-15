@@ -55,6 +55,9 @@ enum TokenType {
   TOK_MINUS,       ///< -
   TOK_MUL,         ///< *
   TOK_DIV,         ///< /
+  TOK_OR,          ///< ||（逻辑或）
+  TOK_AND,         ///< &&（逻辑与）
+  TOK_NOT,         ///< !（逻辑非）
   TOK_SEMI,        ///< ;（语句结束）
   TOK_FOR,         ///< for 关键字
   TOK_IN,          ///< in 关键字
@@ -254,6 +257,7 @@ struct Expr {
     kNewInstance,   ///< new ClassName()
     kThis,          ///< this 关键字
     kBinary,        ///< 二元运算 left op right
+    kUnary,         ///< 一元运算 !expr（逻辑非）
     kBool,          ///< 布尔字面量 true/false
     kStaticAccess,  ///< 静态访问 ClassName::member
   } kind = kString;
@@ -270,9 +274,13 @@ struct Expr {
   MethodCall methodCall;            ///< 方法调用信息
   QString className;                ///< 类名（用于 kNewInstance）
   QVector<Expr *> constructorArgs;  ///< 构造参数（用于 kNewInstance 的 native 类）
-  enum BinaryOp { kAdd, kSub, kMul, kDiv } binOp = kAdd;
+  enum BinaryOp { kAdd, kSub, kMul, kDiv, kOr, kAnd } binOp = kAdd;
   Expr *left = nullptr;
   Expr *right = nullptr;
+
+  /// 一元运算符类型（用于逻辑非 !expr）
+  enum UnaryOp { kNot } unaryOp = kNot;
+  Expr *operand = nullptr;  ///< 一元运算符的操作数
 
   Expr() = default;
   Expr(const Expr &other) { copyFrom(other); }
@@ -323,6 +331,8 @@ private:
     binOp = other.binOp;
     left = other.left ? new Expr(*other.left) : nullptr;
     right = other.right ? new Expr(*other.right) : nullptr;
+    unaryOp = other.unaryOp;
+    operand = other.operand ? new Expr(*other.operand) : nullptr;
   }
   void moveFrom(Expr &&other) {
     kind = other.kind;
@@ -345,6 +355,9 @@ private:
     right = other.right;
     other.left = nullptr;
     other.right = nullptr;
+    unaryOp = other.unaryOp;
+    operand = other.operand;
+    other.operand = nullptr;
   }
   void freeOwned() {
     for (auto &e : objEntries) {
@@ -365,6 +378,8 @@ private:
     left = nullptr;
     delete right;
     right = nullptr;
+    delete operand;
+    operand = nullptr;
   }
 };
 

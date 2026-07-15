@@ -1,12 +1,143 @@
-//生成代码的所有全局参数
+// 参数预处理类 — 将原始数据转换为模板所需格式
 class Param {
-  let entityClass = ""; //实体名字,EnInfoNews
-  let tableName = ""; //表名,info_news
-  let tableDesc = "";//表说明
-  let tableCols = [];//数组，表的列
-  
-  function setTableData(data)
-  {
-    
+  let entityClass = "";     // 实体类名, 如 EnUser
+  let tableName = "";       // 数据库表名, 如 user
+  let tableDesc = "";       // 表说明
+  let fields = [];          // 字段数组 (处理后的)
+  let imports = [];         // 额外的 import 语句
+  let relations = [];       // 关联关系配置
+
+  // MySQL 类型到 TypeScript/TypeORM 类型的映射
+  function mapType(colType) {
+    let t = colType.toLowerCase();
+    // 整数类型
+    if (t.contains("int") || t.contains("tinyint") || t.contains("smallint") || t.contains("bigint")) {
+      return "number";
+    }
+    // 浮点/小数类型
+    if (t.contains("decimal") || t.contains("float") || t.contains("double")) {
+      return "Coin";
+    }
+    // 字符串类型
+    if (t.contains("varchar") || t.contains("char") || t.contains("text")) {
+      return "string";
+    }
+    // 日期时间类型
+    if (t.contains("datetime") || t.contains("timestamp")) {
+      return "Date";
+    }
+    // 布尔类型
+    if (t.contains("boolean") || t.contains("bool") || t.contains("tinyint(1)")) {
+      return "boolean";
+    }
+    // 默认返回 string
+    return "string";
+  }
+
+  // 判断是否为主键
+  function isPrimaryKey(colKey) {
+    return colKey == "PRI";
+  }
+
+  // 判断是否为自增列
+  function isAutoIncrement(extra) {
+    return extra.toLowerCase().contains("auto_increment");
+  }
+
+  // 判断是否为 decimal/Coin 类型
+  function isCoinType(colType) {
+    let t = colType.toLowerCase();
+    return t.contains("decimal") || t.contains("float") || t.contains("double");
+  }
+
+  // 获取 Column 装饰器参数
+  function getColumnOptions(field) {
+    let colType = field.colType;
+    let colDefault = field.colDefault;
+    let options = "{ type: '" + this.mapTypeToOrm(colType) + "'";
+
+    // 设置默认值
+    if (!this.isPrimaryKey(field.colKey)) {
+      if (this.isCoinType(colType)) {
+        options += ", default: 0.00, precision: COIN_PRECISION, scale: COIN_SCALE, transformer: new CoinTransformer()";
+      } else if (colType.contains("varchar") || colType.contains("char")) {
+        options += ", default: ''";
+      } else if (colType.contains("int") && !this.isAutoIncrement(field.extra)) {
+        options += ", default: 0";
+      }
+    }
+
+    options += " }";
+    return options;
+  }
+
+  // 映射到 ORM 的 type 值
+  function mapTypeToOrm(colType) {
+    let t = colType.toLowerCase();
+    if (t.contains("varchar") || t.contains("char") || t.contains("text")) {
+      return "varchar";
+    }
+    if (t.contains("int") || t.contains("tinyint") || t.contains("smallint") || t.contains("bigint")) {
+      return "int";
+    }
+    if (t.contains("decimal") || t.contains("float") || t.contains("double")) {
+      return "decimal";
+    }
+    if (t.contains("datetime") || t.contains("timestamp")) {
+      return "datetime";
+    }
+    if (t.contains("boolean") || t.contains("bool")) {
+      return "boolean";
+    }
+    return "varchar";
+  }
+
+  // 处理表数据，生成模板所需的完整数据结构
+  function setTableData(data) {
+    this.tableName = data.tableName;
+    this.tableDesc = data.tableDesc;
+
+    // 从 modelName 提取实体类名: user\\user -> EnUser
+    let parts = data.modelName.split("\\");
+    let lastPart = parts[parts.length - 1];
+    this.entityClass = "En" + lastPart.charAt(0).toUpperCase() + lastPart.slice(1);
+
+    // 处理字段
+    this.fields = [];
+    for (col in data.columns) {
+      let field = {};
+      field.name = col.name;
+      field.comment = col.comment;
+      field.colType = col.type;
+      field.colKey = col.key;
+      field.colDefault = col.default;
+      field.extra = col.extra;
+      field.tsType = this.mapType(col.type);
+      field.isPrimary = this.isPrimaryKey(col.key);
+      field.isAutoInc = this.isAutoIncrement(col.extra);
+      field.isCoin = this.isCoinType(col.type);
+      field.columnOptions = this.getColumnOptions(field);
+      this.fields.append(field);
+    }
+
+    // 处理关联表的 import 和关系
+    this.imports = [];
+    this.relations = [];
+    if (data.joinTable) {
+      for (jt in data.joinTable) {
+        // 添加 import 语句
+        let imp = "import { " + jt.joinEnClass + " } from '" + jt.joinEnClass_Url + "'";
+        this.imports.append(imp);
+
+        // 添加关系配置
+        let rel = {};
+        rel.decoratorType = jt.joinType;  // OneToMany, ManyToOne 等
+        rel.targetEntity = jt.joinEnClass;
+        rel.propertyName = jt.joinEnClassPro;
+        rel.inverseProperty = jt.inverseJoinEnClassPro;
+        rel.isJoinRelations = jt.isJoinRelations;
+        this.relations.append(rel);
+      }
+    }
   }
 }

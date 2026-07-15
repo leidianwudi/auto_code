@@ -39,6 +39,8 @@ private:
   bool parseInterfaceDef(InterfaceDef &iface);
   bool parseReturnStmt(Expr &retVal);
   bool parseExpr(Expr &expr);
+  bool parseLogicalOr(Expr &expr);
+  bool parseLogicalAnd(Expr &expr);
   bool parseAddSub(Expr &expr);
   bool parseMulDiv(Expr &expr);
   bool parsePrimary(Expr &expr);

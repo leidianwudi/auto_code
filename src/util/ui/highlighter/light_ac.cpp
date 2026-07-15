@@ -68,6 +68,12 @@ LightAc::LightAc(QTextDocument *parent) : QSyntaxHighlighter(parent) {
       {QRegularExpression(QStringLiteral("\\b(?!(?:") + AcKeyword::kAll.join(QStringLiteral("|")) +
                           QStringLiteral(")\\b)\\w+(?=\\s*\\()")),
        callFormat});
+
+  // ── 7. 运算符（青色加粗） ──
+  QTextCharFormat opFormat;
+  opFormat.setForeground(operator_);
+  opFormat.setFontWeight(QFont::Bold);
+  m_rules.append({QRegularExpression(QStringLiteral("\\|\\||&&|!|[+\\-*/]")), opFormat});
 }
 
 // 对单个文本块进行高亮处理

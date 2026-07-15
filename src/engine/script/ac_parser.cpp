@@ -719,7 +719,53 @@ bool AcParser::parseReturnStmt(Expr &retVal) {
 
 // ── 表达式解析 ──
 
-bool AcParser::parseExpr(Expr &expr) { return parseAddSub(expr); }
+bool AcParser::parseExpr(Expr &expr) { return parseLogicalOr(expr); }
+
+bool AcParser::parseLogicalOr(Expr &expr) {
+  if (!parseLogicalAnd(expr)) return false;
+  while (peek().type == TOK_OR) {
+    Token opToken = peek();
+    advance();
+    Expr *left = new Expr(std::move(expr));
+    Expr *right = new Expr();
+    if (!parseLogicalAnd(*right)) {
+      delete left;
+      delete right;
+      return false;
+    }
+    Expr binary;
+    binary.kind = Expr::kBinary;
+    binary.line = opToken.line;
+    binary.binOp = Expr::kOr;
+    binary.left = left;
+    binary.right = right;
+    expr = std::move(binary);
+  }
+  return true;
+}
+
+bool AcParser::parseLogicalAnd(Expr &expr) {
+  if (!parseAddSub(expr)) return false;
+  while (peek().type == TOK_AND) {
+    Token opToken = peek();
+    advance();
+    Expr *left = new Expr(std::move(expr));
+    Expr *right = new Expr();
+    if (!parseAddSub(*right)) {
+      delete left;
+      delete right;
+      return false;
+    }
+    Expr binary;
+    binary.kind = Expr::kBinary;
+    binary.line = opToken.line;
+    binary.binOp = Expr::kAnd;
+    binary.left = left;
+    binary.right = right;
+    expr = std::move(binary);
+  }
+  return true;
+}
 
 bool AcParser::parseAddSub(Expr &expr) {
   if (!parseMulDiv(expr)) return false;
@@ -819,6 +865,20 @@ bool AcParser::parseMulDiv(Expr &expr) {
 
 bool AcParser::parsePrimary(Expr &expr) {
   Token t = peek();
+
+  if (t.type == TOK_NOT) {
+    advance();
+    Expr *operand = new Expr();
+    if (!parsePrimary(*operand)) {
+      delete operand;
+      return false;
+    }
+    expr.kind = Expr::kUnary;
+    expr.line = t.line;
+    expr.unaryOp = Expr::kNot;
+    expr.operand = operand;
+    return true;
+  }
 
   if (t.type == TOK_MINUS) {
     advance();

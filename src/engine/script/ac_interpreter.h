@@ -54,6 +54,7 @@ private:
   QJsonValue evalExpr(const Expr &expr);
   QJsonValue evalExprWithThis(const Expr &expr, const QJsonObject &thisObj);
   QJsonValue evalBinary(const Expr &expr);
+  QJsonValue evalUnary(const Expr &expr);
   QJsonValue evalMethodCall(const Expr &expr);
   QJsonValue evalNewInstance(const Expr &expr);
   QJsonValue callBuiltin(const QString &name, const QVector<Expr *> &args, int line);

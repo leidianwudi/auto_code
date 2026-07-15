@@ -131,6 +131,28 @@ QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
         tokens.append({TOK_DIV, QStringLiteral("/"), line});
         ++i;
         break;
+      case '|':
+        if (i + 1 < n && source[i + 1] == '|') {
+          tokens.append({TOK_OR, QStringLiteral("||"), line});
+          i += 2;
+        } else {
+          error = QStringLiteral("unexpected character '|' at line %1").arg(line);
+          return {};
+        }
+        break;
+      case '&':
+        if (i + 1 < n && source[i + 1] == '&') {
+          tokens.append({TOK_AND, QStringLiteral("&&"), line});
+          i += 2;
+        } else {
+          error = QStringLiteral("unexpected character '&' at line %1").arg(line);
+          return {};
+        }
+        break;
+      case '!':
+        tokens.append({TOK_NOT, QStringLiteral("!"), line});
+        ++i;
+        break;
       case ';':
         tokens.append({TOK_SEMI, QStringLiteral(";"), line});
         ++i;

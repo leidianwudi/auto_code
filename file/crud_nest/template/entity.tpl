@@ -17,21 +17,40 @@ import { ToolStr } from '@/common/tool/tool_str';
 import { Coin, COIN_PRECISION, COIN_SCALE } from '@/common/tool/coin';
 import { CoinTransformer } from '@/common/tool/coin_transformer';
 import { Transform } from 'class-transformer';
-import { EnSportType } from 'src/sport/sport_type/entities/en_sport_type';
-import { EnSportHonorPlayer } from 'src/sport/honor/sport_honor_player/entities/en_sport_honor_player';
-import { EnSportHonorTeam } from 'src/sport/honor/sport_honor_team/entities/en_sport_honor_team';
+${each imports}${imports}
+${/each}
 
-// 荣誉名称数据(sport_honor) 实体
-@Entity('sport_honor')
-export class ${modelName} {
-${each fields}  ${name}: ${type};
-${/each}}
+// ${tableDesc}(${tableName}) 实体
+@Entity('${tableName}')
+export class ${entityClass} {
 
-${if hasService}export class ${modelName}Service {
-  static async getAll(): Promise<${modelName}[]> {
-    return fetch('/api/${modelName.toLowerCase}').then(r => r.json());
+${each fields}
+${if isPrimary}
+  @ApiProperty({ description: '${comment}' })
+  @PrimaryGeneratedColumn()
+  ${name}: ${tsType};
+${else}
+${if isCoin}
+  @ApiProperty({ description: '${comment}' })
+  @Column(${columnOptions})
+  @Transform(({ value }) => value.toJSON())
+  ${name}: ${tsType};
+${else}
+  @ApiProperty({ description: '${comment}' })
+  @Column(${columnOptions})
+  ${name}: ${tsType};
+${/if}
+${/if}
+${/each}
+
+${each relations}
+	@${decoratorType}(() => ${targetEntity}, (${propertyName}) => ${propertyName}.${inverseProperty})
+	${propertyName}: ${targetEntity}[];
+
+${/each}
+
+  static getTableName() {
+    return '${tableName}';
   }
 }
-
-${/if}
 ${/if}
