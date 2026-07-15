@@ -24,6 +24,10 @@ void AstVisitor::visitStmt(const Block::Stmt &stmt) {
     case Block::Stmt::kIndexAssign:
       visitIndexAssignStmt(stmt.indexAssign);
       break;
+    case Block::Stmt::kPropAssign:
+      visitExpr(stmt.propAssign.objectExpr);
+      visitExpr(stmt.propAssign.value);
+      break;
     case Block::Stmt::kFor:
       visitForStmt(stmt.forStmt);
       break;
@@ -47,6 +51,15 @@ void AstVisitor::visitStmt(const Block::Stmt &stmt) {
       break;
     case Block::Stmt::kImport:
       visitImportStmt(stmt.importStmt);
+      break;
+    case Block::Stmt::kWhile:
+      visitWhileStmt(stmt.whileStmt);
+      break;
+    case Block::Stmt::kSwitch:
+      visitSwitchStmt(stmt.switchStmt);
+      break;
+    case Block::Stmt::kBreak:
+    case Block::Stmt::kContinue:
       break;
   }
 }
@@ -95,6 +108,17 @@ void AstVisitor::visitExpr(const Expr &expr) {
     case Expr::kBinary:
       visitBinaryExpr(expr);
       break;
+    case Expr::kUnary:
+      visitUnaryExpr(expr);
+      break;
+    case Expr::kNull:
+    case Expr::kUndefined:
+      break;
+    case Expr::kTernary:
+      if (expr.left) visitExpr(*expr.left);
+      if (expr.right) visitExpr(*expr.right);
+      if (expr.operand) visitExpr(*expr.operand);
+      break;
   }
 }
 
@@ -110,7 +134,11 @@ void AstVisitor::visitCallStmt(const CallStmt &cs) {
 
 void AstVisitor::visitAssignStmt(const AssignStmt &as) { visitExpr(as.value); }
 
-void AstVisitor::visitIndexAssignStmt(const IndexAssignStmt &ias) { visitExpr(ias.value); }
+void AstVisitor::visitIndexAssignStmt(const IndexAssignStmt &ias) {
+  visitExpr(ias.objectExpr);
+  visitExpr(ias.indexExpr);
+  visitExpr(ias.value);
+}
 
 void AstVisitor::visitForStmt(const ForStmt &fs) {
   visitExpr(fs.arrayExpr);
@@ -120,7 +148,10 @@ void AstVisitor::visitForStmt(const ForStmt &fs) {
 void AstVisitor::visitIfStmt(const IfStmt &is) {
   visitExpr(is.condition);
   visitBlock(is.thenBlock);
-  if (is.hasElse) visitBlock(is.elseBlock);
+  if (is.elseIfBranch)
+    visitIfStmt(*is.elseIfBranch);
+  else if (is.hasElse)
+    visitBlock(is.elseBlock);
 }
 
 void AstVisitor::visitClassDef(const ClassDef &cd) {
@@ -142,6 +173,19 @@ void AstVisitor::visitExprStmt(const Expr &expr) { visitExpr(expr); }
 
 void AstVisitor::visitImportStmt(const ImportStmt &imp) { Q_UNUSED(imp); }
 
+void AstVisitor::visitWhileStmt(const WhileStmt &ws) {
+  visitExpr(ws.condition);
+  visitBlock(ws.body);
+}
+
+void AstVisitor::visitSwitchStmt(const SwitchStmt &ss) {
+  visitExpr(ss.expr);
+  for (const auto &sc : ss.cases) {
+    if (!sc.isDefault) visitExpr(sc.value);
+    visitBlock(sc.body);
+  }
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // 表达式 — 默认实现：递归遍历子节点
 // ═════════════════════════════════════════════════════════════════════════════
@@ -154,7 +198,10 @@ void AstVisitor::visitThisExpr(const Expr &expr) { Q_UNUSED(expr); }
 
 void AstVisitor::visitPropAccessExpr(const Expr &expr) { Q_UNUSED(expr); }
 
-void AstVisitor::visitIndexAccessExpr(const Expr &expr) { Q_UNUSED(expr); }
+void AstVisitor::visitIndexAccessExpr(const Expr &expr) {
+  if (expr.left) visitExpr(*expr.left);
+  if (expr.right) visitExpr(*expr.right);
+}
 
 void AstVisitor::visitFuncCallExpr(const Expr &expr) {
   for (const auto *arg : expr.funcCall.args) {
@@ -195,4 +242,8 @@ void AstVisitor::visitArrayExpr(const Expr &expr) {
 void AstVisitor::visitBinaryExpr(const Expr &expr) {
   if (expr.left) visitExpr(*expr.left);
   if (expr.right) visitExpr(*expr.right);
+}
+
+void AstVisitor::visitUnaryExpr(const Expr &expr) {
+  if (expr.operand) visitExpr(*expr.operand);
 }

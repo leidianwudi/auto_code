@@ -41,6 +41,14 @@ static const QHash<QString, TokenType> &keywordMap() {
       {QString::fromLatin1(AcKeyword::kExport), TOK_EXPORT},
       {QString::fromLatin1(AcKeyword::kImport), TOK_IMPORT},
       {QString::fromLatin1(AcKeyword::kFrom), TOK_FROM},
+      {QString::fromLatin1(AcKeyword::kNull), TOK_NULL},
+      {QString::fromLatin1(AcKeyword::kUndefined), TOK_UNDEFINED},
+      {QString::fromLatin1(AcKeyword::kWhile), TOK_WHILE},
+      {QString::fromLatin1(AcKeyword::kBreak), TOK_BREAK},
+      {QString::fromLatin1(AcKeyword::kContinue), TOK_CONTINUE},
+      {QString::fromLatin1(AcKeyword::kSwitch), TOK_SWITCH},
+      {QString::fromLatin1(AcKeyword::kCase), TOK_CASE},
+      {QString::fromLatin1(AcKeyword::kDefault), TOK_DEFAULT},
   };
   return map;
 }
@@ -111,25 +119,41 @@ QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
         tokens.append({TOK_DOT, QStringLiteral("."), line});
         ++i;
         break;
-      case '=':
-        tokens.append({TOK_EQUALS, QStringLiteral("="), line});
-        ++i;
-        break;
       case '+':
-        tokens.append({TOK_PLUS, QStringLiteral("+"), line});
-        ++i;
+        if (i + 1 < n && source[i + 1] == '=') {
+          tokens.append({TOK_PLUSEQ, QStringLiteral("+="), line});
+          i += 2;
+        } else {
+          tokens.append({TOK_PLUS, QStringLiteral("+"), line});
+          ++i;
+        }
         break;
       case '-':
-        tokens.append({TOK_MINUS, QStringLiteral("-"), line});
-        ++i;
+        if (i + 1 < n && source[i + 1] == '=') {
+          tokens.append({TOK_MINUSEQ, QStringLiteral("-="), line});
+          i += 2;
+        } else {
+          tokens.append({TOK_MINUS, QStringLiteral("-"), line});
+          ++i;
+        }
         break;
       case '*':
-        tokens.append({TOK_MUL, QStringLiteral("*"), line});
-        ++i;
+        if (i + 1 < n && source[i + 1] == '=') {
+          tokens.append({TOK_MULEQ, QStringLiteral("*="), line});
+          i += 2;
+        } else {
+          tokens.append({TOK_MUL, QStringLiteral("*"), line});
+          ++i;
+        }
         break;
       case '/':
-        tokens.append({TOK_DIV, QStringLiteral("/"), line});
-        ++i;
+        if (i + 1 < n && source[i + 1] == '=') {
+          tokens.append({TOK_DIVEQ, QStringLiteral("/="), line});
+          i += 2;
+        } else {
+          tokens.append({TOK_DIV, QStringLiteral("/"), line});
+          ++i;
+        }
         break;
       case '|':
         if (i + 1 < n && source[i + 1] == '|') {
@@ -150,11 +174,47 @@ QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
         }
         break;
       case '!':
-        tokens.append({TOK_NOT, QStringLiteral("!"), line});
-        ++i;
+        if (i + 1 < n && source[i + 1] == '=') {
+          tokens.append({TOK_NEQ, QStringLiteral("!="), line});
+          i += 2;
+        } else {
+          tokens.append({TOK_NOT, QStringLiteral("!"), line});
+          ++i;
+        }
+        break;
+      case '=':
+        if (i + 1 < n && source[i + 1] == '=') {
+          tokens.append({TOK_EQ, QStringLiteral("=="), line});
+          i += 2;
+        } else {
+          tokens.append({TOK_EQUALS, QStringLiteral("="), line});
+          ++i;
+        }
+        break;
+      case '<':
+        if (i + 1 < n && source[i + 1] == '=') {
+          tokens.append({TOK_LTE, QStringLiteral("<="), line});
+          i += 2;
+        } else {
+          tokens.append({TOK_LT, QStringLiteral("<"), line});
+          ++i;
+        }
+        break;
+      case '>':
+        if (i + 1 < n && source[i + 1] == '=') {
+          tokens.append({TOK_GTE, QStringLiteral(">="), line});
+          i += 2;
+        } else {
+          tokens.append({TOK_GT, QStringLiteral(">"), line});
+          ++i;
+        }
         break;
       case ';':
         tokens.append({TOK_SEMI, QStringLiteral(";"), line});
+        ++i;
+        break;
+      case '?':
+        tokens.append({TOK_QUESTION, QStringLiteral("?"), line});
         ++i;
         break;
       case '"': {
@@ -172,6 +232,43 @@ QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
         val.replace(QStringLiteral("\\n"), QStringLiteral("\n"));
         val.replace(QStringLiteral("\\\\"), QStringLiteral("\\"));
         tokens.append({TOK_STRING, val, line});
+        ++i;
+        break;
+      }
+      case '`': {
+        int start = ++i;
+        int depth = 0;
+        while (i < n) {
+          if (source[i] == '`' && depth == 0) break;
+          if (source[i] == '\\' && i + 1 < n) {
+            ++i;
+            ++i;
+            continue;
+          }
+          if (source[i] == '$' && i + 1 < n && source[i + 1] == '{') {
+            ++depth;
+            i += 2;
+            continue;
+          }
+          if (source[i] == '{' && depth > 0) {
+            ++depth;
+            ++i;
+            continue;
+          }
+          if (source[i] == '}' && depth > 0) {
+            --depth;
+            ++i;
+            continue;
+          }
+          if (source[i] == '\n') ++line;
+          ++i;
+        }
+        if (i >= n) {
+          error = QStringLiteral("unterminated template string at line %1").arg(line);
+          return {};
+        }
+        QString val = source.mid(start, i - start);
+        tokens.append({TOK_TEMPLATE_STRING, val, line});
         ++i;
         break;
       }

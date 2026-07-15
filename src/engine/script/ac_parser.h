@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "ac_lexer.h"
 #include "ac_type.h"
 
 /// @brief 语法分析器 — 将 Token 序列解析为 AST
@@ -21,6 +22,7 @@ public:
 private:
   // ── token 操作 ──
   Token peek();
+  Token peek(int offset);
   Token advance();
   bool match(TokenType t);
   bool expect(TokenType t, const QString &msg);
@@ -34,19 +36,24 @@ private:
   bool parseIndexAssignStmt(IndexAssignStmt &ias);
   bool parseForStmt(ForStmt &fs);
   bool parseIfStmt(IfStmt &is);
+  bool parseWhileStmt(WhileStmt &ws);
+  bool parseSwitchStmt(SwitchStmt &ss);
   bool parseImportStmt(ImportStmt &imp);
   bool parseClassDef(ClassDef &cd);
   bool parseInterfaceDef(InterfaceDef &iface);
   bool parseReturnStmt(Expr &retVal);
   bool parseExpr(Expr &expr);
+  bool parseTernary(Expr &expr);
   bool parseLogicalOr(Expr &expr);
   bool parseLogicalAnd(Expr &expr);
+  bool parseComparison(Expr &expr);
   bool parseAddSub(Expr &expr);
   bool parseMulDiv(Expr &expr);
   bool parsePrimary(Expr &expr);
   bool parseObject(Expr &expr);
   bool parseArray(Expr &expr);
   bool parseFuncCall(const QString &name, Expr &expr);
+  bool parseTemplateString(Expr &expr);
   bool parseMethodDef(MethodDef &md);
 
   // ── 类型解析 ──

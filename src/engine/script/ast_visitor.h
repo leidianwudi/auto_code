@@ -47,6 +47,8 @@ public:
   virtual void visitReturnStmt(const Expr &retExpr);
   virtual void visitExprStmt(const Expr &expr);
   virtual void visitImportStmt(const ImportStmt &imp);
+  virtual void visitWhileStmt(const WhileStmt &ws);
+  virtual void visitSwitchStmt(const SwitchStmt &ss);
   /// @}
 
   /// @name 表达式类型（由 visitExpr 分发）
@@ -65,5 +67,6 @@ public:
   virtual void visitObjectExpr(const Expr &expr);
   virtual void visitArrayExpr(const Expr &expr);
   virtual void visitBinaryExpr(const Expr &expr);
+  virtual void visitUnaryExpr(const Expr &expr);
   /// @}
 };

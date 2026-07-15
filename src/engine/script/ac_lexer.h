@@ -14,9 +14,9 @@ public:
   /// @param source .ac 源码
   /// @param[out] error 错误信息（解析失败时设置）
   /// @return token 序列，失败时返回空数组
-  QVector<Token> tokenize(const QString &source, QString &error);
+  static QVector<Token> tokenize(const QString &source, QString &error);
 
 private:
   /// @brief 跳过行注释（// 到行尾）
-  void skipLineComment(const QString &source, int &pos);
+  static void skipLineComment(const QString &source, int &pos);
 };

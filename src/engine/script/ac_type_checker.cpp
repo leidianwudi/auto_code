@@ -61,21 +61,14 @@ void AcTypeChecker::checkStmt(const Block::Stmt &stmt, TypeEnv &env) {
       break;
 
     case Block::Stmt::kIndexAssign:
-      // 索引赋值：obj["key"] = value
-      // 检查 obj 是否为数组或对象
-      if (env.varTypes.contains(stmt.indexAssign.objName)) {
-        AcType objType = env.varTypes[stmt.indexAssign.objName];
-        if (objType.kind == AcType::kArray) {
-          // 检查赋值类型与数组元素类型兼容
-          AcType valType = checkExpr(stmt.indexAssign.value, env);
-          if (!isCompatible(valType, *objType.elementType)) {
-            reportError(
-                QStringLiteral("type mismatch: cannot assign '%1' to array element type '%2'")
-                    .arg(typeToString(valType), typeToString(*objType.elementType)),
-                stmt.indexAssign.value.line);
-          }
-        }
-      }
+      checkExpr(stmt.indexAssign.objectExpr, env);
+      checkExpr(stmt.indexAssign.indexExpr, env);
+      checkExpr(stmt.indexAssign.value, env);
+      break;
+
+    case Block::Stmt::kPropAssign:
+      checkExpr(stmt.propAssign.objectExpr, env);
+      checkExpr(stmt.propAssign.value, env);
       break;
 
     case Block::Stmt::kFor: {
@@ -94,13 +87,38 @@ void AcTypeChecker::checkStmt(const Block::Stmt &stmt, TypeEnv &env) {
     case Block::Stmt::kIf:
       checkExpr(stmt.ifStmt.condition, env);
       checkBlock(stmt.ifStmt.thenBlock, env);
-      if (stmt.ifStmt.hasElse) {
+      if (stmt.ifStmt.elseIfBranch) {
+        // 递归检查 else if 链
+        const IfStmt *cur = stmt.ifStmt.elseIfBranch;
+        while (cur) {
+          checkExpr(cur->condition, env);
+          checkBlock(cur->thenBlock, env);
+          cur = cur->elseIfBranch;
+        }
+      } else if (stmt.ifStmt.hasElse) {
         checkBlock(stmt.ifStmt.elseBlock, env);
       }
       break;
 
     case Block::Stmt::kExpr:
       checkExpr(stmt.exprStmt, env);
+      break;
+
+    case Block::Stmt::kWhile:
+      checkExpr(stmt.whileStmt.condition, env);
+      checkBlock(stmt.whileStmt.body, env);
+      break;
+
+    case Block::Stmt::kSwitch:
+      checkExpr(stmt.switchStmt.expr, env);
+      for (const auto &sc : stmt.switchStmt.cases) {
+        if (!sc.isDefault) checkExpr(sc.value, env);
+        checkBlock(sc.body, env);
+      }
+      break;
+
+    case Block::Stmt::kBreak:
+    case Block::Stmt::kContinue:
       break;
 
     case Block::Stmt::kClassDef: {
@@ -296,15 +314,24 @@ AcType AcTypeChecker::checkExpr(const Expr &expr, const TypeEnv &env) {
     }
 
     case Expr::kIndexAccess: {
-      // obj["key"] — 索引访问
-      if (env.varTypes.contains(expr.ident)) {
-        AcType objType = env.varTypes[expr.ident];
-        if (objType.kind == AcType::kArray) {
-          return *objType.elementType;
-        }
+      // obj[expr] — 索引访问
+      AcType objType = checkExpr(*expr.left, env);
+      checkExpr(*expr.right, env);
+      if (objType.kind == AcType::kArray && objType.elementType) {
+        return *objType.elementType;
       }
       return AcType::any();
     }
+
+    case Expr::kNull:
+      return AcType::any();
+
+    case Expr::kUndefined:
+      return AcType::any();
+
+    case Expr::kTernary:
+      checkExpr(*expr.left, env);
+      return checkExpr(*expr.right, env);
 
     case Expr::kArray: {
       // 推导数组元素类型：取所有元素的最小公共类型

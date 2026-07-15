@@ -37,53 +37,73 @@ enum class AccessLevel { kPublic, kProtected, kPrivate };
 
 /// @brief 词法单元类型
 enum TokenType {
-  TOK_EOF,         ///< 输入结束
-  TOK_IDENT,       ///< 标识符（变量名、函数名、方法名）
-  TOK_STRING,      ///< 字符串字面量 "hello"
-  TOK_NUMBER,      ///< 数字字面量 123
-  TOK_LBRACE,      ///< {
-  TOK_RBRACE,      ///< }
-  TOK_LPAREN,      ///< (
-  TOK_RPAREN,      ///< )
-  TOK_LBRACKET,    ///< [
-  TOK_RBRACKET,    ///< ]
-  TOK_COMMA,       ///< ,
-  TOK_COLON,       ///< :
-  TOK_DOT,         ///< .（属性访问）
-  TOK_EQUALS,      ///< =（赋值）
-  TOK_PLUS,        ///< +
-  TOK_MINUS,       ///< -
-  TOK_MUL,         ///< *
-  TOK_DIV,         ///< /
-  TOK_OR,          ///< ||（逻辑或）
-  TOK_AND,         ///< &&（逻辑与）
-  TOK_NOT,         ///< !（逻辑非）
-  TOK_SEMI,        ///< ;（语句结束）
-  TOK_FOR,         ///< for 关键字
-  TOK_IN,          ///< in 关键字
-  TOK_IF,          ///< if 关键字
-  TOK_ELSE,        ///< else 关键字
-  TOK_LET,         ///< let 关键字（变量声明）
-  TOK_CLASS,       ///< class 关键字（类定义）
-  TOK_FUNCTION,    ///< function 关键字（方法定义）
-  TOK_NEW,         ///< new 关键字（实例化）
-  TOK_THIS,        ///< this 关键字（当前实例引用）
-  TOK_RETURN,      ///< return 关键字（返回值）
-  TOK_TRUE,        ///< true 布尔字面量
-  TOK_FALSE,       ///< false 布尔字面量
-  TOK_SCOPE,       ///< ::（作用域解析）
-  TOK_STATIC,      ///< static 关键字（静态成员）
-  TOK_PUBLIC,      ///< public 访问修饰符
-  TOK_PROTECTED,   ///< protected 访问修饰符
-  TOK_PRIVATE,     ///< private 访问修饰符
-  TOK_EXTENDS,     ///< extends 关键字（继承）
-  TOK_OVERRIDE,    ///< override 关键字（重写标注）
-  TOK_INTERFACE,   ///< interface 关键字（接口定义）
-  TOK_IMPLEMENTS,  ///< implements 关键字（接口实现）
-  TOK_SUPER,       ///< super 关键字（父类引用）
-  TOK_EXPORT,      ///< export 关键字（导出）
-  TOK_IMPORT,      ///< import 关键字（导入）
-  TOK_FROM,        ///< from 关键字（import ... from "file"）
+  TOK_EOF,              ///< 输入结束
+  TOK_IDENT,            ///< 标识符（变量名、函数名、方法名）
+  TOK_STRING,           ///< 字符串字面量 "hello"
+  TOK_NUMBER,           ///< 数字字面量 123
+  TOK_LBRACE,           ///< {
+  TOK_RBRACE,           ///< }
+  TOK_LPAREN,           ///< (
+  TOK_RPAREN,           ///< )
+  TOK_LBRACKET,         ///< [
+  TOK_RBRACKET,         ///< ]
+  TOK_COMMA,            ///< ,
+  TOK_COLON,            ///< :
+  TOK_DOT,              ///< .（属性访问）
+  TOK_EQUALS,           ///< =（赋值）
+  TOK_PLUS,             ///< +
+  TOK_MINUS,            ///< -
+  TOK_MUL,              ///< *
+  TOK_DIV,              ///< /
+  TOK_PLUSEQ,           ///< +=
+  TOK_MINUSEQ,          ///< -=
+  TOK_MULEQ,            ///< *=
+  TOK_DIVEQ,            ///< /=
+  TOK_OR,               ///< ||（逻辑或）
+  TOK_AND,              ///< &&（逻辑与）
+  TOK_NOT,              ///< !（逻辑非）
+  TOK_EQ,               ///< ==（等于）
+  TOK_NEQ,              ///< !=（不等于）
+  TOK_LT,               ///< <（小于）
+  TOK_GT,               ///< >（大于）
+  TOK_LTE,              ///< <=（小于等于）
+  TOK_GTE,              ///< >=（大于等于）
+  TOK_SEMI,             ///< ;（语句结束）
+  TOK_FOR,              ///< for 关键字
+  TOK_IN,               ///< in 关键字
+  TOK_IF,               ///< if 关键字
+  TOK_ELSE,             ///< else 关键字
+  TOK_LET,              ///< let 关键字（变量声明）
+  TOK_CLASS,            ///< class 关键字（类定义）
+  TOK_FUNCTION,         ///< function 关键字（方法定义）
+  TOK_NEW,              ///< new 关键字（实例化）
+  TOK_THIS,             ///< this 关键字（当前实例引用）
+  TOK_RETURN,           ///< return 关键字（返回值）
+  TOK_TRUE,             ///< true 布尔字面量
+  TOK_FALSE,            ///< false 布尔字面量
+  TOK_SCOPE,            ///< ::（作用域解析）
+  TOK_STATIC,           ///< static 关键字（静态成员）
+  TOK_PUBLIC,           ///< public 访问修饰符
+  TOK_PROTECTED,        ///< protected 访问修饰符
+  TOK_PRIVATE,          ///< private 访问修饰符
+  TOK_EXTENDS,          ///< extends 关键字（继承）
+  TOK_OVERRIDE,         ///< override 关键字（重写标注）
+  TOK_INTERFACE,        ///< interface 关键字（接口定义）
+  TOK_IMPLEMENTS,       ///< implements 关键字（接口实现）
+  TOK_SUPER,            ///< super 关键字（父类引用）
+  TOK_EXPORT,           ///< export 关键字（导出）
+  TOK_IMPORT,           ///< import 关键字（导入）
+  TOK_FROM,             ///< from 关键字（import ... from "file"）
+  TOK_NULL,             ///< null 关键字
+  TOK_UNDEFINED,        ///< undefined 关键字
+  TOK_WHILE,            ///< while 关键字
+  TOK_BREAK,            ///< break 关键字
+  TOK_CONTINUE,         ///< continue 关键字
+  TOK_SWITCH,           ///< switch 关键字
+  TOK_CASE,             ///< case 关键字
+  TOK_DEFAULT,          ///< default 关键字
+  TOK_QUESTION,         ///< ?（三元运算符）
+  TOK_TEMPLATE_STRING,  ///< 模板字符串 `...${...}...`
 };
 
 /// @brief 词法单元
@@ -249,7 +269,11 @@ struct Expr {
     kNumber,        ///< 数字字面量
     kIdent,         ///< 变量引用
     kPropAccess,    ///< 属性访问 obj.prop
-    kIndexAccess,   ///< 索引访问 obj["key"]
+    kIndexAccess,   ///< 索引访问 obj[expr]（left=对象, right=索引表达式）
+    kNull,          ///< null 字面量
+    kUndefined,     ///< undefined 字面量
+    kTernary,       ///< 三元运算 cond ? trueExpr : falseExpr（left=cond, right=trueExpr,
+                    ///< operand=falseExpr）
     kObject,        ///< 对象字面量 { key: val }
     kArray,         ///< 数组字面量 [item, ...]
     kFuncCall,      ///< 函数调用 name(args)
@@ -267,14 +291,13 @@ struct Expr {
   bool boolVal = false;             ///< 布尔值（用于 kBool）
   QString ident;                    ///< 标识符名
   QString prop;                     ///< 属性名（用于 kPropAccess）
-  QString indexKey;                 ///< 索引键（用于 kIndexAccess）
   QVector<ObjectEntry> objEntries;  ///< 对象条目
   QVector<Expr *> arrItems;         ///< 数组元素（指针）
   FuncCall funcCall;                ///< 函数调用信息
   MethodCall methodCall;            ///< 方法调用信息
   QString className;                ///< 类名（用于 kNewInstance）
   QVector<Expr *> constructorArgs;  ///< 构造参数（用于 kNewInstance 的 native 类）
-  enum BinaryOp { kAdd, kSub, kMul, kDiv, kOr, kAnd } binOp = kAdd;
+  enum BinaryOp { kAdd, kSub, kMul, kDiv, kOr, kAnd, kEq, kNeq, kLt, kGt, kLte, kGte } binOp = kAdd;
   Expr *left = nullptr;
   Expr *right = nullptr;
 
@@ -310,7 +333,6 @@ private:
     boolVal = other.boolVal;
     ident = other.ident;
     prop = other.prop;
-    indexKey = other.indexKey;
     for (const auto &e : other.objEntries) {
       ObjectEntry oe;
       oe.key = e.key;
@@ -342,7 +364,6 @@ private:
     boolVal = other.boolVal;
     ident = std::move(other.ident);
     prop = std::move(other.prop);
-    indexKey = std::move(other.indexKey);
     objEntries = std::move(other.objEntries);
     arrItems = std::move(other.arrItems);
     funcCall = std::move(other.funcCall);
@@ -400,13 +421,22 @@ struct AssignStmt {
   AcType typeAnnotation;           ///< let 声明时的类型注解（如 let x: Number = 1）
   bool hasTypeAnnotation = false;  ///< 是否有类型注解
   bool isExported = false;         ///< 是否导出
+  int compoundOp = 0;              ///< 复合赋值运算符：0=无, 1=+=, 2=-=, 3=*=
 };
 
-/// @brief 索引赋值语句：obj["key"] = expr
+/// @brief 索引赋值语句：obj[expr] = value
 struct IndexAssignStmt {
-  QString objName;
-  QString key;
-  Expr value;
+  Expr objectExpr;  ///< 被索引的对象表达式
+  Expr indexExpr;   ///< 索引表达式
+  Expr value;       ///< 赋值表达式
+};
+
+/// @brief 属性赋值语句：obj.prop = value
+struct PropAssignStmt {
+  Expr objectExpr;     ///< 对象表达式（如变量名、this 等）
+  QString prop;        ///< 属性名
+  Expr value;          ///< 赋值表达式
+  int compoundOp = 0;  ///< 复合赋值运算符：0=无, 1=+=, 2=-=, 3=*=, 4=/=
 };
 
 /// @brief for 循环语句：for (var in arrayExpr) { body }
@@ -422,6 +452,8 @@ struct IfStmt {
   Block thenBlock;
   Block elseBlock;
   bool hasElse = false;
+  bool isElseIf = false;           ///< 是否为 else if 分支
+  IfStmt *elseIfBranch = nullptr;  ///< else if 分支（链式结构）
 };
 
 /// @brief 导入语句：import { A, B } from "file"
@@ -430,12 +462,32 @@ struct ImportStmt {
   QString filePath;   ///< 源文件路径（相对或绝对）
 };
 
+/// @brief while 循环语句：while (condition) { body }
+struct WhileStmt {
+  Expr condition;
+  Block body;
+};
+
+/// @brief switch-case 分支
+struct SwitchCase {
+  Expr value;              ///< 匹配值（isDefault=true 时未使用）
+  bool isDefault = false;  ///< 是否为 default 分支
+  Block body;
+};
+
+/// @brief switch 语句：switch (expr) { case val: ... default: ... }
+struct SwitchStmt {
+  Expr expr;
+  QVector<SwitchCase> cases;
+};
+
 /// @brief 语句 — 包含调用、赋值、类定义、循环、条件、返回等类型
 struct Block::Stmt {
   enum Kind {
     kCall,
     kAssign,
     kIndexAssign,
+    kPropAssign,
     kFor,
     kIf,
     kExpr,
@@ -443,11 +495,16 @@ struct Block::Stmt {
     kInterfaceDef,
     kFuncDef,
     kReturn,
-    kImport
+    kImport,
+    kWhile,
+    kSwitch,
+    kBreak,
+    kContinue
   } kind = kCall;
   CallStmt call;
   AssignStmt assign;
   IndexAssignStmt indexAssign;
+  PropAssignStmt propAssign;
   ForStmt forStmt;
   IfStmt ifStmt;
   Expr exprStmt;
@@ -456,6 +513,8 @@ struct Block::Stmt {
   MethodDef funcDef;
   Expr returnValue;
   ImportStmt importStmt;
+  WhileStmt whileStmt;
+  SwitchStmt switchStmt;
 };
 
 /// @}

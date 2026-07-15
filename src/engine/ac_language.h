@@ -49,6 +49,14 @@ inline constexpr const char *kSuper = "super";
 inline constexpr const char *kExport = "export";
 inline constexpr const char *kImport = "import";
 inline constexpr const char *kFrom = "from";
+inline constexpr const char *kNull = "null";
+inline constexpr const char *kUndefined = "undefined";
+inline constexpr const char *kWhile = "while";
+inline constexpr const char *kBreak = "break";
+inline constexpr const char *kContinue = "continue";
+inline constexpr const char *kSwitch = "switch";
+inline constexpr const char *kCase = "case";
+inline constexpr const char *kDefault = "default";
 
 /// @brief 关键字列表（供高亮、补全使用）
 inline const QStringList kAll = {
@@ -65,6 +73,10 @@ inline const QStringList kAll = {
     QString::fromLatin1(kInterface), QString::fromLatin1(kImplements),
     QString::fromLatin1(kSuper),     QString::fromLatin1(kExport),
     QString::fromLatin1(kImport),    QString::fromLatin1(kFrom),
+    QString::fromLatin1(kNull),      QString::fromLatin1(kUndefined),
+    QString::fromLatin1(kWhile),     QString::fromLatin1(kBreak),
+    QString::fromLatin1(kContinue),  QString::fromLatin1(kSwitch),
+    QString::fromLatin1(kCase),      QString::fromLatin1(kDefault),
 };
 }  // namespace AcKeyword
 

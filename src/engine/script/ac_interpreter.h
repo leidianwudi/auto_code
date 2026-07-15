@@ -51,6 +51,7 @@ private:
   void execBlock(const Block &block);
   void execBlockWithThis(const Block &block, const QJsonObject &thisObj, QJsonValue &returnVal);
   void execStmt(const Block::Stmt &stmt);
+  void execIfStmt(const IfStmt &ifStmt);
   QJsonValue evalExpr(const Expr &expr);
   QJsonValue evalExprWithThis(const Expr &expr, const QJsonObject &thisObj);
   QJsonValue evalBinary(const Expr &expr);
@@ -58,6 +59,10 @@ private:
   QJsonValue evalMethodCall(const Expr &expr);
   QJsonValue evalNewInstance(const Expr &expr);
   QJsonValue callBuiltin(const QString &name, const QVector<Expr *> &args, int line);
+  QJsonValue evalStringBuiltin(const QString &obj, const QString &method,
+                               const QVector<Expr *> &args, int line);
+  QJsonValue evalArrayBuiltin(const QJsonArray &arr, const QString &method,
+                              const QVector<Expr *> &args, int line, QJsonValue &modifiedArr);
 
   // ── 变量操作 ──
   QJsonValue resolveVar(const QString &name) const;
@@ -66,6 +71,7 @@ private:
   void pushScope();
   void popScope();
   static bool isTruthy(const QJsonValue &cond);
+  static int compareValues(const QJsonValue &l, const QJsonValue &r);
 
   // ── 引用计数辅助 ──
   /// 如果值是受管理的实例，retain
@@ -109,6 +115,8 @@ private:
   QJsonObject m_currentThis;
   QJsonObject m_modifiedThis;
   bool m_hasReturned = false;
+  bool m_hasBreak = false;
+  bool m_hasContinue = false;
   QJsonValue m_returnValue;
   QStringList m_generatedFiles;
 

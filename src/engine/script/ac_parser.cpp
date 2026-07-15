@@ -14,6 +14,12 @@ Token AcParser::peek() {
   return {TOK_EOF, {}, 0};
 }
 
+Token AcParser::peek(int offset) {
+  int pos = m_pos + offset;
+  if (pos >= 0 && pos < m_tokens.size()) return m_tokens[pos];
+  return {TOK_EOF, {}, 0};
+}
+
 Token AcParser::advance() {
   if (m_pos < m_tokens.size()) return m_tokens[m_pos++];
   return {TOK_EOF, {}, 0};
@@ -128,7 +134,8 @@ bool AcParser::parseBlock(Block &block) {
     // class/interface/function 定义以 } 结尾，不需要分号
     if (stmt.kind != Block::Stmt::kClassDef && stmt.kind != Block::Stmt::kInterfaceDef &&
         stmt.kind != Block::Stmt::kFuncDef && stmt.kind != Block::Stmt::kIf &&
-        stmt.kind != Block::Stmt::kFor) {
+        stmt.kind != Block::Stmt::kFor && stmt.kind != Block::Stmt::kWhile &&
+        stmt.kind != Block::Stmt::kSwitch) {
       if (!expect(TOK_SEMI, QStringLiteral("expected ';' after statement"))) return false;
     }
   }
@@ -236,6 +243,28 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
     return parseIfStmt(stmt.ifStmt);
   }
 
+  if (t.type == TOK_WHILE) {
+    stmt.kind = Block::Stmt::kWhile;
+    return parseWhileStmt(stmt.whileStmt);
+  }
+
+  if (t.type == TOK_SWITCH) {
+    stmt.kind = Block::Stmt::kSwitch;
+    return parseSwitchStmt(stmt.switchStmt);
+  }
+
+  if (t.type == TOK_BREAK) {
+    advance();
+    stmt.kind = Block::Stmt::kBreak;
+    return true;
+  }
+
+  if (t.type == TOK_CONTINUE) {
+    advance();
+    stmt.kind = Block::Stmt::kContinue;
+    return true;
+  }
+
   if (t.type == TOK_LET) {
     advance();
     if (peek().type != TOK_IDENT) {
@@ -270,7 +299,10 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
       stmt.kind = Block::Stmt::kExpr;
       return parseExpr(stmt.exprStmt);
     }
-    if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_EQUALS) {
+    if (m_pos + 1 < m_tokens.size() &&
+        (m_tokens[m_pos + 1].type == TOK_EQUALS || m_tokens[m_pos + 1].type == TOK_PLUSEQ ||
+         m_tokens[m_pos + 1].type == TOK_MINUSEQ || m_tokens[m_pos + 1].type == TOK_MULEQ ||
+         m_tokens[m_pos + 1].type == TOK_DIVEQ)) {
       if (!m_declaredVars->contains(t.text)) {
         *m_error = QStringLiteral(
                        "variable '%1' must be declared with 'let' "
@@ -291,6 +323,38 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
       return parseFuncCall(name, stmt.exprStmt);
     }
     if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_DOT) {
+      // 检查是否为 ident.prop = value（属性赋值）
+      if (m_pos + 2 < m_tokens.size() && m_tokens[m_pos + 2].type == TOK_IDENT &&
+          m_pos + 3 < m_tokens.size() &&
+          (m_tokens[m_pos + 3].type == TOK_EQUALS || m_tokens[m_pos + 3].type == TOK_PLUSEQ ||
+           m_tokens[m_pos + 3].type == TOK_MINUSEQ || m_tokens[m_pos + 3].type == TOK_MULEQ ||
+           m_tokens[m_pos + 3].type == TOK_DIVEQ)) {
+        stmt.kind = Block::Stmt::kPropAssign;
+        stmt.propAssign.objectExpr.kind = Expr::kIdent;
+        stmt.propAssign.objectExpr.ident = advance().text;
+        stmt.propAssign.objectExpr.line = t.line;
+        advance();  // skip .
+        stmt.propAssign.prop = advance().text;
+        Token opToken = peek();
+        if (opToken.type == TOK_PLUSEQ) {
+          stmt.propAssign.compoundOp = 1;
+          advance();
+        } else if (opToken.type == TOK_MINUSEQ) {
+          stmt.propAssign.compoundOp = 2;
+          advance();
+        } else if (opToken.type == TOK_MULEQ) {
+          stmt.propAssign.compoundOp = 3;
+          advance();
+        } else if (opToken.type == TOK_DIVEQ) {
+          stmt.propAssign.compoundOp = 4;
+          advance();
+        } else {
+          if (!expect(TOK_EQUALS, QStringLiteral("expected '='"))) return false;
+        }
+        return parseExpr(stmt.propAssign.value);
+      }
+      // 检查是否为 ident.prop[expr] = value（链式索引赋值，走表达式）
+      // 或者 ident.prop.method()（方法调用，走表达式）
       stmt.kind = Block::Stmt::kExpr;
       return parseExpr(stmt.exprStmt);
     }
@@ -306,23 +370,57 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
         return false;
       }
       QString prop = peek().text;
-      // 检查 this.prop 后面是否跟着 '='，如果是则走赋值，否则走表达式语句
+      TokenType assignOp = peek(1).type;
+      bool isCompoundAssign = (assignOp == TOK_PLUSEQ || assignOp == TOK_MINUSEQ ||
+                               assignOp == TOK_MULEQ || assignOp == TOK_DIVEQ);
+      // 检查 this.prop 后面是否跟着 '=' 或复合赋值运算符，如果是则走赋值，否则走表达式语句
       if (m_pos + 2 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_DOT &&
           m_tokens[m_pos + 2].type == TOK_IDENT && m_pos + 3 < m_tokens.size() &&
-          m_tokens[m_pos + 3].type == TOK_EQUALS) {
+          (m_tokens[m_pos + 3].type == TOK_EQUALS || isCompoundAssign)) {
         advance();  // skip property name
         stmt.assign.thisProp = prop;
-        if (!expect(TOK_EQUALS,
-                    QStringLiteral("expected '=' after 'this.%1'").arg(stmt.assign.thisProp)))
-          return false;
+        Token opToken = peek();
+        if (opToken.type == TOK_PLUSEQ) {
+          stmt.assign.compoundOp = 1;
+          advance();
+        } else if (opToken.type == TOK_MINUSEQ) {
+          stmt.assign.compoundOp = 2;
+          advance();
+        } else if (opToken.type == TOK_MULEQ) {
+          stmt.assign.compoundOp = 3;
+          advance();
+        } else if (opToken.type == TOK_DIVEQ) {
+          stmt.assign.compoundOp = 4;
+          advance();
+        } else {
+          if (!expect(TOK_EQUALS,
+                      QStringLiteral("expected '=' after 'this.%1'").arg(stmt.assign.thisProp)))
+            return false;
+        }
         stmt.kind = Block::Stmt::kAssign;
         return parseExpr(stmt.assign.value);
       }
-      // this.prop = value 的简单检测
-      if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_EQUALS) {
+      // this.prop [=|+=|-=|*=/=] value 的简单检测
+      if (m_pos + 1 < m_tokens.size() &&
+          (m_tokens[m_pos + 1].type == TOK_EQUALS || isCompoundAssign)) {
         advance();  // skip property name
         stmt.assign.thisProp = prop;
-        advance();  // skip =
+        Token opToken = peek();
+        if (opToken.type == TOK_PLUSEQ) {
+          stmt.assign.compoundOp = 1;
+          advance();
+        } else if (opToken.type == TOK_MINUSEQ) {
+          stmt.assign.compoundOp = 2;
+          advance();
+        } else if (opToken.type == TOK_MULEQ) {
+          stmt.assign.compoundOp = 3;
+          advance();
+        } else if (opToken.type == TOK_DIVEQ) {
+          stmt.assign.compoundOp = 4;
+          advance();
+        } else {
+          advance();  // skip =
+        }
         stmt.kind = Block::Stmt::kAssign;
         return parseExpr(stmt.assign.value);
       }
@@ -366,19 +464,32 @@ bool AcParser::parseAssignStmt(AssignStmt &as) {
     as.hasTypeAnnotation = true;
   }
 
-  if (!expect(TOK_EQUALS, QStringLiteral("expected '='"))) return false;
+  // 检查复合赋值运算符
+  Token opToken = peek();
+  if (opToken.type == TOK_PLUSEQ) {
+    as.compoundOp = 1;  // +=
+    advance();
+  } else if (opToken.type == TOK_MINUSEQ) {
+    as.compoundOp = 2;  // -=
+    advance();
+  } else if (opToken.type == TOK_MULEQ) {
+    as.compoundOp = 3;  // *=
+    advance();
+  } else if (opToken.type == TOK_DIVEQ) {
+    as.compoundOp = 4;  // /=
+    advance();
+  } else {
+    if (!expect(TOK_EQUALS, QStringLiteral("expected '='"))) return false;
+  }
   return parseExpr(as.value);
 }
 
 bool AcParser::parseIndexAssignStmt(IndexAssignStmt &ias) {
-  ias.objName = advance().text;
+  // 构建对象表达式
+  ias.objectExpr.kind = Expr::kIdent;
+  ias.objectExpr.ident = advance().text;
   if (!expect(TOK_LBRACKET, QStringLiteral("expected '['"))) return false;
-  if (peek().type != TOK_STRING) {
-    *m_error =
-        QStringLiteral("expected string key in index assignment at line %1").arg(peek().line);
-    return false;
-  }
-  ias.key = advance().text;
+  if (!parseExpr(ias.indexExpr)) return false;
   if (!expect(TOK_RBRACKET, QStringLiteral("expected ']'"))) return false;
   if (!expect(TOK_EQUALS, QStringLiteral("expected '='"))) return false;
   return parseExpr(ias.value);
@@ -404,9 +515,20 @@ bool AcParser::parseIfStmt(IfStmt &is) {
   if (!parseExpr(is.condition)) return false;
   if (!expect(TOK_RPAREN, QStringLiteral("expected ')'"))) return false;
   if (!parseBlock(is.thenBlock)) return false;
+
+  // 检查 else 或 else if
   if (peek().type == TOK_ELSE) {
-    advance();
+    advance();  // skip else
     is.hasElse = true;
+
+    // else if 链式写法
+    if (peek().type == TOK_IF) {
+      is.elseIfBranch = new IfStmt();
+      is.elseIfBranch->isElseIf = true;
+      return parseIfStmt(*is.elseIfBranch);
+    }
+
+    // 普通 else { }
     return parseBlock(is.elseBlock);
   }
   return true;
@@ -443,6 +565,52 @@ bool AcParser::parseImportStmt(ImportStmt &imp) {
   imp.filePath = advance().text;
 
   return true;
+}
+
+bool AcParser::parseWhileStmt(WhileStmt &ws) {
+  advance();
+  if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after while"))) return false;
+  if (!parseExpr(ws.condition)) return false;
+  if (!expect(TOK_RPAREN, QStringLiteral("expected ')'"))) return false;
+  return parseBlock(ws.body);
+}
+
+bool AcParser::parseSwitchStmt(SwitchStmt &ss) {
+  advance();
+  if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after switch"))) return false;
+  if (!parseExpr(ss.expr)) return false;
+  if (!expect(TOK_RPAREN, QStringLiteral("expected ')'"))) return false;
+  if (!expect(TOK_LBRACE, QStringLiteral("expected '{' after switch"))) return false;
+
+  while (peek().type != TOK_RBRACE && peek().type != TOK_EOF) {
+    SwitchCase sc;
+    if (peek().type == TOK_DEFAULT) {
+      advance();
+      sc.isDefault = true;
+    } else if (peek().type == TOK_CASE) {
+      advance();
+      if (!parseExpr(sc.value)) return false;
+    } else {
+      *m_error =
+          QStringLiteral("expected 'case' or 'default' in switch at line %1").arg(peek().line);
+      return false;
+    }
+    if (!expect(TOK_COLON, QStringLiteral("expected ':' after case/default"))) return false;
+    while (peek().type != TOK_CASE && peek().type != TOK_DEFAULT && peek().type != TOK_RBRACE &&
+           peek().type != TOK_EOF) {
+      Block::Stmt stmt;
+      if (!parseStmt(stmt)) return false;
+      sc.body.stmts.append(stmt);
+      if (stmt.kind != Block::Stmt::kClassDef && stmt.kind != Block::Stmt::kInterfaceDef &&
+          stmt.kind != Block::Stmt::kFuncDef && stmt.kind != Block::Stmt::kIf &&
+          stmt.kind != Block::Stmt::kFor && stmt.kind != Block::Stmt::kWhile &&
+          stmt.kind != Block::Stmt::kSwitch) {
+        if (!expect(TOK_SEMI, QStringLiteral("expected ';' after statement"))) return false;
+      }
+    }
+    ss.cases.append(sc);
+  }
+  return expect(TOK_RBRACE, QStringLiteral("expected '}' after switch body"));
 }
 
 // ── 类定义解析 ──
@@ -719,7 +887,41 @@ bool AcParser::parseReturnStmt(Expr &retVal) {
 
 // ── 表达式解析 ──
 
-bool AcParser::parseExpr(Expr &expr) { return parseLogicalOr(expr); }
+bool AcParser::parseExpr(Expr &expr) { return parseTernary(expr); }
+
+bool AcParser::parseTernary(Expr &expr) {
+  if (!parseLogicalOr(expr)) return false;
+  if (peek().type == TOK_QUESTION) {
+    int ternaryLine = peek().line;
+    advance();
+    Expr *cond = new Expr(std::move(expr));
+    Expr *trueExpr = new Expr();
+    if (!parseLogicalOr(*trueExpr)) {
+      delete cond;
+      delete trueExpr;
+      return false;
+    }
+    if (!expect(TOK_COLON, QStringLiteral("expected ':' in ternary expression"))) {
+      delete cond;
+      delete trueExpr;
+      return false;
+    }
+    Expr *falseExpr = new Expr();
+    if (!parseTernary(*falseExpr)) {
+      delete cond;
+      delete trueExpr;
+      delete falseExpr;
+      return false;
+    }
+    expr.kind = Expr::kTernary;
+    expr.line = ternaryLine;
+    expr.left = cond;
+    expr.right = trueExpr;
+    expr.operand = falseExpr;
+    return true;
+  }
+  return true;
+}
 
 bool AcParser::parseLogicalOr(Expr &expr) {
   if (!parseLogicalAnd(expr)) return false;
@@ -745,9 +947,56 @@ bool AcParser::parseLogicalOr(Expr &expr) {
 }
 
 bool AcParser::parseLogicalAnd(Expr &expr) {
-  if (!parseAddSub(expr)) return false;
+  if (!parseComparison(expr)) return false;
   while (peek().type == TOK_AND) {
     Token opToken = peek();
+    advance();
+    Expr *left = new Expr(std::move(expr));
+    Expr *right = new Expr();
+    if (!parseComparison(*right)) {
+      delete left;
+      delete right;
+      return false;
+    }
+    Expr binary;
+    binary.kind = Expr::kBinary;
+    binary.line = opToken.line;
+    binary.binOp = Expr::kAnd;
+    binary.left = left;
+    binary.right = right;
+    expr = std::move(binary);
+  }
+  return true;
+}
+
+bool AcParser::parseComparison(Expr &expr) {
+  if (!parseAddSub(expr)) return false;
+  while (peek().type == TOK_EQ || peek().type == TOK_NEQ || peek().type == TOK_LT ||
+         peek().type == TOK_GT || peek().type == TOK_LTE || peek().type == TOK_GTE) {
+    Token opToken = peek();
+    Expr::BinaryOp op;
+    switch (peek().type) {
+      case TOK_EQ:
+        op = Expr::kEq;
+        break;
+      case TOK_NEQ:
+        op = Expr::kNeq;
+        break;
+      case TOK_LT:
+        op = Expr::kLt;
+        break;
+      case TOK_GT:
+        op = Expr::kGt;
+        break;
+      case TOK_LTE:
+        op = Expr::kLte;
+        break;
+      case TOK_GTE:
+        op = Expr::kGte;
+        break;
+      default:
+        break;
+    }
     advance();
     Expr *left = new Expr(std::move(expr));
     Expr *right = new Expr();
@@ -759,7 +1008,7 @@ bool AcParser::parseLogicalAnd(Expr &expr) {
     Expr binary;
     binary.kind = Expr::kBinary;
     binary.line = opToken.line;
-    binary.binOp = Expr::kAnd;
+    binary.binOp = op;
     binary.left = left;
     binary.right = right;
     expr = std::move(binary);
@@ -842,7 +1091,7 @@ bool AcParser::parseMulDiv(Expr &expr) {
       chained.methodCall.object = new Expr(std::move(expr));
       while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
         auto *arg = new Expr();
-        if (!parseExpr(*arg)) {
+        if (!parseLogicalOr(*arg)) {
           delete arg;
           return false;
         }
@@ -921,7 +1170,7 @@ bool AcParser::parsePrimary(Expr &expr) {
         advance();
         while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
           auto *arg = new Expr();
-          if (!parseExpr(*arg)) {
+          if (!parseLogicalOr(*arg)) {
             delete arg;
             return false;
           }
@@ -937,13 +1186,11 @@ bool AcParser::parsePrimary(Expr &expr) {
     }
     if (peek().type == TOK_LBRACKET) {
       advance();
-      if (peek().type != TOK_STRING) {
-        *m_error = QStringLiteral("expected string key in '[]' at line %1").arg(peek().line);
-        return false;
-      }
       expr.kind = Expr::kIndexAccess;
-      expr.ident = QString::fromLatin1(AcKeyword::kThis);
-      expr.indexKey = advance().text;
+      expr.left = new Expr();
+      expr.left->kind = Expr::kThis;
+      expr.right = new Expr();
+      if (!parseExpr(*expr.right)) return false;
       return expect(TOK_RBRACKET, QStringLiteral("expected ']'"));
     }
     expr.kind = Expr::kThis;
@@ -970,7 +1217,7 @@ bool AcParser::parsePrimary(Expr &expr) {
       advance();
       while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
         auto *arg = new Expr();
-        if (!parseExpr(*arg)) {
+        if (!parseLogicalOr(*arg)) {
           delete arg;
           return false;
         }
@@ -998,7 +1245,7 @@ bool AcParser::parsePrimary(Expr &expr) {
     if (peek().type != TOK_RPAREN) {
       do {
         Expr *arg = new Expr();
-        if (!parseExpr(*arg)) {
+        if (!parseLogicalOr(*arg)) {
           delete arg;
           return false;
         }
@@ -1033,6 +1280,19 @@ bool AcParser::parsePrimary(Expr &expr) {
       advance();
       return true;
 
+    case TOK_NULL:
+      expr.kind = Expr::kNull;
+      advance();
+      return true;
+
+    case TOK_UNDEFINED:
+      expr.kind = Expr::kUndefined;
+      advance();
+      return true;
+
+    case TOK_TEMPLATE_STRING:
+      return parseTemplateString(expr);
+
     case TOK_LPAREN: {
       advance();
       if (!parseExpr(expr)) return false;
@@ -1057,7 +1317,7 @@ bool AcParser::parsePrimary(Expr &expr) {
           advance();
           while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
             auto *arg = new Expr();
-            if (!parseExpr(*arg)) {
+            if (!parseLogicalOr(*arg)) {
               delete arg;
               return false;
             }
@@ -1083,7 +1343,7 @@ bool AcParser::parsePrimary(Expr &expr) {
           advance();
           while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
             auto *arg = new Expr();
-            if (!parseExpr(*arg)) {
+            if (!parseLogicalOr(*arg)) {
               delete arg;
               return false;
             }
@@ -1102,13 +1362,13 @@ bool AcParser::parsePrimary(Expr &expr) {
       }
       if (peek().type == TOK_LBRACKET) {
         advance();
-        if (peek().type != TOK_STRING) {
-          *m_error = QStringLiteral("expected string key in '[]' at line %1").arg(peek().line);
-          return false;
-        }
         expr.kind = Expr::kIndexAccess;
-        expr.ident = name;
-        expr.indexKey = advance().text;
+        expr.left = new Expr();
+        expr.left->kind = Expr::kIdent;
+        expr.left->ident = name;
+        expr.left->line = t.line;
+        expr.right = new Expr();
+        if (!parseExpr(*expr.right)) return false;
         return expect(TOK_RBRACKET, QStringLiteral("expected ']'"));
       }
       expr.kind = Expr::kIdent;
@@ -1174,7 +1434,7 @@ bool AcParser::parseFuncCall(const QString &name, Expr &expr) {
   advance();
   while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
     auto *arg = new Expr();
-    if (!parseExpr(*arg)) {
+    if (!parseLogicalOr(*arg)) {
       delete arg;
       return false;
     }
@@ -1182,6 +1442,110 @@ bool AcParser::parseFuncCall(const QString &name, Expr &expr) {
     if (peek().type == TOK_COMMA) advance();
   }
   return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
+}
+
+bool AcParser::parseTemplateString(Expr &expr) {
+  Token tok = advance();
+  QString raw = tok.text;
+
+  QVector<Expr *> parts;
+
+  int i = 0;
+  int n = raw.size();
+  QString currentStr;
+
+  while (i < n) {
+    if (raw[i] == '$' && i + 1 < n && raw[i + 1] == '{') {
+      if (!currentStr.isEmpty()) {
+        Expr *strExpr = new Expr();
+        strExpr->kind = Expr::kString;
+        strExpr->strVal = currentStr;
+        parts.append(strExpr);
+        currentStr.clear();
+      }
+      i += 2;
+      int depth = 1;
+      int start = i;
+      while (i < n && depth > 0) {
+        if (raw[i] == '{') ++depth;
+        if (raw[i] == '}') --depth;
+        if (depth > 0) ++i;
+      }
+      QString exprText = raw.mid(start, i - start);
+      ++i;
+
+      QVector<Token> exprTokens = AcLexer::tokenize(exprText, *m_error);
+      if (!m_error->isEmpty()) return false;
+
+      int savedPos = m_pos;
+      QVector<Token> savedTokens = m_tokens;
+      m_tokens = exprTokens;
+      m_pos = 0;
+
+      Expr *subExpr = new Expr();
+      if (!parseExpr(*subExpr)) {
+        delete subExpr;
+        m_tokens = savedTokens;
+        m_pos = savedPos;
+        return false;
+      }
+      parts.append(subExpr);
+
+      m_tokens = savedTokens;
+      m_pos = savedPos;
+    } else if (raw[i] == '\\' && i + 1 < n) {
+      QChar next = raw[i + 1];
+      if (next == 'n') {
+        currentStr += QLatin1Char('\n');
+      } else if (next == 't') {
+        currentStr += QLatin1Char('\t');
+      } else if (next == '$') {
+        currentStr += QLatin1Char('$');
+      } else if (next == '`') {
+        currentStr += QLatin1Char('`');
+      } else if (next == '\\') {
+        currentStr += QLatin1Char('\\');
+      } else {
+        currentStr += next;
+      }
+      i += 2;
+    } else {
+      currentStr += raw[i];
+      ++i;
+    }
+  }
+
+  if (!currentStr.isEmpty()) {
+    Expr *strExpr = new Expr();
+    strExpr->kind = Expr::kString;
+    strExpr->strVal = currentStr;
+    parts.append(strExpr);
+  }
+
+  if (parts.isEmpty()) {
+    expr.kind = Expr::kString;
+    expr.strVal = QString();
+    return true;
+  }
+
+  if (parts.size() == 1) {
+    expr = std::move(*parts[0]);
+    delete parts[0];
+    return true;
+  }
+
+  Expr *result = parts[0];
+  for (int j = 1; j < parts.size(); ++j) {
+    Expr *binary = new Expr();
+    binary->kind = Expr::kBinary;
+    binary->binOp = Expr::kAdd;
+    binary->left = result;
+    binary->right = parts[j];
+    result = binary;
+  }
+  expr = std::move(*result);
+  delete result;
+  return true;
 }
 
 // ── 类型解析 ──

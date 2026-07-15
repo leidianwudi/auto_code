@@ -41,7 +41,7 @@ LightAc::LightAc(QTextDocument *parent) : QSyntaxHighlighter(parent) {
   // ── 3. 字符串（橙色） ──
   QTextCharFormat stringFormat;
   stringFormat.setForeground(string_);
-  m_rules.append({QRegularExpression(QStringLiteral("\"[^\"]*\"|'[^']*'")), stringFormat});
+  m_rules.append({QRegularExpression(QStringLiteral("\"[^\"]*\"|'[^']*'|`[^`]*`")), stringFormat});
 
   // ── 4. 数字（橙色加粗） ──
   QTextCharFormat numberFormat;
@@ -49,9 +49,10 @@ LightAc::LightAc(QTextDocument *parent) : QSyntaxHighlighter(parent) {
   numberFormat.setFontWeight(QFont::Bold);
   m_rules.append({QRegularExpression(QStringLiteral("\\b\\d+(?:\\.\\d+)?\\b")), numberFormat});
 
-  // ── 5. 布尔值（红色加粗） ──
-  static const QStringList kBoolLiterals = {QString::fromLatin1(AcKeyword::kTrue),
-                                            QString::fromLatin1(AcKeyword::kFalse)};
+  // ── 5. 布尔值/null/undefined（红色加粗） ──
+  static const QStringList kBoolLiterals = {
+      QString::fromLatin1(AcKeyword::kTrue), QString::fromLatin1(AcKeyword::kFalse),
+      QString::fromLatin1(AcKeyword::kNull), QString::fromLatin1(AcKeyword::kUndefined)};
   QTextCharFormat boolFormat;
   boolFormat.setForeground(boolean_);
   boolFormat.setFontWeight(QFont::Bold);
@@ -73,7 +74,8 @@ LightAc::LightAc(QTextDocument *parent) : QSyntaxHighlighter(parent) {
   QTextCharFormat opFormat;
   opFormat.setForeground(operator_);
   opFormat.setFontWeight(QFont::Bold);
-  m_rules.append({QRegularExpression(QStringLiteral("\\|\\||&&|!|[+\\-*/]")), opFormat});
+  m_rules.append(
+      {QRegularExpression(QStringLiteral("\\|\\||&&|!=|==|<=|>=|<|>|!|[+\\-*/]=?|\\?")), opFormat});
 }
 
 // 对单个文本块进行高亮处理
