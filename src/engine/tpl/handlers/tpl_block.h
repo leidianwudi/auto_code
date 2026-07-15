@@ -42,9 +42,21 @@ public:
    * @param closeTag   闭合标签（如 "${/if}"、"${/each}"）
    * @return 匹配的闭合标签位置，未找到返回 -1
    */
-  static int findMatchingClose(const QString &block, int startPos,
-                               const QString &openPrefix,
+  static int findMatchingClose(const QString &block, int startPos, const QString &openPrefix,
                                const QString &closeTag);
+
+  /**
+   * @brief 查找匹配的 ${else}（支持嵌套，仅返回当前 if 层的 else）
+   *
+   * 从 startPos 开始扫描 block，正确计数嵌套的 ${if ...} / ${/if}，
+   * 仅在当前 if 层级（depth == 1）时返回 ${else} 的位置。
+   * 如果遇到当前 if 的匹配 ${/if}（depth 归零），返回 -1 表示没有 else。
+   *
+   * @param block    完整的模板字符串
+   * @param startPos 开始搜索的位置（应在 ${if ...} 之后）
+   * @return ${else} 的位置，未找到返回 -1
+   */
+  static int findElsePos(const QString &block, int startPos);
 
   /**
    * @brief 处理一个模板表达式

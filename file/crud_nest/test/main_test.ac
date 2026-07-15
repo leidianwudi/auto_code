@@ -1,24 +1,24 @@
 // ── 接口定义 ──
 
 interface Drivable {
-  function drive(speed);
+  function drive(speed: Number): Void;
 }
 
 interface Printable {
-  function toString();
+  function toString(): String;
 }
 
-// ── 顶层函数 ──11
+// ── 顶层函数 ──
 
-function add(a, b) {
+function add(a: Number, b: Number): Number {
   return a + b;
 }
 
-function multiply(a, b) {
+function multiply(a: Number, b: Number): Number {
   return a * b;
 }
 
-function greet(name) {
+function greet(name: String): String {
   return "Hello, " + name + "!";
 }
 
@@ -28,11 +28,11 @@ class Engine {
   private let type = "V8";
   protected let horsepower = 400;
 
-  public function start() {
+  public function start(): Void {
     printLog("Engine " + this.type + " started, horsepower: " + this.horsepower);
   }
 
-  public function getInfo() {
+  public function getInfo(): String {
     return this.type + " (" + this.horsepower + "hp)";
   }
 }
@@ -44,17 +44,17 @@ class Car extends Engine implements Drivable {
   public let engine = new Engine();
   public let year = 2024;
 
-  public override function start() {
+  public override function start(): Void {
     super.start();
     printLog(this.brand + " engine started");
   }
 
-  public function drive(speed) {
+  public function drive(speed: Number): Void {
     this.engine.start();
     printLog(this.brand + " is driving at " + speed + " km/h");
   }
 
-  public function getDetails() {
+  public function getDetails(): String {
     let info = this.engine.getInfo();
     return this.brand + " " + this.year + " with engine: " + info;
   }
@@ -64,34 +64,34 @@ class Person implements Printable {
   public let name = "default";
   private let age = 0;
 
-  public function setName(n) {
+  public function setName(n: String): Void {
     this.name = n;
   }
 
-  public function setAge(a) {
+  public function setAge(a: Number): Void {
     this.age = a;
   }
 
-  public function introduce() {
+  public function introduce(): String {
     return "Hi, I'm " + this.name + ", " + this.age + " years old";
   }
 
-  public function toString() {
+  public function toString(): String {
     return this.name + " (" + this.age + ")";
   }
 }
 
-// ── 静态类测试  1 ──
+// ── 静态类测试 ──
 
 class Counter {
   static let count = 0;
   static let name = "Counter";
 
-  static function increment() {
+  static function increment(): Void {
     Counter::count = Counter::count + 1;
   }
 
-  static function getCount() {
+  static function getCount(): Number {
     return Counter::count;
   }
 }

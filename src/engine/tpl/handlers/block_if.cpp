@@ -93,8 +93,8 @@ bool BlockIf::handle(const QString &block, int &pos, const QString &expr,
     return false;
   }
 
-  // 在 ${if} 和 ${/if} 之间查找 ${else}
-  int elsePos = block.indexOf(QString::fromLatin1(AcTemplate::kElse), pos);
+  // 在 ${if} 和 ${/if} 之间查找 ${else}（支持嵌套，避免误找子 if 内的 else）
+  int elsePos = TplBlock::findElsePos(block, pos);
 
   if (truthy) {
     // 条件成立：渲染 then 部分

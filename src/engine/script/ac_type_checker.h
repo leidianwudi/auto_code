@@ -47,6 +47,7 @@ private:
   const QHash<QString, MethodDef> *m_functions = nullptr;
   QStringList *m_errors = nullptr;
   QHash<QString, InterfaceDef> m_interfaces;  ///< 接口定义集合
+  QSet<QString> m_declaredVars;               ///< 已声明的标识符（含跨文件导入的类名）
 
   // ── 核心检查 ──
   void checkBlock(const Block &block, TypeEnv &env);

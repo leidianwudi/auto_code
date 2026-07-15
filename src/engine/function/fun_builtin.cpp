@@ -122,7 +122,26 @@ QJsonValue FunBuiltin::printLog(const QJsonArray &args) {
 
   QString text;
   for (const QJsonValue &v : args) {
-    text += v.isString() ? v.toString() : QString::number(v.toDouble());
+    if (v.isString()) {
+      text += v.toString();
+    } else if (v.isBool()) {
+      text += v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
+    } else if (v.isDouble()) {
+      double d = v.toDouble();
+      if (d == qFloor(d)) {
+        text += QString::number(static_cast<qint64>(d));
+      } else {
+        text += QString::number(d);
+      }
+    } else if (v.isNull()) {
+      text += QStringLiteral("null");
+    } else if (v.isArray()) {
+      text += QString::fromUtf8(QJsonDocument(v.toArray()).toJson(QJsonDocument::Compact));
+    } else if (v.isObject()) {
+      text += QString::fromUtf8(QJsonDocument(v.toObject()).toJson(QJsonDocument::Compact));
+    } else {
+      text += QStringLiteral("undefined");
+    }
   }
   qDebug() << "[FunBuiltin::printLog] text:" << text << "hasCallback:" << (bool)s_ctx.logCallback
            << "currentLine:" << s_ctx.currentLine;
@@ -143,7 +162,26 @@ QJsonValue FunBuiltin::printError(const QJsonArray &args) {
 
   QString text;
   for (const QJsonValue &v : args) {
-    text += v.isString() ? v.toString() : QString::number(v.toDouble());
+    if (v.isString()) {
+      text += v.toString();
+    } else if (v.isBool()) {
+      text += v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
+    } else if (v.isDouble()) {
+      double d = v.toDouble();
+      if (d == qFloor(d)) {
+        text += QString::number(static_cast<qint64>(d));
+      } else {
+        text += QString::number(d);
+      }
+    } else if (v.isNull()) {
+      text += QStringLiteral("null");
+    } else if (v.isArray()) {
+      text += QString::fromUtf8(QJsonDocument(v.toArray()).toJson(QJsonDocument::Compact));
+    } else if (v.isObject()) {
+      text += QString::fromUtf8(QJsonDocument(v.toObject()).toJson(QJsonDocument::Compact));
+    } else {
+      text += QStringLiteral("undefined");
+    }
   }
   if (s_ctx.logCallback) {
     if (s_ctx.currentLine > 0) {

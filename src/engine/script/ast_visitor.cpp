@@ -196,7 +196,9 @@ void AstVisitor::visitNumberExpr(const Expr &expr) { Q_UNUSED(expr); }
 void AstVisitor::visitBoolExpr(const Expr &expr) { Q_UNUSED(expr); }
 void AstVisitor::visitThisExpr(const Expr &expr) { Q_UNUSED(expr); }
 
-void AstVisitor::visitPropAccessExpr(const Expr &expr) { Q_UNUSED(expr); }
+void AstVisitor::visitPropAccessExpr(const Expr &expr) {
+  if (expr.propObject) visitExpr(*expr.propObject);
+}
 
 void AstVisitor::visitIndexAccessExpr(const Expr &expr) {
   if (expr.left) visitExpr(*expr.left);

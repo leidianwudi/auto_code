@@ -42,6 +42,17 @@ bool AcParser::expect(TokenType t, const QString &msg) {
   return false;
 }
 
+bool AcParser::isPropertyName(TokenType t) const {
+  return t == TOK_IDENT || t == TOK_DEFAULT || t == TOK_CASE || t == TOK_NULL ||
+         t == TOK_UNDEFINED || t == TOK_WHILE || t == TOK_BREAK || t == TOK_CONTINUE ||
+         t == TOK_SWITCH || t == TOK_FOR || t == TOK_IF || t == TOK_ELSE || t == TOK_RETURN ||
+         t == TOK_CLASS || t == TOK_FUNCTION || t == TOK_STATIC || t == TOK_PUBLIC ||
+         t == TOK_PROTECTED || t == TOK_PRIVATE || t == TOK_EXTENDS || t == TOK_OVERRIDE ||
+         t == TOK_INTERFACE || t == TOK_IMPLEMENTS || t == TOK_SUPER || t == TOK_EXPORT ||
+         t == TOK_IMPORT || t == TOK_FROM || t == TOK_NEW || t == TOK_LET || t == TOK_IN ||
+         t == TOK_TRUE || t == TOK_FALSE || t == TOK_THIS;
+}
+
 // ── 解析入口 ──
 
 bool AcParser::parse(const QVector<Token> &tokens, Block &program, QString &error,
@@ -364,7 +375,7 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
     if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_DOT) {
       advance();  // skip this
       advance();  // skip .
-      if (peek().type != TOK_IDENT) {
+      if (!isPropertyName(peek().type)) {
         *m_error =
             QStringLiteral("expected property name after 'this.' at line %1").arg(peek().line);
         return false;
@@ -1091,7 +1102,7 @@ bool AcParser::parseMulDiv(Expr &expr) {
   // 处理链式访问：expr.prop 或 expr.method()
   if (peek().type == TOK_DOT) {
     advance();
-    if (peek().type != TOK_IDENT) {
+    if (!isPropertyName(peek().type)) {
       *m_error = QStringLiteral("expected property name after '.' at line %1").arg(peek().line);
       return false;
     }
@@ -1118,11 +1129,33 @@ bool AcParser::parseMulDiv(Expr &expr) {
         return false;
       expr = std::move(chained);
     } else {
-      // 链式属性访问：expr.prop（暂不支持深层链式）
-      *m_error = QStringLiteral("chained property access is not supported yet at line %1")
-                     .arg(peek().line);
+      // 链式属性访问：expr.prop
+      Expr propAccess;
+      propAccess.kind = Expr::kPropAccess;
+      propAccess.line = peek().line;
+      propAccess.prop = memberName;
+      propAccess.propObject = new Expr(std::move(expr));
+      expr = std::move(propAccess);
+    }
+  }
+  // 处理链式索引访问：expr[...]
+  if (peek().type == TOK_LBRACKET) {
+    advance();
+    Expr *idxExpr = new Expr();
+    if (!parseLogicalOr(*idxExpr)) {
+      delete idxExpr;
       return false;
     }
+    if (!expect(TOK_RBRACKET, QStringLiteral("expected ']' after index expression"))) {
+      delete idxExpr;
+      return false;
+    }
+    Expr idxAccess;
+    idxAccess.kind = Expr::kIndexAccess;
+    idxAccess.line = peek().line;
+    idxAccess.left = new Expr(std::move(expr));
+    idxAccess.right = idxExpr;
+    expr = std::move(idxAccess);
   }
   return true;
 }
@@ -1171,7 +1204,7 @@ bool AcParser::parsePrimary(Expr &expr) {
     advance();
     if (peek().type == TOK_DOT) {
       advance();
-      if (peek().type != TOK_IDENT) {
+      if (!isPropertyName(peek().type)) {
         *m_error =
             QStringLiteral("expected property name after 'this.' at line %1").arg(peek().line);
         return false;
@@ -1248,12 +1281,14 @@ bool AcParser::parsePrimary(Expr &expr) {
   }
 
   if (t.type == TOK_NEW) {
+    int newLine = t.line;
     advance();
     if (peek().type != TOK_IDENT) {
       *m_error = QStringLiteral("expected class name after 'new' at line %1").arg(peek().line);
       return false;
     }
     expr.kind = Expr::kNewInstance;
+    expr.line = newLine;
     expr.className = advance().text;
     if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after class name"))) return false;
     // 解析构造参数列表（支持任意多个参数）
@@ -1345,7 +1380,7 @@ bool AcParser::parsePrimary(Expr &expr) {
       }
       if (peek().type == TOK_DOT) {
         advance();
-        if (peek().type != TOK_IDENT) {
+        if (!isPropertyName(peek().type)) {
           *m_error = QStringLiteral("expected property name after '.' at line %1").arg(peek().line);
           return false;
         }
@@ -1409,7 +1444,7 @@ bool AcParser::parseObject(Expr &expr) {
   expr.kind = Expr::kObject;
   advance();
   while (peek().type != TOK_RBRACE && peek().type != TOK_EOF) {
-    if (peek().type != TOK_IDENT) {
+    if (!isPropertyName(peek().type)) {
       *m_error = QStringLiteral("expected key in object at line %1").arg(peek().line);
       return false;
     }

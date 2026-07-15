@@ -1,5 +1,5 @@
 // 参数预处理类 — 将原始数据转换为模板所需格式
-class Param {
+export class Param {
   let entityClass = "";     // 实体类名, 如 EnUser
   let tableName = "";       // 数据库表名, 如 user
   let tableDesc = "";       // 表说明
@@ -8,7 +8,7 @@ class Param {
   let relations = [];       // 关联关系配置
 
   // MySQL 类型到 TypeScript/TypeORM 类型的映射
-  function mapType(colType) {
+  function mapType(colType: String): String {
     let t = colType.toLowerCase();
     // 整数类型
     if (t.contains("int") || t.contains("tinyint") || t.contains("smallint") || t.contains("bigint")) {
@@ -35,23 +35,23 @@ class Param {
   }
 
   // 判断是否为主键
-  function isPrimaryKey(colKey) {
+  function isPrimaryKey(colKey: String): Bool {
     return colKey == "PRI";
   }
 
   // 判断是否为自增列
-  function isAutoIncrement(extra) {
+  function isAutoIncrement(extra: String): Bool {
     return extra.toLowerCase().contains("auto_increment");
   }
 
   // 判断是否为 decimal/Coin 类型
-  function isCoinType(colType) {
+  function isCoinType(colType: String): Bool {
     let t = colType.toLowerCase();
     return t.contains("decimal") || t.contains("float") || t.contains("double");
   }
 
   // 获取 Column 装饰器参数
-  function getColumnOptions(field) {
+  function getColumnOptions(field: Object): String {
     let colType = field.colType;
     let colDefault = field.colDefault;
     let options = "{ type: '" + this.mapTypeToOrm(colType) + "'";
@@ -72,7 +72,7 @@ class Param {
   }
 
   // 映射到 ORM 的 type 值
-  function mapTypeToOrm(colType) {
+  function mapTypeToOrm(colType: String): String {
     let t = colType.toLowerCase();
     if (t.contains("varchar") || t.contains("char") || t.contains("text")) {
       return "varchar";
@@ -93,7 +93,7 @@ class Param {
   }
 
   // 处理表数据，生成模板所需的完整数据结构
-  function setTableData(data) {
+  function setTableData(data: Object): Void {
     this.tableName = data.tableName;
     this.tableDesc = data.tableDesc;
 

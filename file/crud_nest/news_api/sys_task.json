@@ -1,4 +1,0 @@
-{
-    "modelName": "sys\\sys_task", //模块名字，多级  1 文件夹用 \\ 隔开
-    "tableName": "sys_task", // 表名
-}

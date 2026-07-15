@@ -26,6 +26,7 @@ private:
   Token advance();
   bool match(TokenType t);
   bool expect(TokenType t, const QString &msg);
+  bool isPropertyName(TokenType t) const;
 
   // ── 语法分析（递归下降） ──
   bool parseProgram(Block &block);

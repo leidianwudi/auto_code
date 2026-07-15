@@ -13,6 +13,7 @@ void AcTypeChecker::check(const Block &program, const QSet<QString> &declaredVar
   m_classes = &classes;
   m_functions = &functions;
   m_errors = &errors;
+  m_declaredVars = declaredVars;
   m_interfaces.clear();
 
   // 从 AST 中收集接口定义
@@ -301,7 +302,15 @@ AcType AcTypeChecker::checkExpr(const Expr &expr, const TypeEnv &env) {
 
     case Expr::kPropAccess: {
       // obj.prop
-      if (env.varTypes.contains(expr.ident)) {
+      if (expr.propObject) {
+        AcType objType = checkExpr(*expr.propObject, env);
+        if (objType.kind == AcType::kClass && m_classes->contains(objType.className)) {
+          const ClassDef &cd = (*m_classes)[objType.className];
+          for (const auto &prop : cd.properties) {
+            if (prop.key == expr.prop) return prop.type;
+          }
+        }
+      } else if (env.varTypes.contains(expr.ident)) {
         AcType objType = env.varTypes[expr.ident];
         if (objType.kind == AcType::kClass && m_classes->contains(objType.className)) {
           const ClassDef &cd = (*m_classes)[objType.className];
@@ -436,7 +445,7 @@ AcType AcTypeChecker::checkExpr(const Expr &expr, const TypeEnv &env) {
 
     case Expr::kNewInstance: {
       // new ClassName()
-      if (!m_classes->contains(expr.className)) {
+      if (!m_classes->contains(expr.className) && !m_declaredVars.contains(expr.className)) {
         reportError(QStringLiteral("unknown class '%1' in 'new' expression").arg(expr.className),
                     expr.line);
         return AcType::any();
@@ -499,7 +508,7 @@ AcType AcTypeChecker::checkExpr(const Expr &expr, const TypeEnv &env) {
         reportError(
             QStringLiteral("static member '%1::%2' not found").arg(expr.className, expr.prop),
             expr.line);
-      } else {
+      } else if (!m_declaredVars.contains(expr.className)) {
         reportError(QStringLiteral("unknown class '%1' in static access").arg(expr.className),
                     expr.line);
       }

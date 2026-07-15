@@ -5,6 +5,8 @@
 
 #include "undeclared_ident_validator.h"
 
+#include <QDebug>
+
 #include "../ac_language.h"
 
 void UndeclaredIdentValidator::validate(const Block &program, const QSet<QString> &declaredVars,
@@ -128,6 +130,7 @@ void UndeclaredIdentValidator::visitImportStmt(const ImportStmt &imp) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 void UndeclaredIdentValidator::visitIdentExpr(const Expr &expr) {
+  if (expr.ident.isEmpty()) return;
   if (!m_scopeVars.contains(expr.ident)) {
     if (m_errors) {
       m_errors->append(QStringLiteral("undefined variable '%1' at line %2")
@@ -137,7 +140,10 @@ void UndeclaredIdentValidator::visitIdentExpr(const Expr &expr) {
 }
 
 void UndeclaredIdentValidator::visitPropAccessExpr(const Expr &expr) {
-  if (expr.ident != QString::fromLatin1(AcKeyword::kThis) && !m_scopeVars.contains(expr.ident)) {
+  if (expr.propObject) {
+    AstVisitor::visitPropAccessExpr(expr);
+  } else if (!expr.ident.isEmpty() && expr.ident != QString::fromLatin1(AcKeyword::kThis) &&
+             !m_scopeVars.contains(expr.ident)) {
     if (m_errors) {
       m_errors->append(QStringLiteral("undefined variable '%1' at line %2")
                            .arg(expr.ident, QString::number(expr.line)));
@@ -146,12 +152,7 @@ void UndeclaredIdentValidator::visitPropAccessExpr(const Expr &expr) {
 }
 
 void UndeclaredIdentValidator::visitIndexAccessExpr(const Expr &expr) {
-  if (expr.ident != QString::fromLatin1(AcKeyword::kThis) && !m_scopeVars.contains(expr.ident)) {
-    if (m_errors) {
-      m_errors->append(QStringLiteral("undefined variable '%1' at line %2")
-                           .arg(expr.ident, QString::number(expr.line)));
-    }
-  }
+  AstVisitor::visitIndexAccessExpr(expr);
 }
 
 void UndeclaredIdentValidator::visitFuncCallExpr(const Expr &expr) {
@@ -176,10 +177,12 @@ void UndeclaredIdentValidator::visitFuncCallExpr(const Expr &expr) {
 
 void UndeclaredIdentValidator::visitMethodCallExpr(const Expr &expr) {
   if (expr.methodCall.object) {
-    // 链式访问：this.engine.start() → 访问对象表达式
     visitExpr(*expr.methodCall.object);
+  } else if (expr.methodCall.objName.isEmpty()) {
+    qDebug() << "[UndeclaredIdentValidator] methodCall with empty objName and null object at line"
+             << expr.line << "methodName:" << expr.methodCall.methodName;
   } else {
-    // 检查对象变量是否已声明
+    // 检查对象变量是否已声明（跳过空 objName，链式方法调用时 objName 可能为空）
     if (expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis) &&
         expr.methodCall.objName != QString::fromLatin1(AcKeyword::kSuper) &&
         !m_scopeVars.contains(expr.methodCall.objName)) {

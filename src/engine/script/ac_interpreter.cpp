@@ -41,11 +41,16 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
     }
 
     case Expr::kPropAccess: {
-      QJsonValue obj = resolveVar(expr.ident);
-      if (obj.isNull() && expr.ident != QString::fromLatin1(AcKeyword::kThis) &&
-          expr.ident != QString::fromLatin1(AcKeyword::kSuper)) {
-        *m_error = QStringLiteral("undefined variable '%1'").arg(expr.ident);
-        return QJsonValue();
+      QJsonValue obj;
+      if (expr.propObject) {
+        obj = evalExpr(*expr.propObject);
+      } else {
+        obj = resolveVar(expr.ident);
+        if (obj.isNull() && expr.ident != QString::fromLatin1(AcKeyword::kThis) &&
+            expr.ident != QString::fromLatin1(AcKeyword::kSuper)) {
+          *m_error = QStringLiteral("undefined variable '%1'").arg(expr.ident);
+          return QJsonValue();
+        }
       }
       if (expr.prop == QStringLiteral("length")) {
         if (obj.isString()) return QJsonValue(obj.toString().length());
@@ -588,9 +593,25 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
                                          expr.methodCall.args, expr.line, modifiedArr);
     if (!modifiedArr.isNull()) {
       if (isChained) {
-        // 链式调用时无法直接修改变量，暂不支持
+        // 链式属性访问：this.fields.append(...) → 回写到 this 的属性
+        if (expr.methodCall.object && expr.methodCall.object->kind == Expr::kPropAccess &&
+            !expr.methodCall.object->prop.isEmpty()) {
+          const Expr &propObj = *expr.methodCall.object;
+          if (propObj.ident == QString::fromLatin1(AcKeyword::kThis)) {
+            m_currentThis[propObj.prop] = modifiedArr;
+            m_modifiedThis[propObj.prop] = modifiedArr;
+          } else if (!propObj.ident.isEmpty()) {
+            // 链式调用修改普通变量属性：obj.prop.append(...)
+            if (containsVar(propObj.ident)) {
+              QJsonObject varObj = resolveVar(propObj.ident).toObject();
+              varObj[propObj.prop] = modifiedArr;
+              setVar(propObj.ident, QJsonValue(varObj));
+            }
+          }
+        }
       } else if (expr.methodCall.objName == QString::fromLatin1(AcKeyword::kThis)) {
         m_currentThis = modifiedArr.toObject();
+        m_modifiedThis = modifiedArr.toObject();
       } else {
         setVar(expr.methodCall.objName, modifiedArr);
       }
@@ -935,6 +956,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
         releaseIfInstanceWithDestruct(old);
         retainIfInstance(val);
         m_currentThis[stmt.assign.thisProp] = val;
+        m_modifiedThis[stmt.assign.thisProp] = val;
         break;
       }
 
@@ -965,6 +987,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
           setVar(stmt.indexAssign.objectExpr.ident, obj);
         } else if (stmt.indexAssign.objectExpr.kind == Expr::kThis) {
           m_currentThis = obj;
+          m_modifiedThis = obj;
         }
       } else if (objVal.isArray()) {
         QJsonArray arr = objVal.toArray();
@@ -980,6 +1003,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
           setVar(stmt.indexAssign.objectExpr.ident, QJsonValue(arr));
         } else if (stmt.indexAssign.objectExpr.kind == Expr::kThis) {
           m_currentThis = QJsonObject();
+          m_modifiedThis = QJsonObject();
         }
       }
       break;
@@ -1019,6 +1043,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
           setVar(stmt.propAssign.objectExpr.ident, obj);
         } else if (stmt.propAssign.objectExpr.kind == Expr::kThis) {
           m_currentThis = obj;
+          m_modifiedThis = obj;
         }
       }
       break;

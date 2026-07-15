@@ -285,12 +285,14 @@ struct Expr {
     kBool,          ///< 布尔字面量 true/false
     kStaticAccess,  ///< 静态访问 ClassName::member
   } kind = kString;
-  int line = 0;                     ///< 源码行号（用于错误报告）
-  QString strVal;                   ///< 字符串值
-  double numVal = 0;                ///< 数值
-  bool boolVal = false;             ///< 布尔值（用于 kBool）
-  QString ident;                    ///< 标识符名
-  QString prop;                     ///< 属性名（用于 kPropAccess）
+  int line = 0;          ///< 源码行号（用于错误报告）
+  QString strVal;        ///< 字符串值
+  double numVal = 0;     ///< 数值
+  bool boolVal = false;  ///< 布尔值（用于 kBool）
+  QString ident;         ///< 标识符名
+  QString prop;          ///< 属性名（用于 kPropAccess）
+  Expr *propObject =
+      nullptr;  ///< 链式属性访问的对象表达式（用于 kPropAccess 链式，优先级高于 ident）
   QVector<ObjectEntry> objEntries;  ///< 对象条目
   QVector<Expr *> arrItems;         ///< 数组元素（指针）
   FuncCall funcCall;                ///< 函数调用信息
