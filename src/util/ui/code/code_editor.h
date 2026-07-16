@@ -66,8 +66,9 @@ signals:
   /**
    * @brief 验证结果信号
    * @param message 错误信息，无错误时为空字符串
+   * @param errorCount 错误数量，无错误时为 0
    */
-  void validationMessage(const QString &message);
+  void validationMessage(const QString &message, int errorCount = 0);
 
 protected:
   void resizeEvent(QResizeEvent *event) override;

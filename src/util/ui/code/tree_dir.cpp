@@ -36,41 +36,64 @@
 
 void ModifiedFileDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
                                  const QModelIndex &index) const {
-  // 先绘制默认内容（图标 + 文件名）
-  QStyledItemDelegate::paint(painter, option, index);
-
-  // 检查是否为已修改文件
+  // 检查错误状态和修改状态
+  int errorCount = index.data(Qt::UserRole + 3).toInt();
   bool modified = index.data(Qt::UserRole + 2).toBool();
-  if (!modified) return;
+  bool hasError = errorCount > 0;
 
-  // 在文件名右上角绘制红色 "*"
-  painter->save();
-  painter->setPen(AuiStyle::modifiedColor());
+  if (hasError) {
+    // 错误状态：将文件名和错误数量合并，让 Qt 一次性绘制
+    QStyleOptionViewItem opt = option;
 
-  const QTreeWidget *tree = qobject_cast<const QTreeWidget *>(parent());
-  QFont treeFont = tree ? tree->font() : option.font;
-  QFontMetrics fm(treeFont);
-  QString text = index.data(Qt::DisplayRole).toString();
+    // 合并显示文本：文件名 + 错误数量
+    QString originalText = index.data(Qt::DisplayRole).toString();
+    opt.text = originalText + QStringLiteral("  (%1)").arg(errorCount);
 
-  // 图标宽度（decorationSize 可能为 0，回退取实际图标大小）
-  int decoWidth = option.decorationSize.width();
-  if (decoWidth == 0) decoWidth = option.icon.actualSize(QSize(16, 16)).width();
+    // 修改 palette 文字颜色为红色
+    QPalette redPalette = opt.palette;
+    redPalette.setColor(QPalette::Text, AuiStyle::errorTextColor());
+    redPalette.setColor(QPalette::WindowText, AuiStyle::errorTextColor());
+    redPalette.setColor(QPalette::HighlightedText, AuiStyle::errorTextColor());
+    opt.palette = redPalette;
 
-  // 复选框宽度（.json 文件有复选框，.ac 文件没有）
-  int checkWidth = 0;
-  if (index.data(Qt::CheckStateRole).isValid())
-    checkWidth = tree ? tree->style()->pixelMetric(QStyle::PM_IndicatorWidth) + 4 : 20;
+    QFont boldFont = opt.font;
+    boldFont.setBold(true);
+    opt.font = boldFont;
 
-  // 文本起始位置（图标 + 复选框 + 4px 边距）
-  int textStartX = option.rect.left() + checkWidth + decoWidth + 4;
-  int starX = textStartX + fm.horizontalAdvance(text) + 6;
-  int starY = option.rect.top() + fm.ascent();
+    QStyledItemDelegate::paint(painter, opt, index);
+  } else if (modified) {
+    // 先绘制默认内容
+    QStyledItemDelegate::paint(painter, option, index);
 
-  QFont boldFont = treeFont;
-  boldFont.setBold(true);
-  painter->setFont(boldFont);
-  painter->drawText(starX, starY, QStringLiteral("*"));
-  painter->restore();
+    // 在文件名右上角绘制红色 "*"
+    painter->save();
+    painter->setPen(AuiStyle::modifiedColor());
+
+    const QTreeWidget *tree = qobject_cast<const QTreeWidget *>(parent());
+    QFont treeFont = tree ? tree->font() : option.font;
+    QFontMetrics fm(treeFont);
+    QString text = index.data(Qt::DisplayRole).toString();
+
+    int decoWidth = option.decorationSize.width();
+    if (decoWidth == 0) decoWidth = option.icon.actualSize(QSize(16, 16)).width();
+
+    int checkWidth = 0;
+    if (index.data(Qt::CheckStateRole).isValid())
+      checkWidth = tree ? tree->style()->pixelMetric(QStyle::PM_IndicatorWidth) + 4 : 20;
+
+    int textStartX = option.rect.left() + checkWidth + decoWidth + 4;
+    int starX = textStartX + fm.horizontalAdvance(text) + 6;
+    int starY = option.rect.top() + fm.ascent();
+
+    QFont boldFont = treeFont;
+    boldFont.setBold(true);
+    painter->setFont(boldFont);
+    painter->drawText(starX, starY, QStringLiteral("*"));
+    painter->restore();
+  } else {
+    // 无特殊状态，正常绘制
+    QStyledItemDelegate::paint(painter, option, index);
+  }
 }
 
 // ============================================================================
@@ -700,6 +723,38 @@ void TreeDir::setFileModified(const QString &filePath, bool modified) {
     if (item->data(0, Qt::UserRole + 1).toString() == filePath) {
       // 通过自定义数据角色存储修改状态，由 ModifiedFileDelegate 绘制红色 "*"
       item->setData(0, Qt::UserRole + 2, modified);
+      return;
+    }
+    ++it;
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  setFileError / clearFileError — 设置/清除文件错误状态
+// ════════════════════════════════════════════════════════════
+
+void TreeDir::setFileError(const QString &filePath, int errorCount) {
+  if (filePath.isEmpty()) return;
+  QTreeWidgetItemIterator it(const_cast<TreeDir *>(this));
+  while (*it) {
+    QTreeWidgetItem *item = *it;
+    if (item->data(0, Qt::UserRole + 1).toString() == filePath) {
+      // 存储错误数量，由 ModifiedFileDelegate 绘制红色文件名和错误数量徽章
+      item->setData(0, Qt::UserRole + 3, errorCount);
+      return;
+    }
+    ++it;
+  }
+}
+
+void TreeDir::clearFileError(const QString &filePath) {
+  if (filePath.isEmpty()) return;
+  QTreeWidgetItemIterator it(const_cast<TreeDir *>(this));
+  while (*it) {
+    QTreeWidgetItem *item = *it;
+    if (item->data(0, Qt::UserRole + 1).toString() == filePath) {
+      // 清除错误数量
+      item->setData(0, Qt::UserRole + 3, 0);
       return;
     }
     ++it;

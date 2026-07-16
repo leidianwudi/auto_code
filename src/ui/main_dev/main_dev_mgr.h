@@ -72,7 +72,7 @@ private slots:
   /// 应用程序焦点变化时，连接新焦点的编辑器信号
   void onFocusChanged(QWidget *oldFocus, QWidget *newFocus);
   /// 编辑器验证结果变化时，更新状态栏错误信息
-  void onValidationMessage(const QString &msg);
+  void onValidationMessage(const QString &msg, int errorCount);
   /// 处理文件/文件夹重命名请求
   void onRenameFile(const QString &oldPath, const QString &newName);
   /// 处理文件/文件夹删除请求

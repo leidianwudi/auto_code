@@ -379,7 +379,23 @@ void MainDevMgr::updateCursorPosition() {
   m_ui->setCursorStatusText(QStringLiteral("行: %1, 列: %2").arg(line).arg(col));
 }
 
-void MainDevMgr::onValidationMessage(const QString &msg) { m_ui->setErrorMessage(msg); }
+void MainDevMgr::onValidationMessage(const QString &msg, int errorCount) {
+  m_ui->setErrorMessage(msg);
+
+  // 通知 TreeDir 更新文件错误状态
+  if (m_model->connectedEditor && m_ui->fileTree()) {
+    QString filePath = m_model->connectedEditor->objectName();
+    if (!filePath.isEmpty()) {
+      if (errorCount == 0) {
+        // 无错误，清除错误状态
+        m_ui->fileTree()->clearFileError(filePath);
+      } else {
+        // 有错误，传递实际错误数量
+        m_ui->fileTree()->setFileError(filePath, errorCount);
+      }
+    }
+  }
+}
 
 // ──────────────────────────────────────────────────────────────
 //  标签页操作

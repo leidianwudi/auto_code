@@ -390,9 +390,9 @@ void CodeEditor::validateWithValidator(IValidator *validator) {
 
   // 发出验证结果信号（无错误时传空字符串）
   if (errors.isEmpty()) {
-    emit validationMessage(QString());
+    emit validationMessage(QString(), 0);
   } else {
-    emit validationMessage(errors.first());
+    emit validationMessage(errors.first(), results.size());
   }
 }
 

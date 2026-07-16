@@ -81,6 +81,12 @@ public:
   /// 设置文件的修改状态（树节点文本追加/移除 " *"）
   void setFileModified(const QString &filePath, bool modified);
 
+  /// 设置文件的错误状态（树节点文本显示红色，并在右侧显示错误数量）
+  void setFileError(const QString &filePath, int errorCount);
+
+  /// 清除文件的错误状态
+  void clearFileError(const QString &filePath);
+
   /// 定位到指定文件路径的节点（选中 + 展开父节点 + 滚动到可见）
   void locateFile(const QString &filePath);
 
