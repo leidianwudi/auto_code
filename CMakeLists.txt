@@ -33,6 +33,8 @@ qt_add_executable(auto_code
     src/engine/script/undeclared_ident_validator.cpp
     src/engine/script/ac_validator.h
     src/engine/script/ac_validator.cpp
+    src/engine/script/ac_symbol_table.h
+    src/engine/script/ac_symbol_table.cpp
     src/engine/tpl/tpl_engine.h
     src/engine/tpl/tpl_engine.cpp
     src/engine/tpl/tpl_validator.h

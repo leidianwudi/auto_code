@@ -22,6 +22,7 @@ AcExecutor::AcExecutor() = default;
 bool AcExecutor::parse(const QString &source) {
   m_error.clear();
   m_declaredVars.clear();
+  m_sourceLines = source.split(QLatin1Char('\n'));
 
   // ── 步骤 1：词法分析 ──
   m_tokens = m_lexer.tokenize(source, m_error);
@@ -33,8 +34,16 @@ bool AcExecutor::parse(const QString &source) {
   // 步骤 3：模块链接 — 处理 import 语句
   if (!linkImports()) return false;
 
+  // 步骤 4：构建符号表
+  m_symbolTable.clear();
+  m_symbolTable.setFilePath(m_scriptFile.isEmpty() ? QString() : m_scriptFile);
+  for (const auto &stmt : m_program.stmts) {
+    m_symbolTable.collectStmt(stmt);
+  }
+
   qDebug() << "[AcExecutor::parse] after linkImports, declaredVars:" << m_declaredVars;
   qDebug() << "[AcExecutor::parse] program stmts:" << m_program.stmts.size();
+  qDebug() << "[AcExecutor::parse] symbols collected:" << m_symbolTable.allSymbols().size();
   for (int i = 0; i < m_program.stmts.size(); ++i) {
     const auto &s = m_program.stmts[i];
     QString desc;

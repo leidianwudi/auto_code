@@ -16,6 +16,7 @@
 #include "../validation_result.h"
 #include "ac_lexer.h"
 #include "ac_parser.h"
+#include "ac_symbol_table.h"
 #include "ac_type.h"
 #include "ac_type_checker.h"
 #include "undeclared_ident_validator.h"
@@ -37,6 +38,13 @@ public:
   /// @param source .ac 脚本源码字符串
   /// @return 验证结果列表
   QVector<ValidationResult> validate(const QString &source) override;
+
+  /// @brief 获取符号表（验证后调用）
+  AcSymbolTable &symbolTable() { return m_symbolTable; }
+  const AcSymbolTable &symbolTable() const { return m_symbolTable; }
+
+  /// @brief 获取源码行列表
+  const QStringList &sourceLines() const { return m_sourceLines; }
 
 private:
   /// @brief 从 AST 中提取类定义和函数定义
@@ -63,4 +71,8 @@ private:
   QSet<QString> m_declaredVars;
   QHash<QString, ClassDef> m_classes;
   QHash<QString, MethodDef> m_functions;
+
+  // ── 符号表 ──
+  AcSymbolTable m_symbolTable;
+  QStringList m_sourceLines;
 };

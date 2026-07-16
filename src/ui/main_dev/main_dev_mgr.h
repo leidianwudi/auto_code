@@ -13,6 +13,7 @@
 #pragma once
 
 #include <QObject>
+#include <QStack>
 
 #include "src/util/ui/aui_mgr.h"
 
@@ -20,6 +21,13 @@ class QTabWidget;
 class CodeEditor;
 class MainDevUi;
 class MainDevModel;
+
+/// @brief 导航历史记录项
+struct NavigationEntry {
+  QString filePath;  ///< 文件路径
+  int line = 0;      ///< 行号（1-based）
+  int column = 0;    ///< 列号（1-based）
+};
 
 /**
  * @class MainDevMgr
@@ -81,6 +89,14 @@ private slots:
   void onCloseOthers(int index);
   /// 右键菜单：关闭所有标签页
   void onCloseAll();
+  /// 跨文件跳转（从 CodeEditor 的 requestGoToLine 信号触发）
+  void onGoToLine(const QString &filePath, int line);
+  /// 即将导航（记录当前位置到历史栈）
+  void onAboutToNavigate(const QString &targetFilePath, int targetLine);
+  /// 鼠标侧键：后退（XButton1）
+  void navigateBack();
+  /// 鼠标侧键：前进（XButton2）
+  void navigateForward();
 
 private:
   /// 查找并加载 file/ 目录
@@ -101,7 +117,20 @@ private:
   void closeTab(QTabWidget *tabs, int index);
   /// 检查所有编辑器的修改状态，更新保存按钮可用性
   void updateSaveButtonState();
+  /// 推入导航历史记录
+  void pushNavigationHistory(const QString &filePath, int line, int column = 0);
+  /// 跳转到指定位置（内部使用，不推入历史）
+  void jumpToLocation(const QString &filePath, int line, int column = 0);
+
+protected:
+  /// 事件过滤器（用于捕获鼠标侧键）
+  bool eventFilter(QObject *obj, QEvent *event) override;
 
   MainDevUi *m_ui = nullptr;
   MainDevModel *m_model = nullptr;
+
+  // 导航历史栈
+  QStack<NavigationEntry> m_navHistory;       ///< 后退栈
+  QStack<NavigationEntry> m_navForwardStack;  ///< 前进栈
+  bool m_navigating = false;                  ///< 是否正在执行导航（避免循环记录）
 };

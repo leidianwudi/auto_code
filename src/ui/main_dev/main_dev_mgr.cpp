@@ -13,6 +13,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QMouseEvent>
 #include <QShortcut>
 #include <QStatusBar>
 #include <QTabWidget>
@@ -148,6 +149,10 @@ void MainDevMgr::initUi() {
       }
     }
   }
+
+  // 安装事件过滤器以捕获鼠标侧键（前进/后退）
+  // 注意：需要在 QApplication 级别安装，因为鼠标事件可能被子控件消费
+  qApp->installEventFilter(this);
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -314,6 +319,10 @@ void MainDevMgr::connectEditor(CodeEditor *editor) {
                &MainDevMgr::updateCursorPosition);
     disconnect(m_model->connectedEditor, &CodeEditor::validationMessage, this,
                &MainDevMgr::onValidationMessage);
+    disconnect(m_model->connectedEditor, &CodeEditor::requestGoToLine, this,
+               &MainDevMgr::onGoToLine);
+    disconnect(m_model->connectedEditor, &CodeEditor::aboutToNavigate, this,
+               &MainDevMgr::onAboutToNavigate);
   }
 
   m_model->connectedEditor = editor;
@@ -322,6 +331,10 @@ void MainDevMgr::connectEditor(CodeEditor *editor) {
     connect(editor, &QPlainTextEdit::cursorPositionChanged, this,
             &MainDevMgr::updateCursorPosition);
     connect(editor, &CodeEditor::validationMessage, this, &MainDevMgr::onValidationMessage);
+    // 跨文件跳转信号
+    connect(editor, &CodeEditor::requestGoToLine, this, &MainDevMgr::onGoToLine);
+    // 即将导航信号（用于记录历史）
+    connect(editor, &CodeEditor::aboutToNavigate, this, &MainDevMgr::onAboutToNavigate);
     updateCursorPosition();
     editor->validate();
   } else {
@@ -792,4 +805,158 @@ void MainDevMgr::onCloseAll() {
   while (tabs->count() > 0) {
     closeTab(tabs, 0);
   }
+}
+
+// ──────────────────────────────────────────────────────────────
+//  跨文件跳转与导航历史
+// ──────────────────────────────────────────────────────────────
+
+void MainDevMgr::pushNavigationHistory(const QString &filePath, int line, int column) {
+  if (m_navigating) return;
+
+  NavigationEntry entry;
+  entry.filePath = filePath;
+  entry.line = line;
+  entry.column = column;
+
+  // 避免重复记录相同位置
+  if (!m_navHistory.isEmpty()) {
+    const auto &last = m_navHistory.top();
+    if (last.filePath == filePath && last.line == line && last.column == column) return;
+  }
+
+  m_navHistory.push(entry);
+
+  // 新操作时清空前进栈
+  m_navForwardStack.clear();
+
+  // 限制历史栈大小（最多保存 100 条）
+  while (m_navHistory.size() > 100) {
+    m_navHistory.remove(0);
+  }
+}
+
+void MainDevMgr::jumpToLocation(const QString &filePath, int line, int column) {
+  CodeEditor *editor = openFileInEditor(filePath);
+  if (editor) {
+    QTextCursor cursor(editor->document());
+
+    // 定位到指定行
+    if (line > 0) {
+      QTextBlock block = editor->document()->findBlockByNumber(line - 1);
+      if (block.isValid()) {
+        cursor.setPosition(block.position());
+        // 定位到指定列（如果有的话）
+        if (column > 0) {
+          cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor,
+                              qMin(column - 1, block.length() - 1));
+        }
+      }
+    }
+
+    editor->setTextCursor(cursor);
+    editor->ensureCursorVisible();
+    editor->setFocus();
+  }
+}
+
+void MainDevMgr::onGoToLine(const QString &filePath, int line) {
+  qDebug() << "onGoToLine() called:" << filePath << "line:" << line;
+
+  // 注意：历史记录已在 onAboutToNavigate() 中保存，这里只需执行跳转
+  jumpToLocation(filePath, line, 0);
+}
+
+void MainDevMgr::onAboutToNavigate(const QString &targetFilePath, int targetLine) {
+  qDebug() << "onAboutToNavigate() called:" << targetFilePath << "targetLine:" << targetLine;
+
+  // 记录当前位置到历史栈（用于后退）
+  CodeEditor *current = currentEditor();
+  if (current) {
+    QTextCursor cursor = current->textCursor();
+    int curLine = cursor.blockNumber() + 1;
+    int curColumn = cursor.columnNumber() + 1;
+    pushNavigationHistory(current->objectName(), curLine, curColumn);
+    qDebug() << "Pushed to history:" << current->objectName() << "line:" << curLine;
+  }
+}
+
+void MainDevMgr::navigateBack() {
+  qDebug() << "navigateBack() called, history size:" << m_navHistory.size();
+  if (m_navHistory.isEmpty()) {
+    qDebug() << "Navigation history is empty, cannot go back";
+    return;
+  }
+
+  // 先弹出后退栈目标位置（必须在任何修改之前，防止引用失效）
+  NavigationEntry entry = m_navHistory.pop();
+  qDebug() << "Navigating back to:" << entry.filePath << "line:" << entry.line;
+
+  // 记录当前位置到前进栈
+  CodeEditor *current = currentEditor();
+  if (current) {
+    QTextCursor cursor = current->textCursor();
+    NavigationEntry forwardEntry;
+    forwardEntry.filePath = current->objectName();
+    forwardEntry.line = cursor.blockNumber() + 1;
+    forwardEntry.column = cursor.columnNumber() + 1;
+    m_navForwardStack.push(forwardEntry);
+    qDebug() << "Pushed to forward stack:" << forwardEntry.filePath << "line:" << forwardEntry.line;
+  }
+
+  // 执行跳转
+  m_navigating = true;
+  jumpToLocation(entry.filePath, entry.line, entry.column);
+  m_navigating = false;
+}
+
+void MainDevMgr::navigateForward() {
+  qDebug() << "navigateForward() called, forward stack size:" << m_navForwardStack.size();
+  if (m_navForwardStack.isEmpty()) {
+    qDebug() << "Forward stack is empty, cannot go forward";
+    return;
+  }
+
+  // 先弹出前进栈目标位置（必须在 pushNavigationHistory 之前，因为后者会清空前进栈！）
+  NavigationEntry entry = m_navForwardStack.pop();
+  qDebug() << "Navigating forward to:" << entry.filePath << "line:" << entry.line;
+
+  // 记录当前位置到后退栈
+  CodeEditor *current = currentEditor();
+  if (current) {
+    QTextCursor cursor = current->textCursor();
+    pushNavigationHistory(current->objectName(), cursor.blockNumber() + 1,
+                          cursor.columnNumber() + 1);
+  }
+
+  // 执行跳转
+  m_navigating = true;
+  jumpToLocation(entry.filePath, entry.line, entry.column);
+  m_navigating = false;
+}
+
+// ──────────────────────────────────────────────────────────────
+//  事件过滤器（鼠标侧键导航）
+// ──────────────────────────────────────────────────────────────
+
+bool MainDevMgr::eventFilter(QObject *obj, QEvent *event) {
+  // 只处理鼠标按钮释放事件
+  if (event->type() == QEvent::MouseButtonRelease) {
+    auto *mouseEvent = static_cast<QMouseEvent *>(event);
+
+    // 鼠标侧键：XButton1 = 后退，XButton2 = 前进
+    if (mouseEvent->button() == Qt::XButton1) {
+      qDebug() << "Mouse XButton1 pressed (Back)";
+      navigateBack();
+      return true;  // 事件已处理
+    }
+    if (mouseEvent->button() == Qt::XButton2) {
+      qDebug() << "Mouse XButton2 pressed (Forward)";
+      navigateForward();
+      return true;  // 事件已处理
+    }
+  }
+
+  // 其他事件交给默认处理
+  return QObject::eventFilter(obj, event);
 }

@@ -16,6 +16,7 @@
 #include "ac_interpreter.h"
 #include "ac_lexer.h"
 #include "ac_parser.h"
+#include "ac_symbol_table.h"
 #include "ac_type.h"
 #include "ac_type_checker.h"
 
@@ -45,6 +46,16 @@ public:
   /// @return 类型错误信息列表
   QStringList validateTypes();
 
+  /// @brief 获取符号表（用于悬停提示、跳转、查找引用）
+  AcSymbolTable &symbolTable() { return m_symbolTable; }
+  const AcSymbolTable &symbolTable() const { return m_symbolTable; }
+
+  /// @brief 获取 AST 根节点（用于符号表构建）
+  const Block &program() const { return m_program; }
+
+  /// @brief 获取源码行列表（用于引用上下文显示）
+  const QStringList &sourceLines() const { return m_sourceLines; }
+
 private:
   // ── 模块链接 ──
   /// @brief 处理 import 语句，加载并链接导出符号
@@ -71,4 +82,6 @@ private:
   Block m_program;               ///< 解析后的 AST 根节点
   QStringList m_typeErrors;      ///< 类型检查错误列表
   LogCallback m_logCallback;
+  AcSymbolTable m_symbolTable;  ///< 符号表
+  QStringList m_sourceLines;    ///< 源码行列表（用于引用上下文）
 };

@@ -14,6 +14,8 @@ QVector<ValidationResult> AcValidator::validate(const QString &source) {
 
   if (source.trimmed().isEmpty()) return results;
 
+  m_sourceLines = source.split(QLatin1Char('\n'));
+
   // ── 步骤 1：词法分析 ──
   QString lexError;
   QVector<Token> tokens = m_lexer.tokenize(source, lexError);
@@ -38,6 +40,12 @@ QVector<ValidationResult> AcValidator::validate(const QString &source) {
     if (match.hasMatch()) line = match.captured(1).toInt();
     results.append(ValidationResult::atLine(line, parseErrMsg));
     return results;
+  }
+
+  // ── 步骤 2.5：构建符号表 ──
+  m_symbolTable.clear();
+  for (const auto &stmt : m_program.stmts) {
+    m_symbolTable.collectStmt(stmt);
   }
 
   // ── 步骤 3：未声明标识符检查 ──
