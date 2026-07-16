@@ -973,7 +973,7 @@ void CodeEditor::formatCode() {
 
   switch (m_validationMode) {
     case JsonValidation:
-      mode = FormatCode::FormatJson;
+      mode = FormatCode::FormatJson5;
       break;
     case AcValidation:
       mode = FormatCode::FormatAc;

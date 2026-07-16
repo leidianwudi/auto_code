@@ -70,7 +70,9 @@ bool FormatCode::shouldAutoPair(QChar open, QChar charBefore) {
 QString FormatCode::format(const QString &input, FormatMode mode) {
   switch (mode) {
     case FormatJson:
-      return formatJson(input);
+      return formatJson(input, false);
+    case FormatJson5:
+      return formatJson(input, true);
     case FormatAc:
       return formatAc(input);
     case FormatTpl:
@@ -87,9 +89,11 @@ QString FormatCode::format(const QString &input, FormatMode mode) {
  * @brief 递归序列化 QJsonValue 为格式化字符串（支持 key 顺序）
  * @param orderedKeys 每个对象的 key 顺序（路径 -> key 列表）
  * @param path 当前对象在 JSON 树中的路径（如 "0" 表示顶层，"0.2.1" 表示更深层）
+ * @param json5Style 是否使用 JSON5 风格（无引号 key、尾随逗号）
  */
 static void serializeJsonValue(const QJsonValue &v, QStringList &lines, int indent, bool isLast,
-                               const OrderedKeyMap &orderedKeys, const QString &path) {
+                               const OrderedKeyMap &orderedKeys, const QString &path,
+                               bool json5Style = false) {
   const QString prefix(indent * FormatCode::kIndentSize, QLatin1Char(' '));
 
   switch (v.type()) {
@@ -119,13 +123,20 @@ static void serializeJsonValue(const QJsonValue &v, QStringList &lines, int inde
 
       for (int i = 0; i < keys.size(); ++i) {
         const QString &key = keys[i];
-        lines.append(prefix + QStringLiteral("  \"") + key + QStringLiteral("\": "));
+        if (json5Style) {
+          // JSON5 风格：key 不加引号
+          lines.append(prefix + QStringLiteral("  ") + key + QStringLiteral(": "));
+        } else {
+          lines.append(prefix + QStringLiteral("  \"") + key + QStringLiteral("\": "));
+        }
         // 子路径：path + "." + index（例如 "0" -> "0.0" 表示第0个key的值）
         QString childPath = path + QStringLiteral(".") + QString::number(i);
         serializeJsonValue(obj.value(key), lines, indent + 1, i == keys.size() - 1, orderedKeys,
-                           childPath);
+                           childPath, json5Style);
       }
-      lines.append(prefix + QLatin1Char('}') + (isLast ? QString() : QStringLiteral(",")));
+      // JSON5 风格：对象结束行也添加尾随逗号
+      lines.append(prefix + QLatin1Char('}'));
+      if (json5Style || !isLast) lines.last() += QLatin1Char(',');
       break;
     }
     case QJsonValue::Array: {
@@ -140,9 +151,12 @@ static void serializeJsonValue(const QJsonValue &v, QStringList &lines, int inde
         lines.append(prefix + QStringLiteral("  "));
         // 子路径：path + ".arr" + index（数组元素的路径独立编码）
         QString childPath = path + QStringLiteral(".arr") + QString::number(i);
-        serializeJsonValue(arr[i], lines, indent + 1, i == arr.size() - 1, orderedKeys, childPath);
+        serializeJsonValue(arr[i], lines, indent + 1, i == arr.size() - 1, orderedKeys, childPath,
+                           json5Style);
       }
-      lines.append(prefix + QLatin1Char(']') + (isLast ? QString() : QStringLiteral(",")));
+      // JSON5 风格：数组结束行也添加尾随逗号
+      lines.append(prefix + QLatin1Char(']'));
+      if (json5Style || !isLast) lines.last() += QLatin1Char(',');
       break;
     }
     case QJsonValue::String: {
@@ -155,11 +169,17 @@ static void serializeJsonValue(const QJsonValue &v, QStringList &lines, int inde
       escaped.replace(QLatin1Char('\t'), QStringLiteral("\\t"));   // 制表符 -> \t
       escaped.replace(QLatin1Char('\b'), QStringLiteral("\\b"));   // 退格 -> \b
       escaped.replace(QLatin1Char('\f'), QStringLiteral("\\f"));   // 换页 -> \f
-      lines.last() += QLatin1Char('"') + escaped + QLatin1Char('"');
-      if (!isLast) lines.last() += QLatin1Char(',');
+      if (json5Style) {
+        // JSON5 风格：使用单引号
+        lines.last() += QLatin1Char('\'') + escaped + QLatin1Char('\'');
+      } else {
+        lines.last() += QLatin1Char('"') + escaped + QLatin1Char('"');
+      }
+      // JSON5 风格：所有值后都加尾随逗号
+      if (json5Style || !isLast) lines.last() += QLatin1Char(',');
       break;
     }
-    case QJsonValue::Double:
+    case QJsonValue::Double: {
       // 避免输出科学计数法
       lines.last() += QString::number(v.toDouble(), 'f', 6);
       // 去掉末尾多余的 0
@@ -167,17 +187,23 @@ static void serializeJsonValue(const QJsonValue &v, QStringList &lines, int inde
         while (lines.last().endsWith(QLatin1Char('0'))) lines.last().chop(1);
         if (lines.last().endsWith(QLatin1Char('.'))) lines.last().chop(1);
       }
-      if (!isLast) lines.last() += QLatin1Char(',');
+      // JSON5 风格：所有值后都加尾随逗号
+      if (json5Style || !isLast) lines.last() += QLatin1Char(',');
       break;
-    case QJsonValue::Bool:
+    }
+    case QJsonValue::Bool: {
       lines.last() += v.toBool() ? QString::fromLatin1(AcKeyword::kTrue)
                                  : QString::fromLatin1(AcKeyword::kFalse);
-      if (!isLast) lines.last() += QLatin1Char(',');
+      // JSON5 风格：所有值后都加尾随逗号
+      if (json5Style || !isLast) lines.last() += QLatin1Char(',');
       break;
-    case QJsonValue::Null:
+    }
+    case QJsonValue::Null: {
       lines.last() += QStringLiteral("null");
-      if (!isLast) lines.last() += QLatin1Char(',');
+      // JSON5 风格：所有值后都加尾随逗号
+      if (json5Style || !isLast) lines.last() += QLatin1Char(',');
       break;
+    }
     case QJsonValue::Undefined:
       break;
   }
@@ -240,8 +266,34 @@ static OrderedKeyMap extractOrderedKeys(const QString &input) {
     }
 
     // ── 正常状态处理 ──
-    // 字符串开始 → 检测 key
-    if (ch == QLatin1Char('"')) {
+    // key 识别：三种形式
+    //   1. 双引号 key: "key": value
+    //   2. 单引号 key: 'key': value   (JSON5)
+    //   3. 无引号 key: key: value      (JSON5)
+    //
+    // 统一流程：先检测 key 起始，收集 key 内容，检测后面的冒号
+
+    // 辅助：检测 i 位置是否是对象的 key（即前面有效字符是 { 或 ,）
+    auto isObjectKeyContext = [&]() {
+      if (stack.isEmpty() || stack.last().type != QLatin1Char('O')) return false;
+      // 向前扫描，跳过所有非结构字符（空白、注释内容等），只寻找 { 或 ,
+      int m = i - 1;
+      while (m >= 0) {
+        QChar mc = input[m];
+        if (mc.isSpace()) {
+          --m;
+          continue;
+        }
+        // 只在遇到对象起始或属性分隔符时停止
+        if (mc == QLatin1Char('{') || mc == QLatin1Char(',')) return true;
+        // 其他所有内容（注释、字符串、数字、关键字等）全部跳过
+        --m;
+      }
+      return false;
+    };
+
+    // 双引号 key
+    if (ch == QLatin1Char('"') && isObjectKeyContext()) {
       int j = i + 1;
       QString keyStr;
       while (j < input.size()) {
@@ -255,17 +307,87 @@ static OrderedKeyMap extractOrderedKeys(const QString &input) {
         if (kc == QLatin1Char('"')) {
           int check = j + 1;
           while (check < input.size() && input[check].isSpace()) ++check;
-          if (check < input.size() && input[check] == QLatin1Char(':') && !stack.isEmpty() &&
-              stack.last().type == QLatin1Char('O')) {
+          if (check < input.size() && input[check] == QLatin1Char(':')) {
             QString curPath = stack.last().path;
             if (!result.contains(curPath)) result[curPath] = QStringList();
             result[curPath].append(keyStr);
-            // ★ 记录 key 后递增 childIdx（每个 key 对应一个子元素）
             stack.last().childIdx++;
           }
           break;
         }
         keyStr += kc;
+        ++j;
+      }
+      i = j;
+      continue;
+    }
+
+    // 单引号 key (JSON5)
+    if (ch == QLatin1Char('\'') && isObjectKeyContext()) {
+      int j = i + 1;
+      QString keyStr;
+      while (j < input.size()) {
+        QChar kc = input[j];
+        if (kc == QLatin1Char('\\') && j + 1 < input.size()) {
+          keyStr += kc;
+          keyStr += input[j + 1];
+          j += 2;
+          continue;
+        }
+        if (kc == QLatin1Char('\'')) {
+          int check = j + 1;
+          while (check < input.size() && input[check].isSpace()) ++check;
+          if (check < input.size() && input[check] == QLatin1Char(':')) {
+            QString curPath = stack.last().path;
+            if (!result.contains(curPath)) result[curPath] = QStringList();
+            result[curPath].append(keyStr);
+            stack.last().childIdx++;
+          }
+          break;
+        }
+        keyStr += kc;
+        ++j;
+      }
+      i = j;
+      continue;
+    }
+
+    // 无引号 key (JSON5): 字母/$/_ 开头的标识符
+    if ((ch.isLetter() || ch == QLatin1Char('$') || ch == QLatin1Char('_')) &&
+        isObjectKeyContext()) {
+      int j = i;
+      QString keyStr;
+      while (j < input.size()) {
+        QChar kc = input[j];
+        if (kc.isLetterOrNumber() || kc == QLatin1Char('$') || kc == QLatin1Char('_')) {
+          keyStr += kc;
+          ++j;
+          continue;
+        }
+        break;
+      }
+      int check = j;
+      while (check < input.size() && input[check].isSpace()) ++check;
+      if (check < input.size() && input[check] == QLatin1Char(':') && !keyStr.isEmpty()) {
+        QString curPath = stack.last().path;
+        if (!result.contains(curPath)) result[curPath] = QStringList();
+        result[curPath].append(keyStr);
+        stack.last().childIdx++;
+      }
+      i = j - 1;
+      continue;
+    }
+
+    // 保留原来的双引号字符串检测（值的双引号字符串不需要处理 key，跳过）
+    if (ch == QLatin1Char('"')) {
+      // 不是 key 上下文的双引号（值的字符串）
+      int j = i + 1;
+      while (j < input.size()) {
+        if (input[j] == QLatin1Char('\\') && j + 1 < input.size()) {
+          j += 2;
+          continue;
+        }
+        if (input[j] == QLatin1Char('"')) break;
         ++j;
       }
       i = j;
@@ -358,7 +480,6 @@ static QString findNextKeyAfter(const QStringList &srcLines, int startLine) {
 
   for (int lineIdx = startLine; lineIdx < srcLines.size(); ++lineIdx) {
     const QString &line = srcLines[lineIdx];
-    bool inString = false;
 
     for (int i = 0; i < line.size(); ++i) {
       QChar ch = line[i];
@@ -377,7 +498,7 @@ static QString findNextKeyAfter(const QStringList &srcLines, int startLine) {
 
       // 处理行注释
       if (state == kLineComment) {
-        continue;  // 整行剩余部分都是注释
+        continue;
       }
 
       // 处理块注释
@@ -391,10 +512,9 @@ static QString findNextKeyAfter(const QStringList &srcLines, int startLine) {
 
       // kNormal 状态
       if (ch == QLatin1Char('"')) {
-        // 开始收集 key 字符串
-        int keyStart = i + 1;
+        // 双引号 key: "key":
+        int j = i + 1;
         QString key;
-        int j = keyStart;
         while (j < line.size()) {
           QChar kc = line[j];
           if (kc == QLatin1Char('\\') && j + 1 < line.size()) {
@@ -404,11 +524,10 @@ static QString findNextKeyAfter(const QStringList &srcLines, int startLine) {
             continue;
           }
           if (kc == QLatin1Char('"')) {
-            // key 结束。检查后面是否紧跟冒号
             int checkPos = j + 1;
             while (checkPos < line.size() && line[checkPos].isSpace()) ++checkPos;
             if (checkPos < line.size() && line[checkPos] == QLatin1Char(':')) {
-              return key;  // 找到 JSON key
+              return key;
             }
             break;
           }
@@ -416,10 +535,53 @@ static QString findNextKeyAfter(const QStringList &srcLines, int startLine) {
           ++j;
         }
         i = j;
+      } else if (ch == QLatin1Char('\'')) {
+        // 单引号 key (JSON5): 'key':
+        int j = i + 1;
+        QString key;
+        while (j < line.size()) {
+          QChar kc = line[j];
+          if (kc == QLatin1Char('\\') && j + 1 < line.size()) {
+            key += kc;
+            key += line[j + 1];
+            j += 2;
+            continue;
+          }
+          if (kc == QLatin1Char('\'')) {
+            int checkPos = j + 1;
+            while (checkPos < line.size() && line[checkPos].isSpace()) ++checkPos;
+            if (checkPos < line.size() && line[checkPos] == QLatin1Char(':')) {
+              return key;
+            }
+            break;
+          }
+          key += kc;
+          ++j;
+        }
+        i = j;
+      } else if (ch.isLetter() || ch == QLatin1Char('$') || ch == QLatin1Char('_')) {
+        // 无引号 key (JSON5): key:
+        int j = i;
+        QString key;
+        while (j < line.size()) {
+          QChar kc = line[j];
+          if (kc.isLetterOrNumber() || kc == QLatin1Char('$') || kc == QLatin1Char('_')) {
+            key += kc;
+            ++j;
+          } else {
+            break;
+          }
+        }
+        int checkPos = j;
+        while (checkPos < line.size() && line[checkPos].isSpace()) ++checkPos;
+        if (checkPos < line.size() && line[checkPos] == QLatin1Char(':') && !key.isEmpty()) {
+          return key;
+        }
+        i = j - 1;
       } else if (ch == QLatin1Char('/') && i + 1 < line.size()) {
         if (line[i + 1] == QLatin1Char('/')) {
           state = kLineComment;
-          break;  // 后续内容都是注释
+          break;
         } else if (line[i + 1] == QLatin1Char('*')) {
           state = kBlockComment;
           ++i;
@@ -548,31 +710,54 @@ static QVector<JsonCommentInfo> extractJsonComments(const QString &input) {
 // 如果该行不是 key 行，返回空字符串
 static QString extractKeyFromLine(const QString &line) {
   QString trimmed = line.trimmed();
-  if (!trimmed.startsWith(QLatin1Char('"'))) return QString();
+  if (trimmed.isEmpty()) return QString();
 
-  // 查找第一个引号内的内容
-  int i = 1;
-  QString key;
-  while (i < trimmed.size()) {
-    QChar ch = trimmed[i];
-    if (ch == QLatin1Char('\\') && i + 1 < trimmed.size()) {
-      key += ch;
-      key += trimmed[i + 1];
-      i += 2;
-      continue;
-    }
-    if (ch == QLatin1Char('"')) {
-      // 检查后面是否为冒号
-      int checkPos = i + 1;
-      while (checkPos < trimmed.size() && trimmed[checkPos].isSpace()) ++checkPos;
-      if (checkPos < trimmed.size() && trimmed[checkPos] == QLatin1Char(':')) {
-        return key;
+  // 双引号 key: "key":
+  if (trimmed.startsWith(QLatin1Char('"'))) {
+    int i = 1;
+    QString key;
+    while (i < trimmed.size()) {
+      QChar ch = trimmed[i];
+      if (ch == QLatin1Char('\\') && i + 1 < trimmed.size()) {
+        key += ch;
+        key += trimmed[i + 1];
+        i += 2;
+        continue;
       }
-      return QString();
+      if (ch == QLatin1Char('"')) {
+        int checkPos = i + 1;
+        while (checkPos < trimmed.size() && trimmed[checkPos].isSpace()) ++checkPos;
+        if (checkPos < trimmed.size() && trimmed[checkPos] == QLatin1Char(':')) {
+          return key;
+        }
+        return QString();
+      }
+      key += ch;
+      ++i;
     }
-    key += ch;
-    ++i;
   }
+
+  // JSON5 无引号 key: key:
+  QChar first = trimmed[0];
+  if (first.isLetter() || first == QLatin1Char('$') || first == QLatin1Char('_')) {
+    int i = 0;
+    QString key;
+    while (i < trimmed.size()) {
+      QChar ch = trimmed[i];
+      if (ch.isLetterOrNumber() || ch == QLatin1Char('$') || ch == QLatin1Char('_')) {
+        key += ch;
+        ++i;
+      } else {
+        break;
+      }
+    }
+    int checkPos = i;
+    while (checkPos < trimmed.size() && trimmed[checkPos].isSpace()) ++checkPos;
+    if (checkPos < trimmed.size() && trimmed[checkPos] == QLatin1Char(':') && !key.isEmpty()) {
+      return key;
+    }
+  }
+
   return QString();
 }
 
@@ -583,7 +768,7 @@ static int extractIndent(const QString &line) {
   return indent;
 }
 
-QString FormatCode::formatJson(const QString &input) {
+QString FormatCode::formatJson(const QString &input, bool json5Style) {
   QJsonParseError err;
   QJsonDocument doc = UtilJson::fromJson(input, &err);
   if (err.error != QJsonParseError::NoError) return input;
@@ -597,7 +782,7 @@ QString FormatCode::formatJson(const QString &input) {
   lines.append(QString());
   // 2. 使用原始 key 顺序序列化 JSON；顶层对象路径为 "0"
   serializeJsonValue(doc.isObject() ? QJsonValue(doc.object()) : QJsonValue(doc.array()), lines, 0,
-                     true, orderedKeys, QStringLiteral("0"));
+                     true, orderedKeys, QStringLiteral("0"), json5Style);
 
   while (!lines.isEmpty() && lines.first().trimmed().isEmpty()) lines.removeFirst();
   while (!lines.isEmpty() && lines.last().trimmed().isEmpty()) lines.removeLast();

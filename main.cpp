@@ -9,11 +9,21 @@
  */
 
 #include <QApplication>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonParseError>
+#include <QTextStream>
 
 #include "src/engine/function/fun_mgr.h"
 #include "src/ui/main_dev/main_dev_mgr.h"
+#include "src/util/common/util_json.h"
 #include "src/util/ui/aui_window.h"
+#include "src/util/ui/code/format_code.h"
 
+static void appendLog(QTextStream &ts, const QString &title, const QString &content) {
+  ts << "=== " << title << " ===" << Qt::endl;
+  ts << content << Qt::endl << Qt::endl;
+}
 
 /**
  * @brief 应用程序主函数

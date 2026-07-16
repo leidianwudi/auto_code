@@ -33,6 +33,25 @@
 class UtilJson {
 public:
   /**
+   * @brief 将 JSON5 文本转换为标准 JSON 文本
+   * @param text JSON5 文本
+   * @param offsetMap 可选，输出"转换后文本索引 → 原始文本索引"的映射
+   * @return 标准 JSON 文本
+   *
+   * 处理的 JSON5 特性：
+   *   - `//` 行注释 和 `/* *\/` 块注释 → 剥离
+   *   - 无引号 key（标识符）→ 加双引号
+   *   - 单引号字符串 → 改为双引号
+   *   - 尾随逗号（trailing comma）→ 删除
+   *   - 十六进制数字 `0xFF` → 转为十进制
+   *   - 前导小数点 `.5` → `0.5`
+   *   - 后导小数点 `5.` → `5`
+   *   - `Infinity` / `-Infinity` / `NaN` → 转为字符串字面量
+   *   - 字符串跨行（反斜杠续行）→ 合并为单行
+   */
+  static QString json5ToJson(const QString &text, QVector<int> *offsetMap = nullptr);
+
+  /**
    * @brief 剥离 JSON 文本中的注释
    * @param text 包含注释的 JSON 文本
    * @return 剥离注释后的纯 JSON 文本
@@ -52,8 +71,8 @@ public:
   static QString stripCommentsWithMap(const QString &text, QVector<int> &offsetMap);
 
   /**
-   * @brief 解析 JSON 字符串（自动剥离注释），错误位置已映射回原始文本
-   * @param text JSON 文本（可包含注释）
+   * @brief 解析 JSON 字符串（支持 JSON5 语法自动转换），错误位置已映射回原始文本
+   * @param text JSON/JSON5 文本
    * @param error 解析错误信息（可选，传入则填充，offset 已修正为原始文本位置）
    * @return 解析得到的 JSON 文档
    */

@@ -22,12 +22,23 @@ LightJson::LightJson(QTextDocument *parent) : QSyntaxHighlighter(parent) {
   keyFormat.setFontWeight(QFont::Bold);
   m_rules.append({QRegularExpression(QStringLiteral("\"[^\"]+\"\\s*:")), keyFormat});
 
+  // ── 1b. JSON5 无引号键名（蓝色加粗） ──
+  // 匹配无引号的标识符后跟冒号，例：name: 或 $key:
+  QTextCharFormat key5Format;
+  key5Format.setForeground(keyword);
+  key5Format.setFontWeight(QFont::Bold);
+  m_rules.append({QRegularExpression(QStringLiteral("\\b[a-zA-Z_$][\\w$]*\\s*:")), key5Format});
+
   // ── 2. JSON 字符串值（绿色） ──
   // 匹配所有带引号的字符串（包括键名，会被键名规则覆盖）
   // 例："Hello World"、"/path/to/file"
   QTextCharFormat stringFormat;
   stringFormat.setForeground(variable);
   m_rules.append({QRegularExpression(QStringLiteral("\"[^\"]*\"")), stringFormat});
+
+  // ── 2b. JSON5 单引号字符串值（绿色） ──
+  // 例：'Hello World'、'/path/to/file'
+  m_rules.append({QRegularExpression(QStringLiteral("'[^']*'")), stringFormat});
 
   // ── 3. 数字（橙色加粗） ──
   // 支持整数、浮点数、负数，例：42、3.14、-100

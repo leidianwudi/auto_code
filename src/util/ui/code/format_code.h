@@ -18,19 +18,20 @@ public:
 
   /// @brief 一对配对的字符
   struct CharPair {
-    QChar open;  ///< 开字符, e.g. '{'
-    QChar close; ///< 闭字符, e.g. '}'
+    QChar open;   ///< 开字符, e.g. '{'
+    QChar close;  ///< 闭字符, e.g. '}'
   };
 
   /// @brief 所有支持的配对字符
   static const CharPair kPairs[];
-  static constexpr int kPairCount = 4; // { }  [ ]  ( )  " "
+  static constexpr int kPairCount = 4;  // { }  [ ]  ( )  " "
 
   /// @brief 格式化模式
   enum FormatMode {
-    FormatJson, ///< JSON 文件格式化
-    FormatAc,   ///< AC 脚本格式化
-    FormatTpl   ///< TPL 模板格式化
+    FormatJson,   ///< JSON 文件格式化
+    FormatJson5,  ///< JSON5 风格格式化（无引号 key、尾随逗号）
+    FormatAc,     ///< AC 脚本格式化
+    FormatTpl     ///< TPL 模板格式化
   };
 
   /// @brief 格式化代码
@@ -42,7 +43,7 @@ public:
 private:
   // ── JSON 格式化 ──
   /// @brief JSON 格式化（2 空格缩进）
-  static QString formatJson(const QString &input);
+  static QString formatJson(const QString &input, bool json5Style = false);
 
   // ── AC 脚本格式化 ──
   /// @brief AC 脚本格式化（基于 {} 缩进）
