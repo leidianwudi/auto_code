@@ -21,3 +21,4 @@ main {
   printLog("calc.multiply(5,6): " + r2);
 }
 
+

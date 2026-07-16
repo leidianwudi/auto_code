@@ -1,75 +1,82 @@
 {
-    // 用户表
-    "modelName": "user\\user",
-    "tableName": "user",
-    "selCols": ["account"],
-    // 模糊查询名字
-    "selColsLike": ["nick"],
-    "selColsSort": { "id": "DESC", "fans_count": "DESC" },
-    "joinTable": [
-        {
-            "joinEnClass": "EnSportLeagueScheduleLike",
-            "joinEnClass_Url": "src/sport/sport_league_schedule_like/entities/en_sport_league_schedule_like",
-            "joinEnClassPro": "sportLeagueScheduleLikes",
-            "joinType": "OneToMany",
-            "inverseJoinEnClassPro": "user",
-            "isJoinRelations": false
-        },
-        {
-            "joinEnClass": "EnSportMatchStarLog",
-            "joinEnClass_Url": "src/sport/match/sport_match_star_log/entities/en_sport_match_star_log",
-            "joinEnClassPro": "sportMatchStarLogs",
-            "joinType": "OneToMany",
-            "inverseJoinEnClassPro": "user",
-            "isJoinRelations": false
-        },
-        {
-            "joinEnClass": "EnSportInfer",
-            "joinEnClass_Url": "src/sport/infer/sport_infer/entities/en_sport_infer",
-            "joinEnClassPro": "sportInfers",
-            "joinType": "OneToMany",
-            "inverseJoinEnClassPro": "user",
-            "isJoinRelations": false
-        },
-        {
-            "joinEnClass": "EnSportInferStats",
-            "joinEnClass_Url": "src/sport/infer/sport_infer_stats/entities/en_sport_infer_stats",
-            "joinEnClassPro": "sportInferStatsList",
-            "joinType": "OneToMany",
-            "inverseJoinEnClassPro": "user",
-            "isJoinRelations": false
-        },
-        {
-            "joinEnClass": "EnInfoThread",
-            "joinEnClass_Url": "src/info/info_thread/entities/en_info_thread",
-            "joinEnClassPro": "infoThreads",
-            "joinType": "OneToMany",
-            "inverseJoinEnClassPro": "user",
-            "isJoinRelations": false
-        },
-        {
-            "joinEnClass": "EnOperFollow",
-            "joinEnClass_Url": "src/oper/oper_follow/entities/en_oper_follow",
-            "joinEnClassPro": "operFollows",
-            "joinType": "OneToMany",
-            "inverseJoinEnClassPro": "user",
-            "isJoinRelations": false
-        },
-        {
-            "joinEnClass": "EnOperBehavior",
-            "joinEnClass_Url": "src/oper/oper_behavior/entities/en_oper_behavior",
-            "joinEnClassPro": "operBehaviors",
-            "joinType": "OneToMany",
-            "inverseJoinEnClassPro": "user",
-            "isJoinRelations": false
-        },
-        {
-            "joinEnClass": "EnOperBrowse",
-            "joinEnClass_Url": "src/oper/oper_browse/entities/en_oper_browse",
-            "joinEnClassPro": "operBrowses",
-            "joinType": "OneToMany",
-            "inverseJoinEnClassPro": "user",
-            "isJoinRelations": false
-        }
-    ]
+  // 用户表
+  "modelName": "user\\user",
+  "tableName": "user",
+  "selCols": [
+    "account"
+  ],
+  // 模糊查询名字
+  "selColsLike": [
+    "nick"
+  ],
+  "selColsSort": {
+    "id": "DESC",
+    "fans_count": "DESC"
+  },
+  "joinTable": [
+    {
+      "inverseJoinEnClassPro": "user",
+      "isJoinRelations": false,
+      "joinEnClass": "EnSportLeagueScheduleLike",
+      "joinEnClassPro": "sportLeagueScheduleLikes",
+      "joinEnClass_Url": "src/sport/sport_league_schedule_like/entities/en_sport_league_schedule_like",
+      "joinType": "OneToMany"
+    },
+    {
+      "inverseJoinEnClassPro": "user",
+      "isJoinRelations": false,
+      "joinEnClass": "EnSportMatchStarLog",
+      "joinEnClassPro": "sportMatchStarLogs",
+      "joinEnClass_Url": "src/sport/match/sport_match_star_log/entities/en_sport_match_star_log",
+      "joinType": "OneToMany"
+    },
+    {
+      "inverseJoinEnClassPro": "user",
+      "isJoinRelations": false,
+      "joinEnClass": "EnSportInfer",
+      "joinEnClassPro": "sportInfers",
+      "joinEnClass_Url": "src/sport/infer/sport_infer/entities/en_sport_infer",
+      "joinType": "OneToMany"
+    },
+    {
+      "inverseJoinEnClassPro": "user",
+      "isJoinRelations": false,
+      "joinEnClass": "EnSportInferStats",
+      "joinEnClassPro": "sportInferStatsList",
+      "joinEnClass_Url": "src/sport/infer/sport_infer_stats/entities/en_sport_infer_stats",
+      "joinType": "OneToMany"
+    },
+    {
+      "inverseJoinEnClassPro": "user",
+      "isJoinRelations": false,
+      "joinEnClass": "EnInfoThread",
+      "joinEnClassPro": "infoThreads",
+      "joinEnClass_Url": "src/info/info_thread/entities/en_info_thread",
+      "joinType": "OneToMany"
+    },
+    {
+      "inverseJoinEnClassPro": "user",
+      "isJoinRelations": false,
+      "joinEnClass": "EnOperFollow",
+      "joinEnClassPro": "operFollows",
+      "joinEnClass_Url": "src/oper/oper_follow/entities/en_oper_follow",
+      "joinType": "OneToMany"
+    },
+    {
+      "inverseJoinEnClassPro": "user",
+      "isJoinRelations": false,
+      "joinEnClass": "EnOperBehavior",
+      "joinEnClassPro": "operBehaviors",
+      "joinEnClass_Url": "src/oper/oper_behavior/entities/en_oper_behavior",
+      "joinType": "OneToMany"
+    },
+    {
+      "inverseJoinEnClassPro": "user",
+      "isJoinRelations": false,
+      "joinEnClass": "EnOperBrowse",
+      "joinEnClassPro": "operBrowses",
+      "joinEnClass_Url": "src/oper/oper_browse/entities/en_oper_browse",
+      "joinType": "OneToMany"
+    }
+  ]
 }
