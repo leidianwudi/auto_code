@@ -176,9 +176,12 @@ private:
 
   /// @brief 判断位置是否在字符串或注释中（P1: 字符串/注释过滤）
   bool isInStringOrComment(int pos) const;
+  bool isInStringOrComment(int pos, const QString &text, QHash<int, bool> &cache) const;
 
   /// @brief 查找匹配的括号位置（P1: 性能优化 + P3: 颜色区分）
   int findMatchingBracket(int pos, QChar bracket, QChar &matchBracket) const;
+  int findMatchingBracket(int pos, QChar bracket, QChar &matchBracket, const QString &text,
+                          QHash<int, bool> &cache) const;
 
   /// @brief 跳转到匹配括号位置（P2: 快捷键功能）
   void jumpToMatchingBracket();

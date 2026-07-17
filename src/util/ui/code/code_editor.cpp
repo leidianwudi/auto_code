@@ -357,7 +357,15 @@ void CodeEditor::hideErrorTooltip() {
 
 bool CodeEditor::isInStringOrComment(int pos) const {
   QString text = toPlainText();
+  QHash<int, bool> cache;
+  return isInStringOrComment(pos, text, cache);
+}
+
+bool CodeEditor::isInStringOrComment(int pos, const QString &text, QHash<int, bool> &cache) const {
   if (pos < 0 || pos > text.size()) return false;
+
+  auto it = cache.find(pos);
+  if (it != cache.end()) return it.value();
 
   QTextBlock block = document()->findBlock(pos);
   QString blockText = block.text();
@@ -366,6 +374,9 @@ bool CodeEditor::isInStringOrComment(int pos) const {
 
   int lineCommentPos = blockText.indexOf(QLatin1String("//"));
   if (lineCommentPos != -1 && localPos >= lineCommentPos) {
+    for (int i = localPos; i < blockText.size(); ++i) {
+      cache[blockStart + i] = true;
+    }
     return true;
   }
 
@@ -373,7 +384,7 @@ bool CodeEditor::isInStringOrComment(int pos) const {
   bool inDoubleQuote = false;
   bool inTemplateLiteral = false;
 
-  for (int i = 0; i < localPos && i < blockText.size(); ++i) {
+  for (int i = 0; i <= localPos && i < blockText.size(); ++i) {
     QChar ch = blockText[i];
     QChar prevCh = (i > 0) ? blockText[i - 1] : QChar();
 
@@ -387,12 +398,23 @@ bool CodeEditor::isInStringOrComment(int pos) const {
                prevCh != QLatin1Char('\\')) {
       inTemplateLiteral = !inTemplateLiteral;
     }
+
+    bool result = (inSingleQuote || inDoubleQuote || inTemplateLiteral);
+    cache[blockStart + i] = result;
   }
 
-  return inSingleQuote || inDoubleQuote || inTemplateLiteral;
+  bool finalResult = (inSingleQuote || inDoubleQuote || inTemplateLiteral);
+  return finalResult;
 }
 
 int CodeEditor::findMatchingBracket(int pos, QChar bracket, QChar &matchBracket) const {
+  QString text = toPlainText();
+  QHash<int, bool> cache;
+  return findMatchingBracket(pos, bracket, matchBracket, text, cache);
+}
+
+int CodeEditor::findMatchingBracket(int pos, QChar bracket, QChar &matchBracket,
+                                    const QString &text, QHash<int, bool> &cache) const {
   matchBracket = QChar::Null;
 
   static const QHash<QChar, QChar> bracketPairs = {
@@ -405,9 +427,8 @@ int CodeEditor::findMatchingBracket(int pos, QChar bracket, QChar &matchBracket)
 
   matchBracket = it.value();
 
-  if (isInStringOrComment(pos - 1)) return -1;
+  if (isInStringOrComment(pos - 1, text, cache)) return -1;
 
-  QString text = toPlainText();
   bool forward =
       (bracket == QLatin1Char('(') || bracket == QLatin1Char('[') || bracket == QLatin1Char('{'));
 
@@ -417,7 +438,7 @@ int CodeEditor::findMatchingBracket(int pos, QChar bracket, QChar &matchBracket)
   int step = forward ? 1 : -1;
 
   for (int i = searchStart; i != searchEnd; i += step) {
-    if (isInStringOrComment(i)) continue;
+    if (isInStringOrComment(i, text, cache)) continue;
 
     QChar currentChar = text[i];
     if (currentChar == bracket) {
@@ -458,12 +479,14 @@ void CodeEditor::highlightCurrentLine() {
       if (checkPos >= 0 && checkPos < text.size()) {
         QChar ch = text[checkPos];
         if (kBrackets.contains(ch)) {
-          bracketPos = checkPos + 1;  // 转换为1-based position用于findMatchingBracket
+          bracketPos = checkPos + 1;
           bracketChar = ch;
           break;
         }
       }
     }
+
+    QHash<int, bool> strCommentCache;
 
     if (bracketPos == -1) {
       struct BracketPair {
@@ -488,7 +511,7 @@ void CodeEditor::highlightCurrentLine() {
         int closeBrace = -1;
 
         for (int i = 0; i < text.size(); ++i) {
-          if (isInStringOrComment(i)) continue;
+          if (isInStringOrComment(i, text, strCommentCache)) continue;
 
           QChar ch = text[i];
           if (ch == openCh) {
@@ -545,7 +568,7 @@ void CodeEditor::highlightCurrentLine() {
       }
     } else if (bracketPos > 0) {
       QChar matchCh;
-      int matchPos = findMatchingBracket(bracketPos, bracketChar, matchCh);
+      int matchPos = findMatchingBracket(bracketPos, bracketChar, matchCh, text, strCommentCache);
 
       QColor highlightColor = AuiStyle::bracketColorForChar(bracketChar);
 
