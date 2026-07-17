@@ -135,11 +135,40 @@ public:
   /// 当前行高亮背景色（淡黄）
   static QColor currentLineBackground() { return QColor(Qt::yellow).lighter(180); }
 
-  /// 括号匹配高亮背景色（青色）
+  /// 括号匹配默认背景色（青色）
   static QColor bracketMatchColor() { return QColor(0, 200, 200); }
+
+  /// 圆括号 () 匹配高亮色（珊瑚红）
+  static QColor bracketParenColor() { return QColor(255, 127, 80); }
+
+  /// 方括号 [] 匹配高亮色（海绿色）
+  static QColor bracketSquareColor() { return QColor(60, 179, 113); }
+
+  /// 花括号 {} 匹配高亮色（皇家蓝）
+  static QColor bracketBraceColor() { return QColor(65, 105, 225); }
+
+  /// 括号不匹配警告色（红色）
+  static QColor bracketMismatchColor() { return QColor(255, 0, 0); }
 
   /// 错误波浪线颜色（红色）
   static QColor errorUnderlineColor() { return QColor(Qt::red); }
+
+  /// 根据括号字符返回对应的高亮颜色
+  static QColor bracketColorForChar(QChar ch) {
+    switch (ch.toLatin1()) {
+      case '(':
+      case ')':
+        return bracketParenColor();
+      case '[':
+      case ']':
+        return bracketSquareColor();
+      case '{':
+      case '}':
+        return bracketBraceColor();
+      default:
+        return bracketMatchColor();
+    }
+  }
 
   // ════════════════════════════════════════════════════════════
   //  布局尺寸常量

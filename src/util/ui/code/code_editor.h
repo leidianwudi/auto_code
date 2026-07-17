@@ -174,6 +174,18 @@ private:
   /// @brief 获取当前文件的 AC 执行器（用于符号表访问）
   class AcExecutor *acExecutor() const;
 
+  /// @brief 判断位置是否在字符串或注释中（P1: 字符串/注释过滤）
+  bool isInStringOrComment(int pos) const;
+
+  /// @brief 查找匹配的括号位置（P1: 性能优化 + P3: 颜色区分）
+  int findMatchingBracket(int pos, QChar bracket, QChar &matchBracket) const;
+
+  /// @brief 跳转到匹配括号位置（P2: 快捷键功能）
+  void jumpToMatchingBracket();
+
+  /// @brief 选中两个匹配括号之间的所有内容（P2: 快捷键功能）
+  void selectBetweenBrackets();
+
   ValidationMode m_validationMode = NoValidation;
   QTimer m_validationTimer;                                ///< 验证防抖定时器（500ms）
   QTimer m_hoverTimer;                                     ///< 悬停提示防抖定时器（500ms）
