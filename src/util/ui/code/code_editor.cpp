@@ -67,6 +67,10 @@ CodeEditor::CodeEditor(QWidget *parent) : QPlainTextEdit(parent) {
   // 设置 Tab 宽度
   setTabStopDistance(fontMetrics().horizontalAdvance(QLatin1Char(' ')) * 4);
 
+  // 禁用自动换行，启用水平滚动条
+  setLineWrapMode(QPlainTextEdit::NoWrap);
+  setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
   // 默认启用括号匹配
   setExtraSelections(QList<QTextEdit::ExtraSelection>());
 }
