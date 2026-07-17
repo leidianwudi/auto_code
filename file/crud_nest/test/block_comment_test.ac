@@ -1,0 +1,36 @@
+// 测试块注释功能
+
+/**
+ * 这是一个多行块注释
+ * 用于测试 AC 脚本的块注释支持
+ * 支持中文注释
+ */
+
+/* 单行块注释 */
+let x = 10; /* 内联块注释 */ let y = 20;
+
+/*
+ * 多行块注释示例
+ * 可以包含多行内容
+ * 支持各种字符
+ */
+let z = x + y;
+
+/* 嵌套场景 - 块注释中的代码不会执行 */
+/*
+let a = 100;
+let b = 200;
+*/
+
+printLog("x = " + x);
+printLog("y = " + y);
+printLog("z = " + z);
+
+// 测试取模运算符（新增功能）
+let remainder = 17 % 5;
+printLog("17 % 5 = " + remainder);  // 应该输出: 2
+
+let isEven = (remainder % 2 == 0);
+printLog("Is even? " + isEven);  // 应该输出: false
+
+printLog("✅ 块注释和取模运算符测试通过！");

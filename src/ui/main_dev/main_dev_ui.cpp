@@ -215,11 +215,18 @@ void MainDevUi::setupStatusBar(QWidget *contentWidget, QVBoxLayout *contentLayou
   statusBarContentLayout->setContentsMargins(4, 0, 4, 0);
   statusBarContentLayout->setSpacing(0);
 
-  m_errorLabel = new QLabel;
+  m_errorLabel = new QPlainTextEdit;
   m_errorLabel->setStyleSheet(
-      QStringLiteral("QLabel { color: %1; }").arg(AuiStyle::errorTextColor().name()));
+      QStringLiteral("QPlainTextEdit { color: %1; background: transparent; border: none; }")
+          .arg(AuiStyle::errorTextColor().name()));
+  m_errorLabel->setReadOnly(true);
   m_errorLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
   m_errorLabel->setCursor(Qt::IBeamCursor);
+  m_errorLabel->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+  m_errorLabel->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  m_errorLabel->setLineWrapMode(QPlainTextEdit::WidgetWidth);
+  m_errorLabel->setMaximumHeight(30);  // 底部工具栏初始高度为 20px，后续根据内容自动调整
+  m_errorLabel->setFrameShape(QFrame::NoFrame);
   statusBarContentLayout->addWidget(m_errorLabel, 1);
 
   m_cursorPositionLabel = new QLabel(QStringLiteral("行: 1, 列: 1"));
@@ -325,7 +332,11 @@ int MainDevUi::fileTreeWidth() const { return m_fileTree->width(); }
 
 void MainDevUi::setCursorStatusText(const QString &text) { m_cursorPositionLabel->setText(text); }
 
-void MainDevUi::setErrorMessage(const QString &msg) { m_errorLabel->setText(msg); }
+void MainDevUi::setErrorMessage(const QString &msg) {
+  m_errorLabel->setPlainText(msg);
+  // 滚动到顶部，方便查看最早的错误
+  m_errorLabel->verticalScrollBar()->setValue(0);
+}
 
 // ══════════════════════════════════════════════════════════════
 //  标签页颜色

@@ -190,6 +190,12 @@ void AcTypeChecker::checkStmt(const Block::Stmt &stmt, TypeEnv &env) {
     case Block::Stmt::kImport:
       // import 语句在模块链接阶段已处理，此处忽略
       break;
+
+    case Block::Stmt::kUsing: {
+      AcType valType = checkExpr(*stmt.usingStmt.value, env);
+      env.varTypes.insert(stmt.usingStmt.varName, valType);
+      break;
+    }
   }
 }
 
@@ -360,6 +366,16 @@ AcType AcTypeChecker::checkExpr(const Expr &expr, const TypeEnv &env) {
         if (entry.value) checkExpr(*entry.value, env);
       }
       return AcType::any();
+
+    case Expr::kFuncExpr: {
+      // 函数表达式 — 检查函数体，返回类型为函数的返回类型
+      TypeEnv funcEnv = env;
+      for (const auto &param : expr.funcExpr.params) {
+        funcEnv.varTypes.insert(param.name, param.type);
+      }
+      checkBlock(expr.funcExpr.body, funcEnv);
+      return expr.funcExpr.returnType;
+    }
 
     case Expr::kFuncCall: {
       // 函数调用 name(args)
@@ -546,6 +562,17 @@ AcType AcTypeChecker::checkExpr(const Expr &expr, const TypeEnv &env) {
         return AcType::number();
       }
 
+      // ── 逻辑运算符（|| &&）返回操作数类型（JS 语义） ──
+      if (expr.binOp == Expr::kOr || expr.binOp == Expr::kAnd) {
+        if (leftType.kind == AcType::kAny || rightType.kind == AcType::kAny) {
+          return AcType::any();
+        }
+        if (leftType.kind == rightType.kind) {
+          return leftType;
+        }
+        return rightType;
+      }
+
       // ── 减法、乘法、除法（- * /）仅支持 Number ──
       if (leftType.kind == AcType::kNumber && rightType.kind == AcType::kNumber) {
         return AcType::number();
@@ -578,6 +605,25 @@ AcType AcTypeChecker::checkExpr(const Expr &expr, const TypeEnv &env) {
 bool AcTypeChecker::isCompatible(const AcType &from, const AcType &to) const {
   if (to.kind == AcType::kAny) return true;
   if (from.kind == AcType::kAny) return true;
+
+  // Array 字面量 (kArray) 兼容 Array 类 (kClass "Array")
+  if (from.kind == AcType::kArray && to.kind == AcType::kClass &&
+      to.className == QStringLiteral("Array")) {
+    return true;
+  }
+  // Object 字面量 (kClass "Object") 兼容 Object 类
+  if (from.kind == AcType::kClass && from.className == QStringLiteral("Object") &&
+      to.kind == AcType::kClass && to.className == QStringLiteral("Object")) {
+    return true;
+  }
+  // 数值/字符串字面量兼容 Number/String 类属性默认值
+  if (to.kind == AcType::kClass) {
+    if (to.className == QStringLiteral("Number") && from.kind == AcType::kNumber) return true;
+    if (to.className == QStringLiteral("String") && from.kind == AcType::kString) return true;
+    if (to.className == QStringLiteral("Bool") && from.kind == AcType::kBool) return true;
+    if (to.className == QStringLiteral("Array") && from.kind == AcType::kArray) return true;
+    if (to.className == QStringLiteral("Object")) return true;
+  }
 
   if (from.kind == to.kind) {
     if (from.kind == AcType::kArray) {

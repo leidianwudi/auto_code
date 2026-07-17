@@ -245,6 +245,8 @@ bool AcExecutor::linkImportsRecursive(Block &program, const QString &baseDir,
         isExported = true;
       } else if (stmt.kind == Block::Stmt::kInterfaceDef && stmt.interfaceDef.isExported) {
         isExported = true;
+      } else if (stmt.kind == Block::Stmt::kEnumDef && stmt.enumDef.isExported) {
+        isExported = true;
       }
 
       // 调试输出
@@ -257,6 +259,8 @@ bool AcExecutor::linkImportsRecursive(Block &program, const QString &baseDir,
         stmtName = stmt.funcDef.name;
       else if (stmt.kind == Block::Stmt::kInterfaceDef)
         stmtName = stmt.interfaceDef.name;
+      else if (stmt.kind == Block::Stmt::kEnumDef)
+        stmtName = stmt.enumDef.name;
       qDebug() << "  stmt kind:" << (int)stmt.kind << "name:" << stmtName
                << "isExported:" << isExported;
 
@@ -272,16 +276,35 @@ bool AcExecutor::linkImportsRecursive(Block &program, const QString &baseDir,
         exportName = stmt.funcDef.name;
       } else if (stmt.kind == Block::Stmt::kInterfaceDef) {
         exportName = stmt.interfaceDef.name;
+      } else if (stmt.kind == Block::Stmt::kEnumDef) {
+        exportName = stmt.enumDef.name;
       }
 
       if (!imp.names.contains(exportName)) continue;
 
       // 注入到当前程序（插入到开头，确保定义在 main 块语句之前执行）
-      importedStmts.append(stmt);
+      // 如果有别名，需要将符号名重命名为别名
+      Block::Stmt renamedStmt = stmt;
+      QString localName = exportName;
+      if (imp.aliases.contains(exportName)) {
+        localName = imp.aliases[exportName];
+        if (renamedStmt.kind == Block::Stmt::kAssign) {
+          renamedStmt.assign.name = localName;
+        } else if (renamedStmt.kind == Block::Stmt::kClassDef) {
+          renamedStmt.classDef.name = localName;
+        } else if (renamedStmt.kind == Block::Stmt::kFuncDef) {
+          renamedStmt.funcDef.name = localName;
+        } else if (renamedStmt.kind == Block::Stmt::kInterfaceDef) {
+          renamedStmt.interfaceDef.name = localName;
+        } else if (renamedStmt.kind == Block::Stmt::kEnumDef) {
+          renamedStmt.enumDef.name = localName;
+        }
+      }
+      importedStmts.append(renamedStmt);
 
-      // 注册变量名
-      m_declaredVars.insert(exportName);
-      qDebug() << "[linkImports] injected" << exportName << "into program";
+      // 注册变量名（使用别名或原始名）
+      m_declaredVars.insert(localName);
+      qDebug() << "[linkImports] injected" << exportName << "as" << localName << "into program";
     }
 
     // 检查所有导入名是否都找到了
@@ -296,6 +319,8 @@ bool AcExecutor::linkImportsRecursive(Block &program, const QString &baseDir,
         name = stmt.funcDef.name;
       else if (stmt.kind == Block::Stmt::kInterfaceDef && stmt.interfaceDef.isExported)
         name = stmt.interfaceDef.name;
+      else if (stmt.kind == Block::Stmt::kEnumDef && stmt.enumDef.isExported)
+        name = stmt.enumDef.name;
       if (!name.isEmpty()) foundNames.insert(name);
     }
 

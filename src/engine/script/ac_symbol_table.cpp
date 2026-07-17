@@ -210,6 +210,20 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
       break;
     }
 
+    case Block::Stmt::kUsing: {
+      const auto &us = stmt.usingStmt;
+      if (!us.varName.isEmpty()) {
+        AcSymbolEntry entry;
+        entry.name = us.varName;
+        entry.kind = AcSymbolKind::kVariable;
+        entry.filePath = m_filePath;
+        entry.line = 0;
+        entry.signature = us.varName + QStringLiteral(": using");
+        m_symbols.insert(us.varName, entry);
+      }
+      break;
+    }
+
     default:
       break;
   }

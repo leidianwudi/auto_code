@@ -280,6 +280,69 @@ void CodeEditor::paintEvent(QPaintEvent *event) {
   // 先调用标准绘制（背景、文本、默认波浪下划线等）
   QPlainTextEdit::paintEvent(event);
 
+  // 绘制缩进参考线（在文本之下、错误波浪线之下）
+  {
+    int charWidth = fontMetrics().horizontalAdvance(QLatin1Char(' '));
+    int tabW = tabStopDistance() / charWidth;
+    if (tabW <= 0) tabW = 4;
+    m_indentGuide.compute(cachedText(), document()->revision(), tabW);
+
+    const auto &guideRanges = m_indentGuide.ranges();
+    if (!guideRanges.isEmpty()) {
+      QPainter guidePainter(viewport());
+
+      // 可见行范围
+      QTextBlock firstBlock = firstVisibleBlock();
+      int firstLine = firstBlock.blockNumber() + 1;
+      int lastLine = firstLine;
+      {
+        QTextBlock blk = firstBlock;
+        while (blk.isValid()) {
+          QRectF br = blockBoundingGeometry(blk).translated(contentOffset());
+          if (br.top() > viewport()->rect().bottom()) break;
+          lastLine = blk.blockNumber() + 1;
+          blk = blk.next();
+        }
+      }
+
+      // 当前行号和缩进
+      int cursorLine = textCursor().blockNumber() + 1;
+      int cursorIndent = IndentGuide::lineIndentLevel(textCursor().block().text(), tabW);
+
+      QColor normalColor = AuiStyle::indentGuideColor();
+      QColor activeColor = AuiStyle::indentGuideActiveColor();
+
+      for (const auto &range : guideRanges) {
+        if (range.endLine < firstLine || range.startLine > lastLine) continue;
+
+        int drawStart = qMax(range.startLine, firstLine);
+        int drawEnd = qMin(range.endLine, lastLine);
+
+        QTextBlock startBlk = document()->findBlockByNumber(drawStart - 1);
+        QTextBlock endBlk = document()->findBlockByNumber(drawEnd - 1);
+        if (!startBlk.isValid() || !endBlk.isValid()) continue;
+
+        qreal y1 = blockBoundingGeometry(startBlk).translated(contentOffset()).top();
+        qreal y2 = blockBoundingGeometry(endBlk).translated(contentOffset()).bottom();
+
+        // 使用 QTextLayout::cursorToX 获取精确像素位置，避免 charWidth 估算误差
+        qreal x = 0;
+        QTextLayout *layout = startBlk.layout();
+        if (layout && layout->lineCount() > 0) {
+          int centerCol = range.indent - tabW / 2;
+          x = layout->lineAt(0).cursorToX(centerCol) + contentOffset().x();
+        } else {
+          x = (range.indent - tabW / 2.0) * charWidth + contentOffset().x();
+        }
+
+        bool isActive = (cursorLine >= range.startLine && cursorLine <= range.endLine &&
+                         cursorIndent >= range.indent);
+        guidePainter.setPen(QPen(isActive ? activeColor : normalColor, 1, Qt::SolidLine));
+        guidePainter.drawLine(qRound(x), qRound(y1), qRound(x), qRound(y2));
+      }
+    }
+  }
+
   // 在标准绘制之上，额外绘制超粗红色波浪线（覆盖默认细波浪线）
   if (m_errorRanges.isEmpty()) return;
 
@@ -356,7 +419,8 @@ void CodeEditor::showErrorTooltip(const QPoint &pos, const QString &text) {
 
 void CodeEditor::hideErrorTooltip() {
   if (m_errorTooltip) {
-    m_errorTooltip->hide();
+    m_errorTooltip->close();
+    m_errorTooltip = nullptr;
   }
 }
 
@@ -406,6 +470,26 @@ void CodeEditor::highlightCurrentLine() {
       extra.append(sel2);
     }
   }
+
+  // 错误行背景色高亮
+  if (!m_errorLines.isEmpty()) {
+    QTextBlock block = document()->firstBlock();
+    while (block.isValid()) {
+      int lineNum = block.blockNumber() + 1;
+      if (m_errorLines.contains(lineNum)) {
+        QTextEdit::ExtraSelection errorSel;
+        errorSel.format.setBackground(AuiStyle::errorLineBackground());
+        errorSel.format.setProperty(QTextFormat::FullWidthSelection, true);
+        errorSel.cursor = QTextCursor(block);
+        errorSel.cursor.clearSelection();
+        extra.append(errorSel);
+      }
+      block = block.next();
+    }
+  }
+
+  // 错误波浪下划线
+  extra.append(m_errorSelections);
 
   setExtraSelections(extra);
 }

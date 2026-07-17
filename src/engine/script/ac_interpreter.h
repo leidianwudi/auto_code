@@ -109,8 +109,10 @@ private:
   QString m_scriptDir;
   QString m_rootDir;
   QVector<QHash<QString, QJsonValue>> m_scopeStack;
+  QVector<QVector<QString>> m_usingStack;
   QHash<QString, ClassDef> m_classes;
   QHash<QString, MethodDef> m_functions;
+  int m_funcExprCounter = 0;  ///< 函数表达式计数器（生成唯一 lambda 名）
   QHash<QString, QJsonObject> m_staticVars;
   QSet<QString> m_staticInited;
   QJsonObject m_currentThis;

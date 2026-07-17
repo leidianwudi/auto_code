@@ -31,6 +31,7 @@ private:
   // ── 语法分析（递归下降） ──
   bool parseProgram(Block &block);
   bool parseBlock(Block &block);
+  bool parseBlockOrStmt(Block &block);
   bool parseStmt(Block::Stmt &stmt);
   bool parseCallStmt(CallStmt &cs);
   bool parseAssignStmt(AssignStmt &as);
@@ -42,6 +43,7 @@ private:
   bool parseImportStmt(ImportStmt &imp);
   bool parseClassDef(ClassDef &cd);
   bool parseInterfaceDef(InterfaceDef &iface);
+  bool parseEnumDef(EnumDef &ed);
   bool parseReturnStmt(Expr &retVal);
   bool parseExpr(Expr &expr);
   bool parseTernary(Expr &expr);
@@ -50,6 +52,8 @@ private:
   bool parseComparison(Expr &expr);
   bool parseAddSub(Expr &expr);
   bool parseMulDiv(Expr &expr);
+  bool parseUnary(Expr &expr);
+  bool parsePostfix(Expr &expr);
   bool parsePrimary(Expr &expr);
   bool parseObject(Expr &expr);
   bool parseArray(Expr &expr);

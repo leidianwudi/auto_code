@@ -1,0 +1,36 @@
+// ── 导出模块：database.ac ──
+
+export class DB {
+  private let config;
+
+  public constructor(config: Object) {
+    this.config = config;
+  }
+
+  public function query(sql: String, params: Array): Array {
+    printLog(`[DB] query: ${sql}`);
+    return [];
+  }
+
+  public function insert(table: String, data: Object): Void {
+    printLog(`[DB] insert into ${table}`);
+  }
+
+  public function disconnect(): Void {
+    printLog("[DB] disconnected");
+  }
+}
+
+export function readJson(path: String): Object {
+  printLog(`[readJson] ${path}`);
+  return {};
+}
+
+export function writeFile(path: String, content: String): Void {
+  printLog(`[writeFile] ${path}`);
+}
+
+export function renderTpl(tplPath: String, data: Object): String {
+  printLog(`[renderTpl] ${tplPath}`);
+  return "";
+}

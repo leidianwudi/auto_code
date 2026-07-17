@@ -153,6 +153,15 @@ public:
   /// 错误波浪线颜色（红色）
   static QColor errorUnderlineColor() { return QColor(Qt::red); }
 
+  /// 错误行背景色（浅红，类似 VS Code 的 #f2dede）
+  static QColor errorLineBackground() { return QColor(0xf2, 0xde, 0xde); }
+
+  /// 缩进参考线颜色（浅灰，类似 VS Code 的 indent guide）
+  static QColor indentGuideColor() { return QColor(0xd3, 0xd3, 0xd3); }
+
+  /// 缩进参考线高亮颜色（当前行所在层级，类似 VS Code 的 active indent guide）
+  static QColor indentGuideActiveColor() { return QColor(0xa0, 0xa0, 0xa0); }
+
   /// 根据括号字符返回对应的高亮颜色
   static QColor bracketColorForChar(QChar ch) {
     switch (ch.toLatin1()) {

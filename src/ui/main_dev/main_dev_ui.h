@@ -12,6 +12,7 @@
 #include <QEvent>
 #include <QLabel>
 #include <QMainWindow>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QShowEvent>
 #include <QSplitter>
@@ -142,7 +143,7 @@ private:
   QSplitter *m_mainSplitter = nullptr;
   QSplitter *m_editorSplitter = nullptr;
   QLabel *m_cursorPositionLabel = nullptr;
-  QLabel *m_errorLabel = nullptr;
+  QPlainTextEdit *m_errorLabel = nullptr;
   QAction *m_splitAction = nullptr;
   QAction *m_closeAction = nullptr;
   QAction *m_openAction = nullptr;

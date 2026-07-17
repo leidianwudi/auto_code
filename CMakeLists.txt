@@ -75,6 +75,8 @@ qt_add_executable(auto_code
     src/util/ui/code/tree_dir.cpp
     src/util/ui/code/bracket_matcher.h
     src/util/ui/code/bracket_matcher.cpp
+    src/util/ui/code/indent_guide.h
+    src/util/ui/code/indent_guide.cpp
     src/util/ui/code/code_validator.h
     src/util/ui/code/code_validator.cpp
     src/util/ui/code/code_editor.h

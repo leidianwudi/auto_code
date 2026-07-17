@@ -17,6 +17,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QMap>
 #include <QSharedPointer>
 #include <QString>
 #include <QStringList>
@@ -55,10 +56,14 @@ enum TokenType {
   TOK_MINUS,            ///< -
   TOK_MUL,              ///< *
   TOK_DIV,              ///< /
+  TOK_MOD,              ///< %（取模）
   TOK_PLUSEQ,           ///< +=
   TOK_MINUSEQ,          ///< -=
   TOK_MULEQ,            ///< *=
   TOK_DIVEQ,            ///< /=
+  TOK_MODEQ,            ///< %=（取模赋值）
+  TOK_PLUSPLUS,         ///< ++（自增）
+  TOK_MINUSMINUS,       ///< --（自减）
   TOK_OR,               ///< ||（逻辑或）
   TOK_AND,              ///< &&（逻辑与）
   TOK_NOT,              ///< !（逻辑非）
@@ -102,6 +107,11 @@ enum TokenType {
   TOK_SWITCH,           ///< switch 关键字
   TOK_CASE,             ///< case 关键字
   TOK_DEFAULT,          ///< default 关键字
+  TOK_ENUM,             ///< enum 关键字（枚举定义）
+  TOK_CONSTRUCTOR,      ///< constructor 关键字（类构造函数）
+  TOK_USING,            ///< using 关键字（显式资源管理）
+  TOK_DISPOSE,          ///< dispose 关键字（资源释放方法）
+  TOK_AS,               ///< as 关键字（导入别名）
   TOK_QUESTION,         ///< ?（三元运算符）
   TOK_TEMPLATE_STRING,  ///< 模板字符串 `...${...}...`
 };
@@ -223,6 +233,12 @@ struct MethodCall {
       nullptr;  ///< 对象表达式（用于链式访问，如 this.engine.start()，优先级高于 objName）
 };
 
+/// @brief using 语句：using var = expr（离开作用域时自动调用 dispose()）
+struct UsingStmt {
+  QString varName;        ///< 变量名
+  Expr *value = nullptr;  ///< 初始化表达式
+};
+
 /// @brief 方法定义：function name(params) { body }
 struct MethodDef {
   QString name;
@@ -248,6 +264,20 @@ struct InterfaceDef {
   QVector<InterfaceMethod> methods;
   QStringList baseInterfaces;  ///< 接口继承的父接口列表
   bool isExported = false;     ///< 是否导出
+};
+
+/// @brief 枚举成员定义：Name 或 Name = Value
+struct EnumMember {
+  QString name;           ///< 成员名
+  QJsonValue value;       ///< 成员值（未指定时自动递增）
+  bool hasValue = false;  ///< 是否显式指定了值
+};
+
+/// @brief 枚举定义：enum Name { A, B = 10, C }
+struct EnumDef {
+  QString name;
+  QVector<EnumMember> members;
+  bool isExported = false;  ///< 是否导出
 };
 
 /// @brief 类定义：class Name extends Base implements I1, I2 { ... }
@@ -282,8 +312,13 @@ struct Expr {
     kThis,          ///< this 关键字
     kBinary,        ///< 二元运算 left op right
     kUnary,         ///< 一元运算 !expr（逻辑非）
+    kPreInc,        ///< 前置自增 ++expr
+    kPreDec,        ///< 前置自减 --expr
+    kPostInc,       ///< 后置自增 expr++
+    kPostDec,       ///< 后置自减 expr--
     kBool,          ///< 布尔字面量 true/false
     kStaticAccess,  ///< 静态访问 ClassName::member
+    kFuncExpr,      ///< 函数表达式 function(params): Type { body }
   } kind = kString;
   int line = 0;          ///< 源码行号（用于错误报告）
   QString strVal;        ///< 字符串值
@@ -299,7 +334,22 @@ struct Expr {
   MethodCall methodCall;            ///< 方法调用信息
   QString className;                ///< 类名（用于 kNewInstance）
   QVector<Expr *> constructorArgs;  ///< 构造参数（用于 kNewInstance 的 native 类）
-  enum BinaryOp { kAdd, kSub, kMul, kDiv, kOr, kAnd, kEq, kNeq, kLt, kGt, kLte, kGte } binOp = kAdd;
+  MethodDef funcExpr;               ///< 函数表达式（用于 kFuncExpr）
+  enum BinaryOp {
+    kAdd,
+    kSub,
+    kMul,
+    kDiv,
+    kMod,
+    kOr,
+    kAnd,
+    kEq,
+    kNeq,
+    kLt,
+    kGt,
+    kLte,
+    kGte
+  } binOp = kAdd;
   Expr *left = nullptr;
   Expr *right = nullptr;
 
@@ -335,6 +385,7 @@ private:
     boolVal = other.boolVal;
     ident = other.ident;
     prop = other.prop;
+    propObject = other.propObject ? new Expr(*other.propObject) : nullptr;
     for (const auto &e : other.objEntries) {
       ObjectEntry oe;
       oe.key = e.key;
@@ -357,6 +408,7 @@ private:
     right = other.right ? new Expr(*other.right) : nullptr;
     unaryOp = other.unaryOp;
     operand = other.operand ? new Expr(*other.operand) : nullptr;
+    funcExpr = other.funcExpr;
   }
   void moveFrom(Expr &&other) {
     kind = other.kind;
@@ -366,6 +418,8 @@ private:
     boolVal = other.boolVal;
     ident = std::move(other.ident);
     prop = std::move(other.prop);
+    propObject = other.propObject;
+    other.propObject = nullptr;
     objEntries = std::move(other.objEntries);
     arrItems = std::move(other.arrItems);
     funcCall = std::move(other.funcCall);
@@ -381,6 +435,7 @@ private:
     unaryOp = other.unaryOp;
     operand = other.operand;
     other.operand = nullptr;
+    funcExpr = std::move(other.funcExpr);
   }
   void freeOwned() {
     for (auto &e : objEntries) {
@@ -403,6 +458,8 @@ private:
     right = nullptr;
     delete operand;
     operand = nullptr;
+    delete propObject;
+    propObject = nullptr;
   }
 };
 
@@ -441,11 +498,18 @@ struct PropAssignStmt {
   int compoundOp = 0;  ///< 复合赋值运算符：0=无, 1=+=, 2=-=, 3=*=, 4=/=
 };
 
-/// @brief for 循环语句：for (var in arrayExpr) { body }
+/// @brief for 循环语句：for (var in array) { body } 或 for (init; cond; update) { body }
 struct ForStmt {
   QString varName;
+  QString varType;  ///< for-in 变量类型注解（如 for (let item: String in arr)）
   Expr arrayExpr;
   Block body;
+
+  // 标准 for 循环支持：for (init; condition; update) { body }
+  bool isStandard = false;  ///< 是否为标准 for 循环（非 for-in）
+  Block initBlock;          ///< 初始化语句块（如 let i = 0）
+  Expr condition;           ///< 循环条件（如 i < n）
+  Expr updateExpr;          ///< 更新表达式（如 i++）
 };
 
 /// @brief if 条件语句：if (cond) { then } else { else }
@@ -458,10 +522,11 @@ struct IfStmt {
   IfStmt *elseIfBranch = nullptr;  ///< else if 分支（链式结构）
 };
 
-/// @brief 导入语句：import { A, B } from "file"
+/// @brief 导入语句：import { A, B as C } from "file"
 struct ImportStmt {
-  QStringList names;  ///< 导入的符号名列表
-  QString filePath;   ///< 源文件路径（相对或绝对）
+  QStringList names;               ///< 导入的符号名列表（原始名）
+  QMap<QString, QString> aliases;  ///< 别名映射：原始名 → 别名（无别名时不含该键）
+  QString filePath;                ///< 源文件路径（相对或绝对）
 };
 
 /// @brief while 循环语句：while (condition) { body }
@@ -495,13 +560,15 @@ struct Block::Stmt {
     kExpr,
     kClassDef,
     kInterfaceDef,
+    kEnumDef,
     kFuncDef,
     kReturn,
     kImport,
     kWhile,
     kSwitch,
     kBreak,
-    kContinue
+    kContinue,
+    kUsing
   } kind = kCall;
   CallStmt call;
   AssignStmt assign;
@@ -512,11 +579,13 @@ struct Block::Stmt {
   Expr exprStmt;
   ClassDef classDef;
   InterfaceDef interfaceDef;
+  EnumDef enumDef;
   MethodDef funcDef;
   Expr returnValue;
   ImportStmt importStmt;
   WhileStmt whileStmt;
   SwitchStmt switchStmt;
+  UsingStmt usingStmt;
 };
 
 /// @}

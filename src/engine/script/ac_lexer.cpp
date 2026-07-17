@@ -14,6 +14,31 @@ void AcLexer::skipLineComment(const QString &source, int &pos) {
   while (pos < source.size() && source[pos] != '\n') ++pos;
 }
 
+/// @brief 跳过块注释（/* 到 */）
+bool AcLexer::skipBlockComment(const QString &source, int &pos, int &line, QString &error) {
+  // 跳过 /* 的两个字符
+  pos += 2;
+
+  while (pos < source.size()) {
+    // 检查是否遇到 */ 结束标记
+    if (source[pos] == '*' && pos + 1 < source.size() && source[pos + 1] == '/') {
+      pos += 2;     // 跳过 */
+      return true;  // 成功找到闭合的块注释
+    }
+
+    // 更新行号（支持多行块注释）
+    if (source[pos] == '\n') {
+      ++line;
+    }
+
+    ++pos;
+  }
+
+  // 未找到闭合的 */
+  error = QStringLiteral("unterminated block comment at line %1").arg(line);
+  return false;
+}
+
 /// @brief 关键字到 Token 类型的映射表
 static const QHash<QString, TokenType> &keywordMap() {
   static const QHash<QString, TokenType> map = {
@@ -49,6 +74,11 @@ static const QHash<QString, TokenType> &keywordMap() {
       {QString::fromLatin1(AcKeyword::kSwitch), TOK_SWITCH},
       {QString::fromLatin1(AcKeyword::kCase), TOK_CASE},
       {QString::fromLatin1(AcKeyword::kDefault), TOK_DEFAULT},
+      {QString::fromLatin1(AcKeyword::kEnum), TOK_ENUM},
+      {QString::fromLatin1(AcKeyword::kConstructor), TOK_CONSTRUCTOR},
+      {QString::fromLatin1(AcKeyword::kUsing), TOK_USING},
+      {QString::fromLatin1(AcKeyword::kDispose), TOK_DISPOSE},
+      {QString::fromLatin1(AcKeyword::kAs), TOK_AS},
   };
   return map;
 }
@@ -74,6 +104,14 @@ QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
     }
     if (c == '/' && i + 1 < n && source[i + 1] == '/') {
       skipLineComment(source, i);
+      continue;
+    }
+
+    // 检测块注释 /* ... */
+    if (c == '/' && i + 1 < n && source[i + 1] == '*') {
+      if (!skipBlockComment(source, i, line, error)) {
+        return {};  // 块注释未闭合，返回错误
+      }
       continue;
     }
 
@@ -123,6 +161,9 @@ QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
         if (i + 1 < n && source[i + 1] == '=') {
           tokens.append({TOK_PLUSEQ, QStringLiteral("+="), line});
           i += 2;
+        } else if (i + 1 < n && source[i + 1] == '+') {
+          tokens.append({TOK_PLUSPLUS, QStringLiteral("++"), line});
+          i += 2;
         } else {
           tokens.append({TOK_PLUS, QStringLiteral("+"), line});
           ++i;
@@ -131,6 +172,9 @@ QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
       case '-':
         if (i + 1 < n && source[i + 1] == '=') {
           tokens.append({TOK_MINUSEQ, QStringLiteral("-="), line});
+          i += 2;
+        } else if (i + 1 < n && source[i + 1] == '-') {
+          tokens.append({TOK_MINUSMINUS, QStringLiteral("--"), line});
           i += 2;
         } else {
           tokens.append({TOK_MINUS, QStringLiteral("-"), line});
@@ -152,6 +196,15 @@ QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
           i += 2;
         } else {
           tokens.append({TOK_DIV, QStringLiteral("/"), line});
+          ++i;
+        }
+        break;
+      case '%':
+        if (i + 1 < n && source[i + 1] == '=') {
+          tokens.append({TOK_MODEQ, QStringLiteral("%="), line});
+          i += 2;
+        } else {
+          tokens.append({TOK_MOD, QStringLiteral("%"), line});
           ++i;
         }
         break;

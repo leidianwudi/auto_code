@@ -61,6 +61,9 @@ void AstVisitor::visitStmt(const Block::Stmt &stmt) {
     case Block::Stmt::kBreak:
     case Block::Stmt::kContinue:
       break;
+    case Block::Stmt::kUsing:
+      visitUsingStmt(stmt.usingStmt);
+      break;
   }
 }
 
@@ -118,6 +121,9 @@ void AstVisitor::visitExpr(const Expr &expr) {
       if (expr.left) visitExpr(*expr.left);
       if (expr.right) visitExpr(*expr.right);
       if (expr.operand) visitExpr(*expr.operand);
+      break;
+    case Expr::kFuncExpr:
+      visitFuncExprExpr(expr);
       break;
   }
 }
@@ -186,6 +192,10 @@ void AstVisitor::visitSwitchStmt(const SwitchStmt &ss) {
   }
 }
 
+void AstVisitor::visitUsingStmt(const UsingStmt &us) {
+  if (us.value) visitExpr(*us.value);
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // 表达式 — 默认实现：递归遍历子节点
 // ═════════════════════════════════════════════════════════════════════════════
@@ -249,3 +259,5 @@ void AstVisitor::visitBinaryExpr(const Expr &expr) {
 void AstVisitor::visitUnaryExpr(const Expr &expr) {
   if (expr.operand) visitExpr(*expr.operand);
 }
+
+void AstVisitor::visitFuncExprExpr(const Expr &expr) { visitBlock(expr.funcExpr.body); }

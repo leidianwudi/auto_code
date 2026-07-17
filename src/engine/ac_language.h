@@ -57,6 +57,11 @@ inline constexpr const char *kContinue = "continue";
 inline constexpr const char *kSwitch = "switch";
 inline constexpr const char *kCase = "case";
 inline constexpr const char *kDefault = "default";
+inline constexpr const char *kEnum = "enum";
+inline constexpr const char *kConstructor = "constructor";
+inline constexpr const char *kUsing = "using";
+inline constexpr const char *kDispose = "dispose";
+inline constexpr const char *kAs = "as";
 
 /// @brief 关键字列表（供高亮、补全使用）
 inline const QStringList kAll = {
@@ -77,6 +82,9 @@ inline const QStringList kAll = {
     QString::fromLatin1(kWhile),     QString::fromLatin1(kBreak),
     QString::fromLatin1(kContinue),  QString::fromLatin1(kSwitch),
     QString::fromLatin1(kCase),      QString::fromLatin1(kDefault),
+    QString::fromLatin1(kEnum),      QString::fromLatin1(kConstructor),
+    QString::fromLatin1(kUsing),     QString::fromLatin1(kDispose),
+    QString::fromLatin1(kAs),
 };
 }  // namespace AcKeyword
 
@@ -178,6 +186,7 @@ inline const QStringList kMethods = {
     QString::fromLatin1(kTableSchema),
     QString::fromLatin1(kQuery),
     QString::fromLatin1(kDisconnect),
+    QString::fromLatin1(AcKeyword::kDispose),
 };
 }  // namespace AcDB
 

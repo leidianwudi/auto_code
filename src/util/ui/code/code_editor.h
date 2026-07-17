@@ -6,6 +6,7 @@
  * 通过组合模式集成以下专职模块：
  * - BracketMatcher: 括号匹配算法
  * - CodeValidator: 语法验证逻辑
+ * - IndentGuide: 缩进参考线绘制
  * - SymbolNavigator: 符号导航功能
  *
  * 核心职责：
@@ -30,6 +31,7 @@
 
 #include "bracket_matcher.h"
 #include "code_validator.h"
+#include "indent_guide.h"
 #include "symbol_navigator.h"
 
 class QPaintEvent;
@@ -47,6 +49,7 @@ class AuiErrorToolTip;  ///< 自定义可选中/复制的错误提示弹窗
  * ✅ 文本缓存和性能优化
  * ❌ 括号匹配 → 委托给 BracketMatcher
  * ❌ 语法验证 → 委托给 CodeValidator
+ * ❌ 缩进参考线 → 委托给 IndentGuide
  * ❌ 符号导航 → 委托给 SymbolNavigator
  */
 class CodeEditor : public QPlainTextEdit {
@@ -149,6 +152,7 @@ private:
   // 专职模块（组合模式）
   BracketMatcher m_bracketMatcher;    ///< 括号匹配器
   CodeValidator m_codeValidator;      ///< 代码验证器
+  IndentGuide m_indentGuide;          ///< 缩进参考线
   SymbolNavigator m_symbolNavigator;  ///< 符号导航器
 
   // 符号表（用于补全和导航）

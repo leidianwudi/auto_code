@@ -32,6 +32,7 @@ void FunDb::init() {
                                   {QString::fromLatin1(AcDB::kTableSchema), tableSchema},
                                   {QString::fromLatin1(AcDB::kQuery), query},
                                   {QString::fromLatin1(AcDB::kDisconnect), disconnect},
+                                  {QString::fromLatin1(AcKeyword::kDispose), disconnect},
                               });
 }
 

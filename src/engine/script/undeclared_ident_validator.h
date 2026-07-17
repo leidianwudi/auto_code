@@ -34,6 +34,7 @@ protected:
   void visitReturnStmt(const Expr &retExpr) override;
   void visitExprStmt(const Expr &expr) override;
   void visitImportStmt(const ImportStmt &imp) override;
+  void visitUsingStmt(const UsingStmt &us) override;
 
   void visitIdentExpr(const Expr &expr) override;
   void visitPropAccessExpr(const Expr &expr) override;
@@ -44,6 +45,7 @@ protected:
   void visitObjectExpr(const Expr &expr) override;
   void visitArrayExpr(const Expr &expr) override;
   void visitBinaryExpr(const Expr &expr) override;
+  void visitFuncExprExpr(const Expr &expr) override;
 
 private:
   /// @brief 验证辅助数据结构：类方法名列表 + 变量→类名映射

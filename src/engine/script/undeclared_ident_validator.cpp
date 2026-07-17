@@ -30,6 +30,17 @@ void UndeclaredIdentValidator::collectValidationInfo(const Block &block) {
           QStringList methods;
           for (const auto &m : stmt.classDef.methods) methods.append(m.name);
           m_ctx.classMethods.insert(stmt.classDef.name, methods);
+          m_scopeVars.insert(stmt.classDef.name);
+        }
+        break;
+      case Block::Stmt::kEnumDef:
+        if (!stmt.enumDef.name.isEmpty()) {
+          m_scopeVars.insert(stmt.enumDef.name);
+        }
+        break;
+      case Block::Stmt::kFuncDef:
+        if (!stmt.funcDef.name.isEmpty()) {
+          m_scopeVars.insert(stmt.funcDef.name);
         }
         break;
       case Block::Stmt::kAssign:
@@ -65,6 +76,15 @@ void UndeclaredIdentValidator::visitAssignStmt(const AssignStmt &as) {
   }
   // 变量声明（let x = ...）将 x 加入作用域
   m_scopeVars.insert(as.name);
+}
+
+void UndeclaredIdentValidator::visitUsingStmt(const UsingStmt &us) {
+  if (us.value) visitExpr(*us.value);
+  if (!us.varName.isEmpty() && us.value && us.value->kind == Expr::kNewInstance &&
+      !us.value->className.isEmpty()) {
+    m_ctx.varClass.insert(us.varName, us.value->className);
+  }
+  m_scopeVars.insert(us.varName);
 }
 
 void UndeclaredIdentValidator::visitForStmt(const ForStmt &fs) {
@@ -119,9 +139,10 @@ void UndeclaredIdentValidator::visitReturnStmt(const Expr &retExpr) { visitExpr(
 void UndeclaredIdentValidator::visitExprStmt(const Expr &expr) { visitExpr(expr); }
 
 void UndeclaredIdentValidator::visitImportStmt(const ImportStmt &imp) {
-  // import 语句中的符号名由模块链接器注册，此处无需额外处理
+  // import 语句中的符号名由模块链接器注册，此处使用别名或原始名
   for (const auto &name : imp.names) {
-    m_scopeVars.insert(name);
+    QString localName = imp.aliases.contains(name) ? imp.aliases[name] : name;
+    m_scopeVars.insert(localName);
   }
 }
 
@@ -131,6 +152,7 @@ void UndeclaredIdentValidator::visitImportStmt(const ImportStmt &imp) {
 
 void UndeclaredIdentValidator::visitIdentExpr(const Expr &expr) {
   if (expr.ident.isEmpty()) return;
+  if (expr.ident == QStringLiteral("JSON")) return;
   if (!m_scopeVars.contains(expr.ident)) {
     if (m_errors) {
       m_errors->append(QStringLiteral("undefined variable '%1' at line %2")
@@ -143,7 +165,7 @@ void UndeclaredIdentValidator::visitPropAccessExpr(const Expr &expr) {
   if (expr.propObject) {
     AstVisitor::visitPropAccessExpr(expr);
   } else if (!expr.ident.isEmpty() && expr.ident != QString::fromLatin1(AcKeyword::kThis) &&
-             !m_scopeVars.contains(expr.ident)) {
+             expr.ident != QStringLiteral("JSON") && !m_scopeVars.contains(expr.ident)) {
     if (m_errors) {
       m_errors->append(QStringLiteral("undefined variable '%1' at line %2")
                            .arg(expr.ident, QString::number(expr.line)));
@@ -185,6 +207,7 @@ void UndeclaredIdentValidator::visitMethodCallExpr(const Expr &expr) {
     // 检查对象变量是否已声明（跳过空 objName，链式方法调用时 objName 可能为空）
     if (expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis) &&
         expr.methodCall.objName != QString::fromLatin1(AcKeyword::kSuper) &&
+        expr.methodCall.objName != QStringLiteral("JSON") &&
         !m_scopeVars.contains(expr.methodCall.objName)) {
       if (m_errors) {
         m_errors->append(QStringLiteral("undefined variable '%1' at line %2")
@@ -226,4 +249,14 @@ void UndeclaredIdentValidator::visitArrayExpr(const Expr &expr) {
 
 void UndeclaredIdentValidator::visitBinaryExpr(const Expr &expr) {
   AstVisitor::visitBinaryExpr(expr);
+}
+
+void UndeclaredIdentValidator::visitFuncExprExpr(const Expr &expr) {
+  // 函数表达式：将参数加入作用域，遍历函数体
+  QSet<QString> savedScopeVars = m_scopeVars;
+  for (const auto &param : expr.funcExpr.params) {
+    m_scopeVars.insert(param.name);
+  }
+  visitBlock(expr.funcExpr.body);
+  m_scopeVars = savedScopeVars;
 }
