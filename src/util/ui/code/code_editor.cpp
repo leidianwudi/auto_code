@@ -1,6 +1,6 @@
 /**
  * @file code_editor.cpp
- * @brief 代码编辑器控件实现
+ * @brief 代码编辑器控件实现（重构后）
  */
 
 #include "code_editor.h"
@@ -9,70 +9,79 @@
 #include <QApplication>
 #include <QCompleter>
 #include <QFont>
-#include <QHash>
+#include <QFontDatabase>
 #include <QMenu>
 #include <QPainter>
-#include <QPainterPath>
-#include <QRegularExpression>
 #include <QScrollBar>
 #include <QShortcut>
 #include <QStringListModel>
-#include <QSyntaxHighlighter>
-#include <QTextBlock>
-#include <QTextLayout>
-#include <QTimer>
 #include <QToolTip>
 
 #include "src/engine/json_validator.h"
 #include "src/engine/script/ac_validator.h"
 #include "src/engine/tpl/tpl_validator.h"
+#include "src/util/common/code_constants.h"
 #include "src/util/ui/code/format_code.h"
 #include "src/util/ui/component/aui_error_tool_tip.h"
 #include "src/util/ui/component/aui_style.h"
 
 // ──────────────────────────────────────────────────────────────
-//  构造与初始化
+//  构造与初始化（精简后）
 // ──────────────────────────────────────────────────────────────
 
 CodeEditor::CodeEditor(QWidget *parent) : QPlainTextEdit(parent) {
-  // 启用鼠标追踪（不按下按键也能接收 mouseMoveEvent）
   setMouseTracking(true);
 
-  // 创建行号区域
   m_lineNumberArea = new LineNumberArea(this);
 
-  // 连接信号槽
   connect(this, &QPlainTextEdit::blockCountChanged, this, &CodeEditor::updateLineNumberAreaWidth);
   connect(this, &QPlainTextEdit::updateRequest, this, &CodeEditor::updateLineNumberArea);
   connect(this, &QPlainTextEdit::cursorPositionChanged, this, &CodeEditor::highlightCurrentLine);
 
-  // 初始化验证防抖定时器
-  m_validationTimer.setSingleShot(true);
-  m_validationTimer.setInterval(500);
-  connect(&m_validationTimer, &QTimer::timeout, this, &CodeEditor::performValidation);
-
-  // 初始化悬停提示防抖定时器
-  m_hoverTimer.setSingleShot(true);
-  m_hoverTimer.setInterval(500);
-
-  // 初始设置
   updateLineNumberAreaWidth(0);
   highlightCurrentLine();
 
-  // 设置等宽字体
+  // 使用常量配置
   QFont font = QFontDatabase::systemFont(QFontDatabase::FixedFont);
-  font.setPointSize(10);
+  font.setPointSize(CodeConstants::Editor::kDefaultFontSize);
   setFont(font);
 
-  // 设置 Tab 宽度
-  setTabStopDistance(fontMetrics().horizontalAdvance(QLatin1Char(' ')) * 4);
+  setTabStopDistance(fontMetrics().horizontalAdvance(QLatin1Char(' ')) *
+                     CodeConstants::Editor::kTabWidthSpaces);
 
   // 禁用自动换行，启用水平滚动条
   setLineWrapMode(QPlainTextEdit::NoWrap);
   setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
-  // 默认启用括号匹配
   setExtraSelections(QList<QTextEdit::ExtraSelection>());
+
+  // 初始化悬停定时器
+  m_hoverTimer = new QTimer(this);
+  m_hoverTimer->setSingleShot(true);
+  m_hoverTimer->setInterval(CodeConstants::Performance::kHoverDebounceMs);
+
+  // 初始化验证定时器
+  m_validationTimer = new QTimer(this);
+  m_validationTimer->setSingleShot(true);
+  m_validationTimer->setInterval(CodeConstants::Performance::kValidationDebounceMs);
+  connect(m_validationTimer, &QTimer::timeout, this, &CodeEditor::performValidation);
+}
+
+CodeEditor::~CodeEditor() {
+  // 析构时清理资源（如果有动态分配的对象）
+}
+
+// ──────────────────────────────────────────────────────────────
+//  性能优化：文本缓存
+// ──────────────────────────────────────────────────────────────
+
+const QString &CodeEditor::cachedText() const {
+  // 检查文档是否已更改（通过版本号检测）
+  if (document()->revision() != m_cacheVersion) {
+    m_cachedText = toPlainText();
+    m_cacheVersion = document()->revision();
+  }
+  return m_cachedText;
 }
 
 void CodeEditor::setValidationMode(ValidationMode mode) {
@@ -87,7 +96,7 @@ void CodeEditor::validate() { performValidation(); }
 
 void CodeEditor::scheduleValidation() {
   if (m_validationMode == NoValidation) return;
-  m_validationTimer.start();
+  m_validationTimer->start();
 }
 
 void CodeEditor::performValidation() {
@@ -137,7 +146,7 @@ void CodeEditor::performValidation() {
 // ──────────────────────────────────────────────────────────────
 
 void CodeEditor::validateWithValidator(IValidator *validator) {
-  QString text = toPlainText();
+  const QString &text = cachedText();
   if (text.trimmed().isEmpty()) return;
 
   QVector<ValidationResult> results = validator->validate(text);
@@ -352,105 +361,8 @@ void CodeEditor::hideErrorTooltip() {
 }
 
 // ──────────────────────────────────────────────────────────────
-//  当前行高亮 + 括号匹配（P0-P3 完整实现）
+//  当前行高亮 + 括号匹配（使用 BracketMatcher 模块）
 // ──────────────────────────────────────────────────────────────
-
-bool CodeEditor::isInStringOrComment(int pos) const {
-  QString text = toPlainText();
-  QHash<int, bool> cache;
-  return isInStringOrComment(pos, text, cache);
-}
-
-bool CodeEditor::isInStringOrComment(int pos, const QString &text, QHash<int, bool> &cache) const {
-  if (pos < 0 || pos > text.size()) return false;
-
-  auto it = cache.find(pos);
-  if (it != cache.end()) return it.value();
-
-  QTextBlock block = document()->findBlock(pos);
-  QString blockText = block.text();
-  int blockStart = block.position();
-  int localPos = pos - blockStart;
-
-  int lineCommentPos = blockText.indexOf(QLatin1String("//"));
-  if (lineCommentPos != -1 && localPos >= lineCommentPos) {
-    for (int i = localPos; i < blockText.size(); ++i) {
-      cache[blockStart + i] = true;
-    }
-    return true;
-  }
-
-  bool inSingleQuote = false;
-  bool inDoubleQuote = false;
-  bool inTemplateLiteral = false;
-
-  for (int i = 0; i <= localPos && i < blockText.size(); ++i) {
-    QChar ch = blockText[i];
-    QChar prevCh = (i > 0) ? blockText[i - 1] : QChar();
-
-    if (ch == QLatin1Char('\'') && !inDoubleQuote && !inTemplateLiteral &&
-        prevCh != QLatin1Char('\\')) {
-      inSingleQuote = !inSingleQuote;
-    } else if (ch == QLatin1Char('"') && !inSingleQuote && !inTemplateLiteral &&
-               prevCh != QLatin1Char('\\')) {
-      inDoubleQuote = !inDoubleQuote;
-    } else if (ch == QLatin1Char('`') && !inSingleQuote && !inDoubleQuote &&
-               prevCh != QLatin1Char('\\')) {
-      inTemplateLiteral = !inTemplateLiteral;
-    }
-
-    bool result = (inSingleQuote || inDoubleQuote || inTemplateLiteral);
-    cache[blockStart + i] = result;
-  }
-
-  bool finalResult = (inSingleQuote || inDoubleQuote || inTemplateLiteral);
-  return finalResult;
-}
-
-int CodeEditor::findMatchingBracket(int pos, QChar bracket, QChar &matchBracket) const {
-  QString text = toPlainText();
-  QHash<int, bool> cache;
-  return findMatchingBracket(pos, bracket, matchBracket, text, cache);
-}
-
-int CodeEditor::findMatchingBracket(int pos, QChar bracket, QChar &matchBracket,
-                                    const QString &text, QHash<int, bool> &cache) const {
-  matchBracket = QChar::Null;
-
-  static const QHash<QChar, QChar> bracketPairs = {
-      {QLatin1Char('('), QLatin1Char(')')}, {QLatin1Char(')'), QLatin1Char('(')},
-      {QLatin1Char('['), QLatin1Char(']')}, {QLatin1Char(']'), QLatin1Char('[')},
-      {QLatin1Char('{'), QLatin1Char('}')}, {QLatin1Char('}'), QLatin1Char('{')}};
-
-  auto it = bracketPairs.find(bracket);
-  if (it == bracketPairs.end()) return -1;
-
-  matchBracket = it.value();
-
-  if (isInStringOrComment(pos - 1, text, cache)) return -1;
-
-  bool forward =
-      (bracket == QLatin1Char('(') || bracket == QLatin1Char('[') || bracket == QLatin1Char('{'));
-
-  int depth = 1;
-  int searchStart = forward ? pos : pos - 2;
-  int searchEnd = forward ? text.size() : -1;
-  int step = forward ? 1 : -1;
-
-  for (int i = searchStart; i != searchEnd; i += step) {
-    if (isInStringOrComment(i, text, cache)) continue;
-
-    QChar currentChar = text[i];
-    if (currentChar == bracket) {
-      ++depth;
-    } else if (currentChar == matchBracket) {
-      --depth;
-      if (depth == 0) return i;
-    }
-  }
-
-  return -1;
-}
 
 void CodeEditor::highlightCurrentLine() {
   QList<QTextEdit::ExtraSelection> extra;
@@ -467,159 +379,47 @@ void CodeEditor::highlightCurrentLine() {
   QTextCursor cursor = textCursor();
   if (!cursor.hasSelection()) {
     int pos = cursor.position();
-    QString text = toPlainText();
+    const QString &text = cachedText();
 
-    static const QString kBrackets = QStringLiteral("()[]{}");
+    // 使用 BracketMatcher 进行括号匹配
+    auto directMatch = BracketMatcher::findMatchAtCursor(pos, text);
+    auto enclosingMatch =
+        (directMatch.isValid()) ? directMatch : BracketMatcher::findEnclosingBrackets(pos, text);
 
-    int bracketPos = -1;
-    QChar bracketChar;
-
-    for (int offset = 0; offset <= 1; ++offset) {
-      int checkPos = pos - 1 + offset;
-      if (checkPos >= 0 && checkPos < text.size()) {
-        QChar ch = text[checkPos];
-        if (kBrackets.contains(ch)) {
-          bracketPos = checkPos + 1;
-          bracketChar = ch;
-          break;
-        }
-      }
-    }
-
-    QHash<int, bool> strCommentCache;
-
-    if (bracketPos == -1) {
-      struct BracketPair {
-        int openPos;
-        int closePos;
-        QChar openChar;
-        int distance;
-      };
-
-      QVector<BracketPair> candidates;
-
-      static const QPair<QChar, QChar> kBracketTypes[] = {{QLatin1Char('('), QLatin1Char(')')},
-                                                          {QLatin1Char('['), QLatin1Char(']')},
-                                                          {QLatin1Char('{'), QLatin1Char('}')}};
-
-      for (const auto &pair : kBracketTypes) {
-        QChar openCh = pair.first;
-        QChar closeCh = pair.second;
-
-        QVector<int> openStack;
-        int openBrace = -1;
-        int closeBrace = -1;
-
-        for (int i = 0; i < text.size(); ++i) {
-          if (isInStringOrComment(i, text, strCommentCache)) continue;
-
-          QChar ch = text[i];
-          if (ch == openCh) {
-            openStack.append(i);
-          } else if (ch == closeCh) {
-            if (!openStack.isEmpty()) {
-              int openPos = openStack.takeLast();
-              int closePos = i;
-
-              if (openPos < pos && closePos >= pos) {
-                openBrace = openPos;
-                closeBrace = closePos;
-                break;
-              }
-            }
-          }
-        }
-
-        if (openBrace >= 0 && closeBrace >= 0) {
-          BracketPair bp;
-          bp.openPos = openBrace;
-          bp.closePos = closeBrace;
-          bp.openChar = openCh;
-          bp.distance = (pos - openBrace) + (closeBrace - pos);
-          candidates.append(bp);
-        }
-      }
-
-      if (!candidates.isEmpty()) {
-        BracketPair best = candidates[0];
-        for (int i = 1; i < candidates.size(); ++i) {
-          if (candidates[i].distance < best.distance) {
-            best = candidates[i];
-          }
-        }
-
-        QColor highlightColor = AuiStyle::bracketColorForChar(best.openChar);
-
-        QTextEdit::ExtraSelection sel1;
-        sel1.cursor = cursor;
-        sel1.cursor.setPosition(best.openPos);
-        sel1.cursor.setPosition(best.openPos + 1, QTextCursor::KeepAnchor);
-        sel1.format.setBackground(highlightColor);
-        sel1.format.setFontWeight(QFont::Bold);
-        extra.append(sel1);
-
-        QTextEdit::ExtraSelection sel2;
-        sel2.cursor = cursor;
-        sel2.cursor.setPosition(best.closePos);
-        sel2.cursor.setPosition(best.closePos + 1, QTextCursor::KeepAnchor);
-        sel2.format.setBackground(highlightColor);
-        sel2.format.setFontWeight(QFont::Bold);
-        extra.append(sel2);
-      }
-    } else if (bracketPos > 0) {
-      QChar matchCh;
-      int matchPos = findMatchingBracket(bracketPos, bracketChar, matchCh, text, strCommentCache);
-
-      QColor highlightColor = AuiStyle::bracketColorForChar(bracketChar);
+    if (enclosingMatch.isValid()) {
+      QColor color = AuiStyle::bracketColorForChar(enclosingMatch.openChar);
 
       QTextEdit::ExtraSelection sel1;
       sel1.cursor = cursor;
-      sel1.cursor.setPosition(bracketPos - 1);
-      sel1.cursor.setPosition(bracketPos, QTextCursor::KeepAnchor);
+      sel1.cursor.setPosition(enclosingMatch.openPos);
+      sel1.cursor.setPosition(enclosingMatch.openPos + 1, QTextCursor::KeepAnchor);
+      sel1.format.setBackground(color);
+      sel1.format.setFontWeight(QFont::Bold);
+      extra.append(sel1);
 
-      if (matchPos >= 0) {
-        sel1.format.setBackground(highlightColor);
-        sel1.format.setFontWeight(QFont::Bold);
-        extra.append(sel1);
-
-        QTextEdit::ExtraSelection sel2;
-        sel2.cursor = cursor;
-        sel2.cursor.setPosition(matchPos);
-        sel2.cursor.setPosition(matchPos + 1, QTextCursor::KeepAnchor);
-        sel2.format.setBackground(highlightColor);
-        sel2.format.setFontWeight(QFont::Bold);
-        extra.append(sel2);
-      } else if (!matchCh.isNull()) {
-        sel1.format.setUnderlineStyle(QTextCharFormat::WaveUnderline);
-        sel1.format.setUnderlineColor(AuiStyle::bracketMismatchColor());
-        extra.append(sel1);
-      }
+      QTextEdit::ExtraSelection sel2;
+      sel2.cursor = cursor;
+      sel2.cursor.setPosition(enclosingMatch.closePos);
+      sel2.cursor.setPosition(enclosingMatch.closePos + 1, QTextCursor::KeepAnchor);
+      sel2.format.setBackground(color);
+      sel2.format.setFontWeight(QFont::Bold);
+      extra.append(sel2);
     }
   }
 
-  if (!extra.isEmpty()) {
-    QList<QTextEdit::ExtraSelection> all = extra;
-    all.append(m_errorSelections);
-    all.append(m_referenceSelections);
-    setExtraSelections(all);
-  } else {
-    QList<QTextEdit::ExtraSelection> all;
-    all.append(m_errorSelections);
-    all.append(m_referenceSelections);
-    setExtraSelections(all);
-  }
+  setExtraSelections(extra);
 }
 
 void CodeEditor::jumpToMatchingBracket() {
   QTextCursor cursor = textCursor();
   int pos = cursor.position();
-  QString text = toPlainText();
+  const QString &text = cachedText();
 
   if (pos <= 0 || pos > text.size()) return;
 
   QChar ch = text[pos - 1];
   QChar matchCh;
-  int matchPos = findMatchingBracket(pos, ch, matchCh);
+  int matchPos = BracketMatcher::findMatchingBracket(pos, ch, matchCh, text);
 
   if (matchPos >= 0) {
     cursor.setPosition(matchPos);
@@ -630,13 +430,13 @@ void CodeEditor::jumpToMatchingBracket() {
 void CodeEditor::selectBetweenBrackets() {
   QTextCursor cursor = textCursor();
   int pos = cursor.position();
-  QString text = toPlainText();
+  const QString &text = cachedText();
 
   if (pos <= 0 || pos > text.size()) return;
 
   QChar ch = text[pos - 1];
   QChar matchCh;
-  int matchPos = findMatchingBracket(pos, ch, matchCh);
+  int matchPos = BracketMatcher::findMatchingBracket(pos, ch, matchCh, text);
 
   if (matchPos >= 0) {
     int start = qMin(pos - 1, matchPos);
@@ -864,7 +664,7 @@ void CodeEditor::contextMenuEvent(QContextMenuEvent *event) {
 }
 
 void CodeEditor::formatCode() {
-  QString src = toPlainText();
+  const QString &src = cachedText();
   FormatCode::FormatMode mode;
 
   switch (m_validationMode) {
@@ -900,7 +700,7 @@ void CodeEditor::formatCode() {
 // ──────────────────────────────────────────────────────────────
 
 QString CodeEditor::identifierAtCursor(int pos, int *startPos, int *endPos) const {
-  QString text = toPlainText();
+  const QString &text = cachedText();
   if (pos < 0 || pos >= text.size()) {
     if (startPos) *startPos = pos;
     if (endPos) *endPos = pos;
@@ -943,33 +743,8 @@ QString CodeEditor::identifierAtCursor(int pos, int *startPos, int *endPos) cons
 const AcSymbolEntry *CodeEditor::findSymbolDefinition(const QString &name) const {
   if (name.isEmpty()) return nullptr;
 
-  // 精确匹配
-  auto it = m_symbolTable.find(name);
-  if (it != m_symbolTable.end()) return &it.value();
-
-  // 静态访问匹配：ClassName::member -> 尝试 ClassName.member
-  if (name.contains(QStringLiteral("::"))) {
-    QString key = name;
-    key.replace(QStringLiteral("::"), QStringLiteral("."));
-    auto it3 = m_symbolTable.find(key);
-    if (it3 != m_symbolTable.end()) return &it3.value();
-
-    // 也尝试只匹配类名
-    QString className = name.section(QStringLiteral("::"), 0, 0);
-    auto it4 = m_symbolTable.find(className);
-    if (it4 != m_symbolTable.end()) return &it4.value();
-  }
-
-  // 类方法/属性匹配：同名方法/属性/参数
-  for (auto it2 = m_symbolTable.begin(); it2 != m_symbolTable.end(); ++it2) {
-    if (it2.value().name == name &&
-        (it2.value().kind == AcSymbolKind::kMethod || it2.value().kind == AcSymbolKind::kProperty ||
-         it2.value().kind == AcSymbolKind::kParameter)) {
-      return &it2.value();
-    }
-  }
-
-  return nullptr;
+  // 使用 SymbolNavigator 进行查找
+  return m_symbolNavigator.findDefinition(name);
 }
 
 void CodeEditor::goToDefinition(const QString &name) {
@@ -1008,7 +783,7 @@ void CodeEditor::goToDefinition(const QString &name) {
 }
 
 int CodeEditor::findSymbolLineByName(const QString &name) const {
-  QString text = toPlainText();
+  const QString &text = cachedText();
   QStringList lines = text.split(QLatin1Char('\n'));
 
   // 搜索 "function name" 或 "class name" 或 "interface name" 等模式
@@ -1043,7 +818,7 @@ QVector<QPair<int, QString>> CodeEditor::findSymbolReferences(const QString &nam
   if (name.isEmpty()) return refs;
 
   // 扫描全文查找标识符出现位置
-  QString text = toPlainText();
+  const QString &text = cachedText();
   QStringList lines = text.split(QLatin1Char('\n'));
   QRegularExpression re(QStringLiteral("\\b") + QRegularExpression::escape(name) +
                         QStringLiteral("\\b"));
@@ -1107,7 +882,7 @@ void CodeEditor::highlightSymbolReferences(const QString &name) {
 
   QRegularExpression re(QStringLiteral("\\b") + QRegularExpression::escape(name) +
                         QStringLiteral("\\b"));
-  QString text = toPlainText();
+  const QString &text = cachedText();
   int offset = 0;
 
   while (offset < text.size()) {
@@ -1152,15 +927,15 @@ void CodeEditor::mouseMoveEvent(QMouseEvent *event) {
 
   // 悬停提示（不需要 Ctrl，始终显示）
   if (!identifier.isEmpty()) {
-    m_hoverTimer.stop();
+    m_hoverTimer->stop();
     QPoint gpos = event->globalPosition().toPoint();
-    m_hoverTimer.start();
-    disconnect(&m_hoverTimer, &QTimer::timeout, this, nullptr);
-    connect(&m_hoverTimer, &QTimer::timeout, this,
+    m_hoverTimer->start();
+    disconnect(m_hoverTimer, &QTimer::timeout, this, nullptr);
+    connect(m_hoverTimer, &QTimer::timeout, this,
             [this, pos, gpos]() { showSymbolHover(pos, gpos); });
   } else {
     m_currentHoverSymbol.clear();
-    m_hoverTimer.stop();
+    m_hoverTimer->stop();
     QToolTip::hideText();
   }
 }

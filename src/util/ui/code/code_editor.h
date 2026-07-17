@@ -1,215 +1,185 @@
 /**
  * @file code_editor.h
- * @brief 代码编辑器控件
+ * @brief 代码编辑器控件（重构后）
  *
- * 基于 QPlainTextEdit 的增强编辑器，提供：
- * - 行号显示
- * - 当前行高亮
- * - 括号匹配高亮
- * - 语法验证（JSON / 模板标签 / AC 脚本）
+ * 基于 QPlainTextEdit 的增强编辑器，
+ * 通过组合模式集成以下专职模块：
+ * - BracketMatcher: 括号匹配算法
+ * - CodeValidator: 语法验证逻辑
+ * - SymbolNavigator: 符号导航功能
+ *
+ * 核心职责：
+ * - UI 显示（行号、高亮、布局管理）
+ * - 用户交互（键盘、鼠标事件处理）
+ * - 组件协调（调用各模块完成具体功能）
  */
 
 #pragma once
 
+#include <QCompleter>
+#include <QHash>
+#include <QPainterPath>
 #include <QPlainTextEdit>
 #include <QPointer>
+#include <QRegularExpression>
 #include <QSet>
 #include <QString>
+#include <QTextBlock>
 #include <QTimer>
 #include <QVector>
+
+#include "bracket_matcher.h"
+#include "code_validator.h"
+#include "symbol_navigator.h"
 
 class QPaintEvent;
 class QResizeEvent;
 class QWidget;
-class QCompleter;
 class AuiErrorToolTip;  ///< 自定义可选中/复制的错误提示弹窗
-class IValidator;       ///< 统一验证器接口
-struct AcSymbolEntry;   ///< AC 符号表条目
 
 /**
  * @class CodeEditor
- * @brief 增强的代码编辑器控件
+ * @brief 增强的代码编辑器控件（重构后）
  *
- * 基于 QPlainTextEdit，提供以下增强功能：
- * - 行号显示（左侧行号区域，错误行号显示红色）
- * - 当前行高亮（淡黄色背景）
- * - 括号匹配高亮（青色背景，支持 () [] {}）
- * - 实时语法验证（JSON / 模板标签 / AC 脚本，带 500ms 防抖）
- * - 错误波浪下划线（红色波浪线 + Tooltip）
+ * 职责分离后的轻量级编辑器类：
+ * ✅ UI 显示和布局（行号区域、高亮）
+ * ✅ 事件分发和处理
+ * ✅ 文本缓存和性能优化
+ * ❌ 括号匹配 → 委托给 BracketMatcher
+ * ❌ 语法验证 → 委托给 CodeValidator
+ * ❌ 符号导航 → 委托给 SymbolNavigator
  */
 class CodeEditor : public QPlainTextEdit {
   Q_OBJECT
 
 public:
-  /// 验证模式枚举
+  /// 验证模式枚举（兼容旧接口）
   enum ValidationMode {
     NoValidation,        ///< 不做验证
-    JsonValidation,      ///< JSON 语法验证（使用 QJsonDocument）
+    JsonValidation,      ///< JSON 语法验证
     TemplateValidation,  ///< 模板标签 + 括号匹配验证
-    AcValidation         ///< AC 脚本语法验证（使用 AcExecutor）
+    AcValidation         ///< AC 脚本语法验证
   };
 
   explicit CodeEditor(QWidget *parent = nullptr);
+  ~CodeEditor();
 
-  /// 设置验证模式，切换后立即执行一次验证
+  // ── 接口：验证相关 ──
+
   void setValidationMode(ValidationMode mode);
-  /// 手动触发一次验证（同步执行，立即发出 validationMessage 信号）
   void validate();
-
-  /// @brief 自动排版代码（根据当前验证模式选择格式器）
   void formatCode();
 
-  /// 绘制行号区域（由 LineNumberArea 委托调用）
+  // ── 接口：行号显示 ──
+
   void lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area);
-  /// 计算行号区域宽度（根据行数动态计算）
   int lineNumberAreaWidth() const;
 
+  // ── 性能优化：文本缓存 ──
+
+  /**
+   * @brief 获取缓存的文本内容（避免重复 toPlainText() 调用）
+   * @return 文本内容的常量引用
+   */
+  const QString &cachedText() const;
+
 signals:
-  /**
-   * @brief 验证结果信号
-   * @param message 错误信息，无错误时为空字符串
-   * @param errorCount 错误数量，无错误时为 0
-   */
   void validationMessage(const QString &message, int errorCount = 0);
-
-  /**
-   * @brief 跳转到文件指定行
-   * @param filePath 文件路径
-   * @param line 行号（1-based）
-   */
   void requestGoToLine(const QString &filePath, int line);
-
-  /**
-   * @brief 即将执行导航跳转（用于记录导航历史）
-   * @param targetFilePath 目标文件路径
-   * @param targetLine 目标行号
-   */
   void aboutToNavigate(const QString &targetFilePath, int targetLine);
-
-  /**
-   * @brief 查找引用结果
-   * @param filePath 文件路径
-   * @param line 行号
-   * @param context 上下文行文本
-   */
   void requestFindReferences(const QString &filePath, int line, const QString &context);
 
 protected:
   void resizeEvent(QResizeEvent *event) override;
-  /// 自定义绘制：在标准绘制后，额外绘制超粗红色波浪线（覆盖默认细波浪线）
   void paintEvent(QPaintEvent *event) override;
-  /// 处理视口事件（ToolTip 显示错误提示 + 悬停符号提示）
   bool viewportEvent(QEvent *event) override;
-  /// 按键事件：Enter 自动缩进 + F12 跳转
   void keyPressEvent(QKeyEvent *event) override;
-  /// 右键菜单：增加「格式化代码」「转到定义」「查找引用」等
   void contextMenuEvent(QContextMenuEvent *event) override;
-  /// 鼠标移动事件：悬停符号提示
   void mouseMoveEvent(QMouseEvent *event) override;
-  /// 鼠标释放事件：Ctrl+点击跳转
   void mouseReleaseEvent(QMouseEvent *event) override;
 
 private slots:
-  /// 行数变化时重新计算行号区域宽度
   void updateLineNumberAreaWidth(int newBlockCount);
-  /// 刷新当前行高亮
   void highlightCurrentLine();
-  /// 更新行号区域（滚动或重绘）
   void updateLineNumberArea(const QRect &rect, int dy);
-  /// 延迟触发验证（防抖入口）
   void scheduleValidation();
-  /// 执行验证
   void performValidation();
-  /// 用户选择补全项后的回调
   void insertCompletion(const QString &completion);
 
 private:
-  /// 刷新 ExtraSelection 列表（行高亮 + 括号匹配 + 错误标记 + 符号高亮）
+  // ── UI 相关 ──
   void refreshExtraSelections();
-  /// 使用统一的 IValidator 接口执行验证
-  void validateWithValidator(IValidator *validator);
-  /// 将错误区间应用到 ExtraSelection 并标记红色波浪下划线
-  void applyErrorUnderline(int from, int length, const QString &tooltip,
-                           QList<QTextEdit::ExtraSelection> &selections);
-  /// 显示自定义错误提示弹窗（可选中/复制）
   void showErrorTooltip(const QPoint &pos, const QString &text);
-  /// 隐藏自定义错误提示弹窗
   void hideErrorTooltip();
-
-  /// @brief 计算新行需要的缩进空格数
-  /// @param currentLineText 当前行光标前的文本
-  /// @return 缩进空格数
   int calculateNewLineIndent(const QString &linePrefix) const;
 
-  /// @brief 根据验证模式初始化（或销毁）代码补全器
+  // ── 补全相关 ──
   void initCompleter(ValidationMode mode);
-
-  /// @brief 弹出代码补全建议列表
   void showCompleter();
 
-  /// @brief 获取光标下的标识符文本
-  QString identifierAtCursor(int pos, int *startPos = nullptr, int *endPos = nullptr) const;
+  // ── 验证相关（委托给 CodeValidator）──
+  void validateWithValidator(IValidator *validator);
 
-  /// @brief 查找符号定义
-  const AcSymbolEntry *findSymbolDefinition(const QString &name) const;
-
-  /// @brief 跳转到符号定义位置
+  // ── 导航快捷方法（委托给各模块）──
   void goToDefinition(const QString &name);
-
-  /// @brief 通过源码搜索定位符号行号（当 AST 行号不可用时）
-  int findSymbolLineByName(const QString &name) const;
-
-  /// @brief 查找符号的所有引用位置
+  QString identifierAtCursor(int pos, int *startPos = nullptr, int *endPos = nullptr) const;
+  const AcSymbolEntry *findSymbolDefinition(const QString &name) const;
   QVector<QPair<int, QString>> findSymbolReferences(const QString &name) const;
-
-  /// @brief 显示悬停符号提示
-  void showSymbolHover(int pos, const QPoint &globalPos);
-
-  /// @brief 高亮当前符号的所有引用
-  void highlightSymbolReferences(const QString &name);
-
-  /// @brief 设置符号表（由外部调用，传入符号表数据）
+  int findSymbolLineByName(const QString &name) const;
   void setSymbolTable(const QHash<QString, AcSymbolEntry> &symbols);
 
-  /// @brief 获取当前文件的 AC 执行器（用于符号表访问）
-  class AcExecutor *acExecutor() const;
-
-  /// @brief 判断位置是否在字符串或注释中（P1: 字符串/注释过滤）
-  bool isInStringOrComment(int pos) const;
-  bool isInStringOrComment(int pos, const QString &text, QHash<int, bool> &cache) const;
-
-  /// @brief 查找匹配的括号位置（P1: 性能优化 + P3: 颜色区分）
-  int findMatchingBracket(int pos, QChar bracket, QChar &matchBracket) const;
-  int findMatchingBracket(int pos, QChar bracket, QChar &matchBracket, const QString &text,
-                          QHash<int, bool> &cache) const;
-
-  /// @brief 跳转到匹配括号位置（P2: 快捷键功能）
+  // ── 括号导航（使用 BracketMatcher 模块）──
   void jumpToMatchingBracket();
-
-  /// @brief 选中两个匹配括号之间的所有内容（P2: 快捷键功能）
   void selectBetweenBrackets();
 
-  ValidationMode m_validationMode = NoValidation;
-  QTimer m_validationTimer;                                ///< 验证防抖定时器（500ms）
-  QTimer m_hoverTimer;                                     ///< 悬停提示防抖定时器（500ms）
-  QList<QTextEdit::ExtraSelection> m_errorSelections;      ///< 持久化的错误标记
-  QList<QTextEdit::ExtraSelection> m_referenceSelections;  ///< 符号引用高亮
-  QSet<int> m_errorLines;                                  ///< 有错误的行号集合
-  QWidget *m_lineNumberArea;                               ///< 行号显示区域
-  QPointer<AuiErrorToolTip> m_errorTooltip;                ///< 自定义错误提示弹窗
-  QPointer<AuiErrorToolTip> m_hoverTooltip;                ///< 悬停符号提示弹窗
-  QCompleter *m_completer = nullptr;                       ///< 代码补全器
-  QString m_currentHoverSymbol;                            ///< 当前悬停的符号名
-  QHash<QString, AcSymbolEntry> m_symbolTable;             ///< 符号表数据
+  // ── 符号高亮（用于查找引用）──
+  void highlightSymbolReferences(const QString &name);
 
-  /// 错误位置列表（用于 paintEvent 自定义绘制，避免 cursor 失效）
+  // ── 错误处理（委托给 CodeValidator）──
+  void applyErrorUnderline(int start, int length, const QString &tooltip,
+                           QList<QTextEdit::ExtraSelection> &selections);
+
+  // ── 悬停提示（使用 SymbolNavigator）──
+  void showSymbolHover(int pos, const QPoint &gpos);
+
+  // ── 成员变量（精简后）──
+
+  ValidationMode m_validationMode = NoValidation;
+
+  // 专职模块（组合模式）
+  BracketMatcher m_bracketMatcher;    ///< 括号匹配器
+  CodeValidator m_codeValidator;      ///< 代码验证器
+  SymbolNavigator m_symbolNavigator;  ///< 符号导航器
+
+  // 符号表（用于补全和导航）
+  QHash<QString, AcSymbolEntry> m_symbolTable;  ///< 当前文件的符号表
+
+  // UI 组件
+  QWidget *m_lineNumberArea = nullptr;       ///< 行号显示区域
+  QCompleter *m_completer = nullptr;         ///< 代码补全器
+  QPointer<AuiErrorToolTip> m_errorTooltip;  ///< 错误提示弹窗
+
+  // 性能优化：文本缓存
+  mutable QString m_cachedText;     ///< 缓存的文本内容
+  mutable int m_cacheVersion = -1;  ///< 文档版本号（用于失效检测）
+
+  // 错误标记（从 CodeValidator 同步）
+  QList<QTextEdit::ExtraSelection> m_errorSelections;
+  QList<QTextEdit::ExtraSelection> m_referenceSelections;  ///< 引用高亮标记
+  QSet<int> m_errorLines;
+
+  // 悬停提示相关
+  QTimer *m_hoverTimer = nullptr;       ///< 悬停防抖定时器
+  QTimer *m_validationTimer = nullptr;  ///< 验证防抖定时器
+  QString m_currentHoverSymbol;         ///< 当前悬停的符号名
+
   struct ErrorRange {
-    int start;        ///< 起始位置
-    int length;       ///< 长度
-    QString tooltip;  ///< 错误提示文本
+    int start;
+    int length;
+    QString tooltip;
     ErrorRange(int s, int l, const QString &t) : start(s), length(l), tooltip(t) {}
   };
-  QVector<ErrorRange> m_errorRanges;  ///< 所有错误的位置范围
+  QVector<ErrorRange> m_errorRanges;
 };
 
 /**

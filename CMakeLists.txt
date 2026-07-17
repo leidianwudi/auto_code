@@ -73,8 +73,14 @@ qt_add_executable(auto_code
     src/util/common/util_file.cpp
     src/util/ui/code/tree_dir.h
     src/util/ui/code/tree_dir.cpp
+    src/util/ui/code/bracket_matcher.h
+    src/util/ui/code/bracket_matcher.cpp
+    src/util/ui/code/code_validator.h
+    src/util/ui/code/code_validator.cpp
     src/util/ui/code/code_editor.h
     src/util/ui/code/code_editor.cpp
+    src/util/ui/code/symbol_navigator.h
+    src/util/ui/code/symbol_navigator.cpp
     src/util/ui/code/code_log.h
     src/util/ui/code/code_log.cpp
     src/util/ui/highlighter/light_color.h
