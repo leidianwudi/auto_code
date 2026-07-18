@@ -70,11 +70,13 @@ private:
   QJsonValue evalUnary(const Expr &expr);
   QJsonValue evalMethodCall(const Expr &expr);
   QJsonValue evalNewInstance(const Expr &expr);
-  QJsonValue callBuiltin(const QString &name, const QVector<Expr *> &args, int line);
+  QJsonValue callBuiltin(const QString &name, const std::vector<std::unique_ptr<Expr>> &args,
+                         int line);
   QJsonValue evalStringBuiltin(const QString &obj, const QString &method,
-                               const QVector<Expr *> &args, int line);
+                               const std::vector<std::unique_ptr<Expr>> &args, int line);
   QJsonValue evalArrayBuiltin(const QJsonArray &arr, const QString &method,
-                              const QVector<Expr *> &args, int line, QJsonValue &modifiedArr);
+                              const std::vector<std::unique_ptr<Expr>> &args, int line,
+                              QJsonValue &modifiedArr);
 
   // ── 变量操作 ──
   QJsonValue resolveVar(const QString &name) const;

@@ -5,6 +5,9 @@
 
 #pragma once
 
+#include <utility>
+#include <vector>
+
 #include "ac_lexer.h"
 #include "ac_type.h"
 
@@ -27,6 +30,11 @@ private:
   bool match(TokenType t);
   bool expect(TokenType t, const QString &msg);
   bool isPropertyName(TokenType t) const;
+
+  // ── 二元运算解析辅助（模板化，消除重复代码） ──
+  using ParseNextFn = bool (AcParser::*)(Expr &);
+  template <ParseNextFn parseNext>
+  bool parseBinary(Expr &expr, const std::vector<std::pair<TokenType, Expr::BinaryOp>> &ops);
 
   // ── 语法分析（递归下降） ──
   bool parseProgram(Block &block);

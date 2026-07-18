@@ -90,11 +90,11 @@ void AcTypeChecker::checkStmt(const Block::Stmt &stmt, TypeEnv &env) {
       checkBlock(stmt.ifStmt.thenBlock, env);
       if (stmt.ifStmt.elseIfBranch) {
         // 递归检查 else if 链
-        const IfStmt *cur = stmt.ifStmt.elseIfBranch;
+        const IfStmt *cur = stmt.ifStmt.elseIfBranch.get();
         while (cur) {
           checkExpr(cur->condition, env);
           checkBlock(cur->thenBlock, env);
-          cur = cur->elseIfBranch;
+          cur = cur->elseIfBranch.get();
         }
       } else if (stmt.ifStmt.hasElse) {
         checkBlock(stmt.ifStmt.elseBlock, env);
@@ -351,7 +351,7 @@ AcType AcTypeChecker::checkExpr(const Expr &expr, const TypeEnv &env) {
     case Expr::kArray: {
       // 推导数组元素类型：取所有元素的最小公共类型
       AcType elemType = AcType::any();
-      for (const auto *item : expr.arrItems) {
+      for (const auto &item : expr.arrItems) {
         AcType itemType = checkExpr(*item, env);
         if (elemType.kind == AcType::kAny && itemType.kind != AcType::kAny) {
           elemType = itemType;
@@ -407,7 +407,7 @@ AcType AcTypeChecker::checkExpr(const Expr &expr, const TypeEnv &env) {
         return func.returnType;
       }
       // 未知函数 — 运行时确定
-      for (auto *arg : expr.funcCall.args) checkExpr(*arg, env);
+      for (const auto &arg : expr.funcCall.args) checkExpr(*arg, env);
       return AcType::any();
     }
 
@@ -455,7 +455,7 @@ AcType AcTypeChecker::checkExpr(const Expr &expr, const TypeEnv &env) {
                         .arg(objType.className, expr.methodCall.methodName),
                     expr.line);
       }
-      for (auto *arg : expr.methodCall.args) checkExpr(*arg, env);
+      for (const auto &arg : expr.methodCall.args) checkExpr(*arg, env);
       return AcType::any();
     }
 
@@ -475,7 +475,7 @@ AcType AcTypeChecker::checkExpr(const Expr &expr, const TypeEnv &env) {
         const ClassDef &cd = (*m_classes)[expr.className];
 
         // 如果是方法调用（有参数列表）
-        if (!expr.funcCall.args.isEmpty()) {
+        if (!expr.funcCall.args.empty()) {
           // 查找静态方法
           for (const auto &method : cd.methods) {
             if (method.isStatic && method.name == expr.prop) {

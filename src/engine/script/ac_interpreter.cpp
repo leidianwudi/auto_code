@@ -144,7 +144,7 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
 
     case Expr::kArray: {
       QJsonArray arr;
-      for (auto *e : expr.arrItems) {
+      for (const auto &e : expr.arrItems) {
         QJsonValue item = evalExpr(*e);
         // 数组持有实例引用时 retain
         retainIfInstance(item);
@@ -199,7 +199,7 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
 
       // 再尝试匹配静态方法（构建参数数组）
       QJsonArray callArgs;
-      for (auto *arg : expr.funcCall.args) {
+      for (const auto &arg : expr.funcCall.args) {
         callArgs.append(evalExpr(*arg));
         if (!m_error->isEmpty()) return QJsonValue();
       }
@@ -632,10 +632,11 @@ void AcInterpreter::collectCycles() {
   }
 }
 
-QJsonValue AcInterpreter::callBuiltin(const QString &name, const QVector<Expr *> &args, int line) {
+QJsonValue AcInterpreter::callBuiltin(const QString &name,
+                                      const std::vector<std::unique_ptr<Expr>> &args, int line) {
   // 统一求值所有参数
   QJsonArray arr;
-  for (auto *a : args) arr.append(evalExpr(*a));
+  for (const auto &a : args) arr.append(evalExpr(*a));
 
   // call() 特殊处理：前两个参数是类名和函数名
   if (name == AcBuiltin::kCall) {
@@ -703,7 +704,7 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
   if (!isChained && !isSuper && expr.methodCall.objName == QStringLiteral("JSON")) {
     const QString &method = expr.methodCall.methodName;
     if (method == QStringLiteral("parse")) {
-      if (expr.methodCall.args.isEmpty()) {
+      if (expr.methodCall.args.empty()) {
         *m_error = QStringLiteral("JSON.parse() requires 1 argument at line %1").arg(expr.line);
         return QJsonValue();
       }
@@ -726,7 +727,7 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
       return QJsonValue();
     }
     if (method == QStringLiteral("stringify")) {
-      if (expr.methodCall.args.isEmpty()) {
+      if (expr.methodCall.args.empty()) {
         *m_error = QStringLiteral("JSON.stringify() requires 1 argument at line %1").arg(expr.line);
         return QJsonValue();
       }
@@ -834,7 +835,7 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
   if (cd.isNative) {
     QJsonArray args;
     args.append(QJsonValue(obj));
-    for (auto *argExpr : expr.methodCall.args) args.append(evalExpr(*argExpr));
+    for (const auto &argExpr : expr.methodCall.args) args.append(evalExpr(*argExpr));
     QJsonValue r = FunMgr::ins().call(className, expr.methodCall.methodName, args);
     QString err = FunMgr::takeError();
     if (!err.isEmpty()) {
@@ -876,7 +877,7 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
 
   if (foundMethod) {
     QJsonArray args;
-    for (auto *argExpr : expr.methodCall.args) args.append(evalExpr(*argExpr));
+    for (const auto &argExpr : expr.methodCall.args) args.append(evalExpr(*argExpr));
     QJsonObject savedModifiedThis = m_modifiedThis;
     QJsonValue result = execMethod(*foundMethod, obj, QJsonValue(args));
     if (!isChained && !isSuper &&
@@ -913,7 +914,7 @@ QJsonValue AcInterpreter::evalNewInstance(const Expr &expr) {
   // 原生类：调用 FunMgr 构造器
   if (cd.isNative) {
     QJsonArray ctorArgs;
-    for (auto *arg : expr.constructorArgs) ctorArgs.append(evalExpr(*arg));
+    for (const auto &arg : expr.constructorArgs) ctorArgs.append(evalExpr(*arg));
     QJsonValue ctorResult =
         FunMgr::ins().call(expr.className, QString::fromLatin1(AcRuntime::kConstructor), ctorArgs);
     if (ctorResult.isObject()) instance = ctorResult.toObject();
@@ -948,7 +949,7 @@ QJsonValue AcInterpreter::evalNewInstance(const Expr &expr) {
   for (const auto &m : cd.methods) {
     if (m.name == QStringLiteral("constructor")) {
       QJsonArray ctorArgs;
-      for (auto *arg : expr.constructorArgs) ctorArgs.append(evalExpr(*arg));
+      for (const auto &arg : expr.constructorArgs) ctorArgs.append(evalExpr(*arg));
       QJsonValue ctorResult = execMethod(m, instance, QJsonValue(ctorArgs));
       if (!m_error->isEmpty()) return QJsonValue();
       // 构造函数可能修改了 this 上的属性，更新 instance
@@ -1522,7 +1523,8 @@ void AcInterpreter::execIfStmt(const IfStmt &ifStmt) {
 }
 
 QJsonValue AcInterpreter::evalStringBuiltin(const QString &obj, const QString &method,
-                                            const QVector<Expr *> &args, int line) {
+                                            const std::vector<std::unique_ptr<Expr>> &args,
+                                            int line) {
   QString err;
   QJsonValue result = AcBuiltinEval::evalStringMethod(*this, obj, method, args, line, err);
   if (!err.isEmpty()) *m_error = err;
@@ -1530,7 +1532,7 @@ QJsonValue AcInterpreter::evalStringBuiltin(const QString &obj, const QString &m
 }
 
 QJsonValue AcInterpreter::evalArrayBuiltin(const QJsonArray &arr, const QString &method,
-                                           const QVector<Expr *> &args, int line,
+                                           const std::vector<std::unique_ptr<Expr>> &args, int line,
                                            QJsonValue &modifiedArr) {
   QString err;
   QJsonValue result =

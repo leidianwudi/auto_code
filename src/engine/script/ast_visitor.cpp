@@ -216,25 +216,25 @@ void AstVisitor::visitIndexAccessExpr(const Expr &expr) {
 }
 
 void AstVisitor::visitFuncCallExpr(const Expr &expr) {
-  for (const auto *arg : expr.funcCall.args) {
+  for (const auto &arg : expr.funcCall.args) {
     if (arg) visitExpr(*arg);
   }
 }
 
 void AstVisitor::visitMethodCallExpr(const Expr &expr) {
-  for (const auto *arg : expr.methodCall.args) {
+  for (const auto &arg : expr.methodCall.args) {
     if (arg) visitExpr(*arg);
   }
 }
 
 void AstVisitor::visitStaticAccessExpr(const Expr &expr) {
-  for (const auto *arg : expr.funcCall.args) {
+  for (const auto &arg : expr.funcCall.args) {
     if (arg) visitExpr(*arg);
   }
 }
 
 void AstVisitor::visitNewInstanceExpr(const Expr &expr) {
-  for (const auto *arg : expr.constructorArgs) {
+  for (const auto &arg : expr.constructorArgs) {
     if (arg) visitExpr(*arg);
   }
 }
@@ -246,7 +246,7 @@ void AstVisitor::visitObjectExpr(const Expr &expr) {
 }
 
 void AstVisitor::visitArrayExpr(const Expr &expr) {
-  for (const auto *item : expr.arrItems) {
+  for (const auto &item : expr.arrItems) {
     if (item) visitExpr(*item);
   }
 }

@@ -200,7 +200,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
       }
       // else if 链
       if (stmt.ifStmt.elseIfBranch) {
-        collectFromIfBranch(stmt.ifStmt.elseIfBranch);
+        collectFromIfBranch(stmt.ifStmt.elseIfBranch.get());
       }
       break;
     }
@@ -236,7 +236,7 @@ void AcSymbolTable::collectFromIfBranch(const IfStmt *ifStmt) {
     buildFromBlock(m_filePath, ifStmt->elseBlock);
   }
   if (ifStmt->elseIfBranch) {
-    collectFromIfBranch(ifStmt->elseIfBranch);
+    collectFromIfBranch(ifStmt->elseIfBranch.get());
   }
 }
 

@@ -7,14 +7,14 @@
 
 #include "ac_interpreter.h"
 
-
 // ═════════════════════════════════════════════════════════════════════════════
 //  字符串内置方法
 // ═════════════════════════════════════════════════════════════════════════════
 
 QJsonValue AcBuiltinEval::evalStringMethod(AcInterpreter &interp, const QString &obj,
-                                           const QString &method, const QVector<Expr *> &args,
-                                           int line, QString &error) {
+                                           const QString &method,
+                                           const std::vector<std::unique_ptr<Expr>> &args, int line,
+                                           QString &error) {
   auto evalArg = [&](int idx) -> QJsonValue { return interp.evalExpr(*args[idx]); };
 
   if (method == QStringLiteral("toLowerCase")) return QJsonValue(obj.toLower());
@@ -22,42 +22,42 @@ QJsonValue AcBuiltinEval::evalStringMethod(AcInterpreter &interp, const QString 
   if (method == QStringLiteral("trim")) return QJsonValue(obj.trimmed());
 
   if (method == QStringLiteral("includes")) {
-    if (args.isEmpty()) {
+    if (args.empty()) {
       error = QStringLiteral("string.includes() requires 1 argument at line %1").arg(line);
       return QJsonValue();
     }
     return QJsonValue(obj.contains(evalArg(0).toString()));
   }
   if (method == QStringLiteral("startsWith")) {
-    if (args.isEmpty()) {
+    if (args.empty()) {
       error = QStringLiteral("string.startsWith() requires 1 argument at line %1").arg(line);
       return QJsonValue();
     }
     return QJsonValue(obj.startsWith(evalArg(0).toString()));
   }
   if (method == QStringLiteral("endsWith")) {
-    if (args.isEmpty()) {
+    if (args.empty()) {
       error = QStringLiteral("string.endsWith() requires 1 argument at line %1").arg(line);
       return QJsonValue();
     }
     return QJsonValue(obj.endsWith(evalArg(0).toString()));
   }
   if (method == QStringLiteral("indexOf")) {
-    if (args.isEmpty()) {
+    if (args.empty()) {
       error = QStringLiteral("string.indexOf() requires 1 argument at line %1").arg(line);
       return QJsonValue();
     }
     return QJsonValue(obj.indexOf(evalArg(0).toString()));
   }
   if (method == QStringLiteral("lastIndexOf")) {
-    if (args.isEmpty()) {
+    if (args.empty()) {
       error = QStringLiteral("string.lastIndexOf() requires 1 argument at line %1").arg(line);
       return QJsonValue();
     }
     return QJsonValue(obj.lastIndexOf(evalArg(0).toString()));
   }
   if (method == QStringLiteral("split")) {
-    if (args.isEmpty()) {
+    if (args.empty()) {
       error = QStringLiteral("string.split() requires 1 argument at line %1").arg(line);
       return QJsonValue();
     }
@@ -76,7 +76,7 @@ QJsonValue AcBuiltinEval::evalStringMethod(AcInterpreter &interp, const QString 
     return QJsonValue(result);
   }
   if (method == QStringLiteral("substring") || method == QStringLiteral("slice")) {
-    if (args.isEmpty()) {
+    if (args.empty()) {
       error = QStringLiteral("string.%1() requires at least 1 argument at line %2")
                   .arg(method)
                   .arg(line);
@@ -90,7 +90,7 @@ QJsonValue AcBuiltinEval::evalStringMethod(AcInterpreter &interp, const QString 
     return QJsonValue(obj.mid(start));
   }
   if (method == QStringLiteral("charAt")) {
-    if (args.isEmpty()) {
+    if (args.empty()) {
       error = QStringLiteral("string.charAt() requires 1 argument at line %1").arg(line);
       return QJsonValue();
     }
@@ -99,7 +99,7 @@ QJsonValue AcBuiltinEval::evalStringMethod(AcInterpreter &interp, const QString 
     return QJsonValue(QString());
   }
   if (method == QStringLiteral("repeat")) {
-    if (args.isEmpty()) {
+    if (args.empty()) {
       error = QStringLiteral("string.repeat() requires 1 argument at line %1").arg(line);
       return QJsonValue();
     }
@@ -138,12 +138,13 @@ QJsonValue AcBuiltinEval::evalStringMethod(AcInterpreter &interp, const QString 
 // ═════════════════════════════════════════════════════════════════════════════
 
 QJsonValue AcBuiltinEval::evalArrayMethod(AcInterpreter &interp, const QJsonArray &arr,
-                                          const QString &method, const QVector<Expr *> &args,
-                                          int line, QJsonValue &modifiedArr, QString &error) {
+                                          const QString &method,
+                                          const std::vector<std::unique_ptr<Expr>> &args, int line,
+                                          QJsonValue &modifiedArr, QString &error) {
   auto evalArg = [&](int idx) -> QJsonValue { return interp.evalExpr(*args[idx]); };
 
   if (method == QStringLiteral("push") || method == QStringLiteral("append")) {
-    if (args.isEmpty()) {
+    if (args.empty()) {
       error = QStringLiteral("array.%1() requires 1 argument at line %2").arg(method).arg(line);
       return QJsonValue();
     }
@@ -168,8 +169,9 @@ QJsonValue AcBuiltinEval::evalArrayMethod(AcInterpreter &interp, const QJsonArra
     modifiedArr = QJsonValue(newArr);
     return first;
   }
+
   if (method == QStringLiteral("unshift")) {
-    if (args.isEmpty()) {
+    if (args.empty()) {
       error = QStringLiteral("array.unshift() requires 1 argument at line %1").arg(line);
       return QJsonValue();
     }
@@ -180,7 +182,7 @@ QJsonValue AcBuiltinEval::evalArrayMethod(AcInterpreter &interp, const QJsonArra
   }
   if (method == QStringLiteral("join")) {
     QString sep = QStringLiteral(",");
-    if (!args.isEmpty()) {
+    if (!args.empty()) {
       QJsonValue sepVal = evalArg(0);
       if (sepVal.isString()) sep = sepVal.toString();
     }
@@ -191,7 +193,7 @@ QJsonValue AcBuiltinEval::evalArrayMethod(AcInterpreter &interp, const QJsonArra
     return QJsonValue(parts.join(sep));
   }
   if (method == QStringLiteral("indexOf")) {
-    if (args.isEmpty()) {
+    if (args.empty()) {
       error = QStringLiteral("array.indexOf() requires 1 argument at line %1").arg(line);
       return QJsonValue();
     }
@@ -202,7 +204,7 @@ QJsonValue AcBuiltinEval::evalArrayMethod(AcInterpreter &interp, const QJsonArra
     return QJsonValue(-1);
   }
   if (method == QStringLiteral("includes")) {
-    if (args.isEmpty()) {
+    if (args.empty()) {
       error = QStringLiteral("array.includes() requires 1 argument at line %1").arg(line);
       return QJsonValue();
     }
@@ -215,7 +217,7 @@ QJsonValue AcBuiltinEval::evalArrayMethod(AcInterpreter &interp, const QJsonArra
   if (method == QStringLiteral("slice")) {
     int start = 0;
     int end = arr.size();
-    if (!args.isEmpty()) start = evalArg(0).toInt();
+    if (!args.empty()) start = evalArg(0).toInt();
     if (args.size() >= 2) end = evalArg(1).toInt();
     QJsonArray result;
     for (int i = start; i < end && i < arr.size(); ++i) result.append(arr[i]);
@@ -223,7 +225,7 @@ QJsonValue AcBuiltinEval::evalArrayMethod(AcInterpreter &interp, const QJsonArra
   }
   if (method == QStringLiteral("concat")) {
     QJsonArray result = arr;
-    for (auto *argExpr : args) {
+    for (const auto &argExpr : args) {
       QJsonValue val = interp.evalExpr(*argExpr);
       if (val.isArray()) {
         for (const QJsonValue &v : val.toArray()) result.append(v);
@@ -240,7 +242,7 @@ QJsonValue AcBuiltinEval::evalArrayMethod(AcInterpreter &interp, const QJsonArra
     return QJsonValue(newArr);
   }
   if (method == QStringLiteral("splice")) {
-    if (args.isEmpty()) {
+    if (args.empty()) {
       error = QStringLiteral("array.splice() requires at least 1 argument at line %1").arg(line);
       return QJsonValue();
     }

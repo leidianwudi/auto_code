@@ -29,12 +29,14 @@ void Expr::copyFrom(const Expr &other) {
     oe.isStatic = e.isStatic;
     objEntries.append(oe);
   }
-  for (auto *e : other.arrItems) arrItems.append(e ? new Expr(*e) : nullptr);
+  for (const auto &e : other.arrItems) arrItems.push_back(e ? std::make_unique<Expr>(*e) : nullptr);
   funcCall.name = other.funcCall.name;
-  for (auto *e : other.funcCall.args) funcCall.args.append(e ? new Expr(*e) : nullptr);
+  for (const auto &e : other.funcCall.args)
+    funcCall.args.push_back(e ? std::make_unique<Expr>(*e) : nullptr);
   methodCall = other.methodCall;
   className = other.className;
-  for (auto *e : other.constructorArgs) constructorArgs.append(e ? new Expr(*e) : nullptr);
+  for (const auto &e : other.constructorArgs)
+    constructorArgs.push_back(e ? std::make_unique<Expr>(*e) : nullptr);
   binOp = other.binOp;
   left = other.left ? std::make_unique<Expr>(*other.left) : nullptr;
   right = other.right ? std::make_unique<Expr>(*other.right) : nullptr;
@@ -74,16 +76,15 @@ MethodCall::MethodCall(const MethodCall &other)
     : objName(other.objName),
       methodName(other.methodName),
       object(other.object ? std::make_unique<Expr>(*other.object) : nullptr) {
-  for (auto *e : other.args) args.append(e ? new Expr(*e) : nullptr);
+  for (const auto &e : other.args) args.push_back(e ? std::make_unique<Expr>(*e) : nullptr);
 }
 
 MethodCall &MethodCall::operator=(const MethodCall &other) {
   if (this != &other) {
     objName = other.objName;
     methodName = other.methodName;
-    for (auto *e : args) delete e;
     args.clear();
-    for (auto *e : other.args) args.append(e ? new Expr(*e) : nullptr);
+    for (const auto &e : other.args) args.push_back(e ? std::make_unique<Expr>(*e) : nullptr);
     object = other.object ? std::make_unique<Expr>(*other.object) : nullptr;
   }
   return *this;
@@ -126,16 +127,36 @@ UsingStmt &UsingStmt::operator=(const UsingStmt &other) {
   return *this;
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+//  IfStmt 拷贝语义（深拷贝 elseIfBranch 链）
+// ═════════════════════════════════════════════════════════════════════════════
+
+IfStmt::IfStmt(const IfStmt &other)
+    : condition(other.condition),
+      thenBlock(other.thenBlock),
+      elseBlock(other.elseBlock),
+      hasElse(other.hasElse),
+      isElseIf(other.isElseIf),
+      elseIfBranch(other.elseIfBranch ? std::make_unique<IfStmt>(*other.elseIfBranch) : nullptr) {}
+
+IfStmt &IfStmt::operator=(const IfStmt &other) {
+  if (this != &other) {
+    condition = other.condition;
+    thenBlock = other.thenBlock;
+    elseBlock = other.elseBlock;
+    hasElse = other.hasElse;
+    isElseIf = other.isElseIf;
+    elseIfBranch = other.elseIfBranch ? std::make_unique<IfStmt>(*other.elseIfBranch) : nullptr;
+  }
+  return *this;
+}
+
 void Expr::freeOwned() {
   objEntries.clear();
-  for (auto *e : arrItems) delete e;
   arrItems.clear();
-  for (auto *e : funcCall.args) delete e;
   funcCall.args.clear();
-  for (auto *e : methodCall.args) delete e;
   methodCall.args.clear();
   methodCall.object.reset();
-  for (auto *e : constructorArgs) delete e;
   constructorArgs.clear();
   left.reset();
   right.reset();

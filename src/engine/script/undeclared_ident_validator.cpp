@@ -189,7 +189,7 @@ void UndeclaredIdentValidator::visitFuncCallExpr(const Expr &expr) {
   }
 
   if (expr.funcCall.name == QString::fromLatin1(AcBuiltin::kReadFile) &&
-      expr.funcCall.args.isEmpty()) {
+      expr.funcCall.args.empty()) {
     if (m_errors) {
       m_errors->append(
           QStringLiteral("readFile() requires a file path argument at line %1").arg(expr.line));
@@ -230,7 +230,7 @@ void UndeclaredIdentValidator::visitMethodCallExpr(const Expr &expr) {
   }
 
   // 检查参数表达式
-  for (const auto *arg : expr.methodCall.args) {
+  for (const auto &arg : expr.methodCall.args) {
     if (arg) visitExpr(*arg);
   }
 }

@@ -23,6 +23,7 @@
 #include <QStringList>
 #include <QVector>
 #include <memory>
+#include <vector>
 
 /// @defgroup ac_type .ac 脚本类型定义
 /// @{
@@ -228,14 +229,14 @@ struct ObjectEntry {
 /// @brief 函数调用表达式：name(arg1, arg2, ...)
 struct FuncCall {
   QString name;
-  QVector<Expr *> args;
+  std::vector<std::unique_ptr<Expr>> args;
 };
 
 /// @brief 方法调用表达式：obj.method(arg1, arg2, ...)
 struct MethodCall {
-  QString objName;       ///< 对象变量名（用于简单变量）
-  QString methodName;    ///< 方法名
-  QVector<Expr *> args;  ///< 参数列表
+  QString objName;                          ///< 对象变量名（用于简单变量）
+  QString methodName;                       ///< 方法名
+  std::vector<std::unique_ptr<Expr>> args;  ///< 参数列表
   std::unique_ptr<Expr>
       object;  ///< 对象表达式（用于链式访问，如 this.engine.start()，优先级高于 objName）
 
@@ -347,13 +348,14 @@ struct Expr {
   QString prop;          ///< 属性名（用于 kPropAccess）
   std::unique_ptr<Expr>
       propObject;  ///< 链式属性访问的对象表达式（用于 kPropAccess 链式，优先级高于 ident）
-  QVector<ObjectEntry> objEntries;  ///< 对象条目
-  QVector<Expr *> arrItems;         ///< 数组元素（指针）
-  FuncCall funcCall;                ///< 函数调用信息
-  MethodCall methodCall;            ///< 方法调用信息
-  QString className;                ///< 类名（用于 kNewInstance）
-  QVector<Expr *> constructorArgs;  ///< 构造参数（用于 kNewInstance 的 native 类）
-  MethodDef funcExpr;               ///< 函数表达式（用于 kFuncExpr）
+  QVector<ObjectEntry> objEntries;              ///< 对象条目
+  std::vector<std::unique_ptr<Expr>> arrItems;  ///< 数组元素
+  FuncCall funcCall;                            ///< 函数调用信息
+  MethodCall methodCall;                        ///< 方法调用信息
+  QString className;                            ///< 类名（用于 kNewInstance）
+  std::vector<std::unique_ptr<Expr>>
+      constructorArgs;  ///< 构造参数（用于 kNewInstance 的 native 类）
+  MethodDef funcExpr;   ///< 函数表达式（用于 kFuncExpr）
   enum BinaryOp {
     kAdd,
     kSub,
@@ -456,8 +458,14 @@ struct IfStmt {
   Block thenBlock;
   Block elseBlock;
   bool hasElse = false;
-  bool isElseIf = false;           ///< 是否为 else if 分支
-  IfStmt *elseIfBranch = nullptr;  ///< else if 分支（链式结构）
+  bool isElseIf = false;                 ///< 是否为 else if 分支
+  std::unique_ptr<IfStmt> elseIfBranch;  ///< else if 分支（链式结构）
+
+  IfStmt() = default;
+  IfStmt(const IfStmt &other);
+  IfStmt &operator=(const IfStmt &other);
+  IfStmt(IfStmt &&) = default;
+  IfStmt &operator=(IfStmt &&) = default;
 };
 
 /// @brief 导入语句：import { A, B as C } from "file"

@@ -7,7 +7,8 @@
 
 #include <QJsonArray>
 #include <QJsonValue>
-#include <QVector>
+#include <memory>
+#include <vector>
 
 struct Expr;
 
@@ -25,7 +26,8 @@ public:
   /// @param error 错误输出
   /// @return 方法返回值
   static QJsonValue evalStringMethod(AcInterpreter &interpreter, const QString &obj,
-                                     const QString &method, const QVector<Expr *> &args, int line,
+                                     const QString &method,
+                                     const std::vector<std::unique_ptr<Expr>> &args, int line,
                                      QString &error);
 
   /// @brief 求值数组内置方法
@@ -38,6 +40,7 @@ public:
   /// @param error 错误输出
   /// @return 方法返回值
   static QJsonValue evalArrayMethod(AcInterpreter &interpreter, const QJsonArray &arr,
-                                    const QString &method, const QVector<Expr *> &args, int line,
+                                    const QString &method,
+                                    const std::vector<std::unique_ptr<Expr>> &args, int line,
                                     QJsonValue &modifiedArr, QString &error);
 };
