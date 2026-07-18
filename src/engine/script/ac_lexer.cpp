@@ -361,7 +361,9 @@ QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
         } else if ((c.isLetter() && c.unicode() < 128) || c == '_') {
           tokens.append(parseIdentifier(source, i, line));
         } else if (c.unicode() > 127) {
-          ++i;
+          error = QStringLiteral("unexpected non-ASCII character '%1' at line %2")
+                      .arg(c, QString::number(line));
+          return {};
         } else {
           error =
               QStringLiteral("unexpected character '%1' at line %2").arg(c, QString::number(line));
