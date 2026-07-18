@@ -41,9 +41,13 @@ bool AcExecutor::parse(const QString &source) {
     m_symbolTable.collectStmt(stmt);
   }
 
+#ifdef AC_DEBUG
   qDebug() << "[AcExecutor::parse] after linkImports, declaredVars:" << m_declaredVars;
   qDebug() << "[AcExecutor::parse] program stmts:" << m_program.stmts.size();
   qDebug() << "[AcExecutor::parse] symbols collected:" << m_symbolTable.allSymbols().size();
+#else
+  Q_UNUSED(m_declaredVars);
+#endif
   for (int i = 0; i < m_program.stmts.size(); ++i) {
     const auto &s = m_program.stmts[i];
     QString desc;
@@ -59,7 +63,12 @@ bool AcExecutor::parse(const QString &source) {
       desc = "import";
     else
       desc = "kind:" + QString::number((int)s.kind);
+#ifdef AC_DEBUG
     qDebug() << "  [" << i << "]" << desc;
+#else
+    Q_UNUSED(desc);
+    Q_UNUSED(i);
+#endif
   }
 
   return true;
@@ -102,7 +111,9 @@ QJsonValue AcExecutor::execute() {
   m_interpreter.setRootDir(m_rootDir);
   m_interpreter.setLogCallback(m_logCallback);
 
+#ifdef AC_DEBUG
   qDebug() << "[AcExecutor::execute] m_logCallback is null:" << !m_logCallback;
+#endif
 
   // 步骤 2：验证未声明的标识符
   UndeclaredIdentValidator undeclaredValidator;
@@ -110,29 +121,41 @@ QJsonValue AcExecutor::execute() {
   undeclaredValidator.validate(m_program, m_declaredVars, undeclared);
   if (!undeclared.isEmpty()) {
     m_error = undeclared.join(QStringLiteral("\n"));
+#ifdef AC_DEBUG
     qDebug() << "[AcExecutor::execute] undeclared errors:" << m_error;
+#endif
     return QJsonValue();
   }
+#ifdef AC_DEBUG
   qDebug() << "[AcExecutor::execute] undeclared check passed, program stmts:"
            << m_program.stmts.size();
+#endif
 
   // 步骤 3：静态类型检查
   QStringList typeErrors = validateTypes();
   if (!typeErrors.isEmpty()) {
     m_error = typeErrors.join(QStringLiteral("\n"));
+#ifdef AC_DEBUG
     qDebug() << "[AcExecutor::execute] type errors:" << m_error;
+#endif
     return QJsonValue();
   }
+#ifdef AC_DEBUG
   qDebug() << "[AcExecutor::execute] type check passed";
+#endif
 
   // 步骤 4：执行
   QJsonValue result = m_interpreter.execute(m_program, m_error);
   if (!m_error.isEmpty()) {
+#ifdef AC_DEBUG
     qDebug() << "[AcExecutor::execute] execution error:" << m_error;
+#endif
     return QJsonValue();
   }
 
+#ifdef AC_DEBUG
   qDebug() << "[AcExecutor::execute] execution completed, result:" << result;
+#endif
   return result;
 }
 
