@@ -22,8 +22,8 @@
 //  类方法执行
 // ═════════════════════════════════════════════════════════════════════════════
 
-QJsonValue AcInterpreter::execMethod(const MethodDef &method, const QJsonObject &thisObj,
-                                     const QJsonValue &callArgs) {
+QJsonValue AcInterpreter::execCallBody(const QVector<ParamDef> &params, const QJsonValue &callArgs,
+                                       const Block &body, const QJsonObject *thisObj) {
   QJsonArray argsArr = callArgs.toArray();
   QJsonObject oldThis = m_currentThis;
 
@@ -32,16 +32,18 @@ QJsonValue AcInterpreter::execMethod(const MethodDef &method, const QJsonObject 
   m_hasReturned = false;
   m_returnValue = QJsonValue();
 
-  m_currentThis = thisObj;
-  m_modifiedThis = thisObj;
+  if (thisObj) {
+    m_currentThis = *thisObj;
+    m_modifiedThis = *thisObj;
+  }
 
   pushScope();
 
-  for (int i = 0; i < method.params.size(); ++i) {
-    setVar(method.params[i].name, i < argsArr.size() ? argsArr[i] : QJsonValue());
+  for (int i = 0; i < params.size(); ++i) {
+    setVar(params[i].name, i < argsArr.size() ? argsArr[i] : QJsonValue());
   }
 
-  execBlock(method.body);
+  execBlock(body);
 
   popScope();
 
@@ -53,6 +55,11 @@ QJsonValue AcInterpreter::execMethod(const MethodDef &method, const QJsonObject 
   m_currentThis = oldThis;
 
   return result;
+}
+
+QJsonValue AcInterpreter::execMethod(const MethodDef &method, const QJsonObject &thisObj,
+                                     const QJsonValue &callArgs) {
+  return execCallBody(method.params, callArgs, method.body, &thisObj);
 }
 
 void AcInterpreter::initStaticVars(const ClassDef &cd) {
@@ -118,29 +125,7 @@ QJsonObject AcInterpreter::createBaseInstance(const QString &baseClassName) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 QJsonValue AcInterpreter::execUserFunction(const MethodDef &func, const QJsonValue &callArgs) {
-  QJsonArray argsArr = callArgs.toArray();
-
-  bool savedReturned = m_hasReturned;
-  QJsonValue savedReturnValue = m_returnValue;
-  m_hasReturned = false;
-  m_returnValue = QJsonValue();
-
-  pushScope();
-
-  for (int i = 0; i < func.params.size(); ++i) {
-    setVar(func.params[i].name, i < argsArr.size() ? argsArr[i] : QJsonValue());
-  }
-
-  execBlock(func.body);
-
-  QJsonValue result = m_hasReturned ? m_returnValue : QJsonValue();
-
-  popScope();
-
-  m_hasReturned = savedReturned;
-  m_returnValue = savedReturnValue;
-
-  return result;
+  return execCallBody(func.params, callArgs, func.body, nullptr);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -182,6 +167,45 @@ void AcInterpreter::execThisAssign(const QString &propName, const QJsonValue &va
   retainIfInstance(val);
   m_currentThis[propName] = val;
   m_modifiedThis[propName] = val;
+}
+
+void AcInterpreter::assignToIndex(const QJsonValue &objVal, const QJsonValue &idxVal,
+                                  const QJsonValue &newVal, const Expr &objectExpr) {
+  if (objVal.isObject()) {
+    QJsonObject obj = objVal.toObject();
+    QString key = idxVal.isString() ? idxVal.toString() : QString::number(idxVal.toDouble());
+    if (obj.contains(key)) {
+      releaseIfInstanceWithDestruct(obj.value(key));
+    }
+    obj[key] = newVal;
+    writeBackVar(objectExpr, obj);
+  } else if (objVal.isArray()) {
+    QJsonArray arr = objVal.toArray();
+    int idx = idxVal.toInt();
+    if (idx >= 0 && idx < arr.size()) {
+      releaseIfInstanceWithDestruct(arr[idx]);
+      arr.replace(idx, newVal);
+    } else if (idx == arr.size()) {
+      arr.append(newVal);
+    }
+    writeBackVar(objectExpr, QJsonValue(arr));
+  }
+}
+
+void AcInterpreter::assignToProperty(const QJsonValue &objVal, const QString &prop,
+                                     QJsonValue newVal, const Expr &objectExpr, CompoundOp op) {
+  if (!objVal.isObject()) return;
+  QJsonObject obj = objVal.toObject();
+  if (op != CompoundOp::kNone) {
+    QJsonValue oldVal = obj.value(prop);
+    newVal = applyCompoundOp(oldVal, newVal, op, 0);
+    if (!m_error.isEmpty()) return;
+  }
+  if (obj.contains(prop)) {
+    releaseIfInstanceWithDestruct(obj.value(prop));
+  }
+  obj[prop] = newVal;
+  writeBackVar(objectExpr, obj);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -247,26 +271,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       QJsonValue idxVal = evalExpr(stmt.indexAssign.indexExpr);
       QJsonValue newVal = evalExpr(stmt.indexAssign.value);
       retainIfInstance(newVal);
-
-      if (objVal.isObject()) {
-        QJsonObject obj = objVal.toObject();
-        QString key = idxVal.isString() ? idxVal.toString() : QString::number(idxVal.toDouble());
-        if (obj.contains(key)) {
-          releaseIfInstanceWithDestruct(obj.value(key));
-        }
-        obj[key] = newVal;
-        writeBackVar(stmt.indexAssign.objectExpr, obj);
-      } else if (objVal.isArray()) {
-        QJsonArray arr = objVal.toArray();
-        int idx = idxVal.toInt();
-        if (idx >= 0 && idx < arr.size()) {
-          releaseIfInstanceWithDestruct(arr[idx]);
-          arr.replace(idx, newVal);
-        } else if (idx == arr.size()) {
-          arr.append(newVal);
-        }
-        writeBackVar(stmt.indexAssign.objectExpr, QJsonValue(arr));
-      }
+      assignToIndex(objVal, idxVal, newVal, stmt.indexAssign.objectExpr);
       break;
     }
 
@@ -284,19 +289,8 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       QJsonValue objVal = evalExpr(stmt.propAssign.objectExpr);
       QJsonValue newVal = evalExpr(stmt.propAssign.value);
       retainIfInstance(newVal);
-      if (objVal.isObject()) {
-        QJsonObject obj = objVal.toObject();
-        if (stmt.propAssign.compoundOp != CompoundOp::kNone) {
-          QJsonValue oldVal = obj.value(stmt.propAssign.prop);
-          newVal = applyCompoundOp(oldVal, newVal, stmt.propAssign.compoundOp, 0);
-          if (!m_error.isEmpty()) return;
-        }
-        if (obj.contains(stmt.propAssign.prop)) {
-          releaseIfInstanceWithDestruct(obj.value(stmt.propAssign.prop));
-        }
-        obj[stmt.propAssign.prop] = newVal;
-        writeBackVar(stmt.propAssign.objectExpr, obj);
-      }
+      assignToProperty(objVal, stmt.propAssign.prop, newVal, stmt.propAssign.objectExpr,
+                       stmt.propAssign.compoundOp);
       break;
     }
 

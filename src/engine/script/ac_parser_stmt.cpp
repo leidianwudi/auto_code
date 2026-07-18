@@ -377,6 +377,10 @@ CompoundOp AcParser::parseCompoundOp() {
 
 bool AcParser::parseAssignStmt(AssignStmt &as) {
   as.name = advance().text;
+  if (peek().type == TOK_COLON) {
+    advance();
+    advance();
+  }
   CompoundOp op = parseCompoundOp();
   if (op != CompoundOp::kNone) {
     as.compoundOp = op;

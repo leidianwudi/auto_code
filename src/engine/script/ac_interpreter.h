@@ -66,12 +66,16 @@ private:
   void execIfStmt(const IfStmt &ifStmt);
   QJsonValue evalExpr(const Expr &expr);
   QJsonValue evalExprWithThis(const Expr &expr, const QJsonObject &thisObj);
+  /// @brief 设置带行号的错误信息
+  void setError(const QString &msg, int line);
   /// @brief 解析类名.属性访问（静态属性 + 类对象回退），返回属性值；失败返回 Undefined
   QJsonValue resolveClassAccess(const QString &className, const QString &propName);
   /// @brief 解析类的静态属性或方法访问，返回属性值/类引用；失败返回 Undefined
   QJsonValue resolveClassPropOrMethod(const QString &className, const QString &propName);
   /// @brief 创建类引用对象 { __class__: className }
   QJsonValue makeClassRef(const QString &className) const;
+  /// @brief 从对象中取属性值（处理 length/数组索引/普通属性/enum fallback）
+  QJsonValue getPropertyValue(const QJsonValue &obj, const QString &prop, const QString &ident);
   /// @brief 应用复合赋值运算符
   QJsonValue applyCompoundOp(const QJsonValue &currentVal, const QJsonValue &newVal, CompoundOp op,
                              int line);
@@ -81,6 +85,12 @@ private:
   void execStaticAssign(const QString &className, const QString &propName, const QJsonValue &val);
   /// @brief 执行 this 属性赋值
   void execThisAssign(const QString &propName, const QJsonValue &val);
+  /// @brief 执行索引赋值（对象[key]/数组[idx]）
+  void assignToIndex(const QJsonValue &objVal, const QJsonValue &idxVal, const QJsonValue &newVal,
+                     const Expr &objectExpr);
+  /// @brief 执行属性赋值（obj.prop = newVal，支持复合赋值）
+  void assignToProperty(const QJsonValue &objVal, const QString &prop, QJsonValue newVal,
+                        const Expr &objectExpr, CompoundOp op);
   QJsonValue evalBinary(const Expr &expr);
   QJsonValue evalUnary(const Expr &expr);
   QJsonValue evalMethodCall(const Expr &expr);
@@ -110,6 +120,9 @@ private:
   void releaseIfInstance(const QJsonValue &val);
   /// 如果值是受管理的实例，release（用户自定义类需执行 __destruct__ AST）
   void releaseIfInstanceWithDestruct(const QJsonValue &val);
+  /// 递归遍历值中的嵌套数据（数组/普通对象），跳过实例类关键字
+  void traverseNested(const QJsonValue &val,
+                      const std::function<void(const QJsonValue &)> &onChild);
   /// 递归释放值中的所有受管理实例（数组/对象内部的实例）
   void releaseDeep(const QJsonValue &val);
 
@@ -124,6 +137,9 @@ private:
   // ── 类方法执行 ──
   QJsonValue execMethod(const MethodDef &method, const QJsonObject &thisObj,
                         const QJsonValue &callArgs);
+  /// @brief 执行带 this 上下文的函数体（method/function 通用）
+  QJsonValue execCallBody(const QVector<ParamDef> &params, const QJsonValue &callArgs,
+                          const Block &body, const QJsonObject *thisObj);
   void initStaticVars(const ClassDef &cd);
 
   // ── 继承辅助 ──

@@ -151,26 +151,27 @@ void AcInterpreter::processDestructInfo(const AcObjectManager::DestructInfo &inf
   }
 }
 
-void AcInterpreter::releaseDeep(const QJsonValue &val) {
-  if (AcObjectManager::isManagedInstance(val)) {
-    releaseIfInstanceWithDestruct(val);
-    return;
-  }
+void AcInterpreter::traverseNested(const QJsonValue &val,
+                                   const std::function<void(const QJsonValue &)> &onChild) {
   if (val.isArray()) {
-    for (const QJsonValue &item : val.toArray()) {
-      releaseDeep(item);
-    }
-    return;
-  }
-  if (val.isObject()) {
+    for (const QJsonValue &item : val.toArray()) onChild(item);
+  } else if (val.isObject()) {
     QJsonObject obj = val.toObject();
     for (auto it = obj.begin(); it != obj.end(); ++it) {
       if (it.key() == QString::fromLatin1(AcRuntime::kClassKey) ||
           it.key() == QString::fromLatin1(AcRuntime::kObjId))
         continue;
-      releaseDeep(it.value());
+      onChild(it.value());
     }
   }
+}
+
+void AcInterpreter::releaseDeep(const QJsonValue &val) {
+  if (AcObjectManager::isManagedInstance(val)) {
+    releaseIfInstanceWithDestruct(val);
+    return;
+  }
+  traverseNested(val, [this](const QJsonValue &child) { releaseDeep(child); });
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -178,36 +179,15 @@ void AcInterpreter::releaseDeep(const QJsonValue &val) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 void AcInterpreter::markFromValue(const QJsonValue &val) {
-  auto &mgr = m_objMgr;
-
   if (AcObjectManager::isManagedInstance(val)) {
     QString objId = AcObjectManager::getObjId(val);
-    if (mgr.isMarked(objId) || !mgr.contains(objId)) return;
-    mgr.mark(objId);
-    QJsonObject obj = mgr.getObject(objId);
-    for (auto it = obj.begin(); it != obj.end(); ++it) {
-      if (it.key() == QString::fromLatin1(AcRuntime::kClassKey) ||
-          it.key() == QString::fromLatin1(AcRuntime::kObjId))
-        continue;
-      markFromValue(it.value());
-    }
+    if (m_objMgr.isMarked(objId) || !m_objMgr.contains(objId)) return;
+    m_objMgr.mark(objId);
+    QJsonObject obj = m_objMgr.getObject(objId);
+    traverseNested(QJsonValue(obj), [this](const QJsonValue &child) { markFromValue(child); });
     return;
   }
-  if (val.isArray()) {
-    for (const QJsonValue &item : val.toArray()) {
-      markFromValue(item);
-    }
-    return;
-  }
-  if (val.isObject()) {
-    QJsonObject obj = val.toObject();
-    for (auto it = obj.begin(); it != obj.end(); ++it) {
-      if (it.key() == QString::fromLatin1(AcRuntime::kClassKey) ||
-          it.key() == QString::fromLatin1(AcRuntime::kObjId))
-        continue;
-      markFromValue(it.value());
-    }
-  }
+  traverseNested(val, [this](const QJsonValue &child) { markFromValue(child); });
 }
 
 void AcInterpreter::collectCycles() {

@@ -41,20 +41,44 @@ QJsonValue AcInterpreter::resolveClassPropOrMethod(const QString &className,
                                                    const QString &propName) {
   QJsonValue staticVal = resolveClassAccess(className, propName);
   if (!staticVal.isUndefined()) return staticVal;
+  if (!m_classes.contains(className)) return QJsonValue(QJsonValue::Undefined);
   const ClassDef &cd = m_classes[className];
-  for (const auto &p : cd.properties) {
-    if (p.isStatic && p.key == propName) return staticVal;
-  }
   for (const auto &m : cd.methods) {
     if (m.isStatic && m.name == propName) return makeClassRef(className);
   }
   return QJsonValue(QJsonValue::Undefined);
 }
 
+void AcInterpreter::setError(const QString &msg, int line) {
+  m_error = QStringLiteral("%1 at line %2").arg(msg, QString::number(line));
+}
+
 QJsonValue AcInterpreter::makeClassRef(const QString &className) const {
   QJsonObject classObj;
   classObj[QString::fromLatin1(AcRuntime::kClassKey)] = className;
   return QJsonValue(classObj);
+}
+
+QJsonValue AcInterpreter::getPropertyValue(const QJsonValue &obj, const QString &prop,
+                                           const QString &ident) {
+  if (prop == QStringLiteral("length")) {
+    if (obj.isString()) return QJsonValue(obj.toString().length());
+    if (obj.isArray()) return QJsonValue(obj.toArray().size());
+  }
+  if (obj.isObject()) return obj.toObject().value(prop);
+  if (obj.isArray()) {
+    bool ok = false;
+    int idx = prop.toInt(&ok);
+    if (ok) {
+      QJsonArray arr = obj.toArray();
+      if (idx >= 0 && idx < arr.size()) return arr[idx];
+    }
+  }
+  if (obj.isNull() || obj.isUndefined()) {
+    QString enumMemberName = QStringLiteral("%1.%2").arg(ident, prop);
+    if (containsVar(enumMemberName)) return resolveVar(enumMemberName);
+  }
+  return QJsonValue();
 }
 
 QJsonValue AcInterpreter::applyCompoundOp(const QJsonValue &currentVal, const QJsonValue &newVal,
@@ -77,13 +101,13 @@ QJsonValue AcInterpreter::applyCompoundOp(const QJsonValue &currentVal, const QJ
       return QJsonValue(left * right);
     case CompoundOp::kDiv:
       if (right == 0) {
-        m_error = QStringLiteral("division by zero at line %1").arg(line);
+        setError(QStringLiteral("division by zero"), line);
         return QJsonValue();
       }
       return QJsonValue(left / right);
     case CompoundOp::kMod:
       if (right == 0) {
-        m_error = QStringLiteral("modulo by zero at line %1").arg(line);
+        setError(QStringLiteral("modulo by zero"), line);
         return QJsonValue();
       }
       return QJsonValue(fmod(left, right));
@@ -154,30 +178,7 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
           return QJsonValue();
         }
       }
-      if (expr.prop == QStringLiteral("length")) {
-        if (obj.isString()) return QJsonValue(obj.toString().length());
-        if (obj.isArray()) return QJsonValue(obj.toArray().size());
-      }
-
-      if (obj.isObject()) return obj.toObject().value(expr.prop);
-
-      if (obj.isArray()) {
-        bool ok = false;
-        int idx = expr.prop.toInt(&ok);
-        if (ok) {
-          QJsonArray arr = obj.toArray();
-          if (idx >= 0 && idx < arr.size()) return arr[idx];
-        }
-      }
-
-      if (obj.isNull() || obj.isUndefined()) {
-        QString enumMemberName = QStringLiteral("%1.%2").arg(expr.ident, expr.prop);
-        if (containsVar(enumMemberName)) {
-          return resolveVar(enumMemberName);
-        }
-      }
-
-      return QJsonValue();
+      return getPropertyValue(obj, expr.prop, expr.ident);
     }
 
     case Expr::kIndexAccess: {
@@ -204,7 +205,7 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
         if (idx >= 0 && idx < s.length()) return QJsonValue(QString(s[idx]));
         return QJsonValue();
       }
-      m_error = QStringLiteral("cannot access index on value at line %1").arg(expr.line);
+      setError(QStringLiteral("cannot access index on value"), expr.line);
       return QJsonValue();
     }
 
@@ -513,13 +514,12 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
     const QString &method = expr.methodCall.methodName;
     if (method == QStringLiteral("parse")) {
       if (expr.methodCall.args.empty()) {
-        m_error = QStringLiteral("JSON.parse() requires 1 argument at line %1").arg(expr.line);
+        setError(QStringLiteral("JSON.parse() requires 1 argument"), expr.line);
         return QJsonValue();
       }
       QJsonValue argVal = evalExpr(*expr.methodCall.args[0]);
       if (!argVal.isString()) {
-        m_error =
-            QStringLiteral("JSON.parse() argument must be a string at line %1").arg(expr.line);
+        setError(QStringLiteral("JSON.parse() argument must be a string"), expr.line);
         return QJsonValue();
       }
       QJsonParseError parseError;
@@ -536,7 +536,7 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
     }
     if (method == QStringLiteral("stringify")) {
       if (expr.methodCall.args.empty()) {
-        m_error = QStringLiteral("JSON.stringify() requires 1 argument at line %1").arg(expr.line);
+        setError(QStringLiteral("JSON.stringify() requires 1 argument"), expr.line);
         return QJsonValue();
       }
       QJsonValue argVal = evalExpr(*expr.methodCall.args[0]);
@@ -561,7 +561,7 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
         objVal = makeClassRef(expr.methodCall.object->ident);
         m_error.clear();
       } else {
-        m_error = QStringLiteral("method call on null value at line %1").arg(expr.line);
+        setError(QStringLiteral("method call on null value"), expr.line);
         return QJsonValue();
       }
     }
@@ -660,8 +660,7 @@ QJsonValue AcInterpreter::evalClassMethod(const QJsonObject &obj, const QString 
   QString searchClassName = className;
   if (isSuper) {
     if (cd.baseClass.isEmpty()) {
-      m_error = QStringLiteral("cannot use 'super' in class without base class at line %1")
-                    .arg(expr.line);
+      setError(QStringLiteral("cannot use 'super' in class without base class"), expr.line);
       return QJsonValue();
     }
     searchClassName = cd.baseClass;
