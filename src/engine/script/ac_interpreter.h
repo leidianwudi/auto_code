@@ -76,6 +76,8 @@ private:
   QJsonValue makeClassRef(const QString &className) const;
   /// @brief 从对象中取属性值（处理 length/数组索引/普通属性/enum fallback）
   QJsonValue getPropertyValue(const QJsonValue &obj, const QString &prop, const QString &ident);
+  /// @brief 计算链式属性访问 (ident.prop 或 propObject->prop)
+  QJsonValue evalPropertyChain(const Expr &expr);
   /// @brief 应用复合赋值运算符
   QJsonValue applyCompoundOp(const QJsonValue &currentVal, const QJsonValue &newVal, CompoundOp op,
                              int line);
@@ -94,6 +96,8 @@ private:
   QJsonValue evalBinary(const Expr &expr);
   QJsonValue evalUnary(const Expr &expr);
   QJsonValue evalMethodCall(const Expr &expr);
+  QJsonValue evalJSONBuiltin(const Expr &expr);
+  QJsonValue resolveMethodCallTarget(const Expr &expr);
   QJsonValue evalNewInstance(const Expr &expr);
   QJsonValue callBuiltin(const QString &name, const std::vector<std::unique_ptr<Expr>> &args,
                          int line);

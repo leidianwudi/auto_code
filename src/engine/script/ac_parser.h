@@ -45,6 +45,8 @@ private:
   bool parseStmt(Block::Stmt &stmt);
   /// @brief 解析以标识符开头的语句（赋值/属性赋值/方法调用/索引赋值/表达式）
   bool parseIdentStmt(Block::Stmt &stmt, const Token &t);
+  /// @brief 解析静态属性赋值 (ClassName::member = value)，成功时返回 true
+  bool tryParseStaticAssign(Block::Stmt &stmt);
   /// @brief 解析以 this 开头的语句（属性赋值/表达式）
   bool parseThisStmt(Block::Stmt &stmt);
   bool parseCallStmt(CallStmt &cs);
@@ -86,6 +88,8 @@ private:
   AcType parseType();
   /// @brief 将类型名称解析为 AcType（内建类型 / 自定义类名）
   AcType resolveTypeName(const QString &name);
+  /// @brief 跳过可选的 : Type 类型注解（如果存在则消耗两个 token）
+  void skipTypeAnnotation();
 
   // ── 内部状态 ──
   int m_pos = 0;

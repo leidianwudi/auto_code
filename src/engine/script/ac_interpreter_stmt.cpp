@@ -226,7 +226,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       FunMgr::ins().call(clsName, funcName, argsArr);
       QString err = FunMgr::takeError();
       if (!err.isEmpty()) {
-        m_error = QStringLiteral("%1 at line %2").arg(err).arg(stmt.call.className.line);
+        setError(err, stmt.call.className.line);
       }
       break;
     }

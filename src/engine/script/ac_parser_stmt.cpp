@@ -191,11 +191,9 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
   return parseExpr(stmt.exprStmt);
 }
 
-bool AcParser::parseIdentStmt(Block::Stmt &stmt, const Token &t) {
-  // ClassName::prop = value  — 静态属性赋值
-  if (m_pos + 2 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_SCOPE &&
-      m_tokens[m_pos + 2].type == TOK_IDENT && m_pos + 3 < m_tokens.size() &&
-      m_tokens[m_pos + 3].type == TOK_EQUALS) {
+bool AcParser::tryParseStaticAssign(Block::Stmt &stmt) {
+  if (m_pos + 3 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_SCOPE &&
+      m_tokens[m_pos + 2].type == TOK_IDENT && m_tokens[m_pos + 3].type == TOK_EQUALS) {
     stmt.kind = Block::Stmt::kAssign;
     stmt.assign.isStatic = true;
     stmt.assign.staticClassName = advance().text;
@@ -204,6 +202,12 @@ bool AcParser::parseIdentStmt(Block::Stmt &stmt, const Token &t) {
     if (!expect(TOK_EQUALS, QStringLiteral("expected '='"))) return false;
     return parseExpr(stmt.assign.value);
   }
+  return false;
+}
+
+bool AcParser::parseIdentStmt(Block::Stmt &stmt, const Token &t) {
+  // ClassName::prop = value  — 静态属性赋值
+  if (tryParseStaticAssign(stmt)) return true;
   // ClassName::member() 或 ClassName::member  — 静态访问表达式语句
   if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_SCOPE) {
     stmt.kind = Block::Stmt::kExpr;
@@ -375,12 +379,16 @@ CompoundOp AcParser::parseCompoundOp() {
   return CompoundOp::kNone;
 }
 
-bool AcParser::parseAssignStmt(AssignStmt &as) {
-  as.name = advance().text;
+void AcParser::skipTypeAnnotation() {
   if (peek().type == TOK_COLON) {
     advance();
     advance();
   }
+}
+
+bool AcParser::parseAssignStmt(AssignStmt &as) {
+  as.name = advance().text;
+  skipTypeAnnotation();
   CompoundOp op = parseCompoundOp();
   if (op != CompoundOp::kNone) {
     as.compoundOp = op;
@@ -870,10 +878,7 @@ bool AcParser::parseClassProperty(ClassDef &cd, AccessLevel access, bool isStati
   prop.key = name;
   prop.isStatic = isStatic;
   prop.access = access;
-  if (peek().type == TOK_COLON) {
-    advance();
-    advance();
-  }
+  skipTypeAnnotation();
   if (peek().type == TOK_EQUALS) {
     advance();
     prop.value = std::make_unique<Expr>();

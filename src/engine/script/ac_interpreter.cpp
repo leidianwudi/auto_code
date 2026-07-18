@@ -142,11 +142,9 @@ void AcInterpreter::processDestructInfo(const AcObjectManager::DestructInfo &inf
     args.append(QJsonValue(info.instance));
     FunMgr::ins().call(info.className, QString::fromLatin1(AcRuntime::kDestructor), args);
   } else if (m_classes.contains(info.className) && !m_classes[info.className].isNative) {
-    for (const auto &method : m_classes[info.className].methods) {
-      if (method.name == QString::fromLatin1(AcRuntime::kDestructor)) {
-        execMethod(method, info.instance, QJsonValue(QJsonArray()));
-        break;
-      }
+    const MethodDef *dtor = findMethod(info.className, QString::fromLatin1(AcRuntime::kDestructor));
+    if (dtor) {
+      execMethod(*dtor, info.instance, QJsonValue(QJsonArray()));
     }
   }
 }
