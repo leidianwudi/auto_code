@@ -18,8 +18,12 @@ qt_add_executable(auto_code
     src/engine/script/ac_lexer.cpp
     src/engine/script/ac_parser.h
     src/engine/script/ac_parser.cpp
+    src/engine/script/ac_parser_expr.cpp
+    src/engine/script/ac_parser_stmt.cpp
     src/engine/script/ac_interpreter.h
     src/engine/script/ac_interpreter.cpp
+    src/engine/script/ac_interpreter_expr.cpp
+    src/engine/script/ac_interpreter_stmt.cpp
     src/engine/script/ac_builtin_eval.h
     src/engine/script/ac_builtin_eval.cpp
     src/engine/script/ac_object_manager.h

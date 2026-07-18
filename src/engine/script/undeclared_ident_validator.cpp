@@ -200,9 +200,6 @@ void UndeclaredIdentValidator::visitFuncCallExpr(const Expr &expr) {
 void UndeclaredIdentValidator::visitMethodCallExpr(const Expr &expr) {
   if (expr.methodCall.object) {
     visitExpr(*expr.methodCall.object);
-  } else if (expr.methodCall.objName.isEmpty()) {
-    qDebug() << "[UndeclaredIdentValidator] methodCall with empty objName and null object at line"
-             << expr.line << "methodName:" << expr.methodCall.methodName;
   } else {
     // 检查对象变量是否已声明（跳过空 objName，链式方法调用时 objName 可能为空）
     if (expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis) &&

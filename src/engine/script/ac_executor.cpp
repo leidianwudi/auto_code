@@ -284,8 +284,10 @@ bool AcExecutor::linkImportsRecursive(Block &program, const QString &baseDir,
         stmtName = stmt.interfaceDef.name;
       else if (stmt.kind == Block::Stmt::kEnumDef)
         stmtName = stmt.enumDef.name;
+#ifdef AC_DEBUG
       qDebug() << "  stmt kind:" << (int)stmt.kind << "name:" << stmtName
                << "isExported:" << isExported;
+#endif
 
       if (!isExported) continue;
 
@@ -327,7 +329,9 @@ bool AcExecutor::linkImportsRecursive(Block &program, const QString &baseDir,
 
       // 注册变量名（使用别名或原始名）
       m_declaredVars.insert(localName);
+#ifdef AC_DEBUG
       qDebug() << "[linkImports] injected" << exportName << "as" << localName << "into program";
+#endif
     }
 
     // 检查所有导入名是否都找到了

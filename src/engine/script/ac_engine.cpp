@@ -33,10 +33,14 @@ QString AcEngine::execute(const QString &acFilePath) {
   executor.setScriptFile(fi.absoluteFilePath());
   if (!m_rootDir.isEmpty()) executor.setRootDir(m_rootDir);
   if (m_logCallback) executor.setLogCallback(m_logCallback);
+#ifdef AC_DEBUG
   qDebug() << "[AcEngine::execute] m_logCallback is null:" << !m_logCallback;
+#endif
 
   if (!executor.parse(source)) return QStringLiteral("parse error: %1").arg(executor.error());
+#ifdef AC_DEBUG
   qDebug() << "[AcEngine::execute] parse succeeded";
+#endif
 
   QJsonValue result = executor.execute();
   m_generatedFiles = executor.generatedFiles();
