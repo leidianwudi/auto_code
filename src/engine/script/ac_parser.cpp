@@ -40,7 +40,7 @@ bool AcParser::expect(TokenType t, const QString &msg) {
     advance();
     return true;
   }
-  *m_error = QStringLiteral("%1 at line %2").arg(msg).arg(peek().line);
+  m_error = QStringLiteral("%1 at line %2").arg(msg).arg(peek().line);
   return false;
 }
 
@@ -58,11 +58,10 @@ bool AcParser::isPropertyName(TokenType t) const {
 
 // ── 解析入口 ──
 
-bool AcParser::parse(const QVector<Token> &tokens, Block &program, QString &error,
-                     QSet<QString> &declaredVars) {
+bool AcParser::parse(const QVector<Token> &tokens, Block &program, QSet<QString> &declaredVars) {
   m_tokens = tokens;
   m_pos = 0;
-  m_error = &error;
+  m_error.clear();
   m_declaredVars = &declaredVars;
   program = Block();
   return parseProgram(program);
@@ -122,7 +121,7 @@ bool AcParser::parseProgram(Block &block) {
     } else if (t.type == TOK_LET) {
       advance();
       if (peek().type != TOK_IDENT) {
-        *m_error = QStringLiteral("expected variable name after 'let' at line %1").arg(peek().line);
+        m_error = QStringLiteral("expected variable name after 'let' at line %1").arg(peek().line);
         return false;
       }
       m_declaredVars->insert(peek().text);
@@ -187,7 +186,7 @@ bool AcParser::parseBlockOrStmt(Block &block) {
 AcType AcParser::parseType() {
   // 类型必须以标识符开头（内建类型名或自定义类名）
   if (peek().type != TOK_IDENT) {
-    *m_error = QStringLiteral("expected type name at line %1").arg(peek().line);
+    m_error = QStringLiteral("expected type name at line %1").arg(peek().line);
     return AcType::any();
   }
 

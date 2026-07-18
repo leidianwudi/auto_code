@@ -38,6 +38,16 @@ struct Expr;
 /// @brief 访问级别
 enum class AccessLevel { kPublic, kProtected, kPrivate };
 
+/// @brief 复合赋值运算符类型
+enum class CompoundOp {
+  kNone,  ///< 无复合赋值
+  kAdd,   ///< +=
+  kSub,   ///< -=
+  kMul,   ///< *=
+  kDiv,   ///< /=
+  kMod    ///< %=
+};
+
 /// @brief 词法单元类型
 enum TokenType {
   TOK_EOF,              ///< 输入结束
@@ -415,12 +425,12 @@ struct AssignStmt {
   QString name;
   QString thisProp;
   Expr value;
-  bool isStatic = false;           ///< 是否为静态属性赋值
-  QString staticClassName;         ///< 静态类名（isStatic=true 时有效）
-  AcType typeAnnotation;           ///< let 声明时的类型注解（如 let x: Number = 1）
-  bool hasTypeAnnotation = false;  ///< 是否有类型注解
-  bool isExported = false;         ///< 是否导出
-  int compoundOp = 0;              ///< 复合赋值运算符：0=无, 1=+=, 2=-=, 3=*=
+  bool isStatic = false;                      ///< 是否为静态属性赋值
+  QString staticClassName;                    ///< 静态类名（isStatic=true 时有效）
+  AcType typeAnnotation;                      ///< let 声明时的类型注解（如 let x: Number = 1）
+  bool hasTypeAnnotation = false;             ///< 是否有类型注解
+  bool isExported = false;                    ///< 是否导出
+  CompoundOp compoundOp = CompoundOp::kNone;  ///< 复合赋值运算符
 };
 
 /// @brief 索引赋值语句：obj[expr] = value
@@ -432,10 +442,10 @@ struct IndexAssignStmt {
 
 /// @brief 属性赋值语句：obj.prop = value
 struct PropAssignStmt {
-  Expr objectExpr;     ///< 对象表达式（如变量名、this 等）
-  QString prop;        ///< 属性名
-  Expr value;          ///< 赋值表达式
-  int compoundOp = 0;  ///< 复合赋值运算符：0=无, 1=+=, 2=-=, 3=*=, 4=/=
+  Expr objectExpr;                            ///< 对象表达式（如变量名、this 等）
+  QString prop;                               ///< 属性名
+  Expr value;                                 ///< 赋值表达式
+  CompoundOp compoundOp = CompoundOp::kNone;  ///< 复合赋值运算符
 };
 
 /// @brief for 循环语句：for (var in array) { body } 或 for (init; cond; update) { body }

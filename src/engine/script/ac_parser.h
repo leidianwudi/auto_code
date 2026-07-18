@@ -17,10 +17,12 @@ public:
   /// @brief 解析入口：将 tokens 解析为 AST（跳过可选的 main 关键字）
   /// @param tokens 词法分析结果
   /// @param[out] program 输出的 AST 根节点
-  /// @param[out] error 错误信息
   /// @param[in,out] declaredVars 已声明的变量名集合（解析过程中会新增）
-  bool parse(const QVector<Token> &tokens, Block &program, QString &error,
-             QSet<QString> &declaredVars);
+  /// @return true 解析成功，false 解析失败（调用 error() 获取错误信息）
+  bool parse(const QVector<Token> &tokens, Block &program, QSet<QString> &declaredVars);
+
+  /// @brief 获取错误信息
+  QString error() const { return m_error; }
 
 private:
   // ── token 操作 ──
@@ -41,6 +43,10 @@ private:
   bool parseBlock(Block &block);
   bool parseBlockOrStmt(Block &block);
   bool parseStmt(Block::Stmt &stmt);
+  /// @brief 解析以标识符开头的语句（赋值/属性赋值/方法调用/索引赋值/表达式）
+  bool parseIdentStmt(Block::Stmt &stmt, const Token &t);
+  /// @brief 解析以 this 开头的语句（属性赋值/表达式）
+  bool parseThisStmt(Block::Stmt &stmt);
   bool parseCallStmt(CallStmt &cs);
   bool parseAssignStmt(AssignStmt &as);
   bool parseIndexAssignStmt(IndexAssignStmt &ias);
@@ -69,6 +75,10 @@ private:
   bool parseTemplateString(Expr &expr);
   bool parseMethodDef(MethodDef &md);
 
+  // ── 复合赋值运算符解析 ──
+  /// @brief 检查当前 token 是否为复合赋值运算符，如果是则消耗并返回对应枚举值
+  CompoundOp parseCompoundOp();
+
   // ── 类型解析 ──
   /// @brief 解析类型注解（: TypeExpr），返回类型结构
   AcType parseType();
@@ -78,6 +88,6 @@ private:
   // ── 内部状态 ──
   int m_pos = 0;
   QVector<Token> m_tokens;
-  QString *m_error = nullptr;
+  QString m_error;
   QSet<QString> *m_declaredVars = nullptr;
 };

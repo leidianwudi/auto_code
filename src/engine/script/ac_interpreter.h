@@ -66,6 +66,8 @@ private:
   void execIfStmt(const IfStmt &ifStmt);
   QJsonValue evalExpr(const Expr &expr);
   QJsonValue evalExprWithThis(const Expr &expr, const QJsonObject &thisObj);
+  /// @brief 解析类名.属性访问（静态属性 + 类对象回退），返回属性值；失败返回 null
+  QJsonValue resolveClassAccess(const QString &className, const QString &propName);
   QJsonValue evalBinary(const Expr &expr);
   QJsonValue evalUnary(const Expr &expr);
   QJsonValue evalMethodCall(const Expr &expr);
@@ -77,6 +79,9 @@ private:
   QJsonValue evalArrayBuiltin(const QJsonArray &arr, const QString &method,
                               const std::vector<std::unique_ptr<Expr>> &args, int line,
                               QJsonValue &modifiedArr);
+  /// @brief 执行类方法调用（native 类 + 用户类 + super）
+  QJsonValue evalClassMethod(const QJsonObject &obj, const QString &className, const Expr &expr,
+                             bool isChained, bool isSuper);
 
   // ── 变量操作 ──
   QJsonValue resolveVar(const QString &name) const;
@@ -116,7 +121,7 @@ private:
   QJsonValue execUserFunction(const MethodDef &func, const QJsonValue &callArgs);
 
   // ── 运行状态 ──
-  QString *m_error = nullptr;
+  QString m_error;
   QString m_scriptDir;
   QString m_rootDir;
   QVector<QHash<QString, QJsonValue>> m_scopeStack;

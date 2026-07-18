@@ -22,21 +22,42 @@
 //  表达式求值
 // ═════════════════════════════════════════════════════════════════════════════
 
+QJsonValue AcInterpreter::resolveClassAccess(const QString &className, const QString &propName) {
+  if (!m_classes.contains(className)) return QJsonValue(QJsonValue::Undefined);
+  const ClassDef &cd = m_classes[className];
+  if (!m_staticInited.contains(className)) {
+    initStaticVars(cd);
+  }
+  for (const auto &prop : cd.properties) {
+    if (prop.isStatic && prop.key == propName) {
+      QJsonObject sv = m_staticVars.value(className);
+      return sv.value(propName);
+    }
+  }
+  return QJsonValue(QJsonValue::Undefined);
+}
+
 QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
   switch (expr.kind) {
-    case Expr::kString:
-      return QJsonValue(expr.strVal);
+    case Expr::kNull:
+      return QJsonValue();
+
+    case Expr::kBool:
+      return QJsonValue(expr.boolVal);
 
     case Expr::kNumber:
       return QJsonValue(expr.numVal);
+
+    case Expr::kString:
+      return QJsonValue(expr.strVal);
 
     case Expr::kThis:
       return QJsonValue(m_currentThis);
 
     case Expr::kIdent: {
       if (!containsVar(expr.ident)) {
-        *m_error = QStringLiteral("undefined variable '%1' at line %2")
-                       .arg(expr.ident, QString::number(expr.line));
+        m_error = QStringLiteral("undefined variable '%1' at line %2")
+                      .arg(expr.ident, QString::number(expr.line));
         return QJsonValue();
       }
       return resolveVar(expr.ident);
@@ -49,21 +70,30 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
         if (obj.isNull() && expr.propObject->kind == Expr::kIdent &&
             m_classes.contains(expr.propObject->ident)) {
           const QString &clsName = expr.propObject->ident;
-          const ClassDef &cd = m_classes[clsName];
-          if (!m_staticInited.contains(clsName)) {
-            initStaticVars(cd);
+          QJsonValue staticVal = resolveClassAccess(clsName, expr.prop);
+          if (!staticVal.isUndefined()) {
+            m_error.clear();
+            return staticVal;
           }
-          for (const auto &prop : cd.properties) {
-            if (prop.isStatic && prop.key == expr.prop) {
-              m_error->clear();
-              QJsonObject sv = m_staticVars.value(clsName);
-              return sv.value(expr.prop);
+          const ClassDef &cd = m_classes[clsName];
+          for (const auto &p : cd.properties) {
+            if (p.isStatic && p.key == expr.prop) {
+              m_error.clear();
+              return staticVal;
+            }
+          }
+          for (const auto &m : cd.methods) {
+            if (m.isStatic && m.name == expr.prop) {
+              QJsonObject classObj;
+              classObj[QString::fromLatin1(AcRuntime::kClassKey)] = clsName;
+              m_error.clear();
+              return QJsonValue(classObj);
             }
           }
           QJsonObject classObj;
           classObj[QString::fromLatin1(AcRuntime::kClassKey)] = clsName;
           obj = QJsonValue(classObj);
-          m_error->clear();
+          m_error.clear();
         }
       } else if (expr.ident == QString::fromLatin1(AcKeyword::kThis)) {
         obj = QJsonValue(m_currentThis);
@@ -79,18 +109,25 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
             return resolveVar(enumMemberName);
           }
           if (m_classes.contains(expr.ident)) {
-            const ClassDef &cd = m_classes[expr.ident];
-            if (!m_staticInited.contains(expr.ident)) {
-              initStaticVars(cd);
+            QJsonValue staticVal = resolveClassAccess(expr.ident, expr.prop);
+            if (!staticVal.isUndefined()) {
+              return staticVal;
             }
-            for (const auto &prop : cd.properties) {
-              if (prop.isStatic && prop.key == expr.prop) {
-                QJsonObject sv = m_staticVars.value(expr.ident);
-                return sv.value(expr.prop);
+            const ClassDef &cd = m_classes[expr.ident];
+            for (const auto &p : cd.properties) {
+              if (p.isStatic && p.key == expr.prop) {
+                return staticVal;
+              }
+            }
+            for (const auto &m : cd.methods) {
+              if (m.isStatic && m.name == expr.prop) {
+                QJsonObject classObj;
+                classObj[QString::fromLatin1(AcRuntime::kClassKey)] = expr.ident;
+                return QJsonValue(classObj);
               }
             }
           }
-          *m_error = QStringLiteral("undefined variable '%1'").arg(expr.ident);
+          m_error = QStringLiteral("undefined variable '%1'").arg(expr.ident);
           return QJsonValue();
         }
       }
@@ -144,7 +181,7 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
         if (idx >= 0 && idx < s.length()) return QJsonValue(QString(s[idx]));
         return QJsonValue();
       }
-      *m_error = QStringLiteral("cannot access index on value at line %1").arg(expr.line);
+      m_error = QStringLiteral("cannot access index on value at line %1").arg(expr.line);
       return QJsonValue();
     }
 
@@ -190,8 +227,8 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
     case Expr::kStaticAccess: {
       QString className = expr.className;
       if (!m_classes.contains(className)) {
-        *m_error = QStringLiteral("undefined class '%1' at line %2")
-                       .arg(className, QString::number(expr.line));
+        m_error = QStringLiteral("undefined class '%1' at line %2")
+                      .arg(className, QString::number(expr.line));
         return QJsonValue();
       }
       const ClassDef &cd = m_classes[className];
@@ -210,7 +247,7 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
       QJsonArray callArgs;
       for (const auto &arg : expr.funcCall.args) {
         callArgs.append(evalExpr(*arg));
-        if (!m_error->isEmpty()) return QJsonValue();
+        if (!m_error.isEmpty()) return QJsonValue();
       }
       for (const auto &md : cd.methods) {
         if (md.isStatic && md.name == expr.prop) {
@@ -218,8 +255,8 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
         }
       }
 
-      *m_error = QStringLiteral("class '%1' has no static member '%2' at line %3")
-                     .arg(className, expr.prop, QString::number(expr.line));
+      m_error = QStringLiteral("class '%1' has no static member '%2' at line %3")
+                    .arg(className, expr.prop, QString::number(expr.line));
       return QJsonValue();
     }
 
@@ -260,11 +297,6 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
       }
       return val;
     }
-
-    case Expr::kNull:
-      return QJsonValue();
-    case Expr::kUndefined:
-      return QJsonValue();
 
     case Expr::kTernary:
       if (isTruthy(evalExpr(*expr.left)))
@@ -310,13 +342,13 @@ QJsonValue AcInterpreter::evalBinary(const Expr &expr) {
       return QJsonValue(l.toDouble() * r.toDouble());
     case Expr::kDiv:
       if (r.toDouble() == 0.0) {
-        *m_error = QStringLiteral("division by zero");
+        m_error = QStringLiteral("division by zero");
         return QJsonValue();
       }
       return QJsonValue(l.toDouble() / r.toDouble());
     case Expr::kMod:
       if (r.toDouble() == 0.0) {
-        *m_error = QStringLiteral("modulo by zero");
+        m_error = QStringLiteral("modulo by zero");
         return QJsonValue();
       }
       return QJsonValue(fmod(l.toDouble(), r.toDouble()));
@@ -400,7 +432,7 @@ QJsonValue AcInterpreter::callBuiltin(const QString &name,
 
   if (name == AcBuiltin::kCall) {
     if (arr.size() < 2) {
-      *m_error = QStringLiteral("call() requires at least 2 arguments");
+      m_error = QStringLiteral("call() requires at least 2 arguments");
       return QJsonValue();
     }
     QString cls = arr[0].toString();
@@ -410,7 +442,7 @@ QJsonValue AcInterpreter::callBuiltin(const QString &name,
     QJsonValue r = FunMgr::ins().call(cls, func, callArgs);
     QString err = FunMgr::takeError();
     if (!err.isEmpty()) {
-      *m_error = QStringLiteral("%1 at line %2").arg(err).arg(line);
+      m_error = QStringLiteral("%1 at line %2").arg(err).arg(line);
       return QJsonValue();
     }
     return r;
@@ -423,7 +455,7 @@ QJsonValue AcInterpreter::callBuiltin(const QString &name,
     FunBuiltin::setCurrentLine(0);
     QString err = FunMgr::takeError();
     if (!err.isEmpty()) {
-      *m_error = QStringLiteral("%1 at line %2").arg(err).arg(line);
+      m_error = QStringLiteral("%1 at line %2").arg(err).arg(line);
       return QJsonValue();
     }
     return r;
@@ -445,7 +477,7 @@ QJsonValue AcInterpreter::callBuiltin(const QString &name,
     }
   }
 
-  *m_error = QStringLiteral("unknown function '%1' at line %2").arg(name).arg(line);
+  m_error = QStringLiteral("unknown function '%1' at line %2").arg(name).arg(line);
   return QJsonValue();
 }
 
@@ -458,21 +490,21 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
     const QString &method = expr.methodCall.methodName;
     if (method == QStringLiteral("parse")) {
       if (expr.methodCall.args.empty()) {
-        *m_error = QStringLiteral("JSON.parse() requires 1 argument at line %1").arg(expr.line);
+        m_error = QStringLiteral("JSON.parse() requires 1 argument at line %1").arg(expr.line);
         return QJsonValue();
       }
       QJsonValue argVal = evalExpr(*expr.methodCall.args[0]);
       if (!argVal.isString()) {
-        *m_error =
+        m_error =
             QStringLiteral("JSON.parse() argument must be a string at line %1").arg(expr.line);
         return QJsonValue();
       }
       QJsonParseError parseError;
       QJsonDocument doc = QJsonDocument::fromJson(argVal.toString().toUtf8(), &parseError);
       if (parseError.error != QJsonParseError::NoError) {
-        *m_error = QStringLiteral("JSON.parse() error: %1 at line %2")
-                       .arg(parseError.errorString())
-                       .arg(expr.line);
+        m_error = QStringLiteral("JSON.parse() error: %1 at line %2")
+                      .arg(parseError.errorString())
+                      .arg(expr.line);
         return QJsonValue();
       }
       if (doc.isObject()) return doc.object();
@@ -481,7 +513,7 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
     }
     if (method == QStringLiteral("stringify")) {
       if (expr.methodCall.args.empty()) {
-        *m_error = QStringLiteral("JSON.stringify() requires 1 argument at line %1").arg(expr.line);
+        m_error = QStringLiteral("JSON.stringify() requires 1 argument at line %1").arg(expr.line);
         return QJsonValue();
       }
       QJsonValue argVal = evalExpr(*expr.methodCall.args[0]);
@@ -494,7 +526,7 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
         return QJsonValue(argVal.toString());
       return QString::fromUtf8(doc.toJson(QJsonDocument::Indented));
     }
-    *m_error = QStringLiteral("JSON has no method '%1' at line %2").arg(method).arg(expr.line);
+    m_error = QStringLiteral("JSON has no method '%1' at line %2").arg(method).arg(expr.line);
     return QJsonValue();
   }
 
@@ -506,9 +538,9 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
         QJsonObject classObj;
         classObj[QString::fromLatin1(AcRuntime::kClassKey)] = expr.methodCall.object->ident;
         objVal = QJsonValue(classObj);
-        m_error->clear();
+        m_error.clear();
       } else {
-        *m_error = QStringLiteral("method call on null value at line %1").arg(expr.line);
+        m_error = QStringLiteral("method call on null value at line %1").arg(expr.line);
         return QJsonValue();
       }
     }
@@ -522,7 +554,7 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
         classObj[QString::fromLatin1(AcRuntime::kClassKey)] = expr.methodCall.objName;
         objVal = QJsonValue(classObj);
       } else {
-        *m_error =
+        m_error =
             QStringLiteral("undefined variable '%1' in method call").arg(expr.methodCall.objName);
         return QJsonValue();
       }
@@ -566,15 +598,15 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
 
   if (!objVal.isObject()) {
     QString name = isChained ? QStringLiteral("chain expression") : expr.methodCall.objName;
-    *m_error = QStringLiteral("cannot call method on non-object '%1' (type=%2) at line %3")
-                   .arg(name)
-                   .arg(objVal.isDouble()   ? QStringLiteral("Number")
-                        : objVal.isBool()   ? QStringLiteral("Bool")
-                        : objVal.isNull()   ? QStringLiteral("Null")
-                        : objVal.isArray()  ? QStringLiteral("Array")
-                        : objVal.isString() ? QStringLiteral("String")
-                                            : QStringLiteral("Unknown"))
-                   .arg(expr.line);
+    m_error = QStringLiteral("cannot call method on non-object '%1' (type=%2) at line %3")
+                  .arg(name)
+                  .arg(objVal.isDouble()   ? QStringLiteral("Number")
+                       : objVal.isBool()   ? QStringLiteral("Bool")
+                       : objVal.isNull()   ? QStringLiteral("Null")
+                       : objVal.isArray()  ? QStringLiteral("Array")
+                       : objVal.isString() ? QStringLiteral("String")
+                                           : QStringLiteral("Unknown"))
+                  .arg(expr.line);
     return QJsonValue();
   }
 
@@ -582,10 +614,15 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
   QString className = obj.value(QString::fromLatin1(AcRuntime::kClassKey)).toString();
   if (className.isEmpty() || !m_classes.contains(className)) {
     QString name = isChained ? QStringLiteral("chain expression") : expr.methodCall.objName;
-    *m_error = QStringLiteral("object '%1' has no class information").arg(name);
+    m_error = QStringLiteral("object '%1' has no class information").arg(name);
     return QJsonValue();
   }
 
+  return evalClassMethod(obj, className, expr, isChained, isSuper);
+}
+
+QJsonValue AcInterpreter::evalClassMethod(const QJsonObject &obj, const QString &className,
+                                          const Expr &expr, bool isChained, bool isSuper) {
   const ClassDef &cd = m_classes[className];
 
   if (cd.isNative) {
@@ -595,7 +632,7 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
     QJsonValue r = FunMgr::ins().call(className, expr.methodCall.methodName, args);
     QString err = FunMgr::takeError();
     if (!err.isEmpty()) {
-      *m_error = QStringLiteral("%1 at line %2").arg(err).arg(expr.line);
+      m_error = QStringLiteral("%1 at line %2").arg(err).arg(expr.line);
       return QJsonValue();
     }
     return r;
@@ -604,8 +641,8 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
   QString searchClassName = className;
   if (isSuper) {
     if (cd.baseClass.isEmpty()) {
-      *m_error = QStringLiteral("cannot use 'super' in class without base class at line %1")
-                     .arg(expr.line);
+      m_error = QStringLiteral("cannot use 'super' in class without base class at line %1")
+                    .arg(expr.line);
       return QJsonValue();
     }
     searchClassName = cd.baseClass;
@@ -647,14 +684,14 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
     return result;
   }
 
-  *m_error = QStringLiteral("method '%1' not found in class '%2'")
-                 .arg(expr.methodCall.methodName, className);
+  m_error = QStringLiteral("method '%1' not found in class '%2'")
+                .arg(expr.methodCall.methodName, className);
   return QJsonValue();
 }
 
 QJsonValue AcInterpreter::evalNewInstance(const Expr &expr) {
   if (!m_classes.contains(expr.className)) {
-    *m_error = QStringLiteral("undefined class '%1'").arg(expr.className);
+    m_error = QStringLiteral("undefined class '%1'").arg(expr.className);
     return QJsonValue();
   }
 
@@ -695,7 +732,7 @@ QJsonValue AcInterpreter::evalNewInstance(const Expr &expr) {
       QJsonArray ctorArgs;
       for (const auto &arg : expr.constructorArgs) ctorArgs.append(evalExpr(*arg));
       QJsonValue ctorResult = execMethod(m, instance, QJsonValue(ctorArgs));
-      if (!m_error->isEmpty()) return QJsonValue();
+      if (!m_error.isEmpty()) return QJsonValue();
       instance = m_modifiedThis;
       break;
     }
@@ -709,7 +746,7 @@ QJsonValue AcInterpreter::evalStringBuiltin(const QString &obj, const QString &m
                                             int line) {
   QString err;
   QJsonValue result = AcBuiltinEval::evalStringMethod(*this, obj, method, args, line, err);
-  if (!err.isEmpty()) *m_error = err;
+  if (!err.isEmpty()) m_error = err;
   return result;
 }
 
@@ -719,6 +756,6 @@ QJsonValue AcInterpreter::evalArrayBuiltin(const QJsonArray &arr, const QString 
   QString err;
   QJsonValue result =
       AcBuiltinEval::evalArrayMethod(*this, arr, method, args, line, modifiedArr, err);
-  if (!err.isEmpty()) *m_error = err;
+  if (!err.isEmpty()) m_error = err;
   return result;
 }

@@ -18,7 +18,6 @@
 #include "ac_interpreter.h"
 #include "ac_object_manager.h"
 
-
 // ═════════════════════════════════════════════════════════════════════════════
 //  类方法执行
 // ═════════════════════════════════════════════════════════════════════════════
@@ -154,7 +153,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       QJsonValue cls = evalExpr(stmt.call.className);
       QJsonValue func = evalExpr(stmt.call.funcName);
       QJsonValue args = evalExpr(stmt.call.args);
-      if (!m_error->isEmpty()) return;
+      if (!m_error.isEmpty()) return;
       QString clsName = cls.toString();
       QString funcName = func.toString();
       QJsonArray argsArr = args.toArray();
@@ -162,16 +161,16 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       FunMgr::ins().call(clsName, funcName, argsArr);
       QString err = FunMgr::takeError();
       if (!err.isEmpty()) {
-        *m_error = QStringLiteral("%1 at line %2").arg(err).arg(stmt.call.className.line);
+        m_error = QStringLiteral("%1 at line %2").arg(err).arg(stmt.call.className.line);
       }
       break;
     }
 
     case Block::Stmt::kAssign: {
       QJsonValue val = evalExpr(stmt.assign.value);
-      if (!m_error->isEmpty()) return;
+      if (!m_error.isEmpty()) return;
 
-      if (stmt.assign.compoundOp != 0) {
+      if (stmt.assign.compoundOp != CompoundOp::kNone) {
         QJsonValue currentVal;
         if (stmt.assign.isStatic) {
           currentVal = m_staticVars[stmt.assign.staticClassName].value(stmt.assign.name);
@@ -180,7 +179,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
         } else {
           currentVal = resolveVar(stmt.assign.name);
         }
-        if (stmt.assign.compoundOp == 1) {
+        if (stmt.assign.compoundOp == CompoundOp::kAdd) {
           if (currentVal.isString() || val.isString()) {
             QString ls = currentVal.isString() ? currentVal.toString()
                                                : QString::number(currentVal.toDouble());
@@ -193,26 +192,27 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
           double left = currentVal.toDouble();
           double right = val.toDouble();
           switch (stmt.assign.compoundOp) {
-            case 2:
+            case CompoundOp::kSub:
               val = QJsonValue(left - right);
               break;
-            case 3:
+            case CompoundOp::kMul:
               val = QJsonValue(left * right);
               break;
-            case 4:
+            case CompoundOp::kDiv:
               if (right == 0) {
-                *m_error =
-                    QStringLiteral("division by zero at line %1").arg(stmt.assign.value.line);
+                m_error = QStringLiteral("division by zero at line %1").arg(stmt.assign.value.line);
                 return;
               }
               val = QJsonValue(left / right);
               break;
-            case 5:
+            case CompoundOp::kMod:
               if (right == 0) {
-                *m_error = QStringLiteral("modulo by zero at line %1").arg(stmt.assign.value.line);
+                m_error = QStringLiteral("modulo by zero at line %1").arg(stmt.assign.value.line);
                 return;
               }
               val = QJsonValue(fmod(left, right));
+              break;
+            default:
               break;
           }
         }
@@ -324,25 +324,27 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       retainIfInstance(newVal);
       if (objVal.isObject()) {
         QJsonObject obj = objVal.toObject();
-        if (stmt.propAssign.compoundOp != 0) {
+        if (stmt.propAssign.compoundOp != CompoundOp::kNone) {
           QJsonValue oldVal = obj.value(stmt.propAssign.prop);
           double oldNum = oldVal.isDouble() ? oldVal.toDouble() : 0.0;
           double newNum = newVal.isDouble() ? newVal.toDouble() : 0.0;
           switch (stmt.propAssign.compoundOp) {
-            case 1:
+            case CompoundOp::kAdd:
               newVal = QJsonValue(oldNum + newNum);
               break;
-            case 2:
+            case CompoundOp::kSub:
               newVal = QJsonValue(oldNum - newNum);
               break;
-            case 3:
+            case CompoundOp::kMul:
               newVal = QJsonValue(oldNum * newNum);
               break;
-            case 4:
+            case CompoundOp::kDiv:
               newVal = QJsonValue(newNum != 0 ? oldNum / newNum : 0.0);
               break;
-            case 5:
+            case CompoundOp::kMod:
               newVal = QJsonValue(newNum != 0 ? fmod(oldNum, newNum) : 0.0);
+              break;
+            default:
               break;
           }
         }
@@ -364,13 +366,13 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       if (stmt.forStmt.isStandard) {
         pushScope();
         execBlock(stmt.forStmt.initBlock);
-        if (!m_error->isEmpty()) {
+        if (!m_error.isEmpty()) {
           popScope();
           return;
         }
         while (isTruthy(evalExpr(stmt.forStmt.condition))) {
           execBlock(stmt.forStmt.body);
-          if (!m_error->isEmpty()) {
+          if (!m_error.isEmpty()) {
             popScope();
             return;
           }
@@ -380,7 +382,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
           }
           m_hasContinue = false;
           evalExpr(stmt.forStmt.updateExpr);
-          if (!m_error->isEmpty()) {
+          if (!m_error.isEmpty()) {
             popScope();
             return;
           }
@@ -406,7 +408,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
           setVar(stmt.forStmt.varName, v);
           execBlock(stmt.forStmt.body);
           popScope();
-          if (!m_error->isEmpty()) return;
+          if (!m_error.isEmpty()) return;
           if (m_hasBreak) {
             m_hasBreak = false;
             break;
@@ -425,7 +427,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       pushScope();
       while (isTruthy(evalExpr(stmt.whileStmt.condition))) {
         execBlock(stmt.whileStmt.body);
-        if (!m_error->isEmpty()) {
+        if (!m_error.isEmpty()) {
           popScope();
           return;
         }
@@ -458,7 +460,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
           pushScope();
           execBlock(sc.body);
           popScope();
-          if (!m_error->isEmpty()) return;
+          if (!m_error.isEmpty()) return;
           if (m_hasBreak) {
             m_hasBreak = false;
             matched = false;
@@ -506,7 +508,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
 
     case Block::Stmt::kUsing: {
       QJsonValue val = evalExpr(*stmt.usingStmt.value);
-      if (!m_error->isEmpty()) return;
+      if (!m_error.isEmpty()) return;
       retainIfInstance(val);
       setVar(stmt.usingStmt.varName, val);
       m_inferredTypes[stmt.usingStmt.varName] = inferTypeName(val);
@@ -530,7 +532,7 @@ void AcInterpreter::execBlock(const Block &block) {
   for (int i = 0; i < block.stmts.size(); ++i) {
     const auto &stmt = block.stmts[i];
     execStmt(stmt);
-    if (!m_error->isEmpty()) return;
+    if (!m_error.isEmpty()) return;
     if (m_hasReturned || m_hasBreak || m_hasContinue) return;
   }
 }

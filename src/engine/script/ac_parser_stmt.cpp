@@ -26,7 +26,7 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
     if (next.type == TOK_LET) {
       advance();
       if (peek().type != TOK_IDENT) {
-        *m_error =
+        m_error =
             QStringLiteral("expected variable name after 'export let' at line %1").arg(peek().line);
         return false;
       }
@@ -69,7 +69,7 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
       return true;
     }
 
-    *m_error =
+    m_error =
         QStringLiteral(
             "expected 'let', 'class', 'function', 'interface', or 'enum' after 'export' at line %1")
             .arg(next.line);
@@ -151,7 +151,7 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
   if (t.type == TOK_USING) {
     advance();
     if (peek().type != TOK_IDENT) {
-      *m_error = QStringLiteral("expected variable name after 'using' at line %1").arg(peek().line);
+      m_error = QStringLiteral("expected variable name after 'using' at line %1").arg(peek().line);
       return false;
     }
     stmt.usingStmt.varName = advance().text;
@@ -165,11 +165,11 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
   if (t.type == TOK_LET) {
     advance();
     if (peek().type != TOK_IDENT) {
-      *m_error = QStringLiteral("expected variable name after 'let' at line %1").arg(peek().line);
+      m_error = QStringLiteral("expected variable name after 'let' at line %1").arg(peek().line);
       return false;
     }
     if (!peek().text.isEmpty() && peek().text[0].isDigit()) {
-      *m_error =
+      m_error =
           QStringLiteral("variable name cannot start with a digit at line %1").arg(peek().line);
       return false;
     }
@@ -179,187 +179,158 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
   }
 
   if (t.type == TOK_IDENT) {
-    // ClassName::prop = value  — 静态属性赋值
-    if (m_pos + 2 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_SCOPE &&
-        m_tokens[m_pos + 2].type == TOK_IDENT && m_pos + 3 < m_tokens.size() &&
-        m_tokens[m_pos + 3].type == TOK_EQUALS) {
-      stmt.kind = Block::Stmt::kAssign;
-      stmt.assign.isStatic = true;
-      stmt.assign.staticClassName = advance().text;
-      advance();                          // skip ::
-      stmt.assign.name = advance().text;  // member name
-      if (!expect(TOK_EQUALS, QStringLiteral("expected '='"))) return false;
-      return parseExpr(stmt.assign.value);
-    }
-    // ClassName::member() 或 ClassName::member  — 静态访问表达式语句
-    if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_SCOPE) {
-      stmt.kind = Block::Stmt::kExpr;
-      return parseExpr(stmt.exprStmt);
-    }
-    if (m_pos + 1 < m_tokens.size() &&
-        (m_tokens[m_pos + 1].type == TOK_EQUALS || m_tokens[m_pos + 1].type == TOK_PLUSEQ ||
-         m_tokens[m_pos + 1].type == TOK_MINUSEQ || m_tokens[m_pos + 1].type == TOK_MULEQ ||
-         m_tokens[m_pos + 1].type == TOK_DIVEQ || m_tokens[m_pos + 1].type == TOK_MODEQ)) {
-      if (!m_declaredVars->contains(t.text)) {
-        *m_error = QStringLiteral(
-                       "variable '%1' must be declared with 'let' "
-                       "before assignment at line %2")
-                       .arg(t.text, QString::number(t.line));
-        return false;
-      }
-      stmt.kind = Block::Stmt::kAssign;
-      return parseAssignStmt(stmt.assign);
-    }
-    if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_LBRACKET) {
-      stmt.kind = Block::Stmt::kIndexAssign;
-      return parseIndexAssignStmt(stmt.indexAssign);
-    }
-    if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_LPAREN) {
-      stmt.kind = Block::Stmt::kExpr;
-      QString name = advance().text;
-      return parseFuncCall(name, stmt.exprStmt);
-    }
-    if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_DOT) {
-      // 检查是否为 ident.prop[key] = value（链式索引赋值）
-      if (m_pos + 2 < m_tokens.size() && m_tokens[m_pos + 2].type == TOK_IDENT &&
-          m_pos + 3 < m_tokens.size() && m_tokens[m_pos + 3].type == TOK_LBRACKET) {
-        stmt.kind = Block::Stmt::kIndexAssign;
-        stmt.indexAssign.objectExpr.kind = Expr::kPropAccess;
-        stmt.indexAssign.objectExpr.ident = advance().text;
-        stmt.indexAssign.objectExpr.line = t.line;
-        advance();  // skip .
-        stmt.indexAssign.objectExpr.prop = advance().text;
-        advance();  // skip [
-        if (!parseExpr(stmt.indexAssign.indexExpr)) return false;
-        if (!expect(TOK_RBRACKET, QStringLiteral("expected ']'"))) return false;
-        if (!expect(TOK_EQUALS, QStringLiteral("expected '='"))) return false;
-        return parseExpr(stmt.indexAssign.value);
-      }
-      // 检查是否为 ident.prop = value（属性赋值）
-      if (m_pos + 2 < m_tokens.size() && m_tokens[m_pos + 2].type == TOK_IDENT &&
-          m_pos + 3 < m_tokens.size() &&
-          (m_tokens[m_pos + 3].type == TOK_EQUALS || m_tokens[m_pos + 3].type == TOK_PLUSEQ ||
-           m_tokens[m_pos + 3].type == TOK_MINUSEQ || m_tokens[m_pos + 3].type == TOK_MULEQ ||
-           m_tokens[m_pos + 3].type == TOK_DIVEQ || m_tokens[m_pos + 3].type == TOK_MODEQ)) {
-        stmt.kind = Block::Stmt::kPropAssign;
-        stmt.propAssign.objectExpr.kind = Expr::kIdent;
-        stmt.propAssign.objectExpr.ident = advance().text;
-        stmt.propAssign.objectExpr.line = t.line;
-        advance();  // skip .
-        stmt.propAssign.prop = advance().text;
-        Token opToken = peek();
-        if (opToken.type == TOK_PLUSEQ) {
-          stmt.propAssign.compoundOp = 1;
-          advance();
-        } else if (opToken.type == TOK_MINUSEQ) {
-          stmt.propAssign.compoundOp = 2;
-          advance();
-        } else if (opToken.type == TOK_MULEQ) {
-          stmt.propAssign.compoundOp = 3;
-          advance();
-        } else if (opToken.type == TOK_DIVEQ) {
-          stmt.propAssign.compoundOp = 4;
-          advance();
-        } else if (opToken.type == TOK_MODEQ) {
-          stmt.propAssign.compoundOp = 5;
-          advance();
-        } else {
-          if (!expect(TOK_EQUALS, QStringLiteral("expected '='"))) return false;
-        }
-        return parseExpr(stmt.propAssign.value);
-      }
-      // 检查是否为 ident.prop[expr] = value（链式索引赋值，走表达式）
-      // 或者 ident.prop.method()（方法调用，走表达式）
-      stmt.kind = Block::Stmt::kExpr;
-      return parseExpr(stmt.exprStmt);
-    }
+    return parseIdentStmt(stmt, t);
   }
 
   if (t.type == TOK_THIS) {
-    if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_DOT) {
-      int savedPos = m_pos;
-      advance();  // skip this
-      advance();  // skip .
-      if (!isPropertyName(peek().type)) {
-        *m_error =
-            QStringLiteral("expected property name after 'this.' at line %1").arg(peek().line);
-        return false;
-      }
-      QString prop = peek().text;
-      TokenType assignOp = peek(1).type;
-      bool isCompoundAssign =
-          (assignOp == TOK_PLUSEQ || assignOp == TOK_MINUSEQ || assignOp == TOK_MULEQ ||
-           assignOp == TOK_DIVEQ || assignOp == TOK_MODEQ);
-      // 检查 this.prop 后面是否跟 '=' 或复合赋值运算符
-      if (m_pos + 2 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_DOT &&
-          m_tokens[m_pos + 2].type == TOK_IDENT && m_pos + 3 < m_tokens.size() &&
-          (m_tokens[m_pos + 3].type == TOK_EQUALS || isCompoundAssign)) {
-        advance();  // skip property name
-        stmt.assign.thisProp = prop;
-        Token opToken = peek();
-        if (opToken.type == TOK_PLUSEQ) {
-          stmt.assign.compoundOp = 1;
-          advance();
-        } else if (opToken.type == TOK_MINUSEQ) {
-          stmt.assign.compoundOp = 2;
-          advance();
-        } else if (opToken.type == TOK_MULEQ) {
-          stmt.assign.compoundOp = 3;
-          advance();
-        } else if (opToken.type == TOK_DIVEQ) {
-          stmt.assign.compoundOp = 4;
-          advance();
-        } else if (opToken.type == TOK_MODEQ) {
-          stmt.assign.compoundOp = 5;
-          advance();
-        } else {
-          if (!expect(TOK_EQUALS,
-                      QStringLiteral("expected '=' after 'this.%1'").arg(stmt.assign.thisProp)))
-            return false;
-        }
-        stmt.kind = Block::Stmt::kAssign;
-        return parseExpr(stmt.assign.value);
-      }
-      // this.prop [=|+=|-=|*=/=] value 的简单检测
-      if (m_pos + 1 < m_tokens.size() &&
-          (m_tokens[m_pos + 1].type == TOK_EQUALS || isCompoundAssign)) {
-        advance();  // skip property name
-        stmt.assign.thisProp = prop;
-        Token opToken = peek();
-        if (opToken.type == TOK_PLUSEQ) {
-          stmt.assign.compoundOp = 1;
-          advance();
-        } else if (opToken.type == TOK_MINUSEQ) {
-          stmt.assign.compoundOp = 2;
-          advance();
-        } else if (opToken.type == TOK_MULEQ) {
-          stmt.assign.compoundOp = 3;
-          advance();
-        } else if (opToken.type == TOK_DIVEQ) {
-          stmt.assign.compoundOp = 4;
-          advance();
-        } else if (opToken.type == TOK_MODEQ) {
-          stmt.assign.compoundOp = 5;
-          advance();
-        } else {
-          if (!expect(TOK_EQUALS,
-                      QStringLiteral("expected '=' after 'this.%1'").arg(stmt.assign.thisProp)))
-            return false;
-        }
-        stmt.kind = Block::Stmt::kAssign;
-        return parseExpr(stmt.assign.value);
-      }
-      // 回退到表达式语句（恢复位置，让 parseExpr 从 this 开始解析）
-      m_pos = savedPos;
-      stmt.kind = Block::Stmt::kExpr;
-      return parseExpr(stmt.exprStmt);
-    }
-    // this 作为表达式语句
-    stmt.kind = Block::Stmt::kExpr;
-    return parseExpr(stmt.exprStmt);
+    return parseThisStmt(stmt);
   }
 
   // 默认：表达式语句
+  stmt.kind = Block::Stmt::kExpr;
+  return parseExpr(stmt.exprStmt);
+}
+
+bool AcParser::parseIdentStmt(Block::Stmt &stmt, const Token &t) {
+  // ClassName::prop = value  — 静态属性赋值
+  if (m_pos + 2 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_SCOPE &&
+      m_tokens[m_pos + 2].type == TOK_IDENT && m_pos + 3 < m_tokens.size() &&
+      m_tokens[m_pos + 3].type == TOK_EQUALS) {
+    stmt.kind = Block::Stmt::kAssign;
+    stmt.assign.isStatic = true;
+    stmt.assign.staticClassName = advance().text;
+    advance();                          // skip ::
+    stmt.assign.name = advance().text;  // member name
+    if (!expect(TOK_EQUALS, QStringLiteral("expected '='"))) return false;
+    return parseExpr(stmt.assign.value);
+  }
+  // ClassName::member() 或 ClassName::member  — 静态访问表达式语句
+  if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_SCOPE) {
+    stmt.kind = Block::Stmt::kExpr;
+    return parseExpr(stmt.exprStmt);
+  }
+  if (m_pos + 1 < m_tokens.size() &&
+      (m_tokens[m_pos + 1].type == TOK_EQUALS || m_tokens[m_pos + 1].type == TOK_PLUSEQ ||
+       m_tokens[m_pos + 1].type == TOK_MINUSEQ || m_tokens[m_pos + 1].type == TOK_MULEQ ||
+       m_tokens[m_pos + 1].type == TOK_DIVEQ || m_tokens[m_pos + 1].type == TOK_MODEQ)) {
+    if (!m_declaredVars->contains(t.text)) {
+      m_error = QStringLiteral(
+                    "variable '%1' must be declared with 'let' "
+                    "before assignment at line %2")
+                    .arg(t.text, QString::number(t.line));
+      return false;
+    }
+    stmt.kind = Block::Stmt::kAssign;
+    return parseAssignStmt(stmt.assign);
+  }
+  if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_LBRACKET) {
+    stmt.kind = Block::Stmt::kIndexAssign;
+    return parseIndexAssignStmt(stmt.indexAssign);
+  }
+  if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_LPAREN) {
+    stmt.kind = Block::Stmt::kExpr;
+    QString name = advance().text;
+    return parseFuncCall(name, stmt.exprStmt);
+  }
+  if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_DOT) {
+    // 检查是否为 ident.prop[key] = value（链式索引赋值）
+    if (m_pos + 2 < m_tokens.size() && m_tokens[m_pos + 2].type == TOK_IDENT &&
+        m_pos + 3 < m_tokens.size() && m_tokens[m_pos + 3].type == TOK_LBRACKET) {
+      stmt.kind = Block::Stmt::kIndexAssign;
+      stmt.indexAssign.objectExpr.kind = Expr::kPropAccess;
+      stmt.indexAssign.objectExpr.ident = advance().text;
+      stmt.indexAssign.objectExpr.line = t.line;
+      advance();  // skip .
+      stmt.indexAssign.objectExpr.prop = advance().text;
+      advance();  // skip [
+      if (!parseExpr(stmt.indexAssign.indexExpr)) return false;
+      if (!expect(TOK_RBRACKET, QStringLiteral("expected ']'"))) return false;
+      if (!expect(TOK_EQUALS, QStringLiteral("expected '='"))) return false;
+      return parseExpr(stmt.indexAssign.value);
+    }
+    // 检查是否为 ident.prop = value（属性赋值）
+    if (m_pos + 2 < m_tokens.size() && m_tokens[m_pos + 2].type == TOK_IDENT &&
+        m_pos + 3 < m_tokens.size() &&
+        (m_tokens[m_pos + 3].type == TOK_EQUALS || m_tokens[m_pos + 3].type == TOK_PLUSEQ ||
+         m_tokens[m_pos + 3].type == TOK_MINUSEQ || m_tokens[m_pos + 3].type == TOK_MULEQ ||
+         m_tokens[m_pos + 3].type == TOK_DIVEQ || m_tokens[m_pos + 3].type == TOK_MODEQ)) {
+      stmt.kind = Block::Stmt::kPropAssign;
+      stmt.propAssign.objectExpr.kind = Expr::kIdent;
+      stmt.propAssign.objectExpr.ident = advance().text;
+      stmt.propAssign.objectExpr.line = t.line;
+      advance();  // skip .
+      stmt.propAssign.prop = advance().text;
+      CompoundOp op = parseCompoundOp();
+      if (op != CompoundOp::kNone) {
+        stmt.propAssign.compoundOp = op;
+      } else {
+        if (!expect(TOK_EQUALS, QStringLiteral("expected '='"))) return false;
+      }
+      return parseExpr(stmt.propAssign.value);
+    }
+    // 检查是否为 ident.prop[expr] = value（链式索引赋值，走表达式）
+    // 或者 ident.prop.method()（方法调用，走表达式）
+    stmt.kind = Block::Stmt::kExpr;
+    return parseExpr(stmt.exprStmt);
+  }
+  // 默认：表达式语句
+  stmt.kind = Block::Stmt::kExpr;
+  return parseExpr(stmt.exprStmt);
+}
+
+bool AcParser::parseThisStmt(Block::Stmt &stmt) {
+  if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_DOT) {
+    int savedPos = m_pos;
+    advance();  // skip this
+    advance();  // skip .
+    if (!isPropertyName(peek().type)) {
+      m_error = QStringLiteral("expected property name after 'this.' at line %1").arg(peek().line);
+      return false;
+    }
+    QString prop = peek().text;
+    TokenType assignOp = peek(1).type;
+    bool isCompoundAssign =
+        (assignOp == TOK_PLUSEQ || assignOp == TOK_MINUSEQ || assignOp == TOK_MULEQ ||
+         assignOp == TOK_DIVEQ || assignOp == TOK_MODEQ);
+    // 检查 this.prop 后面是否跟 '=' 或复合赋值运算符
+    if (m_pos + 2 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_DOT &&
+        m_tokens[m_pos + 2].type == TOK_IDENT && m_pos + 3 < m_tokens.size() &&
+        (m_tokens[m_pos + 3].type == TOK_EQUALS || isCompoundAssign)) {
+      advance();  // skip property name
+      stmt.assign.thisProp = prop;
+      CompoundOp op = parseCompoundOp();
+      if (op != CompoundOp::kNone) {
+        stmt.assign.compoundOp = op;
+      } else {
+        if (!expect(TOK_EQUALS,
+                    QStringLiteral("expected '=' after 'this.%1'").arg(stmt.assign.thisProp)))
+          return false;
+      }
+      stmt.kind = Block::Stmt::kAssign;
+      return parseExpr(stmt.assign.value);
+    }
+    // this.prop [=|+=|-=|*=/=] value 的简单检测
+    if (m_pos + 1 < m_tokens.size() &&
+        (m_tokens[m_pos + 1].type == TOK_EQUALS || isCompoundAssign)) {
+      advance();  // skip property name
+      stmt.assign.thisProp = prop;
+      CompoundOp op = parseCompoundOp();
+      if (op != CompoundOp::kNone) {
+        stmt.assign.compoundOp = op;
+      } else {
+        if (!expect(TOK_EQUALS,
+                    QStringLiteral("expected '=' after 'this.%1'").arg(stmt.assign.thisProp)))
+          return false;
+      }
+      stmt.kind = Block::Stmt::kAssign;
+      return parseExpr(stmt.assign.value);
+    }
+    // 回退到表达式语句（恢复位置，让 parseExpr 从 this 开始解析）
+    m_pos = savedPos;
+    stmt.kind = Block::Stmt::kExpr;
+    return parseExpr(stmt.exprStmt);
+  }
+  // this 作为表达式语句
   stmt.kind = Block::Stmt::kExpr;
   return parseExpr(stmt.exprStmt);
 }
@@ -379,24 +350,36 @@ bool AcParser::parseCallStmt(CallStmt &cs) {
   return true;
 }
 
-bool AcParser::parseAssignStmt(AssignStmt &as) {
-  as.name = advance().text;
+CompoundOp AcParser::parseCompoundOp() {
   Token opToken = peek();
   if (opToken.type == TOK_PLUSEQ) {
-    as.compoundOp = 1;
     advance();
-  } else if (opToken.type == TOK_MINUSEQ) {
-    as.compoundOp = 2;
+    return CompoundOp::kAdd;
+  }
+  if (opToken.type == TOK_MINUSEQ) {
     advance();
-  } else if (opToken.type == TOK_MULEQ) {
-    as.compoundOp = 3;
+    return CompoundOp::kSub;
+  }
+  if (opToken.type == TOK_MULEQ) {
     advance();
-  } else if (opToken.type == TOK_DIVEQ) {
-    as.compoundOp = 4;
+    return CompoundOp::kMul;
+  }
+  if (opToken.type == TOK_DIVEQ) {
     advance();
-  } else if (opToken.type == TOK_MODEQ) {
-    as.compoundOp = 5;
+    return CompoundOp::kDiv;
+  }
+  if (opToken.type == TOK_MODEQ) {
     advance();
+    return CompoundOp::kMod;
+  }
+  return CompoundOp::kNone;
+}
+
+bool AcParser::parseAssignStmt(AssignStmt &as) {
+  as.name = advance().text;
+  CompoundOp op = parseCompoundOp();
+  if (op != CompoundOp::kNone) {
+    as.compoundOp = op;
   } else {
     if (!expect(TOK_EQUALS, QStringLiteral("expected '='"))) return false;
   }
@@ -422,15 +405,14 @@ bool AcParser::parseIndexAssignStmt(IndexAssignStmt &ias) {
     if (!parseExpr(ias.objectExpr)) return false;
     if (!expect(TOK_RPAREN, QStringLiteral("expected ')'"))) return false;
   } else {
-    *m_error =
-        QStringLiteral("expected identifier or expression before '[' at line %1").arg(t.line);
+    m_error = QStringLiteral("expected identifier or expression before '[' at line %1").arg(t.line);
     return false;
   }
   // 处理 .prop 和 .method() 后缀，遇到 [ 则停止
   while (peek().type == TOK_DOT) {
     advance();
     if (!isPropertyName(peek().type)) {
-      *m_error = QStringLiteral("expected property name after '.' at line %1").arg(peek().line);
+      m_error = QStringLiteral("expected property name after '.' at line %1").arg(peek().line);
       return false;
     }
     QString memberName = advance().text;
@@ -476,9 +458,10 @@ bool AcParser::parseForStmt(ForStmt &fs) {
   if (peek().type == TOK_LET) {
     advance();
     if (peek().type != TOK_IDENT) {
-      *m_error = QStringLiteral("expected variable name after 'let' at line %1").arg(peek().line);
+      m_error = QStringLiteral("expected variable name after 'let' at line %1").arg(peek().line);
       return false;
     }
+
     fs.varName = advance().text;
     m_declaredVars->insert(fs.varName);
     // 处理类型注解：let i: Number = 0 或 let ch: String in str
@@ -558,7 +541,7 @@ bool AcParser::parseImportStmt(ImportStmt &imp) {
   if (!expect(TOK_LBRACE, QStringLiteral("expected '{' after 'import'"))) return false;
   while (peek().type != TOK_RBRACE && peek().type != TOK_EOF) {
     if (peek().type != TOK_IDENT) {
-      *m_error = QStringLiteral("expected identifier in import list at line %1").arg(peek().line);
+      m_error = QStringLiteral("expected identifier in import list at line %1").arg(peek().line);
       return false;
     }
     QString name = advance().text;
@@ -566,7 +549,7 @@ bool AcParser::parseImportStmt(ImportStmt &imp) {
     if (peek().type == TOK_AS) {
       advance();
       if (peek().type != TOK_IDENT) {
-        *m_error = QStringLiteral("expected alias after 'as' at line %1").arg(peek().line);
+        m_error = QStringLiteral("expected alias after 'as' at line %1").arg(peek().line);
         return false;
       }
       alias = advance().text;
@@ -578,7 +561,7 @@ bool AcParser::parseImportStmt(ImportStmt &imp) {
   if (!expect(TOK_RBRACE, QStringLiteral("expected '}' after import list"))) return false;
   if (!expect(TOK_FROM, QStringLiteral("expected 'from' after import list"))) return false;
   if (peek().type != TOK_STRING) {
-    *m_error = QStringLiteral("expected file path string after 'from' at line %1").arg(peek().line);
+    m_error = QStringLiteral("expected file path string after 'from' at line %1").arg(peek().line);
     return false;
   }
   imp.filePath = advance().text;
@@ -637,7 +620,7 @@ bool AcParser::parseSwitchStmt(SwitchStmt &ss) {
       }
       ss.cases.append(sc);
     } else {
-      *m_error = QStringLiteral("expected 'case' or 'default' at line %1").arg(peek().line);
+      m_error = QStringLiteral("expected 'case' or 'default' at line %1").arg(peek().line);
       return false;
     }
   }
@@ -646,7 +629,7 @@ bool AcParser::parseSwitchStmt(SwitchStmt &ss) {
 
 bool AcParser::parseClassDef(ClassDef &cd) {
   if (peek().type != TOK_IDENT) {
-    *m_error = QStringLiteral("expected class name at line %1").arg(peek().line);
+    m_error = QStringLiteral("expected class name at line %1").arg(peek().line);
     return false;
   }
   cd.name = advance().text;
@@ -655,7 +638,7 @@ bool AcParser::parseClassDef(ClassDef &cd) {
   if (peek().type == TOK_EXTENDS) {
     advance();
     if (peek().type != TOK_IDENT) {
-      *m_error =
+      m_error =
           QStringLiteral("expected parent class name after 'extends' at line %1").arg(peek().line);
       return false;
     }
@@ -800,7 +783,7 @@ bool AcParser::parseClassDef(ClassDef &cd) {
 
 bool AcParser::parseInterfaceDef(InterfaceDef &iface) {
   if (peek().type != TOK_IDENT) {
-    *m_error = QStringLiteral("expected interface name at line %1").arg(peek().line);
+    m_error = QStringLiteral("expected interface name at line %1").arg(peek().line);
     return false;
   }
   iface.name = advance().text;
@@ -812,7 +795,7 @@ bool AcParser::parseInterfaceDef(InterfaceDef &iface) {
       advance();
       InterfaceMethod im;
       if (peek().type != TOK_IDENT) {
-        *m_error = QStringLiteral("expected method name at line %1").arg(peek().line);
+        m_error = QStringLiteral("expected method name at line %1").arg(peek().line);
         return false;
       }
       im.name = advance().text;
@@ -821,7 +804,7 @@ bool AcParser::parseInterfaceDef(InterfaceDef &iface) {
         ParamDef pd;
         pd.name = advance().text;
         if (peek().type != TOK_COLON) {
-          *m_error =
+          m_error =
               QStringLiteral("parameter '%1' requires a type annotation (e.g. %1: Type) at line %2")
                   .arg(pd.name)
                   .arg(peek().line);
@@ -848,7 +831,7 @@ bool AcParser::parseInterfaceDef(InterfaceDef &iface) {
 
 bool AcParser::parseEnumDef(EnumDef &ed) {
   if (peek().type != TOK_IDENT) {
-    *m_error = QStringLiteral("expected enum name at line %1").arg(peek().line);
+    m_error = QStringLiteral("expected enum name at line %1").arg(peek().line);
     return false;
   }
   ed.name = advance().text;
@@ -858,7 +841,7 @@ bool AcParser::parseEnumDef(EnumDef &ed) {
   int autoValue = 0;
   while (peek().type != TOK_RBRACE && peek().type != TOK_EOF) {
     if (peek().type != TOK_IDENT) {
-      *m_error = QStringLiteral("expected enum member name at line %1").arg(peek().line);
+      m_error = QStringLiteral("expected enum member name at line %1").arg(peek().line);
       return false;
     }
     QString memberName = advance().text;
@@ -870,7 +853,7 @@ bool AcParser::parseEnumDef(EnumDef &ed) {
         member.value = QJsonValue(advance().text.toDouble());
         autoValue = member.value.toInt() + 1;
       } else {
-        *m_error =
+        m_error =
             QStringLiteral("expected number value for enum member at line %1").arg(peek().line);
         return false;
       }
@@ -888,7 +871,7 @@ bool AcParser::parseEnumDef(EnumDef &ed) {
 
 bool AcParser::parseMethodDef(MethodDef &md) {
   if (peek().type != TOK_IDENT) {
-    *m_error = QStringLiteral("expected method name at line %1").arg(peek().line);
+    m_error = QStringLiteral("expected method name at line %1").arg(peek().line);
     return false;
   }
   md.name = advance().text;
@@ -899,7 +882,7 @@ bool AcParser::parseMethodDef(MethodDef &md) {
     ParamDef pd;
     pd.name = advance().text;
     if (peek().type != TOK_COLON) {
-      *m_error =
+      m_error =
           QStringLiteral("parameter '%1' requires a type annotation (e.g. %1: Type) at line %2")
               .arg(pd.name)
               .arg(peek().line);

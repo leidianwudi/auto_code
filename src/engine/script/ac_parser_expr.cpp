@@ -189,7 +189,7 @@ bool AcParser::parsePostfix(Expr &expr) {
     if (peek().type == TOK_DOT) {
       advance();
       if (!isPropertyName(peek().type)) {
-        *m_error = QStringLiteral("expected property name after '.' at line %1").arg(peek().line);
+        m_error = QStringLiteral("expected property name after '.' at line %1").arg(peek().line);
         return false;
       }
       QString memberName = advance().text;
@@ -254,7 +254,7 @@ bool AcParser::parsePrimary(Expr &expr) {
     if (peek().type == TOK_DOT) {
       advance();
       if (!isPropertyName(peek().type)) {
-        *m_error =
+        m_error =
             QStringLiteral("expected property name after 'this.' at line %1").arg(peek().line);
         return false;
       }
@@ -312,12 +312,12 @@ bool AcParser::parsePrimary(Expr &expr) {
       return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
     }
     if (peek().type != TOK_DOT) {
-      *m_error = QStringLiteral("expected '.' or '(' after 'super' at line %1").arg(peek().line);
+      m_error = QStringLiteral("expected '.' or '(' after 'super' at line %1").arg(peek().line);
       return false;
     }
     advance();
     if (peek().type != TOK_IDENT) {
-      *m_error = QStringLiteral("expected method name after 'super.' at line %1").arg(peek().line);
+      m_error = QStringLiteral("expected method name after 'super.' at line %1").arg(peek().line);
       return false;
     }
     QString methodName = advance().text;
@@ -347,7 +347,7 @@ bool AcParser::parsePrimary(Expr &expr) {
     int newLine = t.line;
     advance();
     if (peek().type != TOK_IDENT) {
-      *m_error = QStringLiteral("expected class name after 'new' at line %1").arg(peek().line);
+      m_error = QStringLiteral("expected class name after 'new' at line %1").arg(peek().line);
       return false;
     }
     expr.kind = Expr::kNewInstance;
@@ -416,7 +416,7 @@ bool AcParser::parsePrimary(Expr &expr) {
         int scopeLine = peek().line;
         advance();
         if (peek().type != TOK_IDENT) {
-          *m_error = QStringLiteral("expected member name after '::' at line %1").arg(peek().line);
+          m_error = QStringLiteral("expected member name after '::' at line %1").arg(peek().line);
           return false;
         }
         QString member = advance().text;
@@ -441,7 +441,7 @@ bool AcParser::parsePrimary(Expr &expr) {
       if (peek().type == TOK_DOT) {
         advance();
         if (!isPropertyName(peek().type)) {
-          *m_error = QStringLiteral("expected property name after '.' at line %1").arg(peek().line);
+          m_error = QStringLiteral("expected property name after '.' at line %1").arg(peek().line);
           return false;
         }
         QString propName = advance().text;
@@ -505,7 +505,7 @@ bool AcParser::parsePrimary(Expr &expr) {
         ParamDef pd;
         pd.name = advance().text;
         if (peek().type != TOK_COLON) {
-          *m_error =
+          m_error =
               QStringLiteral("parameter '%1' requires a type annotation (e.g. %1: Type) at line %2")
                   .arg(pd.name)
                   .arg(peek().line);
@@ -519,10 +519,10 @@ bool AcParser::parsePrimary(Expr &expr) {
       }
       if (!expect(TOK_RPAREN, QStringLiteral("expected ')' after parameters"))) return false;
       if (peek().type != TOK_COLON) {
-        *m_error = QStringLiteral(
-                       "function expression requires a return type annotation (e.g. : Type) at "
-                       "line %1")
-                       .arg(peek().line);
+        m_error = QStringLiteral(
+                      "function expression requires a return type annotation (e.g. : Type) at "
+                      "line %1")
+                      .arg(peek().line);
         return false;
       }
       advance();
@@ -532,7 +532,7 @@ bool AcParser::parsePrimary(Expr &expr) {
     }
 
     default:
-      *m_error =
+      m_error =
           QStringLiteral("unexpected token '%1' at line %2").arg(t.text, QString::number(t.line));
       return false;
   }
@@ -543,7 +543,7 @@ bool AcParser::parseObject(Expr &expr) {
   advance();
   while (peek().type != TOK_RBRACE && peek().type != TOK_EOF) {
     if (!isPropertyName(peek().type)) {
-      *m_error = QStringLiteral("expected key in object at line %1").arg(peek().line);
+      m_error = QStringLiteral("expected key in object at line %1").arg(peek().line);
       return false;
     }
     ObjectEntry entry;
@@ -620,8 +620,8 @@ bool AcParser::parseTemplateString(Expr &expr) {
       QString exprText = raw.mid(start, i - start);
       ++i;
 
-      QVector<Token> exprTokens = AcLexer::tokenize(exprText, *m_error);
-      if (!m_error->isEmpty()) return false;
+      QVector<Token> exprTokens = AcLexer::tokenize(exprText, m_error);
+      if (!m_error.isEmpty()) return false;
 
       int savedPos = m_pos;
       QVector<Token> savedTokens = m_tokens;

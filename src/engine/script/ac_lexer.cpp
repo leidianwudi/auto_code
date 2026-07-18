@@ -334,15 +334,19 @@ QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
             while (i < n && source[i].isDigit()) ++i;
           }
           tokens.append({TOK_NUMBER, source.mid(start, i - start), line});
-        } else if (c.isLetter() || c == '_') {
+        } else if ((c.isLetter() && c.unicode() < 128) || c == '_') {
           int start = i;
-          while (i < n && (source[i].isLetterOrNumber() || source[i] == '_')) ++i;
+          while (i < n &&
+                 ((source[i].isLetterOrNumber() && source[i].unicode() < 128) || source[i] == '_'))
+            ++i;
           QString word = source.mid(start, i - start);
           auto it = keywordMap().constFind(word);
           if (it != keywordMap().constEnd())
             tokens.append({*it, word, line});
           else
             tokens.append({TOK_IDENT, word, line});
+        } else if (c.unicode() > 127) {
+          ++i;
         } else {
           error =
               QStringLiteral("unexpected character '%1' at line %2").arg(c, QString::number(line));

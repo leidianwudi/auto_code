@@ -254,7 +254,7 @@ void AcInterpreter::collectCycles() {
 // ═════════════════════════════════════════════════════════════════════════════
 
 QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
-  m_error = &error;
+  m_error.clear();
   m_scopeStack.clear();
   m_usingStack.clear();
   m_classes.clear();
@@ -297,7 +297,8 @@ QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
   }
 
   execBlock(program);
-  if (!m_error->isEmpty()) {
+  if (!m_error.isEmpty()) {
+    error = m_error;
     AcObjectManager::ins().cleanup();
     return QJsonValue();
   }

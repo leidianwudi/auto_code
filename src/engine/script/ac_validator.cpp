@@ -32,8 +32,8 @@ QVector<ValidationResult> AcValidator::validate(const QString &source) {
   // ── 步骤 2：语法分析 ──
   m_declaredVars.clear();
   m_program = Block();
-  QString parseErrMsg;
-  if (!m_parser.parse(tokens, m_program, parseErrMsg, m_declaredVars)) {
+  if (!m_parser.parse(tokens, m_program, m_declaredVars)) {
+    QString parseErrMsg = m_parser.error();
     int line = 1;
     QRegularExpression re(QStringLiteral("at line (\\d+)"));
     auto match = re.match(parseErrMsg);

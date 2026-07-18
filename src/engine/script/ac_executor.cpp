@@ -29,7 +29,10 @@ bool AcExecutor::parse(const QString &source) {
   if (!m_error.isEmpty()) return false;
 
   // ── 步骤 2：语法分析 ──
-  if (!m_parser.parse(m_tokens, m_program, m_error, m_declaredVars)) return false;
+  if (!m_parser.parse(m_tokens, m_program, m_declaredVars)) {
+    m_error = m_parser.error();
+    return false;
+  }
 
   // 步骤 3：模块链接 — 处理 import 语句
   if (!linkImports()) return false;
@@ -242,8 +245,8 @@ bool AcExecutor::linkImportsRecursive(Block &program, const QString &baseDir,
       m_error = QStringLiteral("import: parse error in '%1': %2").arg(imp.filePath, moduleError);
       return false;
     }
-    if (!parser.parse(tokens, moduleAst, moduleError, moduleVars)) {
-      m_error = QStringLiteral("import: parse error in '%1': %2").arg(imp.filePath, moduleError);
+    if (!parser.parse(tokens, moduleAst, moduleVars)) {
+      m_error = QStringLiteral("import: parse error in '%1': %2").arg(imp.filePath, parser.error());
       return false;
     }
 
