@@ -5,6 +5,8 @@
 
 #include "ac_parser.h"
 
+#include <vector>
+
 #include "../ac_language.h"
 
 // ── token 操作 ──
@@ -328,6 +330,7 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
     m_declaredVars->insert(stmt.usingStmt.varName);
     if (!expect(TOK_EQUALS, QStringLiteral("expected '=' after 'using varName'"))) return false;
     stmt.kind = Block::Stmt::kUsing;
+    stmt.usingStmt.value = std::make_unique<Expr>();
     return parseExpr(*stmt.usingStmt.value);
   }
 
@@ -874,9 +877,8 @@ bool AcParser::parseClassDef(ClassDef &cd) {
       prop.value = nullptr;
       if (peek().type == TOK_EQUALS) {
         advance();
-        prop.value = new Expr();
+        prop.value = std::make_unique<Expr>();
         if (!parseExpr(*prop.value)) {
-          delete prop.value;
           prop.value = nullptr;
           return false;
         }
@@ -946,9 +948,8 @@ bool AcParser::parseClassDef(ClassDef &cd) {
       prop.value = nullptr;
       if (peek().type == TOK_EQUALS) {
         advance();
-        prop.value = new Expr();
+        prop.value = std::make_unique<Expr>();
         if (!parseExpr(*prop.value)) {
-          delete prop.value;
           prop.value = nullptr;
           return false;
         }
@@ -1166,17 +1167,17 @@ bool AcParser::parseExpr(Expr &expr) {
   // 后置自增 expr++
   if (peek().type == TOK_PLUSPLUS) {
     advance();
-    Expr *operand = new Expr(std::move(expr));
+    auto operand = std::make_unique<Expr>(std::move(expr));
     expr.kind = Expr::kPostInc;
-    expr.operand = operand;
+    expr.operand = std::move(operand);
     return true;
   }
   // 后置自减 expr--
   if (peek().type == TOK_MINUSMINUS) {
     advance();
-    Expr *operand = new Expr(std::move(expr));
+    auto operand = std::make_unique<Expr>(std::move(expr));
     expr.kind = Expr::kPostDec;
-    expr.operand = operand;
+    expr.operand = std::move(operand);
     return true;
   }
   return true;
@@ -1187,30 +1188,23 @@ bool AcParser::parseTernary(Expr &expr) {
   if (peek().type == TOK_QUESTION) {
     int ternaryLine = peek().line;
     advance();
-    Expr *cond = new Expr(std::move(expr));
-    Expr *trueExpr = new Expr();
+    auto cond = std::make_unique<Expr>(std::move(expr));
+    auto trueExpr = std::make_unique<Expr>();
     if (!parseLogicalOr(*trueExpr)) {
-      delete cond;
-      delete trueExpr;
       return false;
     }
     if (!expect(TOK_COLON, QStringLiteral("expected ':' in ternary expression"))) {
-      delete cond;
-      delete trueExpr;
       return false;
     }
-    Expr *falseExpr = new Expr();
+    auto falseExpr = std::make_unique<Expr>();
     if (!parseTernary(*falseExpr)) {
-      delete cond;
-      delete trueExpr;
-      delete falseExpr;
       return false;
     }
     expr.kind = Expr::kTernary;
     expr.line = ternaryLine;
-    expr.left = cond;
-    expr.right = trueExpr;
-    expr.operand = falseExpr;
+    expr.left = std::move(cond);
+    expr.right = std::move(trueExpr);
+    expr.operand = std::move(falseExpr);
     return true;
   }
   return true;
@@ -1221,19 +1215,17 @@ bool AcParser::parseLogicalOr(Expr &expr) {
   while (peek().type == TOK_OR) {
     Token opToken = peek();
     advance();
-    Expr *left = new Expr(std::move(expr));
-    Expr *right = new Expr();
+    auto left = std::make_unique<Expr>(std::move(expr));
+    auto right = std::make_unique<Expr>();
     if (!parseLogicalAnd(*right)) {
-      delete left;
-      delete right;
       return false;
     }
     Expr binary;
     binary.kind = Expr::kBinary;
     binary.line = opToken.line;
     binary.binOp = Expr::kOr;
-    binary.left = left;
-    binary.right = right;
+    binary.left = std::move(left);
+    binary.right = std::move(right);
     expr = std::move(binary);
   }
   return true;
@@ -1244,19 +1236,17 @@ bool AcParser::parseLogicalAnd(Expr &expr) {
   while (peek().type == TOK_AND) {
     Token opToken = peek();
     advance();
-    Expr *left = new Expr(std::move(expr));
-    Expr *right = new Expr();
+    auto left = std::make_unique<Expr>(std::move(expr));
+    auto right = std::make_unique<Expr>();
     if (!parseComparison(*right)) {
-      delete left;
-      delete right;
       return false;
     }
     Expr binary;
     binary.kind = Expr::kBinary;
     binary.line = opToken.line;
     binary.binOp = Expr::kAnd;
-    binary.left = left;
-    binary.right = right;
+    binary.left = std::move(left);
+    binary.right = std::move(right);
     expr = std::move(binary);
   }
   return true;
@@ -1291,19 +1281,17 @@ bool AcParser::parseComparison(Expr &expr) {
         break;
     }
     advance();
-    Expr *left = new Expr(std::move(expr));
-    Expr *right = new Expr();
+    auto left = std::make_unique<Expr>(std::move(expr));
+    auto right = std::make_unique<Expr>();
     if (!parseAddSub(*right)) {
-      delete left;
-      delete right;
       return false;
     }
     Expr binary;
     binary.kind = Expr::kBinary;
     binary.line = opToken.line;
     binary.binOp = op;
-    binary.left = left;
-    binary.right = right;
+    binary.left = std::move(left);
+    binary.right = std::move(right);
     expr = std::move(binary);
   }
   return true;
@@ -1321,19 +1309,17 @@ bool AcParser::parseAddSub(Expr &expr) {
       op = Expr::kSub;
       advance();
     }
-    Expr *left = new Expr(std::move(expr));
-    Expr *right = new Expr();
+    auto left = std::make_unique<Expr>(std::move(expr));
+    auto right = std::make_unique<Expr>();
     if (!parseMulDiv(*right)) {
-      delete left;
-      delete right;
       return false;
     }
     Expr binary;
     binary.kind = Expr::kBinary;
     binary.line = opToken.line;
     binary.binOp = op;
-    binary.left = left;
-    binary.right = right;
+    binary.left = std::move(left);
+    binary.right = std::move(right);
     expr = std::move(binary);
   }
   return true;
@@ -1354,19 +1340,17 @@ bool AcParser::parseMulDiv(Expr &expr) {
       op = Expr::kMod;
       advance();
     }
-    Expr *left = new Expr(std::move(expr));
-    Expr *right = new Expr();
+    auto left = std::make_unique<Expr>(std::move(expr));
+    auto right = std::make_unique<Expr>();
     if (!parseUnary(*right)) {
-      delete left;
-      delete right;
       return false;
     }
     Expr binary;
     binary.kind = Expr::kBinary;
     binary.line = opToken.line;
     binary.binOp = op;
-    binary.left = left;
-    binary.right = right;
+    binary.left = std::move(left);
+    binary.right = std::move(right);
     expr = std::move(binary);
   }
   return true;
@@ -1377,41 +1361,38 @@ bool AcParser::parseUnary(Expr &expr) {
 
   if (t.type == TOK_PLUSPLUS) {
     advance();
-    Expr *operand = new Expr();
+    auto operand = std::make_unique<Expr>();
     if (!parseUnary(*operand)) {
-      delete operand;
       return false;
     }
     expr.kind = Expr::kPreInc;
     expr.line = t.line;
-    expr.operand = operand;
+    expr.operand = std::move(operand);
     return true;
   }
 
   if (t.type == TOK_MINUSMINUS) {
     advance();
-    Expr *operand = new Expr();
+    auto operand = std::make_unique<Expr>();
     if (!parseUnary(*operand)) {
-      delete operand;
       return false;
     }
     expr.kind = Expr::kPreDec;
     expr.line = t.line;
-    expr.operand = operand;
+    expr.operand = std::move(operand);
     return true;
   }
 
   if (t.type == TOK_NOT) {
     advance();
-    Expr *operand = new Expr();
+    auto operand = std::make_unique<Expr>();
     if (!parseUnary(*operand)) {
-      delete operand;
       return false;
     }
     expr.kind = Expr::kUnary;
     expr.line = t.line;
     expr.unaryOp = Expr::kNot;
-    expr.operand = operand;
+    expr.operand = std::move(operand);
     return true;
   }
 
@@ -1422,18 +1403,17 @@ bool AcParser::parseUnary(Expr &expr) {
       expr.numVal = -advance().text.toDouble();
       return true;
     }
-    Expr *right = new Expr();
+    auto right = std::make_unique<Expr>();
     if (!parseUnary(*right)) {
-      delete right;
       return false;
     }
     Expr binary;
     binary.kind = Expr::kBinary;
     binary.binOp = Expr::kSub;
-    binary.left = new Expr();
+    binary.left = std::make_unique<Expr>();
     binary.left->kind = Expr::kNumber;
     binary.left->numVal = 0;
-    binary.right = right;
+    binary.right = std::move(right);
     expr = std::move(binary);
     return true;
   }
@@ -1460,7 +1440,7 @@ bool AcParser::parsePostfix(Expr &expr) {
         if (expr.kind == Expr::kIdent) {
           chained.methodCall.objName = expr.ident;
         }
-        chained.methodCall.object = new Expr(std::move(expr));
+        chained.methodCall.object = std::make_unique<Expr>(std::move(expr));
         while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
           auto *arg = new Expr();
           if (!parseLogicalOr(*arg)) {
@@ -1479,25 +1459,23 @@ bool AcParser::parsePostfix(Expr &expr) {
         propAccess.kind = Expr::kPropAccess;
         propAccess.line = peek().line;
         propAccess.prop = memberName;
-        propAccess.propObject = new Expr(std::move(expr));
+        propAccess.propObject = std::make_unique<Expr>(std::move(expr));
         expr = std::move(propAccess);
       }
     } else if (peek().type == TOK_LBRACKET) {
       advance();
-      Expr *idxExpr = new Expr();
+      auto idxExpr = std::make_unique<Expr>();
       if (!parseLogicalOr(*idxExpr)) {
-        delete idxExpr;
         return false;
       }
       if (!expect(TOK_RBRACKET, QStringLiteral("expected ']' after index expression"))) {
-        delete idxExpr;
         return false;
       }
       Expr idxAccess;
       idxAccess.kind = Expr::kIndexAccess;
       idxAccess.line = peek().line;
-      idxAccess.left = new Expr(std::move(expr));
-      idxAccess.right = idxExpr;
+      idxAccess.left = std::make_unique<Expr>(std::move(expr));
+      idxAccess.right = std::move(idxExpr);
       expr = std::move(idxAccess);
     } else {
       break;
@@ -1544,9 +1522,9 @@ bool AcParser::parsePrimary(Expr &expr) {
     if (peek().type == TOK_LBRACKET) {
       advance();
       expr.kind = Expr::kIndexAccess;
-      expr.left = new Expr();
+      expr.left = std::make_unique<Expr>();
       expr.left->kind = Expr::kThis;
-      expr.right = new Expr();
+      expr.right = std::make_unique<Expr>();
       if (!parseExpr(*expr.right)) return false;
       return expect(TOK_RBRACKET, QStringLiteral("expected ']'"));
     }
@@ -1741,11 +1719,11 @@ bool AcParser::parsePrimary(Expr &expr) {
       if (peek().type == TOK_LBRACKET) {
         advance();
         expr.kind = Expr::kIndexAccess;
-        expr.left = new Expr();
+        expr.left = std::make_unique<Expr>();
         expr.left->kind = Expr::kIdent;
         expr.left->ident = name;
         expr.left->line = t.line;
-        expr.right = new Expr();
+        expr.right = std::make_unique<Expr>();
         if (!parseExpr(*expr.right)) return false;
         return expect(TOK_RBRACKET, QStringLiteral("expected ']'"));
       }
@@ -1821,9 +1799,9 @@ bool AcParser::parseObject(Expr &expr) {
     ObjectEntry entry;
     entry.key = advance().text;
     if (!expect(TOK_COLON, QStringLiteral("expected ':'"))) return false;
-    entry.value = new Expr();
+    entry.value = std::make_unique<Expr>();
     if (!parseExpr(*entry.value)) {
-      delete entry.value;
+      entry.value = nullptr;
       return false;
     }
     expr.objEntries.append(entry);
@@ -1868,7 +1846,7 @@ bool AcParser::parseTemplateString(Expr &expr) {
   Token tok = advance();
   QString raw = tok.text;
 
-  QVector<Expr *> parts;
+  std::vector<std::unique_ptr<Expr>> parts;
 
   int i = 0;
   int n = raw.size();
@@ -1877,10 +1855,10 @@ bool AcParser::parseTemplateString(Expr &expr) {
   while (i < n) {
     if (raw[i] == '$' && i + 1 < n && raw[i + 1] == '{') {
       if (!currentStr.isEmpty()) {
-        Expr *strExpr = new Expr();
+        auto strExpr = std::make_unique<Expr>();
         strExpr->kind = Expr::kString;
         strExpr->strVal = currentStr;
-        parts.append(strExpr);
+        parts.push_back(std::move(strExpr));
         currentStr.clear();
       }
       i += 2;
@@ -1902,14 +1880,13 @@ bool AcParser::parseTemplateString(Expr &expr) {
       m_tokens = exprTokens;
       m_pos = 0;
 
-      Expr *subExpr = new Expr();
+      auto subExpr = std::make_unique<Expr>();
       if (!parseExpr(*subExpr)) {
-        delete subExpr;
         m_tokens = savedTokens;
         m_pos = savedPos;
         return false;
       }
-      parts.append(subExpr);
+      parts.push_back(std::move(subExpr));
 
       m_tokens = savedTokens;
       m_pos = savedPos;
@@ -1936,13 +1913,13 @@ bool AcParser::parseTemplateString(Expr &expr) {
   }
 
   if (!currentStr.isEmpty()) {
-    Expr *strExpr = new Expr();
+    auto strExpr = std::make_unique<Expr>();
     strExpr->kind = Expr::kString;
     strExpr->strVal = currentStr;
-    parts.append(strExpr);
+    parts.push_back(std::move(strExpr));
   }
 
-  if (parts.isEmpty()) {
+  if (parts.empty()) {
     expr.kind = Expr::kString;
     expr.strVal = QString();
     return true;
@@ -1950,21 +1927,19 @@ bool AcParser::parseTemplateString(Expr &expr) {
 
   if (parts.size() == 1) {
     expr = std::move(*parts[0]);
-    delete parts[0];
     return true;
   }
 
-  Expr *result = parts[0];
+  auto result = std::move(parts[0]);
   for (int j = 1; j < parts.size(); ++j) {
-    Expr *binary = new Expr();
+    auto binary = std::make_unique<Expr>();
     binary->kind = Expr::kBinary;
     binary->binOp = Expr::kAdd;
-    binary->left = result;
-    binary->right = parts[j];
-    result = binary;
+    binary->left = std::move(result);
+    binary->right = std::move(parts[j]);
+    result = std::move(binary);
   }
   expr = std::move(*result);
-  delete result;
   return true;
 }
 

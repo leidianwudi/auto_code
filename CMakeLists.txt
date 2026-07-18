@@ -13,12 +13,15 @@ qt_add_executable(auto_code
     main.cpp
     res/app_icon.rc
     src/engine/script/ac_type.h
+    src/engine/script/ac_type.cpp
     src/engine/script/ac_lexer.h
     src/engine/script/ac_lexer.cpp
     src/engine/script/ac_parser.h
     src/engine/script/ac_parser.cpp
     src/engine/script/ac_interpreter.h
     src/engine/script/ac_interpreter.cpp
+    src/engine/script/ac_builtin_eval.h
+    src/engine/script/ac_builtin_eval.cpp
     src/engine/script/ac_object_manager.h
     src/engine/script/ac_object_manager.cpp
     src/engine/script/ac_executor.h

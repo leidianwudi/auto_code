@@ -17,9 +17,12 @@
 #include "ac_type.h"
 
 class TplEngine;
+class AcBuiltinEval;
 
 /// @brief 解释执行器 — 执行 AST 并返回结果
 class AcInterpreter {
+  friend class AcBuiltinEval;
+
 public:
   /// 日志回调：print() 的输出通过此回调通知 UI
   using LogCallback = std::function<void(const QString &text, bool isError)>;
@@ -46,6 +49,15 @@ public:
   /// @brief 获取已解析的类定义集合（供类型检查器使用）
   const QHash<QString, ClassDef> &classes() const { return m_classes; }
 
+  /// @brief 比较两个 JSON 值（用于 == 和数组 indexOf/includes）
+  static int compareValues(const QJsonValue &l, const QJsonValue &r);
+
+  /// @brief 判断值是否为真
+  static bool isTruthy(const QJsonValue &cond);
+
+  /// @brief 推导类型名称
+  static QString inferTypeName(const QJsonValue &val);
+
 private:
   // ── 执行 ──
   void execBlock(const Block &block);
@@ -70,9 +82,6 @@ private:
   bool containsVar(const QString &name) const;
   void pushScope();
   void popScope();
-  static bool isTruthy(const QJsonValue &cond);
-  static int compareValues(const QJsonValue &l, const QJsonValue &r);
-  static QString inferTypeName(const QJsonValue &val);
 
   // ── 引用计数辅助 ──
   /// 如果值是受管理的实例，retain

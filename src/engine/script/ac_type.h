@@ -22,6 +22,7 @@
 #include <QString>
 #include <QStringList>
 #include <QVector>
+#include <memory>
 
 /// @defgroup ac_type .ac 脚本类型定义
 /// @{
@@ -213,9 +214,15 @@ struct Block {
 struct ObjectEntry {
   QString key;
   AcType type;  ///< 属性类型（默认 Any，无注解时）
-  Expr *value = nullptr;
+  std::unique_ptr<Expr> value;
   bool isStatic = false;                      ///< 是否为静态属性
   AccessLevel access = AccessLevel::kPublic;  ///< 访问级别
+
+  ObjectEntry() = default;
+  ObjectEntry(const ObjectEntry &other);
+  ObjectEntry &operator=(const ObjectEntry &other);
+  ObjectEntry(ObjectEntry &&) = default;
+  ObjectEntry &operator=(ObjectEntry &&) = default;
 };
 
 /// @brief 函数调用表达式：name(arg1, arg2, ...)
@@ -229,14 +236,26 @@ struct MethodCall {
   QString objName;       ///< 对象变量名（用于简单变量）
   QString methodName;    ///< 方法名
   QVector<Expr *> args;  ///< 参数列表
-  Expr *object =
-      nullptr;  ///< 对象表达式（用于链式访问，如 this.engine.start()，优先级高于 objName）
+  std::unique_ptr<Expr>
+      object;  ///< 对象表达式（用于链式访问，如 this.engine.start()，优先级高于 objName）
+
+  MethodCall() = default;
+  MethodCall(const MethodCall &other);
+  MethodCall &operator=(const MethodCall &other);
+  MethodCall(MethodCall &&) = default;
+  MethodCall &operator=(MethodCall &&) = default;
 };
 
 /// @brief using 语句：using var = expr（离开作用域时自动调用 dispose()）
 struct UsingStmt {
-  QString varName;        ///< 变量名
-  Expr *value = nullptr;  ///< 初始化表达式
+  QString varName;              ///< 变量名
+  std::unique_ptr<Expr> value;  ///< 初始化表达式
+
+  UsingStmt() = default;
+  UsingStmt(const UsingStmt &other);
+  UsingStmt &operator=(const UsingStmt &other);
+  UsingStmt(UsingStmt &&) = default;
+  UsingStmt &operator=(UsingStmt &&) = default;
 };
 
 /// @brief 方法定义：function name(params) { body }
@@ -326,8 +345,8 @@ struct Expr {
   bool boolVal = false;  ///< 布尔值（用于 kBool）
   QString ident;         ///< 标识符名
   QString prop;          ///< 属性名（用于 kPropAccess）
-  Expr *propObject =
-      nullptr;  ///< 链式属性访问的对象表达式（用于 kPropAccess 链式，优先级高于 ident）
+  std::unique_ptr<Expr>
+      propObject;  ///< 链式属性访问的对象表达式（用于 kPropAccess 链式，优先级高于 ident）
   QVector<ObjectEntry> objEntries;  ///< 对象条目
   QVector<Expr *> arrItems;         ///< 数组元素（指针）
   FuncCall funcCall;                ///< 函数调用信息
@@ -350,12 +369,12 @@ struct Expr {
     kLte,
     kGte
   } binOp = kAdd;
-  Expr *left = nullptr;
-  Expr *right = nullptr;
+  std::unique_ptr<Expr> left;
+  std::unique_ptr<Expr> right;
 
   /// 一元运算符类型（用于逻辑非 !expr）
   enum UnaryOp { kNot } unaryOp = kNot;
-  Expr *operand = nullptr;  ///< 一元运算符的操作数
+  std::unique_ptr<Expr> operand;  ///< 一元运算符的操作数
 
   Expr() = default;
   Expr(const Expr &other) { copyFrom(other); }
@@ -377,90 +396,9 @@ struct Expr {
   ~Expr() { freeOwned(); }
 
 private:
-  void copyFrom(const Expr &other) {
-    kind = other.kind;
-    line = other.line;
-    strVal = other.strVal;
-    numVal = other.numVal;
-    boolVal = other.boolVal;
-    ident = other.ident;
-    prop = other.prop;
-    propObject = other.propObject ? new Expr(*other.propObject) : nullptr;
-    for (const auto &e : other.objEntries) {
-      ObjectEntry oe;
-      oe.key = e.key;
-      oe.type = e.type;
-      oe.value = e.value ? new Expr(*e.value) : nullptr;
-      oe.isStatic = e.isStatic;
-      objEntries.append(oe);
-    }
-    for (auto *e : other.arrItems) arrItems.append(e ? new Expr(*e) : nullptr);
-    funcCall.name = other.funcCall.name;
-    for (auto *e : other.funcCall.args) funcCall.args.append(e ? new Expr(*e) : nullptr);
-    methodCall.objName = other.methodCall.objName;
-    methodCall.methodName = other.methodCall.methodName;
-    for (auto *e : other.methodCall.args) methodCall.args.append(e ? new Expr(*e) : nullptr);
-    methodCall.object = other.methodCall.object ? new Expr(*other.methodCall.object) : nullptr;
-    className = other.className;
-    for (auto *e : other.constructorArgs) constructorArgs.append(e ? new Expr(*e) : nullptr);
-    binOp = other.binOp;
-    left = other.left ? new Expr(*other.left) : nullptr;
-    right = other.right ? new Expr(*other.right) : nullptr;
-    unaryOp = other.unaryOp;
-    operand = other.operand ? new Expr(*other.operand) : nullptr;
-    funcExpr = other.funcExpr;
-  }
-  void moveFrom(Expr &&other) {
-    kind = other.kind;
-    line = other.line;
-    strVal = std::move(other.strVal);
-    numVal = other.numVal;
-    boolVal = other.boolVal;
-    ident = std::move(other.ident);
-    prop = std::move(other.prop);
-    propObject = other.propObject;
-    other.propObject = nullptr;
-    objEntries = std::move(other.objEntries);
-    arrItems = std::move(other.arrItems);
-    funcCall = std::move(other.funcCall);
-    methodCall = std::move(other.methodCall);
-    other.methodCall.object = nullptr;
-    className = std::move(other.className);
-    constructorArgs = std::move(other.constructorArgs);
-    binOp = other.binOp;
-    left = other.left;
-    right = other.right;
-    other.left = nullptr;
-    other.right = nullptr;
-    unaryOp = other.unaryOp;
-    operand = other.operand;
-    other.operand = nullptr;
-    funcExpr = std::move(other.funcExpr);
-  }
-  void freeOwned() {
-    for (auto &e : objEntries) {
-      delete e.value;
-      e.value = nullptr;
-    }
-    for (auto *e : arrItems) delete e;
-    arrItems.clear();
-    for (auto *e : funcCall.args) delete e;
-    funcCall.args.clear();
-    for (auto *e : methodCall.args) delete e;
-    methodCall.args.clear();
-    delete methodCall.object;
-    methodCall.object = nullptr;
-    for (auto *e : constructorArgs) delete e;
-    constructorArgs.clear();
-    delete left;
-    left = nullptr;
-    delete right;
-    right = nullptr;
-    delete operand;
-    operand = nullptr;
-    delete propObject;
-    propObject = nullptr;
-  }
+  void copyFrom(const Expr &other);
+  void moveFrom(Expr &&other);
+  void freeOwned();
 };
 
 /// @brief 调用语句：call("cls", "func", arg)

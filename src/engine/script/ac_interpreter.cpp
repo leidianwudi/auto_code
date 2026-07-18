@@ -16,6 +16,7 @@
 #include "../function/fun_builtin.h"
 #include "../function/fun_mgr.h"
 #include "../tpl/tpl_engine.h"
+#include "ac_builtin_eval.h"
 #include "ac_object_manager.h"
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -35,7 +36,6 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
 
     case Expr::kIdent: {
       if (!containsVar(expr.ident)) {
-        qDebug() << "[DEBUG] kIdent not found: ident='" << expr.ident << "' line=" << expr.line;
         *m_error = QStringLiteral("undefined variable '%1' at line %2")
                        .arg(expr.ident, QString::number(expr.line));
         return QJsonValue();
@@ -47,8 +47,6 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
       QJsonValue obj;
       if (expr.propObject) {
         obj = evalExpr(*expr.propObject);
-        qDebug() << "[DEBUG] kPropAccess propObject branch: prop=" << expr.prop
-                 << "obj type=" << obj.type() << "obj=" << obj;
       } else {
         // 先尝试作为普通变量查找
         obj = resolveVar(expr.ident);
@@ -79,7 +77,6 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
       if (expr.prop == QStringLiteral("length")) {
         if (obj.isString()) return QJsonValue(obj.toString().length());
         if (obj.isArray()) return QJsonValue(obj.toArray().size());
-        qDebug() << "[DEBUG] .length on non-string/non-array: type=" << obj.type() << "obj=" << obj;
       }
 
       // 尝试访问对象属性
@@ -661,9 +658,6 @@ QJsonValue AcInterpreter::callBuiltin(const QString &name, const QVector<Expr *>
 
   // 其余内置函数：优先检查是否已注册，避免与 null 返回值混淆
   const QString builtinClass = QString::fromLatin1(AcRuntime::kBuiltinClass);
-  qDebug() << "[callBuiltin] name:" << name
-           << "contains:" << FunMgr::ins().contains(builtinClass, name) << "args:" << arr
-           << "line:" << line;
   if (FunMgr::ins().contains(builtinClass, name)) {
     // 注入当前行号，printLog/printError 输出时带上行号
     FunBuiltin::setCurrentLine(line);
@@ -675,7 +669,6 @@ QJsonValue AcInterpreter::callBuiltin(const QString &name, const QVector<Expr *>
       *m_error = QStringLiteral("%1 at line %2").arg(err).arg(line);
       return QJsonValue();
     }
-    qDebug() << "[callBuiltin] call result:" << r;
     return r;
   }
 
@@ -792,8 +785,6 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
             !expr.methodCall.object->prop.isEmpty()) {
           const Expr &propObj = *expr.methodCall.object;
           if (propObj.ident == QString::fromLatin1(AcKeyword::kThis)) {
-            qDebug() << "[DEBUG] chained array writeback: this." << propObj.prop << "="
-                     << modifiedArr;
             m_currentThis[propObj.prop] = modifiedArr;
             m_modifiedThis[propObj.prop] = modifiedArr;
           } else if (!propObj.ident.isEmpty()) {
@@ -888,9 +879,6 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
     for (auto *argExpr : expr.methodCall.args) args.append(evalExpr(*argExpr));
     QJsonObject savedModifiedThis = m_modifiedThis;
     QJsonValue result = execMethod(*foundMethod, obj, QJsonValue(args));
-    qDebug() << "[DEBUG] after execMethod:" << expr.methodCall.methodName
-             << "isChained=" << isChained << "objName=" << expr.methodCall.objName
-             << "modifiedThis.items=" << m_modifiedThis.value(QStringLiteral("items"));
     if (!isChained && !isSuper &&
         expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis)) {
       if (containsVar(expr.methodCall.objName))
@@ -899,8 +887,6 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
                expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis)) {
       if (containsVar(expr.methodCall.objName)) {
         setVar(expr.methodCall.objName, QJsonValue(m_modifiedThis));
-        qDebug() << "[DEBUG] writeback to" << expr.methodCall.objName << "items="
-                 << resolveVar(expr.methodCall.objName).toObject().value(QStringLiteral("items"));
       }
     }
     // super() 构造函数调用需要保留 m_modifiedThis（父类构造函数修改了 this）
@@ -1494,20 +1480,6 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
 
     case Block::Stmt::kReturn:
       m_hasReturned = true;
-      qDebug() << "[DEBUG] kReturn expr kind:" << (int)stmt.returnValue.kind
-               << "ident:" << stmt.returnValue.ident << "prop:" << stmt.returnValue.prop
-               << "propObject:" << (stmt.returnValue.propObject != nullptr)
-               << "line:" << stmt.returnValue.line;
-      if (stmt.returnValue.propObject) {
-        qDebug() << "[DEBUG] kReturn propObject kind:" << (int)stmt.returnValue.propObject->kind
-                 << "ident:" << stmt.returnValue.propObject->ident
-                 << "prop:" << stmt.returnValue.propObject->prop;
-        if (stmt.returnValue.propObject->propObject) {
-          qDebug() << "[DEBUG] kReturn propObject->propObject kind:"
-                   << (int)stmt.returnValue.propObject->propObject->kind
-                   << "ident:" << stmt.returnValue.propObject->propObject->ident;
-        }
-      }
       m_returnValue = evalExpr(stmt.returnValue);
       break;
 
@@ -1518,15 +1490,10 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
 }
 
 void AcInterpreter::execBlock(const Block &block) {
-  qDebug() << "[execBlock] stmts count:" << block.stmts.size();
   for (int i = 0; i < block.stmts.size(); ++i) {
     const auto &stmt = block.stmts[i];
-    qDebug() << "[execBlock] stmt" << i << "kind:" << (int)stmt.kind;
     execStmt(stmt);
-    if (!m_error->isEmpty()) {
-      qDebug() << "[execBlock] error after stmt" << i << ":" << *m_error;
-      return;
-    }
+    if (!m_error->isEmpty()) return;
     if (m_hasReturned || m_hasBreak || m_hasContinue) return;
   }
 }
@@ -1556,269 +1523,20 @@ void AcInterpreter::execIfStmt(const IfStmt &ifStmt) {
 
 QJsonValue AcInterpreter::evalStringBuiltin(const QString &obj, const QString &method,
                                             const QVector<Expr *> &args, int line) {
-  if (method == QStringLiteral("toLowerCase")) {
-    return QJsonValue(obj.toLower());
-  }
-  if (method == QStringLiteral("toUpperCase")) {
-    return QJsonValue(obj.toUpper());
-  }
-  if (method == QStringLiteral("trim")) {
-    return QJsonValue(obj.trimmed());
-  }
-  if (method == QStringLiteral("includes")) {
-    if (args.isEmpty()) {
-      *m_error = QStringLiteral("string.includes() requires 1 argument at line %1").arg(line);
-      return QJsonValue();
-    }
-    QJsonValue arg = evalExpr(*args[0]);
-    return QJsonValue(obj.contains(arg.toString()));
-  }
-  if (method == QStringLiteral("startsWith")) {
-    if (args.isEmpty()) {
-      *m_error = QStringLiteral("string.startsWith() requires 1 argument at line %1").arg(line);
-      return QJsonValue();
-    }
-    QJsonValue arg = evalExpr(*args[0]);
-    return QJsonValue(obj.startsWith(arg.toString()));
-  }
-  if (method == QStringLiteral("endsWith")) {
-    if (args.isEmpty()) {
-      *m_error = QStringLiteral("string.endsWith() requires 1 argument at line %1").arg(line);
-      return QJsonValue();
-    }
-    QJsonValue arg = evalExpr(*args[0]);
-    return QJsonValue(obj.endsWith(arg.toString()));
-  }
-  if (method == QStringLiteral("indexOf")) {
-    if (args.isEmpty()) {
-      *m_error = QStringLiteral("string.indexOf() requires 1 argument at line %1").arg(line);
-      return QJsonValue();
-    }
-    QJsonValue arg = evalExpr(*args[0]);
-    return QJsonValue(obj.indexOf(arg.toString()));
-  }
-  if (method == QStringLiteral("lastIndexOf")) {
-    if (args.isEmpty()) {
-      *m_error = QStringLiteral("string.lastIndexOf() requires 1 argument at line %1").arg(line);
-      return QJsonValue();
-    }
-    QJsonValue arg = evalExpr(*args[0]);
-    return QJsonValue(obj.lastIndexOf(arg.toString()));
-  }
-  if (method == QStringLiteral("split")) {
-    if (args.isEmpty()) {
-      *m_error = QStringLiteral("string.split() requires 1 argument at line %1").arg(line);
-      return QJsonValue();
-    }
-    QJsonValue arg = evalExpr(*args[0]);
-    QStringList parts = obj.split(arg.toString());
-    QJsonArray arr;
-    for (const QString &p : parts) arr.append(QJsonValue(p));
-    return QJsonValue(arr);
-  }
-  if (method == QStringLiteral("replace")) {
-    if (args.size() < 2) {
-      *m_error = QStringLiteral("string.replace() requires 2 arguments at line %1").arg(line);
-      return QJsonValue();
-    }
-    QJsonValue search = evalExpr(*args[0]);
-    QJsonValue repl = evalExpr(*args[1]);
-    QString result = obj;
-    result.replace(search.toString(), repl.toString());
-    return QJsonValue(result);
-  }
-  if (method == QStringLiteral("substring") || method == QStringLiteral("slice")) {
-    if (args.isEmpty()) {
-      *m_error = QStringLiteral("string.%1() requires at least 1 argument at line %2")
-                     .arg(method)
-                     .arg(line);
-      return QJsonValue();
-    }
-    int start = evalExpr(*args[0]).toInt();
-    if (args.size() >= 2) {
-      int end = evalExpr(*args[1]).toInt();
-      return QJsonValue(obj.mid(start, end - start));
-    }
-    return QJsonValue(obj.mid(start));
-  }
-  if (method == QStringLiteral("charAt")) {
-    if (args.isEmpty()) {
-      *m_error = QStringLiteral("string.charAt() requires 1 argument at line %1").arg(line);
-      return QJsonValue();
-    }
-    int idx = evalExpr(*args[0]).toInt();
-    if (idx >= 0 && idx < obj.size()) return QJsonValue(QString(obj[idx]));
-    return QJsonValue(QString());
-  }
-  if (method == QStringLiteral("repeat")) {
-    if (args.isEmpty()) {
-      *m_error = QStringLiteral("string.repeat() requires 1 argument at line %1").arg(line);
-      return QJsonValue();
-    }
-    int count = evalExpr(*args[0]).toInt();
-    return QJsonValue(QString(obj).repeated(count));
-  }
-  if (method == QStringLiteral("padStart")) {
-    if (args.size() < 2) {
-      *m_error = QStringLiteral("string.padStart() requires 2 arguments at line %1").arg(line);
-      return QJsonValue();
-    }
-    int len = evalExpr(*args[0]).toInt();
-    QJsonValue fillVal = evalExpr(*args[1]);
-    QString fill = fillVal.toString();
-    QString result = obj;
-    while (result.length() < len) result = fill + result;
-    return QJsonValue(result.left(len));
-  }
-  if (method == QStringLiteral("padEnd")) {
-    if (args.size() < 2) {
-      *m_error = QStringLiteral("string.padEnd() requires 2 arguments at line %1").arg(line);
-      return QJsonValue();
-    }
-    int len = evalExpr(*args[0]).toInt();
-    QJsonValue fillVal = evalExpr(*args[1]);
-    QString fill = fillVal.toString();
-    QString result = obj;
-    while (result.length() < len) result = result + fill;
-    return QJsonValue(result.left(len));
-  }
-  if (method == QStringLiteral("length")) {
-    return QJsonValue(obj.length());
-  }
-  *m_error = QStringLiteral("string has no method '%1' at line %2").arg(method).arg(line);
-  return QJsonValue();
+  QString err;
+  QJsonValue result = AcBuiltinEval::evalStringMethod(*this, obj, method, args, line, err);
+  if (!err.isEmpty()) *m_error = err;
+  return result;
 }
 
 QJsonValue AcInterpreter::evalArrayBuiltin(const QJsonArray &arr, const QString &method,
                                            const QVector<Expr *> &args, int line,
                                            QJsonValue &modifiedArr) {
-  if (method == QStringLiteral("push") || method == QStringLiteral("append")) {
-    if (args.isEmpty()) {
-      *m_error = QStringLiteral("array.%1() requires 1 argument at line %2").arg(method).arg(line);
-      return QJsonValue();
-    }
-    QJsonArray newArr = arr;
-    QJsonValue val = evalExpr(*args[0]);
-    newArr.append(val);
-    modifiedArr = QJsonValue(newArr);
-    return QJsonValue(newArr.size());
-  }
-  if (method == QStringLiteral("pop")) {
-    if (arr.isEmpty()) return QJsonValue();
-    QJsonArray newArr = arr;
-    QJsonValue last = newArr.last();
-    newArr.removeLast();
-    modifiedArr = QJsonValue(newArr);
-    return last;
-  }
-  if (method == QStringLiteral("shift")) {
-    if (arr.isEmpty()) return QJsonValue();
-    QJsonArray newArr = arr;
-    QJsonValue first = newArr.first();
-    newArr.removeFirst();
-    modifiedArr = QJsonValue(newArr);
-    return first;
-  }
-  if (method == QStringLiteral("unshift")) {
-    if (args.isEmpty()) {
-      *m_error = QStringLiteral("array.unshift() requires 1 argument at line %1").arg(line);
-      return QJsonValue();
-    }
-    QJsonArray newArr = arr;
-    QJsonValue val = evalExpr(*args[0]);
-    newArr.insert(0, val);
-    modifiedArr = QJsonValue(newArr);
-    return QJsonValue(newArr.size());
-  }
-  if (method == QStringLiteral("join")) {
-    QString sep = QStringLiteral(",");
-    if (!args.isEmpty()) {
-      QJsonValue sepVal = evalExpr(*args[0]);
-      if (sepVal.isString()) sep = sepVal.toString();
-    }
-    QStringList parts;
-    for (const QJsonValue &v : arr) {
-      parts.append(v.isString() ? v.toString() : QString::number(v.toDouble()));
-    }
-    return QJsonValue(parts.join(sep));
-  }
-  if (method == QStringLiteral("indexOf")) {
-    if (args.isEmpty()) {
-      *m_error = QStringLiteral("array.indexOf() requires 1 argument at line %1").arg(line);
-      return QJsonValue();
-    }
-    QJsonValue target = evalExpr(*args[0]);
-    for (int i = 0; i < arr.size(); ++i) {
-      if (compareValues(arr[i], target) == 0) return QJsonValue(i);
-    }
-    return QJsonValue(-1);
-  }
-  if (method == QStringLiteral("includes")) {
-    if (args.isEmpty()) {
-      *m_error = QStringLiteral("array.includes() requires 1 argument at line %1").arg(line);
-      return QJsonValue();
-    }
-    QJsonValue target = evalExpr(*args[0]);
-    for (const QJsonValue &v : arr) {
-      if (compareValues(v, target) == 0) return QJsonValue(true);
-    }
-    return QJsonValue(false);
-  }
-  if (method == QStringLiteral("slice")) {
-    int start = 0;
-    int end = arr.size();
-    if (!args.isEmpty()) start = evalExpr(*args[0]).toInt();
-    if (args.size() >= 2) end = evalExpr(*args[1]).toInt();
-    QJsonArray result;
-    for (int i = start; i < end && i < arr.size(); ++i) result.append(arr[i]);
-    return QJsonValue(result);
-  }
-  if (method == QStringLiteral("concat")) {
-    QJsonArray result = arr;
-    for (auto *argExpr : args) {
-      QJsonValue val = evalExpr(*argExpr);
-      if (val.isArray()) {
-        for (const QJsonValue &v : val.toArray()) result.append(v);
-      } else {
-        result.append(val);
-      }
-    }
-    return QJsonValue(result);
-  }
-  if (method == QStringLiteral("reverse")) {
-    QJsonArray newArr;
-    for (int i = arr.size() - 1; i >= 0; --i) newArr.append(arr[i]);
-    modifiedArr = QJsonValue(newArr);
-    return QJsonValue(newArr);
-  }
-  if (method == QStringLiteral("splice")) {
-    if (args.isEmpty()) {
-      *m_error = QStringLiteral("array.splice() requires at least 1 argument at line %1").arg(line);
-      return QJsonValue();
-    }
-    int start = evalExpr(*args[0]).toInt();
-    int deleteCount = arr.size() - start;
-    if (args.size() >= 2) deleteCount = evalExpr(*args[1]).toInt();
-    QJsonArray newArr = arr;
-    QJsonArray removed;
-    for (int i = 0; i < deleteCount && start < newArr.size(); ++i) {
-      removed.append(newArr.takeAt(start));
-    }
-    for (int i = 2; i < args.size(); ++i) {
-      newArr.insert(start + i - 2, evalExpr(*args[i]));
-    }
-    modifiedArr = QJsonValue(newArr);
-    return QJsonValue(removed);
-  }
-  if (method == QStringLiteral("map") || method == QStringLiteral("filter") ||
-      method == QStringLiteral("forEach")) {
-    *m_error = QStringLiteral("array.%1() with callback is not supported yet at line %2")
-                   .arg(method)
-                   .arg(line);
-    return QJsonValue();
-  }
-  *m_error = QStringLiteral("array has no method '%1' at line %2").arg(method).arg(line);
-  return QJsonValue();
+  QString err;
+  QJsonValue result =
+      AcBuiltinEval::evalArrayMethod(*this, arr, method, args, line, modifiedArr, err);
+  if (!err.isEmpty()) *m_error = err;
+  return result;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1850,8 +1568,6 @@ QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
 
   // 注入解释器上下文给 FunBuiltin 使用
   FunMgr::init();
-  qDebug() << "[AcInterpreter::execute] m_logCallback is null:" << !m_logCallback
-           << "m_scriptDir:" << m_scriptDir << "m_rootDir:" << m_rootDir;
   FunBuiltin::setContext({m_scriptDir, m_rootDir, m_logCallback, &m_generatedFiles, 0});
 
   // 预扫描：将所有顶层函数/类/枚举定义先注册（函数提升，允许先调用后定义）
