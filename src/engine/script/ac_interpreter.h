@@ -66,8 +66,21 @@ private:
   void execIfStmt(const IfStmt &ifStmt);
   QJsonValue evalExpr(const Expr &expr);
   QJsonValue evalExprWithThis(const Expr &expr, const QJsonObject &thisObj);
-  /// @brief 解析类名.属性访问（静态属性 + 类对象回退），返回属性值；失败返回 null
+  /// @brief 解析类名.属性访问（静态属性 + 类对象回退），返回属性值；失败返回 Undefined
   QJsonValue resolveClassAccess(const QString &className, const QString &propName);
+  /// @brief 解析类的静态属性或方法访问，返回属性值/类引用；失败返回 Undefined
+  QJsonValue resolveClassPropOrMethod(const QString &className, const QString &propName);
+  /// @brief 创建类引用对象 { __class__: className }
+  QJsonValue makeClassRef(const QString &className) const;
+  /// @brief 应用复合赋值运算符
+  QJsonValue applyCompoundOp(const QJsonValue &currentVal, const QJsonValue &newVal, CompoundOp op,
+                             int line);
+  /// @brief 将修改后的值回写到变量/this/属性
+  void writeBackVar(const Expr &objectExpr, const QJsonValue &val);
+  /// @brief 执行静态属性赋值
+  void execStaticAssign(const QString &className, const QString &propName, const QJsonValue &val);
+  /// @brief 执行 this 属性赋值
+  void execThisAssign(const QString &propName, const QJsonValue &val);
   QJsonValue evalBinary(const Expr &expr);
   QJsonValue evalUnary(const Expr &expr);
   QJsonValue evalMethodCall(const Expr &expr);
@@ -124,6 +137,7 @@ private:
   QString m_error;
   QString m_scriptDir;
   QString m_rootDir;
+  AcObjectManager m_objMgr;
   QVector<QHash<QString, QJsonValue>> m_scopeStack;
   QVector<QVector<QString>> m_usingStack;
   QHash<QString, ClassDef> m_classes;

@@ -9,11 +9,6 @@
 
 #include "../ac_language.h"
 
-AcObjectManager &AcObjectManager::ins() {
-  static AcObjectManager s_inst;
-  return s_inst;
-}
-
 QJsonObject AcObjectManager::registerInstance(const QJsonObject &instance,
                                               const QString &className) {
   QString objId = QUuid::createUuid().toString(QUuid::WithoutBraces);

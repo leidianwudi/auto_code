@@ -144,6 +144,47 @@ QJsonValue AcInterpreter::execUserFunction(const MethodDef &func, const QJsonVal
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+//  语句执行辅助
+// ═════════════════════════════════════════════════════════════════════════════
+
+void AcInterpreter::writeBackVar(const Expr &objectExpr, const QJsonValue &val) {
+  if (objectExpr.kind == Expr::kIdent) {
+    setVar(objectExpr.ident, val);
+  } else if (objectExpr.kind == Expr::kThis) {
+    m_currentThis = val.toObject();
+    m_modifiedThis = val.toObject();
+  } else if (objectExpr.kind == Expr::kPropAccess) {
+    QJsonValue parentVal = resolveVar(objectExpr.ident);
+    if (parentVal.isObject()) {
+      QJsonObject parentObj = parentVal.toObject();
+      parentObj[objectExpr.prop] = val;
+      setVar(objectExpr.ident, parentObj);
+    }
+  }
+}
+
+void AcInterpreter::execStaticAssign(const QString &className, const QString &propName,
+                                     const QJsonValue &val) {
+  if (m_staticVars.contains(className)) {
+    QJsonObject sv = m_staticVars[className];
+    if (sv.contains(propName)) {
+      releaseIfInstanceWithDestruct(sv.value(propName));
+    }
+    retainIfInstance(val);
+    sv[propName] = val;
+    m_staticVars[className] = sv;
+  }
+}
+
+void AcInterpreter::execThisAssign(const QString &propName, const QJsonValue &val) {
+  QJsonValue old = m_currentThis.value(propName);
+  releaseIfInstanceWithDestruct(old);
+  retainIfInstance(val);
+  m_currentThis[propName] = val;
+  m_modifiedThis[propName] = val;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 //  语句执行
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -179,64 +220,17 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
         } else {
           currentVal = resolveVar(stmt.assign.name);
         }
-        if (stmt.assign.compoundOp == CompoundOp::kAdd) {
-          if (currentVal.isString() || val.isString()) {
-            QString ls = currentVal.isString() ? currentVal.toString()
-                                               : QString::number(currentVal.toDouble());
-            QString rs = val.isString() ? val.toString() : QString::number(val.toDouble());
-            val = QJsonValue(ls + rs);
-          } else {
-            val = QJsonValue(currentVal.toDouble() + val.toDouble());
-          }
-        } else {
-          double left = currentVal.toDouble();
-          double right = val.toDouble();
-          switch (stmt.assign.compoundOp) {
-            case CompoundOp::kSub:
-              val = QJsonValue(left - right);
-              break;
-            case CompoundOp::kMul:
-              val = QJsonValue(left * right);
-              break;
-            case CompoundOp::kDiv:
-              if (right == 0) {
-                m_error = QStringLiteral("division by zero at line %1").arg(stmt.assign.value.line);
-                return;
-              }
-              val = QJsonValue(left / right);
-              break;
-            case CompoundOp::kMod:
-              if (right == 0) {
-                m_error = QStringLiteral("modulo by zero at line %1").arg(stmt.assign.value.line);
-                return;
-              }
-              val = QJsonValue(fmod(left, right));
-              break;
-            default:
-              break;
-          }
-        }
+        val = applyCompoundOp(currentVal, val, stmt.assign.compoundOp, stmt.assign.value.line);
+        if (!m_error.isEmpty()) return;
       }
 
       if (stmt.assign.isStatic) {
-        if (m_staticVars.contains(stmt.assign.staticClassName)) {
-          QJsonObject sv = m_staticVars[stmt.assign.staticClassName];
-          if (sv.contains(stmt.assign.name)) {
-            releaseIfInstanceWithDestruct(sv.value(stmt.assign.name));
-          }
-          retainIfInstance(val);
-          sv[stmt.assign.name] = val;
-          m_staticVars[stmt.assign.staticClassName] = sv;
-        }
+        execStaticAssign(stmt.assign.staticClassName, stmt.assign.name, val);
         break;
       }
 
       if (!stmt.assign.thisProp.isEmpty()) {
-        QJsonValue old = m_currentThis.value(stmt.assign.thisProp);
-        releaseIfInstanceWithDestruct(old);
-        retainIfInstance(val);
-        m_currentThis[stmt.assign.thisProp] = val;
-        m_modifiedThis[stmt.assign.thisProp] = val;
+        execThisAssign(stmt.assign.thisProp, val);
         break;
       }
 
@@ -261,19 +255,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
           releaseIfInstanceWithDestruct(obj.value(key));
         }
         obj[key] = newVal;
-        if (stmt.indexAssign.objectExpr.kind == Expr::kIdent) {
-          setVar(stmt.indexAssign.objectExpr.ident, obj);
-        } else if (stmt.indexAssign.objectExpr.kind == Expr::kThis) {
-          m_currentThis = obj;
-          m_modifiedThis = obj;
-        } else if (stmt.indexAssign.objectExpr.kind == Expr::kPropAccess) {
-          QJsonValue parentVal = resolveVar(stmt.indexAssign.objectExpr.ident);
-          if (parentVal.isObject()) {
-            QJsonObject parentObj = parentVal.toObject();
-            parentObj[stmt.indexAssign.objectExpr.prop] = obj;
-            setVar(stmt.indexAssign.objectExpr.ident, parentObj);
-          }
-        }
+        writeBackVar(stmt.indexAssign.objectExpr, obj);
       } else if (objVal.isArray()) {
         QJsonArray arr = objVal.toArray();
         int idx = idxVal.toInt();
@@ -283,19 +265,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
         } else if (idx == arr.size()) {
           arr.append(newVal);
         }
-        if (stmt.indexAssign.objectExpr.kind == Expr::kIdent) {
-          setVar(stmt.indexAssign.objectExpr.ident, QJsonValue(arr));
-        } else if (stmt.indexAssign.objectExpr.kind == Expr::kThis) {
-          m_currentThis = QJsonObject();
-          m_modifiedThis = QJsonObject();
-        } else if (stmt.indexAssign.objectExpr.kind == Expr::kPropAccess) {
-          QJsonValue parentVal = resolveVar(stmt.indexAssign.objectExpr.ident);
-          if (parentVal.isObject()) {
-            QJsonObject parentObj = parentVal.toObject();
-            parentObj[stmt.indexAssign.objectExpr.prop] = QJsonValue(arr);
-            setVar(stmt.indexAssign.objectExpr.ident, parentObj);
-          }
-        }
+        writeBackVar(stmt.indexAssign.objectExpr, QJsonValue(arr));
       }
       break;
     }
@@ -304,19 +274,11 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       if (stmt.propAssign.objectExpr.kind == Expr::kIdent &&
           m_classes.contains(stmt.propAssign.objectExpr.ident)) {
         QJsonValue newVal = evalExpr(stmt.propAssign.value);
-        retainIfInstance(newVal);
         QString className = stmt.propAssign.objectExpr.ident;
         if (!m_staticInited.contains(className)) {
           initStaticVars(m_classes[className]);
         }
-        if (m_staticVars.contains(className)) {
-          QJsonObject sv = m_staticVars[className];
-          if (sv.contains(stmt.propAssign.prop)) {
-            releaseIfInstanceWithDestruct(sv.value(stmt.propAssign.prop));
-          }
-          sv[stmt.propAssign.prop] = newVal;
-          m_staticVars[className] = sv;
-        }
+        execStaticAssign(className, stmt.propAssign.prop, newVal);
         break;
       }
       QJsonValue objVal = evalExpr(stmt.propAssign.objectExpr);
@@ -326,38 +288,14 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
         QJsonObject obj = objVal.toObject();
         if (stmt.propAssign.compoundOp != CompoundOp::kNone) {
           QJsonValue oldVal = obj.value(stmt.propAssign.prop);
-          double oldNum = oldVal.isDouble() ? oldVal.toDouble() : 0.0;
-          double newNum = newVal.isDouble() ? newVal.toDouble() : 0.0;
-          switch (stmt.propAssign.compoundOp) {
-            case CompoundOp::kAdd:
-              newVal = QJsonValue(oldNum + newNum);
-              break;
-            case CompoundOp::kSub:
-              newVal = QJsonValue(oldNum - newNum);
-              break;
-            case CompoundOp::kMul:
-              newVal = QJsonValue(oldNum * newNum);
-              break;
-            case CompoundOp::kDiv:
-              newVal = QJsonValue(newNum != 0 ? oldNum / newNum : 0.0);
-              break;
-            case CompoundOp::kMod:
-              newVal = QJsonValue(newNum != 0 ? fmod(oldNum, newNum) : 0.0);
-              break;
-            default:
-              break;
-          }
+          newVal = applyCompoundOp(oldVal, newVal, stmt.propAssign.compoundOp, 0);
+          if (!m_error.isEmpty()) return;
         }
         if (obj.contains(stmt.propAssign.prop)) {
           releaseIfInstanceWithDestruct(obj.value(stmt.propAssign.prop));
         }
         obj[stmt.propAssign.prop] = newVal;
-        if (stmt.propAssign.objectExpr.kind == Expr::kIdent) {
-          setVar(stmt.propAssign.objectExpr.ident, obj);
-        } else if (stmt.propAssign.objectExpr.kind == Expr::kThis) {
-          m_currentThis = obj;
-          m_modifiedThis = obj;
-        }
+        writeBackVar(stmt.propAssign.objectExpr, obj);
       }
       break;
     }

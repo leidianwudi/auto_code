@@ -16,27 +16,85 @@ void AcLexer::skipLineComment(const QString &source, int &pos) {
 
 /// @brief 跳过块注释（/* 到 */）
 bool AcLexer::skipBlockComment(const QString &source, int &pos, int &line, QString &error) {
-  // 跳过 /* 的两个字符
   pos += 2;
-
   while (pos < source.size()) {
-    // 检查是否遇到 */ 结束标记
     if (source[pos] == '*' && pos + 1 < source.size() && source[pos + 1] == '/') {
-      pos += 2;     // 跳过 */
-      return true;  // 成功找到闭合的块注释
+      pos += 2;
+      return true;
     }
-
-    // 更新行号（支持多行块注释）
-    if (source[pos] == '\n') {
-      ++line;
-    }
-
+    if (source[pos] == '\n') ++line;
     ++pos;
   }
-
-  // 未找到闭合的 */
   error = QStringLiteral("unterminated block comment at line %1").arg(line);
   return false;
+}
+
+Token AcLexer::parseStringLiteral(const QString &source, int &pos, int line, QString &error) {
+  int start = ++pos;
+  int n = source.size();
+  while (pos < n && source[pos] != '"') {
+    if (source[pos] == '\\' && pos + 1 < n) ++pos;
+    ++pos;
+  }
+  if (pos >= n) {
+    error = QStringLiteral("unterminated string at line %1").arg(line);
+    return {TOK_EOF, {}, line};
+  }
+  QString val = source.mid(start, pos - start);
+  val.replace(QStringLiteral("\\\""), QStringLiteral("\""));
+  val.replace(QStringLiteral("\\n"), QStringLiteral("\n"));
+  val.replace(QStringLiteral("\\\\"), QStringLiteral("\\"));
+  ++pos;
+  return {TOK_STRING, val, line};
+}
+
+Token AcLexer::parseTemplateStringLiteral(const QString &source, int &pos, int &line,
+                                          QString &error) {
+  int start = ++pos;
+  int n = source.size();
+  int depth = 0;
+  while (pos < n) {
+    if (source[pos] == '`' && depth == 0) break;
+    if (source[pos] == '\\' && pos + 1 < n) {
+      pos += 2;
+      continue;
+    }
+    if (source[pos] == '$' && pos + 1 < n && source[pos + 1] == '{') {
+      ++depth;
+      pos += 2;
+      continue;
+    }
+    if (source[pos] == '{' && depth > 0) {
+      ++depth;
+      ++pos;
+      continue;
+    }
+    if (source[pos] == '}' && depth > 0) {
+      --depth;
+      ++pos;
+      continue;
+    }
+    if (source[pos] == '\n') ++line;
+    ++pos;
+  }
+  if (pos >= n) {
+    error = QStringLiteral("unterminated template string at line %1").arg(line);
+    return {TOK_EOF, {}, line};
+  }
+  QString val = source.mid(start, pos - start);
+  ++pos;
+  return {TOK_TEMPLATE_STRING, val, line};
+}
+
+Token AcLexer::parseNumberLiteral(const QString &source, int &pos, int line) {
+  int start = pos;
+  int n = source.size();
+  while (pos < n && source[pos].isDigit()) ++pos;
+  if (pos + 1 < n && source[pos] == '.' && source[pos + 1].isDigit()) {
+    ++pos;
+    while (pos < n && source[pos].isDigit()) ++pos;
+  }
+  return {TOK_NUMBER, source.mid(start, pos - start), line};
 }
 
 /// @brief 关键字到 Token 类型的映射表
@@ -81,6 +139,21 @@ static const QHash<QString, TokenType> &keywordMap() {
       {QString::fromLatin1(AcKeyword::kAs), TOK_AS},
   };
   return map;
+}
+
+Token AcLexer::parseIdentifier(const QString &source, int &pos, int line) {
+  int start = pos;
+  int n = source.size();
+  while (pos < n &&
+         ((source[pos].isLetterOrNumber() && source[pos].unicode() < 128) || source[pos] == '_'))
+    ++pos;
+  QString word = source.mid(start, pos - start);
+  auto it = keywordMap().constFind(word);
+  Token tok;
+  tok.line = line;
+  tok.text = word;
+  tok.type = (it != keywordMap().constEnd()) ? it.value() : TOK_IDENT;
+  return tok;
 }
 
 /// @brief 将源码字符串拆分为 token 序列
@@ -271,80 +344,22 @@ QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
         ++i;
         break;
       case '"': {
-        int start = ++i;
-        while (i < n && source[i] != '"') {
-          if (source[i] == '\\' && i + 1 < n) ++i;
-          ++i;
-        }
-        if (i >= n) {
-          error = QStringLiteral("unterminated string at line %1").arg(line);
-          return {};
-        }
-        QString val = source.mid(start, i - start);
-        val.replace(QStringLiteral("\\\""), QStringLiteral("\""));
-        val.replace(QStringLiteral("\\n"), QStringLiteral("\n"));
-        val.replace(QStringLiteral("\\\\"), QStringLiteral("\\"));
-        tokens.append({TOK_STRING, val, line});
-        ++i;
+        Token tok = parseStringLiteral(source, i, line, error);
+        if (!error.isEmpty()) return {};
+        tokens.append(tok);
         break;
       }
       case '`': {
-        int start = ++i;
-        int depth = 0;
-        while (i < n) {
-          if (source[i] == '`' && depth == 0) break;
-          if (source[i] == '\\' && i + 1 < n) {
-            ++i;
-            ++i;
-            continue;
-          }
-          if (source[i] == '$' && i + 1 < n && source[i + 1] == '{') {
-            ++depth;
-            i += 2;
-            continue;
-          }
-          if (source[i] == '{' && depth > 0) {
-            ++depth;
-            ++i;
-            continue;
-          }
-          if (source[i] == '}' && depth > 0) {
-            --depth;
-            ++i;
-            continue;
-          }
-          if (source[i] == '\n') ++line;
-          ++i;
-        }
-        if (i >= n) {
-          error = QStringLiteral("unterminated template string at line %1").arg(line);
-          return {};
-        }
-        QString val = source.mid(start, i - start);
-        tokens.append({TOK_TEMPLATE_STRING, val, line});
-        ++i;
+        Token tok = parseTemplateStringLiteral(source, i, line, error);
+        if (!error.isEmpty()) return {};
+        tokens.append(tok);
         break;
       }
       default:
         if (c.isDigit()) {
-          int start = i;
-          while (i < n && source[i].isDigit()) ++i;
-          if (i + 1 < n && source[i] == '.' && source[i + 1].isDigit()) {
-            ++i;
-            while (i < n && source[i].isDigit()) ++i;
-          }
-          tokens.append({TOK_NUMBER, source.mid(start, i - start), line});
+          tokens.append(parseNumberLiteral(source, i, line));
         } else if ((c.isLetter() && c.unicode() < 128) || c == '_') {
-          int start = i;
-          while (i < n &&
-                 ((source[i].isLetterOrNumber() && source[i].unicode() < 128) || source[i] == '_'))
-            ++i;
-          QString word = source.mid(start, i - start);
-          auto it = keywordMap().constFind(word);
-          if (it != keywordMap().constEnd())
-            tokens.append({*it, word, line});
-          else
-            tokens.append({TOK_IDENT, word, line});
+          tokens.append(parseIdentifier(source, i, line));
         } else if (c.unicode() > 127) {
           ++i;
         } else {

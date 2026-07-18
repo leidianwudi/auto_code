@@ -27,4 +27,17 @@ private:
   /// @param[out] error 错误信息（未闭合的块注释时设置）
   /// @return true 成功跳过，false 块注释未闭合
   static bool skipBlockComment(const QString &source, int &pos, int &line, QString &error);
+
+  /// @brief 解析字符串字面量（从当前位置的 " 开始）
+  static Token parseStringLiteral(const QString &source, int &pos, int line, QString &error);
+
+  /// @brief 解析模板字符串字面量（从当前位置的 ` 开始）
+  static Token parseTemplateStringLiteral(const QString &source, int &pos, int &line,
+                                          QString &error);
+
+  /// @brief 解析数字字面量（从当前位置的数字开始）
+  static Token parseNumberLiteral(const QString &source, int &pos, int line);
+
+  /// @brief 解析标识符或关键字（从当前位置的字母/下划线开始）
+  static Token parseIdentifier(const QString &source, int &pos, int line);
 };

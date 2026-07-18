@@ -74,6 +74,8 @@ private:
   bool parseFuncCall(const QString &name, Expr &expr);
   bool parseTemplateString(Expr &expr);
   bool parseMethodDef(MethodDef &md);
+  /// @brief 解析类属性（static let / let / ident = value），返回是否成功
+  bool parseClassProperty(ClassDef &cd, AccessLevel access, bool isStatic);
 
   // ── 复合赋值运算符解析 ──
   /// @brief 检查当前 token 是否为复合赋值运算符，如果是则消耗并返回对应枚举值

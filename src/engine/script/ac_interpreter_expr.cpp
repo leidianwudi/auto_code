@@ -37,6 +37,61 @@ QJsonValue AcInterpreter::resolveClassAccess(const QString &className, const QSt
   return QJsonValue(QJsonValue::Undefined);
 }
 
+QJsonValue AcInterpreter::resolveClassPropOrMethod(const QString &className,
+                                                   const QString &propName) {
+  QJsonValue staticVal = resolveClassAccess(className, propName);
+  if (!staticVal.isUndefined()) return staticVal;
+  const ClassDef &cd = m_classes[className];
+  for (const auto &p : cd.properties) {
+    if (p.isStatic && p.key == propName) return staticVal;
+  }
+  for (const auto &m : cd.methods) {
+    if (m.isStatic && m.name == propName) return makeClassRef(className);
+  }
+  return QJsonValue(QJsonValue::Undefined);
+}
+
+QJsonValue AcInterpreter::makeClassRef(const QString &className) const {
+  QJsonObject classObj;
+  classObj[QString::fromLatin1(AcRuntime::kClassKey)] = className;
+  return QJsonValue(classObj);
+}
+
+QJsonValue AcInterpreter::applyCompoundOp(const QJsonValue &currentVal, const QJsonValue &newVal,
+                                          CompoundOp op, int line) {
+  if (op == CompoundOp::kAdd) {
+    if (currentVal.isString() || newVal.isString()) {
+      QString ls =
+          currentVal.isString() ? currentVal.toString() : QString::number(currentVal.toDouble());
+      QString rs = newVal.isString() ? newVal.toString() : QString::number(newVal.toDouble());
+      return QJsonValue(ls + rs);
+    }
+    return QJsonValue(currentVal.toDouble() + newVal.toDouble());
+  }
+  double left = currentVal.toDouble();
+  double right = newVal.toDouble();
+  switch (op) {
+    case CompoundOp::kSub:
+      return QJsonValue(left - right);
+    case CompoundOp::kMul:
+      return QJsonValue(left * right);
+    case CompoundOp::kDiv:
+      if (right == 0) {
+        m_error = QStringLiteral("division by zero at line %1").arg(line);
+        return QJsonValue();
+      }
+      return QJsonValue(left / right);
+    case CompoundOp::kMod:
+      if (right == 0) {
+        m_error = QStringLiteral("modulo by zero at line %1").arg(line);
+        return QJsonValue();
+      }
+      return QJsonValue(fmod(left, right));
+    default:
+      return newVal;
+  }
+}
+
 QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
   switch (expr.kind) {
     case Expr::kNull:
@@ -70,29 +125,12 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
         if (obj.isNull() && expr.propObject->kind == Expr::kIdent &&
             m_classes.contains(expr.propObject->ident)) {
           const QString &clsName = expr.propObject->ident;
-          QJsonValue staticVal = resolveClassAccess(clsName, expr.prop);
-          if (!staticVal.isUndefined()) {
+          QJsonValue result = resolveClassPropOrMethod(clsName, expr.prop);
+          if (!result.isUndefined()) {
             m_error.clear();
-            return staticVal;
+            return result;
           }
-          const ClassDef &cd = m_classes[clsName];
-          for (const auto &p : cd.properties) {
-            if (p.isStatic && p.key == expr.prop) {
-              m_error.clear();
-              return staticVal;
-            }
-          }
-          for (const auto &m : cd.methods) {
-            if (m.isStatic && m.name == expr.prop) {
-              QJsonObject classObj;
-              classObj[QString::fromLatin1(AcRuntime::kClassKey)] = clsName;
-              m_error.clear();
-              return QJsonValue(classObj);
-            }
-          }
-          QJsonObject classObj;
-          classObj[QString::fromLatin1(AcRuntime::kClassKey)] = clsName;
-          obj = QJsonValue(classObj);
+          obj = makeClassRef(clsName);
           m_error.clear();
         }
       } else if (expr.ident == QString::fromLatin1(AcKeyword::kThis)) {
@@ -109,23 +147,8 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
             return resolveVar(enumMemberName);
           }
           if (m_classes.contains(expr.ident)) {
-            QJsonValue staticVal = resolveClassAccess(expr.ident, expr.prop);
-            if (!staticVal.isUndefined()) {
-              return staticVal;
-            }
-            const ClassDef &cd = m_classes[expr.ident];
-            for (const auto &p : cd.properties) {
-              if (p.isStatic && p.key == expr.prop) {
-                return staticVal;
-              }
-            }
-            for (const auto &m : cd.methods) {
-              if (m.isStatic && m.name == expr.prop) {
-                QJsonObject classObj;
-                classObj[QString::fromLatin1(AcRuntime::kClassKey)] = expr.ident;
-                return QJsonValue(classObj);
-              }
-            }
+            QJsonValue result = resolveClassPropOrMethod(expr.ident, expr.prop);
+            if (!result.isUndefined()) return result;
           }
           m_error = QStringLiteral("undefined variable '%1'").arg(expr.ident);
           return QJsonValue();
@@ -535,9 +558,7 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
     if (objVal.isNull()) {
       if (expr.methodCall.object->kind == Expr::kIdent &&
           m_classes.contains(expr.methodCall.object->ident)) {
-        QJsonObject classObj;
-        classObj[QString::fromLatin1(AcRuntime::kClassKey)] = expr.methodCall.object->ident;
-        objVal = QJsonValue(classObj);
+        objVal = makeClassRef(expr.methodCall.object->ident);
         m_error.clear();
       } else {
         m_error = QStringLiteral("method call on null value at line %1").arg(expr.line);
@@ -550,9 +571,7 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
     objVal = resolveVar(expr.methodCall.objName);
     if (objVal.isNull() && expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis)) {
       if (m_classes.contains(expr.methodCall.objName)) {
-        QJsonObject classObj;
-        classObj[QString::fromLatin1(AcRuntime::kClassKey)] = expr.methodCall.objName;
-        objVal = QJsonValue(classObj);
+        objVal = makeClassRef(expr.methodCall.objName);
       } else {
         m_error =
             QStringLiteral("undefined variable '%1' in method call").arg(expr.methodCall.objName);
@@ -705,7 +724,7 @@ QJsonValue AcInterpreter::evalNewInstance(const Expr &expr) {
         FunMgr::ins().call(expr.className, QString::fromLatin1(AcRuntime::kConstructor), ctorArgs);
     if (ctorResult.isObject()) instance = ctorResult.toObject();
     instance[QString::fromLatin1(AcRuntime::kClassKey)] = expr.className;
-    instance = AcObjectManager::ins().registerInstance(instance, expr.className);
+    instance = m_objMgr.registerInstance(instance, expr.className);
     return QJsonValue(instance);
   }
 
@@ -725,7 +744,7 @@ QJsonValue AcInterpreter::evalNewInstance(const Expr &expr) {
 
   instance[QString::fromLatin1(AcRuntime::kClassKey)] = expr.className;
 
-  instance = AcObjectManager::ins().registerInstance(instance, expr.className);
+  instance = m_objMgr.registerInstance(instance, expr.className);
 
   for (const auto &m : cd.methods) {
     if (m.name == QStringLiteral("constructor")) {

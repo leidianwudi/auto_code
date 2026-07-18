@@ -27,7 +27,8 @@ public:
     QString className;     ///< 类名
   };
 
-  static AcObjectManager &ins();
+  AcObjectManager() = default;
+  ~AcObjectManager() = default;
 
   /**
    * @brief 注册新实例（new 时调用）
@@ -105,11 +106,6 @@ public:
   void cleanup();
 
 private:
-  AcObjectManager() = default;
-  ~AcObjectManager() = default;
-  AcObjectManager(const AcObjectManager &) = delete;
-  AcObjectManager &operator=(const AcObjectManager &) = delete;
-
   QHash<QString, int> m_refCount;            ///< objId → 引用计数
   QHash<QString, QJsonObject> m_objects;     ///< objId → 实例数据
   QHash<QString, QString> m_classNames;      ///< objId → 类名

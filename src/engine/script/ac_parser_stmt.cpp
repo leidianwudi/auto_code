@@ -679,36 +679,8 @@ bool AcParser::parseClassDef(ClassDef &cd) {
         md.access = access;
         md.isStatic = true;
         cd.methods.append(md);
-      } else if (peek().type == TOK_LET) {
-        // static let property: Type [= value];
-        advance();
-        QString name = advance().text;
-        ObjectEntry prop;
-        prop.key = name;
-        prop.isStatic = true;
-        prop.access = access;
-        if (peek().type == TOK_COLON) {
-          advance();
-          advance();  // skip type name
-        }
-        if (peek().type == TOK_EQUALS) {
-          advance();
-          prop.value = std::make_unique<Expr>();
-          if (!parseExpr(*prop.value)) return false;
-        }
-        cd.properties.append(prop);
-      } else if (peek().type == TOK_IDENT) {
-        QString name = advance().text;
-        if (peek().type == TOK_EQUALS) {
-          advance();
-          ObjectEntry prop;
-          prop.key = name;
-          prop.isStatic = true;
-          prop.access = access;
-          prop.value = std::make_unique<Expr>();
-          if (!parseExpr(*prop.value)) return false;
-          cd.properties.append(prop);
-        }
+      } else if (peek().type == TOK_LET || peek().type == TOK_IDENT) {
+        if (!parseClassProperty(cd, access, true)) return false;
       }
     } else if (peek().type == TOK_CONSTRUCTOR) {
       // constructor(param: Type, ...) { ... }
@@ -747,32 +719,8 @@ bool AcParser::parseClassDef(ClassDef &cd) {
       md.access = access;
       md.isOverride = true;
       cd.methods.append(md);
-    } else if (peek().type == TOK_LET) {
-      // let property: Type [= value];
-      advance();
-      QString name = advance().text;
-      ObjectEntry prop;
-      prop.key = name;
-      if (peek().type == TOK_COLON) {
-        advance();
-        advance();  // skip type name
-      }
-      if (peek().type == TOK_EQUALS) {
-        advance();
-        prop.value = std::make_unique<Expr>();
-        if (!parseExpr(*prop.value)) return false;
-      }
-      cd.properties.append(prop);
-    } else if (peek().type == TOK_IDENT) {
-      QString name = advance().text;
-      if (peek().type == TOK_EQUALS) {
-        advance();
-        ObjectEntry prop;
-        prop.key = name;
-        prop.value = std::make_unique<Expr>();
-        if (!parseExpr(*prop.value)) return false;
-        cd.properties.append(prop);
-      }
+    } else if (peek().type == TOK_LET || peek().type == TOK_IDENT) {
+      if (!parseClassProperty(cd, access, false)) return false;
     }
 
     // 方法体以 } 结束，不需要分号；属性声明以 ; 结束，跳过即可
@@ -903,6 +851,32 @@ bool AcParser::parseMethodDef(MethodDef &md) {
   }
 
   return parseBlock(md.body);
+}
+
+bool AcParser::parseClassProperty(ClassDef &cd, AccessLevel access, bool isStatic) {
+  if (peek().type == TOK_LET) {
+    advance();
+  }
+  if (peek().type != TOK_IDENT) {
+    m_error = QStringLiteral("expected property name at line %1").arg(peek().line);
+    return false;
+  }
+  QString name = advance().text;
+  ObjectEntry prop;
+  prop.key = name;
+  prop.isStatic = isStatic;
+  prop.access = access;
+  if (peek().type == TOK_COLON) {
+    advance();
+    advance();
+  }
+  if (peek().type == TOK_EQUALS) {
+    advance();
+    prop.value = std::make_unique<Expr>();
+    if (!parseExpr(*prop.value)) return false;
+  }
+  cd.properties.append(prop);
+  return true;
 }
 
 bool AcParser::parseReturnStmt(Expr &retVal) {

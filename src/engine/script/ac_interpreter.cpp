@@ -112,18 +112,18 @@ bool AcInterpreter::isTruthy(const QJsonValue &cond) {
 
 void AcInterpreter::retainIfInstance(const QJsonValue &val) {
   if (!AcObjectManager::isManagedInstance(val)) return;
-  AcObjectManager::ins().retain(AcObjectManager::getObjId(val));
+  m_objMgr.retain(AcObjectManager::getObjId(val));
 }
 
 void AcInterpreter::releaseIfInstance(const QJsonValue &val) {
   if (!AcObjectManager::isManagedInstance(val)) return;
-  AcObjectManager::ins().release(AcObjectManager::getObjId(val));
+  m_objMgr.release(AcObjectManager::getObjId(val));
 }
 
 void AcInterpreter::releaseIfInstanceWithDestruct(const QJsonValue &val) {
   if (!AcObjectManager::isManagedInstance(val)) return;
-  AcObjectManager::ins().release(AcObjectManager::getObjId(val));
-  QVector<AcObjectManager::DestructInfo> pending = AcObjectManager::ins().takePendingDestructs();
+  m_objMgr.release(AcObjectManager::getObjId(val));
+  QVector<AcObjectManager::DestructInfo> pending = m_objMgr.takePendingDestructs();
   for (const auto &info : pending) {
     processDestructInfo(info);
   }
@@ -178,7 +178,7 @@ void AcInterpreter::releaseDeep(const QJsonValue &val) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 void AcInterpreter::markFromValue(const QJsonValue &val) {
-  auto &mgr = AcObjectManager::ins();
+  auto &mgr = m_objMgr;
 
   if (AcObjectManager::isManagedInstance(val)) {
     QString objId = AcObjectManager::getObjId(val);
@@ -211,7 +211,7 @@ void AcInterpreter::markFromValue(const QJsonValue &val) {
 }
 
 void AcInterpreter::collectCycles() {
-  auto &mgr = AcObjectManager::ins();
+  auto &mgr = m_objMgr;
   if (mgr.objectCount() == 0) return;
 
   mgr.clearMarks();
@@ -299,7 +299,7 @@ QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
   execBlock(program);
   if (!m_error.isEmpty()) {
     error = m_error;
-    AcObjectManager::ins().cleanup();
+    m_objMgr.cleanup();
     return QJsonValue();
   }
 
