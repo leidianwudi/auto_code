@@ -31,19 +31,14 @@ import {
 
 ${# Swagger API 文档：@ApiProperty 用于生成接口字段说明                          }
 import { ApiProperty } from '@nestjs/swagger';
-
 ${# 工具类：字符串处理                                                           }
 import { ToolStr } from '@/common/tool/tool_str';
-
 ${# Coin 类型：处理金额/decimal/浮点数，精度和缩放由常量统一管理                 }
 import { Coin, COIN_PRECISION, COIN_SCALE } from '@/common/tool/coin';
-
 ${# Coin 类型的 TypeORM 转换器：数据库 decimal <-> 业务层 Coin 对象             }
 import { CoinTransformer } from '@/common/tool/coin_transformer';
-
 ${# class-transformer：Coin 转 JSON 用于 API 响应序列化                         }
 import { Transform } from 'class-transformer';
-
 ${# ── 动态 import：由 param.ac 处理生成，用于关联实体类 ───────────────────   }
 ${# 例如：import { EnNewsCategory } from './en_news_category' }
 ${each imp in imports}
@@ -66,24 +61,18 @@ export class ${entityClass} {
   ${#   .columnOptions @Column 的完整参数字符串（由 param.getColumnOptions 生成）}
   ${each field in fields}
     ${if field.isPrimary}
-
   @ApiProperty({ description: '${field.comment}' })
   @PrimaryGeneratedColumn()
   ${field.name}: ${field.tsType};
-
     ${else if field.isCoin}
-
   @ApiProperty({ description: '${field.comment}' })
   @Column(${field.columnOptions})
   @Transform(({ value }) => value.toJSON())
   ${field.name}: ${field.tsType};
-
     ${else}
-
   @ApiProperty({ description: '${field.comment}' })
   @Column(${field.columnOptions})
   ${field.name}: ${field.tsType};
-
     ${/if}
   ${/each}
 

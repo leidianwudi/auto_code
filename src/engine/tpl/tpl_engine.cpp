@@ -252,12 +252,15 @@ QString TplEngine::renderBlock(const QString &block, const QJsonObject &context)
     }
 
     // ── Step 2: 输出标签之前的文本 [pos, start)，智能处理空行 ──
+    // 设计原则（与 Jinja2/Mustache 一致）：
+    //   独占一行的标签只删除自己所在行（缩进+标签+换行），
+    //   不影响周围的空行。模板作者通过添加/删除空行来控制输出间距。
     if (start > pos) {
       int outputEnd = start;
 
       if ((isComment || isBlockTag) && aloneOnLine) {
-        // 当前是独占一行的块标签 → 裁剪末尾空行 + 标签所在行的缩进
-        // 因为整行（包括缩进）都不应该出现在输出中
+        // 当前是独占一行的块标签 → 只裁剪标签所在行的缩进空白
+        // 整行（包括缩进）都不应该出现在输出中，但标签前的空行保留
         int trimPos = start - 1;
 
         // 从 start 往回扫描，跳过标签所在行的缩进空白
@@ -265,20 +268,7 @@ QString TplEngine::renderBlock(const QString &block, const QJsonObject &context)
           trimPos--;
         }
 
-        // 继续往回扫描，跳过末尾的空行（只包含空白字符的完整行）
-        while (trimPos >= pos) {
-          if (block[trimPos] != QChar('\n')) break;
-
-          int lineBegin = trimPos - 1;
-          while (lineBegin >= pos && block[lineBegin] != QChar('\n')) {
-            if (!block[lineBegin].isSpace()) goto output_text;
-            lineBegin--;
-          }
-
-          trimPos = lineBegin;
-        }
-
-      output_text:
+        // 不再往回扫描空行——空行是模板作者有意添加的，应保留
         outputEnd = trimPos + 1;
       }
 
@@ -290,7 +280,7 @@ QString TplEngine::renderBlock(const QString &block, const QJsonObject &context)
     // ── Step 3: 处理标签本身 ──
     if (isComment) {
       if (aloneOnLine) {
-        pos = skipRestOfLine(block, closeEnd, true);  // 注释标签：跳过后续空行
+        pos = skipRestOfLine(block, closeEnd, false);  // 注释标签：只跳过本行，不跳后续空行
       } else {
         pos = closeEnd;
       }
@@ -298,10 +288,14 @@ QString TplEngine::renderBlock(const QString &block, const QJsonObject &context)
     }
 
     if (isBlockTag && aloneOnLine) {
-      pos = closeEnd;
+      // 独占一行的块标签：跳过开标签行的剩余内容（含换行符），
+      // 这样 handle 提取的 body 不会包含开标签行的换行符，
+      // 避免循环体每次迭代都多输出一个空行
+      pos = skipRestOfLine(block, closeEnd, false);
       auto h = m_handlerFactory.createHandler(expr);
       if (!h->handle(block, pos, expr, context, result)) return {};
-      pos = skipRestOfLine(block, pos, false);  // 条件/循环标签：只跳过当前行，不跳后续空行
+      // 跳过闭标签行的剩余内容（含换行符）
+      pos = skipRestOfLine(block, pos, false);
     } else {
       pos = closeEnd;
       auto h = m_handlerFactory.createHandler(expr);
