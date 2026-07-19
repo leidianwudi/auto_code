@@ -16,6 +16,7 @@ namespace {
 const QString kEachName = QString::fromLatin1(AcTemplate::kEachPrefix).trimmed();
 const QString kIfName = QString::fromLatin1(AcTemplate::kIfPrefix).trimmed();
 const QString kElseName = QString::fromLatin1(AcTemplate::kElse).mid(2, 4);
+const QString kCommentPrefix = QString::fromLatin1(AcTemplate::kCommentPrefix);
 }  // namespace
 
 QVector<ValidationResult> TplValidator::validate(const QString &source) {
@@ -227,6 +228,11 @@ void TplValidator::checkMethods(const QString &text, QVector<ValidationResult> &
   while (exprIt.hasNext()) {
     auto exprMatch = exprIt.next();
 
+    // 跳过 ${# ...} 注释标签
+    int exprStart = exprMatch.capturedStart() + 2;
+    QString content = text.mid(exprStart, exprMatch.capturedLength() - 3).trimmed();
+    if (content.startsWith(kCommentPrefix)) continue;
+
     // 跳过注释中的表达式
     int lineStart = text.lastIndexOf(QLatin1Char('\n'), exprMatch.capturedStart());
     if (lineStart == -1) lineStart = 0;
@@ -234,7 +240,6 @@ void TplValidator::checkMethods(const QString &text, QVector<ValidationResult> &
     if (linePrefix.contains(QStringLiteral("//"))) continue;
 
     QString exprContent = exprMatch.captured().mid(2, exprMatch.capturedLength() - 3);
-    int exprStart = exprMatch.capturedStart() + 2;
 
     QStringList segments = exprContent.split(QLatin1Char('.'));
     if (segments.size() < 2) continue;

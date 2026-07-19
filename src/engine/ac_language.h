@@ -277,6 +277,8 @@ inline constexpr const char *kIfClose = "${/if}";
 inline constexpr const char *kEachClose = "${/each}";
 /// @brief else 标签：${else}
 inline constexpr const char *kElse = "${else}";
+/// @brief 注释标签：${# 注释内容}，渲染时整段跳过不输出
+inline constexpr const char *kCommentPrefix = "#";
 /// @brief 循环当前元素的 context 键：${.} 或 ${this}
 inline constexpr const char *kCurrentItem = ".";
 }  // namespace AcTemplate

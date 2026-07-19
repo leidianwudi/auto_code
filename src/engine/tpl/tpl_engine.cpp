@@ -81,6 +81,11 @@ QString TplEngine::renderBlock(const QString &block, const QJsonObject &context)
     QString expr = block.mid(start + 2, end - start - 2).trimmed();
     pos = end + 1;
 
+    // ${# ...} 注释标签：整段跳过，不输出任何字符
+    if (expr.startsWith(QChar('#'))) {
+      continue;
+    }
+
     auto handler = m_handlerFactory.createHandler(expr);
     if (!handler->handle(block, pos, expr, context, result)) {
       return {};
