@@ -1,71 +1,107 @@
-// 参数预处理类 — 将原始数据转换为模板所需格式
+// ============================================================================
+// Param 类 — 数据库 schema → 模板数据结构的转换器
+// ----------------------------------------------------------------------------
+// 作用：
+//   news_main.ac 从数据库拿到的 schema 是原始格式（列名、类型、是否主键等），
+//   模板引擎需要的是"已加工好"的数据（tsType、isPrimary、columnOptions 等）。
+//   本类负责完成这个中间层转换，模板只需要直接取值输出。
+//
+// 核心流程：
+//   db.tableSchema() → Param.setTableData() 加工 → entity.tpl 直接取值渲染
+// ============================================================================
 export class Param {
-  let entityClass = "";     // 实体类名, 如 EnUser
-  let tableName = "";       // 数据库表名, 如 user
-  let tableDesc = "";       // 表说明
-  let fields = [];          // 字段数组 (处理后的)
-  let imports = [];         // 额外的 import 语句
-  let relations = [];       // 关联关系配置
+  let entityClass = "";     // 生成的 TS 实体类名，如 EnUser (由 user 派生)
+  let tableName = "";       // 数据库表名，如 user
+  let tableDesc = "";       // 表说明文字，用于 TS 文件中的注释
+  let fields = [];          // 加工后的字段数组，每个元素是一个 Object
+  let imports = [];         // 额外的 import 语句字符串（用于关联表）
+  let relations = [];       // 关联关系配置 (OneToMany / ManyToOne 等)
 
-  // MySQL 类型到 TypeScript/TypeORM 类型的映射
+  // --------------------------------------------------------------------------
+  // MySQL 列类型 → TypeScript 类型 的映射表
+  //   输入：varchar(50)、int、decimal(10,2)、datetime 等
+  //   输出：number / string / Date / boolean / Coin
+  // --------------------------------------------------------------------------
   function mapType(colType: String): String {
     let t = colType.toLowerCase();
-    // 整数类型
+
+    // 整数类型：int / tinyint / smallint / bigint → number
     if (t.includes("int") || t.includes("tinyint") || t.includes("smallint") || t.includes("bigint")) {
       return "number";
     }
-    // 浮点/小数类型
+    // 浮点/小数类型：decimal / float / double → Coin (自定义高精度金额类型)
     if (t.includes("decimal") || t.includes("float") || t.includes("double")) {
       return "Coin";
     }
-    // 字符串类型
+    // 字符串类型：varchar / char / text → string
     if (t.includes("varchar") || t.includes("char") || t.includes("text")) {
       return "string";
     }
-    // 日期时间类型
+    // 日期时间类型：datetime / timestamp → Date
     if (t.includes("datetime") || t.includes("timestamp")) {
       return "Date";
     }
-    // 布尔类型
+    // 布尔类型：boolean / bool / tinyint(1) → boolean
     if (t.includes("boolean") || t.includes("bool") || t.includes("tinyint(1)")) {
       return "boolean";
     }
-    // 默认返回 string
+    // 默认返回 string (兜底，未知类型当字符串处理)
     return "string";
   }
 
-  // 判断是否为主键
+  // --------------------------------------------------------------------------
+  // 判断字段是否为主键
+  //   MySQL INFORMATION_SCHEMA 中，主键列的 COLUMN_KEY = 'PRI'
+  // --------------------------------------------------------------------------
   function isPrimaryKey(colKey: String): Bool {
     return colKey == "PRI";
   }
 
-  // 判断是否为自增列
+  // --------------------------------------------------------------------------
+  // 判断字段是否为自增列
+  //   MySQL INFORMATION_SCHEMA 中，自增列的 EXTRA 包含 'auto_increment'
+  // --------------------------------------------------------------------------
   function isAutoIncrement(extra: String): Bool {
     return extra.toLowerCase().includes("auto_increment");
   }
 
-  // 判断是否为 decimal/Coin 类型
+  // --------------------------------------------------------------------------
+  // 判断字段是否为 decimal/Coin 类型（金额字段需要特殊处理）
+  //   - 数据库用 decimal(10,2) 存储
+  //   - TypeScript 用自定义 Coin 类型（高精度、防浮点误差）
+  //   - 通过 CoinTransformer 做数据库值和业务对象之间的转换
+  // --------------------------------------------------------------------------
   function isCoinType(colType: String): Bool {
     let t = colType.toLowerCase();
     return t.includes("decimal") || t.includes("float") || t.includes("double");
   }
 
-  // 获取 Column 装饰器参数
+  // --------------------------------------------------------------------------
+  // 生成 @Column 装饰器的参数字符串
+  //   例如："{ type: 'varchar', default: '' }"
+  //   例如："{ type: 'decimal', default: 0.00, precision: 18, scale: 2, transformer: new CoinTransformer() }"
+  //
+  // 输入：field 对象 (包含 colType / colKey / colDefault / extra 等)
+  // 输出：字符串，会被模板直接嵌入 @Column() 中
+  // --------------------------------------------------------------------------
   function getColumnOptions(field: Object): String {
     let colType = field.colType;
     let colDefault = field.colDefault;
 
-    // 直接构建 type 部分
+    // 先映射到 TypeORM 的 type 值（varchar / int / decimal / datetime / boolean）
     let ormType = this.mapTypeToOrm(colType);
     let options = "{ type: '" + ormType + "'";
 
-    // 设置默认值
+    // 非主键字段需要设置默认值（主键一般是自增，不需要 default）
     if (!this.isPrimaryKey(field.colKey)) {
       if (this.isCoinType(colType)) {
+        // decimal 金额字段：默认 0.00，精度和缩放用全局常量统一管理
         options += ", default: 0.00, precision: COIN_PRECISION, scale: COIN_SCALE, transformer: new CoinTransformer()";
       } else if (colType.includes("varchar") || colType.includes("char")) {
+        // 字符串字段：默认空字符串
         options += ", default: ''";
       } else if (colType.includes("int") && !this.isAutoIncrement(field.extra)) {
+        // 非自增的整数字段：默认 0
         options += ", default: 0";
       }
     }
@@ -74,7 +110,11 @@ export class Param {
     return options;
   }
 
-  // 映射到 ORM 的 type 值
+  // --------------------------------------------------------------------------
+  // MySQL 列类型 → TypeORM 的 type 值
+  //   与 mapType 区别：mapType 输出的是 TS 语言类型，这里输出的是 ORM 列类型
+  //   例如 "int" 同时被 mapType 映射为 "number"，被这里映射为 "int"
+  // --------------------------------------------------------------------------
   function mapTypeToOrm(colType: String): String {
     let t = colType.toLowerCase();
     if (t.includes("varchar") || t.includes("char") || t.includes("text")) {
@@ -95,50 +135,77 @@ export class Param {
     return "varchar";
   }
 
-  // 处理表数据，生成模板所需的完整数据结构
+  // --------------------------------------------------------------------------
+  // 主入口：处理整张表的数据，生成模板所需的完整数据结构
+  //
+  // 输入 data 对象的典型结构（由 news_main.ac 中 merge(json, schema) 生成）：
+  //   {
+  //     tableName: "news",            // 表名
+  //     modelName: "news\\news",      // 模型路径，用于派生实体类名
+  //     columns: [                    // 字段数组，来自 db.tableSchema()
+  //       { name: "id", type: "int", key: "PRI", extra: "auto_increment", comment: "主键", default: null },
+  //       { name: "title", type: "varchar(100)", key: "", extra: "", comment: "标题", default: "" },
+  //       { name: "price", type: "decimal(10,2)", key: "", extra: "", comment: "价格", default: "0.00" },
+  //       ...
+  //     ],
+  //     joinTable: [                  // 关联表信息（可选）
+  //       { joinEnClass: "EnCategory", joinEnClass_Url: "./en_category",
+  //         joinType: "ManyToOne", joinEnClassPro: "category",
+  //         inverseJoinEnClassPro: "newsList", isJoinRelations: true },
+  //       ...
+  //     ]
+  //   }
+  //
+  // 输出：本实例的 fields / imports / relations 被填充，entity.tpl 可以直接取值
+  // --------------------------------------------------------------------------
   function setTableData(data: Object): Void {
     this.tableName = data.tableName;
     this.tableDesc = data.tableDesc;
 
-    // 从 modelName 提取实体类名: user\\user -> EnUser
+    // ── 从 modelName 派生实体类名 ──────────────────────────────────────
+    //   规则：取路径最后一级 + "En" 前缀 + 首字母大写
+    //   例如 "news\\news" → "news" → 首字母大写 → "EnNews"
     let parts = data.modelName.split("\\");
     let lastPart = parts[parts.length - 1];
     this.entityClass = "En" + lastPart.charAt(0).toUpperCase() + lastPart.slice(1);
 
-    // 处理字段
+    // ── 处理字段：把原始 schema 列转换成模板需要的结构 ────────────────
     this.fields = [];
     for (col in data.columns) {
       let field = {};
-      field.name = col.name;
-      field.comment = col.comment;
-      field.colType = col.type;
-      field.colKey = col.key;
-      field.colDefault = col.default;
-      field.extra = col.extra;
-      field.tsType = this.mapType(col.type);
-      field.isPrimary = this.isPrimaryKey(col.key);
-      field.isAutoInc = this.isAutoIncrement(col.extra);
-      field.isCoin = this.isCoinType(col.type);
-      field.columnOptions = this.getColumnOptions(field);
+      field.name = col.name;                                     // 字段名（原样）
+      field.comment = col.comment;                               // 字段注释（@ApiProperty 的描述）
+      field.colType = col.type;                                  // 原始 MySQL 类型，如 "varchar(100)"
+      field.colKey = col.key;                                    // 列索引类型 ("PRI" = 主键)
+      field.colDefault = col.default;                            // 列默认值
+      field.extra = col.extra;                                   // 列附加信息 ("auto_increment" = 自增)
+      field.tsType = this.mapType(col.type);                     // → TypeScript 类型
+      field.isPrimary = this.isPrimaryKey(col.key);              // → 是否主键
+      field.isAutoInc = this.isAutoIncrement(col.extra);         // → 是否自增
+      field.isCoin = this.isCoinType(col.type);                  // → 是否金额类型
+      field.columnOptions = this.getColumnOptions(field);        // → @Column 的完整参数字符串
       this.fields.append(field);
     }
 
-    // 处理关联表的 import 和关系
+    // ── 处理关联表 ────────────────────────────────────────────────────
+    //   对每个 joinTable 做两件事：
+    //   1) 生成一条 import 语句，让当前实体能 import 关联实体
+    //   2) 生成关系配置对象（decoratorType、targetEntity 等），模板循环生成 @OneToMany 等
     this.imports = [];
     this.relations = [];
     if (data.joinTable) {
       for (jt in data.joinTable) {
-        // 添加 import 语句
+        // 生成：import { EnNewsCategory } from './en_news_category'
         let imp = "import { " + jt.joinEnClass + " } from '" + jt.joinEnClass_Url + "'";
         this.imports.append(imp);
 
-        // 添加关系配置
+        // 生成关系配置，对应 TypeORM 的关系装饰器
         let rel = {};
-        rel.decoratorType = jt.joinType;  // OneToMany, ManyToOne 等
-        rel.targetEntity = jt.joinEnClass;
-        rel.propertyName = jt.joinEnClassPro;
-        rel.inverseProperty = jt.inverseJoinEnClassPro;
-        rel.isJoinRelations = jt.isJoinRelations;
+        rel.decoratorType = jt.joinType;               // 装饰器类型：OneToMany / ManyToOne / OneToOne / ManyToMany
+        rel.targetEntity = jt.joinEnClass;             // 目标实体类名，如 EnNewsCategory
+        rel.propertyName = jt.joinEnClassPro;          // 本端属性名，如 category
+        rel.inverseProperty = jt.inverseJoinEnClassPro; // 对方属性名，如 newsList
+        rel.isJoinRelations = jt.isJoinRelations;      // 是否启用联表查询
         this.relations.append(rel);
       }
     }

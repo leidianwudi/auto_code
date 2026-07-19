@@ -269,8 +269,10 @@ namespace AcTemplate {
 inline constexpr const char *kExprOpen = "${";
 /// @brief if 块前缀：${if condition}
 inline constexpr const char *kIfPrefix = "if ";
-/// @brief each 块前缀：${each items}
+/// @brief each 块前缀：${each items} 或 ${each item in items}
 inline constexpr const char *kEachPrefix = "each ";
+/// @brief each 块中 "in" 分隔关键字：each item **in** items
+inline constexpr const char *kEachIn = " in ";
 /// @brief if 块闭合标签：${/if}
 inline constexpr const char *kIfClose = "${/if}";
 /// @brief each 块闭合标签：${/each}

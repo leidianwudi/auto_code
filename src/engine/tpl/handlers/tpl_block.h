@@ -56,7 +56,7 @@ public:
    * @param startPos 开始搜索的位置（应在 ${if ...} 之后）
    * @return ${else} 的位置，未找到返回 -1
    */
-  static int findElsePos(const QString &block, int startPos);
+  static int findElsePos(const QString &block, int startPos, bool *isElseIf = nullptr);
 
   /**
    * @brief 处理一个模板表达式

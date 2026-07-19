@@ -54,10 +54,154 @@ QString TplEngine::render(const QString &tmpl, const QJsonObject &data) const {
     }
   }
 
-  return renderBlock(tmpl, data);
+  QString cleanTmpl = tmpl;
+  cleanTmpl.remove(QLatin1Char('\r'));
+
+  QString result = renderBlock(cleanTmpl, data);
+
+  // 后处理1：将连续3个及以上换行（2个及以上空行）替换为2个换行（1个空行）
+  // 关键：每个匹配项必须以 \n 结尾，这样不会吃掉下一行的缩进
+  // \n([ \t]*\n){2,} 匹配：\n + 2个或更多(可选空白+\n)
+  // 例如 \n\n\n → \n\n，但 \n\n    code 不会被匹配（第3个\n不存在）
+  result.replace(QRegularExpression(QStringLiteral("\n([ \t]*\\n){2,}")), QStringLiteral("\n\n"));
+
+  // 后处理2：去掉开头的空行（只匹配完整的空行，不吞下一行缩进）
+  result.replace(QRegularExpression(QStringLiteral("^([ \\t]*\\n)+")), QString());
+
+  // 后处理3：去掉结尾的空行
+  result.replace(QRegularExpression(QStringLiteral("([ \\t]*\\n)+$")), QString());
+
+  return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// 辅助：判断表达式是否为"块标签"（注释/条件/循环及其闭合标签）
+// 块标签与普通变量标签的区别：块标签本身不产生输出，也不在文本行内出现
+static bool isBlockTagExpr(const QString &expr) {
+  if (expr.startsWith(QChar('#'))) return true;                                    // ${# 注释内容}
+  if (expr.startsWith(QString::fromLatin1(AcTemplate::kIfPrefix))) return true;    // ${if ...}
+  if (expr.startsWith(QString::fromLatin1(AcTemplate::kEachPrefix))) return true;  // ${each ...}
+  if (expr.startsWith(QString::fromLatin1(AcTemplate::kElse) + QLatin1Char(' ') +
+                      QString::fromLatin1(AcTemplate::kIfPrefix)))
+    return true;                                                           // ${else if ...}
+  if (expr == QString::fromLatin1(AcTemplate::kElse).mid(2)) return true;  // ${else}
+  if (expr == QStringLiteral("/if")) return true;                          // ${/if}
+  if (expr == QStringLiteral("/each")) return true;                        // ${/each}
+  return false;
+}
+
+// 辅助：判断从 from 到 to 之间的字符是否只包含空白和块标签
+// 用于判断一行是否"只有块标签"（整行可以跳过，不输出）
+static bool isOnlyBlockTagsAndWhitespace(const QString &block, int from, int to) {
+  int cur = from;
+  while (cur < to) {
+    if (block[cur].isSpace()) {
+      cur++;
+      continue;
+    }
+    // 遇到 ${ 开头，检查是否是块标签
+    if (cur + 1 < to && block[cur] == QChar('$') && block[cur + 1] == QChar('{')) {
+      int exprStart = cur + 2;
+      // 找到匹配的 }
+      int depth = 1, scan = exprStart;
+      while (scan < to && depth > 0) {
+        if (scan + 1 < to && block[scan] == QChar('$') && block[scan + 1] == QChar('{')) {
+          depth++;
+          scan += 2;
+        } else if (block[scan] == QChar('}')) {
+          depth--;
+          scan++;
+        } else {
+          scan++;
+        }
+      }
+      if (depth != 0) return false;  // 未闭合的 ${，不是块标签行
+      // 提取表达式并判断是否是块标签
+      QString expr = block.mid(exprStart, scan - exprStart - 1).trimmed();
+      if (!isBlockTagExpr(expr)) return false;  // 非块标签（如 ${field.name}），不能跳过
+      cur = scan;
+    } else {
+      return false;  // 非空白且非 ${ 开头，不能跳过
+    }
+  }
+  return true;
+}
+
+// 辅助：判断标签是否"独占一行"（标签所在行只有空白和块标签）
+// 增强版：不仅支持单个标签独占一行，还支持一行多个块标签（如 ${else}${if ...}）
+// 参数：block 模板文本，tagStart ${ 的位置，tagEndAfter } 的下一个位置
+// 返回：true = 标签所在行只有块标签和空白，整行可以跳过
+static bool isTagAloneOnLine(const QString &block, int tagStart, int tagEndAfter) {
+  // 找到标签所在行的范围
+  int lineBegin = tagStart;
+  while (lineBegin > 0 && block[lineBegin - 1] != QChar('\n')) {
+    lineBegin--;
+  }
+  int lineEnd = tagEndAfter;
+  while (lineEnd < block.length() && block[lineEnd] != QChar('\n')) {
+    lineEnd++;
+  }
+
+  // 检查整行是否只包含空白和块标签
+  return isOnlyBlockTagsAndWhitespace(block, lineBegin, lineEnd);
+}
+
+// 辅助：从 pos 开始跳过当前行剩余的空白及行尾换行符
+// 如果 skipBlankLines=true，还会继续跳过后续的完整空行（只包含空白的行）
+// 返回：跳过空白后新的位置
+static int skipRestOfLine(const QString &block, int pos, bool skipBlank = false) {
+  // 先跳过当前行的剩余空白和换行符
+  while (pos < block.length() && block[pos] != QChar('\n')) {
+    if (!block[pos].isSpace()) break;
+    pos++;
+  }
+  if (pos < block.length() && block[pos] == QChar('\n')) pos++;
+
+  // 如果需要，继续跳过后续的完整空行
+  if (skipBlank) {
+    while (pos < block.length()) {
+      int lineStart = pos;
+      bool isBlankLine = true;
+
+      while (pos < block.length() && block[pos] != QChar('\n')) {
+        if (!block[pos].isSpace()) {
+          isBlankLine = false;
+          break;
+        }
+        pos++;
+      }
+
+      if (!isBlankLine) {
+        pos = lineStart;
+        break;
+      }  // 不是空行，回退
+
+      if (pos < block.length() && block[pos] == QChar('\n')) pos++;  // 吃掉空行的 \n
+    }
+  }
+
+  return pos;
+}
+
+// ── 辅助：检测 [from, to) 区间是否只包含空白字符 ──
+//   用于判断：tag 之前的行首内容是否只是缩进（而非真实代码）
+static bool isAllWhitespace(const QString &block, int from, int to) {
+  for (int i = from; i < to; i++) {
+    if (!block[i].isSpace()) return false;
+  }
+  return true;
 }
 
 // renderBlock — 递归扫描 ${...} 并交给处理器
+//
+// 基本流程：
+//   1. 找到下一个 ${
+//   2. 输出标签之前的文本（智能处理空行）
+//   3. 判断标签类型并处理
+//
+// 空白行处理策略：
+//   - 当遇到"独占一行的块标签"时，标签之前的末尾空行会被裁剪掉
+//   - 这样可以避免模板中为结构清晰添加的空行泄露到输出中
 
 QString TplEngine::renderBlock(const QString &block, const QJsonObject &context) const {
   QString result;
@@ -70,25 +214,98 @@ QString TplEngine::renderBlock(const QString &block, const QJsonObject &context)
       break;
     }
 
-    result += block.mid(pos, start - pos);
+    int lineStart = (start == 0) ? 0 : (block.lastIndexOf(QChar('\n'), start - 1) + 1);
 
-    int end = block.indexOf(QStringLiteral("}"), start + 2);
-    if (end == -1) {
+    // ── Step 1: 预判标签类型 ──
+    bool isComment = false;
+    bool isBlockTag = false;
+    bool aloneOnLine = false;
+    int closeEnd = -1;
+    QString expr;
+
+    int commentPos = start + 2;
+    if (commentPos < block.length() && block[commentPos] == QChar('#')) {
+      isComment = true;
+      isBlockTag = true;
+      // 注释使用贪婪匹配：找到行内最后一个 } 作为注释结束符
+      // 这样注释内容中的 }（如代码示例 import { A } from 'x'）不会被误判为注释结束
+      int lineEnd = block.indexOf(QChar('\n'), commentPos);
+      if (lineEnd == -1) lineEnd = block.length();
+      int lastClose = block.lastIndexOf(QChar('}'), lineEnd - 1);
+      if (lastClose > commentPos) {
+        closeEnd = lastClose + 1;
+        aloneOnLine = isTagAloneOnLine(block, start, closeEnd);
+      }
+    } else {
+      int end = block.indexOf(QLatin1Char('}'), start + 2);
+      if (end != -1) {
+        closeEnd = end + 1;
+        expr = block.mid(start + 2, end - start - 2).trimmed();
+        isBlockTag = isBlockTagExpr(expr);
+        aloneOnLine = isTagAloneOnLine(block, start, closeEnd);
+      }
+    }
+
+    if (closeEnd == -1) {
       m_lastError = QStringLiteral("Unclosed ${ at position %1").arg(start);
       return {};
     }
 
-    QString expr = block.mid(start + 2, end - start - 2).trimmed();
-    pos = end + 1;
+    // ── Step 2: 输出标签之前的文本 [pos, start)，智能处理空行 ──
+    if (start > pos) {
+      int outputEnd = start;
 
-    // ${# ...} 注释标签：整段跳过，不输出任何字符
-    if (expr.startsWith(QChar('#'))) {
+      if ((isComment || isBlockTag) && aloneOnLine) {
+        // 当前是独占一行的块标签 → 裁剪末尾空行 + 标签所在行的缩进
+        // 因为整行（包括缩进）都不应该出现在输出中
+        int trimPos = start - 1;
+
+        // 从 start 往回扫描，跳过标签所在行的缩进空白
+        while (trimPos >= pos && block[trimPos] != QChar('\n')) {
+          trimPos--;
+        }
+
+        // 继续往回扫描，跳过末尾的空行（只包含空白字符的完整行）
+        while (trimPos >= pos) {
+          if (block[trimPos] != QChar('\n')) break;
+
+          int lineBegin = trimPos - 1;
+          while (lineBegin >= pos && block[lineBegin] != QChar('\n')) {
+            if (!block[lineBegin].isSpace()) goto output_text;
+            lineBegin--;
+          }
+
+          trimPos = lineBegin;
+        }
+
+      output_text:
+        outputEnd = trimPos + 1;
+      }
+
+      if (outputEnd > pos) {
+        result += block.mid(pos, outputEnd - pos);
+      }
+    }
+
+    // ── Step 3: 处理标签本身 ──
+    if (isComment) {
+      if (aloneOnLine) {
+        pos = skipRestOfLine(block, closeEnd, true);  // 注释标签：跳过后续空行
+      } else {
+        pos = closeEnd;
+      }
       continue;
     }
 
-    auto handler = m_handlerFactory.createHandler(expr);
-    if (!handler->handle(block, pos, expr, context, result)) {
-      return {};
+    if (isBlockTag && aloneOnLine) {
+      pos = closeEnd;
+      auto h = m_handlerFactory.createHandler(expr);
+      if (!h->handle(block, pos, expr, context, result)) return {};
+      pos = skipRestOfLine(block, pos, false);  // 条件/循环标签：只跳过当前行，不跳后续空行
+    } else {
+      pos = closeEnd;
+      auto h = m_handlerFactory.createHandler(expr);
+      if (!h->handle(block, pos, expr, context, result)) return {};
     }
   }
 

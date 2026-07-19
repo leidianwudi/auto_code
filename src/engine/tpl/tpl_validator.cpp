@@ -24,10 +24,51 @@ QVector<ValidationResult> TplValidator::validate(const QString &source) {
 
   if (source.isEmpty()) return results;
 
-  checkBrackets(source, results);
-  checkDollarBraces(source, results);
-  checkTags(source, results);
-  checkMethods(source, results);
+  // ── 先将所有 ${# ...} 注释区域替换为空格，避免注释里的示例标记被误匹配 ──
+  // 保留字符长度不变，这样后续基于位置的行号/列号报告仍然准确
+  QString cleaned = source;
+  int scanIdx = 0;
+  while (scanIdx < cleaned.length()) {
+    int commentStart = cleaned.indexOf(QString::fromLatin1(AcTemplate::kExprOpen), scanIdx);
+    if (commentStart == -1) break;
+    if (commentStart + 2 < cleaned.length() && cleaned[commentStart + 2] == QChar('#')) {
+      // 用深度计数找到注释的闭合 }
+      int depth = 1;
+      int cursor = commentStart + 3;  // 从 ${# 之后开始扫描
+      while (cursor < cleaned.length()) {
+        if (cleaned.mid(cursor, 2) == QString::fromLatin1(AcTemplate::kExprOpen)) {
+          depth++;
+          cursor += 2;
+        } else if (cleaned[cursor] == QChar('}')) {
+          depth--;
+          if (depth == 0) break;
+          cursor++;
+        } else {
+          cursor++;
+        }
+      }
+      if (depth == 0) {
+        // 将整个 ${# ... } 替换为空格（保留长度）
+        int commentLen = cursor - commentStart + 1;
+        for (int j = 0; j < commentLen; ++j) {
+          if (cleaned[commentStart + j] != QLatin1Char('\n')) {
+            cleaned[commentStart + j] = QLatin1Char(' ');
+          }
+        }
+        scanIdx = cursor + 1;
+      } else {
+        // 注释未闭合，直接停止扫描（后续 checkDollarBraces 会报告）
+        break;
+      }
+    } else {
+      scanIdx = commentStart + 2;
+    }
+  }
+
+  checkBrackets(cleaned, results);
+  checkDollarBraces(cleaned, results);
+  checkTags(cleaned, results);
+  checkMethods(cleaned, results);
 
   // 按行号排序
   std::sort(results.begin(), results.end(),
@@ -154,10 +195,11 @@ void TplValidator::checkDollarBraces(const QString &text, QVector<ValidationResu
 // ═════════════════════════════════════════════════════════════════════════════
 
 void TplValidator::checkTags(const QString &text, QVector<ValidationResult> &results) {
+  // 匹配 ${each ...}、${if ...}、${else if ...}、${else}、${/each}、${/if}
   static const QRegularExpression tagRegex(
       QStringLiteral("\\$\\{(") + kEachName + QStringLiteral("|") + kIfName + QStringLiteral("|") +
-      kElseName + QStringLiteral("|/") + kEachName + QStringLiteral("|/") + kIfName +
-      QStringLiteral(")\\b[^}]*\\}"));
+      kElseName + QStringLiteral("(?:\\s+") + kIfName + QStringLiteral(")?|/") + kEachName +
+      QStringLiteral("|/") + kIfName + QStringLiteral(")\\b[^}]*\\}"));
 
   struct TagInfo {
     QString tag;
@@ -219,7 +261,8 @@ void TplValidator::checkMethods(const QString &text, QVector<ValidationResult> &
 
   static const QRegularExpression exprRegex(
       QStringLiteral("\\$\\{(?!(?:") + kEachName + QStringLiteral("|") + kIfName +
-      QStringLiteral("|") + kElseName + QStringLiteral("|/") + kEachName + QStringLiteral("|/") +
+      QStringLiteral("|") + kElseName + QStringLiteral("(?:\\s+") + kIfName +
+      QStringLiteral(")?|") + kElseName + QStringLiteral("|/") + kEachName + QStringLiteral("|/") +
       kIfName + QStringLiteral(")\\b)[^}]+\\}"));
 
   static const QRegularExpression identRegex(QStringLiteral(R"(^[a-zA-Z_][a-zA-Z0-9_]*$)"));

@@ -15,7 +15,6 @@
 #include "../ac_language.h"
 #include "fun_mgr.h"
 
-
 void FunFile::init() {
   FunMgr::ins().registerFuncs(QString::fromLatin1(AcFile::kClassName),
                               {
@@ -76,10 +75,15 @@ QJsonValue FunFile::write(const QJsonArray &args) {
     return QJsonValue();
   }
 
-  // UTF-8 编码写入
+  // UTF-8 编码写入，强制使用 Unix 换行符 (\n)
   QTextStream out(&file);
   out.setEncoding(QStringConverter::Utf8);
-  out << content;
+  out.setGenerateByteOrderMark(false);
+
+  QString cleanContent = content;
+  cleanContent.remove(QLatin1Char('\r'));
+
+  out << cleanContent;
   file.close();
 
   return QJsonValue(true);

@@ -63,14 +63,29 @@ static bool isTruthy(const QJsonValue &val) {
  *     ...条件不成立时渲染的内容...
  *   ${/if}
  *
+ * 或带 else if 分支：
+ *   ${if condition1}
+ *     ...条件1成立时渲染的内容...
+ *   ${else if condition2}
+ *     ...条件2成立时渲染的内容...
+ *   ${else}
+ *     ...以上条件都不成立时渲染的内容...
+ *   ${/if}
+ *
  * 条件判断规则与 JavaScript 一致：
  * - 非空字符串、非零数字、非空数组、非空对象 => 成立
  * - 空字符串、0、空数组、null、undefined、false => 不成立
  */
 bool BlockIf::handle(const QString &block, int &pos, const QString &expr,
                      const QJsonObject &context, QString &result) const {
-  // 提取条件表达式（去掉 "if " 前缀）
-  QString condition = expr.mid(3).trimmed();
+  // 提取条件表达式（去掉 "if " 或 "else if " 前缀）
+  QString condition;
+  if (expr.startsWith(QString::fromLatin1(AcTemplate::kElse) + QLatin1Char(' ') +
+                      QString::fromLatin1(AcTemplate::kIfPrefix))) {
+    condition = expr.mid(8).trimmed();  // 去掉 "else if "
+  } else {
+    condition = expr.mid(3).trimmed();  // 去掉 "if "
+  }
 
   // 支持 ! 取反：${if !fileExists(path)} 表示"不存在"
   bool negate = false;
@@ -84,7 +99,7 @@ bool BlockIf::handle(const QString &block, int &pos, const QString &expr,
   bool truthy = isTruthy(condVal);
   if (negate) truthy = !truthy;
 
-  // 查找 ${else} 和 ${/if}
+  // 查找 ${else} / ${else if} 和 ${/if}
   int closePos = TplBlock::findMatchingClose(block, pos, QString::fromLatin1(AcTemplate::kIfPrefix),
                                              QString::fromLatin1(AcTemplate::kIfClose));
   if (closePos == -1) {
@@ -93,8 +108,9 @@ bool BlockIf::handle(const QString &block, int &pos, const QString &expr,
     return false;
   }
 
-  // 在 ${if} 和 ${/if} 之间查找 ${else}（支持嵌套，避免误找子 if 内的 else）
-  int elsePos = TplBlock::findElsePos(block, pos);
+  // 在 ${if} 和 ${/if} 之间查找 ${else} 或 ${else if}（支持嵌套，避免误找子 if 内的 else）
+  bool isElseIf = false;
+  int elsePos = TplBlock::findElsePos(block, pos, &isElseIf);
 
   if (truthy) {
     // 条件成立：渲染 then 部分
@@ -105,9 +121,33 @@ bool BlockIf::handle(const QString &block, int &pos, const QString &expr,
       thenBody = block.mid(pos, closePos - pos);
     result += m_engine.renderBlock(thenBody, context);
   } else if (elsePos != -1 && elsePos < closePos) {
-    // 条件不成立且有 else：渲染 else 部分
-    QString elseBody = block.mid(elsePos + 7, closePos - elsePos - 7);
-    result += m_engine.renderBlock(elseBody, context);
+    if (isElseIf) {
+      // ${else if condition}：提取 else if 部分，递归渲染
+      // else if 标签格式：${else if condition}
+      // 找到 ${else if condition} 的结束位置 }
+      int elseIfExprStart = elsePos + 2;  // 跳过 ${
+      int elseIfExprEnd = block.indexOf(QLatin1Char('}'), elseIfExprStart);
+      if (elseIfExprEnd == -1) {
+        const_cast<TplEngine &>(m_engine).setError(QStringLiteral("Malformed ${else if}"));
+        return false;
+      }
+      // else if 部分从 } 之后到 ${/if} 之前
+      // 这部分可能还包含更多 ${else if} 或 ${else}，交给递归的 renderBlock 处理
+      // 构造一个虚拟的 ${if condition}...${/if} 块，让 renderBlock 递归处理
+      QString elseIfExpr = block.mid(elseIfExprStart, elseIfExprEnd - elseIfExprStart).trimmed();
+      // elseIfExpr 格式为 "else if condition"，提取 "if condition" 部分
+      QString ifExpr = elseIfExpr.mid(5).trimmed();  // 去掉 "else "，保留 "if condition"
+      // 构造虚拟块：${ifExpr}...body...${/if}
+      QString elseIfBody = block.mid(elseIfExprEnd + 1, closePos - elseIfExprEnd - 1);
+      QString virtualBlock = QString::fromLatin1(AcTemplate::kExprOpen) + ifExpr + QChar('}') +
+                             elseIfBody + QString::fromLatin1(AcTemplate::kIfClose);
+      result += m_engine.renderBlock(virtualBlock, context);
+    } else {
+      // ${else}（不带 if）：渲染 else 部分
+      int elseTagEnd = elsePos + QString::fromLatin1(AcTemplate::kElse).length();
+      QString elseBody = block.mid(elseTagEnd, closePos - elseTagEnd);
+      result += m_engine.renderBlock(elseBody, context);
+    }
   }
 
   pos = closePos + 6;  // 跳过 ${/if}

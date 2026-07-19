@@ -88,7 +88,48 @@ void LightTpl::highlightBlock(const QString &text) {
   // 位图：标记已被高优先级规则格式化的字符位置
   QVector<bool> formatted(text.size(), false);
 
+  // ── 预扫描：处理 ${# 注释（深度计数，跳过内部 ${...}） ──
+  // 不能用正则 \\$\\{#[^}]*\\}，因为注释里可能包含 ${...} 示例
+  QTextCharFormat commentFormat;
+  commentFormat.setForeground(LightColor::comment);
+  commentFormat.setFontItalic(true);
+
+  int idx = 0;
+  while (idx < text.length()) {
+    int start = text.indexOf(QString::fromLatin1(AcTemplate::kExprOpen), idx);
+    if (start == -1) break;
+    if (start + 2 < text.length() && text[start + 2] == QChar('#')) {
+      // 用深度计数找到正确的闭合 }
+      int depth = 1;
+      int cursor = start + 3;
+      while (cursor < text.length()) {
+        if (text.mid(cursor, 2) == QString::fromLatin1(AcTemplate::kExprOpen)) {
+          depth++;
+          cursor += 2;
+        } else if (text[cursor] == QChar('}')) {
+          depth--;
+          if (depth == 0) break;
+          cursor++;
+        } else {
+          cursor++;
+        }
+      }
+      if (depth == 0) {
+        // 整个 ${# ... } 标记为灰色斜体
+        int end = cursor + 1;
+        setFormat(start, end - start, commentFormat);
+        for (int j = start; j < end && j < text.size(); ++j) formatted[j] = true;
+        idx = end;
+      } else {
+        idx = start + 2;  // 未闭合，继续扫描
+      }
+    } else {
+      idx = start + 2;  // 非注释，让后续规则处理
+    }
+  }
+
   // 按优先级顺序应用规则，后加入的规则优先级更低
+  // （${# 注释已在上面预处理，这里的规则仅处理其他标签）
   for (const HighlightRule &rule : std::as_const(m_rules)) {
     QRegularExpressionMatchIterator matchIterator = rule.pattern.globalMatch(text);
     while (matchIterator.hasNext()) {

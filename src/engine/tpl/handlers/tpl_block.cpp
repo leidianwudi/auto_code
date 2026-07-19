@@ -8,50 +8,74 @@
 #include "../../ac_language.h"
 
 /**
- * @brief 查找匹配的 ${else}（支持嵌套，仅返回当前 if 层的 else）
+ * @brief 查找匹配的 ${else} 或 ${else if ...}（支持嵌套，仅返回当前 if 层的 else）
  *
  * 从 startPos 开始扫描 block，正确计数嵌套的 ${if ...} / ${/if}，
- * 仅在当前 if 层级（depth == 1）时返回 ${else} 的位置。
+ * 仅在当前 if 层级（depth == 1）时返回 ${else} 或 ${else if} 的位置。
  * 如果遇到当前 if 的匹配 ${/if}（depth 归零），返回 -1 表示没有 else。
  */
-int TplBlock::findElsePos(const QString &block, int startPos) {
+int TplBlock::findElsePos(const QString &block, int startPos, bool *isElseIf) {
+  if (isElseIf) *isElseIf = false;
   int depth = 1;
   int pos = startPos;
   QString openTag =
       QString::fromLatin1(AcTemplate::kExprOpen) + QString::fromLatin1(AcTemplate::kIfPrefix);
   QString closeTag = QString::fromLatin1(AcTemplate::kIfClose);
   QString elseTag = QString::fromLatin1(AcTemplate::kElse);
+  QString elseIfTag =
+      QString::fromLatin1(AcTemplate::kElse) + QString::fromLatin1(AcTemplate::kIfPrefix);
   int openLen = openTag.length();
   int closeLen = closeTag.length();
   int elseLen = elseTag.length();
+  int elseIfLen = elseIfTag.length();
 
   while (pos < block.length()) {
-    // 查找三种标签中最近的一个
+    // 查找四种标签中最近的一个
     int nextOpen = block.indexOf(openTag, pos);
     int nextClose = block.indexOf(closeTag, pos);
+    int nextElseIf = block.indexOf(elseIfTag, pos);
     int nextElse = block.indexOf(elseTag, pos);
+
+    // 排除 ${else if} 被 ${else} 误匹配的情况
+    // 如果 nextElse 和 nextElseIf 相同位置，说明是 ${else if}，应走 elseIf 分支
+    if (nextElse != -1 && nextElseIf != -1 && nextElse == nextElseIf) {
+      nextElse = -1;  // 让 elseIf 优先处理
+    }
+    // 如果 nextElse 紧跟在 nextElseIf 后面（else 的位置恰好在 else if 的 else 部分），
+    // 也排除掉，避免把 ${else if ...} 中的 ${else} 单独匹配
+    if (nextElse != -1 && nextElseIf != -1 && nextElse >= nextElseIf &&
+        nextElse < nextElseIf + elseIfLen) {
+      nextElse = -1;
+    }
 
     // 取最近的一个
     int nearest = -1;
     if (nextOpen != -1) nearest = nextOpen;
     if (nextClose != -1 && (nearest == -1 || nextClose < nearest)) nearest = nextClose;
+    if (nextElseIf != -1 && (nearest == -1 || nextElseIf < nearest)) nearest = nextElseIf;
     if (nextElse != -1 && (nearest == -1 || nextElse < nearest)) nearest = nextElse;
 
-    if (nearest == -1) return -1;  // 什么都没找到
+    if (nearest == -1) return -1;
 
     if (nearest == nextOpen) {
-      // 嵌套的 ${if ...}，深度+1
       ++depth;
       pos = nearest + openLen;
     } else if (nearest == nextClose) {
-      // ${/if}
       --depth;
-      if (depth == 0) return -1;  // 当前 if 层闭合，没有 else
+      if (depth == 0) return -1;
       pos = nearest + closeLen;
+    } else if (nearest == nextElseIf) {
+      if (depth == 1) {
+        if (isElseIf) *isElseIf = true;
+        return nearest;
+      }
+      pos = nearest + elseIfLen;
     } else {
-      // ${else}
-      if (depth == 1) return nearest;  // 当前 if 层的 else
-      // 嵌套 if 内部的 else，忽略
+      // ${else}（不带 if）
+      if (depth == 1) {
+        if (isElseIf) *isElseIf = false;
+        return nearest;
+      }
       pos = nearest + elseLen;
     }
   }

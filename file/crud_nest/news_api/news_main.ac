@@ -1,7 +1,28 @@
+// ============================================================================
+// news_main.ac — 代码生成主脚本
+// ----------------------------------------------------------------------------
+// 整体流程（从数据库到 TypeScript 文件）：
+//
+//   ┌─────────────┐   schema   ┌──────────┐   fields[]   ┌────────────┐
+//   │ MySQL 数据库 │ ──────►  │ Param    │ ──────────►  │ entity.tpl │
+//   │ (news 库)   │    列信息  │ (加工器)  │   关联信息   │  (模板)    │
+//   └─────────────┘            └──────────┘   imports[]  └────────────┘
+//                                                         │
+//                                     renderTpl()         ▼
+//                                                  生成 xxx.entity.ts
+//
+// 本脚本是主入口，负责：
+//   1. 连接 MySQL 数据库
+//   2. 遍历输入的 JSON 配置文件（每个文件描述一张表）
+//   3. 读取每张表的 schema 结构（字段名、类型、主键、默认值等）
+//   4. 合并 JSON 配置 + schema → 传给 Param 加工 → 得到模板数据
+//   5. 调用 renderTpl() 渲染模板 → 写入 xxx.entity.ts
+// ============================================================================
 import { Param } from "../template/param.ac";
 
 main {
 
+  // ── 1. 数据库连接配置 ──────────────────────────────────────────────
   let db = new DB({
     host: "192.168.5.103",
     port: 3306,
@@ -10,37 +31,61 @@ main {
     database: "news"
   });
 
+  // ── 2. 输出文件的根目录（所有 entity.ts 都写到这个目录下）──────
   let basePath : String = "D:/output";
 
+  // ── 3. 模板配置：一个模板对应一个生成的 TS 文件 ───────────────
+  //    以后要新增 service/controller/dto 只需在这个数组里加配置即可
   let templates = [
     { tpl: "../template/entity.tpl", suffix: ".ts" },
   ];
 
+  // ── 4. 读取所有 JSON 配置文件（文件路径由外部配置提供）────────
   let files = getCheckedFiles();
   let filesLen = files.length;
   printLog("files count: " + filesLen);
+
+  // ── 5. 对每张表（每个 JSON 文件）执行一次完整的生成流程 ────────
   for (file in files) {
+
+    // ── 5.1 读取 JSON 配置 ───────────────────────────────────────
+    //      JSON 文件里一般包含：tableName、modelName、joinTable 等元信息
     let json = readJson(file);
     printLog("json tableName: " + json.tableName);
 
+    // ── 5.2 从数据库读取这张表的 schema 结构 ─────────────────────
+    //      db.tableSchema() 返回 columns 数组，每列包含：
+    //        name   - 字段名
+    //        type   - MySQL 类型（如 "varchar(100)"）
+    //        key    - 索引类型（"PRI" = 主键，"" = 普通）
+    //        extra  - 附加信息（"auto_increment" = 自增）
+    //        comment- 字段注释（DDL 中的 COMMENT 内容）
+    //        default- 默认值
     let schema = db.tableSchema({ table: json.tableName });
     let schemaLen = schema.length;
     printLog("schema count: " + schemaLen);
 
-    // 合并 JSON 配置和数据库 schema
+    // ── 5.3 合并 JSON 配置和 schema（JSON 中的配置会覆盖 schema）─
+    //      然后把 schema 列数组挂到 combined["columns"] 上供 Param 读取
     let combined = merge(json, schema);
-    combined["columns"] = schema; // 表字段信息
+    combined["columns"] = schema;                 // 表字段信息
     combined["tableDesc"] = "用户表(" + json.tableName + ")"; // 表说明
 
-    // 使用 Param 类预处理数据
+    // ── 5.4 用 Param 类把原始数据加工成模板可直接使用的结构 ─────
+    //      核心转换：
+    //        - MySQL "int"           →  tsType "number"
+    //        - MySQL "decimal(10,2)" →  tsType "Coin" + columnOptions
+    //        - colKey "PRI"          →  isPrimary true
+    //        - 每列字段都会生成完整的 @Column(...) 参数字符串
     let param = new Param();
     param.setTableData(combined);
     printLog("entityClass: " + param.entityClass);
+
     let fields = param.fields;
     let fieldsLen = fields.length;
     printLog("fields count: " + fieldsLen);
 
-    // 调试：打印第一个字段的 columnOptions
+    // ── 调试输出：打印第一个字段的加工结果，验证转换是否正确 ─────
     if (fieldsLen > 0) {
       let firstField = fields[0];
       printLog("first field columnOptions: " + firstField.columnOptions);
@@ -48,23 +93,33 @@ main {
       printLog("first field tsType: " + firstField.tsType);
     }
 
-    // 准备模板数据
+    // ── 5.5 组装传给模板的数据对象 tplData ────────────────────
+    //      entity.tpl 中的所有 ${变量名} 都从这里取值
     let tplData = {};
-    tplData["entityClass"] = param.entityClass;
-    tplData["tableName"] = param.tableName;
-    tplData["tableDesc"] = combined["tableDesc"];
-    tplData["fields"] = param.fields;
-    tplData["imports"] = param.imports;
-    tplData["relations"] = param.relations;
+    tplData["entityClass"] = param.entityClass;   // ${entityClass}
+    tplData["tableName"]   = param.tableName;     // ${tableName}
+    tplData["tableDesc"]   = combined["tableDesc"]; // ${tableDesc}
+    tplData["fields"]      = param.fields;         // ${each field in fields} 循环
+    tplData["imports"]     = param.imports;        // ${each imp in imports} 循环
+    tplData["relations"]   = param.relations;      // ${each rel in relations} 循环
 
+    // ── 5.6 生成输出文件路径 ─────────────────────────────────────
+    //      例如：D:/output/news.entity.ts
     let name = basename(file);
     tplData["outputPath"] = basePath + "/" + name + ".entity.ts";
 
+    // ── 5.7 遍历模板配置，逐个渲染并写入文件 ───────────────────
+    //      目前只有 entity.tpl，未来可以加 service.tpl / controller.tpl 等
     for (cfg in templates) {
       printLog("tpl path: " + cfg.tpl);
+
+      // 核心：调用模板引擎，把 tpl 中的 ${变量名} 替换为实际值，
+      //      ${if ...} / ${each ...} 做条件判断和循环
       let result = renderTpl(cfg.tpl, tplData);
       let resultLen = result.length;
       printLog("result length: " + resultLen);
+
+      // 渲染成功 → 写入磁盘
       if (result) {
         writeFile(tplData["outputPath"], result);
         printLog("生成文件: " + tplData["outputPath"]);
@@ -72,6 +127,7 @@ main {
     }
   }
 
+  // ── 6. 收尾：断开数据库连接 ─────────────────────────────────────
   db.disconnect();
 
   printLog("--- 代码生成结束 ---");
