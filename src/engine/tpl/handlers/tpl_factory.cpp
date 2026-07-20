@@ -16,7 +16,8 @@ TplFactory::BlockType TplFactory::detectType(const QString &expr) {
   if (expr.startsWith(QString::fromLatin1(AcTemplate::kEachPrefix))) return BlockType::Each;
   if (expr.startsWith(QString::fromLatin1(AcTemplate::kIfPrefix))) return BlockType::If;
   // ${else if condition} 也走 If 分支
-  if (expr.startsWith(QString::fromLatin1(AcTemplate::kElse) + QLatin1Char(' ') +
+  // 注意：expr 是 ${...} 内部内容，不含 ${ 和 }，需用 AcKeyword::kElse ("else") 而非 AcTemplate::kElse ("${else}")
+  if (expr.startsWith(QString::fromLatin1(AcKeyword::kElse) + QLatin1Char(' ') +
                       QString::fromLatin1(AcTemplate::kIfPrefix)))
     return BlockType::If;
   return BlockType::Expression;

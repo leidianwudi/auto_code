@@ -21,9 +21,12 @@ int TplBlock::findElsePos(const QString &block, int startPos, bool *isElseIf) {
   QString openTag =
       QString::fromLatin1(AcTemplate::kExprOpen) + QString::fromLatin1(AcTemplate::kIfPrefix);
   QString closeTag = QString::fromLatin1(AcTemplate::kIfClose);
-  QString elseTag = QString::fromLatin1(AcTemplate::kElse);
-  QString elseIfTag =
-      QString::fromLatin1(AcTemplate::kElse) + QString::fromLatin1(AcTemplate::kIfPrefix);
+  QString elseTag = QString::fromLatin1(AcTemplate::kElse);  // "${else}"
+  // ${else if condition}：注意 else 和 if 之间有空格
+  // 拼接为 "${" + "else" + " " + "if " = "${else if "
+  QString elseIfTag = QString::fromLatin1(AcTemplate::kExprOpen) +
+                      QString::fromLatin1(AcKeyword::kElse) + QLatin1Char(' ') +
+                      QString::fromLatin1(AcTemplate::kIfPrefix);
   int openLen = openTag.length();
   int closeLen = closeTag.length();
   int elseLen = elseTag.length();

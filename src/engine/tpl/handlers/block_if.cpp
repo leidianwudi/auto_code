@@ -119,6 +119,10 @@ bool BlockIf::handle(const QString &block, int &pos, const QString &expr,
       thenBody = block.mid(pos, elsePos - pos);
     else
       thenBody = block.mid(pos, closePos - pos);
+    // 去掉末尾的空格/制表符（分支标签行的缩进），保留所有换行符和空行
+    while (thenBody.endsWith(QChar(' ')) || thenBody.endsWith(QChar('\t'))) {
+      thenBody.chop(1);
+    }
     result += m_engine.renderBlock(thenBody, context);
   } else if (elsePos != -1 && elsePos < closePos) {
     if (isElseIf) {
@@ -139,14 +143,29 @@ bool BlockIf::handle(const QString &block, int &pos, const QString &expr,
       QString ifExpr = elseIfExpr.mid(5).trimmed();  // 去掉 "else "，保留 "if condition"
       // 构造虚拟块：${ifExpr}...body...${/if}
       QString elseIfBody = block.mid(elseIfExprEnd + 1, closePos - elseIfExprEnd - 1);
+      // 去掉末尾的空格/制表符（${/if} 行的缩进），保留所有换行符和空行
+      while (elseIfBody.endsWith(QChar(' ')) || elseIfBody.endsWith(QChar('\t'))) {
+        elseIfBody.chop(1);
+      }
       QString virtualBlock = QString::fromLatin1(AcTemplate::kExprOpen) + ifExpr + QChar('}') +
                              elseIfBody + QString::fromLatin1(AcTemplate::kIfClose);
       result += m_engine.renderBlock(virtualBlock, context);
     } else {
       // ${else}（不带 if）：渲染 else 部分
+      // 构造虚拟块：${if true}elseBody${/if}，让 renderBlock 递归处理
+      // 这样可以正确跳过 ${else} 标签行的换行符（与 ${else if} 分支保持一致）
       int elseTagEnd = elsePos + QString::fromLatin1(AcTemplate::kElse).length();
       QString elseBody = block.mid(elseTagEnd, closePos - elseTagEnd);
-      result += m_engine.renderBlock(elseBody, context);
+      // 去掉末尾的空格/制表符（${/if} 行的缩进），保留所有换行符和空行
+      while (elseBody.endsWith(QChar(' ')) || elseBody.endsWith(QChar('\t'))) {
+        elseBody.chop(1);
+      }
+      // 构造虚拟块：${if true}elseBody${/if}
+      // 使用 "if true" 是因为 else 分支无条件成立，直接渲染 body
+      QString virtualBlock = QString::fromLatin1(AcTemplate::kExprOpen) +
+                             QString::fromLatin1(AcTemplate::kIfPrefix) + QStringLiteral("true") +
+                             QChar('}') + elseBody + QString::fromLatin1(AcTemplate::kIfClose);
+      result += m_engine.renderBlock(virtualBlock, context);
     }
   }
 

@@ -9,6 +9,8 @@
 
 #include "block_each.h"
 
+#include <QRegularExpression>
+
 #include "../../ac_language.h"
 #include "../tpl_engine.h"
 
@@ -82,6 +84,25 @@ bool BlockEach::handle(const QString &block, int &pos, const QString &expr,
   // 提取循环体内容
   QString body = block.mid(pos, closePos - pos);
   pos = closePos + QString::fromLatin1(AcTemplate::kEachClose).length();
+
+  // 循环体 trim：只移除标签行的缩进（前导空格/制表符）和尾部缩进
+  // 所有空行、换行符都保留，让模板作者完全控制空行输出
+  {
+    // 头部：renderBlock 已通过 skipRestOfLine 跳过了 ${each ...} 标签行的换行符
+    // body 从下一行开始，这里不需要跳过任何内容
+    int start = 0;
+
+    // 尾部：只移除末尾的空格/制表符（${/each} 行的缩进）
+    // 保留末尾的换行符和纯空白行，让模板作者完全控制空行输出
+    int end = body.length();
+    while (end > start && (body[end - 1] == QChar(' ') || body[end - 1] == QChar('\t'))) {
+      end--;  // 跳过末尾的空格/制表符
+    }
+
+    if (start > 0 || end < body.length()) {
+      body = body.mid(start, end - start);
+    }
+  }
 
   // 获取数组数据
   QJsonValue arrVal = m_engine.resolvePath(arrayName, context);

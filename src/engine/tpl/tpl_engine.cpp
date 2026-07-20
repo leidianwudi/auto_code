@@ -59,18 +59,8 @@ QString TplEngine::render(const QString &tmpl, const QJsonObject &data) const {
 
   QString result = renderBlock(cleanTmpl, data);
 
-  // 后处理1：将连续3个及以上换行（2个及以上空行）替换为2个换行（1个空行）
-  // 关键：每个匹配项必须以 \n 结尾，这样不会吃掉下一行的缩进
-  // \n([ \t]*\n){2,} 匹配：\n + 2个或更多(可选空白+\n)
-  // 例如 \n\n\n → \n\n，但 \n\n    code 不会被匹配（第3个\n不存在）
-  result.replace(QRegularExpression(QStringLiteral("\n([ \t]*\\n){2,}")), QStringLiteral("\n\n"));
-
-  // 后处理2：去掉开头的空行（只匹配完整的空行，不吞下一行缩进）
-  result.replace(QRegularExpression(QStringLiteral("^([ \\t]*\\n)+")), QString());
-
-  // 后处理3：去掉结尾的空行
-  result.replace(QRegularExpression(QStringLiteral("([ \\t]*\\n)+$")), QString());
-
+  // 不再做空行后处理：模板里有多少空行就生成多少空行
+  // 模板作者通过在模板中添加/删除空行来控制输出间距
   return result;
 }
 
@@ -81,12 +71,14 @@ static bool isBlockTagExpr(const QString &expr) {
   if (expr.startsWith(QChar('#'))) return true;                                    // ${# 注释内容}
   if (expr.startsWith(QString::fromLatin1(AcTemplate::kIfPrefix))) return true;    // ${if ...}
   if (expr.startsWith(QString::fromLatin1(AcTemplate::kEachPrefix))) return true;  // ${each ...}
-  if (expr.startsWith(QString::fromLatin1(AcTemplate::kElse) + QLatin1Char(' ') +
+  // 注意：expr 是 ${...} 内部内容，不含 ${ 和 }，需用 AcKeyword::kElse ("else") 而非
+  // AcTemplate::kElse ("${else}")
+  if (expr.startsWith(QString::fromLatin1(AcKeyword::kElse) + QLatin1Char(' ') +
                       QString::fromLatin1(AcTemplate::kIfPrefix)))
-    return true;                                                           // ${else if ...}
-  if (expr == QString::fromLatin1(AcTemplate::kElse).mid(2)) return true;  // ${else}
-  if (expr == QStringLiteral("/if")) return true;                          // ${/if}
-  if (expr == QStringLiteral("/each")) return true;                        // ${/each}
+    return true;                                                   // ${else if ...}
+  if (expr == QString::fromLatin1(AcKeyword::kElse)) return true;  // ${else}
+  if (expr == QStringLiteral("/if")) return true;                  // ${/if}
+  if (expr == QStringLiteral("/each")) return true;                // ${/each}
   return false;
 }
 
