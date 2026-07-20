@@ -8,8 +8,12 @@
  * - 条件判断: ${if condition}...${else}...${/if}
  * - 算术运算: ${a + b * c}
  *
- * 具体的处理逻辑已提取到对应的 TplBlock 子类中。
- * TplEngine 作为协调者：提供 render 入口 + 共享工具方法。
+ * 处理流程（AST 三阶段方案）：
+ *   1. Lexer   — 把模板字符串切成 Token 流（tpl_lexer.h/cpp）
+ *   2. Parser  — 把 Token 流组装成 AST 树（tpl_parser.h/cpp）
+ *   3. Renderer — 遍历 AST 树输出最终字符串（tpl_renderer.h/cpp）
+ *
+ * TplEngine 作为协调者：提供 render 入口 + 共享工具方法（resolvePath）。
  */
 
 #pragma once
@@ -20,20 +24,16 @@
 #include <QString>
 #include <functional>
 
-#include "handlers/tpl_factory.h"
-
 class SchemaValidator;
 
 /**
  * @class TplEngine
  * @brief 模板引擎类
  *
- * 核心职责（精简后）：
- * 1. render() — 对外渲染入口
- * 2. renderBlock() — 递归扫描 ${...} 并交给 TplFactory
- * 3. resolvePath() — 嵌套属性解析（供 handler 共享调用）
+ * 核心职责：
+ * 1. render()      — 对外渲染入口（Lexer → Parser → Renderer）
+ * 2. resolvePath() — 嵌套属性解析（供 Renderer 共享调用）
  *
- * 算术表达式求值已移至 BlockExpression 内部实现。
  * C++ 函数调用使用 FunMgr::call(类名, 函数名, 参数)。
  */
 class TplEngine {
@@ -41,9 +41,9 @@ public:
   /**
    * @brief 默认构造函数
    */
-  TplEngine();
+  TplEngine() = default;
 
-  /// 日志回调：模板中 ${print(...)} 的输出通过此回调通知 UI
+  /// 日志回调：模板中 ${printLog(...)} 的输出通过此回调通知 UI
   using LogCallback = std::function<void(const QString &text, bool isError)>;
   void setLogCallback(LogCallback cb) { m_logCallback = std::move(cb); }
   LogCallback logCallback() const { return m_logCallback; }
@@ -75,13 +75,13 @@ public:
   QString lastError() const { return m_lastError; }
 
   /**
-   * @brief 设置错误信息（供 TplBlock 调用）
+   * @brief 设置错误信息（供 Renderer 调用）
    * @param msg 错误信息
    */
   void setError(const QString &msg) const { m_lastError = msg; }
 
   // ====================================================================
-  // 共享工具方法（供 TplBlock 子类调用）
+  // 共享工具方法（供 Renderer 调用）
   // ====================================================================
 
   /**
@@ -93,11 +93,6 @@ public:
    * @return 解析后的值，未找到返回 Null
    */
   QJsonValue resolvePath(const QString &path, const QJsonObject &context) const;
-
-  /**
-   * @brief 递归渲染模板块（供 TplBlock 子类调用）
-   */
-  QString renderBlock(const QString &block, const QJsonObject &context) const;
 
 private:
   /**
@@ -114,9 +109,6 @@ private:
    * 按点号分割逐层查找 JSON 对象/数组的属性。
    */
   QJsonValue resolveVarPath(const QString &path, const QJsonObject &context) const;
-
-  /// Handler 工厂
-  mutable TplFactory m_handlerFactory;
 
   /// 最后一次错误信息
   mutable QString m_lastError;

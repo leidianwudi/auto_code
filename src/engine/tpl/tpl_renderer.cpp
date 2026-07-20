@@ -4,7 +4,7 @@
  *
  * 遍历 AST 树，输出最终字符串。
  *
- * 表达式求值逻辑参考了旧实现 block_expression.cpp 的策略：
+ * 表达式求值策略：
  *   1. 内置函数：printLog(text)、fileExists(path)
  *   2. 循环变量：${this}、${.}
  *   3. 算术表达式：含四则运算符的表达式
@@ -229,7 +229,7 @@ QString evalVariable(const QString &expr, const QJsonObject &context, const TplE
   return valueToString(engine.resolvePath(expr, context));
 }
 
-/// @brief 判断 JSON 值是否为 truthy（与旧 BlockIf 实现一致）
+/// @brief 判断 JSON 值是否为 truthy
 bool isTruthy(const QJsonValue &val) {
   switch (val.type()) {
     case QJsonValue::Bool:
