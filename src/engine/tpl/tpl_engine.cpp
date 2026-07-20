@@ -22,6 +22,9 @@
 #include "../ac_language.h"
 #include "../function/fun_mgr.h"
 #include "../schema_validator.h"
+#include "tpl_lexer.h"
+#include "tpl_parser.h"
+#include "tpl_renderer.h"
 
 // 静态成员定义
 
@@ -43,6 +46,16 @@ void TplEngine::clearSchema() {
 }
 
 // render — 对外渲染入口
+//
+// 新实现流程（AST 方案）：
+//   1. Lexer   — 把模板字符串切成 Token 流
+//   2. Parser  — 把 Token 流组装成 AST 树
+//   3. Renderer — 遍历 AST 树，输出最终字符串
+//
+// 空行控制规则（明确且简单）：
+//   - 块标签（${if}/${each}/${else} 等）独占一行时，剔除该行的缩进和换行符
+//   - 块标签行内出现时，保留所有空白字符
+//   - 不做任何"智能空行压缩"，模板里几个 \n 就输出几个 \n
 QString TplEngine::render(const QString &tmpl, const QJsonObject &data) const {
   m_lastError.clear();
 
@@ -54,13 +67,29 @@ QString TplEngine::render(const QString &tmpl, const QJsonObject &data) const {
     }
   }
 
+  // 去除 \r（统一行尾格式）
   QString cleanTmpl = tmpl;
   cleanTmpl.remove(QLatin1Char('\r'));
 
-  QString result = renderBlock(cleanTmpl, data);
+  // 阶段 1：词法分析
+  QString lexError;
+  QList<TplLexer::Token> tokens = TplLexer::tokenize(cleanTmpl, lexError);
+  if (!lexError.isEmpty()) {
+    m_lastError = lexError;
+    return {};
+  }
 
-  // 不再做空行后处理：模板里有多少空行就生成多少空行
-  // 模板作者通过在模板中添加/删除空行来控制输出间距
+  // 阶段 2：语法分析
+  QString parseError;
+  QList<QSharedPointer<TplAst::AstNode>> ast = TplParser::parse(tokens, parseError);
+  if (!parseError.isEmpty()) {
+    m_lastError = parseError;
+    return {};
+  }
+
+  // 阶段 3：渲染
+  QString result = TplRenderer::render(ast, data, *this);
+
   return result;
 }
 

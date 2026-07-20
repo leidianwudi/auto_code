@@ -46,6 +46,13 @@ qt_add_executable(auto_code
     src/engine/tpl/tpl_engine.cpp
     src/engine/tpl/tpl_validator.h
     src/engine/tpl/tpl_validator.cpp
+    src/engine/tpl/tpl_ast.h
+    src/engine/tpl/tpl_lexer.h
+    src/engine/tpl/tpl_lexer.cpp
+    src/engine/tpl/tpl_parser.h
+    src/engine/tpl/tpl_parser.cpp
+    src/engine/tpl/tpl_renderer.h
+    src/engine/tpl/tpl_renderer.cpp
     src/engine/tpl/handlers/tpl_block.h
     src/engine/tpl/handlers/tpl_block.cpp
     src/engine/tpl/handlers/tpl_factory.h
