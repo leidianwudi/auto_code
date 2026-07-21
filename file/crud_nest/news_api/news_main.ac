@@ -37,7 +37,7 @@ main {
   // ── 3. 模板配置：一个模板对应一个生成的 TS 文件 ───────────────
   //    以后要新增 service/controller/dto 只需在这个数组里加配置即可
   let templates = [
-    { tpl: "../template/entity.tpl", suffix: ".ts" },
+    { tpl: "../template/entities/en.tpl", suffix: ".ts" },
   ];
 
   // ── 4. 读取所有 JSON 配置文件（文件路径由外部配置提供）────────
