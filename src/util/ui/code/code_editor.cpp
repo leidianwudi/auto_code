@@ -16,7 +16,9 @@
 #include <QShortcut>
 #include <QStringListModel>
 #include <QToolTip>
+#include <QVBoxLayout>
 
+#include "code_find_bar.h"
 #include "src/engine/json_validator.h"
 #include "src/engine/script/ac_validator.h"
 #include "src/engine/tpl/tpl_validator.h"
@@ -65,6 +67,14 @@ CodeEditor::CodeEditor(QWidget *parent) : QPlainTextEdit(parent) {
   m_validationTimer->setSingleShot(true);
   m_validationTimer->setInterval(CodeConstants::Performance::kValidationDebounceMs);
   connect(m_validationTimer, &QTimer::timeout, this, &CodeEditor::performValidation);
+
+  // 初始化查找/替换栏（嵌入编辑器上方，默认隐藏）
+  m_findBar = new CodeFindBar(this, this);
+  connect(m_findBar, &CodeFindBar::findBarClosed, this, [this]() {
+    // 查找栏关闭时恢复视口边距
+    setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
+  });
+  connect(m_findBar, &CodeFindBar::layoutChanged, this, &CodeEditor::updateFindBarLayout);
 }
 
 CodeEditor::~CodeEditor() {
@@ -209,7 +219,10 @@ void CodeEditor::applyErrorUnderline(int from, int length, const QString &toolti
 
 void CodeEditor::updateLineNumberAreaWidth(int newBlockCount) {
   Q_UNUSED(newBlockCount);
-  setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
+  // 保留查找栏的顶部边距
+  int topMargin =
+      (m_findBar && m_findBar->isFindBarVisible()) ? m_findBar->sizeHint().height() + 4 : 0;
+  setViewportMargins(lineNumberAreaWidth(), topMargin, 0, 0);
 }
 
 void CodeEditor::updateLineNumberArea(const QRect &rect, int dy) {
@@ -273,7 +286,18 @@ void CodeEditor::resizeEvent(QResizeEvent *event) {
   QPlainTextEdit::resizeEvent(event);
 
   QRect cr = contentsRect();
-  m_lineNumberArea->setGeometry(QRect(cr.left(), cr.top(), lineNumberAreaWidth(), cr.height()));
+  // 行号区域从视口内容区顶部开始（跳过查找栏占用的顶部边距）
+  int topMargin = viewportMargins().top();
+  m_lineNumberArea->setGeometry(
+      QRect(cr.left(), cr.top() + topMargin, lineNumberAreaWidth(), cr.height() - topMargin));
+
+  // 查找栏定位：在视口顶部边距区域内，右对齐
+  if (m_findBar && m_findBar->isVisible()) {
+    int findBarH = m_findBar->sizeHint().height();
+    int findBarW = qMin(m_findBar->sizeHint().width(), cr.width() - 10);
+    m_findBar->setGeometry(cr.right() - findBarW - 5, cr.top() + topMargin - findBarH - 2, findBarW,
+                           findBarH);
+  }
 }
 
 void CodeEditor::paintEvent(QPaintEvent *event) {
@@ -491,6 +515,11 @@ void CodeEditor::highlightCurrentLine() {
   // 错误波浪下划线
   extra.append(m_errorSelections);
 
+  // 查找匹配高亮（由 CodeFindBar 管理，追加到行高亮之后）
+  if (m_findBar && m_findBar->isFindBarVisible()) {
+    extra.append(m_findSelections);
+  }
+
   setExtraSelections(extra);
 }
 
@@ -538,6 +567,20 @@ void CodeEditor::refreshExtraSelections() { highlightCurrentLine(); }
 // ──────────────────────────────────────────────────────────────
 
 void CodeEditor::keyPressEvent(QKeyEvent *event) {
+  // Ctrl+F 查找
+  if ((event->modifiers() & Qt::ControlModifier) && event->key() == Qt::Key_F) {
+    showFindBar();
+    event->accept();
+    return;
+  }
+
+  // Ctrl+H 替换（等同 Ctrl+F + 展开替换区域）
+  if ((event->modifiers() & Qt::ControlModifier) && event->key() == Qt::Key_H) {
+    showFindBar();
+    event->accept();
+    return;
+  }
+
   // F12 转到定义
   if (event->key() == Qt::Key_F12 && m_validationMode == AcValidation) {
     QTextCursor cursor = textCursor();
@@ -1042,4 +1085,40 @@ void CodeEditor::mouseReleaseEvent(QMouseEvent *event) {
 
 void CodeEditor::setSymbolTable(const QHash<QString, AcSymbolEntry> &symbols) {
   m_symbolTable = symbols;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  查找/替换栏
+// ══════════════════════════════════════════════════════════════════════════════
+
+void CodeEditor::showFindBar() {
+  if (!m_findBar) return;
+  m_findBar->showFindBar();
+  updateFindBarLayout();
+}
+
+void CodeEditor::hideFindBar() {
+  if (m_findBar) m_findBar->hideFindBar();
+  setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
+}
+
+bool CodeEditor::isFindBarVisible() const { return m_findBar && m_findBar->isFindBarVisible(); }
+
+CodeFindBar *CodeEditor::findBar() const { return m_findBar; }
+
+void CodeEditor::updateFindBarLayout() {
+  if (!m_findBar || !m_findBar->isFindBarVisible()) return;
+  // 强制刷新布局，确保 sizeHint 反映替换区域展开/收起后的实际高度
+  m_findBar->layout()->activate();
+  int findBarH = m_findBar->sizeHint().height();
+  int topMargin = findBarH + 4;
+  setViewportMargins(lineNumberAreaWidth(), topMargin, 0, 0);
+  QRect cr = contentsRect();
+  int findBarW = qMin(m_findBar->sizeHint().width(), cr.width() - 10);
+  // 查找栏定位在顶部边距区域内，不覆盖代码
+  m_findBar->setGeometry(cr.right() - findBarW - 5, cr.top() + topMargin - findBarH - 2, findBarW,
+                         findBarH);
+  // 行号区域也要同步调整
+  m_lineNumberArea->setGeometry(
+      QRect(cr.left(), cr.top() + topMargin, lineNumberAreaWidth(), cr.height() - topMargin));
 }

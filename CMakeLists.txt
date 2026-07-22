@@ -85,6 +85,8 @@ qt_add_executable(auto_code
     src/util/ui/code/code_validator.cpp
     src/util/ui/code/code_editor.h
     src/util/ui/code/code_editor.cpp
+    src/util/ui/code/code_find_bar.h
+    src/util/ui/code/code_find_bar.cpp
     src/util/ui/code/symbol_navigator.h
     src/util/ui/code/symbol_navigator.cpp
     src/util/ui/code/code_log.h

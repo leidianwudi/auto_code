@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file main_dev_mgr.cpp
  * @brief 代码编辑器控制器层实现（单例 UI 控制器）
  */
@@ -26,6 +26,7 @@
 #include "src/engine/ac_language.h"
 #include "src/engine/script/ac_engine.h"
 #include "src/util/ui/code/code_editor.h"
+#include "src/util/ui/code/code_find_bar.h"
 #include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/highlighter/light_ac.h"
 #include "src/util/ui/highlighter/light_json.h"
@@ -465,6 +466,18 @@ void MainDevMgr::onTabCloseRequested(int index) {
 void MainDevMgr::onCurrentTabChanged(int index) {
   auto *tabs = qobject_cast<QTabWidget *>(sender());
   if (!tabs) return;
+
+  // ── 同步查找栏显示/隐藏 ──
+  // 遍历该面板所有编辑器：暂停非当前标签页的查找栏，恢复当前标签页的查找栏
+  for (int i = 0; i < tabs->count(); ++i) {
+    auto *editor = qobject_cast<CodeEditor *>(tabs->widget(i));
+    if (!editor || !editor->findBar()) continue;
+    if (i == index) {
+      editor->findBar()->resumeVisible();
+    } else {
+      editor->findBar()->pauseVisible();
+    }
+  }
 
   // ── 更新窗口标题 ──
   if (index < 0 || index >= tabs->count()) {

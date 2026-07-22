@@ -162,6 +162,12 @@ public:
   /// 缩进参考线高亮颜色（当前行所在层级，类似 VS Code 的 active indent guide）
   static QColor indentGuideActiveColor() { return QColor(0xa0, 0xa0, 0xa0); }
 
+  /// 查找匹配高亮背景色（所有匹配项，浅橙色）
+  static QColor findMatchBackground() { return QColor(0xff, 0xc6, 0x6d); }
+
+  /// 查找当前匹配高亮背景色（当前选中项，深橙色）
+  static QColor findCurrentMatchBackground() { return QColor(0xff, 0x99, 0x33); }
+
   /// 根据括号字符返回对应的高亮颜色
   static QColor bracketColorForChar(QChar ch) {
     switch (ch.toLatin1()) {

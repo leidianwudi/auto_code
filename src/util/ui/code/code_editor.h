@@ -34,6 +34,7 @@
 #include "indent_guide.h"
 #include "symbol_navigator.h"
 
+class CodeFindBar;
 class QPaintEvent;
 class QResizeEvent;
 class QWidget;
@@ -54,6 +55,7 @@ class AuiErrorToolTip;  ///< 自定义可选中/复制的错误提示弹窗
  */
 class CodeEditor : public QPlainTextEdit {
   Q_OBJECT
+  friend class CodeFindBar;  ///< 查找栏需要访问 m_findSelections
 
 public:
   /// 验证模式枚举（兼容旧接口）
@@ -72,6 +74,19 @@ public:
   void setValidationMode(ValidationMode mode);
   void validate();
   void formatCode();
+
+  // ── 接口：查找/替换 ──
+
+  /// 显示查找/替换栏（Ctrl+F）
+  void showFindBar();
+  /// 隐藏查找/替换栏
+  void hideFindBar();
+  /// 查找/替换栏是否可见
+  bool isFindBarVisible() const;
+  /// 获取查找/替换栏控件（供外部管理显示/隐藏）
+  CodeFindBar *findBar() const;
+  /// 更新查找栏布局和视口边距
+  void updateFindBarLayout();
 
   // ── 接口：行号显示 ──
 
@@ -176,6 +191,10 @@ private:
   QTimer *m_hoverTimer = nullptr;       ///< 悬停防抖定时器
   QTimer *m_validationTimer = nullptr;  ///< 验证防抖定时器
   QString m_currentHoverSymbol;         ///< 当前悬停的符号名
+
+  // 查找/替换栏
+  CodeFindBar *m_findBar = nullptr;                   ///< 查找/替换栏控件
+  QList<QTextEdit::ExtraSelection> m_findSelections;  ///< 查找匹配高亮（由 CodeFindBar 写入）
 
   struct ErrorRange {
     int start;
