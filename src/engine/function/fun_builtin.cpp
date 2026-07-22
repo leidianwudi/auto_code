@@ -41,6 +41,7 @@ void FunBuiltin::init() {
           {QString::fromLatin1(AcBuiltin::kGetCheckedFiles), getCheckedFiles},
           {QString::fromLatin1(AcBuiltin::kMerge), merge},
           {QString::fromLatin1(AcBuiltin::kBasename), basename},
+          {QString::fromLatin1(AcBuiltin::kFormatPath), formatPath},
       });
 }
 
@@ -243,4 +244,101 @@ QJsonValue FunBuiltin::basename(const QJsonArray &args) {
   }
 
   return QJsonValue(QFileInfo(args[0].toString()).completeBaseName());
+}
+
+// ============================================================================
+// formatPath — 用 {key} 占位符从数据对象中取值替换，生成最终路径
+// ============================================================================
+//
+// 参数：
+//   args[0] - 路径模板字符串，如 "{basePath}/{name}.entity.ts"
+//   args[1] - 数据对象，包含占位符对应的值
+//
+// 规则：
+//   - {key}  从 data 中查找 key，替换为字符串值
+//   - {{     转义为字面量 {
+//   - }}     转义为字面量 }
+//   - 占位符找不到对应键 → 报错并返回空串（避免文件写到错误位置）
+//   - 路径分隔符统一为 /（避免 Windows \ 问题）
+//   - 末尾自动通过 QDir::cleanPath 规整（去除冗余 ./、../）
+//
+// 示例：
+//   formatPath("{base}/{name}.ts", {base:"D:/out", name:"user"})
+//   → "D:/out/user.ts"
+QJsonValue FunBuiltin::formatPath(const QJsonArray &args) {
+  if (args.size() < 2 || !args[0].isString() || !args[1].isObject()) {
+    FunMgr::setError(QStringLiteral(
+        "formatPath() requires 2 arguments: pattern string and data object"));
+    return QJsonValue();
+  }
+
+  QString pattern = args[0].toString();
+  QJsonObject data = args[1].toObject();
+
+  QString result;
+  int i = 0;
+  while (i < pattern.length()) {
+    QChar ch = pattern[i];
+
+    // 转义：{{ → {，}} → }
+    if (ch == QLatin1Char('{') && i + 1 < pattern.length() &&
+        pattern[i + 1] == QLatin1Char('{')) {
+      result += QLatin1Char('{');
+      i += 2;
+      continue;
+    }
+    if (ch == QLatin1Char('}') && i + 1 < pattern.length() &&
+        pattern[i + 1] == QLatin1Char('}')) {
+      result += QLatin1Char('}');
+      i += 2;
+      continue;
+    }
+
+    // 占位符：{key}
+    if (ch == QLatin1Char('{')) {
+      int end = pattern.indexOf(QLatin1Char('}'), i + 1);
+      if (end == -1) {
+        FunMgr::setError(
+            QStringLiteral("formatPath() unterminated placeholder at position %1").arg(i));
+        return QJsonValue();
+      }
+      QString key = pattern.mid(i + 1, end - i - 1).trimmed();
+      if (key.isEmpty()) {
+        FunMgr::setError(
+            QStringLiteral("formatPath() empty placeholder at position %1").arg(i));
+        return QJsonValue();
+      }
+      if (!data.contains(key)) {
+        FunMgr::setError(
+            QStringLiteral("formatPath() placeholder '%1' not found in data object").arg(key));
+        return QJsonValue();
+      }
+      QJsonValue v = data.value(key);
+      QString vs;
+      if (v.isString()) {
+        vs = v.toString();
+      } else if (v.isDouble()) {
+        vs = QString::number(v.toDouble());
+      } else if (v.isBool()) {
+        vs = v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
+      } else {
+        FunMgr::setError(QStringLiteral(
+            "formatPath() placeholder '%1' value must be string/number/bool").arg(key));
+        return QJsonValue();
+      }
+      result += vs;
+      i = end + 1;
+      continue;
+    }
+
+    result += ch;
+    ++i;
+  }
+
+  // 路径分隔符统一为 /（Windows 兼容）
+  result.replace(QLatin1Char('\\'), QLatin1Char('/'));
+  // 规整路径（去除冗余 ./、解析 ../）
+  result = QDir::cleanPath(result);
+
+  return QJsonValue(result);
 }

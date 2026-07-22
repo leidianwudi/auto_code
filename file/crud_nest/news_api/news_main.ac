@@ -4,8 +4,8 @@
 // 整体流程（从数据库到 TypeScript 文件）：
 //
 //   ┌─────────────┐   schema   ┌──────────┐   fields[]   ┌────────────┐
-//   │ MySQL 数据库 │ ──────►  │ Param    │ ──────────►  │ entity.tpl │
-//   │ (news 库)   │    列信息  │ (加工器)  │   关联信息   │  (模板)    │
+//   │ MySQL 数据库 │ ──────►    │ Param    │ ──────────►  │ entity.tpl │
+//   │ (news 库)   │    列信息   │ (加工器)  │   关联信息     │  (模板)     │
 //   └─────────────┘            └──────────┘   imports[]  └────────────┘
 //                                                         │
 //                                     renderTpl()         ▼
@@ -34,10 +34,17 @@ main {
   // ── 2. 输出文件的根目录（所有 entity.ts 都写到这个目录下）──────
   let basePath : String = "D:/output";
 
-  // ── 3. 模板配置：一个模板对应一个生成的 TS 文件 ───────────────
+  // ── 3. 模板配置：一个模板对应一个生成的代码文件 ───────────────
+  //    字段说明：
+  //      tpl  - 模板文件路径（相对脚本目录）
+  //      out  - 输出文件路径模板，用 {key} 占位符从 tplData 取值
+  //             支持的占位符：{basePath}、{name}、{tableName}、{entityClass} 等
   //    以后要新增 service/controller/dto 只需在这个数组里加配置即可
   let templates = [
-    { tpl: "../template/entities/en.tpl", suffix: ".ts" },
+    { tpl: "../template/entities/en.tpl", out: "{basePath}/{name}.ts" },
+    // 示例：未来扩展
+    // { tpl: "../template/service/svc.tpl", out: "{basePath}/service/{name}.service.ts" },
+    // { tpl: "../template/dto/dto.tpl",     out: "{basePath}/dto/{name}.dto.ts" },
   ];
 
   // ── 4. 读取所有 JSON 配置文件（文件路径由外部配置提供）────────
@@ -103,15 +110,22 @@ main {
     tplData["imports"]     = param.imports;        // ${each imp in imports} 循环
     tplData["relations"]   = param.relations;      // ${each rel in relations} 循环
 
-    // ── 5.6 生成输出文件路径 ─────────────────────────────────────
-    //      例如：D:/output/news.entity.ts
+    // ── 5.6 基础路径数据（供 formatPath 占位符替换）────────────
     let name = basename(file);
-    tplData["outputPath"] = basePath + "/" + name + ".entity.ts";
 
     // ── 5.7 遍历模板配置，逐个渲染并写入文件 ───────────────────
-    //      目前只有 entity.tpl，未来可以加 service.tpl / controller.tpl 等
+    //      每个模板 cfg 的输出路径由 cfg.out 模板 + formatPath 替换得到
     for (cfg in templates) {
       printLog("tpl path: " + cfg.tpl);
+
+      // 用 formatPath 替换 {basePath}/{name} 等占位符，得到输出文件路径
+      let outPath = formatPath(cfg.out, {
+        basePath: basePath,
+        name: name,
+        tableName: json.tableName,
+        entityClass: param.entityClass
+      });
+      tplData["outputPath"] = outPath;  // 供模板内的 fileExists(outputPath) 守卫使用
 
       // 核心：调用模板引擎，把 tpl 中的 ${变量名} 替换为实际值，
       //      ${if ...} / ${each ...} 做条件判断和循环
@@ -121,8 +135,8 @@ main {
 
       // 渲染成功 → 写入磁盘
       if (result) {
-        writeFile(tplData["outputPath"], result);
-        printLog("生成文件: " + tplData["outputPath"]);
+        writeFile(outPath, result);
+        printLog("生成文件: " + outPath);
       }
     }
   }

@@ -11,6 +11,7 @@
  *   let files = getCheckedFiles()
  *   let merged = merge({a: 1}, {b: 2})
  *   let name = basename("/path/to/file.txt")  // → "file"
+ *   let path = formatPath("{base}/{name}.ts", {base:"D:/out", name:"user"})
  * @endcode
  *
  * 这些函数通过 FunMgr 的 "builtin" 伪类注册，由 AcInterpreter::callBuiltin()
@@ -91,4 +92,8 @@ private:
   /// 获取文件名（不含扩展名）
   /// @param args [0] 文件路径
   static QJsonValue basename(const QJsonArray &args);
+
+  /// 格式化路径：用 {key} 占位符从数据对象中取值替换
+  /// @param args [0] 路径模板（如 "{basePath}/{name}.ts"），[1] 数据对象
+  static QJsonValue formatPath(const QJsonArray &args);
 };

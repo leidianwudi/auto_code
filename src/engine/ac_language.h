@@ -115,12 +115,15 @@ inline constexpr const char *kMerge = "merge";
 inline constexpr const char *kBasename = "basename";
 /// @brief 判断文件是否存在（模板专用）：fileExists("path.txt") → 返回 bool
 inline constexpr const char *kFileExists = "fileExists";
+/// @brief 格式化路径：formatPath("{basePath}/{name}.ts", {basePath:"D:/out", name:"user"})
+/// → "D:/out/user.ts"。占位符 {key} 从第二个参数的对象中查找替换。
+inline constexpr const char *kFormatPath = "formatPath";
 
 /// @brief 一级函数名列表（供解析器校验、高亮、补全使用）
 inline const QStringList kAll = {
     QString(kCall),      QString(kReadJson), QString(kReadFile),   QString(kRenderTpl),
     QString(kWriteFile), QString(kPrintLog), QString(kPrintError), QString(kGetCheckedFiles),
-    QString(kMerge),     QString(kBasename), QString(kFileExists),
+    QString(kMerge),     QString(kBasename), QString(kFileExists), QString(kFormatPath),
 };
 }  // namespace AcBuiltin
 
