@@ -11,6 +11,7 @@
 #include <cmath>
 
 #include "../ac_language.h"
+#include "../ac_value_str.h"
 #include "../function/fun_builtin.h"
 #include "../function/fun_mgr.h"
 #include "../tpl/tpl_engine.h"
@@ -120,9 +121,8 @@ QJsonValue AcInterpreter::applyCompoundOp(const QJsonValue &currentVal, const QJ
                                           CompoundOp op, int line) {
   if (op == CompoundOp::kAdd) {
     if (currentVal.isString() || newVal.isString()) {
-      QString ls =
-          currentVal.isString() ? currentVal.toString() : QString::number(currentVal.toDouble());
-      QString rs = newVal.isString() ? newVal.toString() : QString::number(newVal.toDouble());
+      QString ls = currentVal.isString() ? currentVal.toString() : AcValueStr::toString(currentVal);
+      QString rs = newVal.isString() ? newVal.toString() : AcValueStr::toString(newVal);
       return QJsonValue(ls + rs);
     }
     return QJsonValue(currentVal.toDouble() + newVal.toDouble());
@@ -350,9 +350,7 @@ QJsonValue AcInterpreter::evalBinary(const Expr &expr) {
       if (l.isString() || r.isString()) {
         auto valToStr = [](const QJsonValue &v) -> QString {
           if (v.isString()) return v.toString();
-          if (v.isBool()) return v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
-          if (v.isNull()) return QStringLiteral("null");
-          return QString::number(v.toDouble());
+          return AcValueStr::toString(v);
         };
         return QJsonValue(valToStr(l) + valToStr(r));
       }

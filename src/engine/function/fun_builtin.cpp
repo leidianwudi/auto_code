@@ -11,6 +11,7 @@
 #include <QJsonObject>
 
 #include "../ac_language.h"
+#include "../ac_value_str.h"
 #include "../tpl/tpl_engine.h"
 #include "fun_mgr.h"
 #include "src/util/common/util_json.h"
@@ -125,35 +126,25 @@ QJsonValue FunBuiltin::printLog(const QJsonArray &args) {
   for (const QJsonValue &v : args) {
     if (v.isString()) {
       text += v.toString();
-    } else if (v.isBool()) {
-      text += v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
-    } else if (v.isDouble()) {
-      double d = v.toDouble();
-      if (d == qFloor(d)) {
-        text += QString::number(static_cast<qint64>(d));
-      } else {
-        text += QString::number(d);
-      }
-    } else if (v.isNull()) {
-      text += QStringLiteral("null");
-    } else if (v.isArray()) {
-      text += QString::fromUtf8(QJsonDocument(v.toArray()).toJson(QJsonDocument::Compact));
-    } else if (v.isObject()) {
-      text += QString::fromUtf8(QJsonDocument(v.toObject()).toJson(QJsonDocument::Compact));
     } else {
-      text += QStringLiteral("undefined");
+      text += AcValueStr::toString(v);
     }
   }
+#ifdef AC_DEBUG
   qDebug() << "[FunBuiltin::printLog] text:" << text << "hasCallback:" << (bool)s_ctx.logCallback
            << "currentLine:" << s_ctx.currentLine;
+#endif
   if (s_ctx.logCallback) {
     if (s_ctx.currentLine > 0) {
       text = QStringLiteral("[%1] %2").arg(s_ctx.currentLine).arg(text);
     }
     s_ctx.logCallback(text, false);
-  } else {
+  }
+#ifdef AC_DEBUG
+  else {
     qDebug() << "[FunBuiltin::printLog] WARNING: logCallback is null!";
   }
+#endif
 
   return QJsonValue(true);
 }
@@ -165,23 +156,8 @@ QJsonValue FunBuiltin::printError(const QJsonArray &args) {
   for (const QJsonValue &v : args) {
     if (v.isString()) {
       text += v.toString();
-    } else if (v.isBool()) {
-      text += v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
-    } else if (v.isDouble()) {
-      double d = v.toDouble();
-      if (d == qFloor(d)) {
-        text += QString::number(static_cast<qint64>(d));
-      } else {
-        text += QString::number(d);
-      }
-    } else if (v.isNull()) {
-      text += QStringLiteral("null");
-    } else if (v.isArray()) {
-      text += QString::fromUtf8(QJsonDocument(v.toArray()).toJson(QJsonDocument::Compact));
-    } else if (v.isObject()) {
-      text += QString::fromUtf8(QJsonDocument(v.toObject()).toJson(QJsonDocument::Compact));
     } else {
-      text += QStringLiteral("undefined");
+      text += AcValueStr::toString(v);
     }
   }
   if (s_ctx.logCallback) {
@@ -267,8 +243,8 @@ QJsonValue FunBuiltin::basename(const QJsonArray &args) {
 //   → "D:/out/user.ts"
 QJsonValue FunBuiltin::formatPath(const QJsonArray &args) {
   if (args.size() < 2 || !args[0].isString() || !args[1].isObject()) {
-    FunMgr::setError(QStringLiteral(
-        "formatPath() requires 2 arguments: pattern string and data object"));
+    FunMgr::setError(
+        QStringLiteral("formatPath() requires 2 arguments: pattern string and data object"));
     return QJsonValue();
   }
 
@@ -281,14 +257,12 @@ QJsonValue FunBuiltin::formatPath(const QJsonArray &args) {
     QChar ch = pattern[i];
 
     // 转义：{{ → {，}} → }
-    if (ch == QLatin1Char('{') && i + 1 < pattern.length() &&
-        pattern[i + 1] == QLatin1Char('{')) {
+    if (ch == QLatin1Char('{') && i + 1 < pattern.length() && pattern[i + 1] == QLatin1Char('{')) {
       result += QLatin1Char('{');
       i += 2;
       continue;
     }
-    if (ch == QLatin1Char('}') && i + 1 < pattern.length() &&
-        pattern[i + 1] == QLatin1Char('}')) {
+    if (ch == QLatin1Char('}') && i + 1 < pattern.length() && pattern[i + 1] == QLatin1Char('}')) {
       result += QLatin1Char('}');
       i += 2;
       continue;
@@ -304,8 +278,7 @@ QJsonValue FunBuiltin::formatPath(const QJsonArray &args) {
       }
       QString key = pattern.mid(i + 1, end - i - 1).trimmed();
       if (key.isEmpty()) {
-        FunMgr::setError(
-            QStringLiteral("formatPath() empty placeholder at position %1").arg(i));
+        FunMgr::setError(QStringLiteral("formatPath() empty placeholder at position %1").arg(i));
         return QJsonValue();
       }
       if (!data.contains(key)) {
@@ -322,8 +295,9 @@ QJsonValue FunBuiltin::formatPath(const QJsonArray &args) {
       } else if (v.isBool()) {
         vs = v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
       } else {
-        FunMgr::setError(QStringLiteral(
-            "formatPath() placeholder '%1' value must be string/number/bool").arg(key));
+        FunMgr::setError(
+            QStringLiteral("formatPath() placeholder '%1' value must be string/number/bool")
+                .arg(key));
         return QJsonValue();
       }
       result += vs;

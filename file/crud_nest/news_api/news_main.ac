@@ -58,7 +58,7 @@ main {
     // ── 5.1 读取 JSON 配置 ───────────────────────────────────────
     //      JSON 文件里一般包含：tableName、modelName、joinTable 等元信息
     let json = readJson(file);
-    printLog("json tableName: " + json.tableName);
+    printLog("json: " + json);
 
     // ── 5.2 从数据库读取这张表的 schema 结构 ─────────────────────
     //      db.tableSchema() 返回 columns 数组，每列包含：
@@ -86,7 +86,7 @@ main {
     //        - 每列字段都会生成完整的 @Column(...) 参数字符串
     let param = new Param();
     param.setTableData(combined);
-    printLog("entityClass: " + param.entityClass);
+    printLog("param: " + param);
 
     let fields = param.fields;
     let fieldsLen = fields.length;

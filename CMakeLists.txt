@@ -151,6 +151,8 @@ target_include_directories(auto_code PRIVATE
 # 注入项目源码路径，使运行时能准确找到 file/ 目录
 target_compile_definitions(auto_code PRIVATE
     PROJECT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    # 开启调试模式,打开会输出ac引擎和模板引擎的日志
+    # AC_DEBUG
 )
 
 target_link_libraries(auto_code

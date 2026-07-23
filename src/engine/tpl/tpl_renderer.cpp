@@ -259,6 +259,7 @@ bool evalCondition(QString expr, const QJsonObject &context, const TplEngine &en
   }
   QJsonValue condVal = engine.resolvePath(expr, context);
   bool truthy = isTruthy(condVal);
+#ifdef AC_DEBUG
   // 调试日志：输出条件求值结果
   if (auto cb = engine.logCallback()) {
     QString valStr;
@@ -280,6 +281,7 @@ bool evalCondition(QString expr, const QJsonObject &context, const TplEngine &en
            .arg(negate ? !truthy : truthy),
        false);
   }
+#endif
   return negate ? !truthy : truthy;
 }
 
