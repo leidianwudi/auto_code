@@ -41,7 +41,8 @@ main {
   //             支持的占位符：{basePath}、{name}、{tableName}、{entityClass} 等
   //    以后要新增 service/controller/dto 只需在这个数组里加配置即可
   let templates = [
-    { tpl: "../template/entities/en.tpl", out: "{basePath}/{name}.ts" },
+    { tpl: "../template/entities/en.tpl", out: "{basePath}/{name}.entity.ts" },
+    { tpl: "../template/in/in_ins.tpl",  out: "{basePath}/in_ins_{name}.ts" },
     // 示例：未来扩展
     // { tpl: "../template/service/svc.tpl", out: "{basePath}/service/{name}.service.ts" },
     // { tpl: "../template/dto/dto.tpl",     out: "{basePath}/dto/{name}.dto.ts" },
@@ -101,14 +102,16 @@ main {
     }
 
     // ── 5.5 组装传给模板的数据对象 tplData ────────────────────
-    //      entity.tpl 中的所有 ${变量名} 都从这里取值
+    //      模板中的所有 ${变量名} 都从这里取值
     let tplData = {};
-    tplData["entityClass"] = param.entityClass;   // ${entityClass}
-    tplData["tableName"]   = param.tableName;     // ${tableName}
-    tplData["tableDesc"]   = combined["tableDesc"]; // ${tableDesc}
-    tplData["fields"]      = param.fields;         // ${each field in fields} 循环
-    tplData["imports"]     = param.imports;        // ${each imp in imports} 循环
-    tplData["relations"]   = param.relations;      // ${each rel in relations} 循环
+    tplData["entityClass"]     = param.entityClass;   // ${entityClass} 实体类名，如 EnUser
+    tplData["insClass"]        = "InIns" + param.entityClass.substring(2);  // ${insClass} InIns类名，如 InInsUser
+    tplData["entityClassFile"] = "en_" + param.tableName;  // ${entityClassFile} 实体文件名，如 en_user
+    tplData["tableName"]       = param.tableName;     // ${tableName}
+    tplData["tableDesc"]       = combined["tableDesc"]; // ${tableDesc}
+    tplData["fields"]          = param.fields;         // ${each field in fields} 循环
+    tplData["imports"]         = param.imports;        // ${each imp in imports} 循环
+    tplData["relations"]       = param.relations;      // ${each rel in relations} 循环
 
     // ── 5.6 基础路径数据（供 formatPath 占位符替换）────────────
     let name = basename(file);
@@ -123,7 +126,8 @@ main {
         basePath: basePath,
         name: name,
         tableName: json.tableName,
-        entityClass: param.entityClass
+        entityClass: param.entityClass,
+        insClass: tplData["insClass"]
       });
       tplData["outputPath"] = outPath;  // 供模板内的 fileExists(outputPath) 守卫使用
 
