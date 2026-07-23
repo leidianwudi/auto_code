@@ -41,8 +41,9 @@ main {
   //             支持的占位符：{basePath}、{name}、{tableName}、{entityClass} 等
   //    以后要新增 service/controller/dto 只需在这个数组里加配置即可
   let templates = [
-    { tpl: "../template/entities/en.tpl", out: "{basePath}/{name}.entity.ts" },
+    { tpl: "../template/entities/en.tpl", out: "{basePath}/en_{name}.ts" },
     { tpl: "../template/in/in_ins.tpl",  out: "{basePath}/in_ins_{name}.ts" },
+    { tpl: "../template/in/in_sel.tpl",  out: "{basePath}/in_sel_{name}.ts" },
   ];
 
   // ── 4. 读取所有 JSON 配置文件（文件路径由外部配置提供）────────
@@ -109,12 +110,82 @@ main {
     let tplData = {};
     tplData["entityClass"]     = param.entityClass;   // ${entityClass} 实体类名，如 EnUser
     tplData["insClass"]        = "InIns" + param.entityClass.substring(2);  // ${insClass} InIns类名，如 InInsUser
+    tplData["selClass"]        = "InSel" + param.entityClass.substring(2);  // ${selClass} InSel类名，如 InSelUser
     tplData["entityClassFile"] = "en_" + param.tableName;  // ${entityClassFile} 实体文件名，如 en_user
     tplData["tableName"]       = param.tableName;     // ${tableName}
     tplData["tableDesc"]       = combined["tableDesc"]; // ${tableDesc}
     tplData["fields"]          = param.fields;         // ${each field in fields} 循环
     tplData["imports"]         = param.imports;        // ${each imp in imports} 循环
     tplData["relations"]       = param.relations;      // ${each rel in relations} 循环
+
+    // ── 5.5b 构建 InSel 的查询字段和排序描述 ────────────────────
+    //      selFields = 主键 + selCols(精确查询) + selColsLike(模糊查询)
+    //      sortDesc  = selColsSort 的键名用逗号拼接
+    let selFields = [];
+    let selFieldNames = [];
+    // 先加主键字段
+    for (field in param.fields) {
+      if (field.isPrimary) {
+        let sf = {};
+        sf.name = field.name;
+        sf.comment = field.comment;
+        sf.tsType = field.tsType;
+        sf.isPrimary = field.isPrimary;
+        sf.isCoin = field.isCoin;
+        sf.isLike = false;
+        selFields.append(sf);
+        selFieldNames.append(field.name);
+      }
+    }
+    // 加 selCols（精确查询字段）
+    if (json.selCols) {
+      for (colName in json.selCols) {
+        // 从 fields 中找到对应字段的元信息
+        for (field in param.fields) {
+          if (field.name == colName) {
+            let sf = {};
+            sf.name = field.name;
+            sf.comment = field.comment;
+            sf.tsType = field.tsType;
+            sf.isPrimary = field.isPrimary;
+            sf.isCoin = field.isCoin;
+            sf.isLike = false;
+            selFields.append(sf);
+            selFieldNames.append(field.name);
+          }
+        }
+      }
+    }
+    // 加 selColsLike（模糊查询字段）
+    if (json.selColsLike) {
+      for (colName in json.selColsLike) {
+        for (field in param.fields) {
+          if (field.name == colName) {
+            let sf = {};
+            sf.name = field.name;
+            sf.comment = field.comment;
+            sf.tsType = field.tsType;
+            sf.isPrimary = field.isPrimary;
+            sf.isCoin = field.isCoin;
+            sf.isLike = true;
+            selFields.append(sf);
+            selFieldNames.append(field.name);
+          }
+        }
+      }
+    }
+    tplData["selFields"] = selFields;
+
+    // 构建 sortDesc：从 selColsSort 的键名拼接
+    // 例如 selColsSort = { id: "DESC", fans_count: "DESC" } → "排序字段:id, fans_count"
+    let sortKeys = [];
+    if (json.selColsSort) {
+      for (sortKey in json.selColsSort) {
+        sortKeys.append(sortKey);
+      }
+    }
+    let sortDesc = "排序字段:" + sortKeys.join(", ");
+    tplData["sortDesc"] = sortDesc;
 
     // ── 5.6 基础路径数据（供 formatPath 占位符替换）────────────
     let name = basename(file);
@@ -130,7 +201,8 @@ main {
         name: name,
         tableName: json.tableName,
         entityClass: param.entityClass,
-        insClass: tplData["insClass"]
+        insClass: tplData["insClass"],
+        selClass: tplData["selClass"]
       });
       tplData["outputPath"] = outPath;  // 供模板内的 fileExists(outputPath) 守卫使用
 
