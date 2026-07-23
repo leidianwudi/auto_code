@@ -875,10 +875,85 @@ const AcSymbolEntry *CodeEditor::findSymbolDefinition(const QString &name) const
   return m_symbolNavigator.findDefinition(name);
 }
 
+const AcSymbolEntry *CodeEditor::findPropertyDefinition(const QString &propName) const {
+  if (propName.isEmpty()) return nullptr;
+
+  // 从光标位置向前扫描，识别 obj.prop 模式
+  const QString &text = cachedText();
+  int cursorPos = textCursor().position();
+
+  // 向前找到当前标识符的起始位置
+  int idEnd = cursorPos;
+  int idStart = cursorPos;
+  // 先跳过光标可能在的标识符内位置，找到标识符结束
+  while (idEnd < text.size() &&
+         (text[idEnd].isLetterOrNumber() || text[idEnd] == QLatin1Char('_') ||
+          text[idEnd] == QLatin1Char('$'))) {
+    ++idEnd;
+  }
+  // 找到标识符起始
+  while (idStart > 0 &&
+         (text[idStart - 1].isLetterOrNumber() || text[idStart - 1] == QLatin1Char('_') ||
+          text[idStart - 1] == QLatin1Char('$'))) {
+    --idStart;
+  }
+
+  // 检查标识符前面是否是 '.'（属性访问）
+  int dotPos = idStart - 1;
+  if (dotPos < 0 || text[dotPos] != QLatin1Char('.')) return nullptr;
+
+  // 提取对象名：向前扫描到 '.' 前面的标识符
+  int objEnd = dotPos;
+  int objStart = dotPos;
+  while (objStart > 0 &&
+         (text[objStart - 1].isLetterOrNumber() || text[objStart - 1] == QLatin1Char('_') ||
+          text[objStart - 1] == QLatin1Char('$'))) {
+    --objStart;
+  }
+  QString objName = text.mid(objStart, objEnd - objStart);
+  if (objName.isEmpty()) return nullptr;
+
+  // 查找对象符号，获取其类型
+  const AcSymbolEntry *objEntry = m_symbolNavigator.findDefinition(objName);
+  if (!objEntry) return nullptr;
+
+  // 用 returnType 作为类名，查找 ClassName.propName
+  QString typeName = objEntry->returnType;
+  if (typeName.isEmpty() || typeName == QStringLiteral("Any")) {
+    // 尝试用对象名本身作为类名（同名变量 → 同名类）
+    typeName = objName;
+    // 首字母大写：cfg → Cfg
+    if (!typeName.isEmpty()) {
+      typeName[0] = typeName[0].toUpper();
+    }
+  }
+
+  // 查找 ClassName.propName
+  QString qualifiedKey = typeName + QStringLiteral(".") + propName;
+  const AcSymbolEntry *propEntry = m_symbolNavigator.findDefinition(qualifiedKey);
+  if (propEntry) return propEntry;
+
+  // 回退：遍历符号表查找名为 propName 的 kProperty 类型符号
+  const auto &symbols = m_symbolNavigator.symbolTable();
+  for (auto it = symbols.begin(); it != symbols.end(); ++it) {
+    if (it.value().name == propName && it.value().kind == AcSymbolKind::kProperty) {
+      return &it.value();
+    }
+  }
+
+  return nullptr;
+}
+
 void CodeEditor::goToDefinition(const QString &name) {
   if (name.isEmpty() || !document()) return;
 
   const AcSymbolEntry *entry = findSymbolDefinition(name);
+
+  // 如果直接找不到，尝试属性访问上下文：obj.prop → 查找 objType.prop
+  if (!entry) {
+    entry = findPropertyDefinition(name);
+  }
+
   if (!entry) return;
 
   // 确定目标位置
@@ -914,17 +989,24 @@ int CodeEditor::findSymbolLineByName(const QString &name) const {
   const QString &text = cachedText();
   QStringList lines = text.split(QLatin1Char('\n'));
 
-  // 搜索 "function name" 或 "class name" 或 "interface name" 等模式
+  // 搜索各种定义模式
   QRegularExpression funcRe(QStringLiteral("^\\s*function\\s+") + QRegularExpression::escape(name) +
                             QStringLiteral("\\b"));
   QRegularExpression classRe(QStringLiteral("^\\s*class\\s+") + QRegularExpression::escape(name) +
                              QStringLiteral("\\b"));
   QRegularExpression ifaceRe(QStringLiteral("^\\s*interface\\s+") +
                              QRegularExpression::escape(name) + QStringLiteral("\\b"));
+  // 变量声明：let name 或 let name: Type
+  QRegularExpression letRe(QStringLiteral("^\\s*let\\s+") + QRegularExpression::escape(name) +
+                           QStringLiteral("\\b"));
+  // for-in 循环变量：for (name in 或 for (let name in
+  QRegularExpression forInRe(QStringLiteral("\\bfor\\s*\\(\\s*(?:let\\s+)?") +
+                             QRegularExpression::escape(name) + QStringLiteral("\\b"));
 
   for (int i = 0; i < lines.size(); ++i) {
     if (funcRe.match(lines[i]).hasMatch() || classRe.match(lines[i]).hasMatch() ||
-        ifaceRe.match(lines[i]).hasMatch()) {
+        ifaceRe.match(lines[i]).hasMatch() || letRe.match(lines[i]).hasMatch() ||
+        forInRe.match(lines[i]).hasMatch()) {
       return i + 1;  // 返回 1-based 行号
     }
   }

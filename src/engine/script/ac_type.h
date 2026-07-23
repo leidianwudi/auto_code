@@ -425,6 +425,7 @@ struct AssignStmt {
   QString name;
   QString thisProp;
   Expr value;
+  int line = 0;                               ///< 源码行号（1-based，用于符号导航）
   bool isStatic = false;                      ///< 是否为静态属性赋值
   QString staticClassName;                    ///< 静态类名（isStatic=true 时有效）
   AcType typeAnnotation;                      ///< let 声明时的类型注解（如 let x: Number = 1）
@@ -454,6 +455,7 @@ struct ForStmt {
   QString varType;  ///< for-in 变量类型注解（如 for (let item: String in arr)）
   Expr arrayExpr;
   Block body;
+  int line = 0;  ///< 源码行号（1-based，用于符号导航）
 
   // 标准 for 循环支持：for (init; condition; update) { body }
   bool isStandard = false;  ///< 是否为标准 for 循环（非 for-in）
@@ -526,6 +528,7 @@ struct Block::Stmt {
     kContinue,
     kUsing
   } kind = kCall;
+  int line = 0;  ///< 源码行号（1-based，用于符号导航）
   CallStmt call;
   AssignStmt assign;
   IndexAssignStmt indexAssign;

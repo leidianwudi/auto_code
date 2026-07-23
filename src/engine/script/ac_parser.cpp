@@ -75,6 +75,7 @@ bool AcParser::parseProgram(Block &block) {
     if (t.type == TOK_IMPORT) {
       advance();
       Block::Stmt stmt;
+      stmt.line = t.line;
       stmt.kind = Block::Stmt::kImport;
       if (!parseImportStmt(stmt.importStmt)) return false;
       block.stmts.append(stmt);
@@ -97,24 +98,28 @@ bool AcParser::parseProgram(Block &block) {
     if (t.type == TOK_CLASS) {
       advance();
       Block::Stmt stmt;
+      stmt.line = t.line;
       stmt.kind = Block::Stmt::kClassDef;
       if (!parseClassDef(stmt.classDef)) return false;
       block.stmts.append(stmt);
     } else if (t.type == TOK_INTERFACE) {
       advance();
       Block::Stmt stmt;
+      stmt.line = t.line;
       stmt.kind = Block::Stmt::kInterfaceDef;
       if (!parseInterfaceDef(stmt.interfaceDef)) return false;
       block.stmts.append(stmt);
     } else if (t.type == TOK_ENUM) {
       advance();
       Block::Stmt stmt;
+      stmt.line = t.line;
       stmt.kind = Block::Stmt::kEnumDef;
       if (!parseEnumDef(stmt.enumDef)) return false;
       block.stmts.append(stmt);
     } else if (t.type == TOK_FUNCTION) {
       advance();
       Block::Stmt stmt;
+      stmt.line = t.line;
       stmt.kind = Block::Stmt::kFuncDef;
       if (!parseMethodDef(stmt.funcDef)) return false;
       block.stmts.append(stmt);
@@ -126,8 +131,10 @@ bool AcParser::parseProgram(Block &block) {
       }
       m_declaredVars->insert(peek().text);
       Block::Stmt stmt;
+      stmt.line = t.line;
       stmt.kind = Block::Stmt::kAssign;
       if (!parseAssignStmt(stmt.assign)) return false;
+      stmt.assign.line = t.line;
       block.stmts.append(stmt);
       if (!expect(TOK_SEMI, QStringLiteral("expected ';' after statement"))) return false;
     } else if (t.type == TOK_IDENT && t.text == QString::fromLatin1(AcKeyword::kMain)) {

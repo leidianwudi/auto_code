@@ -142,6 +142,7 @@ private:
   void goToDefinition(const QString &name);
   QString identifierAtCursor(int pos, int *startPos = nullptr, int *endPos = nullptr) const;
   const AcSymbolEntry *findSymbolDefinition(const QString &name) const;
+  const AcSymbolEntry *findPropertyDefinition(const QString &propName) const;
   QVector<QPair<int, QString>> findSymbolReferences(const QString &name) const;
   int findSymbolLineByName(const QString &name) const;
   void setSymbolTable(const QHash<QString, AcSymbolEntry> &symbols);

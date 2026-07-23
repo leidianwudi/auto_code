@@ -37,7 +37,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
       entry.name = fd.name;
       entry.kind = AcSymbolKind::kFunction;
       entry.filePath = m_filePath;
-      entry.line = 0;
+      entry.line = stmt.line;
       entry.returnType = acTypeToString(fd.returnType);
       entry.params = fd.params;
       entry.signature = makeFunctionSignature(fd.name, fd.params, fd.returnType);
@@ -51,7 +51,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
           paramEntry.name = param.name;
           paramEntry.kind = AcSymbolKind::kParameter;
           paramEntry.filePath = m_filePath;
-          paramEntry.line = 0;
+          paramEntry.line = stmt.line;
           paramEntry.parentClass = fd.name;
           paramEntry.returnType = acTypeToString(param.type);
           paramEntry.signature = param.name + QStringLiteral(": ") + acTypeToString(param.type);
@@ -70,7 +70,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
       entry.name = iface.name;
       entry.kind = AcSymbolKind::kClass;
       entry.filePath = m_filePath;
-      entry.line = 0;
+      entry.line = stmt.line;
       entry.signature = QStringLiteral("interface ") + iface.name;
       if (!iface.baseInterfaces.isEmpty()) {
         entry.signature +=
@@ -84,7 +84,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
         methodEntry.name = method.name;
         methodEntry.kind = AcSymbolKind::kMethod;
         methodEntry.filePath = m_filePath;
-        methodEntry.line = 0;
+        methodEntry.line = stmt.line;
         methodEntry.parentClass = iface.name;
         methodEntry.returnType = acTypeToString(method.returnType);
         methodEntry.params = method.params;
@@ -101,7 +101,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
       entry.name = cd.name;
       entry.kind = AcSymbolKind::kClass;
       entry.filePath = m_filePath;
-      entry.line = 0;
+      entry.line = stmt.line;
       entry.comment =
           cd.baseClass.isEmpty() ? QString() : QStringLiteral("extends %1").arg(cd.baseClass);
       entry.signature =
@@ -127,7 +127,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
         methodEntry.name = method.name;
         methodEntry.kind = AcSymbolKind::kMethod;
         methodEntry.filePath = m_filePath;
-        methodEntry.line = 0;
+        methodEntry.line = stmt.line;
         methodEntry.parentClass = cd.name;
         methodEntry.returnType = acTypeToString(method.returnType);
         methodEntry.params = method.params;
@@ -144,7 +144,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
             paramEntry.name = param.name;
             paramEntry.kind = AcSymbolKind::kParameter;
             paramEntry.filePath = m_filePath;
-            paramEntry.line = 0;
+            paramEntry.line = stmt.line;
             paramEntry.parentClass = cd.name + QStringLiteral(".") + method.name;
             paramEntry.returnType = acTypeToString(param.type);
             paramEntry.signature = param.name + QStringLiteral(": ") + acTypeToString(param.type);
@@ -165,7 +165,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
         entry.name = as.name;
         entry.kind = AcSymbolKind::kVariable;
         entry.filePath = m_filePath;
-        entry.line = 0;
+        entry.line = as.line > 0 ? as.line : stmt.line;
         if (as.hasTypeAnnotation) {
           entry.returnType = acTypeToString(as.typeAnnotation);
           entry.signature = as.name + QStringLiteral(": ") + acTypeToString(as.typeAnnotation);
@@ -185,7 +185,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
         entry.name = fs.varName;
         entry.kind = AcSymbolKind::kVariable;
         entry.filePath = m_filePath;
-        entry.line = 0;
+        entry.line = fs.line > 0 ? fs.line : stmt.line;
         entry.signature = fs.varName + QStringLiteral(": iterator");
         m_symbols.insert(fs.varName, entry);
       }
@@ -217,7 +217,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
         entry.name = us.varName;
         entry.kind = AcSymbolKind::kVariable;
         entry.filePath = m_filePath;
-        entry.line = 0;
+        entry.line = stmt.line;
         entry.signature = us.varName + QStringLiteral(": using");
         m_symbols.insert(us.varName, entry);
       }

@@ -10,6 +10,7 @@
 
 bool AcParser::parseStmt(Block::Stmt &stmt) {
   Token t = peek();
+  stmt.line = t.line;  // 记录语句起始行号
 
   // ── import { A, B } from "file" ──
   if (t.type == TOK_IMPORT) {
@@ -115,6 +116,7 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
   if (t.type == TOK_FOR) {
     advance();
     stmt.kind = Block::Stmt::kFor;
+    stmt.forStmt.line = t.line;
     return parseForStmt(stmt.forStmt);
   }
 
@@ -175,7 +177,9 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
     }
     m_declaredVars->insert(peek().text);
     stmt.kind = Block::Stmt::kAssign;
-    return parseAssignStmt(stmt.assign);
+    if (!parseAssignStmt(stmt.assign)) return false;
+    stmt.assign.line = t.line;
+    return true;
   }
 
   if (t.type == TOK_IDENT) {
@@ -387,7 +391,9 @@ void AcParser::skipTypeAnnotation() {
 }
 
 bool AcParser::parseAssignStmt(AssignStmt &as) {
+  Token nameToken = peek();
   as.name = advance().text;
+  as.line = nameToken.line;
   skipTypeAnnotation();
   CompoundOp op = parseCompoundOp();
   if (op != CompoundOp::kNone) {
