@@ -19,6 +19,7 @@
 //   5. 调用 renderTpl() 渲染模板 → 写入 xxx.entity.ts
 // ============================================================================
 import { Param } from "../template/param.ac";
+import { QueryData } from "../template/query_data.ac";
 
 main {
 
@@ -38,12 +39,14 @@ main {
   //    字段说明：
   //      tpl  - 模板文件路径（相对脚本目录）
   //      out  - 输出文件路径模板，用 {key} 占位符从 tplData 取值
-  //             支持的占位符：{basePath}、{name}、{tableName}、{entityClass} 等
+  //             支持的占位符：{basePath}、{modelName}、{name}、{tableName} 等
   //    以后要新增 service/controller/dto 只需在这个数组里加配置即可
   let templates = [
-    { tpl: "../template/entities/en.tpl", out: "{basePath}/en_{name}.ts" },
-    { tpl: "../template/in/in_ins.tpl",  out: "{basePath}/in_ins_{name}.ts" },
-    { tpl: "../template/in/in_sel.tpl",  out: "{basePath}/in_sel_{name}.ts" },
+    { tpl: "../template/entities/en.tpl", out: "{basePath}/{modelName}/entities/en_{name}.ts" },
+    { tpl: "../template/in/in_ins.tpl",   out: "{basePath}/{modelName}/in/in_ins_{name}.ts" },
+    { tpl: "../template/in/in_sel.tpl",   out: "{basePath}/{modelName}/in/in_sel_{name}.ts" },
+    { tpl: "../template/model/db_.tpl",   out: "{basePath}/{modelName}/model/{dbBaseClassFile}.ts" },
+    { tpl: "../template/model/db.tpl",    out: "{basePath}/{modelName}/model/{dbClassFile}.ts" },
   ];
 
   // ── 4. 读取所有 JSON 配置文件（文件路径由外部配置提供）────────
@@ -105,92 +108,45 @@ main {
       printLog("first field tsType: " + firstField.tsType);
     }
 
-    // ── 5.5 组装传给模板的数据对象 tplData ────────────────────
+    // ── 5.5 用 QueryData 构建查询场景数据 ──────────────────────
+    //      selFields       - InSel 查询字段列表（主键+selCols+selColsLike）
+    //      sortInfo        - 排序信息（sortDesc、orderByDef、defaultOrder）
+    //      whereConditions - getWhereByIn 中的条件语句
+    let queryData = new QueryData();
+    let selFields = queryData.buildSelFields(json, param);
+    let sortInfo = queryData.buildSortInfo(json);
+    let whereConditions = queryData.buildWhereConditions(selFields);
+
+    // ── 5.6 组装传给模板的数据对象 tplData ────────────────────
     //      模板中的所有 ${变量名} 都从这里取值
     let tplData = {};
-    tplData["entityClass"]     = param.entityClass;   // ${entityClass} 实体类名，如 EnUser
-    tplData["insClass"]        = "InIns" + param.entityClass.substring(2);  // ${insClass} InIns类名，如 InInsUser
-    tplData["selClass"]        = "InSel" + param.entityClass.substring(2);  // ${selClass} InSel类名，如 InSelUser
-    tplData["entityClassFile"] = "en_" + param.tableName;  // ${entityClassFile} 实体文件名，如 en_user
-    tplData["tableName"]       = param.tableName;     // ${tableName}
-    tplData["tableDesc"]       = combined["tableDesc"]; // ${tableDesc}
-    tplData["fields"]          = param.fields;         // ${each field in fields} 循环
-    tplData["imports"]         = param.imports;        // ${each imp in imports} 循环
-    tplData["relations"]       = param.relations;      // ${each rel in relations} 循环
+    tplData["entityClass"]      = param.entityClass;   // ${entityClass} 实体类名，如 EnUser
+    tplData["insClass"]         = "InIns" + param.entityClass.substring(2);  // ${insClass} InIns类名，如 InInsUser
+    tplData["selClass"]         = "InSel" + param.entityClass.substring(2);  // ${selClass} InSel类名，如 InSelUser
+    tplData["entityClassFile"]  = "en_" + param.tableName;  // ${entityClassFile} 实体文件名，如 en_user
+    tplData["tableName"]        = param.tableName;     // ${tableName}
+    tplData["tableDesc"]        = combined["tableDesc"]; // ${tableDesc}
+    tplData["fields"]           = param.fields;         // ${each field in fields} 循环
+    tplData["imports"]          = param.imports;        // ${each imp in imports} 循环
+    tplData["relations"]        = param.relations;      // ${each rel in relations} 循环
+    // 查询场景数据（由 QueryData 构建）
+    tplData["selFields"]        = selFields;            // ${each field in selFields} InSel 字段循环
+    tplData["sortDesc"]         = sortInfo.sortDesc;    // ${sortDesc} 排序描述
+    tplData["whereConditions"]  = whereConditions;      // ${each cond in whereConditions} where 条件循环
+    tplData["orderByDef"]       = sortInfo.orderByDef;  // ${orderByDef} 排序对象字面量
+    tplData["defaultOrderField"] = sortInfo.defaultOrderField;  // ${defaultOrderField} 默认排序字段
+    tplData["defaultOrderDir"]  = sortInfo.defaultOrderDir;     // ${defaultOrderDir} 默认排序方向
+    // Db 模型类名
+    let modelBaseName = param.entityClass.substring(2);  // 如 "User"
+    tplData["dbBaseClass"]      = modelBaseName + "Db_"; // ${dbBaseClass} 如 UserDb_
+    tplData["dbClass"]          = modelBaseName + "Db";  // ${dbClass} 如 UserDb
+    tplData["dbBaseClassFile"]  = param.tableName + ".db_";  // ${dbBaseClassFile} 如 user.db_
+    tplData["dbClassFile"]      = param.tableName + ".db";   // ${dbClassFile} 如 user.db
 
-    // ── 5.5b 构建 InSel 的查询字段和排序描述 ────────────────────
-    //      selFields = 主键 + selCols(精确查询) + selColsLike(模糊查询)
-    //      sortDesc  = selColsSort 的键名用逗号拼接
-    let selFields = [];
-    let selFieldNames = [];
-    // 先加主键字段
-    for (field in param.fields) {
-      if (field.isPrimary) {
-        let sf = {};
-        sf.name = field.name;
-        sf.comment = field.comment;
-        sf.tsType = field.tsType;
-        sf.isPrimary = field.isPrimary;
-        sf.isCoin = field.isCoin;
-        sf.isLike = false;
-        selFields.append(sf);
-        selFieldNames.append(field.name);
-      }
-    }
-    // 加 selCols（精确查询字段）
-    if (json.selCols) {
-      for (colName in json.selCols) {
-        // 从 fields 中找到对应字段的元信息
-        for (field in param.fields) {
-          if (field.name == colName) {
-            let sf = {};
-            sf.name = field.name;
-            sf.comment = field.comment;
-            sf.tsType = field.tsType;
-            sf.isPrimary = field.isPrimary;
-            sf.isCoin = field.isCoin;
-            sf.isLike = false;
-            selFields.append(sf);
-            selFieldNames.append(field.name);
-          }
-        }
-      }
-    }
-    // 加 selColsLike（模糊查询字段）
-    if (json.selColsLike) {
-      for (colName in json.selColsLike) {
-        for (field in param.fields) {
-          if (field.name == colName) {
-            let sf = {};
-            sf.name = field.name;
-            sf.comment = field.comment;
-            sf.tsType = field.tsType;
-            sf.isPrimary = field.isPrimary;
-            sf.isCoin = field.isCoin;
-            sf.isLike = true;
-            selFields.append(sf);
-            selFieldNames.append(field.name);
-          }
-        }
-      }
-    }
-    tplData["selFields"] = selFields;
-
-    // 构建 sortDesc：从 selColsSort 的键名拼接
-    // 例如 selColsSort = { id: "DESC", fans_count: "DESC" } → "排序字段:id, fans_count"
-    let sortKeys = [];
-    if (json.selColsSort) {
-      for (sortKey in json.selColsSort) {
-        sortKeys.append(sortKey);
-      }
-    }
-    let sortDesc = "排序字段:" + sortKeys.join(", ");
-    tplData["sortDesc"] = sortDesc;
-
-    // ── 5.6 基础路径数据（供 formatPath 占位符替换）────────────
+    // ── 5.7 基础路径数据（供 formatPath 占位符替换）────────────
     let name = basename(file);
 
-    // ── 5.7 遍历模板配置，逐个渲染并写入文件 ───────────────────
+    // ── 5.8 遍历模板配置，逐个渲染并写入文件 ───────────────────
     //      每个模板 cfg 的输出路径由 cfg.out 模板 + formatPath 替换得到
     for (cfg in templates) {
       printLog("tpl path: " + cfg.tpl);
@@ -198,11 +154,14 @@ main {
       // 用 formatPath 替换 {basePath}/{name} 等占位符，得到输出文件路径
       let outPath = formatPath(cfg.out, {
         basePath: basePath,
+        modelName: json.modelName,
         name: name,
         tableName: json.tableName,
         entityClass: param.entityClass,
         insClass: tplData["insClass"],
-        selClass: tplData["selClass"]
+        selClass: tplData["selClass"],
+        dbBaseClassFile: tplData["dbBaseClassFile"],
+        dbClassFile: tplData["dbClassFile"]
       });
       tplData["outputPath"] = outPath;  // 供模板内的 fileExists(outputPath) 守卫使用
 

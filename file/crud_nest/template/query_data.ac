@@ -1,0 +1,174 @@
+// ============================================================================
+// QueryData 类 — 查询场景数据构建器
+// ----------------------------------------------------------------------------
+// 作用：
+//   从 JSON 配置的 selCols/selColsLike/selColsSort 和 Param 的 fields 中，
+//   构建查询场景所需的数据结构（selFields、sortDesc、whereConditions、orderByDef）。
+//   供 in_sel.tpl、db_.tpl 等模板使用。
+//
+// 核心流程：
+//   json.selCols + json.selColsLike + param.fields → selFields[]
+//   json.selColsSort → sortDesc + orderByDef + defaultOrder
+//   selFields → whereConditions[]
+// ============================================================================
+export class QueryData {
+
+  // --------------------------------------------------------------------------
+  // 构建 selFields 数组（InSel 查询字段列表）
+  //
+  // 逻辑：
+  //   1. 主键字段（isPrimary）→ isLike = false
+  //   2. json.selCols 精确查询字段 → isLike = false
+  //   3. json.selColsLike 模糊查询字段 → isLike = true
+  //
+  // 每个 selField 包含：
+  //   .name      字段名
+  //   .comment   字段注释
+  //   .tsType    TypeScript 类型
+  //   .isPrimary 是否主键
+  //   .isCoin    是否金额类型
+  //   .isLike    是否模糊查询
+  // --------------------------------------------------------------------------
+  function buildSelFields(json: Object, param: Object): Array {
+    let selFields = [];
+    let selFieldNames = [];
+
+    // 先加主键字段
+    for (field in param.fields) {
+      if (field.isPrimary) {
+        let sf = {};
+        sf.name = field.name;
+        sf.comment = field.comment;
+        sf.tsType = field.tsType;
+        sf.isPrimary = field.isPrimary;
+        sf.isCoin = field.isCoin;
+        sf.isLike = false;
+        selFields.append(sf);
+        selFieldNames.append(field.name);
+      }
+    }
+
+    // 加 selCols（精确查询字段）
+    if (json.selCols) {
+      for (colName in json.selCols) {
+        // 跳过已添加的字段（避免主键重复）
+        let alreadyAdded = false;
+        for (n in selFieldNames) {
+          if (n == colName) {
+            alreadyAdded = true;
+          }
+        }
+        if (alreadyAdded) { continue; }
+
+        // 从 fields 中找到对应字段的元信息
+        for (field in param.fields) {
+          if (field.name == colName) {
+            let sf = {};
+            sf.name = field.name;
+            sf.comment = field.comment;
+            sf.tsType = field.tsType;
+            sf.isPrimary = field.isPrimary;
+            sf.isCoin = field.isCoin;
+            sf.isLike = false;
+            selFields.append(sf);
+            selFieldNames.append(field.name);
+          }
+        }
+      }
+    }
+
+    // 加 selColsLike（模糊查询字段）
+    if (json.selColsLike) {
+      for (colName in json.selColsLike) {
+        let alreadyAdded = false;
+        for (n in selFieldNames) {
+          if (n == colName) {
+            alreadyAdded = true;
+          }
+        }
+        if (alreadyAdded) { continue; }
+
+        for (field in param.fields) {
+          if (field.name == colName) {
+            let sf = {};
+            sf.name = field.name;
+            sf.comment = field.comment;
+            sf.tsType = field.tsType;
+            sf.isPrimary = field.isPrimary;
+            sf.isCoin = field.isCoin;
+            sf.isLike = true;
+            selFields.append(sf);
+            selFieldNames.append(field.name);
+          }
+        }
+      }
+    }
+
+    return selFields;
+  }
+
+  // --------------------------------------------------------------------------
+  // 构建 sortInfo 对象（排序信息）
+  //
+  // 输入：json.selColsSort = { id: "DESC", fans_count: "DESC" }
+  // 输出：
+  //   .sortDesc       → "排序字段:id, fans_count"（用于 @ApiProperty description）
+  //   .orderByDef     → "'id': 'DESC', 'fans_count': 'DESC'"（用于 getOrderByKey 的对象字面量）
+  //   .defaultOrderField → "id"（默认排序字段，取第一个键）
+  //   .defaultOrderDir   → "DESC"（默认排序方向，取第一个值）
+  // --------------------------------------------------------------------------
+  function buildSortInfo(json: Object): Object {
+    let sortKeys = [];
+    let sortVals = [];
+    if (json.selColsSort) {
+      for (sortKey in json.selColsSort) {
+        sortKeys.append(sortKey);
+        sortVals.append(json.selColsSort[sortKey]);
+      }
+    }
+
+    let result = {};
+    result.sortDesc = "排序字段:" + sortKeys.join(", ");
+
+    // 构建 orderByDef：'id': 'DESC', 'fans_count': 'DESC'
+    let orderParts = [];
+    let keyLen = sortKeys.length;
+    for (let i = 0; i < keyLen; i++) {
+      orderParts.append("'" + sortKeys[i] + "': '" + sortVals[i] + "'");
+    }
+    result.orderByDef = orderParts.join(", ");
+
+    // 默认排序（取第一个键值对）
+    if (keyLen > 0) {
+      result.defaultOrderField = sortKeys[0];
+      result.defaultOrderDir = sortVals[0];
+    } else {
+      result.defaultOrderField = "id";
+      result.defaultOrderDir = "DESC";
+    }
+
+    return result;
+  }
+
+  // --------------------------------------------------------------------------
+  // 构建 whereConditions 数组（getWhereByIn 方法中的条件语句）
+  //
+  // 每个 whereCondition 包含：
+  //   .line  → 完整的条件语句行，如：
+  //            "if (!ToolDb.isNull(sel.id)) where.add('id', sel.id);"
+  //            "if (!ToolDb.isNull(sel.nick)) where.addLike('nick', `%${sel.nick}%`);"
+  // --------------------------------------------------------------------------
+  function buildWhereConditions(selFields: Array): Array {
+    let conditions = [];
+    for (sf in selFields) {
+      let line = "";
+      if (sf.isLike) {
+        line = "if (!ToolDb.isNull(sel." + sf.name + ")) where.addLike('" + sf.name + "', `%${sel." + sf.name + "}%`);";
+      } else {
+        line = "if (!ToolDb.isNull(sel." + sf.name + ")) where.add('" + sf.name + "', sel." + sf.name + ");";
+      }
+      conditions.append(line);
+    }
+    return conditions;
+  }
+}
