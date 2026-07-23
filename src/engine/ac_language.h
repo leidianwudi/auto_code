@@ -137,6 +137,8 @@ namespace AcDB {
 inline constexpr const char *kClassName = "DB";
 /// @brief 获取表结构：db.tableSchema({table: "news"})
 inline constexpr const char *kTableSchema = "tableSchema";
+/// @brief 获取表信息：db.tableInfo({table: "news"}) → {comment, engine, ...}
+inline constexpr const char *kTableInfo = "tableInfo";
 /// @brief 执行 SQL：db.query({sql: "SELECT * FROM t"})
 inline constexpr const char *kQuery = "query";
 /// @brief 断开连接：db.disconnect()
@@ -160,6 +162,9 @@ inline constexpr const char *kColKey = "key";
 inline constexpr const char *kColDefault = "default";
 inline constexpr const char *kColExtra = "extra";
 inline constexpr const char *kColComment = "comment";
+/// @brief tableInfo 返回的表信息 JSON 键名
+inline constexpr const char *kTblComment = "comment";
+inline constexpr const char *kTblEngine = "engine";
 
 /// @brief 数据库连接配置 — 对应 new DB({host, port, user, password, database})
 struct DbConfig {

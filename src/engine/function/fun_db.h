@@ -77,6 +77,13 @@ public:
   static QJsonValue tableSchema(const QJsonArray &args);
 
   /**
+   * @brief 获取指定表的元信息（表注释、引擎等）
+   * args[0] JSON: { table }
+   * @return { comment: "表注释", engine: "InnoDB" }
+   */
+  static QJsonValue tableInfo(const QJsonArray &args);
+
+  /**
    * @brief 执行自定义 SQL 查询
    * args[0] JSON: { sql }
    * @return 查询结果 JSON 数组

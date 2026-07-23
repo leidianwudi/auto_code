@@ -30,6 +30,7 @@ void FunDb::init() {
                                   {QString::fromLatin1(AcRuntime::kConstructor), constructor},
                                   {QString::fromLatin1(AcRuntime::kDestructor), destructor},
                                   {QString::fromLatin1(AcDB::kTableSchema), tableSchema},
+                                  {QString::fromLatin1(AcDB::kTableInfo), tableInfo},
                                   {QString::fromLatin1(AcDB::kQuery), query},
                                   {QString::fromLatin1(AcDB::kDisconnect), disconnect},
                                   {QString::fromLatin1(AcKeyword::kDispose), disconnect},
@@ -202,6 +203,62 @@ QJsonValue FunDb::tableSchema(const QJsonArray &args) {
 
   mysql_free_result(result);
   return QJsonValue(columns);
+}
+
+// tableInfo — 获取表元信息（表注释、引擎等）
+QJsonValue FunDb::tableInfo(const QJsonArray &args) {
+  if (args.size() < 2 || !args[0].isObject() || !args[1].isObject()) {
+    FunMgr::setError(QStringLiteral("DB::tableInfo() requires a DB instance and params object"));
+    return QJsonValue();
+  }
+
+  const QJsonObject instance = args[0].toObject();
+  const QJsonObject params = args[1].toObject();
+
+  MYSQL *conn = getConnection(instance);
+  if (!conn) {
+    FunMgr::setError(QStringLiteral("DB::tableInfo() not connected, call new DB() first"));
+    return QJsonValue();
+  }
+
+  const QString connId = instance.value(QString::fromLatin1(AcDB::kConnId)).toString();
+  const AcDB::DbConfig cfg = s_configs.value(connId);
+  const QString table = params.value(QString::fromLatin1(AcDB::kTable)).toString();
+  if (table.isEmpty()) {
+    FunMgr::setError(QStringLiteral("DB::tableInfo() requires 'table' in params"));
+    return QJsonValue();
+  }
+
+  const QString sql = QStringLiteral(
+                          "SELECT TABLE_COMMENT, ENGINE "
+                          "FROM INFORMATION_SCHEMA.TABLES "
+                          "WHERE TABLE_SCHEMA = '%1' AND TABLE_NAME = '%2'")
+                          .arg(cfg.database, table);
+
+  if (mysql_query(conn, sql.toUtf8().constData()) != 0) {
+    FunMgr::setError(QStringLiteral("DB::tableInfo() query failed: %1")
+                         .arg(QString::fromUtf8(mysql_error(conn))));
+    return QJsonValue();
+  }
+
+  MYSQL_RES *result = mysql_store_result(conn);
+  if (!result) {
+    FunMgr::setError(QStringLiteral("DB::tableInfo() no result from query"));
+    return QJsonValue();
+  }
+
+  QJsonObject info;
+  MYSQL_ROW row = mysql_fetch_row(result);
+  if (row) {
+    info[QString::fromLatin1(AcDB::kTblComment)] = row[0] ? QString::fromUtf8(row[0]) : QString();
+    info[QString::fromLatin1(AcDB::kTblEngine)] = row[1] ? QString::fromUtf8(row[1]) : QString();
+  } else {
+    info[QString::fromLatin1(AcDB::kTblComment)] = QString();
+    info[QString::fromLatin1(AcDB::kTblEngine)] = QString();
+  }
+
+  mysql_free_result(result);
+  return QJsonValue(info);
 }
 
 // query — 执行自定义 SQL

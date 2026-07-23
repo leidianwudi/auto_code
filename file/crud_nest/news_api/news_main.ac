@@ -43,9 +43,6 @@ main {
   let templates = [
     { tpl: "../template/entities/en.tpl", out: "{basePath}/{name}.entity.ts" },
     { tpl: "../template/in/in_ins.tpl",  out: "{basePath}/in_ins_{name}.ts" },
-    // 示例：未来扩展
-    // { tpl: "../template/service/svc.tpl", out: "{basePath}/service/{name}.service.ts" },
-    // { tpl: "../template/dto/dto.tpl",     out: "{basePath}/dto/{name}.dto.ts" },
   ];
 
   // ── 4. 读取所有 JSON 配置文件（文件路径由外部配置提供）────────
@@ -73,11 +70,17 @@ main {
     let schemaLen = schema.length;
     printLog("schema count: " + schemaLen);
 
+    // ── 5.2b 获取表的元信息（表注释、引擎等）──────────────────────
+    //      db.tableInfo() 返回 { comment: "用户表", engine: "InnoDB" }
+    //      表注释来自 DDL 中的 COMMENT '用户表'
+    let tblInfo = db.tableInfo({ table: json.tableName });
+    printLog("table comment: " + tblInfo.comment);
+
     // ── 5.3 合并 JSON 配置和 schema（JSON 中的配置会覆盖 schema）─
     //      然后把 schema 列数组挂到 combined["columns"] 上供 Param 读取
     let combined = merge(json, schema);
     combined["columns"] = schema;                 // 表字段信息
-    combined["tableDesc"] = "用户表(" + json.tableName + ")"; // 表说明
+    combined["tableDesc"] = tblInfo.comment;      // 表说明（从 DDL COMMENT 取）
 
     // ── 5.4 用 Param 类把原始数据加工成模板可直接使用的结构 ─────
     //      核心转换：
