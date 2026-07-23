@@ -275,6 +275,7 @@ struct MethodDef {
   QVector<ParamDef> params;  ///< 参数列表（带类型注解）
   AcType returnType;         ///< 返回类型（默认 Any，无注解时）
   Block body;
+  int line = 0;                               ///< 源码行号（1-based，用于符号导航）
   bool isStatic = false;                      ///< 是否为静态方法
   AccessLevel access = AccessLevel::kPublic;  ///< 访问级别
   bool isOverride = false;                    ///< 是否重写父类方法

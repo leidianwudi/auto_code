@@ -46,9 +46,21 @@ public:
   /// @brief 获取源码行列表
   const QStringList &sourceLines() const { return m_sourceLines; }
 
+  /// @brief 设置当前文件路径（用于解析 import 的相对路径）
+  void setFilePath(const QString &path) { m_filePath = path; }
+
 private:
   /// @brief 从 AST 中提取类定义和函数定义
   void collectClassesAndFunctions(const Block &program);
+
+  /// @brief 解析 import 语句，读取目标文件并收集符号到符号表
+  /// @param program 当前文件的 AST
+  void resolveImportedSymbols(const Block &program);
+
+  /// @brief 从指定文件收集符号到符号表
+  /// @param filePath 目标文件绝对路径
+  /// @param importNames 需要导入的符号名列表（空表示导入全部 exported 符号）
+  void collectSymbolsFromFile(const QString &filePath, const QStringList &importNames);
 
   /// @brief 将错误信息字符串转为 ValidationResult
   /// @param msg 错误信息，格式如 "undefined variable 'x' at line 5"
@@ -75,4 +87,6 @@ private:
   // ── 符号表 ──
   AcSymbolTable m_symbolTable;
   QStringList m_sourceLines;
+  QString m_filePath;  ///< 当前文件路径（用于解析 import 相对路径）
+  QSet<QString> m_visitedFiles;  ///< 已解析的文件集合（防止循环 import）
 };

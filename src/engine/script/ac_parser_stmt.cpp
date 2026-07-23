@@ -840,6 +840,7 @@ bool AcParser::parseMethodDef(MethodDef &md) {
     m_error = QStringLiteral("expected method name at line %1").arg(peek().line);
     return false;
   }
+  md.line = peek().line;  // 记录方法名所在行号
   md.name = advance().text;
 
   if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after method name"))) return false;

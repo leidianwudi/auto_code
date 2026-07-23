@@ -93,6 +93,11 @@ public:
   /// 清除符号表
   void clear();
 
+  /// 合并另一个符号表中的指定符号（用于跨文件 import）
+  /// @param other 源符号表
+  /// @param names 需要合并的符号名列表（精确匹配 + ClassName.* 前缀匹配）
+  void mergeFrom(const AcSymbolTable &other, const QStringList &names);
+
   /// 获取当前文件路径
   const QString &filePath() const { return m_filePath; }
 

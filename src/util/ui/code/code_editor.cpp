@@ -131,6 +131,7 @@ void CodeEditor::performValidation() {
     }
     case AcValidation: {
       AcValidator validator;
+      validator.setFilePath(objectName());  // 设置文件路径用于解析 import
       validateWithValidator(&validator);
       // 验证后提取符号表数据，同步到导航器
       m_symbolTable = validator.symbolTable().allSymbols();

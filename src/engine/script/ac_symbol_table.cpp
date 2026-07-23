@@ -127,7 +127,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
         methodEntry.name = method.name;
         methodEntry.kind = AcSymbolKind::kMethod;
         methodEntry.filePath = m_filePath;
-        methodEntry.line = stmt.line;
+        methodEntry.line = method.line > 0 ? method.line : stmt.line;
         methodEntry.parentClass = cd.name;
         methodEntry.returnType = acTypeToString(method.returnType);
         methodEntry.params = method.params;
@@ -300,6 +300,24 @@ QVector<AcSymbolEntry> AcSymbolTable::findSymbolsByPrefix(const QString &prefix)
 void AcSymbolTable::clear() {
   m_symbols.clear();
   m_filePath.clear();
+}
+
+void AcSymbolTable::mergeFrom(const AcSymbolTable &other, const QStringList &names) {
+  const auto &otherSymbols = other.allSymbols();
+  for (const auto &name : names) {
+    // 精确匹配（类名、函数名、变量名）
+    auto it = otherSymbols.find(name);
+    if (it != otherSymbols.end()) {
+      m_symbols.insert(name, it.value());
+    }
+    // 前缀匹配：ClassName.method / ClassName.prop
+    QString prefix = name + QStringLiteral(".");
+    for (auto sit = otherSymbols.begin(); sit != otherSymbols.end(); ++sit) {
+      if (sit.key().startsWith(prefix)) {
+        m_symbols.insert(sit.key(), sit.value());
+      }
+    }
+  }
 }
 
 // ──────────────────────────────────────────────────────────────

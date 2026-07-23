@@ -5,7 +5,11 @@
 
 #include "ac_validator.h"
 
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QRegularExpression>
+#include <QTextStream>
 
 #include "../ac_language.h"
 
@@ -44,8 +48,16 @@ QVector<ValidationResult> AcValidator::validate(const QString &source) {
 
   // ── 步骤 2.5：构建符号表 ──
   m_symbolTable.clear();
+  m_symbolTable.setFilePath(m_filePath);
   for (const auto &stmt : m_program.stmts) {
     m_symbolTable.collectStmt(stmt);
+  }
+
+  // ── 步骤 2.6：解析 import 语句，收集跨文件符号 ──
+  m_visitedFiles.clear();
+  if (!m_filePath.isEmpty()) {
+    m_visitedFiles.insert(QFileInfo(m_filePath).canonicalFilePath());
+    resolveImportedSymbols(m_program);
   }
 
   // ── 步骤 3：未声明标识符检查 ──
@@ -108,6 +120,78 @@ void AcValidator::collectClassesAndFunctions(const Block &program) {
       }
     }
   }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  跨文件 import 符号解析
+// ═════════════════════════════════════════════════════════════════════════════
+
+void AcValidator::resolveImportedSymbols(const Block &program) {
+  for (const auto &stmt : program.stmts) {
+    if (stmt.kind == Block::Stmt::kImport) {
+      const auto &imp = stmt.importStmt;
+      if (imp.filePath.isEmpty()) continue;
+
+      // 将 import 路径解析为绝对路径
+      QString absPath;
+      QFileInfo fi(imp.filePath);
+      // 相对路径：基于当前文件目录解析
+      if (fi.isRelative()) {
+        QDir dir = QFileInfo(m_filePath).dir();
+        absPath = dir.filePath(imp.filePath);
+      } else {
+        absPath = imp.filePath;
+      }
+      absPath = QDir::cleanPath(absPath);
+
+      // 读取目标文件并收集符号
+      collectSymbolsFromFile(absPath, imp.names);
+    }
+  }
+}
+
+void AcValidator::collectSymbolsFromFile(const QString &filePath, const QStringList &importNames) {
+  // 防止循环 import
+  QString canonical = QFileInfo(filePath).canonicalFilePath();
+  if (canonical.isEmpty()) canonical = filePath;
+  if (m_visitedFiles.contains(canonical)) return;
+  m_visitedFiles.insert(canonical);
+
+  // 读取文件内容
+  QFile file(filePath);
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+
+  QTextStream stream(&file);
+  QString source = stream.readAll();
+  file.close();
+
+  if (source.trimmed().isEmpty()) return;
+
+  // 词法分析
+  QString lexError;
+  QVector<Token> tokens = m_lexer.tokenize(source, lexError);
+  if (!lexError.isEmpty()) return;
+
+  // 语法分析
+  QSet<QString> declaredVars;
+  Block program;
+  if (!m_parser.parse(tokens, program, declaredVars)) return;
+
+  // 构建目标文件的符号表
+  AcSymbolTable importedTable;
+  importedTable.setFilePath(filePath);
+  for (const auto &stmt : program.stmts) {
+    importedTable.collectStmt(stmt);
+  }
+
+  // 将 import 列表中指定的符号合并到主符号表
+  m_symbolTable.mergeFrom(importedTable, importNames);
+
+  // 递归解析目标文件的 import（支持间接 import）
+  QString savedFilePath = m_filePath;
+  m_filePath = filePath;
+  resolveImportedSymbols(program);
+  m_filePath = savedFilePath;
 }
 
 int AcValidator::extractLine(const QString &msg) const {
