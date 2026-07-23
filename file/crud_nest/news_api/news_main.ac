@@ -42,11 +42,17 @@ main {
   //             支持的占位符：{basePath}、{modelName}、{name}、{tableName} 等
   //    以后要新增 service/controller/dto 只需在这个数组里加配置即可
   let templates = [
-    { tpl: "../template/entities/en.tpl", out: "{basePath}/{modelName}/entities/en_{name}.ts" },
-    { tpl: "../template/in/in_ins.tpl",   out: "{basePath}/{modelName}/in/in_ins_{name}.ts" },
-    { tpl: "../template/in/in_sel.tpl",   out: "{basePath}/{modelName}/in/in_sel_{name}.ts" },
-    { tpl: "../template/model/db_.tpl",   out: "{basePath}/{modelName}/model/{dbBaseClassFile}.ts" },
-    { tpl: "../template/model/db.tpl",    out: "{basePath}/{modelName}/model/{dbClassFile}.ts" },
+    { tpl: "../template/entities/en.tpl",      out: "{basePath}/{modelName}/entities/en_{name}.ts" },
+    { tpl: "../template/in/in_ins.tpl",        out: "{basePath}/{modelName}/in/in_ins_{name}.ts" },
+    { tpl: "../template/in/in_sel.tpl",        out: "{basePath}/{modelName}/in/in_sel_{name}.ts" },
+    { tpl: "../template/out/out_page.tpl",     out: "{basePath}/{modelName}/out/out_page_{name}.ts" },
+    { tpl: "../template/model/db_.tpl",        out: "{basePath}/{modelName}/model/{dbBaseClassFile}.ts" },
+    { tpl: "../template/model/db.tpl",         out: "{basePath}/{modelName}/model/{dbClassFile}.ts" },
+    { tpl: "../template/service_.tpl",         out: "{basePath}/{modelName}/{serviceBaseClassFile}.ts" },
+    { tpl: "../template/service.tpl",          out: "{basePath}/{modelName}/{serviceClassFile}.ts" },
+    { tpl: "../template/controller_.tpl",      out: "{basePath}/{modelName}/{controllerBaseClassFile}.ts" },
+    { tpl: "../template/controller.tpl",       out: "{basePath}/{modelName}/{controllerClassFile}.ts" },
+    { tpl: "../template/module.tpl",           out: "{basePath}/{modelName}/{moduleClassFile}.ts" },
   ];
 
   // ── 4. 读取所有 JSON 配置文件（文件路径由外部配置提供）────────
@@ -80,9 +86,10 @@ main {
     let tblInfo = db.tableInfo({ table: json.tableName });
     printLog("table comment: " + tblInfo.comment);
 
-    // ── 5.3 合并 JSON 配置和 schema（JSON 中的配置会覆盖 schema）─
-    //      然后把 schema 列数组挂到 combined["columns"] 上供 Param 读取
-    let combined = merge(json, schema);
+    // ── 5.3 合并 JSON 配置和 schema ─
+    //      merge() 只能合并对象，schema 是数组会被 toObject() 丢弃，
+    //      所以需要单独把 schema 列数组挂到 combined["columns"] 上供 Param 读取
+    let combined = json;
     combined["columns"] = schema;                 // 表字段信息
     combined["tableDesc"] = tblInfo.comment;      // 表说明（从 DDL COMMENT 取）
 
@@ -142,6 +149,23 @@ main {
     tplData["dbClass"]          = modelBaseName + "Db";  // ${dbClass} 如 UserDb
     tplData["dbBaseClassFile"]  = param.tableName + ".db_";  // ${dbBaseClassFile} 如 user.db_
     tplData["dbClassFile"]      = param.tableName + ".db";   // ${dbClassFile} 如 user.db
+    tplData["dbVarName"]        = param.tableName + "Db";    // ${dbVarName} 如 userDb
+    // OutPage 类名
+    tplData["outPageClass"]     = "OutPage" + modelBaseName; // ${outPageClass} 如 OutPageUser
+    // Service 类名
+    tplData["serviceBaseClass"] = modelBaseName + "Service_"; // ${serviceBaseClass} 如 UserService_
+    tplData["serviceClass"]     = modelBaseName + "Service";  // ${serviceClass} 如 UserService
+    tplData["serviceBaseClassFile"] = param.tableName + ".service_"; // ${serviceBaseClassFile} 如 user.service_
+    tplData["serviceClassFile"]     = param.tableName + ".service";  // ${serviceClassFile} 如 user.service
+    tplData["serviceVarName"]       = param.tableName + "Service";   // ${serviceVarName} 如 userService
+    // Controller 类名
+    tplData["controllerBaseClass"] = modelBaseName + "Controller_"; // ${controllerBaseClass} 如 UserController_
+    tplData["controllerClass"]     = modelBaseName + "Controller";  // ${controllerClass} 如 UserController
+    tplData["controllerBaseClassFile"] = param.tableName + ".controller_"; // ${controllerBaseClassFile} 如 user.controller_
+    tplData["controllerClassFile"]     = param.tableName + ".controller";  // ${controllerClassFile} 如 user.controller
+    tplData["modelBaseName"]       = modelBaseName;  // ${modelBaseName} 如 User（供 ApiTags/Module 使用）
+    // Module 类名
+    tplData["moduleClassFile"]     = param.tableName + ".module"; // ${moduleClassFile} 如 user.module
 
     // ── 5.7 基础路径数据（供 formatPath 占位符替换）────────────
     let name = basename(file);
@@ -161,7 +185,12 @@ main {
         insClass: tplData["insClass"],
         selClass: tplData["selClass"],
         dbBaseClassFile: tplData["dbBaseClassFile"],
-        dbClassFile: tplData["dbClassFile"]
+        dbClassFile: tplData["dbClassFile"],
+        serviceBaseClassFile: tplData["serviceBaseClassFile"],
+        serviceClassFile: tplData["serviceClassFile"],
+        controllerBaseClassFile: tplData["controllerBaseClassFile"],
+        controllerClassFile: tplData["controllerClassFile"],
+        moduleClassFile: tplData["moduleClassFile"]
       });
       tplData["outputPath"] = outPath;  // 供模板内的 fileExists(outputPath) 守卫使用
 
