@@ -119,6 +119,7 @@ void MainDevUi::setupTitleBar() {
   // ── 帮助菜单 ──
   auto *helpMenu = new QMenu(m_titleBar);
   m_helpExampleAction = helpMenu->addAction(QStringLiteral("例子(&E)..."));
+  m_helpKeyAction = helpMenu->addAction(QStringLiteral("快捷键(&K)..."));
 
   auto *helpBtn = new QToolButton;
   helpBtn->setText(QStringLiteral("帮助(&H)"));

@@ -5,8 +5,10 @@
 
 #include "ac_executor.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QTextStream>
 
 #include "../ac_language.h"
 #include "undeclared_ident_validator.h"
@@ -82,11 +84,62 @@ QStringList AcExecutor::validateTypes() {
 
   QHash<QString, ClassDef> classes;
   QHash<QString, MethodDef> functions;
+
+  // 从当前脚本的 AST 中收集类和函数定义
   for (const auto &stmt : m_program.stmts) {
     if (stmt.kind == Block::Stmt::kClassDef) {
       classes.insert(stmt.classDef.name, stmt.classDef);
     } else if (stmt.kind == Block::Stmt::kFuncDef) {
       functions.insert(stmt.funcDef.name, stmt.funcDef);
+    }
+  }
+
+  // 加载 builtin.d.ac 声明文件（C++ 原生函数和内置类型）
+  // 必须在类型检查之前加载，以便类型推断引擎能查到内置函数返回类型
+  {
+    QStringList searchPaths;
+    if (!m_scriptFile.isEmpty()) {
+      searchPaths << QFileInfo(m_scriptFile).dir().absolutePath();
+      searchPaths << QFileInfo(m_scriptFile).dir().absolutePath() + QStringLiteral("/..");
+    }
+    searchPaths << QCoreApplication::applicationDirPath() + QStringLiteral("/file");
+#ifndef PROJECT_SOURCE_DIR
+#define PROJECT_SOURCE_DIR "."
+#endif
+    searchPaths << QStringLiteral(PROJECT_SOURCE_DIR) + QStringLiteral("/file");
+
+    for (const auto &dir : searchPaths) {
+      QString builtinPath = QDir(dir).filePath(QStringLiteral("builtin.d.ac"));
+      if (QFile::exists(builtinPath)) {
+        // 解析 builtin.d.ac，收集其中的类和函数定义
+        QFile file(builtinPath);
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+          QTextStream stream(&file);
+          QString source = stream.readAll();
+          file.close();
+
+          AcLexer lexer;
+          AcParser parser;
+          Block builtinAst;
+          QSet<QString> builtinVars;
+          QString lexError;
+          QVector<Token> tokens = lexer.tokenize(source, lexError);
+          if (lexError.isEmpty() && parser.parse(tokens, builtinAst, builtinVars)) {
+            for (const auto &stmt : builtinAst.stmts) {
+              if (stmt.kind == Block::Stmt::kClassDef) {
+                if (!classes.contains(stmt.classDef.name)) {
+                  classes.insert(stmt.classDef.name, stmt.classDef);
+                }
+              } else if (stmt.kind == Block::Stmt::kFuncDef) {
+                if (!functions.contains(stmt.funcDef.name)) {
+                  functions.insert(stmt.funcDef.name, stmt.funcDef);
+                }
+              }
+            }
+          }
+        }
+        break;
+      }
     }
   }
 
@@ -100,6 +153,7 @@ QStringList AcExecutor::validateTypes() {
   }
 
   AcTypeChecker typeChecker;
+  typeChecker.setFilePath(m_scriptFile);
   typeChecker.check(m_program, m_declaredVars, classes, functions, m_typeErrors);
   return m_typeErrors;
 }
@@ -134,10 +188,17 @@ QJsonValue AcExecutor::execute() {
            << m_program.stmts.size();
 #endif
 
-  // 步骤 3：静态类型检查
+  // 步骤 3：静态类型检查（过滤警告，警告不阻止执行）
   QStringList typeErrors = validateTypes();
-  if (!typeErrors.isEmpty()) {
-    m_error = typeErrors.join(QStringLiteral("\n"));
+  QStringList realErrors;
+  for (const auto &err : typeErrors) {
+    // 警告（以 "warning: " 开头）不阻止执行，只在编辑器中显示
+    if (!err.startsWith(QStringLiteral("warning: "))) {
+      realErrors.append(err);
+    }
+  }
+  if (!realErrors.isEmpty()) {
+    m_error = realErrors.join(QStringLiteral("\n"));
 #ifdef AC_DEBUG
     qDebug() << "[AcExecutor::execute] type errors:" << m_error;
 #endif
@@ -308,7 +369,14 @@ bool AcExecutor::linkImportsRecursive(Block &program, const QString &baseDir,
         exportName = stmt.enumDef.name;
       }
 
-      if (!imp.names.contains(exportName)) continue;
+      if (!imp.names.contains(exportName)) {
+        // 不在 import 列表中的导出类也注入，作为类型依赖
+        // （例如 Param 内部使用 RelationDef，需要 RelationDef 在类型表中可用）
+        if (isExported && stmt.kind == Block::Stmt::kClassDef) {
+          importedStmts.append(stmt);
+        }
+        continue;
+      }
 
       // 注入到当前程序（插入到开头，确保定义在 main 块语句之前执行）
       // 如果有别名，需要将符号名重命名为别名

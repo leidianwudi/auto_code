@@ -142,8 +142,8 @@ function reverseString(str: String): String {
 }
 
 // 数组工具函数
-function filter(arr: Array, predicate: Any): Array {
-  let result = [];
+function filter(arr: Object[], predicate: Any): Object[] {
+  let result: Any[] = [];
   for (let item: Any in arr) {
     if (predicate(item)) {
       result.push(item);
@@ -152,15 +152,15 @@ function filter(arr: Array, predicate: Any): Array {
   return result;
 }
 
-function map(arr: Array, transformer: Any): Array {
-  let result = [];
+function map(arr: Object[], transformer: Any): Object[] {
+  let result: Any[] = [];
   for (let item: Any in arr) {
     result.push(transformer(item));
   }
   return result;
 }
 
-function reduce(arr: Array, accumulator: Any, initialValue: Any): Any {
+function reduce(arr: Object[], accumulator: Any, initialValue: Any): Any {
   let total = initialValue;
   for (let item: Any in arr) {
     total = accumulator(total, item);
@@ -228,7 +228,7 @@ class User implements Printable, Serializable {
 
 // 管理员类 - 继承 User，演示继承和多态
 class Admin extends User implements Comparable {
-  private let permissions: Array;
+  private let permissions: String[];
   private let level: Number;
 
   public constructor(id: Any, name: String, email: String) {
@@ -382,7 +382,7 @@ class Validator {
 
 // 容器类 - 演示数据容器
 class Container {
-  private let items: Array;
+  private let items: Any[];
 
   public constructor() {
     this.items = [];
@@ -410,7 +410,7 @@ class Container {
     return null;  // 返回 null 替代 T | null
   }
 
-  public function findAll(predicate: Any): Array {
+  public function findAll(predicate: Any): Object[] {
     return filter(this.items, predicate);
   }
 
@@ -422,9 +422,9 @@ class Container {
     this.items = [];
   }
 
-  public function toArray(): Array {
+  public function toArray(): Object[] {
     // 手动复制数组（替代展开运算符）
-    let copy = [];
+    let copy: Any[] = [];
     for (let item: Any in this.items) {
       copy.push(item);
     }
@@ -865,7 +865,7 @@ main {
   printLog("\n--- 15. 性能与边界测试 ---");
 
   // 大数组性能测试
-  let largeArray = [];
+  let largeArray: Number[] = [];
   for (let i: Number in range(0, 100)) {
     largeArray.push(i);
   }
@@ -905,7 +905,7 @@ function assert(condition: Boolean, message: String): Void {
   }
 }
 
-function tagTemplate(strings: Array, value1: String): String {
+function tagTemplate(strings: String[], value1: String): String {
   // 简化版本：只支持一个插值变量
   let result = strings[0];
   if (value1 != null) {
@@ -914,8 +914,8 @@ function tagTemplate(strings: Array, value1: String): String {
   return result;
 }
 
-function range(start: Number, end: Number): Array {
-  let result = [];
+function range(start: Number, end: Number): Number[] {
+  let result: Number[] = [];
   let i = start;
   while (i < end) {
     result.push(i);

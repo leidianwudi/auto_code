@@ -99,7 +99,8 @@ ObjectEntry::ObjectEntry(const ObjectEntry &other)
       type(other.type),
       value(other.value ? std::make_unique<Expr>(*other.value) : nullptr),
       isStatic(other.isStatic),
-      access(other.access) {}
+      access(other.access),
+      line(other.line) {}
 
 ObjectEntry &ObjectEntry::operator=(const ObjectEntry &other) {
   if (this != &other) {
@@ -108,6 +109,7 @@ ObjectEntry &ObjectEntry::operator=(const ObjectEntry &other) {
     value = other.value ? std::make_unique<Expr>(*other.value) : nullptr;
     isStatic = other.isStatic;
     access = other.access;
+    line = other.line;
   }
   return *this;
 }

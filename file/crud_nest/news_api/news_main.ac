@@ -21,6 +21,12 @@
 import { Param } from "../template/param.ac";
 import { QueryData } from "../template/query_data.ac";
 
+/// @brief 模板配置（一个模板对应一个生成的代码文件）
+class TemplateConfig {
+  let tpl: String = "";  // 模板文件路径（相对脚本目录）
+  let out: String = "";  // 输出文件路径模板，用 {key} 占位符从 tplData 取值
+}
+
 main {
 
   // ── 1. 数据库连接配置 ──────────────────────────────────────────────
@@ -41,7 +47,7 @@ main {
   //      out  - 输出文件路径模板，用 {key} 占位符从 tplData 取值
   //             支持的占位符：{basePath}、{modelName}、{name}、{tableName} 等
   //    以后要新增 service/controller/dto 只需在这个数组里加配置即可
-  let templates = [
+  let templates: TemplateConfig[] = [
     { tpl: "../template/entities/en.tpl",      out: "{basePath}/{modelName}/entities/en_{name}.ts" },
     { tpl: "../template/in/in_ins.tpl",        out: "{basePath}/{modelName}/in/in_ins_{name}.ts" },
     { tpl: "../template/in/in_sel.tpl",        out: "{basePath}/{modelName}/in/in_sel_{name}.ts" },
@@ -126,7 +132,7 @@ main {
 
     // ── 5.6 组装传给模板的数据对象 tplData ────────────────────
     //      模板中的所有 ${变量名} 都从这里取值
-    let tplData = {};
+    let tplData: Object = {};
     tplData["entityClass"]      = param.entityClass;   // ${entityClass} 实体类名，如 EnUser
     tplData["insClass"]         = "InIns" + param.entityClass.substring(2);  // ${insClass} InIns类名，如 InInsUser
     tplData["selClass"]         = "InSel" + param.entityClass.substring(2);  // ${selClass} InSel类名，如 InSelUser

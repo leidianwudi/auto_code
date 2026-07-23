@@ -1,0 +1,197 @@
+/**
+ * @file builtin.d.ac
+ * @brief C++ 原生函数声明文件（仅供编辑器消费，不可执行）
+ *
+ * 类似 TypeScript 的 .d.ts 声明文件，为所有 C++ 注册的内置函数
+ * 和内置类型提供类型签名，支持编辑器跳转和悬停提示。
+ */
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  一级函数（全局函数）
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// 渲染模板文件，将 data 中的键值替换到模板占位符中
+export function renderTpl(tplPath: String, data: Object): String;
+
+/// 读取文件全文内容，返回 UTF-8 字符串
+export function readFile(path: String): String;
+
+/// 将字符串内容写入文件（覆盖模式）
+export function writeFile(path: String, content: String): Bool;
+
+/// 读取 JSON 文件并解析为对象/数组
+export function readJson(path: String): Object;
+
+/// 输出日志到控制台（不换行追加）
+export function printLog(message: String): Void;
+
+/// 输出错误日志到控制台
+export function printError(message: String): Void;
+
+/// 获取 IDE 中勾选的文件列表
+export function getCheckedFiles(): String[];
+
+/// 深度合并两个对象（b 的键覆盖 a 的同名键）
+export function merge(a: Object, b: Object): Object;
+
+/// 从文件路径中提取文件名（含扩展名）
+export function basename(path: String): String;
+
+/// 判断文件是否存在
+export function fileExists(path: String): Bool;
+
+/// 根据数据解析输出路径模板（{key} 占位符替换，路径分隔符统一为 /）
+export function formatPath(pattern: String, data: Object): String;
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  String 字符串类型（内置类型，属性和方法直接在字符串值上调用）
+// ═════════════════════════════════════════════════════════════════════════════
+
+export class String {
+  /// 字符串长度（字符数）
+  let length: Number;
+
+  /// 转为小写字母
+  function toLowerCase(): String;
+
+  /// 转为大写字母
+  function toUpperCase(): String;
+
+  /// 去除首尾空白字符
+  function trim(): String;
+
+  /// 是否包含子串
+  function includes(sub: String): Bool;
+
+  /// 是否以指定前缀开头
+  function startsWith(prefix: String): Bool;
+
+  /// 是否以指定后缀结尾
+  function endsWith(suffix: String): Bool;
+
+  /// 查找子串首次出现的位置，未找到返回 -1
+  function indexOf(sub: String): Number;
+
+  /// 按分隔符拆分为数组
+  function split(sep: String): String[];
+
+  /// 替换所有匹配的子串
+  function replace(old: String, newStr: String): String;
+
+  /// 截取子串 [start, end)，end 省略时取到末尾
+  function substring(start: Number, end: Number): String;
+
+  /// 截取子串 [start, end)，同 substring
+  function slice(start: Number, end: Number): String;
+
+  /// 返回指定位置的单字符字符串
+  function charAt(index: Number): String;
+
+  /// 重复字符串 n 次
+  function repeat(count: Number): String;
+
+  /// 左侧填充指定字符到目标长度
+  function padStart(length: Number, fill: String): String;
+
+  /// 右侧填充指定字符到目标长度
+  function padEnd(length: Number, fill: String): String;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  Array 数组类型（内置类型，属性和方法直接在数组值上调用）
+// ═════════════════════════════════════════════════════════════════════════════
+
+export class Array {
+  /// 数组元素个数
+  let length: Number;
+
+  /// 末尾追加元素，返回新长度
+  function push(value: Object): Number;
+
+  /// 末尾追加元素（push 的别名）
+  function append(value: Object): Number;
+
+  /// 弹出末尾元素
+  function pop(): Object;
+
+  /// 弹出首部元素
+  function shift(): Object;
+
+  /// 首部插入元素，返回新长度
+  function unshift(value: Object): Number;
+
+  /// 用分隔符连接所有元素为字符串
+  function join(sep: String): String;
+
+  /// 查找元素首次出现的索引，未找到返回 -1
+  function indexOf(value: Object): Number;
+
+  /// 是否包含指定元素
+  function includes(value: Object): Bool;
+
+  /// 截取子数组 [start, end)
+  function slice(start: Number, end: Number): Object[];
+
+  /// 拼接多个数组/元素，返回新数组
+  function concat(other: Object[]): Object[];
+
+  /// 反转数组元素顺序
+  function reverse(): Object[];
+
+  /// 从 start 位置删除 deleteCount 个元素，并插入新元素
+  function splice(start: Number, deleteCount: Number, item: Object): Object[];
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  Object 对象类型（内置类型，通过键名访问属性）
+// ═════════════════════════════════════════════════════════════════════════════
+
+export class Object {
+  /// 获取对象所有键名
+  function keys(): String[];
+
+  /// 获取对象所有值
+  function values(): Object[];
+
+  /// 是否包含指定键
+  function has(key: String): Bool;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  DB 数据库类（通过 new DB(config) 实例化）
+// ═════════════════════════════════════════════════════════════════════════════
+
+export class DB {
+  /// 构造函数，config 指定数据库连接参数
+  constructor(config: Object);
+
+  /// 获取表结构信息
+  function tableSchema(opts: Object): Object[];
+
+  /// 获取表字段详情
+  function tableInfo(opts: Object): Object;
+
+  /// 执行 SQL 查询，返回结果集
+  function query(opts: Object): Object[];
+
+  /// 断开数据库连接
+  function disconnect(): Void;
+
+  /// 释放数据库资源
+  function dispose(): Void;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  File 文件操作类（通过 new File() 实例化）
+// ═════════════════════════════════════════════════════════════════════════════
+
+export class File {
+  /// 构造函数
+  constructor();
+
+  /// 读取文件内容
+  function read(path: String): String;
+
+  /// 写入文件内容
+  function write(path: String, content: String): Void;
+}

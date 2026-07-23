@@ -199,7 +199,7 @@ AcType AcParser::parseType() {
 
   QString typeName = advance().text;
 
-  // 泛型参数：List<T>
+  // 泛型参数：Array<T>
   if (peek().type == TOK_LT) {
     advance();
     auto elementType = std::make_shared<AcType>(parseType());
@@ -211,18 +211,36 @@ AcType AcParser::parseType() {
   }
 
   // 简单类型名映射
+  AcType baseType;
   if (typeName == "Number" || typeName == "Int" || typeName == "Float" || typeName == "Double") {
-    return AcType::number();
+    baseType = AcType::number();
   } else if (typeName == "String") {
-    return AcType::string();
+    baseType = AcType::string();
   } else if (typeName == "Bool" || typeName == "Boolean") {
-    return AcType::boolean();
+    baseType = AcType::boolean();
   } else if (typeName == "Any") {
-    return AcType::any();
+    baseType = AcType::any();
   } else if (typeName == "Void") {
-    return AcType::voidType();
+    baseType = AcType::voidType();
+  } else if (typeName == "Array") {
+    // P1b: 禁止弱类型 Array，必须使用 Array<Type> 或 Type[]
+    m_error = QStringLiteral(
+                  "bare 'Array' type requires element type: use Array<Type> or Type[] at line %1")
+                  .arg(peek().line);
+    return AcType::any();
+  } else if (typeName == "Object") {
+    baseType = AcType::classType(QStringLiteral("Object"));
   } else {
     // 自定义类类型
-    return AcType::classType(typeName);
+    baseType = AcType::classType(typeName);
   }
+
+  // TypeScript 风格数组后缀：Type[]（支持多维 Type[][]）
+  while (peek().type == TOK_LBRACKET && peek(1).type == TOK_RBRACKET) {
+    advance();  // [
+    advance();  // ]
+    baseType = AcType::arrayOf(baseType);
+  }
+
+  return baseType;
 }

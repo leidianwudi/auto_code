@@ -228,6 +228,7 @@ struct ObjectEntry {
   std::unique_ptr<Expr> value;
   bool isStatic = false;                      ///< 是否为静态属性
   AccessLevel access = AccessLevel::kPublic;  ///< 访问级别
+  int line = 0;                               ///< 源码行号（1-based，用于符号导航）
 
   ObjectEntry() = default;
   ObjectEntry(const ObjectEntry &other);
@@ -280,6 +281,7 @@ struct MethodDef {
   AccessLevel access = AccessLevel::kPublic;  ///< 访问级别
   bool isOverride = false;                    ///< 是否重写父类方法
   bool isExported = false;                    ///< 是否导出（仅顶层函数有效）
+  bool isDeclaration = false;                 ///< 是否为声明-only（无函数体，用于 .d.ac 声明文件）
 };
 
 /// @brief 接口方法签名

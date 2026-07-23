@@ -33,12 +33,19 @@ public:
              const QHash<QString, ClassDef> &classes, const QHash<QString, MethodDef> &functions,
              QStringList &errors);
 
+  /// @brief 设置当前检查的文件路径（用于错误消息）
+  void setFilePath(const QString &path) { m_filePath = path; }
+
 private:
+  QString m_filePath;  ///< 当前检查的文件路径（用于错误消息）
+
   /// @brief 类型环境 — 变量名 → 类型映射
   struct TypeEnv {
     QHash<QString, AcType> varTypes;   ///< 变量名 → 类型
     QHash<QString, AcType> propTypes;  ///< this 的属性名 → 类型（当前类上下文）
     QString className;                 ///< 当前所在类名（空表示不在类中）
+    AcType returnType;                 ///< 当前函数的声明返回类型（P3 返回值验证）
+    QString funcName;                  ///< 当前函数名（P3 返回值验证）
   };
 
   // ── 内部状态 ──

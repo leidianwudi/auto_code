@@ -11,6 +11,27 @@
 //   json.selColsSort → sortDesc + orderByDef + defaultOrder
 //   selFields → whereConditions[]
 // ============================================================================
+
+import { FieldDef, Param } from "param.ac";
+
+/// @brief 查询字段定义（InSel 字段列表元素）
+export class SelFieldDef {
+  let name: String = "";        // 字段名
+  let comment: String = "";     // 字段注释
+  let tsType: String = "";      // TypeScript 类型
+  let isPrimary: Bool = false;  // 是否主键
+  let isCoin: Bool = false;     // 是否金额类型
+  let isLike: Bool = false;     // 是否模糊查询
+}
+
+/// @brief 排序信息结果（buildSortInfo 的返回值）
+export class SortInfoResult {
+  let sortDesc: String = "";            // 排序描述，如 "排序字段:id, fans_count"
+  let orderByDef: String = "";          // 排序对象字面量，如 "'id': 'DESC', 'fans_count': 'DESC'"
+  let defaultOrderField: String = "";   // 默认排序字段，如 "id"
+  let defaultOrderDir: String = "";     // 默认排序方向，如 "DESC"
+}
+
 export class QueryData {
 
   // --------------------------------------------------------------------------
@@ -20,23 +41,15 @@ export class QueryData {
   //   1. 主键字段（isPrimary）→ isLike = false
   //   2. json.selCols 精确查询字段 → isLike = false
   //   3. json.selColsLike 模糊查询字段 → isLike = true
-  //
-  // 每个 selField 包含：
-  //   .name      字段名
-  //   .comment   字段注释
-  //   .tsType    TypeScript 类型
-  //   .isPrimary 是否主键
-  //   .isCoin    是否金额类型
-  //   .isLike    是否模糊查询
   // --------------------------------------------------------------------------
-  function buildSelFields(json: Object, param: Object): Array {
-    let selFields = [];
-    let selFieldNames = [];
+  function buildSelFields(json: Object, param: Param): SelFieldDef[] {
+    let selFields: SelFieldDef[] = [];
+    let selFieldNames: String[] = [];
 
     // 先加主键字段
     for (field in param.fields) {
       if (field.isPrimary) {
-        let sf = {};
+        let sf = new SelFieldDef();
         sf.name = field.name;
         sf.comment = field.comment;
         sf.tsType = field.tsType;
@@ -63,7 +76,7 @@ export class QueryData {
         // 从 fields 中找到对应字段的元信息
         for (field in param.fields) {
           if (field.name == colName) {
-            let sf = {};
+            let sf = new SelFieldDef();
             sf.name = field.name;
             sf.comment = field.comment;
             sf.tsType = field.tsType;
@@ -90,7 +103,7 @@ export class QueryData {
 
         for (field in param.fields) {
           if (field.name == colName) {
-            let sf = {};
+            let sf = new SelFieldDef();
             sf.name = field.name;
             sf.comment = field.comment;
             sf.tsType = field.tsType;
@@ -117,9 +130,9 @@ export class QueryData {
   //   .defaultOrderField → "id"（默认排序字段，取第一个键）
   //   .defaultOrderDir   → "DESC"（默认排序方向，取第一个值）
   // --------------------------------------------------------------------------
-  function buildSortInfo(json: Object): Object {
-    let sortKeys = [];
-    let sortVals = [];
+  function buildSortInfo(json: Object): SortInfoResult {
+    let sortKeys: String[] = [];
+    let sortVals: String[] = [];
     if (json.selColsSort) {
       for (sortKey in json.selColsSort) {
         sortKeys.append(sortKey);
@@ -127,11 +140,11 @@ export class QueryData {
       }
     }
 
-    let result = {};
+    let result = new SortInfoResult();
     result.sortDesc = "排序字段:" + sortKeys.join(", ");
 
     // 构建 orderByDef：'id': 'DESC', 'fans_count': 'DESC'
-    let orderParts = [];
+    let orderParts: String[] = [];
     let keyLen = sortKeys.length;
     for (let i = 0; i < keyLen; i++) {
       orderParts.append("'" + sortKeys[i] + "': '" + sortVals[i] + "'");
@@ -158,8 +171,8 @@ export class QueryData {
   //            "if (!ToolDb.isNull(sel.id)) where.add('id', sel.id);"
   //            "if (!ToolDb.isNull(sel.nick)) where.addLike('nick', `%${sel.nick}%`);"
   // --------------------------------------------------------------------------
-  function buildWhereConditions(selFields: Array): Array {
-    let conditions = [];
+  function buildWhereConditions(selFields: SelFieldDef[]): String[] {
+    let conditions: String[] = [];
     for (sf in selFields) {
       let line = "";
       if (sf.isLike) {

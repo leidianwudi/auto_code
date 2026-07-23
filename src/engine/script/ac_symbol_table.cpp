@@ -97,6 +97,10 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
 
     case Block::Stmt::kClassDef: {
       const auto &cd = stmt.classDef;
+      // 设置当前类名上下文（用于 this 关键字类型解析）
+      QString savedClassName = m_currentClassName;
+      m_currentClassName = cd.name;
+
       AcSymbolEntry entry;
       entry.name = cd.name;
       entry.kind = AcSymbolKind::kClass;
@@ -115,6 +119,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
         propEntry.name = prop.key;
         propEntry.kind = AcSymbolKind::kProperty;
         propEntry.filePath = m_filePath;
+        propEntry.line = prop.line > 0 ? prop.line : stmt.line;
         propEntry.parentClass = cd.name;
         propEntry.returnType = acTypeToString(prop.type);
         propEntry.signature = prop.key + QStringLiteral(": ") + acTypeToString(prop.type);
@@ -155,6 +160,8 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
         // 递归收集方法体内的符号
         buildFromBlock(m_filePath, method.body);
       }
+      // 恢复类名上下文
+      m_currentClassName = savedClassName;
       break;
     }
 
@@ -167,12 +174,30 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
         entry.filePath = m_filePath;
         entry.line = as.line > 0 ? as.line : stmt.line;
         if (as.hasTypeAnnotation) {
+          // 显式类型注解：let x: Type = ...
           entry.returnType = acTypeToString(as.typeAnnotation);
           entry.signature = as.name + QStringLiteral(": ") + acTypeToString(as.typeAnnotation);
         } else {
-          entry.signature = as.name;
+          // 类型推断：从初始化表达式推断变量类型
+          QString inferredType = inferTypeFromExpr(as.value);
+          if (!inferredType.isEmpty()) {
+            entry.returnType = inferredType;
+            entry.signature = as.name + QStringLiteral(": ") + inferredType;
+          } else {
+            entry.signature = as.name;
+          }
         }
         m_symbols.insert(as.name, entry);
+
+        // 对象字面量：收集属性到符号表（如 let x = {a: 1} → x.a: Number）
+        if (as.value.kind == Expr::kObject) {
+          collectObjectProperties(as.name, as.value);
+        }
+        // 数组字面量：如果首元素是对象，收集属性（如 let arr = [{a: 1}] → arr.a: Number）
+        if (as.value.kind == Expr::kArray && !as.value.arrItems.empty() && as.value.arrItems[0] &&
+            as.value.arrItems[0]->kind == Expr::kObject) {
+          collectObjectProperties(as.name, *as.value.arrItems[0]);
+        }
       }
       break;
     }
@@ -186,7 +211,26 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
         entry.kind = AcSymbolKind::kVariable;
         entry.filePath = m_filePath;
         entry.line = fs.line > 0 ? fs.line : stmt.line;
-        entry.signature = fs.varName + QStringLiteral(": iterator");
+
+        // 类型推断：优先使用显式注解，其次从可迭代表达式推断元素类型
+        QString elemType;
+        if (!fs.varType.isEmpty()) {
+          // 显式注解：for (let item: Type in arr)
+          elemType = fs.varType;
+        } else {
+          // 从 arrayExpr 推断：如果类型是 ElementType[]，提取 ElementType
+          QString arrType = inferTypeFromExpr(fs.arrayExpr);
+          if (arrType.endsWith(QStringLiteral("[]"))) {
+            elemType = arrType.left(arrType.length() - 2);  // 去掉 "[]"
+          }
+        }
+
+        if (!elemType.isEmpty()) {
+          entry.returnType = elemType;
+          entry.signature = fs.varName + QStringLiteral(": ") + elemType;
+        } else {
+          entry.signature = fs.varName + QStringLiteral(": iterator");
+        }
         m_symbols.insert(fs.varName, entry);
       }
       buildFromBlock(m_filePath, fs.body);
@@ -259,8 +303,7 @@ QString AcSymbolTable::acTypeToString(const AcType &type) const {
     case AcType::kNull:
       return QStringLiteral("null");
     case AcType::kArray:
-      if (type.elementType)
-        return QStringLiteral("Array<") + acTypeToString(*type.elementType) + QStringLiteral(">");
+      if (type.elementType) return acTypeToString(*type.elementType) + QStringLiteral("[]");
       return QStringLiteral("Array");
     case AcType::kClass:
       return type.className;
@@ -304,6 +347,13 @@ void AcSymbolTable::clear() {
 
 void AcSymbolTable::mergeFrom(const AcSymbolTable &other, const QStringList &names) {
   const auto &otherSymbols = other.allSymbols();
+  if (names.isEmpty()) {
+    // 空列表：合并全部符号（用于 builtin.d.ac）
+    for (auto it = otherSymbols.begin(); it != otherSymbols.end(); ++it) {
+      m_symbols.insert(it.key(), it.value());
+    }
+    return;
+  }
   for (const auto &name : names) {
     // 精确匹配（类名、函数名、变量名）
     auto it = otherSymbols.find(name);
@@ -362,4 +412,196 @@ QString AcSymbolTable::makeMethodSignature(const QString &className, const QStri
     sig += QStringLiteral(": ") + acTypeToString(returnType);
   }
   return sig;
+}
+
+// ──────────────────────────────────────────────────────────────
+//  类型推断引擎 — 从表达式 AST 推断变量类型
+// ──────────────────────────────────────────────────────────────
+
+QString AcSymbolTable::inferTypeFromExpr(const Expr &expr) const {
+  switch (expr.kind) {
+    // 字面量类型
+    case Expr::kString:
+      return QStringLiteral("String");
+    case Expr::kNumber:
+      return QStringLiteral("Number");
+    case Expr::kBool:
+      return QStringLiteral("Boolean");
+    case Expr::kArray:
+      return QStringLiteral("Array");
+    case Expr::kObject:
+      return QStringLiteral("Object");
+    case Expr::kNull:
+    case Expr::kUndefined:
+      return QString();
+
+    // 变量引用：查找符号表中的 returnType
+    case Expr::kIdent: {
+      const AcSymbolEntry *entry = findSymbol(expr.ident);
+      if (entry && !entry->returnType.isEmpty() && entry->returnType != QStringLiteral("Any")) {
+        return entry->returnType;
+      }
+      return QString();
+    }
+
+    // this 关键字 → 当前类名
+    case Expr::kThis:
+      return m_currentClassName;
+
+    // new ClassName() → 类型为 ClassName
+    case Expr::kNewInstance:
+      return expr.className;
+
+    // 函数调用：查找函数的返回类型
+    case Expr::kFuncCall: {
+      const AcSymbolEntry *entry = findSymbol(expr.funcCall.name);
+      if (entry && !entry->returnType.isEmpty() && entry->returnType != QStringLiteral("Any") &&
+          entry->returnType != QStringLiteral("void")) {
+        return entry->returnType;
+      }
+      return QString();
+    }
+
+    // 属性访问 obj.prop → 查找对象类型，再查找 ClassName.prop 的 returnType
+    case Expr::kPropAccess: {
+      QString objType;
+      // 链式访问：propObject 优先
+      if (expr.propObject) {
+        objType = inferTypeFromExpr(*expr.propObject);
+      } else if (!expr.ident.isEmpty()) {
+        const AcSymbolEntry *objEntry = findSymbol(expr.ident);
+        if (objEntry) objType = objEntry->returnType;
+      }
+      if (objType.isEmpty()) return QString();
+
+      // 查找 ClassName.prop
+      QString qualifiedKey = objType + QStringLiteral(".") + expr.prop;
+      const AcSymbolEntry *propEntry = findSymbol(qualifiedKey);
+      if (propEntry && !propEntry->returnType.isEmpty() &&
+          propEntry->returnType != QStringLiteral("Any")) {
+        return propEntry->returnType;
+      }
+      return QString();
+    }
+
+    // 方法调用 obj.method() → 查找对象类型，再查找 ClassName.method 的 returnType
+    case Expr::kMethodCall: {
+      QString objType;
+      // 链式访问：object 表达式优先
+      if (expr.methodCall.object) {
+        objType = inferTypeFromExpr(*expr.methodCall.object);
+      } else if (!expr.methodCall.objName.isEmpty()) {
+        const AcSymbolEntry *objEntry = findSymbol(expr.methodCall.objName);
+        if (objEntry) objType = objEntry->returnType;
+      }
+      if (objType.isEmpty()) return QString();
+
+      // 查找 ClassName.method
+      QString qualifiedKey = objType + QStringLiteral(".") + expr.methodCall.methodName;
+      const AcSymbolEntry *methodEntry = findSymbol(qualifiedKey);
+      if (methodEntry && !methodEntry->returnType.isEmpty() &&
+          methodEntry->returnType != QStringLiteral("Any") &&
+          methodEntry->returnType != QStringLiteral("void")) {
+        return methodEntry->returnType;
+      }
+      return QString();
+    }
+
+    // 二元运算：字符串拼接 → String，否则 Number
+    case Expr::kBinary: {
+      if (expr.binOp == Expr::kAdd) {
+        QString lType = expr.left ? inferTypeFromExpr(*expr.left) : QString();
+        QString rType = expr.right ? inferTypeFromExpr(*expr.right) : QString();
+        if (lType == QStringLiteral("String") || rType == QStringLiteral("String")) {
+          return QStringLiteral("String");
+        }
+        if (lType == QStringLiteral("Number") && rType == QStringLiteral("Number")) {
+          return QStringLiteral("Number");
+        }
+      }
+      // 比较运算 → Boolean
+      if (expr.binOp >= Expr::kEq && expr.binOp <= Expr::kGte) {
+        return QStringLiteral("Boolean");
+      }
+      // 算术运算 → Number
+      if (expr.binOp >= Expr::kAdd && expr.binOp <= Expr::kMod) {
+        return QStringLiteral("Number");
+      }
+      // 逻辑运算 → Boolean
+      if (expr.binOp == Expr::kOr || expr.binOp == Expr::kAnd) {
+        return QStringLiteral("Boolean");
+      }
+      return QString();
+    }
+
+    // 三元运算：取 trueExpr 的类型
+    case Expr::kTernary: {
+      if (expr.right) return inferTypeFromExpr(*expr.right);
+      return QString();
+    }
+
+    // 索引访问 obj[index] → 提取元素类型
+    case Expr::kIndexAccess: {
+      QString objType = expr.left ? inferTypeFromExpr(*expr.left) : QString();
+      if (objType.isEmpty()) return QString();
+      // ElementType[] → ElementType
+      if (objType.endsWith(QStringLiteral("[]"))) {
+        return objType.left(objType.length() - 2);
+      }
+      // String[i] → String（单字符仍是 String）
+      if (objType == QStringLiteral("String")) {
+        return QStringLiteral("String");
+      }
+      return QString();
+    }
+
+    // 一元运算 !expr → Boolean
+    case Expr::kUnary:
+      return QStringLiteral("Boolean");
+
+    // 静态访问 ClassName::member
+    case Expr::kStaticAccess: {
+      // ident 是类名，prop 是成员名
+      QString qualifiedKey = expr.ident + QStringLiteral(".") + expr.prop;
+      const AcSymbolEntry *entry = findSymbol(qualifiedKey);
+      if (entry && !entry->returnType.isEmpty() && entry->returnType != QStringLiteral("Any")) {
+        return entry->returnType;
+      }
+      return QString();
+    }
+
+    default:
+      return QString();
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+//  对象字面量属性收集 — 为 {a: 1, b: "s"} 创建 varName.a / varName.b 符号
+// ──────────────────────────────────────────────────────────────
+
+void AcSymbolTable::collectObjectProperties(const QString &varName, const Expr &expr) {
+  if (expr.kind != Expr::kObject) return;
+
+  for (const auto &entry : expr.objEntries) {
+    if (entry.key.isEmpty()) continue;
+
+    // 推断属性值类型
+    QString propType;
+    if (entry.value) {
+      propType = inferTypeFromExpr(*entry.value);
+    }
+
+    AcSymbolEntry propEntry;
+    propEntry.name = entry.key;
+    propEntry.kind = AcSymbolKind::kProperty;
+    propEntry.filePath = m_filePath;
+    propEntry.line = entry.line;
+    propEntry.returnType = propType;
+    if (!propType.isEmpty()) {
+      propEntry.signature = entry.key + QStringLiteral(": ") + propType;
+    } else {
+      propEntry.signature = entry.key;
+    }
+    m_symbols.insert(varName + QStringLiteral(".") + entry.key, propEntry);
+  }
 }

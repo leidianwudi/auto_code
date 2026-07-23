@@ -1,4 +1,61 @@
 // ============================================================================
+// 数据类型定义 — 字段和关联关系的强类型结构
+// ============================================================================
+
+/// @brief 数据库列 schema（db.tableSchema() 返回的原始列信息）
+export class ColumnSchema {
+  let name: String = "";         // 字段名
+  let type: String = "";         // MySQL 类型，如 "varchar(100)"
+  let key: String = "";          // 列索引类型 ("PRI" = 主键，"" = 普通)
+  let extra: String = "";        // 附加信息 ("auto_increment" = 自增)
+  let comment: String = "";      // 字段注释（DDL 中的 COMMENT）
+  let defaultValue: String = ""; // 默认值
+}
+
+/// @brief 关联表信息（JSON 配置中的 joinTable 数组元素）
+export class JoinTableInfo {
+  let joinEnClass: String = "";           // 关联实体类名，如 EnNewsCategory
+  let joinEnClass_Url: String = "";       // 关联实体 import 路径
+  let joinType: String = "";              // 关系类型：OneToMany / ManyToOne / OneToOne / ManyToMany
+  let joinEnClassPro: String = "";        // 本端属性名，如 category
+  let inverseJoinEnClassPro: String = ""; // 对方属性名，如 newsList
+  let isJoinRelations: Bool = false;      // 是否启用联表查询
+}
+
+/// @brief 字段定义（加工后的数据库列信息）
+export class FieldDef {
+  let name: String = "";           // 字段名（原样）
+  let comment: String = "";        // 字段注释（@ApiProperty 的描述）
+  let colType: String = "";        // 原始 MySQL 类型，如 "varchar(100)"
+  let colKey: String = "";         // 列索引类型 ("PRI" = 主键)
+  let colDefault: String = "";     // 列默认值
+  let extra: String = "";          // 列附加信息 ("auto_increment" = 自增)
+  let tsType: String = "";         // TypeScript 类型（number/string/Date/boolean/Coin）
+  let isPrimary: Bool = false;     // 是否主键
+  let isAutoInc: Bool = false;     // 是否自增
+  let isCoin: Bool = false;        // 是否金额类型
+  let columnOptions: String = "";  // @Column 的完整参数字符串
+}
+
+/// @brief 关联关系配置（TypeORM 关系装饰器参数）
+export class RelationDef {
+  let decoratorType: String = "";    // 装饰器类型：OneToMany / ManyToOne / OneToOne / ManyToMany
+  let targetEntity: String = "";     // 目标实体类名，如 EnNewsCategory
+  let propertyName: String = "";     // 本端属性名，如 category
+  let inverseProperty: String = "";  // 对方属性名，如 newsList
+  let isJoinRelations: Bool = false; // 是否启用联表查询
+}
+
+/// @brief 表 schema 数据（传给 Param.setTableData 的参数）
+export class TableSchemaData {
+  let tableName: String = "";               // 数据库表名
+  let tableDesc: String = "";               // 表说明文字
+  let modelName: String = "";               // 模型路径，如 "news\news"
+  let columns: ColumnSchema[] = [];         // 字段数组（来自 db.tableSchema()）
+  let joinTable: JoinTableInfo[] = [];      // 关联表信息（可选）
+}
+
+// ============================================================================
 // Param 类 — 数据库 schema → 模板数据结构的转换器
 // ----------------------------------------------------------------------------
 // 作用：
@@ -10,12 +67,12 @@
 //   db.tableSchema() → Param.setTableData() 加工 → entity.tpl 直接取值渲染
 // ============================================================================
 export class Param {
-  let entityClass = "";     // 生成的 TS 实体类名，如 EnUser (由 user 派生)
-  let tableName = "";       // 数据库表名，如 user
-  let tableDesc = "";       // 表说明文字，用于 TS 文件中的注释
-  let fields = [];          // 加工后的字段数组，每个元素是一个 Object
-  let imports = [];         // 额外的 import 语句字符串（用于关联表）
-  let relations = [];       // 关联关系配置 (OneToMany / ManyToOne 等)
+  let entityClass: String = "";        // 生成的 TS 实体类名，如 EnUser (由 user 派生)
+  let tableName: String = "";          // 数据库表名，如 user
+  let tableDesc: String = "";          // 表说明文字，用于 TS 文件中的注释
+  let fields: FieldDef[] = [];         // 加工后的字段数组
+  let imports: String[] = [];          // 额外的 import 语句字符串（用于关联表）
+  let relations: RelationDef[] = [];   // 关联关系配置 (OneToMany / ManyToOne 等)
 
   // --------------------------------------------------------------------------
   // MySQL 列类型 → TypeScript 类型 的映射表
@@ -84,7 +141,7 @@ export class Param {
   // 输入：field 对象 (包含 colType / colKey / colDefault / extra 等)
   // 输出：字符串，会被模板直接嵌入 @Column() 中
   // --------------------------------------------------------------------------
-  function getColumnOptions(field: Object): String {
+  function getColumnOptions(field: FieldDef): String {
     let colType = field.colType;
     let colDefault = field.colDefault;
 
@@ -158,7 +215,7 @@ export class Param {
   //
   // 输出：本实例的 fields / imports / relations 被填充，entity.tpl 可以直接取值
   // --------------------------------------------------------------------------
-  function setTableData(data: Object): Void {
+  function setTableData(data: TableSchemaData): Void {
     this.tableName = data.tableName;
     this.tableDesc = data.tableDesc;
 
@@ -172,12 +229,12 @@ export class Param {
     // ── 处理字段：把原始 schema 列转换成模板需要的结构 ────────────────
     this.fields = [];
     for (col in data.columns) {
-      let field = {};
+      let field = new FieldDef();
       field.name = col.name;                                     // 字段名（原样）
       field.comment = col.comment;                               // 字段注释（@ApiProperty 的描述）
       field.colType = col.type;                                  // 原始 MySQL 类型，如 "varchar(100)"
       field.colKey = col.key;                                    // 列索引类型 ("PRI" = 主键)
-      field.colDefault = col.default;                            // 列默认值
+      field.colDefault = col["default"];                        // 列默认值（"default" 是 AC 关键字，用方括号访问）
       field.extra = col.extra;                                   // 列附加信息 ("auto_increment" = 自增)
       field.tsType = this.mapType(col.type);                     // → TypeScript 类型
       field.isPrimary = this.isPrimaryKey(col.key);              // → 是否主键
@@ -200,7 +257,7 @@ export class Param {
         this.imports.append(imp);
 
         // 生成关系配置，对应 TypeORM 的关系装饰器
-        let rel = {};
+        let rel = new RelationDef();
         rel.decoratorType = jt.joinType;               // 装饰器类型：OneToMany / ManyToOne / OneToOne / ManyToMany
         rel.targetEntity = jt.joinEnClass;             // 目标实体类名，如 EnNewsCategory
         rel.propertyName = jt.joinEnClassPro;          // 本端属性名，如 category

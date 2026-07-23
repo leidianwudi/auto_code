@@ -383,18 +383,23 @@ CompoundOp AcParser::parseCompoundOp() {
   return CompoundOp::kNone;
 }
 
-void AcParser::skipTypeAnnotation() {
-  if (peek().type == TOK_COLON) {
-    advance();
-    advance();
-  }
+bool AcParser::parseTypeAnnotation(AcType &outType) {
+  if (peek().type != TOK_COLON) return false;
+  advance();  // 消耗 ':'
+  outType = parseType();
+  return true;
 }
 
 bool AcParser::parseAssignStmt(AssignStmt &as) {
   Token nameToken = peek();
   as.name = advance().text;
   as.line = nameToken.line;
-  skipTypeAnnotation();
+  // 解析类型注解：let x: Type = ...
+  AcType typeAnnotation;
+  if (parseTypeAnnotation(typeAnnotation)) {
+    as.typeAnnotation = typeAnnotation;
+    as.hasTypeAnnotation = true;
+  }
   CompoundOp op = parseCompoundOp();
   if (op != CompoundOp::kNone) {
     as.compoundOp = op;
@@ -718,7 +723,13 @@ bool AcParser::parseClassDef(ClassDef &cd) {
         if (peek().type == TOK_COMMA) advance();
       }
       if (!expect(TOK_RPAREN, QStringLiteral("expected ')' after parameters"))) return false;
-      if (!parseBlock(md.body)) return false;
+      // 支持声明-only 语法：constructor(params);（无函数体，用于 .d.ac 声明文件）
+      if (peek().type == TOK_SEMI) {
+        advance();
+        md.isDeclaration = true;
+      } else {
+        if (!parseBlock(md.body)) return false;
+      }
       md.access = access;
       cd.methods.append(md);
     } else if (peek().type == TOK_FUNCTION) {
@@ -836,7 +847,8 @@ bool AcParser::parseEnumDef(EnumDef &ed) {
 }
 
 bool AcParser::parseMethodDef(MethodDef &md) {
-  if (peek().type != TOK_IDENT) {
+  // dispose 是语言关键字（TOK_DISPOSE），但允许作为方法名使用（using/dispose 模式）
+  if (peek().type != TOK_IDENT && peek().type != TOK_DISPOSE) {
     m_error = QStringLiteral("expected method name at line %1").arg(peek().line);
     return false;
   }
@@ -864,9 +876,30 @@ bool AcParser::parseMethodDef(MethodDef &md) {
 
   if (!expect(TOK_RPAREN, QStringLiteral("expected ')' after parameters"))) return false;
 
-  if (peek().type == TOK_COLON) {
+  // P0: 强制函数返回值类型注解（构造函数除外）
+  if (md.name != QStringLiteral("constructor")) {
+    if (peek().type != TOK_COLON) {
+      m_error =
+          QStringLiteral("function '%1' requires return type annotation (e.g. ): Type) at line %2")
+              .arg(md.name)
+              .arg(peek().line);
+      return false;
+    }
     advance();
     md.returnType = parseType();
+  } else {
+    // 构造函数：可选的返回类型
+    if (peek().type == TOK_COLON) {
+      advance();
+      md.returnType = parseType();
+    }
+  }
+
+  // 支持声明-only 语法：function name(params): Type;（无函数体，用于 .d.ac 声明文件）
+  if (peek().type == TOK_SEMI) {
+    advance();
+    md.isDeclaration = true;
+    return true;
   }
 
   return parseBlock(md.body);
@@ -880,12 +913,17 @@ bool AcParser::parseClassProperty(ClassDef &cd, AccessLevel access, bool isStati
     m_error = QStringLiteral("expected property name at line %1").arg(peek().line);
     return false;
   }
-  QString name = advance().text;
+  Token nameToken = advance();
   ObjectEntry prop;
-  prop.key = name;
+  prop.key = nameToken.text;
+  prop.line = nameToken.line;  // 记录属性名所在行号
   prop.isStatic = isStatic;
   prop.access = access;
-  skipTypeAnnotation();
+  // 解析类型注解：let prop: Type = ...
+  AcType propType;
+  if (parseTypeAnnotation(propType)) {
+    prop.type = propType;
+  }
   if (peek().type == TOK_EQUALS) {
     advance();
     prop.value = std::make_unique<Expr>();

@@ -5,6 +5,7 @@
 
 #include "ac_validator.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -19,6 +20,10 @@ QVector<ValidationResult> AcValidator::validate(const QString &source) {
   if (source.trimmed().isEmpty()) return results;
 
   m_sourceLines = source.split(QLatin1Char('\n'));
+
+  // 清空类和函数表（在 import 解析之前清空，以便导入文件的类能被收集）
+  m_classes.clear();
+  m_functions.clear();
 
   // ── 步骤 1：词法分析 ──
   QString lexError;
@@ -46,18 +51,44 @@ QVector<ValidationResult> AcValidator::validate(const QString &source) {
     return results;
   }
 
-  // ── 步骤 2.5：构建符号表 ──
+  // ── 步骤 2.5：构建符号表（先加载依赖，再收集当前文件，确保类型推断可用）──
   m_symbolTable.clear();
   m_symbolTable.setFilePath(m_filePath);
-  for (const auto &stmt : m_program.stmts) {
-    m_symbolTable.collectStmt(stmt);
-  }
 
-  // ── 步骤 2.6：解析 import 语句，收集跨文件符号 ──
+  // 步骤 2.5a：加载内置函数声明文件 (builtin.d.ac)
+  // 必须在当前文件符号收集之前加载，以便类型推断引擎能查到内置函数返回类型
   m_visitedFiles.clear();
   if (!m_filePath.isEmpty()) {
     m_visitedFiles.insert(QFileInfo(m_filePath).canonicalFilePath());
+  }
+  {
+    QStringList searchPaths;
+    if (!m_filePath.isEmpty()) {
+      searchPaths << QFileInfo(m_filePath).dir().absolutePath();
+      searchPaths << QFileInfo(m_filePath).dir().absolutePath() + QStringLiteral("/..");
+    }
+    searchPaths << QCoreApplication::applicationDirPath() + QStringLiteral("/file");
+    searchPaths << QStringLiteral(PROJECT_SOURCE_DIR) + QStringLiteral("/file");
+
+    for (const auto &dir : searchPaths) {
+      QString builtinPath = QDir(dir).filePath(QStringLiteral("builtin.d.ac"));
+      if (QFile::exists(builtinPath)) {
+        m_visitedFiles.remove(QFileInfo(builtinPath).canonicalFilePath());
+        QStringList allNames;
+        collectSymbolsFromFile(builtinPath, allNames);
+        break;
+      }
+    }
+  }
+
+  // 步骤 2.5b：解析 import 语句，收集跨文件符号
+  if (!m_filePath.isEmpty()) {
     resolveImportedSymbols(m_program);
+  }
+
+  // 步骤 2.5c：收集当前文件符号（此时内置函数和 import 符号已在符号表中，类型推断可正常工作）
+  for (const auto &stmt : m_program.stmts) {
+    m_symbolTable.collectStmt(stmt);
   }
 
   // ── 步骤 3：未声明标识符检查 ──
@@ -68,8 +99,7 @@ QVector<ValidationResult> AcValidator::validate(const QString &source) {
   }
 
   // ── 步骤 4：静态类型检查 ──
-  m_classes.clear();
-  m_functions.clear();
+  // 注意：m_classes/m_functions 已在 validate() 开头清空，并在 import 解析时收集了导入文件的类
   collectClassesAndFunctions(m_program);
 
   // 注册 C++ 原生类
@@ -83,6 +113,7 @@ QVector<ValidationResult> AcValidator::validate(const QString &source) {
   }
 
   QStringList typeErrors;
+  m_typeChecker.setFilePath(m_filePath);
   m_typeChecker.check(m_program, m_declaredVars, m_classes, m_functions, typeErrors);
   for (const QString &err : typeErrors) {
     if (!err.isEmpty()) results.append(parseError(err));
@@ -186,6 +217,19 @@ void AcValidator::collectSymbolsFromFile(const QString &filePath, const QStringL
 
   // 将 import 列表中指定的符号合并到主符号表
   m_symbolTable.mergeFrom(importedTable, importNames);
+
+  // 收集导入文件的类定义到 m_classes（供类型检查器使用）
+  for (const auto &stmt : program.stmts) {
+    if (stmt.kind == Block::Stmt::kClassDef) {
+      if (!m_classes.contains(stmt.classDef.name)) {
+        m_classes.insert(stmt.classDef.name, stmt.classDef);
+      }
+    } else if (stmt.kind == Block::Stmt::kFuncDef) {
+      if (!m_functions.contains(stmt.funcDef.name)) {
+        m_functions.insert(stmt.funcDef.name, stmt.funcDef);
+      }
+    }
+  }
 
   // 递归解析目标文件的 import（支持间接 import）
   QString savedFilePath = m_filePath;

@@ -8,6 +8,7 @@
 #include <QAbstractItemView>
 #include <QApplication>
 #include <QCompleter>
+#include <QFileInfo>
 #include <QFont>
 #include <QFontDatabase>
 #include <QMenu>
@@ -595,6 +596,26 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
     }
   }
 
+  // Ctrl+T 工作区符号搜索
+  if ((event->modifiers() & Qt::ControlModifier) && event->key() == Qt::Key_T &&
+      m_validationMode == AcValidation) {
+    emit requestWorkspaceSymbols();
+    event->accept();
+    return;
+  }
+
+  // Shift+F12 跨文件查找引用
+  if ((event->modifiers() & Qt::ShiftModifier) && event->key() == Qt::Key_F12 &&
+      m_validationMode == AcValidation) {
+    QTextCursor cursor = textCursor();
+    QString identifier = identifierAtCursor(cursor.position());
+    if (!identifier.isEmpty()) {
+      emit requestFindReferencesAll(identifier);
+      event->accept();
+      return;
+    }
+  }
+
   // Ctrl+M / Ctrl+] 跳转到匹配括号（P2: 快捷键功能）
   if ((event->modifiers() & Qt::ControlModifier) &&
       (event->key() == Qt::Key_M || event->key() == Qt::Key_BracketRight)) {
@@ -609,6 +630,15 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
       event->key() == Qt::Key_M) {
     selectBetweenBrackets();
     event->accept();
+    return;
+  }
+
+  // 输入 ( 时显示函数签名提示
+  if (event->key() == Qt::Key_ParenLeft && m_validationMode == AcValidation) {
+    QPlainTextEdit::keyPressEvent(event);
+    showSignatureHelp();
+    scheduleValidation();
+    if (m_completer) showCompleter();
     return;
   }
 
@@ -771,14 +801,16 @@ void CodeEditor::contextMenuEvent(QContextMenuEvent *event) {
       connect(goDefAction, &QAction::triggered, this,
               [this, identifier]() { goToDefinition(identifier); });
 
-      // ── 查找所有引用 ──
+      // ── 转到类型定义 ──
+      QAction *goTypeDefAction = menu->addAction(QStringLiteral("转到类型定义"));
+      connect(goTypeDefAction, &QAction::triggered, this,
+              [this, identifier]() { goToTypeDefinition(identifier); });
+
+      // ── 查找所有引用（跨文件）──
       QAction *findRefsAction = menu->addAction(QStringLiteral("查找所有引用"));
-      connect(findRefsAction, &QAction::triggered, this, [this, identifier]() {
-        auto refs = findSymbolReferences(identifier);
-        for (const auto &ref : refs) {
-          emit requestFindReferences(QString(), ref.first, ref.second);
-        }
-      });
+      findRefsAction->setShortcut(QKeySequence(QStringLiteral("Shift+F12")));
+      connect(findRefsAction, &QAction::triggered, this,
+              [this, identifier]() { emit requestFindReferencesAll(identifier); });
     }
 
     menu->addSeparator();
@@ -879,20 +911,18 @@ const AcSymbolEntry *CodeEditor::findSymbolDefinition(const QString &name) const
 const AcSymbolEntry *CodeEditor::findPropertyDefinition(const QString &propName) const {
   if (propName.isEmpty()) return nullptr;
 
-  // 从光标位置向前扫描，识别 obj.prop 模式
+  // 从光标位置向前扫描，收集完整属性链：a.b.c → [a, b, c]
   const QString &text = cachedText();
   int cursorPos = textCursor().position();
 
   // 向前找到当前标识符的起始位置
   int idEnd = cursorPos;
   int idStart = cursorPos;
-  // 先跳过光标可能在的标识符内位置，找到标识符结束
   while (idEnd < text.size() &&
          (text[idEnd].isLetterOrNumber() || text[idEnd] == QLatin1Char('_') ||
           text[idEnd] == QLatin1Char('$'))) {
     ++idEnd;
   }
-  // 找到标识符起始
   while (idStart > 0 &&
          (text[idStart - 1].isLetterOrNumber() || text[idStart - 1] == QLatin1Char('_') ||
           text[idStart - 1] == QLatin1Char('$'))) {
@@ -903,36 +933,59 @@ const AcSymbolEntry *CodeEditor::findPropertyDefinition(const QString &propName)
   int dotPos = idStart - 1;
   if (dotPos < 0 || text[dotPos] != QLatin1Char('.')) return nullptr;
 
-  // 提取对象名：向前扫描到 '.' 前面的标识符
-  int objEnd = dotPos;
-  int objStart = dotPos;
-  while (objStart > 0 &&
-         (text[objStart - 1].isLetterOrNumber() || text[objStart - 1] == QLatin1Char('_') ||
-          text[objStart - 1] == QLatin1Char('$'))) {
-    --objStart;
+  // 向前收集完整属性链：a.b.c
+  QStringList chain;  // 逆序收集后 prepend
+  chain.prepend(propName);
+
+  int scanPos = dotPos;
+  while (scanPos > 0 && text[scanPos] == QLatin1Char('.')) {
+    int objEnd = scanPos;
+    int objStart = scanPos;
+    while (objStart > 0 &&
+           (text[objStart - 1].isLetterOrNumber() || text[objStart - 1] == QLatin1Char('_') ||
+            text[objStart - 1] == QLatin1Char('$'))) {
+      --objStart;
+    }
+    if (objStart == objEnd) break;
+    chain.prepend(text.mid(objStart, objEnd - objStart));
+
+    scanPos = objStart - 1;
+    while (scanPos > 0 && text[scanPos].isSpace()) --scanPos;
+    if (scanPos < 0 || text[scanPos] != QLatin1Char('.')) break;
   }
-  QString objName = text.mid(objStart, objEnd - objStart);
-  if (objName.isEmpty()) return nullptr;
 
-  // 查找对象符号，获取其类型
-  const AcSymbolEntry *objEntry = m_symbolNavigator.findDefinition(objName);
-  if (!objEntry) return nullptr;
+  if (chain.size() < 2) return nullptr;
 
-  // 用 returnType 作为类名，查找 ClassName.propName
-  QString typeName = objEntry->returnType;
-  if (typeName.isEmpty() || typeName == QStringLiteral("Any")) {
-    // 尝试用对象名本身作为类名（同名变量 → 同名类）
-    typeName = objName;
-    // 首字母大写：cfg → Cfg
-    if (!typeName.isEmpty()) {
-      typeName[0] = typeName[0].toUpper();
+  // 从链首开始逐级解析类型
+  QString currentType;
+  const AcSymbolEntry *result = nullptr;
+
+  const AcSymbolEntry *objEntry = m_symbolNavigator.findDefinition(chain[0]);
+  if (objEntry) {
+    currentType = objEntry->returnType;
+    if (currentType.isEmpty() || currentType == QStringLiteral("Any")) {
+      currentType = chain[0];
+      if (!currentType.isEmpty()) currentType[0] = currentType[0].toUpper();
     }
   }
 
-  // 查找 ClassName.propName
-  QString qualifiedKey = typeName + QStringLiteral(".") + propName;
-  const AcSymbolEntry *propEntry = m_symbolNavigator.findDefinition(qualifiedKey);
-  if (propEntry) return propEntry;
+  // 逐级解析属性链：a → TypeA → TypeA.b → TypeB → TypeB.c
+  for (int i = 1; i < chain.size() && !currentType.isEmpty(); ++i) {
+    QString qualifiedKey = currentType + QStringLiteral(".") + chain[i];
+    result = m_symbolNavigator.findDefinition(qualifiedKey);
+    if (!result) {
+      // 尝试用变量名作为前缀（对象字面量属性）
+      QString varKey = chain[0] + QStringLiteral(".") + chain[i];
+      result = m_symbolNavigator.findDefinition(varKey);
+      if (!result) break;
+    }
+    if (i < chain.size() - 1) {
+      currentType = result->returnType;
+      if (currentType.isEmpty() || currentType == QStringLiteral("Any")) break;
+    }
+  }
+
+  if (result) return result;
 
   // 回退：遍历符号表查找名为 propName 的 kProperty 类型符号
   const auto &symbols = m_symbolNavigator.symbolTable();
@@ -948,11 +1001,35 @@ const AcSymbolEntry *CodeEditor::findPropertyDefinition(const QString &propName)
 void CodeEditor::goToDefinition(const QString &name) {
   if (name.isEmpty() || !document()) return;
 
-  const AcSymbolEntry *entry = findSymbolDefinition(name);
+  // 优先检查属性访问上下文：obj.prop → 精确查找 objType.prop
+  // 必须在 findSymbolDefinition 之前，避免找到同名的其他类属性（如 Array.length vs String.length）
+  const AcSymbolEntry *entry = findPropertyDefinition(name);
 
-  // 如果直接找不到，尝试属性访问上下文：obj.prop → 查找 objType.prop
+  // 非属性访问场景，或属性查找失败时，使用普通符号查找
   if (!entry) {
-    entry = findPropertyDefinition(name);
+    entry = findSymbolDefinition(name);
+  }
+
+  // 检查是否是 new ClassName() 上下文 → 转到类型定义
+  if (!entry) {
+    const QString &text = cachedText();
+    QTextCursor cursor = textCursor();
+    int pos = cursor.position();
+    // 向前找 new 关键字
+    int idStart = pos;
+    while (idStart > 0 &&
+           (text[idStart - 1].isLetterOrNumber() || text[idStart - 1] == QLatin1Char('_'))) {
+      --idStart;
+    }
+    // 跳过空格
+    int checkPos = idStart - 1;
+    while (checkPos > 0 && text[checkPos].isSpace()) --checkPos;
+    // 检查是否是 "new" 关键字
+    if (checkPos >= 2 && text.mid(checkPos - 2, 3) == QStringLiteral("new") &&
+        (checkPos == 2 || !text[checkPos - 3].isLetterOrNumber())) {
+      goToTypeDefinition(name);
+      return;
+    }
   }
 
   if (!entry) return;
@@ -1024,6 +1101,113 @@ int CodeEditor::findSymbolLineByName(const QString &name) const {
   return 0;
 }
 
+void CodeEditor::goToTypeDefinition(const QString &name) {
+  if (name.isEmpty() || !document()) return;
+
+  // 在符号表中查找类定义
+  const AcSymbolEntry *entry = m_symbolNavigator.findDefinition(name);
+  if (!entry || entry->kind != AcSymbolKind::kClass) {
+    // 遍历查找类名匹配的条目
+    const auto &symbols = m_symbolNavigator.symbolTable();
+    for (auto it = symbols.begin(); it != symbols.end(); ++it) {
+      if (it.value().name == name && it.value().kind == AcSymbolKind::kClass) {
+        entry = &it.value();
+        break;
+      }
+    }
+  }
+
+  if (!entry) return;
+
+  QString targetPath = entry->filePath.isEmpty() ? objectName() : entry->filePath;
+  int targetLine = entry->line;
+  if (targetLine <= 0) {
+    targetLine = findSymbolLineByName(name);
+    if (targetLine <= 0) targetLine = 1;
+  }
+
+  emit aboutToNavigate(targetPath, targetLine);
+
+  if (targetPath == objectName()) {
+    QTextCursor cursor(document());
+    QTextBlock block = document()->findBlockByNumber(targetLine - 1);
+    if (block.isValid()) {
+      cursor.setPosition(block.position());
+      setTextCursor(cursor);
+      ensureCursorVisible();
+      setFocus();
+    }
+  } else {
+    emit requestGoToLine(targetPath, targetLine);
+  }
+}
+
+void CodeEditor::showSignatureHelp() {
+  if (m_validationMode != AcValidation) return;
+
+  const QString &text = cachedText();
+  QTextCursor cursor = textCursor();
+  int pos = cursor.position();
+
+  // 光标在 ( 之后，向前查找函数名
+  // pos 现在在 ( 之后一位
+  int parenPos = pos - 1;
+  if (parenPos < 0 || text[parenPos] != QLatin1Char('(')) return;
+
+  // 向前跳过空格
+  int scanPos = parenPos - 1;
+  while (scanPos > 0 && text[scanPos].isSpace()) --scanPos;
+
+  // 提取函数名（支持 obj.method 形式）
+  int nameEnd = scanPos + 1;
+  int nameStart = scanPos;
+  while (nameStart > 0 &&
+         (text[nameStart - 1].isLetterOrNumber() || text[nameStart - 1] == QLatin1Char('_') ||
+          text[nameStart - 1] == QLatin1Char('.') || text[nameStart - 1] == QLatin1Char('$'))) {
+    --nameStart;
+  }
+  QString funcName = text.mid(nameStart, nameEnd - nameStart);
+  if (funcName.isEmpty()) return;
+
+  // 查找函数符号
+  const AcSymbolEntry *entry = nullptr;
+
+  // 如果是 obj.method 形式，查找 ClassName.method
+  if (funcName.contains(QLatin1Char('.'))) {
+    entry = m_symbolNavigator.findDefinition(funcName);
+  }
+
+  // 直接按函数名查找
+  if (!entry) {
+    entry = m_symbolNavigator.findDefinition(funcName);
+  }
+
+  // 如果函数名包含 .，尝试只匹配方法名部分
+  if (!entry && funcName.contains(QLatin1Char('.'))) {
+    QString methodName = funcName.section(QLatin1Char('.'), -1);
+    const auto &symbols = m_symbolNavigator.symbolTable();
+    for (auto it = symbols.begin(); it != symbols.end(); ++it) {
+      if (it.value().name == methodName && it.value().kind == AcSymbolKind::kMethod) {
+        entry = &it.value();
+        break;
+      }
+    }
+  }
+
+  if (!entry) return;
+
+  // 构建签名提示文本
+  QString tip = entry->signature;
+  if (!entry->returnType.isEmpty() && entry->returnType != QStringLiteral("Void")) {
+    tip += QStringLiteral("\n→ ") + entry->returnType;
+  }
+
+  // 显示在光标上方
+  QRect rect = cursorRect();
+  QPoint gpos = viewport()->mapToGlobal(QPoint(rect.x(), rect.y() - 20));
+  QToolTip::showText(gpos, tip, this);
+}
+
 QVector<QPair<int, QString>> CodeEditor::findSymbolReferences(const QString &name) const {
   QVector<QPair<int, QString>> refs;
   if (name.isEmpty()) return refs;
@@ -1063,10 +1247,70 @@ void CodeEditor::showSymbolHover(int pos, const QPoint &globalPos) {
 
   // 从符号表获取详细信息
   const AcSymbolEntry *entry = findSymbolDefinition(identifier);
+
+  // 如果直接找不到，尝试属性访问上下文
+  if (!entry) {
+    entry = findPropertyDefinition(identifier);
+  }
+
   if (entry) {
-    tipText = entry->signature;
-    if (!entry->returnType.isEmpty()) {
+    // 显示签名
+    if (!entry->signature.isEmpty()) {
+      tipText = entry->signature;
+    }
+
+    // 显示返回类型
+    if (!entry->returnType.isEmpty() && entry->returnType != QStringLiteral("Any") &&
+        entry->returnType != QStringLiteral("Void")) {
       tipText += QStringLiteral("\n返回: ") + entry->returnType;
+    }
+
+    // 显示参数详情（函数/方法）
+    if (!entry->params.isEmpty() &&
+        (entry->kind == AcSymbolKind::kFunction || entry->kind == AcSymbolKind::kMethod)) {
+      tipText += QStringLiteral("\n参数:");
+      for (const auto &param : entry->params) {
+        tipText += QStringLiteral("\n  ") + param.name + QStringLiteral(": ") +
+                   (param.type.className.isEmpty() ? QStringLiteral("Any") : param.type.className);
+      }
+    }
+
+    // 显示符号类型和所属类
+    QString kindStr;
+    switch (entry->kind) {
+      case AcSymbolKind::kFunction:
+        kindStr = QStringLiteral("函数");
+        break;
+      case AcSymbolKind::kClass:
+        kindStr = QStringLiteral("类");
+        break;
+      case AcSymbolKind::kMethod:
+        kindStr = QStringLiteral("方法");
+        break;
+      case AcSymbolKind::kProperty:
+        kindStr = QStringLiteral("属性");
+        break;
+      case AcSymbolKind::kVariable:
+        kindStr = QStringLiteral("变量");
+        break;
+      case AcSymbolKind::kParameter:
+        kindStr = QStringLiteral("参数");
+        break;
+      default:
+        break;
+    }
+    if (!kindStr.isEmpty()) {
+      tipText += QStringLiteral("\n类型: ") + kindStr;
+    }
+    if (!entry->parentClass.isEmpty()) {
+      tipText += QStringLiteral("\n所属: ") + entry->parentClass;
+    }
+
+    // 显示文件位置
+    if (!entry->filePath.isEmpty() && entry->line > 0) {
+      QFileInfo fi(entry->filePath);
+      tipText += QStringLiteral("\n位置: ") + fi.fileName() + QStringLiteral(":") +
+                 QString::number(entry->line);
     }
   }
 

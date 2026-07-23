@@ -88,8 +88,10 @@ private:
   AcType parseType();
   /// @brief 将类型名称解析为 AcType（内建类型 / 自定义类名）
   AcType resolveTypeName(const QString &name);
-  /// @brief 跳过可选的 : Type 类型注解（如果存在则消耗两个 token）
-  void skipTypeAnnotation();
+  /// @brief 解析可选的 : Type 类型注解，返回是否解析成功
+  /// @param outType 输出解析到的类型（如果有注解）
+  /// @return true 表示有类型注解并已解析，false 表示无注解
+  bool parseTypeAnnotation(AcType &outType);
 
   // ── 内部状态 ──
   int m_pos = 0;

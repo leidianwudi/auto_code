@@ -13,7 +13,10 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QInputDialog>
+#include <QLineEdit>
 #include <QMouseEvent>
+#include <QRegularExpression>
 #include <QShortcut>
 #include <QStatusBar>
 #include <QTabWidget>
@@ -25,6 +28,7 @@
 #include "main_dev_ui_ext.h"
 #include "src/engine/ac_language.h"
 #include "src/engine/script/ac_engine.h"
+#include "src/ui/main_dev/help_key/help_key_mgr.h"
 #include "src/util/ui/code/code_editor.h"
 #include "src/util/ui/code/code_find_bar.h"
 #include "src/util/ui/component/aui_message_box.h"
@@ -92,6 +96,9 @@ void MainDevMgr::initUi() {
   connect(m_ui->splitAction(), &QAction::triggered, this, &MainDevMgr::onSplitRight);
   connect(m_ui->closeAction(), &QAction::triggered, this, &MainDevMgr::onCloseEditor);
   connect(m_ui->fileTree(), &TreeDir::fileActivated, this, &MainDevMgr::openFileInEditor);
+
+  // ── 帮助 → 快捷键 ──
+  connect(m_ui->helpKeyAction(), &QAction::triggered, this, []() { HelpKeyMgr::ins().open(); });
   connect(m_ui->fileTree(), &TreeDir::renameRequested, this, &MainDevMgr::onRenameFile);
   connect(m_ui->fileTree(), &TreeDir::deleteRequested, this, &MainDevMgr::onDeleteFile);
   connect(qApp, &QApplication::focusChanged, this, &MainDevMgr::onFocusChanged);
@@ -104,6 +111,12 @@ void MainDevMgr::initUi() {
   auto *saveShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+S")), m_ui);
   connect(saveShortcut, &QShortcut::activated, this,
           [this]() { m_model->saveEditor(currentEditor()); });
+
+  // ── Alt+Left 后退 / Alt+Right 前进 ──
+  auto *backShortcut = new QShortcut(QKeySequence(QStringLiteral("Alt+Left")), m_ui);
+  connect(backShortcut, &QShortcut::activated, this, &MainDevMgr::navigateBack);
+  auto *forwardShortcut = new QShortcut(QKeySequence(QStringLiteral("Alt+Right")), m_ui);
+  connect(forwardShortcut, &QShortcut::activated, this, &MainDevMgr::navigateForward);
 
   // ── 保存全部按钮 ──
   connect(m_ui->saveAllBtn(), &QPushButton::clicked, this, [this]() {
@@ -324,6 +337,8 @@ void MainDevMgr::connectEditor(CodeEditor *editor) {
                &MainDevMgr::onGoToLine);
     disconnect(m_model->connectedEditor, &CodeEditor::aboutToNavigate, this,
                &MainDevMgr::onAboutToNavigate);
+    disconnect(m_model->connectedEditor, &CodeEditor::requestFindReferencesAll, this, nullptr);
+    disconnect(m_model->connectedEditor, &CodeEditor::requestWorkspaceSymbols, this, nullptr);
   }
 
   m_model->connectedEditor = editor;
@@ -336,6 +351,68 @@ void MainDevMgr::connectEditor(CodeEditor *editor) {
     connect(editor, &CodeEditor::requestGoToLine, this, &MainDevMgr::onGoToLine);
     // 即将导航信号（用于记录历史）
     connect(editor, &CodeEditor::aboutToNavigate, this, &MainDevMgr::onAboutToNavigate);
+    // 跨文件查找引用
+    connect(editor, &CodeEditor::requestFindReferencesAll, this, [this](const QString &name) {
+      m_ui->clearOutput();
+      m_ui->appendOutput(QStringLiteral("查找引用: ") + name, false);
+      int totalRefs = 0;
+      for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
+        auto *tabs = m_ui->editorPanelAt(pi);
+        if (!tabs) continue;
+        for (int ti = 0; ti < tabs->count(); ++ti) {
+          auto *ed = qobject_cast<CodeEditor *>(tabs->widget(ti));
+          if (!ed) continue;
+          QFileInfo fi(ed->objectName());
+          auto refs = ed->findSymbolReferences(name);
+          for (const auto &ref : refs) {
+            m_ui->appendOutput(QStringLiteral("  %1:%2 → %3")
+                                   .arg(fi.fileName())
+                                   .arg(ref.first)
+                                   .arg(ref.second.trimmed()),
+                               false);
+            ++totalRefs;
+          }
+        }
+      }
+      m_ui->appendOutput(QStringLiteral("共 %1 处引用").arg(totalRefs), false);
+    });
+    // 工作区符号搜索 (Ctrl+T)
+    connect(editor, &CodeEditor::requestWorkspaceSymbols, this, [this]() {
+      bool ok = false;
+      QString query =
+          QInputDialog::getText(m_ui, QStringLiteral("工作区符号搜索"),
+                                QStringLiteral("输入符号名:"), QLineEdit::Normal, QString(), &ok);
+      if (!ok || query.isEmpty()) return;
+
+      m_ui->clearOutput();
+      m_ui->appendOutput(QStringLiteral("符号搜索: ") + query, false);
+      int totalFound = 0;
+      for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
+        auto *tabs = m_ui->editorPanelAt(pi);
+        if (!tabs) continue;
+        for (int ti = 0; ti < tabs->count(); ++ti) {
+          auto *ed = qobject_cast<CodeEditor *>(tabs->widget(ti));
+          if (!ed) continue;
+          QFileInfo fi(ed->objectName());
+          // 搜索当前编辑器的符号表
+          QRegularExpression re(QStringLiteral("\\b") + QRegularExpression::escape(query),
+                                QRegularExpression::CaseInsensitiveOption);
+          const QString &text = ed->cachedText();
+          QStringList lines = text.split(QLatin1Char('\n'));
+          for (int i = 0; i < lines.size(); ++i) {
+            if (re.match(lines[i]).hasMatch()) {
+              m_ui->appendOutput(QStringLiteral("  %1:%2 → %3")
+                                     .arg(fi.fileName())
+                                     .arg(i + 1)
+                                     .arg(lines[i].trimmed()),
+                                 false);
+              ++totalFound;
+            }
+          }
+        }
+      }
+      m_ui->appendOutput(QStringLiteral("共 %1 处匹配").arg(totalFound), false);
+    });
     updateCursorPosition();
     editor->validate();
   } else {

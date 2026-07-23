@@ -1,13 +1,13 @@
 // ── 导出模块：database.ac ──
 
 export class DB {
-  private let config;
+  private let config: Object;
 
   public constructor(config: Object) {
     this.config = config;
   }
 
-  public function query(sql: String, params: Array): Array {
+  public function query(sql: String, params: Object[]): Object[] {
     printLog(`[DB] query: ${sql}`);
     return [];
   }

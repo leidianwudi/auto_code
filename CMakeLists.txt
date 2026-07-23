@@ -141,6 +141,12 @@ qt_add_executable(auto_code
     src/ui/create/create_mgr.cpp
     src/ui/create/create_model.h
     src/ui/create/create_model.cpp
+    src/ui/main_dev/help_key/help_key_model.h
+    src/ui/main_dev/help_key/help_key_model.cpp
+    src/ui/main_dev/help_key/help_key_ui.h
+    src/ui/main_dev/help_key/help_key_ui.cpp
+    src/ui/main_dev/help_key/help_key_mgr.h
+    src/ui/main_dev/help_key/help_key_mgr.cpp
 )
 
 target_include_directories(auto_code PRIVATE

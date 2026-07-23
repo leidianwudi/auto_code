@@ -123,6 +123,19 @@ private:
                               const QVector<ParamDef> &params, const AcType &returnType,
                               bool isStatic) const;
 
+  /// @brief 从表达式推断类型（类型推断引擎核心）
+  /// @param expr 表达式 AST 节点
+  /// @return 类型名字符串（如 "String"、"DB"），无法推断时返回空串
+  QString inferTypeFromExpr(const Expr &expr) const;
+
+  /// @brief 收集对象字面量的属性到符号表
+  /// @param varName 变量名（作为属性键前缀，如 "config.host"）
+  /// @param expr 对象字面量表达式
+  void collectObjectProperties(const QString &varName, const Expr &expr);
+
+  /// @brief 当前正在收集的类名（用于 this 关键字类型解析）
+  QString m_currentClassName;
+
   QString m_filePath;  ///< 当前文件路径
   QHash<QString, AcSymbolEntry> m_symbols;
 };

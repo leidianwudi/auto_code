@@ -101,11 +101,22 @@ public:
    */
   const QString &cachedText() const;
 
+  // ── 接口：符号引用查找（供外部控制器跨文件调用）──
+
+  /**
+   * @brief 查找当前文件中指定符号的所有引用位置
+   * @param name 符号名称
+   * @return 引用列表（行号 + 上下文文本）
+   */
+  QVector<QPair<int, QString>> findSymbolReferences(const QString &name) const;
+
 signals:
   void validationMessage(const QString &message, int errorCount = 0);
   void requestGoToLine(const QString &filePath, int line);
   void aboutToNavigate(const QString &targetFilePath, int targetLine);
   void requestFindReferences(const QString &filePath, int line, const QString &context);
+  void requestFindReferencesAll(const QString &symbolName);  ///< 跨文件查找引用
+  void requestWorkspaceSymbols();                            ///< 工作区符号搜索 (Ctrl+T)
 
 protected:
   void resizeEvent(QResizeEvent *event) override;
@@ -140,10 +151,11 @@ private:
 
   // ── 导航快捷方法（委托给各模块）──
   void goToDefinition(const QString &name);
+  void goToTypeDefinition(const QString &name);  ///< 转到类型定义（new ClassName() → class）
+  void showSignatureHelp();                      ///< 函数签名提示（输入 ( 时触发）
   QString identifierAtCursor(int pos, int *startPos = nullptr, int *endPos = nullptr) const;
   const AcSymbolEntry *findSymbolDefinition(const QString &name) const;
   const AcSymbolEntry *findPropertyDefinition(const QString &propName) const;
-  QVector<QPair<int, QString>> findSymbolReferences(const QString &name) const;
   int findSymbolLineByName(const QString &name) const;
   void setSymbolTable(const QHash<QString, AcSymbolEntry> &symbols);
 

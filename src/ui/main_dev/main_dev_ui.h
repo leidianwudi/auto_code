@@ -114,6 +114,7 @@ public:
   QAction *openAction() const { return m_openAction; }
   QAction *openFolderAction() const { return m_openFolderAction; }
   QAction *helpExampleAction() const { return m_helpExampleAction; }
+  QAction *helpKeyAction() const { return m_helpKeyAction; }
   QPushButton *buildBtn() const { return m_buildBtn; }
   QComboBox *startupCombo() const { return m_startupCombo; }
   QPushButton *saveBtn() const { return m_saveBtn; }
@@ -149,6 +150,7 @@ private:
   QAction *m_openAction = nullptr;
   QAction *m_openFolderAction = nullptr;
   QAction *m_helpExampleAction = nullptr;
+  QAction *m_helpKeyAction = nullptr;
 
   // ── 自定义标题栏 ──
   QWidget *m_titleBar = nullptr;

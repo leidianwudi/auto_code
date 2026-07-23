@@ -132,8 +132,8 @@ public:
   /// 行号区域背景色（浅灰）
   static QColor lineNumberBackground() { return QColor(Qt::lightGray).lighter(110); }
 
-  /// 当前行高亮背景色（淡黄）
-  static QColor currentLineBackground() { return QColor(Qt::yellow).lighter(180); }
+  /// 当前行高亮背景色（浅蓝，类似 VS Code 浅色主题）
+  static QColor currentLineBackground() { return QColor(230, 240, 255); }
 
   /// 括号匹配默认背景色（青色）
   static QColor bracketMatchColor() { return QColor(0, 200, 200); }
