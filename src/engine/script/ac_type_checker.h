@@ -63,6 +63,19 @@ private:
   void checkAssign(const AssignStmt &as, const TypeEnv &env);
   void checkCallStmt(const CallStmt &cs, const TypeEnv &env);
 
+  // ── 表达式分派检查（P5: 将 checkExpr 的 switch case 提取为独立方法）──
+  AcType checkExprIdent(const Expr &expr, const TypeEnv &env);
+  AcType checkExprPropAccess(const Expr &expr, const TypeEnv &env);
+  AcType checkExprIndexAccess(const Expr &expr, const TypeEnv &env);
+  AcType checkExprArray(const Expr &expr, const TypeEnv &env);
+  AcType checkExprObject(const Expr &expr, const TypeEnv &env);
+  AcType checkExprFuncExpr(const Expr &expr, const TypeEnv &env);
+  AcType checkExprFuncCall(const Expr &expr, const TypeEnv &env);
+  AcType checkExprMethodCall(const Expr &expr, const TypeEnv &env);
+  AcType checkExprNewInstance(const Expr &expr, const TypeEnv &env);
+  AcType checkExprStaticAccess(const Expr &expr, const TypeEnv &env);
+  AcType checkExprBinary(const Expr &expr, const TypeEnv &env);
+
   // ── 继承与接口检查 ──
   void checkImplements(const ClassDef &cd);
   void checkOverride(const ClassDef &cd);

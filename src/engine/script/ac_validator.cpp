@@ -5,14 +5,16 @@
 
 #include "ac_validator.h"
 
-#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
 #include <QTextStream>
 
+#include "../../util/common/path_resolver.h"
+#include "../../util/common/util_file.h"
 #include "../ac_language.h"
+#include "ac_builtin_loader.h"
 
 QVector<ValidationResult> AcValidator::validate(const QString &source) {
   QVector<ValidationResult> results;
@@ -62,22 +64,11 @@ QVector<ValidationResult> AcValidator::validate(const QString &source) {
     m_visitedFiles.insert(QFileInfo(m_filePath).canonicalFilePath());
   }
   {
-    QStringList searchPaths;
-    if (!m_filePath.isEmpty()) {
-      searchPaths << QFileInfo(m_filePath).dir().absolutePath();
-      searchPaths << QFileInfo(m_filePath).dir().absolutePath() + QStringLiteral("/..");
-    }
-    searchPaths << QCoreApplication::applicationDirPath() + QStringLiteral("/file");
-    searchPaths << QStringLiteral(PROJECT_SOURCE_DIR) + QStringLiteral("/file");
-
-    for (const auto &dir : searchPaths) {
-      QString builtinPath = QDir(dir).filePath(QStringLiteral("builtin.d.ac"));
-      if (QFile::exists(builtinPath)) {
-        m_visitedFiles.remove(QFileInfo(builtinPath).canonicalFilePath());
-        QStringList allNames;
-        collectSymbolsFromFile(builtinPath, allNames);
-        break;
-      }
+    QString builtinPath = AcBuiltinLoader::findBuiltinFile(m_filePath);
+    if (!builtinPath.isEmpty()) {
+      m_visitedFiles.remove(QFileInfo(builtinPath).canonicalFilePath());
+      QStringList allNames;
+      collectSymbolsFromFile(builtinPath, allNames);
     }
   }
 
@@ -103,14 +94,7 @@ QVector<ValidationResult> AcValidator::validate(const QString &source) {
   collectClassesAndFunctions(m_program);
 
   // 注册 C++ 原生类
-  for (const auto &name : AcClass::kAll) {
-    if (!m_classes.contains(name)) {
-      ClassDef nativeClass;
-      nativeClass.name = name;
-      nativeClass.isNative = true;
-      m_classes.insert(name, nativeClass);
-    }
-  }
+  AcBuiltinLoader::registerNativeClasses(m_classes);
 
   QStringList typeErrors;
   m_typeChecker.setFilePath(m_filePath);
@@ -164,16 +148,7 @@ void AcValidator::resolveImportedSymbols(const Block &program) {
       if (imp.filePath.isEmpty()) continue;
 
       // 将 import 路径解析为绝对路径
-      QString absPath;
-      QFileInfo fi(imp.filePath);
-      // 相对路径：基于当前文件目录解析
-      if (fi.isRelative()) {
-        QDir dir = QFileInfo(m_filePath).dir();
-        absPath = dir.filePath(imp.filePath);
-      } else {
-        absPath = imp.filePath;
-      }
-      absPath = QDir::cleanPath(absPath);
+      QString absPath = PathResolver::resolveImportPath(imp.filePath, m_filePath);
 
       // 读取目标文件并收集符号
       collectSymbolsFromFile(absPath, imp.names);
@@ -189,13 +164,7 @@ void AcValidator::collectSymbolsFromFile(const QString &filePath, const QStringL
   m_visitedFiles.insert(canonical);
 
   // 读取文件内容
-  QFile file(filePath);
-  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
-
-  QTextStream stream(&file);
-  QString source = stream.readAll();
-  file.close();
-
+  QString source = UtilFile::readUtf8(filePath);
   if (source.trimmed().isEmpty()) return;
 
   // 词法分析

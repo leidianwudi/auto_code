@@ -40,6 +40,8 @@ qt_add_executable(auto_code
     src/engine/script/undeclared_ident_validator.cpp
     src/engine/script/ac_validator.h
     src/engine/script/ac_validator.cpp
+    src/engine/script/ac_builtin_loader.h
+    src/engine/script/ac_builtin_loader.cpp
     src/engine/script/ac_symbol_table.h
     src/engine/script/ac_symbol_table.cpp
     src/engine/tpl/tpl_engine.h
@@ -75,6 +77,8 @@ qt_add_executable(auto_code
     src/util/common/util_json.cpp
     src/util/common/util_file.h
     src/util/common/util_file.cpp
+    src/util/common/path_resolver.h
+    src/util/common/path_resolver.cpp
     src/util/ui/code/tree_dir.h
     src/util/ui/code/tree_dir.cpp
     src/util/ui/code/bracket_matcher.h
@@ -85,6 +89,8 @@ qt_add_executable(auto_code
     src/util/ui/code/code_validator.cpp
     src/util/ui/code/code_editor.h
     src/util/ui/code/code_editor.cpp
+    src/util/ui/code/code_editor_navigate.cpp
+    src/util/ui/code/code_editor_complete.cpp
     src/util/ui/code/code_find_bar.h
     src/util/ui/code/code_find_bar.cpp
     src/util/ui/code/symbol_navigator.h
@@ -127,6 +133,7 @@ qt_add_executable(auto_code
     src/ui/main_dev/main_dev_ui_ext.cpp
     src/ui/main_dev/main_dev_mgr.h
     src/ui/main_dev/main_dev_mgr.cpp
+    src/ui/main_dev/main_dev_mgr_navigate.cpp
     src/ui/main_dev/main_dev_model.h
     src/ui/main_dev/main_dev_model.cpp
     src/ui/demo/demo_ui.h

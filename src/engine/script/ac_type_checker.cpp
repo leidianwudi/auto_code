@@ -371,369 +371,428 @@ AcType AcTypeChecker::checkExpr(const Expr &expr, const TypeEnv &env) {
   switch (expr.kind) {
     case Expr::kString:
       return AcType::string();
-
     case Expr::kNumber:
       return AcType::number();
-
     case Expr::kBool:
       return AcType::boolean();
-
-    case Expr::kThis:
-      if (!env.className.isEmpty()) {
-        return AcType::classType(env.className);
-      }
-      return AcType::any();
-
-    case Expr::kIdent: {
-      if (env.varTypes.contains(expr.ident)) {
-        return env.varTypes[expr.ident];
-      }
-      // 未知标识符 — 运行时才能确定，设为 Any 不报错
-      return AcType::any();
-    }
-
-    case Expr::kPropAccess: {
-      // obj.prop
-      AcType objType;
-      if (expr.propObject) {
-        objType = checkExpr(*expr.propObject, env);
-      } else if (env.varTypes.contains(expr.ident)) {
-        objType = env.varTypes[expr.ident];
-      }
-
-      // 数组类型的 length 属性 → Number（kArray 或 kClass "Array"）
-      if (expr.prop == QStringLiteral("length") &&
-          (objType.kind == AcType::kArray ||
-           (objType.kind == AcType::kClass && objType.className == QStringLiteral("Array")))) {
-        return AcType::number();
-      }
-      // 字符串类型的 length 属性 → Number（kString 或 kClass "String"）
-      if (expr.prop == QStringLiteral("length") &&
-          (objType.kind == AcType::kString ||
-           (objType.kind == AcType::kClass && objType.className == QStringLiteral("String")))) {
-        return AcType::number();
-      }
-
-      // 类类型的属性访问
-      if (objType.kind == AcType::kClass && m_classes->contains(objType.className)) {
-        const ClassDef &cd = (*m_classes)[objType.className];
-        for (const auto &prop : cd.properties) {
-          if (prop.key == expr.prop) return prop.type;
-        }
-      }
-      return AcType::any();
-    }
-
-    case Expr::kIndexAccess: {
-      // obj[expr] — 索引访问
-      AcType objType = checkExpr(*expr.left, env);
-      checkExpr(*expr.right, env);
-      if (objType.kind == AcType::kArray && objType.elementType) {
-        return *objType.elementType;
-      }
-      // kClass "Array" 的索引访问 → 返回 Object（元素类型未知）
-      if (objType.kind == AcType::kClass && objType.className == QStringLiteral("Array")) {
-        return AcType::classType(QStringLiteral("Object"));
-      }
-      // kClass "String" 的索引访问 → 返回 String（单字符）
-      if (objType.kind == AcType::kClass && objType.className == QStringLiteral("String")) {
-        return AcType::string();
-      }
-      // kString 的索引访问 → 返回 String（单字符）
-      if (objType.kind == AcType::kString) {
-        return AcType::string();
-      }
-      return AcType::any();
-    }
-
     case Expr::kNull:
-      return AcType::any();
-
     case Expr::kUndefined:
       return AcType::any();
-
+    case Expr::kThis:
+    case Expr::kIdent:
+      return checkExprIdent(expr, env);
+    case Expr::kPropAccess:
+      return checkExprPropAccess(expr, env);
+    case Expr::kIndexAccess:
+      return checkExprIndexAccess(expr, env);
     case Expr::kTernary:
       checkExpr(*expr.left, env);
       return checkExpr(*expr.right, env);
-
-    case Expr::kArray: {
-      // 推导数组元素类型：取所有元素的最小公共类型
-      AcType elemType = AcType::any();
-      for (const auto &item : expr.arrItems) {
-        AcType itemType = checkExpr(*item, env);
-        if (elemType.kind == AcType::kAny && itemType.kind != AcType::kAny) {
-          elemType = itemType;
-        }
-      }
-      return AcType::arrayOf(elemType);
-    }
-
+    case Expr::kArray:
+      return checkExprArray(expr, env);
     case Expr::kObject:
-      // 对象字面量 — 类型为 Any
-      for (const auto &entry : expr.objEntries) {
-        if (entry.value) checkExpr(*entry.value, env);
-      }
-      return AcType::any();
-
-    case Expr::kFuncExpr: {
-      // 函数表达式 — 检查函数体，返回类型为函数的返回类型
-      TypeEnv funcEnv = env;
-      for (const auto &param : expr.funcExpr.params) {
-        funcEnv.varTypes.insert(param.name, param.type);
-      }
-      checkBlock(expr.funcExpr.body, funcEnv);
-      return expr.funcExpr.returnType;
-    }
-
-    case Expr::kFuncCall: {
-      // 函数调用 name(args)
-      // 检查参数类型是否匹配函数定义
-      if (m_functions->contains(expr.funcCall.name)) {
-        const MethodDef &func = (*m_functions)[expr.funcCall.name];
-        // 检查参数个数（允许省略尾部参数，符合 JS 语义）
-        int argCount = expr.funcCall.args.size();
-        int paramCount = func.params.size();
-        if (argCount > paramCount) {
-          reportError(QStringLiteral("function '%1' expects at most %2 arguments but got %3")
-                          .arg(expr.funcCall.name)
-                          .arg(paramCount)
-                          .arg(argCount),
-                      expr.line);
-        }
-        // 检查参数类型
-        for (int i = 0; i < qMin(argCount, paramCount); ++i) {
-          AcType argType = checkExpr(*expr.funcCall.args[i], env);
-          if (!isCompatible(argType, func.params[i].type)) {
-            reportError(
-                QStringLiteral("type mismatch in argument %1 of '%2': expected '%3' but got '%4'")
-                    .arg(i + 1)
-                    .arg(expr.funcCall.name)
-                    .arg(typeToString(func.params[i].type), typeToString(argType)),
-                expr.funcCall.args[i]->line);
-          }
-        }
-        return func.returnType;
-      }
-      // 未知函数 — 运行时确定
-      for (const auto &arg : expr.funcCall.args) checkExpr(*arg, env);
-      return AcType::any();
-    }
-
-    case Expr::kMethodCall: {
-      // obj.method(args)
-      AcType objType;
-      if (expr.methodCall.object) {
-        // 链式访问：先计算对象表达式类型
-        objType = checkExpr(*expr.methodCall.object, env);
-      } else if (env.varTypes.contains(expr.methodCall.objName)) {
-        objType = env.varTypes[expr.methodCall.objName];
-      }
-      // 将字面量类型统一映射到类类型，便于查找内置类方法
-      if (objType.kind == AcType::kString) {
-        objType = AcType::classType(QStringLiteral("String"));
-      } else if (objType.kind == AcType::kNumber) {
-        objType = AcType::classType(QStringLiteral("Number"));
-      } else if (objType.kind == AcType::kBool) {
-        objType = AcType::classType(QStringLiteral("Bool"));
-      } else if (objType.kind == AcType::kArray) {
-        objType = AcType::classType(QStringLiteral("Array"));
-      }
-      if (objType.kind == AcType::kClass && m_classes->contains(objType.className)) {
-        const ClassDef &cd = (*m_classes)[objType.className];
-        for (const auto &method : cd.methods) {
-          if (method.name == expr.methodCall.methodName) {
-            // 检查参数个数（允许省略尾部参数，符合 JS 语义）
-            int argCount = expr.methodCall.args.size();
-            int paramCount = method.params.size();
-            if (argCount > paramCount) {
-              reportError(QStringLiteral(
-                              "method '%1' of class '%2' expects at most %3 arguments but got %4")
-                              .arg(method.name, cd.name)
-                              .arg(paramCount)
-                              .arg(argCount),
-                          expr.line);
-            }
-            // 检查参数类型
-            for (int i = 0; i < qMin(argCount, paramCount); ++i) {
-              AcType argType = checkExpr(*expr.methodCall.args[i], env);
-              if (!isCompatible(argType, method.params[i].type)) {
-                reportError(
-                    QStringLiteral(
-                        "type mismatch in argument %1 of '%2.%3': expected '%4' but got '%5'")
-                        .arg(i + 1)
-                        .arg(cd.name, method.name)
-                        .arg(typeToString(method.params[i].type), typeToString(argType)),
-                    expr.methodCall.args[i]->line);
-              }
-            }
-            return method.returnType;
-          }
-        }
-        reportError(QStringLiteral("class '%1' has no method named '%2'")
-                        .arg(objType.className, expr.methodCall.methodName),
-                    expr.line);
-      }
-      for (const auto &arg : expr.methodCall.args) checkExpr(*arg, env);
-      return AcType::any();
-    }
-
-    case Expr::kNewInstance: {
-      // new ClassName()
-      if (!m_classes->contains(expr.className) && !m_declaredVars.contains(expr.className)) {
-        reportError(QStringLiteral("unknown class '%1' in 'new' expression").arg(expr.className),
-                    expr.line);
-        return AcType::any();
-      }
-      return AcType::classType(expr.className);
-    }
-
-    case Expr::kStaticAccess: {
-      // ClassName::member 或 ClassName::method(args)
-      if (m_classes->contains(expr.className)) {
-        const ClassDef &cd = (*m_classes)[expr.className];
-
-        // 如果是方法调用（有参数列表）
-        if (!expr.funcCall.args.empty()) {
-          // 查找静态方法
-          for (const auto &method : cd.methods) {
-            if (method.isStatic && method.name == expr.prop) {
-              // 检查参数类型
-              int argCount = expr.funcCall.args.size();
-              int paramCount = method.params.size();
-              if (argCount != paramCount) {
-                reportError(QStringLiteral("static method '%1::%2' expects %3 arguments but got %4")
-                                .arg(expr.className, expr.prop)
-                                .arg(paramCount)
-                                .arg(argCount),
-                            expr.line);
-              }
-              for (int i = 0; i < qMin(argCount, paramCount); ++i) {
-                AcType argType = checkExpr(*expr.funcCall.args[i], env);
-                if (!isCompatible(argType, method.params[i].type)) {
-                  reportError(QStringLiteral("type mismatch in argument %1 of static method "
-                                             "'%2::%3': expected '%4' but got '%5'")
-                                  .arg(i + 1)
-                                  .arg(expr.className, expr.prop)
-                                  .arg(typeToString(method.params[i].type), typeToString(argType)),
-                              expr.funcCall.args[i]->line);
-                }
-              }
-              return method.returnType;
-            }
-          }
-          reportError(
-              QStringLiteral("static method '%1::%2' not found").arg(expr.className, expr.prop),
-              expr.line);
-          return AcType::any();
-        }
-
-        // 属性访问：ClassName::member
-        for (const auto &prop : cd.properties) {
-          if (prop.isStatic && prop.key == expr.prop) {
-            return prop.type;
-          }
-        }
-        // 无参数静态方法调用：ClassName::method
-        for (const auto &method : cd.methods) {
-          if (method.isStatic && method.name == expr.prop) {
-            return method.returnType;
-          }
-        }
-        reportError(
-            QStringLiteral("static member '%1::%2' not found").arg(expr.className, expr.prop),
-            expr.line);
-      } else if (!m_declaredVars.contains(expr.className)) {
-        reportError(QStringLiteral("unknown class '%1' in static access").arg(expr.className),
-                    expr.line);
-      }
-      return AcType::any();
-    }
-
-    case Expr::kBinary: {
-      // 二元运算：检查左右操作数类型兼容
-      AcType leftType = checkExpr(*expr.left, env);
-      AcType rightType = checkExpr(*expr.right, env);
-
-      // 将 kClass "String" 视为 kString，kClass "Number" 视为 kNumber（统一字面量与类类型）
-      auto normalizeType = [](AcType &t) {
-        if (t.kind == AcType::kClass) {
-          if (t.className == QStringLiteral("String"))
-            t = AcType::string();
-          else if (t.className == QStringLiteral("Number"))
-            t = AcType::number();
-          else if (t.className == QStringLiteral("Bool"))
-            t = AcType::boolean();
-        }
-      };
-      normalizeType(leftType);
-      normalizeType(rightType);
-
-      // ── 加法（+）支持字符串拼接和数字加法 ──
-      if (expr.binOp == Expr::kAdd) {
-        // String + String → String
-        if (leftType.kind == AcType::kString && rightType.kind == AcType::kString) {
-          return AcType::string();
-        }
-        // String + 任意 → String（Number 隐式转 String）
-        if (leftType.kind == AcType::kString) {
-          return AcType::string();
-        }
-        // 任意 + String → String（Number 隐式转 String）
-        if (rightType.kind == AcType::kString) {
-          return AcType::string();
-        }
-        // 任意 + 任意 → 如果包含 Any 则不做检查
-        if (leftType.kind == AcType::kAny || rightType.kind == AcType::kAny) {
-          return AcType::any();
-        }
-        // Number + Number → Number
-        if (leftType.kind == AcType::kNumber && rightType.kind == AcType::kNumber) {
-          return AcType::number();
-        }
-        // 其他类型组合 → Number（运行时决定）
-        return AcType::number();
-      }
-
-      // ── 比较运算符（== != < > <= >=）返回 Bool ──
-      if (expr.binOp == Expr::kEq || expr.binOp == Expr::kNeq || expr.binOp == Expr::kLt ||
-          expr.binOp == Expr::kGt || expr.binOp == Expr::kLte || expr.binOp == Expr::kGte) {
-        return AcType::boolean();
-      }
-
-      // ── 逻辑运算符（|| &&）返回操作数类型（JS 语义） ──
-      if (expr.binOp == Expr::kOr || expr.binOp == Expr::kAnd) {
-        if (leftType.kind == AcType::kAny || rightType.kind == AcType::kAny) {
-          return AcType::any();
-        }
-        if (leftType.kind == rightType.kind) {
-          return leftType;
-        }
-        return rightType;
-      }
-
-      // ── 减法、乘法、除法（- * /）仅支持 Number ──
-      if (leftType.kind == AcType::kNumber && rightType.kind == AcType::kNumber) {
-        return AcType::number();
-      }
-
-      // 包含 Any 时不报错
-      if (leftType.kind == AcType::kAny || rightType.kind == AcType::kAny) {
-        return AcType::any();
-      }
-
-      // 类型不兼容
-      if (!isCompatible(leftType, rightType)) {
-        reportError(QStringLiteral("type mismatch: '%1' and '%2' in binary operation")
-                        .arg(typeToString(leftType), typeToString(rightType)),
-                    expr.line);
-      }
-
-      return AcType::number();
-    }
-
+      return checkExprObject(expr, env);
+    case Expr::kFuncExpr:
+      return checkExprFuncExpr(expr, env);
+    case Expr::kFuncCall:
+      return checkExprFuncCall(expr, env);
+    case Expr::kMethodCall:
+      return checkExprMethodCall(expr, env);
+    case Expr::kNewInstance:
+      return checkExprNewInstance(expr, env);
+    case Expr::kStaticAccess:
+      return checkExprStaticAccess(expr, env);
+    case Expr::kBinary:
+      return checkExprBinary(expr, env);
     default:
       return AcType::any();
   }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  标识符 / this 表达式检查
+// ═════════════════════════════════════════════════════════════════════════════
+
+AcType AcTypeChecker::checkExprIdent(const Expr &expr, const TypeEnv &env) {
+  if (expr.kind == Expr::kThis) {
+    if (!env.className.isEmpty()) {
+      return AcType::classType(env.className);
+    }
+    return AcType::any();
+  }
+  // kIdent
+  if (env.varTypes.contains(expr.ident)) {
+    return env.varTypes[expr.ident];
+  }
+  // 未知标识符 — 运行时才能确定，设为 Any 不报错
+  return AcType::any();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  属性访问检查 obj.prop
+// ═════════════════════════════════════════════════════════════════════════════
+
+AcType AcTypeChecker::checkExprPropAccess(const Expr &expr, const TypeEnv &env) {
+  // obj.prop
+  AcType objType;
+  if (expr.propObject) {
+    objType = checkExpr(*expr.propObject, env);
+  } else if (env.varTypes.contains(expr.ident)) {
+    objType = env.varTypes[expr.ident];
+  }
+
+  // 数组类型的 length 属性 → Number（kArray 或 kClass "Array"）
+  if (expr.prop == QStringLiteral("length") &&
+      (objType.kind == AcType::kArray ||
+       (objType.kind == AcType::kClass && objType.className == QStringLiteral("Array")))) {
+    return AcType::number();
+  }
+  // 字符串类型的 length 属性 → Number（kString 或 kClass "String"）
+  if (expr.prop == QStringLiteral("length") &&
+      (objType.kind == AcType::kString ||
+       (objType.kind == AcType::kClass && objType.className == QStringLiteral("String")))) {
+    return AcType::number();
+  }
+
+  // 类类型的属性访问
+  if (objType.kind == AcType::kClass && m_classes->contains(objType.className)) {
+    const ClassDef &cd = (*m_classes)[objType.className];
+    for (const auto &prop : cd.properties) {
+      if (prop.key == expr.prop) return prop.type;
+    }
+  }
+  return AcType::any();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  索引访问检查 obj[expr]
+// ═════════════════════════════════════════════════════════════════════════════
+
+AcType AcTypeChecker::checkExprIndexAccess(const Expr &expr, const TypeEnv &env) {
+  // obj[expr] — 索引访问
+  AcType objType = checkExpr(*expr.left, env);
+  checkExpr(*expr.right, env);
+  if (objType.kind == AcType::kArray && objType.elementType) {
+    return *objType.elementType;
+  }
+  // kClass "Array" 的索引访问 → 返回 Object（元素类型未知）
+  if (objType.kind == AcType::kClass && objType.className == QStringLiteral("Array")) {
+    return AcType::classType(QStringLiteral("Object"));
+  }
+  // kClass "String" 的索引访问 → 返回 String（单字符）
+  if (objType.kind == AcType::kClass && objType.className == QStringLiteral("String")) {
+    return AcType::string();
+  }
+  // kString 的索引访问 → 返回 String（单字符）
+  if (objType.kind == AcType::kString) {
+    return AcType::string();
+  }
+  return AcType::any();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  数组字面量检查
+// ═════════════════════════════════════════════════════════════════════════════
+
+AcType AcTypeChecker::checkExprArray(const Expr &expr, const TypeEnv &env) {
+  // 推导数组元素类型：取所有元素的最小公共类型
+  AcType elemType = AcType::any();
+  for (const auto &item : expr.arrItems) {
+    AcType itemType = checkExpr(*item, env);
+    if (elemType.kind == AcType::kAny && itemType.kind != AcType::kAny) {
+      elemType = itemType;
+    }
+  }
+  return AcType::arrayOf(elemType);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  对象字面量检查
+// ═════════════════════════════════════════════════════════════════════════════
+
+AcType AcTypeChecker::checkExprObject(const Expr &expr, const TypeEnv &env) {
+  // 对象字面量 — 类型为 Any
+  for (const auto &entry : expr.objEntries) {
+    if (entry.value) checkExpr(*entry.value, env);
+  }
+  return AcType::any();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  函数表达式检查
+// ═════════════════════════════════════════════════════════════════════════════
+
+AcType AcTypeChecker::checkExprFuncExpr(const Expr &expr, const TypeEnv &env) {
+  // 函数表达式 — 检查函数体，返回类型为函数的返回类型
+  TypeEnv funcEnv = env;
+  for (const auto &param : expr.funcExpr.params) {
+    funcEnv.varTypes.insert(param.name, param.type);
+  }
+  checkBlock(expr.funcExpr.body, funcEnv);
+  return expr.funcExpr.returnType;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  函数调用检查 name(args)
+// ═════════════════════════════════════════════════════════════════════════════
+
+AcType AcTypeChecker::checkExprFuncCall(const Expr &expr, const TypeEnv &env) {
+  // 函数调用 name(args)
+  // 检查参数类型是否匹配函数定义
+  if (m_functions->contains(expr.funcCall.name)) {
+    const MethodDef &func = (*m_functions)[expr.funcCall.name];
+    // 检查参数个数（允许省略尾部参数，符合 JS 语义）
+    int argCount = expr.funcCall.args.size();
+    int paramCount = func.params.size();
+    if (argCount > paramCount) {
+      reportError(QStringLiteral("function '%1' expects at most %2 arguments but got %3")
+                      .arg(expr.funcCall.name)
+                      .arg(paramCount)
+                      .arg(argCount),
+                  expr.line);
+    }
+    // 检查参数类型
+    for (int i = 0; i < qMin(argCount, paramCount); ++i) {
+      AcType argType = checkExpr(*expr.funcCall.args[i], env);
+      if (!isCompatible(argType, func.params[i].type)) {
+        reportError(
+            QStringLiteral("type mismatch in argument %1 of '%2': expected '%3' but got '%4'")
+                .arg(i + 1)
+                .arg(expr.funcCall.name)
+                .arg(typeToString(func.params[i].type), typeToString(argType)),
+            expr.funcCall.args[i]->line);
+      }
+    }
+    return func.returnType;
+  }
+  // 未知函数 — 运行时确定
+  for (const auto &arg : expr.funcCall.args) checkExpr(*arg, env);
+  return AcType::any();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  方法调用检查 obj.method(args)
+// ═════════════════════════════════════════════════════════════════════════════
+
+AcType AcTypeChecker::checkExprMethodCall(const Expr &expr, const TypeEnv &env) {
+  // obj.method(args)
+  AcType objType;
+  if (expr.methodCall.object) {
+    // 链式访问：先计算对象表达式类型
+    objType = checkExpr(*expr.methodCall.object, env);
+  } else if (env.varTypes.contains(expr.methodCall.objName)) {
+    objType = env.varTypes[expr.methodCall.objName];
+  }
+  // 将字面量类型统一映射到类类型，便于查找内置类方法
+  if (objType.kind == AcType::kString) {
+    objType = AcType::classType(QStringLiteral("String"));
+  } else if (objType.kind == AcType::kNumber) {
+    objType = AcType::classType(QStringLiteral("Number"));
+  } else if (objType.kind == AcType::kBool) {
+    objType = AcType::classType(QStringLiteral("Bool"));
+  } else if (objType.kind == AcType::kArray) {
+    objType = AcType::classType(QStringLiteral("Array"));
+  }
+  if (objType.kind == AcType::kClass && m_classes->contains(objType.className)) {
+    const ClassDef &cd = (*m_classes)[objType.className];
+    for (const auto &method : cd.methods) {
+      if (method.name == expr.methodCall.methodName) {
+        // 检查参数个数（允许省略尾部参数，符合 JS 语义）
+        int argCount = expr.methodCall.args.size();
+        int paramCount = method.params.size();
+        if (argCount > paramCount) {
+          reportError(
+              QStringLiteral("method '%1' of class '%2' expects at most %3 arguments but got %4")
+                  .arg(method.name, cd.name)
+                  .arg(paramCount)
+                  .arg(argCount),
+              expr.line);
+        }
+        // 检查参数类型
+        for (int i = 0; i < qMin(argCount, paramCount); ++i) {
+          AcType argType = checkExpr(*expr.methodCall.args[i], env);
+          if (!isCompatible(argType, method.params[i].type)) {
+            reportError(QStringLiteral(
+                            "type mismatch in argument %1 of '%2.%3': expected '%4' but got '%5'")
+                            .arg(i + 1)
+                            .arg(cd.name, method.name)
+                            .arg(typeToString(method.params[i].type), typeToString(argType)),
+                        expr.methodCall.args[i]->line);
+          }
+        }
+        return method.returnType;
+      }
+    }
+    reportError(QStringLiteral("class '%1' has no method named '%2'")
+                    .arg(objType.className, expr.methodCall.methodName),
+                expr.line);
+  }
+  for (const auto &arg : expr.methodCall.args) checkExpr(*arg, env);
+  return AcType::any();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  new 实例化检查 new ClassName()
+// ═════════════════════════════════════════════════════════════════════════════
+
+AcType AcTypeChecker::checkExprNewInstance(const Expr &expr, const TypeEnv &env) {
+  // new ClassName()
+  if (!m_classes->contains(expr.className) && !m_declaredVars.contains(expr.className)) {
+    reportError(QStringLiteral("unknown class '%1' in 'new' expression").arg(expr.className),
+                expr.line);
+    return AcType::any();
+  }
+  return AcType::classType(expr.className);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  静态访问检查 ClassName::member / ClassName::method(args)
+// ═════════════════════════════════════════════════════════════════════════════
+
+AcType AcTypeChecker::checkExprStaticAccess(const Expr &expr, const TypeEnv &env) {
+  // ClassName::member 或 ClassName::method(args)
+  if (m_classes->contains(expr.className)) {
+    const ClassDef &cd = (*m_classes)[expr.className];
+
+    // 如果是方法调用（有参数列表）
+    if (!expr.funcCall.args.empty()) {
+      // 查找静态方法
+      for (const auto &method : cd.methods) {
+        if (method.isStatic && method.name == expr.prop) {
+          // 检查参数类型
+          int argCount = expr.funcCall.args.size();
+          int paramCount = method.params.size();
+          if (argCount != paramCount) {
+            reportError(QStringLiteral("static method '%1::%2' expects %3 arguments but got %4")
+                            .arg(expr.className, expr.prop)
+                            .arg(paramCount)
+                            .arg(argCount),
+                        expr.line);
+          }
+          for (int i = 0; i < qMin(argCount, paramCount); ++i) {
+            AcType argType = checkExpr(*expr.funcCall.args[i], env);
+            if (!isCompatible(argType, method.params[i].type)) {
+              reportError(QStringLiteral("type mismatch in argument %1 of static method "
+                                         "'%2::%3': expected '%4' but got '%5'")
+                              .arg(i + 1)
+                              .arg(expr.className, expr.prop)
+                              .arg(typeToString(method.params[i].type), typeToString(argType)),
+                          expr.funcCall.args[i]->line);
+            }
+          }
+          return method.returnType;
+        }
+      }
+      reportError(QStringLiteral("static method '%1::%2' not found").arg(expr.className, expr.prop),
+                  expr.line);
+      return AcType::any();
+    }
+
+    // 属性访问：ClassName::member
+    for (const auto &prop : cd.properties) {
+      if (prop.isStatic && prop.key == expr.prop) {
+        return prop.type;
+      }
+    }
+    // 无参数静态方法调用：ClassName::method
+    for (const auto &method : cd.methods) {
+      if (method.isStatic && method.name == expr.prop) {
+        return method.returnType;
+      }
+    }
+    reportError(QStringLiteral("static member '%1::%2' not found").arg(expr.className, expr.prop),
+                expr.line);
+  } else if (!m_declaredVars.contains(expr.className)) {
+    reportError(QStringLiteral("unknown class '%1' in static access").arg(expr.className),
+                expr.line);
+  }
+  return AcType::any();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  二元运算检查
+// ═════════════════════════════════════════════════════════════════════════════
+
+AcType AcTypeChecker::checkExprBinary(const Expr &expr, const TypeEnv &env) {
+  // 二元运算：检查左右操作数类型兼容
+  AcType leftType = checkExpr(*expr.left, env);
+  AcType rightType = checkExpr(*expr.right, env);
+
+  // 将 kClass "String" 视为 kString，kClass "Number" 视为 kNumber（统一字面量与类类型）
+  auto normalizeType = [](AcType &t) {
+    if (t.kind == AcType::kClass) {
+      if (t.className == QStringLiteral("String"))
+        t = AcType::string();
+      else if (t.className == QStringLiteral("Number"))
+        t = AcType::number();
+      else if (t.className == QStringLiteral("Bool"))
+        t = AcType::boolean();
+    }
+  };
+  normalizeType(leftType);
+  normalizeType(rightType);
+
+  // ── 加法（+）支持字符串拼接和数字加法 ──
+  if (expr.binOp == Expr::kAdd) {
+    // String + String → String
+    if (leftType.kind == AcType::kString && rightType.kind == AcType::kString) {
+      return AcType::string();
+    }
+    // String + 任意 → String（Number 隐式转 String）
+    if (leftType.kind == AcType::kString) {
+      return AcType::string();
+    }
+    // 任意 + String → String（Number 隐式转 String）
+    if (rightType.kind == AcType::kString) {
+      return AcType::string();
+    }
+    // 任意 + 任意 → 如果包含 Any 则不做检查
+    if (leftType.kind == AcType::kAny || rightType.kind == AcType::kAny) {
+      return AcType::any();
+    }
+    // Number + Number → Number
+    if (leftType.kind == AcType::kNumber && rightType.kind == AcType::kNumber) {
+      return AcType::number();
+    }
+    // 其他类型组合 → Number（运行时决定）
+    return AcType::number();
+  }
+
+  // ── 比较运算符（== != < > <= >=）返回 Bool ──
+  if (expr.binOp == Expr::kEq || expr.binOp == Expr::kNeq || expr.binOp == Expr::kLt ||
+      expr.binOp == Expr::kGt || expr.binOp == Expr::kLte || expr.binOp == Expr::kGte) {
+    return AcType::boolean();
+  }
+
+  // ── 逻辑运算符（|| &&）返回操作数类型（JS 语义） ──
+  if (expr.binOp == Expr::kOr || expr.binOp == Expr::kAnd) {
+    if (leftType.kind == AcType::kAny || rightType.kind == AcType::kAny) {
+      return AcType::any();
+    }
+    if (leftType.kind == rightType.kind) {
+      return leftType;
+    }
+    return rightType;
+  }
+
+  // ── 减法、乘法、除法（- * /）仅支持 Number ──
+  if (leftType.kind == AcType::kNumber && rightType.kind == AcType::kNumber) {
+    return AcType::number();
+  }
+
+  // 包含 Any 时不报错
+  if (leftType.kind == AcType::kAny || rightType.kind == AcType::kAny) {
+    return AcType::any();
+  }
+
+  // 类型不兼容
+  if (!isCompatible(leftType, rightType)) {
+    reportError(QStringLiteral("type mismatch: '%1' and '%2' in binary operation")
+                    .arg(typeToString(leftType), typeToString(rightType)),
+                expr.line);
+  }
+
+  return AcType::number();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

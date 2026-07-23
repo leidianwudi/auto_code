@@ -5,12 +5,13 @@
 
 #include "ac_executor.h"
 
-#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
-#include <QTextStream>
 
+#include "../../util/common/path_resolver.h"
+#include "../../util/common/util_file.h"
 #include "../ac_language.h"
+#include "ac_builtin_loader.h"
 #include "undeclared_ident_validator.h"
 
 AcExecutor::AcExecutor() = default;
@@ -94,63 +95,9 @@ QStringList AcExecutor::validateTypes() {
     }
   }
 
-  // 加载 builtin.d.ac 声明文件（C++ 原生函数和内置类型）
+  // 加载 builtin.d.ac 声明文件（C++ 原生函数和内置类型）并注册原生类
   // 必须在类型检查之前加载，以便类型推断引擎能查到内置函数返回类型
-  {
-    QStringList searchPaths;
-    if (!m_scriptFile.isEmpty()) {
-      searchPaths << QFileInfo(m_scriptFile).dir().absolutePath();
-      searchPaths << QFileInfo(m_scriptFile).dir().absolutePath() + QStringLiteral("/..");
-    }
-    searchPaths << QCoreApplication::applicationDirPath() + QStringLiteral("/file");
-#ifndef PROJECT_SOURCE_DIR
-#define PROJECT_SOURCE_DIR "."
-#endif
-    searchPaths << QStringLiteral(PROJECT_SOURCE_DIR) + QStringLiteral("/file");
-
-    for (const auto &dir : searchPaths) {
-      QString builtinPath = QDir(dir).filePath(QStringLiteral("builtin.d.ac"));
-      if (QFile::exists(builtinPath)) {
-        // 解析 builtin.d.ac，收集其中的类和函数定义
-        QFile file(builtinPath);
-        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-          QTextStream stream(&file);
-          QString source = stream.readAll();
-          file.close();
-
-          AcLexer lexer;
-          AcParser parser;
-          Block builtinAst;
-          QSet<QString> builtinVars;
-          QString lexError;
-          QVector<Token> tokens = lexer.tokenize(source, lexError);
-          if (lexError.isEmpty() && parser.parse(tokens, builtinAst, builtinVars)) {
-            for (const auto &stmt : builtinAst.stmts) {
-              if (stmt.kind == Block::Stmt::kClassDef) {
-                if (!classes.contains(stmt.classDef.name)) {
-                  classes.insert(stmt.classDef.name, stmt.classDef);
-                }
-              } else if (stmt.kind == Block::Stmt::kFuncDef) {
-                if (!functions.contains(stmt.funcDef.name)) {
-                  functions.insert(stmt.funcDef.name, stmt.funcDef);
-                }
-              }
-            }
-          }
-        }
-        break;
-      }
-    }
-  }
-
-  for (const auto &name : AcClass::kAll) {
-    if (!classes.contains(name)) {
-      ClassDef nativeClass;
-      nativeClass.name = name;
-      nativeClass.isNative = true;
-      classes.insert(name, nativeClass);
-    }
-  }
+  AcBuiltinLoader::loadAll(m_scriptFile, classes, functions);
 
   AcTypeChecker typeChecker;
   typeChecker.setFilePath(m_scriptFile);
@@ -227,12 +174,7 @@ QJsonValue AcExecutor::execute() {
 // 模块链接
 // ═════════════════════════════════════════════════════════════════════════════
 
-/// @brief 读取文件全部内容（UTF-8）
-static QString readFileUtf8(const QString &path) {
-  QFile f(path);
-  if (!f.open(QIODevice::ReadOnly)) return {};
-  return QString::fromUtf8(f.readAll());
-}
+/// @brief 读取文件全部内容（UTF-8）— 已迁移至 UtilFile::readUtf8
 
 /**
  * @brief 处理 import 语句，加载并链接导出符号
@@ -273,7 +215,7 @@ bool AcExecutor::linkImportsRecursive(Block &program, const QString &baseDir,
 
     // 解析文件路径
     QString absPath = QDir(baseDir).absoluteFilePath(imp.filePath);
-    absPath = QFileInfo(absPath).absoluteFilePath();
+    absPath = QFileInfo(absPath).absoluteFilePath();  // 规范化为绝对路径
 
     if (!QFileInfo::exists(absPath)) {
       m_error = QStringLiteral("import: file not found '%1'").arg(imp.filePath);
@@ -290,7 +232,7 @@ bool AcExecutor::linkImportsRecursive(Block &program, const QString &baseDir,
     visited.insert(absPath);
 
     // 读取并解析目标文件
-    QString source = readFileUtf8(absPath);
+    QString source = UtilFile::readUtf8(absPath);
     if (source.isEmpty()) {
       m_error = QStringLiteral("import: cannot read file '%1'").arg(imp.filePath);
       return false;

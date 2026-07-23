@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file ac_interpreter.cpp
  * @brief 解释执行器 — 辅助函数、变量操作、引用计数、执行入口
  */
@@ -17,7 +17,9 @@
 #include "../function/fun_mgr.h"
 #include "../tpl/tpl_engine.h"
 #include "ac_builtin_eval.h"
+#include "ac_builtin_loader.h"
 #include "ac_object_manager.h"
+
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  变量操作
@@ -245,12 +247,7 @@ QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
 
   pushScope();
 
-  for (const auto &name : AcClass::kAll) {
-    ClassDef nativeClass;
-    nativeClass.name = name;
-    nativeClass.isNative = true;
-    m_classes[name] = nativeClass;
-  }
+  AcBuiltinLoader::registerNativeClasses(m_classes);
 
   FunMgr::init();
   FunBuiltin::setContext({m_scriptDir, m_rootDir, m_logCallback, &m_generatedFiles, 0});
