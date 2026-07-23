@@ -132,8 +132,9 @@ void CodeEditor::performValidation() {
     case AcValidation: {
       AcValidator validator;
       validateWithValidator(&validator);
-      // 验证后提取符号表数据
+      // 验证后提取符号表数据，同步到导航器
       m_symbolTable = validator.symbolTable().allSymbols();
+      m_symbolNavigator.setSymbolTable(m_symbolTable);
       break;
     }
     default:
@@ -1085,6 +1086,7 @@ void CodeEditor::mouseReleaseEvent(QMouseEvent *event) {
 
 void CodeEditor::setSymbolTable(const QHash<QString, AcSymbolEntry> &symbols) {
   m_symbolTable = symbols;
+  m_symbolNavigator.setSymbolTable(symbols);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
