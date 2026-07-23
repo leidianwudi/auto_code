@@ -57,11 +57,13 @@ LightTpl::LightTpl(QTextDocument *parent) : QSyntaxHighlighter(parent) {
   stringFormat.setForeground(string_);
   m_rules.append({QRegularExpression(QStringLiteral("\"[^\"]*\"|'[^']*'")), stringFormat});
 
-  // ── 5. 行注释（灰色斜体） ──
+  // ── 5. 行注释定界符（灰色斜体） ──
+  // .tpl 中 // 是输出文本（非模板注释），只把 // 本身标灰
+  // 后续文字交给正常规则处理（如 ${var} 显示为变量绿色）
   QTextCharFormat commentFormat;
   commentFormat.setForeground(comment);
   commentFormat.setFontItalic(true);
-  m_rules.append({QRegularExpression(QStringLiteral("//[^\n]*")), commentFormat});
+  m_rules.append({QRegularExpression(QStringLiteral("//")), commentFormat});
 
   // ── 6. 算术运算符（红色加粗） ──
   QTextCharFormat operatorFormat;
@@ -125,6 +127,126 @@ void LightTpl::highlightBlock(const QString &text) {
       }
     } else {
       idx = start + 2;  // 非注释，让后续规则处理
+    }
+  }
+
+  // ── 预扫描2：处理 /* */ 输出注释定界符 ──
+  // 在 .tpl 中 /* */ 是输出文本（非模板注释），只有 ${# } 才是模板注释。
+  // 只把 /* 和 */ 定界符标灰斜体，中间内容默认色（${...} 由变量规则标绿）。
+  // 但需标记中间位置防止运算符规则把 * / 标红。
+  QTextCharFormat jsCommentDelimFormat;
+  jsCommentDelimFormat.setForeground(LightColor::comment);
+  jsCommentDelimFormat.setFontItalic(true);
+
+  setCurrentBlockState(0);  // 默认不在注释中
+  int jsCommentStart = -1;
+  if (previousBlockState() != 1) {
+    jsCommentStart = text.indexOf(QStringLiteral("/*"));
+  }
+  while (jsCommentStart >= 0) {
+    int jsCommentEnd = text.indexOf(QStringLiteral("*/"), jsCommentStart);
+
+    // 标灰 /* 定界符
+    setFormat(jsCommentStart, 2, jsCommentDelimFormat);
+    formatted[jsCommentStart] = true;
+    if (jsCommentStart + 1 < text.size()) formatted[jsCommentStart + 1] = true;
+
+    if (jsCommentEnd == -1) {
+      // 未找到 */，注释延伸到下一行
+      // 标记中间位置防止运算符匹配 * / 为红色（不设灰色格式）
+      for (int j = jsCommentStart + 2; j < text.size(); ++j) formatted[j] = true;
+      setCurrentBlockState(1);
+      // 重新扫描模板变量，解除 formatted 让变量规则覆盖为绿色
+      int varIdx = jsCommentStart + 2;
+      while (varIdx < text.length()) {
+        int varStart = text.indexOf(QString::fromLatin1(AcTemplate::kExprOpen), varIdx);
+        if (varStart == -1) break;
+        int varEnd = text.indexOf(QChar('}'), varStart + 2);
+        if (varEnd == -1) {
+          varIdx = varStart + 2;
+          continue;
+        }
+        for (int j = varStart; j <= varEnd && j < text.size(); ++j) {
+          formatted[j] = false;
+        }
+        varIdx = varEnd + 1;
+      }
+      break;
+    }
+
+    // 标灰 */ 定界符
+    setFormat(jsCommentEnd, 2, jsCommentDelimFormat);
+    formatted[jsCommentEnd] = true;
+    if (jsCommentEnd + 1 < text.size()) formatted[jsCommentEnd + 1] = true;
+
+    // 标记中间位置防止运算符匹配（不设灰色格式，保持默认色）
+    for (int j = jsCommentStart + 2; j < jsCommentEnd && j < text.size(); ++j) {
+      formatted[j] = true;
+    }
+
+    // 重新扫描中间区域，解除模板变量的 formatted 让变量规则覆盖为绿色
+    int varIdx = jsCommentStart + 2;
+    while (varIdx < jsCommentEnd && varIdx < text.length()) {
+      int varStart = text.indexOf(QString::fromLatin1(AcTemplate::kExprOpen), varIdx);
+      if (varStart == -1 || varStart >= jsCommentEnd) break;
+      int varEnd = text.indexOf(QChar('}'), varStart + 2);
+      if (varEnd == -1 || varEnd >= jsCommentEnd) {
+        varIdx = varStart + 2;
+        continue;
+      }
+      for (int j = varStart; j <= varEnd && j < text.size(); ++j) {
+        formatted[j] = false;
+      }
+      varIdx = varEnd + 1;
+    }
+
+    jsCommentStart = text.indexOf(QStringLiteral("/*"), jsCommentEnd + 2);
+  }
+
+  // 如果上一行在 /* 注释中（previousBlockState == 1）且本行没找到新的 /*
+  if (previousBlockState() == 1) {
+    int jsCommentEnd = text.indexOf(QStringLiteral("*/"));
+    if (jsCommentEnd == -1) {
+      // 整行仍在注释中，标记位置防止运算符匹配（不设灰色格式）
+      for (int j = 0; j < text.size(); ++j) formatted[j] = true;
+      setCurrentBlockState(1);
+      // 重新扫描模板变量，解除 formatted 让变量规则覆盖为绿色
+      int varIdx = 0;
+      while (varIdx < text.length()) {
+        int varStart = text.indexOf(QString::fromLatin1(AcTemplate::kExprOpen), varIdx);
+        if (varStart == -1) break;
+        int varEnd = text.indexOf(QChar('}'), varStart + 2);
+        if (varEnd == -1) {
+          varIdx = varStart + 2;
+          continue;
+        }
+        for (int j = varStart; j <= varEnd && j < text.size(); ++j) {
+          formatted[j] = false;
+        }
+        varIdx = varEnd + 1;
+      }
+    } else {
+      // 找到 */，标灰定界符，中间位置防运算符匹配（不设灰色格式）
+      for (int j = 0; j < jsCommentEnd && j < text.size(); ++j) formatted[j] = true;
+      setFormat(jsCommentEnd, 2, jsCommentDelimFormat);
+      formatted[jsCommentEnd] = true;
+      if (jsCommentEnd + 1 < text.size()) formatted[jsCommentEnd + 1] = true;
+
+      // 重新扫描中间区域的模板变量
+      int varIdx = 0;
+      while (varIdx < jsCommentEnd && varIdx < text.length()) {
+        int varStart = text.indexOf(QString::fromLatin1(AcTemplate::kExprOpen), varIdx);
+        if (varStart == -1 || varStart >= jsCommentEnd) break;
+        int varEnd = text.indexOf(QChar('}'), varStart + 2);
+        if (varEnd == -1 || varEnd >= jsCommentEnd) {
+          varIdx = varStart + 2;
+          continue;
+        }
+        for (int j = varStart; j <= varEnd && j < text.size(); ++j) {
+          formatted[j] = false;
+        }
+        varIdx = varEnd + 1;
+      }
     }
   }
 
