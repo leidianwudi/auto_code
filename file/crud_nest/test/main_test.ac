@@ -55,7 +55,7 @@ enum UserRole {
   Guest
 }
 
-let ROLE_GUEST = UserRole.Guest;
+let ROLE_GUEST: UserRole = UserRole.Guest;
 
 // HTTP 状态码枚举（数字枚举，显式指定值）
 enum HttpStatus {
@@ -114,12 +114,12 @@ function formatNumber(num: Number, decimals: Number): String {
     }
   } else {
     let decimalPart = str.substring(dotPos + 1);
-    if (decimalPart.length() > decimals) {
+    if (decimalPart.length > decimals) {
       // 截断到指定小数位
       str = str.substring(0, dotPos + 1 + decimals);
     } else {
       // 补零
-      while (decimalPart.length() < decimals) {
+      while (decimalPart.length < decimals) {
         str = str + "0";
         decimalPart = decimalPart + "0";
       }
@@ -129,7 +129,7 @@ function formatNumber(num: Number, decimals: Number): String {
 }
 
 function capitalize(str: String): String {
-  if (str.length() == 0) return str;
+  if (str.length == 0) return str;
   return str[0].toUpperCase() + str.substring(1);
 }
 
@@ -161,7 +161,7 @@ function map(arr: Object[], transformer: Any): Object[] {
 }
 
 function reduce(arr: Object[], accumulator: Any, initialValue: Any): Any {
-  let total = initialValue;
+  let total: Any = initialValue;
   for (let item: Any in arr) {
     total = accumulator(total, item);
   }
@@ -194,7 +194,7 @@ class User implements Printable, Serializable {
   }
 
   public function setName(name: String): Void {
-    if (name.length() < 2) {
+    if (name.length < 2) {
       printLog("Error: Name too short");
       return;
     }
@@ -219,7 +219,7 @@ class User implements Printable, Serializable {
   }
 
   public function fromJson(json: String): Void {
-    let data = JSON.parse(json);
+    let data: Object = JSON.parse(json);
     this.id = data["id"];
     this.name = data["name"];
     this.email = data["email"];
@@ -296,20 +296,20 @@ class ConfigManager {
   }
 
   public static function set(key: String, value: Any): Void {
-    let mgr = ConfigManager.getInstance();
+    let mgr: ConfigManager = ConfigManager.getInstance();
     mgr.settings[key] = value;
     ConfigManager.instance = mgr;
   }
 
   public static function get(key: String): Any {
-    let mgr = ConfigManager.getInstance();
+    let mgr: ConfigManager = ConfigManager.getInstance();
     return mgr.settings[key];
   }
 
   public static function getAll(): Object {
-    let mgr = ConfigManager.getInstance();
+    let mgr: ConfigManager = ConfigManager.getInstance();
     // 手动复制对象（替代展开运算符）
-    let copy = {};
+    let copy: Object = {};
     for (let key: String in mgr.settings) {
       copy[key] = mgr.settings[key];
     }
@@ -317,7 +317,7 @@ class ConfigManager {
   }
 
   public static function clear(): Void {
-    let mgr = ConfigManager.getInstance();
+    let mgr: ConfigManager = ConfigManager.getInstance();
     mgr.settings = {};
     ConfigManager.instance = mgr;
   }
@@ -335,17 +335,17 @@ class ConfigManager {
 class Validator {
   // 简单的邮箱格式验证（检查是否包含 @ 和 .）
   public static function isEmail(email: String): Bool {
-    if (email == null || email.length() == 0) return false;
+    if (email == null || email.length == 0) return false;
     let atPos = email.indexOf("@");
-    if (atPos <= 0 || atPos == email.length() - 1) return false;
-    let dotPos = email.lastIndexOf(".");
-    if (dotPos <= atPos + 1 || dotPos == email.length() - 1) return false;
+    if (atPos <= 0 || atPos == email.length - 1) return false;
+    let dotPos: Number = email.lastIndexOf(".");
+    if (dotPos <= atPos + 1 || dotPos == email.length - 1) return false;
     return true;
   }
 
   // 简单的手机号验证（检查是否为11位数字且以1开头）
   public static function isPhone(phone: String): Bool {
-    if (phone == null || phone.length() != 11) return false;
+    if (phone == null || phone.length != 11) return false;
     if (phone[0] != "1") return false;
     // 检查第二位是否为3-9
     let secondChar = phone[1];
@@ -360,19 +360,19 @@ class Validator {
 
   // 简单的URL验证（检查是否以 http:// 或 https:// 开头）
   public static function isURL(url: String): Bool {
-    if (url == null || url.length() < 7) return false;
+    if (url == null || url.length < 7) return false;
     let prefix = url.substring(0, 7);
     if (prefix == "http://") return true;
-    if (url.length() >= 8 && url.substring(0, 8) == "https://") return true;
+    if (url.length >= 8 && url.substring(0, 8) == "https://") return true;
     return false;
   }
 
   public static function minLength(str: String, min: Number): Bool {
-    return str.length() >= min;
+    return str.length >= min;
   }
 
   public static function maxLength(str: String, max: Number): Bool {
-    return str.length() <= max;
+    return str.length <= max;
   }
 
   public static function range(num: Number, min: Number, max: Number): Bool {
@@ -441,8 +441,8 @@ import { DB, readJson, writeFile, renderTpl } from "./lib/database.ac";
 import { Logger, LogLevel } from "./lib/logger.ac";
 
 export function testImportFunction(): Number {
-  let sum = mathAdd(100, 200);
-  let product = mathMul(10, 20);
+  let sum: Number = mathAdd(100, 200);
+  let product: Number = mathMul(10, 20);
   return sum + product;
 }
 
@@ -450,7 +450,7 @@ export function testImportFunction(): Number {
 // 第六部分：JSON 操作示例
 // ═══════════════════════════════════════════════════════════════
 
-let sampleConfig = {
+let sampleConfig: Object = {
   "appName": "AutoCode Test Suite",
   "version": "2.0.0",
   "database": {
@@ -604,7 +604,7 @@ main {
   let squared = map(numbers, function(n: Number): Number { return n * n; });
   printLog(`平方映射: [${squared.join(", ")}]`);
 
-  let total = reduce(numbers, function(acc: Number, n: Number): Number { return acc + n; }, 0);
+  let total: Number = reduce(numbers, function(acc: Number, n: Number): Number { return acc + n; }, 0);
   printLog(`求和: ${total}`);
   assert(total == 55, "数组求和测试失败");
 
@@ -639,36 +639,36 @@ main {
   ConfigManager.set("app.version", "1.0.0");
   ConfigManager.set("debug.mode", true);
 
-  let allConfig = ConfigManager.getAll();
+  let allConfig: Object = ConfigManager.getAll();
   printLog(`配置项: ${JSON.stringify(allConfig, null, 2)}`);
 
-  let appName = ConfigManager.get("app.name");
+  let appName: String = ConfigManager.get("app.name");
   printLog(`应用名称: ${appName}`);
 
   ConfigManager.clear();
-  let clearedConfig = ConfigManager.getAll();
+  let clearedConfig: Object = ConfigManager.getAll();
   // 简化：不使用 Object.keys()
   printLog(`清空后配置项数: 0`);  // clear() 后应该为空
 
   // ── 6. 数据验证测试 ──
   printLog("\n--- 6. 数据验证测试 ---");
 
-  let validEmail = Validator.isEmail("test@example.com");
+  let validEmail: Bool = Validator.isEmail("test@example.com");
   printLog(`邮箱验证 (test@example.com): ${validEmail}`);
 
-  let invalidEmail = Validator.isEmail("invalid-email");
+  let invalidEmail: Bool = Validator.isEmail("invalid-email");
   printLog(`邮箱验证 (invalid-email): ${invalidEmail}`);
 
-  let validPhone = Validator.isPhone("13812345678");
+  let validPhone: Bool = Validator.isPhone("13812345678");
   printLog(`手机号验证 (13812345678): ${validPhone}`);
 
-  let validUrl = Validator.isURL("https://www.example.com");
+  let validUrl: Bool = Validator.isURL("https://www.example.com");
   printLog(`URL验证: ${validUrl}`);
 
-  let lengthOk = Validator.minLength("hello", 3);
+  let lengthOk: Bool = Validator.minLength("hello", 3);
   printLog(`长度验证 ("hello" >= 3): ${lengthOk}`);
 
-  let rangeOk = Validator.range(50, 0, 100);
+  let rangeOk: Bool = Validator.range(50, 0, 100);
   printLog(`范围验证 (50 in [0,100]): ${rangeOk}`);
 
   // ── 7. 泛型容器测试 ──
@@ -681,10 +681,10 @@ main {
 
   printLog(`容器大小: ${stringContainer.count()}`);
 
-  let found = stringContainer.find(function(item: String): Boolean { return item.startsWith("b"); });
+  let found: Bool = stringContainer.find(function(item: String): Boolean { return item.startsWith("b"); });
   printLog(`查找以 'b' 开头: ${found}`);
 
-  let longItems = stringContainer.findAll(function(item: String): Boolean { return item.length() > 5; });
+  let longItems = stringContainer.findAll(function(item: String): Boolean { return item.length > 5; });
   printLog(`长度 > 5 的项目: [${longItems.join(", ")}]`);
 
   stringContainer.remove("banana");
@@ -693,20 +693,20 @@ main {
   // ── 8. JSON 操作测试 ──
   printLog("\n--- 8. JSON 操作测试 ---");
 
-  let configStr = JSON.stringify(sampleConfig, null, 2);
-  printLog(`JSON 序列化长度: ${configStr.length()} 字符`);
+  let configStr: String = JSON.stringify(sampleConfig, null, 2);
+  printLog(`JSON 序列化长度: ${configStr.length} 字符`);
 
-  let parsedConfig = JSON.parse(configStr);
+  let parsedConfig: Object = JSON.parse(configStr);
   printLog(`应用名称: ${parsedConfig["appName"]}`);
   printLog(`数据库主机: ${parsedConfig["database"]["host"]}`);
   printLog(`特性列表: [${parsedConfig["features"].join(", ")}]`);
 
   // 嵌套访问
-  let username = parsedConfig["database"]["credentials"]["username"];
+  let username: String = parsedConfig["database"]["credentials"]["username"];
   printLog(`数据库用户名: ${username}`);
 
   // 数组操作
-  let features = parsedConfig["features"];
+  let features: Object[] = parsedConfig["features"];
   features.push("new_feature");
   features.splice(0, 1);  // 删除第一个元素
   printLog(`修改后的特性: [${features.join(", ")}]`);
@@ -823,7 +823,7 @@ main {
   // ── 13. 数据库操作模拟 ──
   printLog("\n--- 13. 数据库操作模拟 ---");
 
-  let dbConfig = {
+  let dbConfig: Object = {
     host: sampleConfig.database.host,
     port: sampleConfig.database.port,
     user: sampleConfig.database.credentials.username,
@@ -847,11 +847,11 @@ main {
   // ── 14. 枚举与类型系统测试 ──
   printLog("\n--- 14. 枚举与类型系统测试 ---");
 
-  let currentRole = UserRole.Editor;
+  let currentRole: UserRole = UserRole.Editor;
   printLog(`当前角色: ${currentRole}`);
   printLog(`是否为管理员: ${currentRole == UserRole.Admin}`);
 
-  let statusCode = HttpStatus.OK;
+  let statusCode: HttpStatus = HttpStatus.OK;
   printLog(`HTTP 状态码: ${statusCode}`);
   printLog(`状态码数值: ${statusCode}`);
 

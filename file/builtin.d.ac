@@ -43,6 +43,9 @@ export function fileExists(path: String): Bool;
 /// 根据数据解析输出路径模板（{key} 占位符替换，路径分隔符统一为 /）
 export function formatPath(pattern: String, data: Object): String;
 
+/// 断言函数：condition 为 false 时输出错误消息并终止执行
+export function assert(condition: Bool, message: String): Void;
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  String 字符串类型（内置类型，属性和方法直接在字符串值上调用）
 // ═════════════════════════════════════════════════════════════════════════════
@@ -71,6 +74,9 @@ export class String {
 
   /// 查找子串首次出现的位置，未找到返回 -1
   function indexOf(sub: String): Number;
+
+  /// 查找子串最后一次出现的位置，未找到返回 -1
+  function lastIndexOf(sub: String): Number;
 
   /// 按分隔符拆分为数组
   function split(sep: String): String[];

@@ -84,10 +84,10 @@ QJsonValue FunStr::substring(const QJsonArray &args) {
   }
 
   const QString str = args[0].toString();
-  const int start = static_cast<int>(args[1].toDouble());
+  const int start = safeJsonToInt(args[1]);
 
   if (args.size() >= 3 && args[2].isDouble()) {
-    const int length = static_cast<int>(args[2].toDouble());
+    const int length = safeJsonToInt(args[2]);
     return QJsonValue(str.mid(start, length));
   }
 

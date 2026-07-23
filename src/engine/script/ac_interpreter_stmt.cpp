@@ -181,7 +181,7 @@ void AcInterpreter::assignToIndex(const QJsonValue &objVal, const QJsonValue &id
     writeBackVar(objectExpr, obj);
   } else if (objVal.isArray()) {
     QJsonArray arr = objVal.toArray();
-    int idx = idxVal.toInt();
+    int idx = safeJsonToInt(idxVal);
     if (idx >= 0 && idx < arr.size()) {
       releaseIfInstanceWithDestruct(arr[idx]);
       arr.replace(idx, newVal);

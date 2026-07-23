@@ -16,6 +16,7 @@
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonValue>
+#include <cmath>
 #include <optional>
 
 #include "../ac_language.h"
@@ -67,7 +68,10 @@ QString valueToString(const QJsonValue &v) {
   if (v.isString()) return v.toString();
   if (v.isDouble()) {
     double d = v.toDouble();
-    return (d == static_cast<int>(d)) ? QString::number(static_cast<int>(d)) : QString::number(d);
+    if (d == std::floor(d)) {
+      return QString::number(static_cast<qint64>(d));
+    }
+    return QString::number(d);
   }
   if (v.isBool())
     return v.toBool() ? QString::fromLatin1(AcKeyword::kTrue)

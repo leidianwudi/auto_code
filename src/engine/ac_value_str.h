@@ -17,6 +17,7 @@
 #include <QJsonValue>
 #include <QString>
 #include <QStringList>
+#include <cmath>
 
 #include "ac_language.h"
 
@@ -28,8 +29,8 @@ inline QString toString(const QJsonValue &v);
 /// @brief 将 QJsonObject 转为可读字符串
 inline QString objectToString(const QJsonObject &obj) {
   bool isInstance = obj.contains(QString::fromLatin1(AcRuntime::kObjId));
-  bool isFuncRef = obj.value(QString::fromLatin1(AcRuntime::kClassKey)).toString() ==
-                   QStringLiteral("__func__");
+  bool isFuncRef =
+      obj.value(QString::fromLatin1(AcRuntime::kClassKey)).toString() == QStringLiteral("__func__");
 
   QString className;
   if (isInstance) {
@@ -50,7 +51,8 @@ inline QString objectToString(const QJsonObject &obj) {
     return QStringLiteral("<%1>{%2}").arg(className).arg(content);
   } else if (isFuncRef) {
     QString funcName = obj.value(QStringLiteral("__name__")).toString();
-    return QStringLiteral("function(%1)").arg(funcName.isEmpty() ? QStringLiteral("...") : funcName);
+    return QStringLiteral("function(%1)")
+        .arg(funcName.isEmpty() ? QStringLiteral("...") : funcName);
   }
   return QStringLiteral("{%1}").arg(content);
 }
@@ -72,7 +74,7 @@ inline QString toString(const QJsonValue &v) {
       return v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
     case QJsonValue::Double: {
       double d = v.toDouble();
-      if (d == qFloor(d)) {
+      if (d == std::floor(d)) {
         return QString::number(static_cast<qint64>(d));
       }
       return QString::number(d);

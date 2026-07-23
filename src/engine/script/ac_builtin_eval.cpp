@@ -5,6 +5,7 @@
 
 #include "ac_builtin_eval.h"
 
+#include "../ac_language.h"
 #include "ac_interpreter.h"
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -82,9 +83,9 @@ QJsonValue AcBuiltinEval::evalStringMethod(AcInterpreter &interp, const QString 
                   .arg(line);
       return QJsonValue();
     }
-    int start = evalArg(0).toInt();
+    int start = safeJsonToInt(evalArg(0));
     if (args.size() >= 2) {
-      int end = evalArg(1).toInt();
+      int end = safeJsonToInt(evalArg(1));
       return QJsonValue(obj.mid(start, end - start));
     }
     return QJsonValue(obj.mid(start));
@@ -94,7 +95,7 @@ QJsonValue AcBuiltinEval::evalStringMethod(AcInterpreter &interp, const QString 
       error = QStringLiteral("string.charAt() requires 1 argument at line %1").arg(line);
       return QJsonValue();
     }
-    int idx = evalArg(0).toInt();
+    int idx = safeJsonToInt(evalArg(0));
     if (idx >= 0 && idx < obj.size()) return QJsonValue(QString(obj[idx]));
     return QJsonValue(QString());
   }
@@ -103,14 +104,14 @@ QJsonValue AcBuiltinEval::evalStringMethod(AcInterpreter &interp, const QString 
       error = QStringLiteral("string.repeat() requires 1 argument at line %1").arg(line);
       return QJsonValue();
     }
-    return QJsonValue(QString(obj).repeated(evalArg(0).toInt()));
+    return QJsonValue(QString(obj).repeated(safeJsonToInt(evalArg(0))));
   }
   if (method == QStringLiteral("padStart")) {
     if (args.size() < 2) {
       error = QStringLiteral("string.padStart() requires 2 arguments at line %1").arg(line);
       return QJsonValue();
     }
-    int len = evalArg(0).toInt();
+    int len = safeJsonToInt(evalArg(0));
     QString fill = evalArg(1).toString();
     QString result = obj;
     while (result.length() < len) result = fill + result;
@@ -121,7 +122,7 @@ QJsonValue AcBuiltinEval::evalStringMethod(AcInterpreter &interp, const QString 
       error = QStringLiteral("string.padEnd() requires 2 arguments at line %1").arg(line);
       return QJsonValue();
     }
-    int len = evalArg(0).toInt();
+    int len = safeJsonToInt(evalArg(0));
     QString fill = evalArg(1).toString();
     QString result = obj;
     while (result.length() < len) result = result + fill;
@@ -217,8 +218,8 @@ QJsonValue AcBuiltinEval::evalArrayMethod(AcInterpreter &interp, const QJsonArra
   if (method == QStringLiteral("slice")) {
     int start = 0;
     int end = arr.size();
-    if (!args.empty()) start = evalArg(0).toInt();
-    if (args.size() >= 2) end = evalArg(1).toInt();
+    if (!args.empty()) start = safeJsonToInt(evalArg(0));
+    if (args.size() >= 2) end = safeJsonToInt(evalArg(1));
     QJsonArray result;
     for (int i = start; i < end && i < arr.size(); ++i) result.append(arr[i]);
     return QJsonValue(result);
@@ -246,9 +247,9 @@ QJsonValue AcBuiltinEval::evalArrayMethod(AcInterpreter &interp, const QJsonArra
       error = QStringLiteral("array.splice() requires at least 1 argument at line %1").arg(line);
       return QJsonValue();
     }
-    int start = evalArg(0).toInt();
+    int start = safeJsonToInt(evalArg(0));
     int deleteCount = arr.size() - start;
-    if (args.size() >= 2) deleteCount = evalArg(1).toInt();
+    if (args.size() >= 2) deleteCount = safeJsonToInt(evalArg(1));
     QJsonArray newArr = arr;
     QJsonArray removed;
     for (int i = 0; i < deleteCount && start < newArr.size(); ++i) {

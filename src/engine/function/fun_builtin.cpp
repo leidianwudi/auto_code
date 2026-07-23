@@ -43,6 +43,7 @@ void FunBuiltin::init() {
           {QString::fromLatin1(AcBuiltin::kMerge), merge},
           {QString::fromLatin1(AcBuiltin::kBasename), basename},
           {QString::fromLatin1(AcBuiltin::kFormatPath), formatPath},
+          {QString::fromLatin1(AcBuiltin::kAssert), assertFn},
       });
 }
 
@@ -315,4 +316,36 @@ QJsonValue FunBuiltin::formatPath(const QJsonArray &args) {
   result = QDir::cleanPath(result);
 
   return QJsonValue(result);
+}
+
+// ============================================================================
+// assert — 断言函数
+// ============================================================================
+
+QJsonValue FunBuiltin::assertFn(const QJsonArray &args) {
+  if (args.size() < 1) {
+    FunMgr::setError(QStringLiteral("assert() requires at least 1 argument: condition"));
+    return QJsonValue();
+  }
+
+  bool condition = false;
+  const QJsonValue &condVal = args[0];
+  if (condVal.isBool()) {
+    condition = condVal.toBool();
+  } else if (condVal.isDouble()) {
+    condition = condVal.toDouble() != 0;
+  } else if (condVal.isString()) {
+    condition = !condVal.toString().isEmpty();
+  } else {
+    condition = !condVal.isNull() && !condVal.isUndefined();
+  }
+
+  if (!condition) {
+    QString message = args.size() >= 2 ? args[1].toString() : QStringLiteral("assertion failed");
+    QString lineInfo =
+        s_ctx.currentLine > 0 ? QStringLiteral(" at line %1").arg(s_ctx.currentLine) : QString();
+    FunMgr::setError(QStringLiteral("Assertion failed: %1%2").arg(message, lineInfo));
+  }
+
+  return QJsonValue();
 }

@@ -828,7 +828,7 @@ bool AcParser::parseEnumDef(EnumDef &ed) {
       advance();
       if (peek().type == TOK_NUMBER) {
         member.value = QJsonValue(advance().text.toDouble());
-        autoValue = member.value.toInt() + 1;
+        autoValue = safeJsonToInt(member.value) + 1;
       } else {
         m_error =
             QStringLiteral("expected number value for enum member at line %1").arg(peek().line);

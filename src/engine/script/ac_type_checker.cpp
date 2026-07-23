@@ -229,27 +229,30 @@ void AcTypeChecker::checkStmt(const Block::Stmt &stmt, TypeEnv &env) {
 void AcTypeChecker::checkAssign(const AssignStmt &as, const TypeEnv &env) {
   AcType valType = checkExpr(as.value, env);
 
-  // 强类型检查：空数组字面量 [] 必须有类型注解（仅 let 声明，不含 this.prop 赋值）
+  // 强类型检查：空数组字面量 [] 必须有类型注解（仅 let 首次声明，不含 this.prop 赋值）
   if (!as.hasTypeAnnotation && as.thisProp.isEmpty() && !as.isStatic &&
-      as.value.kind == Expr::kArray && as.value.arrItems.empty()) {
+      !env.varTypes.contains(as.name) && as.value.kind == Expr::kArray &&
+      as.value.arrItems.empty()) {
     reportError(QStringLiteral("empty array literal requires type annotation: "
                                "let %1: Type[] = []")
                     .arg(as.name),
                 as.line);
   }
 
-  // P1a: 空对象字面量 {} 必须有类型注解（仅 let 声明）
+  // P1a: 空对象字面量 {} 必须有类型注解（仅 let 首次声明）
   if (!as.hasTypeAnnotation && as.thisProp.isEmpty() && !as.isStatic &&
-      as.value.kind == Expr::kObject && as.value.objEntries.empty()) {
+      !env.varTypes.contains(as.name) && as.value.kind == Expr::kObject &&
+      as.value.objEntries.empty()) {
     reportError(QStringLiteral("empty object literal requires type annotation: "
                                "let %1: TypeName = new ClassName() or let %1: ClassName = {}")
                     .arg(as.name),
                 as.line);
   }
 
-  // P1b: 非空对象字面量 { a: 1, b: 2 } 必须有类型注解（仅 let 声明）
+  // P1b: 非空对象字面量 { a: 1, b: 2 } 必须有类型注解（仅 let 首次声明）
   if (!as.hasTypeAnnotation && as.thisProp.isEmpty() && !as.isStatic &&
-      as.value.kind == Expr::kObject && !as.value.objEntries.empty()) {
+      !env.varTypes.contains(as.name) && as.value.kind == Expr::kObject &&
+      !as.value.objEntries.empty()) {
     reportError(QStringLiteral("object literal requires type annotation: "
                                "let %1: TypeName = { ... }")
                     .arg(as.name),
@@ -258,19 +261,21 @@ void AcTypeChecker::checkAssign(const AssignStmt &as, const TypeEnv &env) {
 
   // P0: let 变量声明如果没有类型注解，且推导的类型为 Any，则报错
   //     允许省略类型注解的情况：字面量（String/Number/Bool）、new 表达式、null/undefined
+  //     仅对首次声明检查，重新赋值不检查
   if (!as.hasTypeAnnotation && as.thisProp.isEmpty() && !as.isStatic &&
-      valType.kind == AcType::kAny && as.value.kind != Expr::kString &&
-      as.value.kind != Expr::kNumber && as.value.kind != Expr::kBool &&
-      as.value.kind != Expr::kNewInstance && as.value.kind != Expr::kNull &&
-      as.value.kind != Expr::kUndefined) {
+      !env.varTypes.contains(as.name) && valType.kind == AcType::kAny &&
+      as.value.kind != Expr::kString && as.value.kind != Expr::kNumber &&
+      as.value.kind != Expr::kBool && as.value.kind != Expr::kNewInstance &&
+      as.value.kind != Expr::kNull && as.value.kind != Expr::kUndefined) {
     reportError(QStringLiteral("variable '%1' requires type annotation — "
                                "cannot infer type from expression (e.g. let %1: Type = ...)")
                     .arg(as.name),
                 as.line);
   }
 
-  // P3: 限制 Any 类型使用（警告）
-  if (as.hasTypeAnnotation && as.typeAnnotation.kind == AcType::kAny) {
+  // P3: 限制 Any 类型使用（警告，仅首次声明）
+  if (as.hasTypeAnnotation && as.typeAnnotation.kind == AcType::kAny &&
+      !env.varTypes.contains(as.name)) {
     reportError(QStringLiteral("warning: variable '%1' uses 'Any' type — consider using a "
                                "specific type for better type safety")
                     .arg(as.name),

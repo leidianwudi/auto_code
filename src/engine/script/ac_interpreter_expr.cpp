@@ -192,13 +192,13 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
         return obj.toObject().value(key);
       }
       if (obj.isArray()) {
-        int idx = idxVal.toInt();
+        int idx = safeJsonToInt(idxVal);
         QJsonArray arr = obj.toArray();
         if (idx >= 0 && idx < arr.size()) return arr[idx];
         return QJsonValue();
       }
       if (obj.isString()) {
-        int idx = idxVal.toInt();
+        int idx = safeJsonToInt(idxVal);
         QString s = obj.toString();
         if (idx >= 0 && idx < s.length()) return QJsonValue(QString(s[idx]));
         return QJsonValue();

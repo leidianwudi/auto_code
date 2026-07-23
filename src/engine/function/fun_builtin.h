@@ -96,4 +96,8 @@ private:
   /// 格式化路径：用 {key} 占位符从数据对象中取值替换
   /// @param args [0] 路径模板（如 "{basePath}/{name}.ts"），[1] 数据对象
   static QJsonValue formatPath(const QJsonArray &args);
+
+  /// 断言函数：condition 为 false 时输出错误消息
+  /// @param args [0] 条件表达式, [1] 错误消息（可选）
+  static QJsonValue assertFn(const QJsonArray &args);
 };

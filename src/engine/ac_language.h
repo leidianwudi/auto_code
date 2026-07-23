@@ -18,6 +18,21 @@
 #include <QStringList>
 
 // ═════════════════════════════════════════════════════════════════════════════
+// 安全数值转换 — 避免 QJsonValue::toInt() 对超出 int 范围的值触发 Qt 断言
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// @brief 将 QJsonValue 安全转为 int（不触发 Qt 断言）
+/// @param v JSON 值（Double 类型）
+/// @return 越界时截断到 INT_MAX/INT_MIN，非数字返回 0
+inline int safeJsonToInt(const QJsonValue &v) {
+  if (!v.isDouble()) return 0;
+  double d = v.toDouble();
+  if (d >= 2147483647.0) return 2147483647;
+  if (d <= -2147483648.0) return -2147483648;
+  return static_cast<int>(d);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 // 零、语言关键字 — 语法高亮、补全共用
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -119,11 +134,15 @@ inline constexpr const char *kFileExists = "fileExists";
 /// → "D:/out/user.ts"。占位符 {key} 从第二个参数的对象中查找替换。
 inline constexpr const char *kFormatPath = "formatPath";
 
+/// @brief 断言：assert(condition, message) — condition 为 false 时输出错误消息
+inline constexpr const char *kAssert = "assert";
+
 /// @brief 一级函数名列表（供解析器校验、高亮、补全使用）
 inline const QStringList kAll = {
     QString(kCall),      QString(kReadJson), QString(kReadFile),   QString(kRenderTpl),
     QString(kWriteFile), QString(kPrintLog), QString(kPrintError), QString(kGetCheckedFiles),
     QString(kMerge),     QString(kBasename), QString(kFileExists), QString(kFormatPath),
+    QString(kAssert),
 };
 }  // namespace AcBuiltin
 
@@ -178,7 +197,8 @@ struct DbConfig {
   static DbConfig fromJson(const QJsonObject &obj) {
     DbConfig cfg;
     cfg.host = obj.value(QString::fromLatin1(kHost)).toString();
-    cfg.port = obj.value(QString::fromLatin1(kPort)).toInt(3306);
+    cfg.port = safeJsonToInt(obj.value(QString::fromLatin1(kPort)));
+    if (cfg.port == 0) cfg.port = 3306;
     cfg.user = obj.value(QString::fromLatin1(kUser)).toString();
     cfg.password = obj.value(QString::fromLatin1(kPassword)).toString();
     cfg.database = obj.value(QString::fromLatin1(kDatabase)).toString();
