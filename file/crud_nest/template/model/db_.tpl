@@ -9,8 +9,6 @@ ${#   - getWhereByIn(sel) 构建查询条件（精确+模糊）                 
 ${#   - getOrderByKey/getOrderByIn 排序逻辑                                      }
 ${#   - selectById/insert/update/delete 基本 CRUD                                }
 ${# ============================================================================}
-${# 安全保护：只有当输出文件不存在时才生成，防止开发者已修改的代码被覆盖           }
-${if !fileExists(outputPath)}
 ${# ── 头部：注释和静态 import ──────────────────────────────────────────────   }
 
 //此代码为AutoCode框架生成，请勿手动修改
@@ -114,5 +112,3 @@ export class ${dbBaseClass} extends RepositorySuper<${entityClass}> {
     return await this.db.delete(ids);
   }
 }
-
-${/if}

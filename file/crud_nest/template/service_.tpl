@@ -8,8 +8,6 @@ ${#   - selectByIn 分页查询                                                 
 ${#   - selectById 单条查询                                                      }
 ${#   - insert / update / delete 增删改                                          }
 ${# ============================================================================}
-${if !fileExists(outputPath)}
-
 // 此代码为AutoCode框架生成，请勿手动修改
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -66,5 +64,3 @@ export class ${serviceBaseClass} {
     return result.affected;
   }
 }
-
-${/if}

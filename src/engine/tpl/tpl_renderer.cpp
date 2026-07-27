@@ -253,6 +253,25 @@ bool isTruthy(const QJsonValue &val) {
   }
 }
 
+/// @brief 将表达式求值为 QJsonValue（支持内置函数和变量路径）
+QJsonValue evalExprToJson(const QString &expr, const QJsonObject &context,
+                          const TplEngine &engine) {
+  // 1. 内置函数 fileExists(path)
+  if (auto arg = parseFuncArg(expr, QString::fromLatin1(AcBuiltin::kFileExists))) {
+    QString resolved = resolveStringArg(*arg, context, engine);
+    return QJsonValue(QFileInfo::exists(resolved));
+  }
+  // 2. 内置函数 printLog(text)
+  if (auto arg = parseFuncArg(expr, QString::fromLatin1(AcBuiltin::kPrintLog))) {
+    QString resolved = resolveStringArg(*arg, context, engine);
+    auto cb = engine.logCallback();
+    if (cb) cb(resolved, false);
+    return QJsonValue(QJsonValue::Null);
+  }
+  // 3. 变量路径
+  return engine.resolvePath(expr, context);
+}
+
 /// @brief 解析条件表达式（支持 ! 取反）
 bool evalCondition(QString expr, const QJsonObject &context, const TplEngine &engine) {
   expr = expr.trimmed();
@@ -261,7 +280,7 @@ bool evalCondition(QString expr, const QJsonObject &context, const TplEngine &en
     negate = true;
     expr = expr.mid(1).trimmed();
   }
-  QJsonValue condVal = engine.resolvePath(expr, context);
+  QJsonValue condVal = evalExprToJson(expr, context, engine);
   bool truthy = isTruthy(condVal);
 #ifdef AC_DEBUG
   // 调试日志：输出条件求值结果

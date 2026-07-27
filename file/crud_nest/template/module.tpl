@@ -5,7 +5,8 @@ ${# 作用：                                                                   
 ${#   生成 @Module 装饰的 NestJS 模块类，注册实体、控制器和服务。                }
 ${#   开发者可在此类中添加自定义导入和提供者，不会被框架覆盖。                    }
 ${# ============================================================================}
-
+${# 安全保护：只有当输出文件不存在时才生成，防止开发者已修改的代码被覆盖           }
+${if !fileExists(outputPath)}
 // 此代码为 AutoCode 框架生成，需要扩展时，可以手动修改
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -23,3 +24,4 @@ import { ${dbClass} } from './model/${dbClassFile}';
 })
 // 对外提供当前业务模块，供其他模块按需引入
 export class ${modelBaseName}Module {}
+${/if}

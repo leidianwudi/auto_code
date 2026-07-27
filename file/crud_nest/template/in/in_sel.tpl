@@ -7,8 +7,6 @@ ${#   - extends In_BasePage（分页基类）                                   
 ${#   - @ApiProperty + @IsOptional + @IsXxx 验证装饰器                           }
 ${#   - 固定的 sort 字段（可排序字段列表）                                        }
 ${# ============================================================================}
-${# 安全保护：只有当输出文件不存在时才生成，防止开发者已修改的代码被覆盖           }
-${if !fileExists(outputPath)}
 ${# ── 头部：注释和静态 import ──────────────────────────────────────────────   }
 
 //此代码为AutoCode框架生成，请勿手动修改
@@ -51,4 +49,3 @@ ${if field.isPrimary}@IsInt({ message: "${field.name}必须是整数" })
   @Type(() => Array)
   sort?: string[];
 }
-${/if}

@@ -5,7 +5,8 @@ ${# 作用：                                                                   
 ${#   生成 Injectable 装饰的数据库操作子类，继承 Db_ 父类。                     }
 ${#   开发者可在此类中添加自定义查询方法，不会被框架覆盖。                        }
 ${# ============================================================================}
-
+${# 安全保护：只有当输出文件不存在时才生成，防止开发者已修改的代码被覆盖           }
+${if !fileExists(outputPath)}
 //此代码为AutoCode框架生成，可以手动修改
 ${# TypeORM 核心类型 }
 import { EntityManager, Repository } from "typeorm";
@@ -32,3 +33,4 @@ export class ${dbClass} extends ${dbBaseClass} {
 
 
 }
+${/if}

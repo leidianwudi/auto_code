@@ -9,8 +9,6 @@ ${#   - insert 新增接口                                                     
 ${#   - update 更新/新增接口                                                     }
 ${#   - delete 删除接口                                                          }
 ${# ============================================================================}
-${if !fileExists(outputPath)}
-
 // 此代码为AutoCode框架生成，请勿手动修改
 import { Controller, Get, Post, Put, Body, Param, Query, Delete, HttpCode, HttpStatus } from '@nestjs/common';
 import { NumberKeyOutEnum, StringKeyOutEnum } from '@/common/tool/out_enum_record';
@@ -109,5 +107,3 @@ export class ${controllerBaseClass} {
   }
 
 }
-
-${/if}
