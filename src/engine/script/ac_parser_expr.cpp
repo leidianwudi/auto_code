@@ -12,6 +12,19 @@
 
 bool AcParser::parseExpr(Expr &expr) {
   if (!parseTernary(expr)) return false;
+  // 赋值表达式: lhs = rhs
+  if (peek().type == TOK_EQUALS) {
+    int assignLine = peek().line;
+    advance();
+    auto left = std::make_unique<Expr>(std::move(expr));
+    auto right = std::make_unique<Expr>();
+    if (!parseExpr(*right)) return false;
+    expr.kind = Expr::kAssign;
+    expr.line = assignLine;
+    expr.left = std::move(left);
+    expr.right = std::move(right);
+    return true;
+  }
   if (peek().type == TOK_PLUSPLUS) {
     advance();
     auto operand = std::make_unique<Expr>(std::move(expr));

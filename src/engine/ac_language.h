@@ -322,4 +322,5 @@ inline constexpr const char *kAc = ".ac";
 inline constexpr const char *kTpl = ".tpl";
 inline constexpr const char *kTpljson = ".tpljson";
 inline constexpr const char *kJson = ".json";
+inline constexpr const char *kJsonvue = ".jsonvue";
 }  // namespace AcFileSuffix

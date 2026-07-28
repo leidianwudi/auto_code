@@ -100,6 +100,18 @@ void TplValidator::checkBrackets(const QString &text, QVector<ValidationResult> 
 
     // 跟踪 ${...} 表达式内部
     if (ch == '$' && i + 1 < len && text[i + 1] == '{') {
+      // 注释 ${# ...}：跳过到行内最后一个 }，不检查括号匹配
+      if (i + 2 < len && text[i + 2] == '#') {
+        int lineEnd = text.indexOf(QChar('\n'), i + 3);
+        if (lineEnd == -1) lineEnd = len;
+        int lastClose = text.lastIndexOf(QChar('}'), lineEnd - 1);
+        if (lastClose > i) {
+          i = lastClose;
+        } else {
+          i = lineEnd - 1;
+        }
+        continue;
+      }
       inTemplateExpr = true;
       templateExprDepth++;
       i++;

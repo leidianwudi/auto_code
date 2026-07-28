@@ -60,6 +60,7 @@ void CreateUi::setupUI() {
   m_typeCombo->addItem(CreateModel::fileTypeLabel(CreateModel::Tpl));
   m_typeCombo->addItem(CreateModel::fileTypeLabel(CreateModel::Json));
   m_typeCombo->addItem(CreateModel::fileTypeLabel(CreateModel::Tpljson));
+  m_typeCombo->addItem(CreateModel::fileTypeLabel(CreateModel::Jsonvue));
   typeLayout->addWidget(typeLabel);
   typeLayout->addWidget(m_typeCombo, 1);
   contentLayout->addLayout(typeLayout);

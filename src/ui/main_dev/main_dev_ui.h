@@ -119,6 +119,7 @@ public:
   QComboBox *startupCombo() const { return m_startupCombo; }
   QPushButton *saveBtn() const { return m_saveBtn; }
   QPushButton *saveAllBtn() const { return m_saveAllBtn; }
+  QPushButton *visualToggleBtn() const { return m_visualToggleBtn; }
 
   /// 刷新启动项下拉框
   void refreshStartupCombo();
@@ -156,6 +157,7 @@ private:
   QWidget *m_titleBar = nullptr;
   QLabel *m_titleLabel = nullptr;
   QPushButton *m_splitBtn = nullptr;
+  QPushButton *m_visualToggleBtn = nullptr;  ///< 可视化/代码切换按钮
   QPushButton *m_buildBtn = nullptr;
   QComboBox *m_startupCombo = nullptr;
   QPushButton *m_saveBtn = nullptr;

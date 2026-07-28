@@ -152,10 +152,14 @@ void MainDevUi::setupTitleBar() {
   m_saveAllBtn->setEnabled(false);
   titleLayout->insertWidget(tb.contentInsertIndex, m_saveAllBtn);
 
+  // ── 可视化/代码切换按钮（在拆分按钮之前插入，位于拆分按钮左侧） ──
+  m_visualToggleBtn = AuiButton::createVisualToggleButton();
+
   // ── 拆分按钮（在标题标签之前插入） ──
   m_splitBtn = AuiButton::createSplitButton();
   int titleIdx = titleLayout->indexOf(m_titleLabel);
-  titleLayout->insertWidget(titleIdx, m_splitBtn);
+  titleLayout->insertWidget(titleIdx, m_visualToggleBtn);
+  titleLayout->insertWidget(titleIdx + 1, m_splitBtn);
 
   connect(m_splitBtn, &QPushButton::clicked, m_splitAction, &QAction::trigger);
 

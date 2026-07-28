@@ -349,6 +349,7 @@ struct Expr {
     kPreDec,        ///< 前置自减 --expr
     kPostInc,       ///< 后置自增 expr++
     kPostDec,       ///< 后置自减 expr--
+    kAssign,        ///< 赋值表达式 left = right
     kBool,          ///< 布尔字面量 true/false
     kStaticAccess,  ///< 静态访问 ClassName::member
     kFuncExpr,      ///< 函数表达式 function(params): Type { body }

@@ -98,6 +98,44 @@ QPushButton *AuiButton::createSplitButton() {
   return btn;
 }
 
+QPushButton *AuiButton::createVisualToggleButton() {
+  auto *btn = new QPushButton;
+  btn->setCheckable(true);  // 可切换状态
+
+  // 绘制图标：左侧方块（代码）+ 右侧网格（可视化）
+  auto drawIcon = [](bool checked) {
+    QPixmap px(20, 20);
+    px.fill(Qt::transparent);
+    QPainter p(&px);
+    p.setRenderHint(QPainter::Antialiasing);
+    QColor c = checked ? AuiStyle::compileButtonColor() : AuiStyle::textColor();
+    p.setPen(QPen(c, 1.5));
+    // 左侧：代码符号 < >
+    p.drawLine(QPointF(2, 6), QPointF(5, 10));
+    p.drawLine(QPointF(2, 14), QPointF(5, 10));
+    p.drawLine(QPointF(8, 6), QPointF(5, 10));
+    p.drawLine(QPointF(8, 14), QPointF(5, 10));
+    // 右侧：可视化网格 2x2
+    p.drawRect(11, 5, 7, 10);
+    p.drawLine(QPointF(14.5, 5), QPointF(14.5, 15));
+    p.drawLine(QPointF(11, 10), QPointF(18, 10));
+    p.end();
+    return px;
+  };
+
+  btn->setIcon(QIcon(drawIcon(false)));
+  btn->setIconSize(QSize(20, 20));
+  btn->setToolTip(QStringLiteral("可视化编辑 / 代码编辑切换"));
+
+  // 切换状态时更新图标
+  QObject::connect(btn, &QPushButton::toggled, btn, [btn, drawIcon](bool checked) {
+    btn->setIcon(QIcon(drawIcon(checked)));
+  });
+
+  applyCommonStyle(btn);
+  return btn;
+}
+
 QPushButton *AuiButton::createMinButton() {
   auto *btn = new QPushButton(QStringLiteral("\u2014"));  // em dash
   applyCommonStyle(btn);

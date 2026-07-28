@@ -1,0 +1,245 @@
+// ============================================================================
+// erp_admin.ac — Vue3 后台管理界面代码生成主脚本
+// ----------------------------------------------------------------------------
+// 整体流程（从 .jsonvue 配置到 Vue 文件）：
+//
+//   ┌───────────────┐   readJson   ┌──────────────┐   tplData   ┌────────────┐
+//   │ .jsonvue 文件  │ ──────────►  │  数据加工    │ ──────────► │  模板渲染   │
+//   │ (config_g等)  │   配置数据    │  (本脚本)    │   模板数据   │  index.tpl │
+//   └───────────────┘              └──────────────┘             │  write.tpl │
+//                                                                └────────────┘
+//                                                                      │
+//                                          renderTpl()                ▼
+//                                                               生成 vue 文件
+//
+// 本脚本是主入口，负责：
+//   1. 读取所有打勾的 .jsonvue 配置文件
+//   2. 解析每个 .jsonvue 的 meta/columns/queryFields 配置
+//   3. 将原始数据加工成模板可直接使用的结构（添加 isSwitch 标志、转换组件名等）
+//   4. 调用 renderTpl() 渲染模板 → 写入 vue 文件
+//
+// 与 news_main.ac 的区别：
+//   - 不连接数据库，所有数据来自 .jsonvue 配置文件
+//   - 生成的是 Vue3 前端代码而非 TypeScript 后端代码
+// ============================================================================
+
+/// @brief 模板配置（一个模板对应一个生成的代码文件）
+class TemplateConfig {
+  let tpl: String = "";  // 模板文件路径（相对脚本目录）
+  let out: String = "";  // 输出文件路径模板，用 {key} 占位符从 tplData 取值
+}
+
+main {
+
+  // ── 1. HTTP 通用配置（可视化编辑器"生成"按钮使用） ─────────────────
+  //    baseUrl     - HTTP 基础路径
+  //    authHeader  - 请求头 Authorization（Bearer token 会经常更换）
+  //    postData    - POST 请求的默认数据
+  let baseUrl: String = "http://47.236.202.220:3008/";
+  let authHeader: String = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyaWQiOjcsInVzZXJuYW1lIjoiYWRtaW4zIiwicm9sZXMiOlsiYWRtaW4iXSwicm9sZUlkIjoyLCJpYXQiOjE3ODUyMDQ4OTMsImV4cCI6MTc4NTI5MTI5M30.nrJuonRyOBG7y4pGzsdfLHFW4GiV8NWaMm-MSaZ56vk";
+  let postData: String = "{\"page\":1,\"pageSize\":20}";
+
+  // ── 2. 输出文件的根目录 ──────────────────────────────────────────
+  let basePath: String = "D:/output";
+
+  // ── 2. 模板配置：一个模板对应一个生成的代码文件 ───────────────────
+  //    字段说明：
+  //      tpl  - 模板文件路径（相对脚本目录）
+  //      out  - 输出文件路径模板，用 {key} 占位符从 tplData 取值
+  //             支持的占位符：{basePath}、{pagePath}
+  let templates: TemplateConfig[] = [
+    { tpl: "../template/index.tpl",  out: "{basePath}/{pagePath}/index.vue" },
+    { tpl: "../template/write.tpl", out: "{basePath}/{pagePath}/components/write.vue" },
+  ];
+
+  // ── 3. 读取所有打勾的 .jsonvue 配置文件 ──────────────────────────
+  let files = getCheckedFiles();
+  let filesLen = files.length;
+  printLog("files count: " + filesLen);
+
+  // ── 4. 对每个 .jsonvue 文件执行一次完整的生成流程 ────────────────
+  for (file in files) {
+
+    printLog("processing: " + file);
+
+    // ── 4.1 读取 .jsonvue 配置 ────────────────────────────────────
+    //      .jsonvue 文件结构：
+    //        meta: { queryApi, deleteApi, updateApi, noDelete, noEdit, ... }
+    //        columns: [{ dataName, queryName, queryStyle, editName, editStyle, ... }]
+    //        queryFields: [{ displayName, dataName, inputStyle, relation }]
+    let json = readJson(file);
+    let meta: Object = json.meta;
+    let rawColumns: Object[] = json.columns;
+    let rawQueryFields: Object[] = json.queryFields;
+
+    // ── 4.2 从文件路径推导页面路径 ────────────────────────────────
+    //      文件路径示例：.../erp_admin/setting/config_g.jsonvue
+    //      推导结果：pagePath = "setting/config_g"
+    //      方法：取 basename 去掉 .jsonvue 后缀得到页面名，
+    //            从完整路径中提取所在目录名作为模块名
+    let fileName = basename(file);              // config_g.jsonvue
+    let pageName = fileName.replace(".jsonvue", "");  // config_g
+
+    // 统一路径分隔符为 /
+    let normPath = file.replace("\\", "/");
+    // 去掉文件名，得到目录路径
+    let dirPath = normPath.replace("/" + fileName, "");
+    // 获取目录路径的最后一级目录名
+    let dirParts = dirPath.split("/");
+    let dirName = "";
+    let dirPartsLen = dirParts.length;
+    // 从后往前找第一个非空的目录名
+    for (let i = dirPartsLen - 1; i >= 0; i = i - 1) {
+      if (dirParts[i] != "") {
+        dirName = dirParts[i];
+        break;
+      }
+    }
+    let pagePath = dirName + "/" + pageName;     // setting/config_g
+    printLog("pagePath: " + pagePath);
+
+    // 从 pagePath 提取 API 模块名（第一级目录）
+    let pathParts = pagePath.split("/");
+    let apiModule = pathParts[0];                // setting
+    printLog("apiModule: " + apiModule);
+
+    // ── 4.3 预生成 API 导入列表字符串 ─────────────────────────────
+    //      示例："getConfigGListApi, delConfigGListApi, updConfigGListApi"
+    let queryApi: String = meta.queryApi;
+    let deleteApi: String = meta.deleteApi;
+    let updateApi: String = meta.updateApi;
+    let noDelete: Bool = meta.noDelete;
+    let noEdit: Bool = meta.noEdit;
+
+    let apiImports = queryApi;
+    if (!noDelete) {
+      apiImports = apiImports + ", " + deleteApi;
+    }
+    if (!noEdit) {
+      apiImports = apiImports + ", " + updateApi;
+    }
+    printLog("apiImports: " + apiImports);
+
+    // ── 4.4 加工列配置数据 ───────────────────────────────────────
+    //      将 rawColumns 转换为模板友好的格式：
+    //        dataName      - 数据列名
+    //        label         - 列表显示列名（使用 editName）
+    //        editName      - 编辑界面列名
+    //        isSwitch      - 是否为开关样式（queryStyle == "switch"）
+    //        isTextArea    - 是否为多行文本（editStyle == "textarea"）
+    //        editComponent - 编辑界面 Vue 组件名（Input/InputNumber/DatePicker/Select）
+    let columns: Object[] = [];
+    let rawColsLen = rawColumns.length;
+    for (let i = 0; i < rawColsLen; i = i + 1) {
+      let rawCol: Object = rawColumns[i];
+      let col: Object = {};
+      col["dataName"] = rawCol.dataName;
+      col["label"] = rawCol.editName;
+      col["editName"] = rawCol.editName;
+
+      // 判断是否为开关样式
+      let isSwitch = false;
+      if (rawCol.queryStyle == "switch") {
+        isSwitch = true;
+      }
+      col["isSwitch"] = isSwitch;
+
+      // 判断是否为多行文本
+      let isTextArea = false;
+      if (rawCol.editStyle == "textarea") {
+        isTextArea = true;
+      }
+      col["isTextArea"] = isTextArea;
+
+      // 根据 editStyle 决定编辑界面 Vue 组件名
+      // 开关样式 → Select（启用/禁用下拉）
+      // int/float → InputNumber
+      // date → DatePicker
+      // combobox → Select
+      // textarea → Input（带 textarea componentProps）
+      // 其他 → Input
+      let editComp = "Input";
+      if (isSwitch) {
+        editComp = "Select";
+      } else {
+        if (rawCol.editStyle == "int") {
+          editComp = "InputNumber";
+        } else {
+          if (rawCol.editStyle == "float") {
+            editComp = "InputNumber";
+          } else {
+            if (rawCol.editStyle == "date") {
+              editComp = "DatePicker";
+            } else {
+              if (rawCol.editStyle == "combobox") {
+                editComp = "Select";
+              }
+            }
+          }
+        }
+      }
+      col["editComponent"] = editComp;
+
+      columns.push(col);
+    }
+    printLog("columns count: " + columns.length);
+
+    // ── 4.5 加工查询字段数据 ─────────────────────────────────────
+    //      将 rawQueryFields 转换为模板友好的格式：
+    //        displayName - 显示列名
+    //        dataName    - 数据列名
+    //        component   - Vue 组件名（text→Input, time→DatePicker）
+    let queryFields: Object[] = [];
+    let rawQfLen = rawQueryFields.length;
+    for (let i = 0; i < rawQfLen; i = i + 1) {
+      let rawQf: Object = rawQueryFields[i];
+      let qf: Object = {};
+      qf["displayName"] = rawQf.displayName;
+      qf["dataName"] = rawQf.dataName;
+      let comp = "Input";
+      if (rawQf.inputStyle == "time") {
+        comp = "DatePicker";
+      }
+      qf["component"] = comp;
+      queryFields.push(qf);
+    }
+    printLog("queryFields count: " + queryFields.length);
+
+    // ── 4.6 组装传给模板的数据对象 tplData ────────────────────────
+    //      模板中的所有 ${变量名} 都从这里取值
+    let tplData: Object = {};
+    tplData["apiImports"] = apiImports;          // ${apiImports} API 导入列表
+    tplData["apiModule"] = apiModule;            // ${apiModule} API 模块路径
+    tplData["queryApi"] = queryApi;              // ${queryApi} 查询接口名
+    tplData["deleteApi"] = deleteApi;            // ${deleteApi} 删除接口名
+    tplData["updateApi"] = updateApi;            // ${updateApi} 修改接口名
+    tplData["noDelete"] = noDelete;              // ${if !noDelete} 不可删除
+    tplData["noEdit"] = noEdit;                  // ${if !noEdit} 不可编辑
+    tplData["columns"] = columns;                // ${each col in columns} 列循环
+    tplData["queryFields"] = queryFields;        // ${each q in queryFields} 查询字段循环
+
+    // ── 4.7 遍历模板配置，逐个渲染并写入文件 ─────────────────────
+    for (cfg in templates) {
+      printLog("tpl path: " + cfg.tpl);
+
+      // 用 formatPath 替换 {basePath}/{pagePath} 等占位符，得到输出文件路径
+      let outPath = formatPath(cfg.out, {
+        basePath: basePath,
+        pagePath: pagePath
+      });
+      tplData["outputPath"] = outPath;  // 供模板内的 fileExists(outputPath) 守卫使用
+
+      // 核心：调用模板引擎，把 tpl 中的 ${变量名} 替换为实际值
+      let result = renderTpl(cfg.tpl, tplData);
+      printLog("result length: " + result.length);
+
+      // 渲染成功 → 写入磁盘
+      if (result) {
+        writeFile(outPath, result);
+        printLog("生成文件: " + outPath);
+      }
+    }
+  }
+
+  printLog("--- Vue 代码生成结束 ---");
+}

@@ -319,6 +319,41 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
       return val;
     }
 
+    case Expr::kAssign: {
+      QJsonValue value = evalExpr(*expr.right);
+      // 左值为标识符：直接设置变量
+      if (expr.left->kind == Expr::kIdent) {
+        setVar(expr.left->ident, value);
+      }
+      // 左值为属性访问：设置对象属性
+      else if (expr.left->kind == Expr::kPropAccess) {
+        // 简单属性赋值：obj.prop = value
+        if (expr.left->propObject && expr.left->propObject->kind == Expr::kIdent) {
+          QJsonObject obj = resolveVar(expr.left->propObject->ident).toObject();
+          obj[expr.left->prop] = value;
+          setVar(expr.left->propObject->ident, QJsonValue(obj));
+        }
+      }
+      // 左值为索引访问：arr[idx] = value
+      else if (expr.left->kind == Expr::kIndexAccess) {
+        if (expr.left->left->kind == Expr::kIdent) {
+          QJsonValue arrVal = resolveVar(expr.left->left->ident);
+          QJsonValue idxVal = evalExpr(*expr.left->right);
+          if (arrVal.isArray()) {
+            QJsonArray arr = arrVal.toArray();
+            int idx = static_cast<int>(idxVal.toDouble());
+            if (idx >= 0 && idx < arr.size()) {
+              arr.replace(idx, value);
+            } else if (idx == arr.size()) {
+              arr.append(value);
+            }
+            setVar(expr.left->left->ident, QJsonValue(arr));
+          }
+        }
+      }
+      return value;
+    }
+
     case Expr::kTernary:
       if (isTruthy(evalExpr(*expr.left)))
         return evalExpr(*expr.right);

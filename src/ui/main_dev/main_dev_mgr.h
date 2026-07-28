@@ -117,6 +117,8 @@ private:
   void closeTab(QTabWidget *tabs, int index);
   /// 检查所有编辑器的修改状态，更新保存按钮可用性
   void updateSaveButtonState();
+  /// 保存前同步 JsonVueWidget 可视化数据到代码编辑器
+  void syncJsonVueBeforeSave();
   /// 推入导航历史记录
   void pushNavigationHistory(const QString &filePath, int line, int column = 0);
   /// 跳转到指定位置（内部使用，不推入历史）

@@ -43,6 +43,9 @@ public:
   /// 创建「向右拆分」按钮
   static QPushButton *createSplitButton();
 
+  /// 创建「可视化/代码切换」按钮（checkable，按下表示可视化模式）
+  static QPushButton *createVisualToggleButton();
+
   /// 创建「最小化」按钮
   static QPushButton *createMinButton();
 

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file tree_dir.h
  * @brief 可打勾的文件树控件
  *
@@ -72,6 +72,11 @@ public:
   /// 设置当前选中的启动项（由外部下拉框联动）
   void setSelectedStartup(const QString &path);
 
+  /// 获取可视化编辑按钮状态
+  bool visualToggle() const { return m_visualToggle; }
+  /// 设置可视化编辑按钮状态并保存
+  void setVisualToggle(bool enabled);
+
   /// 重命名路径时更新启动项数据（m_startupFiles 和 m_selectedStartup）
   void renameStartupPath(const QString &oldPath, const QString &newPath);
 
@@ -144,4 +149,6 @@ private:
 
   QSet<QString> m_startupFiles;  ///< 被设为启动项的 .ac 文件绝对路径集合
   QString m_selectedStartup;     ///< 当前下拉框选中的启动项路径
+
+  bool m_visualToggle = false;  ///< 可视化编辑按钮状态
 };

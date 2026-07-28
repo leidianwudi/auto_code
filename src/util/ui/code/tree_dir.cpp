@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file tree_dir.cpp
  * @brief 可打勾的文件树控件实现
  */
@@ -29,6 +29,12 @@
 #include "src/util/ui/component/aui_icon.h"
 #include "src/util/ui/component/aui_style.h"
 #include "src/util/ui/rename_dialog.h"
+
+/// 检查文件路径是否为 JSON 类型（.json 或 .jsonvue）
+static inline bool isJsonLike(const QString &path) {
+  return path.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive) ||
+         path.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive);
+}
 
 // ──────────────────────────────────────────────────────────────
 //  ModifiedFileDelegate 实现
@@ -191,7 +197,7 @@ void TreeDir::onItemClicked(QTreeWidgetItem *item, int column) {
   }
 
   // 文件节点
-  if (filePath.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive)) {
+  if (isJsonLike(filePath)) {
     if (m_lastClickOnCheckbox) {
       // 单击复选框 → Qt 已自动切换复选框，刷新状态
       updateParentCheckState(item);
@@ -227,8 +233,8 @@ void TreeDir::onItemChanged(QTreeWidgetItem *item, int column) {
 
   const QString filePath = item->data(0, Qt::UserRole + 1).toString();
 
-  if (!filePath.isEmpty() && filePath.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive)) {
-    // json 文件的复选框变化：更新父节点状态
+  if (!filePath.isEmpty() && isJsonLike(filePath)) {
+    // json/jsonvue 文件的复选框变化：更新父节点状态
     updateParentCheckState(item);
     saveState();
   }
@@ -241,14 +247,15 @@ void TreeDir::onItemChanged(QTreeWidgetItem *item, int column) {
 void TreeDir::addDirectoryToTree(QTreeWidgetItem *parentItem, const QString &dirPath) {
   QDir dir(dirPath);
 
-  // 文件（.ac、.tpl 和 .json）
+  // 文件（.ac、.tpl、.json 和 .jsonvue）
   QStringList nameFilters;
-  nameFilters << QStringLiteral("*.ac") << QStringLiteral("*.tpl") << QStringLiteral("*.json");
+  nameFilters << QStringLiteral("*.ac") << QStringLiteral("*.tpl") << QStringLiteral("*.json")
+              << QStringLiteral("*.jsonvue");
   QFileInfoList files = dir.entryInfoList(nameFilters, QDir::Files);
 
   int jsonCount = 0;
   for (const QFileInfo &info : files) {
-    if (info.fileName().endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive)) ++jsonCount;
+    if (isJsonLike(info.absoluteFilePath())) ++jsonCount;
   }
 
   // 子目录
@@ -284,7 +291,7 @@ void TreeDir::addDirectoryToTree(QTreeWidgetItem *parentItem, const QString &dir
     fileItem->setIcon(0, style()->standardIcon(QStyle::SP_FileIcon));
     fileItem->setData(0, Qt::UserRole + 1, info.absoluteFilePath());
 
-    if (info.fileName().endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive)) {
+    if (isJsonLike(info.absoluteFilePath())) {
       fileItem->setFlags(fileItem->flags() | Qt::ItemIsUserCheckable);
       fileItem->setCheckState(0, Qt::Unchecked);
     }
@@ -315,8 +322,7 @@ void TreeDir::setJsonChildrenCheckState(QTreeWidgetItem *item, Qt::CheckState st
     QTreeWidgetItem *child = item->child(i);
     QString filePath = child->data(0, Qt::UserRole + 1).toString();
 
-    if (!filePath.isEmpty() && filePath.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive))
-      child->setCheckState(0, state);
+    if (!filePath.isEmpty() && isJsonLike(filePath)) child->setCheckState(0, state);
 
     setJsonChildrenCheckState(child, state);
   }
@@ -396,6 +402,7 @@ void TreeDir::saveState() {
   root[QStringLiteral("checked")] = checkedArr;
   root[QStringLiteral("startup")] = startupArr;
   if (!selectedRel.isEmpty()) root[QStringLiteral("startupSelected")] = selectedRel;
+  root[QStringLiteral("visualToggle")] = m_visualToggle;
 
   QFile file(m_configPath);
   if (file.open(QIODevice::WriteOnly | QIODevice::Truncate))
@@ -467,6 +474,9 @@ void TreeDir::loadState() {
   // 通知外部启动项已恢复
   emit startupItemsChanged();
 
+  // ── 恢复可视化编辑按钮状态 ──
+  m_visualToggle = obj[QStringLiteral("visualToggle")].toBool(false);
+
   m_bulkUpdating = false;
 }
 
@@ -483,7 +493,7 @@ QStringList TreeDir::checkedJsonFiles() const {
 void TreeDir::collectJsonFiles(QTreeWidgetItem *item, QStringList &files) const {
   // 检查当前节点本身（处理根目录下的 .json 文件）
   QString selfPath = item->data(0, Qt::UserRole + 1).toString();
-  if (!selfPath.isEmpty() && selfPath.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive)) {
+  if (!selfPath.isEmpty() && isJsonLike(selfPath)) {
     if (item->checkState(0) == Qt::Checked) files.append(selfPath);
   }
 
@@ -503,7 +513,7 @@ static bool pathListContains(const QStringList &list, const QString &absPath) {
 void TreeDir::applyStateToTree(QTreeWidgetItem *item, const QStringList &checkedAbsPaths) {
   // 检查当前节点本身（处理根目录下的 .json 文件）
   QString selfPath = item->data(0, Qt::UserRole + 1).toString();
-  if (!selfPath.isEmpty() && selfPath.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive)) {
+  if (!selfPath.isEmpty() && isJsonLike(selfPath)) {
     if (pathListContains(checkedAbsPaths, selfPath)) item->setCheckState(0, Qt::Checked);
     return;  // 文件节点无子节点，无需递归
   }
@@ -513,7 +523,7 @@ void TreeDir::applyStateToTree(QTreeWidgetItem *item, const QStringList &checked
     QTreeWidgetItem *child = item->child(i);
     QString filePath = child->data(0, Qt::UserRole + 1).toString();
 
-    if (!filePath.isEmpty() && filePath.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive)) {
+    if (!filePath.isEmpty() && isJsonLike(filePath)) {
       if (pathListContains(checkedAbsPaths, filePath)) child->setCheckState(0, Qt::Checked);
     }
 
@@ -566,6 +576,13 @@ QStringList TreeDir::startupFiles() const {
 void TreeDir::setSelectedStartup(const QString &path) {
   if (m_selectedStartup != path) {
     m_selectedStartup = path;
+    saveState();
+  }
+}
+
+void TreeDir::setVisualToggle(bool enabled) {
+  if (m_visualToggle != enabled) {
+    m_visualToggle = enabled;
     saveState();
   }
 }

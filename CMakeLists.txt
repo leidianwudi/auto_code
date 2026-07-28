@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.19)
 project(auto_code LANGUAGES CXX)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Sql)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Sql Network)
 
 qt_standard_project_setup()
 
@@ -79,6 +79,8 @@ qt_add_executable(auto_code
     src/util/common/util_file.cpp
     src/util/common/path_resolver.h
     src/util/common/path_resolver.cpp
+    src/util/common/http_client.h
+    src/util/common/http_client.cpp
     src/util/ui/code/tree_dir.h
     src/util/ui/code/tree_dir.cpp
     src/util/ui/code/bracket_matcher.h
@@ -148,6 +150,12 @@ qt_add_executable(auto_code
     src/ui/create/create_mgr.cpp
     src/ui/create/create_model.h
     src/ui/create/create_model.cpp
+    src/ui/json_vue/json_vue_model.h
+    src/ui/json_vue/json_vue_model.cpp
+    src/ui/json_vue/json_vue_editor.h
+    src/ui/json_vue/json_vue_editor.cpp
+    src/ui/json_vue/json_vue_widget.h
+    src/ui/json_vue/json_vue_widget.cpp
     src/ui/main_dev/help_key/help_key_model.h
     src/ui/main_dev/help_key/help_key_model.cpp
     src/ui/main_dev/help_key/help_key_ui.h
@@ -173,6 +181,7 @@ target_link_libraries(auto_code
         Qt::Core
         Qt::Widgets
         Qt::Sql
+        Qt::Network
         D:/tool/mysql9_0/lib/libmysql.lib
         dwmapi.lib
 )

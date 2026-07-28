@@ -28,6 +28,7 @@
 #include "main_dev_ui_ext.h"
 #include "src/engine/ac_language.h"
 #include "src/engine/script/ac_engine.h"
+#include "src/ui/json_vue/json_vue_widget.h"
 #include "src/ui/main_dev/help_key/help_key_mgr.h"
 #include "src/util/common/path_resolver.h"
 #include "src/util/ui/code/code_editor.h"
@@ -74,6 +75,9 @@ QWidget *MainDevMgr::onCreateWindow() {
   // ── 加载文件树 ──
   loadFiles();
 
+  // ── 恢复可视化编辑按钮状态 ──
+  m_ui->visualToggleBtn()->setChecked(m_ui->fileTree()->visualToggle());
+
   return m_ui;
 }
 
@@ -105,13 +109,17 @@ void MainDevMgr::initUi() {
   connect(qApp, &QApplication::focusChanged, this, &MainDevMgr::onFocusChanged);
 
   // ── 保存按钮 ──
-  connect(m_ui->saveBtn(), &QPushButton::clicked, this,
-          [this]() { m_model->saveEditor(currentEditor()); });
+  connect(m_ui->saveBtn(), &QPushButton::clicked, this, [this]() {
+    syncJsonVueBeforeSave();
+    m_model->saveEditor(currentEditor());
+  });
 
   // ── Ctrl+S 快捷键 ──
   auto *saveShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+S")), m_ui);
-  connect(saveShortcut, &QShortcut::activated, this,
-          [this]() { m_model->saveEditor(currentEditor()); });
+  connect(saveShortcut, &QShortcut::activated, this, [this]() {
+    syncJsonVueBeforeSave();
+    m_model->saveEditor(currentEditor());
+  });
 
   // ── Alt+Left 后退 / Alt+Right 前进 ──
   auto *backShortcut = new QShortcut(QKeySequence(QStringLiteral("Alt+Left")), m_ui);
@@ -125,8 +133,43 @@ void MainDevMgr::initUi() {
       auto *tabs = m_ui->editorPanelAt(pi);
       if (!tabs) continue;
       for (int ti = 0; ti < tabs->count(); ++ti) {
-        auto *editor = qobject_cast<CodeEditor *>(tabs->widget(ti));
-        if (editor && editor->document()->isModified()) m_model->saveEditor(editor);
+        auto *w = tabs->widget(ti);
+        auto *jvw = qobject_cast<JsonVueWidget *>(w);
+        CodeEditor *editor = nullptr;
+        bool wasModified = false;
+        if (jvw) {
+          editor = jvw->codeEditor();
+          // syncVisualToCode 会重置 modified 为 false，需先记录
+          wasModified = editor && editor->document()->isModified();
+          jvw->syncVisualToCode();
+        } else {
+          editor = qobject_cast<CodeEditor *>(w);
+        }
+        if (editor && (wasModified || editor->document()->isModified())) {
+          m_model->saveEditor(editor);
+        }
+      }
+    }
+  });
+
+  // ── 可视化/代码切换按钮 ──
+  connect(m_ui->visualToggleBtn(), &QPushButton::toggled, this, [this](bool checked) {
+    // 保存按钮状态到 tree.config
+    m_ui->fileTree()->setVisualToggle(checked);
+    // 获取当前 tab 的 widget
+    for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
+      auto *tabs = m_ui->editorPanelAt(i);
+      if (!tabs) continue;
+      if (!tabs->isVisible()) continue;
+      auto *w = tabs->currentWidget();
+      auto *jvw = qobject_cast<JsonVueWidget *>(w);
+      if (jvw) {
+        if (checked) {
+          jvw->switchToVisual();
+        } else {
+          jvw->switchToCode();
+        }
+        return;
       }
     }
   });
@@ -224,11 +267,19 @@ CodeEditor *MainDevMgr::createEditorForFile(const QString &filePath) {
 
 CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
   // ── 查重：遍历所有面板组的所有标签页 ──
+  // 支持 CodeEditor 和 JsonVueWidget（包装器）两种类型
   for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
     auto *tabs = m_ui->editorPanelAt(i);
     if (!tabs) continue;
     for (int j = 0; j < tabs->count(); ++j) {
-      auto *editor = qobject_cast<CodeEditor *>(tabs->widget(j));
+      auto *w = tabs->widget(j);
+      // 直接 CodeEditor
+      auto *editor = qobject_cast<CodeEditor *>(w);
+      if (!editor) {
+        // JsonVueWidget 包装器
+        auto *jvw = qobject_cast<JsonVueWidget *>(w);
+        if (jvw) editor = jvw->codeEditor();
+      }
       if (editor && editor->objectName() == filePath) {
         tabs->setCurrentIndex(j);
         tabs->setFocus();
@@ -249,9 +300,32 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
   QString content = in.readAll();
   file.close();
 
-  // ── 创建编辑器（含高亮器 + 验证模式） ──
-  CodeEditor *editor = createEditorForFile(filePath);
-  editor->setPlainText(content);
+  // ── 创建编辑器 ──
+  // .jsonvue 文件使用 JsonVueWidget 包装器（CodeEditor + 可视化编辑器）
+  bool isJsonVue = filePath.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive);
+  CodeEditor *editor = nullptr;
+  QWidget *tabWidget = nullptr;
+  JsonVueWidget *jvw = nullptr;
+
+  if (isJsonVue) {
+    jvw = new JsonVueWidget;
+    editor = jvw->codeEditor();
+    editor->setPlainText(content);
+    tabWidget = jvw;
+    // 从当前启动项 AC 脚本加载 HTTP 配置（baseUrl、authHeader、postData）
+    QString acPath = m_ui->startupCombo()->currentData().toString();
+    if (!acPath.isEmpty()) {
+      jvw->loadHttpConfigFromAcFile(acPath);
+    }
+    // 可视化按钮生效时，自动以可视化方式打开
+    if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) {
+      jvw->switchToVisual();
+    }
+  } else {
+    editor = createEditorForFile(filePath);
+    editor->setPlainText(content);
+    tabWidget = editor;
+  }
 
   // ── 获取 / 创建面板组 ──
   QTabWidget *tabs = currentTabWidget();
@@ -261,7 +335,7 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
   }
 
   QFileInfo fi(filePath);
-  int idx = tabs->addTab(editor, fi.fileName());
+  int idx = tabs->addTab(tabWidget, fi.fileName());
   tabs->setTabToolTip(idx, filePath);
   tabs->setCurrentIndex(idx);
 
@@ -276,9 +350,9 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
 
   // ── 修改标记：内容变化时标签页和树节点绘制红色 "*" ──
   connect(editor->document(), &QTextDocument::modificationChanged, this,
-          [this, tabs, editor, filePath](bool changed) {
+          [this, tabs, editor, filePath, tabWidget](bool changed) {
             for (int i = 0; i < tabs->count(); ++i) {
-              if (tabs->widget(i) == editor) {
+              if (tabs->widget(i) == tabWidget) {
                 auto *bar = qobject_cast<DraggableTabBar *>(tabs->tabBar());
                 if (bar) bar->setTabModified(i, changed);
                 break;
@@ -290,6 +364,12 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
             updateSaveButtonState();
           });
 
+  // ── JsonVueWidget：可视化编辑器内容变化时也触发修改标记 ──
+  if (jvw) {
+    connect(jvw, &JsonVueWidget::contentChanged, this,
+            [jvw, editor]() { editor->document()->setModified(true); });
+  }
+
   return editor;
 }
 
@@ -297,7 +377,14 @@ CodeEditor *MainDevMgr::currentEditor() const {
   for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
     auto *tabs = m_ui->editorPanelAt(i);
     if (tabs && tabs->isVisible()) {
-      auto *editor = qobject_cast<CodeEditor *>(tabs->currentWidget());
+      auto *w = tabs->currentWidget();
+      // 直接 CodeEditor
+      auto *editor = qobject_cast<CodeEditor *>(w);
+      if (!editor) {
+        // JsonVueWidget 包装器
+        auto *jvw = qobject_cast<JsonVueWidget *>(w);
+        if (jvw) editor = jvw->codeEditor();
+      }
       if (editor) return editor;
     }
   }
@@ -500,7 +587,19 @@ void MainDevMgr::onValidationMessage(const QString &msg, int errorCount) {
 // ──────────────────────────────────────────────────────────────
 
 void MainDevMgr::closeTab(QTabWidget *tabs, int index) {
-  auto *editor = qobject_cast<CodeEditor *>(tabs->widget(index));
+  auto *w = tabs->widget(index);
+  if (!w) return;
+
+  // 支持 CodeEditor 和 JsonVueWidget 两种类型
+  CodeEditor *editor = qobject_cast<CodeEditor *>(w);
+  QWidget *container = w;
+  if (!editor) {
+    auto *jvw = qobject_cast<JsonVueWidget *>(w);
+    if (jvw) {
+      editor = jvw->codeEditor();
+      container = jvw;
+    }
+  }
   if (!editor) return;
 
   // ── 清理数据层 ──
@@ -510,7 +609,7 @@ void MainDevMgr::closeTab(QTabWidget *tabs, int index) {
   }
 
   tabs->removeTab(index);
-  editor->deleteLater();
+  container->deleteLater();
 
   // ── 空面板且存在多个面板 → 删除面板组 ──
   if (tabs->count() == 0 && m_ui->editorPanelCount() > 1) {
@@ -554,7 +653,12 @@ void MainDevMgr::onCurrentTabChanged(int index) {
   // ── 同步查找栏显示/隐藏 ──
   // 遍历该面板所有编辑器：暂停非当前标签页的查找栏，恢复当前标签页的查找栏
   for (int i = 0; i < tabs->count(); ++i) {
-    auto *editor = qobject_cast<CodeEditor *>(tabs->widget(i));
+    auto *w = tabs->widget(i);
+    auto *editor = qobject_cast<CodeEditor *>(w);
+    if (!editor) {
+      auto *jvw = qobject_cast<JsonVueWidget *>(w);
+      if (jvw) editor = jvw->codeEditor();
+    }
     if (!editor || !editor->findBar()) continue;
     if (i == index) {
       editor->findBar()->resumeVisible();
@@ -577,6 +681,20 @@ void MainDevMgr::onCurrentTabChanged(int index) {
     m_ui->fileTree()->locateFile(fullPath);
   }
 
+  // ── 同步可视化切换按钮状态 ──
+  // 按钮状态独立保持，不受非 jsonvue 文件影响
+  // 切换到 jsonvue 标签时，让 jsonvue 跟随按钮状态
+  auto *curWidget = tabs->widget(index);
+  auto *jvw = qobject_cast<JsonVueWidget *>(curWidget);
+  if (jvw && m_ui->visualToggleBtn()) {
+    bool visualChecked = m_ui->visualToggleBtn()->isChecked();
+    if (visualChecked) {
+      jvw->switchToVisual();
+    } else {
+      jvw->switchToCode();
+    }
+  }
+
   connectEditor(currentEditor());
   m_model->lastActivePanel = tabs;
   m_ui->applyTabDimming(tabs);
@@ -590,7 +708,12 @@ void MainDevMgr::onTabBarClicked(int index) {
   if (!tabs || index < 0 || index >= tabs->count()) return;
 
   // 将焦点设置到当前编辑器，触发 onFocusChanged 完成面板切换
-  auto *editor = qobject_cast<CodeEditor *>(tabs->widget(index));
+  auto *w = tabs->widget(index);
+  auto *editor = qobject_cast<CodeEditor *>(w);
+  if (!editor) {
+    auto *jvw = qobject_cast<JsonVueWidget *>(w);
+    if (jvw) editor = jvw->codeEditor();
+  }
   if (editor) editor->setFocus();
 }
 
@@ -620,18 +743,55 @@ void MainDevMgr::onSplitRight() {
   {
     // 复用 createEditorForFile 创建高亮器 + 验证模式一致的编辑器
     QString filePath = current->objectName();
-    auto *editor = createEditorForFile(filePath);
-    editor->setPlainText(current->toPlainText());
+    bool isJsonVue = filePath.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive);
 
-    QFileInfo fi(filePath);
-    QString tabLabel = filePath.isEmpty() ? QStringLiteral("拆分副本") : fi.fileName();
-    int idx = newPanel->addTab(editor, tabLabel);
-    newPanel->setTabToolTip(idx, filePath);
-    newPanel->setCurrentIndex(idx);
+    if (isJsonVue) {
+      // .jsonvue 文件拆分时创建 JsonVueWidget，保持可视化能力
+      auto *jvw = new JsonVueWidget;
+      auto *editor = jvw->codeEditor();
+      editor->setPlainText(current->toPlainText());
 
-    if (!filePath.isEmpty()) {
-      editor->setObjectName(filePath);
-      m_model->registerFile(filePath, current->toPlainText(), editor);
+      // 从当前启动项 AC 脚本加载 HTTP 配置
+      QString acPath = m_ui->startupCombo()->currentData().toString();
+      if (!acPath.isEmpty()) {
+        jvw->loadHttpConfigFromAcFile(acPath);
+      }
+
+      // 可视化按钮生效时，拆分的副本也以可视化方式打开
+      if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) {
+        jvw->switchToVisual();
+      }
+
+      QFileInfo fi(filePath);
+      QString tabLabel = filePath.isEmpty() ? QStringLiteral("拆分副本") : fi.fileName();
+      int idx = newPanel->addTab(jvw, tabLabel);
+      newPanel->setTabToolTip(idx, filePath);
+      newPanel->setCurrentIndex(idx);
+
+      if (!filePath.isEmpty()) {
+        editor->setObjectName(filePath);
+        m_model->registerFile(filePath, current->toPlainText(), editor);
+      }
+
+      // 连接 contentChanged 信号
+      connect(jvw, &JsonVueWidget::contentChanged, this, [jvw, editor, this]() {
+        editor->document()->setModified(true);
+        updateSaveButtonState();
+      });
+    } else {
+      auto *editor = createEditorForFile(filePath);
+      editor->setPlainText(current->toPlainText());
+
+      QFileInfo fi(filePath);
+      QString tabLabel = filePath.isEmpty() ? QStringLiteral("拆分副本") : fi.fileName();
+      int idx = newPanel->addTab(editor, tabLabel);
+      newPanel->setTabToolTip(idx, filePath);
+      newPanel->setCurrentIndex(idx);
+
+      if (!filePath.isEmpty()) {
+        editor->setObjectName(filePath);
+        m_model->registerFile(filePath, current->toPlainText(), editor);
+      }
     }
   }
 
@@ -680,6 +840,14 @@ void MainDevMgr::onCloseEditor() {
 void MainDevMgr::updateSaveButtonState() {
   m_ui->saveBtn()->setEnabled(currentEditor() && currentEditor()->document()->isModified());
   m_ui->saveAllBtn()->setEnabled(m_model->hasAnyModified());
+}
+
+void MainDevMgr::syncJsonVueBeforeSave() {
+  auto *tabs = currentTabWidget();
+  if (!tabs) return;
+  auto *w = tabs->currentWidget();
+  auto *jvw = qobject_cast<JsonVueWidget *>(w);
+  if (jvw) jvw->syncVisualToCode();
 }
 
 // ──────────────────────────────────────────────────────────────
