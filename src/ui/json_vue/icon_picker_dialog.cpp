@@ -946,7 +946,7 @@ IconPickerDialog::IconPickerDialog(const QString &currentIcon, QWidget *parent)
 
 void IconPickerDialog::setupUI() {
   setWindowTitle(QStringLiteral("选择图标"));
-  setMinimumSize(680, 660);
+  setMinimumSize(685, 660);
 
   AuiWindow::setupFramelessDialog(this);
 

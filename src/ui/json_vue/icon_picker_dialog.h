@@ -58,7 +58,7 @@ private:
   int m_totalPages = 0;         ///< 总页数
   QStringList m_filteredIcons;  ///< 当前筛选后的图标列表
 
-  static constexpr int kCols = 12;                 ///< 网格列数
+  static constexpr int kCols = 14;                 ///< 网格列数
   static constexpr int kRows = 10;                 ///< 网格行数
   static constexpr int kPageSize = kCols * kRows;  ///< 每页图标数
   static constexpr int kIconSize = 32;             ///< 图标显示尺寸
