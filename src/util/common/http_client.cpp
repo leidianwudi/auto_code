@@ -8,6 +8,8 @@
 #include <QJsonArray>
 #include <QNetworkRequest>
 
+#include "util_json.h"
+
 // ════════════════════════════════════════════════════════════
 //  单例
 // ════════════════════════════════════════════════════════════
@@ -17,15 +19,14 @@ HttpClient &HttpClient::instance() {
   return inst;
 }
 
-HttpClient::HttpClient(QObject *parent) : QObject(parent), m_manager(new QNetworkAccessManager(this)) {}
+HttpClient::HttpClient(QObject *parent)
+    : QObject(parent), m_manager(new QNetworkAccessManager(this)) {}
 
 // ════════════════════════════════════════════════════════════
 //  公开接口
 // ════════════════════════════════════════════════════════════
 
-void HttpClient::get(const QString &url, QObject *parent) {
-  request(Get, url, {}, parent);
-}
+void HttpClient::get(const QString &url, QObject *parent) { request(Get, url, {}, parent); }
 
 void HttpClient::post(const QString &url, const QJsonObject &body, QObject *parent) {
   request(Post, url, body, parent);
@@ -36,12 +37,14 @@ void HttpClient::request(Method method, const QString &url, const QJsonObject &b
   request(method, url, body, {}, parent);
 }
 
+/// HTTP 请求默认超时时间（30 秒）
+static constexpr int kHttpTimeoutMs = 30000;
+
 void HttpClient::request(Method method, const QString &url, const QJsonObject &body,
                          const Headers &headers, QObject *parent) {
   QNetworkRequest req((QUrl(url)));
   req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
-  // 设置超时（30 秒）
-  req.setTransferTimeout(30000);
+  req.setTransferTimeout(kHttpTimeoutMs);
 
   // 设置自定义请求头
   for (auto it = headers.cbegin(); it != headers.cend(); ++it) {
@@ -84,7 +87,7 @@ void HttpClient::request(Method method, const QString &url, const QJsonObject &b
 
     QByteArray data = reply->readAll();
     QJsonParseError parseErr;
-    QJsonDocument doc = QJsonDocument::fromJson(data, &parseErr);
+    QJsonDocument doc = UtilJson::fromJson(data, &parseErr);
     if (parseErr.error != QJsonParseError::NoError) {
       emit error(url, QStringLiteral("JSON 解析失败: %1").arg(parseErr.errorString()));
       return;

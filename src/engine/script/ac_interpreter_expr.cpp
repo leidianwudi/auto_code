@@ -18,6 +18,7 @@
 #include "ac_builtin_eval.h"
 #include "ac_interpreter.h"
 #include "ac_object_manager.h"
+#include "src/util/common/util_json.h"
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  表达式求值
@@ -548,7 +549,7 @@ QJsonValue AcInterpreter::evalJSONBuiltin(const Expr &expr) {
       return QJsonValue();
     }
     QJsonParseError parseError;
-    QJsonDocument doc = QJsonDocument::fromJson(argVal.toString().toUtf8(), &parseError);
+    QJsonDocument doc = UtilJson::fromJson(argVal.toString(), &parseError);
     if (parseError.error != QJsonParseError::NoError) {
       setError(QStringLiteral("JSON.parse() error: %1").arg(parseError.errorString()), expr.line);
       return QJsonValue();

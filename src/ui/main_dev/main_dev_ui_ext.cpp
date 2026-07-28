@@ -42,6 +42,22 @@ void DraggableTabBar::setTabModified(int index, bool modified) {
 
 bool DraggableTabBar::isTabModified(int index) const { return m_modifiedTabs.contains(index); }
 
+void DraggableTabBar::tabRemoved(int index) {
+  // QTabBar::removeTab 会自动下移后续标签索引，需要同步修正 m_modifiedTabs
+  m_modifiedTabs.remove(index);
+  // 所有大于 index 的索引下移 1
+  QSet<int> newSet;
+  for (int idx : m_modifiedTabs) {
+    if (idx > index)
+      newSet.insert(idx - 1);
+    else
+      newSet.insert(idx);
+  }
+  m_modifiedTabs = newSet;
+  update();
+  QTabBar::tabRemoved(index);
+}
+
 void DraggableTabBar::paintEvent(QPaintEvent *event) {
   // 先绘制默认标签栏
   QTabBar::paintEvent(event);

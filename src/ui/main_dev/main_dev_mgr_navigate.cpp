@@ -3,12 +3,12 @@
  * @brief 导航历史功能实现（MainDevMgr 的跨文件跳转与导航历史方法）
  */
 
-#include "main_dev_mgr.h"
-
 #include <QDebug>
 #include <QTextBlock>
 #include <QTextCursor>
 
+#include "main_dev_mgr.h"
+#include "src/util/common/ac_log.h"
 #include "src/util/ui/code/code_editor.h"
 
 // ──────────────────────────────────────────────────────────────
@@ -65,14 +65,14 @@ void MainDevMgr::jumpToLocation(const QString &filePath, int line, int column) {
 }
 
 void MainDevMgr::onGoToLine(const QString &filePath, int line) {
-  qDebug() << "onGoToLine() called:" << filePath << "line:" << line;
+  AC_LOG_INFO() << "onGoToLine() called:" << filePath << "line:" << line;
 
   // 注意：历史记录已在 onAboutToNavigate() 中保存，这里只需执行跳转
   jumpToLocation(filePath, line, 0);
 }
 
 void MainDevMgr::onAboutToNavigate(const QString &targetFilePath, int targetLine) {
-  qDebug() << "onAboutToNavigate() called:" << targetFilePath << "targetLine:" << targetLine;
+  AC_LOG_INFO() << "onAboutToNavigate() called:" << targetFilePath << "targetLine:" << targetLine;
 
   // 记录当前位置到历史栈（用于后退）
   CodeEditor *current = currentEditor();
@@ -81,20 +81,20 @@ void MainDevMgr::onAboutToNavigate(const QString &targetFilePath, int targetLine
     int curLine = cursor.blockNumber() + 1;
     int curColumn = cursor.columnNumber() + 1;
     pushNavigationHistory(current->objectName(), curLine, curColumn);
-    qDebug() << "Pushed to history:" << current->objectName() << "line:" << curLine;
+    AC_LOG_INFO() << "Pushed to history:" << current->objectName() << "line:" << curLine;
   }
 }
 
 void MainDevMgr::navigateBack() {
-  qDebug() << "navigateBack() called, history size:" << m_navHistory.size();
+  AC_LOG_INFO() << "navigateBack() called, history size:" << m_navHistory.size();
   if (m_navHistory.isEmpty()) {
-    qDebug() << "Navigation history is empty, cannot go back";
+    AC_LOG_INFO() << "Navigation history is empty, cannot go back";
     return;
   }
 
   // 先弹出后退栈目标位置（必须在任何修改之前，防止引用失效）
   NavigationEntry entry = m_navHistory.pop();
-  qDebug() << "Navigating back to:" << entry.filePath << "line:" << entry.line;
+  AC_LOG_INFO() << "Navigating back to:" << entry.filePath << "line:" << entry.line;
 
   // 记录当前位置到前进栈
   CodeEditor *current = currentEditor();
@@ -105,7 +105,8 @@ void MainDevMgr::navigateBack() {
     forwardEntry.line = cursor.blockNumber() + 1;
     forwardEntry.column = cursor.columnNumber() + 1;
     m_navForwardStack.push(forwardEntry);
-    qDebug() << "Pushed to forward stack:" << forwardEntry.filePath << "line:" << forwardEntry.line;
+    AC_LOG_INFO() << "Pushed to forward stack:" << forwardEntry.filePath
+                  << "line:" << forwardEntry.line;
   }
 
   // 执行跳转
@@ -115,15 +116,15 @@ void MainDevMgr::navigateBack() {
 }
 
 void MainDevMgr::navigateForward() {
-  qDebug() << "navigateForward() called, forward stack size:" << m_navForwardStack.size();
+  AC_LOG_INFO() << "navigateForward() called, forward stack size:" << m_navForwardStack.size();
   if (m_navForwardStack.isEmpty()) {
-    qDebug() << "Forward stack is empty, cannot go forward";
+    AC_LOG_INFO() << "Forward stack is empty, cannot go forward";
     return;
   }
 
   // 先弹出前进栈目标位置（必须在 pushNavigationHistory 之前，因为后者会清空前进栈！）
   NavigationEntry entry = m_navForwardStack.pop();
-  qDebug() << "Navigating forward to:" << entry.filePath << "line:" << entry.line;
+  AC_LOG_INFO() << "Navigating forward to:" << entry.filePath << "line:" << entry.line;
 
   // 记录当前位置到后退栈
   CodeEditor *current = currentEditor();

@@ -32,34 +32,14 @@ QVector<ValidationResult> TplValidator::validate(const QString &source) {
     int commentStart = cleaned.indexOf(QString::fromLatin1(AcTemplate::kExprOpen), scanIdx);
     if (commentStart == -1) break;
     if (commentStart + 2 < cleaned.length() && cleaned[commentStart + 2] == QChar('#')) {
-      // 用深度计数找到注释的闭合 }
-      int depth = 1;
-      int cursor = commentStart + 3;  // 从 ${# 之后开始扫描
-      while (cursor < cleaned.length()) {
-        if (cleaned.mid(cursor, 2) == QString::fromLatin1(AcTemplate::kExprOpen)) {
-          depth++;
-          cursor += 2;
-        } else if (cleaned[cursor] == QChar('}')) {
-          depth--;
-          if (depth == 0) break;
-          cursor++;
-        } else {
-          cursor++;
-        }
+      // ${# ...} 为单行注释，直接跳到行尾（不使用深度计数，避免 } ] 等字符干扰）
+      int lineEnd = cleaned.indexOf(QChar('\n'), commentStart + 3);
+      if (lineEnd == -1) lineEnd = cleaned.length();
+      // 将整个 ${# ... 到行尾替换为空格（保留长度，保留换行符）
+      for (int j = commentStart; j < lineEnd; ++j) {
+        cleaned[j] = QLatin1Char(' ');
       }
-      if (depth == 0) {
-        // 将整个 ${# ... } 替换为空格（保留长度）
-        int commentLen = cursor - commentStart + 1;
-        for (int j = 0; j < commentLen; ++j) {
-          if (cleaned[commentStart + j] != QLatin1Char('\n')) {
-            cleaned[commentStart + j] = QLatin1Char(' ');
-          }
-        }
-        scanIdx = cursor + 1;
-      } else {
-        // 注释未闭合，直接停止扫描（后续 checkDollarBraces 会报告）
-        break;
-      }
+      scanIdx = lineEnd;
     } else {
       scanIdx = commentStart + 2;
     }
@@ -100,16 +80,13 @@ void TplValidator::checkBrackets(const QString &text, QVector<ValidationResult> 
 
     // 跟踪 ${...} 表达式内部
     if (ch == '$' && i + 1 < len && text[i + 1] == '{') {
-      // 注释 ${# ...}：跳过到行内最后一个 }，不检查括号匹配
+      // 注释 ${# ...}：跳过到行尾，不检查括号匹配
       if (i + 2 < len && text[i + 2] == '#') {
         int lineEnd = text.indexOf(QChar('\n'), i + 3);
-        if (lineEnd == -1) lineEnd = len;
-        int lastClose = text.lastIndexOf(QChar('}'), lineEnd - 1);
-        if (lastClose > i) {
-          i = lastClose;
-        } else {
+        if (lineEnd == -1)
+          i = len - 1;
+        else
           i = lineEnd - 1;
-        }
         continue;
       }
       inTemplateExpr = true;

@@ -1,27 +1,24 @@
 /**
  * @file main_dev_mgr.cpp
  * @brief 代码编辑器控制器层实现（单例 UI 控制器）
+ *
+ * 本文件只包含核心方法：窗口创建、信号初始化、文件树加载、保存逻辑。
+ * 其他方法拆分到：
+ *   - main_dev_mgr_file.cpp    文件操作（打开/创建/重命名/删除）
+ *   - main_dev_mgr_tab.cpp     标签页管理（关闭/拆分/切换）
+ *   - main_dev_mgr_connect.cpp 编辑器信号连接与事件过滤
+ *   - main_dev_mgr_navigate.cpp 导航历史
  */
 
 #include "main_dev_mgr.h"
 
 #include <QAction>
 #include <QApplication>
-#include <QCoreApplication>
-#include <QDebug>
 #include <QDir>
-#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
-#include <QInputDialog>
-#include <QLineEdit>
-#include <QMouseEvent>
-#include <QRegularExpression>
 #include <QShortcut>
-#include <QStatusBar>
 #include <QTabWidget>
-#include <QTextCursor>
-#include <QTextStream>
 
 #include "main_dev_model.h"
 #include "main_dev_ui.h"
@@ -32,11 +29,6 @@
 #include "src/ui/main_dev/help_key/help_key_mgr.h"
 #include "src/util/common/path_resolver.h"
 #include "src/util/ui/code/code_editor.h"
-#include "src/util/ui/code/code_find_bar.h"
-#include "src/util/ui/component/aui_message_box.h"
-#include "src/util/ui/highlighter/light_ac.h"
-#include "src/util/ui/highlighter/light_json.h"
-#include "src/util/ui/highlighter/light_tpl.h"
 
 // ──────────────────────────────────────────────────────────────
 //  静态方法（通过单例转发）
@@ -82,10 +74,19 @@ QWidget *MainDevMgr::onCreateWindow() {
 }
 
 // ──────────────────────────────────────────────────────────────
-//  initUi — 连接所有信号槽
+//  initUi — 连接所有信号槽（按职责拆分为子方法）
 // ──────────────────────────────────────────────────────────────
 
 void MainDevMgr::initUi() {
+  connectFileActions();
+  connectSaveActions();
+  connectVisualToggle();
+  connectBuildAction();
+  connectEditorPanels();
+}
+
+/// 文件打开、帮助、重命名、删除信号
+void MainDevMgr::connectFileActions() {
   connect(m_ui->openAction(), &QAction::triggered, this, [this]() {
     QString filePath = QFileDialog::getOpenFileName(m_ui, QStringLiteral("打开文件"),
                                                     QStringLiteral(PROJECT_SOURCE_DIR));
@@ -107,7 +108,10 @@ void MainDevMgr::initUi() {
   connect(m_ui->fileTree(), &TreeDir::renameRequested, this, &MainDevMgr::onRenameFile);
   connect(m_ui->fileTree(), &TreeDir::deleteRequested, this, &MainDevMgr::onDeleteFile);
   connect(qApp, &QApplication::focusChanged, this, &MainDevMgr::onFocusChanged);
+}
 
+/// 保存、Ctrl+S、保存全部信号
+void MainDevMgr::connectSaveActions() {
   // ── 保存按钮 ──
   connect(m_ui->saveBtn(), &QPushButton::clicked, this, [this]() {
     syncJsonVueBeforeSave();
@@ -151,8 +155,10 @@ void MainDevMgr::initUi() {
       }
     }
   });
+}
 
-  // ── 可视化/代码切换按钮 ──
+/// 可视化/代码切换按钮
+void MainDevMgr::connectVisualToggle() {
   connect(m_ui->visualToggleBtn(), &QPushButton::toggled, this, [this](bool checked) {
     // 保存按钮状态到 tree.config
     m_ui->fileTree()->setVisualToggle(checked);
@@ -173,8 +179,10 @@ void MainDevMgr::initUi() {
       }
     }
   });
+}
 
-  // ── 执行按钮 ──
+/// 执行按钮
+void MainDevMgr::connectBuildAction() {
   connect(m_ui->buildBtn(), &QPushButton::clicked, this, [this]() {
     QString scriptPath = m_ui->startupCombo()->currentData().toString();
     if (scriptPath.isEmpty()) {
@@ -192,7 +200,10 @@ void MainDevMgr::initUi() {
       for (const QString &f : files) m_ui->appendOutput(QStringLiteral("  生成: %1").arg(f), false);
     }
   });
+}
 
+/// 编辑器面板信号 + 事件过滤器
+void MainDevMgr::connectEditorPanels() {
   // 连接初始编辑器面板组的信号
   for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
     auto *tabs = m_ui->editorPanelAt(i);
@@ -218,12 +229,8 @@ void MainDevMgr::initUi() {
 // ──────────────────────────────────────────────────────────────
 
 void MainDevMgr::loadFiles() {
-  // 搜索 file/ 目录（优先 PROJECT_SOURCE_DIR，其次应用目录）
-  QStringList searchPaths;
-  searchPaths << QStringLiteral(PROJECT_SOURCE_DIR) + QStringLiteral("/file");
-  searchPaths << QCoreApplication::applicationDirPath() + QStringLiteral("/file");
-  searchPaths << QCoreApplication::applicationDirPath() + QStringLiteral("/../../file");
-  searchPaths << QDir::currentPath() + QStringLiteral("/file");
+  // 复用 PathResolver 统一的文件搜索路径
+  QStringList searchPaths = PathResolver::fileSearchPaths(QString());
 
   QDir baseDir;
   for (const auto &path : searchPaths) {
@@ -242,599 +249,7 @@ void MainDevMgr::loadFiles() {
 }
 
 // ──────────────────────────────────────────────────────────────
-//  创建 / 打开编辑器
-// ──────────────────────────────────────────────────────────────
-
-CodeEditor *MainDevMgr::createEditorForFile(const QString &filePath) {
-  auto *editor = new CodeEditor;
-
-  if (filePath.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive)) {
-    new LightJson(editor->document());
-    editor->setValidationMode(CodeEditor::JsonValidation);
-  } else if (filePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive)) {
-    new LightAc(editor->document());
-    editor->setValidationMode(CodeEditor::AcValidation);
-  } else if (filePath.endsWith(AcFileSuffix::kTpl, Qt::CaseInsensitive)) {
-    new LightTpl(editor->document());
-    editor->setValidationMode(CodeEditor::TemplateValidation);
-  } else {
-    new LightTpl(editor->document());
-    editor->setValidationMode(CodeEditor::TemplateValidation);
-  }
-
-  return editor;
-}
-
-CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
-  // ── 查重：遍历所有面板组的所有标签页 ──
-  // 支持 CodeEditor 和 JsonVueWidget（包装器）两种类型
-  for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
-    auto *tabs = m_ui->editorPanelAt(i);
-    if (!tabs) continue;
-    for (int j = 0; j < tabs->count(); ++j) {
-      auto *w = tabs->widget(j);
-      // 直接 CodeEditor
-      auto *editor = qobject_cast<CodeEditor *>(w);
-      if (!editor) {
-        // JsonVueWidget 包装器
-        auto *jvw = qobject_cast<JsonVueWidget *>(w);
-        if (jvw) editor = jvw->codeEditor();
-      }
-      if (editor && editor->objectName() == filePath) {
-        tabs->setCurrentIndex(j);
-        tabs->setFocus();
-        editor->setFocus();
-        return editor;
-      }
-    }
-  }
-
-  // ── 读取文件 ──
-  QFile file(filePath);
-  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-    AuiMessageBox::show(m_ui, QStringLiteral("打开失败"),
-                        QStringLiteral("无法打开文件: %1").arg(filePath));
-    return nullptr;
-  }
-  QTextStream in(&file);
-  QString content = in.readAll();
-  file.close();
-
-  // ── 创建编辑器 ──
-  // .jsonvue 文件使用 JsonVueWidget 包装器（CodeEditor + 可视化编辑器）
-  bool isJsonVue = filePath.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive);
-  CodeEditor *editor = nullptr;
-  QWidget *tabWidget = nullptr;
-  JsonVueWidget *jvw = nullptr;
-
-  if (isJsonVue) {
-    jvw = new JsonVueWidget;
-    editor = jvw->codeEditor();
-    editor->setPlainText(content);
-    tabWidget = jvw;
-    // 从当前启动项 AC 脚本加载 HTTP 配置（baseUrl、authHeader、postData）
-    QString acPath = m_ui->startupCombo()->currentData().toString();
-    if (!acPath.isEmpty()) {
-      jvw->loadHttpConfigFromAcFile(acPath);
-    }
-    // 可视化按钮生效时，自动以可视化方式打开
-    if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) {
-      jvw->switchToVisual();
-    }
-  } else {
-    editor = createEditorForFile(filePath);
-    editor->setPlainText(content);
-    tabWidget = editor;
-  }
-
-  // ── 获取 / 创建面板组 ──
-  QTabWidget *tabs = currentTabWidget();
-  if (!tabs) {
-    tabs = m_ui->createEditorPanel();
-    m_ui->addEditorPanel(tabs);
-  }
-
-  QFileInfo fi(filePath);
-  int idx = tabs->addTab(tabWidget, fi.fileName());
-  tabs->setTabToolTip(idx, filePath);
-  tabs->setCurrentIndex(idx);
-
-  // ── 首次加载文件时刷新主分割器布局 ──
-  if (m_model->openFiles.isEmpty()) m_ui->adjustMainSplitter();
-
-  // ── 记录状态 ──
-  m_model->registerFile(filePath, content, editor);
-  editor->setObjectName(filePath);
-  editor->setFocus();
-  m_ui->setWindowTitle(MainDevUi::fileTitle(fi.fileName()));
-
-  // ── 修改标记：内容变化时标签页和树节点绘制红色 "*" ──
-  connect(editor->document(), &QTextDocument::modificationChanged, this,
-          [this, tabs, editor, filePath, tabWidget](bool changed) {
-            for (int i = 0; i < tabs->count(); ++i) {
-              if (tabs->widget(i) == tabWidget) {
-                auto *bar = qobject_cast<DraggableTabBar *>(tabs->tabBar());
-                if (bar) bar->setTabModified(i, changed);
-                break;
-              }
-            }
-            // 更新树形目录对应文件的修改状态
-            m_ui->fileTree()->setFileModified(filePath, changed);
-            // 更新保存按钮可用状态
-            updateSaveButtonState();
-          });
-
-  // ── JsonVueWidget：可视化编辑器内容变化时也触发修改标记 ──
-  if (jvw) {
-    connect(jvw, &JsonVueWidget::contentChanged, this,
-            [jvw, editor]() { editor->document()->setModified(true); });
-  }
-
-  return editor;
-}
-
-CodeEditor *MainDevMgr::currentEditor() const {
-  for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
-    auto *tabs = m_ui->editorPanelAt(i);
-    if (tabs && tabs->isVisible()) {
-      auto *w = tabs->currentWidget();
-      // 直接 CodeEditor
-      auto *editor = qobject_cast<CodeEditor *>(w);
-      if (!editor) {
-        // JsonVueWidget 包装器
-        auto *jvw = qobject_cast<JsonVueWidget *>(w);
-        if (jvw) editor = jvw->codeEditor();
-      }
-      if (editor) return editor;
-    }
-  }
-  return nullptr;
-}
-
-QTabWidget *MainDevMgr::currentTabWidget() const {
-  // 1. 优先从焦点控件向上查找 QTabWidget 祖先
-  QWidget *focus = QApplication::focusWidget();
-  while (focus) {
-    if (auto *tabs = qobject_cast<QTabWidget *>(focus)) return tabs;
-    focus = focus->parentWidget();
-  }
-
-  // 2. 再 fallback 到最后活跃面板
-  if (m_model->lastActivePanel && m_model->lastActivePanel->isVisible() &&
-      m_model->lastActivePanel->count() > 0) {
-    return m_model->lastActivePanel;
-  }
-
-  // 3. 最后 fallback 到第一个可见非空面板
-  QTabWidget *emptyPanel = nullptr;
-  for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
-    auto *tabs = m_ui->editorPanelAt(i);
-    if (tabs && tabs->isVisible()) {
-      if (tabs->count() > 0) return tabs;
-      if (!emptyPanel) emptyPanel = tabs;
-    }
-  }
-  return emptyPanel;
-}
-
-// ──────────────────────────────────────────────────────────────
-//  信号连接
-// ──────────────────────────────────────────────────────────────
-
-void MainDevMgr::connectEditor(CodeEditor *editor) {
-  if (m_model->connectedEditor) {
-    disconnect(m_model->connectedEditor, &QPlainTextEdit::cursorPositionChanged, this,
-               &MainDevMgr::updateCursorPosition);
-    disconnect(m_model->connectedEditor, &CodeEditor::validationMessage, this,
-               &MainDevMgr::onValidationMessage);
-    disconnect(m_model->connectedEditor, &CodeEditor::requestGoToLine, this,
-               &MainDevMgr::onGoToLine);
-    disconnect(m_model->connectedEditor, &CodeEditor::aboutToNavigate, this,
-               &MainDevMgr::onAboutToNavigate);
-    disconnect(m_model->connectedEditor, &CodeEditor::requestFindReferencesAll, this, nullptr);
-    disconnect(m_model->connectedEditor, &CodeEditor::requestWorkspaceSymbols, this, nullptr);
-  }
-
-  m_model->connectedEditor = editor;
-
-  if (editor) {
-    connect(editor, &QPlainTextEdit::cursorPositionChanged, this,
-            &MainDevMgr::updateCursorPosition);
-    connect(editor, &CodeEditor::validationMessage, this, &MainDevMgr::onValidationMessage);
-    // 跨文件跳转信号
-    connect(editor, &CodeEditor::requestGoToLine, this, &MainDevMgr::onGoToLine);
-    // 即将导航信号（用于记录历史）
-    connect(editor, &CodeEditor::aboutToNavigate, this, &MainDevMgr::onAboutToNavigate);
-    // 跨文件查找引用
-    connect(editor, &CodeEditor::requestFindReferencesAll, this, [this](const QString &name) {
-      m_ui->clearOutput();
-      m_ui->appendOutput(QStringLiteral("查找引用: ") + name, false);
-      int totalRefs = 0;
-      for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
-        auto *tabs = m_ui->editorPanelAt(pi);
-        if (!tabs) continue;
-        for (int ti = 0; ti < tabs->count(); ++ti) {
-          auto *ed = qobject_cast<CodeEditor *>(tabs->widget(ti));
-          if (!ed) continue;
-          QFileInfo fi(ed->objectName());
-          auto refs = ed->findSymbolReferences(name);
-          for (const auto &ref : refs) {
-            m_ui->appendOutput(QStringLiteral("  %1:%2 → %3")
-                                   .arg(fi.fileName())
-                                   .arg(ref.first)
-                                   .arg(ref.second.trimmed()),
-                               false);
-            ++totalRefs;
-          }
-        }
-      }
-      m_ui->appendOutput(QStringLiteral("共 %1 处引用").arg(totalRefs), false);
-    });
-    // 工作区符号搜索 (Ctrl+T)
-    connect(editor, &CodeEditor::requestWorkspaceSymbols, this, [this]() {
-      bool ok = false;
-      QString query =
-          QInputDialog::getText(m_ui, QStringLiteral("工作区符号搜索"),
-                                QStringLiteral("输入符号名:"), QLineEdit::Normal, QString(), &ok);
-      if (!ok || query.isEmpty()) return;
-
-      m_ui->clearOutput();
-      m_ui->appendOutput(QStringLiteral("符号搜索: ") + query, false);
-      int totalFound = 0;
-      for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
-        auto *tabs = m_ui->editorPanelAt(pi);
-        if (!tabs) continue;
-        for (int ti = 0; ti < tabs->count(); ++ti) {
-          auto *ed = qobject_cast<CodeEditor *>(tabs->widget(ti));
-          if (!ed) continue;
-          QFileInfo fi(ed->objectName());
-          // 搜索当前编辑器的符号表
-          QRegularExpression re(QStringLiteral("\\b") + QRegularExpression::escape(query),
-                                QRegularExpression::CaseInsensitiveOption);
-          const QString &text = ed->cachedText();
-          QStringList lines = text.split(QLatin1Char('\n'));
-          for (int i = 0; i < lines.size(); ++i) {
-            if (re.match(lines[i]).hasMatch()) {
-              m_ui->appendOutput(QStringLiteral("  %1:%2 → %3")
-                                     .arg(fi.fileName())
-                                     .arg(i + 1)
-                                     .arg(lines[i].trimmed()),
-                                 false);
-              ++totalFound;
-            }
-          }
-        }
-      }
-      m_ui->appendOutput(QStringLiteral("共 %1 处匹配").arg(totalFound), false);
-    });
-    updateCursorPosition();
-    editor->validate();
-  } else {
-    m_ui->setCursorStatusText(MainDevUi::cursorDefault());
-    m_ui->setErrorMessage(QString());
-  }
-}
-
-void MainDevMgr::onFocusChanged(QWidget * /*oldFocus*/, QWidget *newFocus) {
-  if (!newFocus) return;
-
-  QWidget *w = newFocus;
-  CodeEditor *foundEditor = nullptr;
-
-  while (w) {
-    if (auto *tabs = qobject_cast<QTabWidget *>(w)) m_model->lastActivePanel = tabs;
-    if (!foundEditor) {
-      if (auto *editor = qobject_cast<CodeEditor *>(w)) foundEditor = editor;
-    }
-    w = w->parentWidget();
-  }
-
-  if (foundEditor) {
-    connectEditor(foundEditor);
-    // 焦点切换到编辑器时，同步定位树形目录到当前文件（处理拆分面板间切换的场景）
-    QString filePath = foundEditor->objectName();
-    if (!filePath.isEmpty()) {
-      m_ui->fileTree()->locateFile(filePath);
-    }
-  }
-
-  // 找出焦点所在的面板组 → 应用 dimming
-  QTabWidget *activeTabs = nullptr;
-  for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
-    auto *tabs = m_ui->editorPanelAt(i);
-    if (tabs && tabs->isAncestorOf(newFocus)) {
-      activeTabs = tabs;
-      break;
-    }
-  }
-
-  m_ui->applyTabDimming(activeTabs);
-  updateSaveButtonState();
-}
-
-void MainDevMgr::updateCursorPosition() {
-  if (!m_model->connectedEditor || !m_model->connectedEditor->isVisible()) {
-    m_ui->setCursorStatusText(MainDevUi::cursorDefault());
-    return;
-  }
-
-  QTextCursor cursor = m_model->connectedEditor->textCursor();
-  int line = cursor.blockNumber() + 1;
-  int col = cursor.columnNumber() + 1;
-  m_ui->setCursorStatusText(QStringLiteral("行: %1, 列: %2").arg(line).arg(col));
-}
-
-void MainDevMgr::onValidationMessage(const QString &msg, int errorCount) {
-  m_ui->setErrorMessage(msg);
-
-  // 通知 TreeDir 更新文件错误状态
-  if (m_model->connectedEditor && m_ui->fileTree()) {
-    QString filePath = m_model->connectedEditor->objectName();
-    if (!filePath.isEmpty()) {
-      if (errorCount == 0) {
-        // 无错误，清除错误状态
-        m_ui->fileTree()->clearFileError(filePath);
-      } else {
-        // 有错误，传递实际错误数量
-        m_ui->fileTree()->setFileError(filePath, errorCount);
-      }
-    }
-  }
-}
-
-// ──────────────────────────────────────────────────────────────
-//  标签页操作
-// ──────────────────────────────────────────────────────────────
-
-void MainDevMgr::closeTab(QTabWidget *tabs, int index) {
-  auto *w = tabs->widget(index);
-  if (!w) return;
-
-  // 支持 CodeEditor 和 JsonVueWidget 两种类型
-  CodeEditor *editor = qobject_cast<CodeEditor *>(w);
-  QWidget *container = w;
-  if (!editor) {
-    auto *jvw = qobject_cast<JsonVueWidget *>(w);
-    if (jvw) {
-      editor = jvw->codeEditor();
-      container = jvw;
-    }
-  }
-  if (!editor) return;
-
-  // ── 清理数据层 ──
-  QString filePath = editor->objectName();
-  if (!filePath.isEmpty() && !m_model->isRegisteredElsewhere(filePath, editor)) {
-    m_model->unregisterFile(filePath);
-  }
-
-  tabs->removeTab(index);
-  container->deleteLater();
-
-  // ── 空面板且存在多个面板 → 删除面板组 ──
-  if (tabs->count() == 0 && m_ui->editorPanelCount() > 1) {
-    int idx = m_ui->editorPanelIndex(tabs);
-    if (idx >= 0) m_ui->removeEditorPanelAt(idx);
-    m_ui->setEditorPanelsUniformStretch();
-    if (m_model->lastActivePanel == tabs) m_model->lastActivePanel = nullptr;
-    m_ui->setWindowTitle(MainDevUi::devTitle());
-    connectEditor(currentEditor());
-    m_ui->applyTabDimming(currentTabWidget());
-    return;
-  }
-
-  // ── 更新窗口标题 ──
-  if (tabs->count() == 0) {
-    m_ui->setWindowTitle(MainDevUi::devTitle());
-  } else {
-    int newIdx = tabs->currentIndex();
-    if (newIdx >= 0) {
-      QString fullPath = tabs->tabToolTip(newIdx);
-      if (!fullPath.isEmpty()) {
-        QFileInfo fi(fullPath);
-        m_ui->setWindowTitle(MainDevUi::fileTitle(fi.fileName()));
-      }
-    }
-  }
-
-  connectEditor(currentEditor());
-}
-
-void MainDevMgr::onTabCloseRequested(int index) {
-  auto *tabs = qobject_cast<QTabWidget *>(sender());
-  if (!tabs) return;
-  closeTab(tabs, index);
-}
-
-void MainDevMgr::onCurrentTabChanged(int index) {
-  auto *tabs = qobject_cast<QTabWidget *>(sender());
-  if (!tabs) return;
-
-  // ── 同步查找栏显示/隐藏 ──
-  // 遍历该面板所有编辑器：暂停非当前标签页的查找栏，恢复当前标签页的查找栏
-  for (int i = 0; i < tabs->count(); ++i) {
-    auto *w = tabs->widget(i);
-    auto *editor = qobject_cast<CodeEditor *>(w);
-    if (!editor) {
-      auto *jvw = qobject_cast<JsonVueWidget *>(w);
-      if (jvw) editor = jvw->codeEditor();
-    }
-    if (!editor || !editor->findBar()) continue;
-    if (i == index) {
-      editor->findBar()->resumeVisible();
-    } else {
-      editor->findBar()->pauseVisible();
-    }
-  }
-
-  // ── 更新窗口标题 ──
-  if (index < 0 || index >= tabs->count()) {
-    m_ui->setWindowTitle(MainDevUi::devTitle());
-    return;
-  }
-
-  QString fullPath = tabs->tabToolTip(index);
-  if (!fullPath.isEmpty()) {
-    QFileInfo fi(fullPath);
-    m_ui->setWindowTitle(MainDevUi::fileTitle(fi.fileName()));
-    // 标签页切换时，同步定位树形目录到当前文件
-    m_ui->fileTree()->locateFile(fullPath);
-  }
-
-  // ── 同步可视化切换按钮状态 ──
-  // 按钮状态独立保持，不受非 jsonvue 文件影响
-  // 切换到 jsonvue 标签时，让 jsonvue 跟随按钮状态
-  auto *curWidget = tabs->widget(index);
-  auto *jvw = qobject_cast<JsonVueWidget *>(curWidget);
-  if (jvw && m_ui->visualToggleBtn()) {
-    bool visualChecked = m_ui->visualToggleBtn()->isChecked();
-    if (visualChecked) {
-      jvw->switchToVisual();
-    } else {
-      jvw->switchToCode();
-    }
-  }
-
-  connectEditor(currentEditor());
-  m_model->lastActivePanel = tabs;
-  m_ui->applyTabDimming(tabs);
-}
-
-void MainDevMgr::onTabBarClicked(int index) {
-  // 点击已选中的标签时 currentChanged 不会触发，需要手动激活该面板
-  auto *bar = qobject_cast<QTabBar *>(sender());
-  if (!bar) return;
-  auto *tabs = qobject_cast<QTabWidget *>(bar->parentWidget());
-  if (!tabs || index < 0 || index >= tabs->count()) return;
-
-  // 将焦点设置到当前编辑器，触发 onFocusChanged 完成面板切换
-  auto *w = tabs->widget(index);
-  auto *editor = qobject_cast<CodeEditor *>(w);
-  if (!editor) {
-    auto *jvw = qobject_cast<JsonVueWidget *>(w);
-    if (jvw) editor = jvw->codeEditor();
-  }
-  if (editor) editor->setFocus();
-}
-
-// ──────────────────────────────────────────────────────────────
-//  拆分 / 关闭标签页
-// ──────────────────────────────────────────────────────────────
-
-void MainDevMgr::onSplitRight() {
-  // 没有打开任何文件时不拆分
-  CodeEditor *current = currentEditor();
-  if (!current) return;
-
-  QTabWidget *newPanel = m_ui->createEditorPanel();
-
-  connect(newPanel, &QTabWidget::tabCloseRequested, this, &MainDevMgr::onTabCloseRequested);
-  connect(newPanel, &QTabWidget::currentChanged, this, &MainDevMgr::onCurrentTabChanged);
-
-  {
-    auto *bar = qobject_cast<DraggableTabBar *>(newPanel->tabBar());
-    if (bar) {
-      connect(bar, &DraggableTabBar::closeOthersRequested, this, &MainDevMgr::onCloseOthers);
-      connect(bar, &DraggableTabBar::closeAllRequested, this, &MainDevMgr::onCloseAll);
-      connect(bar, &QTabBar::tabBarClicked, this, &MainDevMgr::onTabBarClicked);
-    }
-  }
-
-  {
-    // 复用 createEditorForFile 创建高亮器 + 验证模式一致的编辑器
-    QString filePath = current->objectName();
-    bool isJsonVue = filePath.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive);
-
-    if (isJsonVue) {
-      // .jsonvue 文件拆分时创建 JsonVueWidget，保持可视化能力
-      auto *jvw = new JsonVueWidget;
-      auto *editor = jvw->codeEditor();
-      editor->setPlainText(current->toPlainText());
-
-      // 从当前启动项 AC 脚本加载 HTTP 配置
-      QString acPath = m_ui->startupCombo()->currentData().toString();
-      if (!acPath.isEmpty()) {
-        jvw->loadHttpConfigFromAcFile(acPath);
-      }
-
-      // 可视化按钮生效时，拆分的副本也以可视化方式打开
-      if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) {
-        jvw->switchToVisual();
-      }
-
-      QFileInfo fi(filePath);
-      QString tabLabel = filePath.isEmpty() ? QStringLiteral("拆分副本") : fi.fileName();
-      int idx = newPanel->addTab(jvw, tabLabel);
-      newPanel->setTabToolTip(idx, filePath);
-      newPanel->setCurrentIndex(idx);
-
-      if (!filePath.isEmpty()) {
-        editor->setObjectName(filePath);
-        m_model->registerFile(filePath, current->toPlainText(), editor);
-      }
-
-      // 连接 contentChanged 信号
-      connect(jvw, &JsonVueWidget::contentChanged, this, [jvw, editor, this]() {
-        editor->document()->setModified(true);
-        updateSaveButtonState();
-      });
-    } else {
-      auto *editor = createEditorForFile(filePath);
-      editor->setPlainText(current->toPlainText());
-
-      QFileInfo fi(filePath);
-      QString tabLabel = filePath.isEmpty() ? QStringLiteral("拆分副本") : fi.fileName();
-      int idx = newPanel->addTab(editor, tabLabel);
-      newPanel->setTabToolTip(idx, filePath);
-      newPanel->setCurrentIndex(idx);
-
-      if (!filePath.isEmpty()) {
-        editor->setObjectName(filePath);
-        m_model->registerFile(filePath, current->toPlainText(), editor);
-      }
-    }
-  }
-
-  // ── 计算当前面板在分割器中的大小，用于平分 ──
-  QTabWidget *curPanel = currentTabWidget();
-  int curIdx = m_ui->editorPanelIndex(curPanel);
-  QList<int> oldSizes = curIdx >= 0 ? m_ui->editorSplitter()->sizes() : QList<int>();
-
-  m_ui->addEditorPanel(newPanel);
-  m_ui->setEditorPanelsUniformStretch();
-
-  // 仅平分当前面板：原面板和新面板各占一半
-  if (curIdx >= 0 && curIdx < oldSizes.size()) {
-    int half = oldSizes[curIdx] / 2;
-    QList<int> newSizes = m_ui->editorSplitter()->sizes();
-    newSizes[curIdx] = half;
-    newSizes.insert(curIdx + 1, half);
-    m_ui->editorSplitter()->setSizes(newSizes);
-  }
-
-  m_model->lastActivePanel = newPanel;
-  m_ui->applyTabDimming(newPanel);
-
-  auto *editorInPanel = qobject_cast<CodeEditor *>(newPanel->currentWidget());
-  if (editorInPanel)
-    editorInPanel->setFocus();
-  else
-    newPanel->setFocus();
-}
-
-void MainDevMgr::onCloseEditor() {
-  QTabWidget *tabs = currentTabWidget();
-  if (!tabs) return;
-
-  int idx = tabs->currentIndex();
-  if (idx >= 0) {
-    // 通过信号触发 onTabCloseRequested → closeTab，确保 sender() 兼容
-    emit tabs->tabCloseRequested(idx);
-  }
-}
-
-// ──────────────────────────────────────────────────────────────
-//  工具栏状态更新
+//  保存按钮状态
 // ──────────────────────────────────────────────────────────────
 
 void MainDevMgr::updateSaveButtonState() {
@@ -848,252 +263,4 @@ void MainDevMgr::syncJsonVueBeforeSave() {
   auto *w = tabs->currentWidget();
   auto *jvw = qobject_cast<JsonVueWidget *>(w);
   if (jvw) jvw->syncVisualToCode();
-}
-
-// ──────────────────────────────────────────────────────────────
-//  重命名
-// ──────────────────────────────────────────────────────────────
-
-void MainDevMgr::onRenameFile(const QString &oldPath, const QString &newName) {
-  // 校验新名称
-  if (newName.isEmpty()) return;
-
-  static const QString kInvalidChars = QStringLiteral("\\/:*?\"<>|");
-  for (const QChar &c : newName) {
-    if (kInvalidChars.contains(c)) {
-      AuiMessageBox::show(m_ui, QStringLiteral("重命名失败"),
-                          QStringLiteral("文件名不能包含以下字符: %1").arg(kInvalidChars));
-      return;
-    }
-  }
-
-  QFileInfo oldInfo(oldPath);
-  QString parentDir = oldInfo.absolutePath();
-  QString newPath = QDir::cleanPath(parentDir + QStringLiteral("/") + newName);
-
-  // 同名检查
-  if (QFileInfo::exists(newPath)) {
-    AuiMessageBox::show(m_ui, QStringLiteral("重命名失败"),
-                        QStringLiteral("已存在同名文件或文件夹: %1").arg(newName));
-    return;
-  }
-
-  bool isDir = oldInfo.isDir();
-
-  if (isDir) {
-    // 文件夹重命名
-    QDir dir(parentDir);
-    if (!dir.rename(oldInfo.fileName(), newName)) {
-      AuiMessageBox::show(m_ui, QStringLiteral("重命名失败"),
-                          QStringLiteral("无法重命名文件夹: %1").arg(oldInfo.fileName()));
-      return;
-    }
-
-    // 更新所有以旧路径开头的已打开文件
-    QString oldDirPath = QDir::cleanPath(oldPath);
-    for (const QString &filePath : m_model->openFilePaths()) {
-      if (filePath.startsWith(oldDirPath + QStringLiteral("/"))) {
-        QString newFilePath = newPath + filePath.mid(oldDirPath.length());
-        CodeEditor *editor = m_model->openFiles.value(filePath);
-        if (editor) {
-          editor->setObjectName(newFilePath);
-          // 更新 tab 标题和 tooltip
-          for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
-            auto *tabs = m_ui->editorPanelAt(pi);
-            if (!tabs) continue;
-            for (int ti = 0; ti < tabs->count(); ++ti) {
-              if (tabs->widget(ti) == editor) {
-                tabs->setTabText(ti, QFileInfo(newFilePath).fileName());
-                tabs->setTabToolTip(ti, newFilePath);
-                break;
-              }
-            }
-          }
-        }
-        // 更新 model 中的注册信息
-        QString content = m_model->fileContents.value(filePath);
-        m_model->openFiles.remove(filePath);
-        m_model->fileContents.remove(filePath);
-        m_model->openFiles.insert(newFilePath, editor);
-        m_model->fileContents.insert(newFilePath, content);
-      }
-    }
-  } else {
-    // 文件重命名
-    QFile file(oldPath);
-    if (!file.rename(newPath)) {
-      AuiMessageBox::show(m_ui, QStringLiteral("重命名失败"),
-                          QStringLiteral("无法重命名文件: %1").arg(oldInfo.fileName()));
-      return;
-    }
-
-    // 更新已打开的编辑器
-    CodeEditor *editor = m_model->openFiles.value(oldPath);
-    if (editor) {
-      editor->setObjectName(newPath);
-      for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
-        auto *tabs = m_ui->editorPanelAt(pi);
-        if (!tabs) continue;
-        for (int ti = 0; ti < tabs->count(); ++ti) {
-          if (tabs->widget(ti) == editor) {
-            tabs->setTabText(ti, newName);
-            tabs->setTabToolTip(ti, newPath);
-            break;
-          }
-        }
-      }
-      // 更新 model 中的注册信息
-      QString content = m_model->fileContents.value(oldPath);
-      m_model->openFiles.remove(oldPath);
-      m_model->fileContents.remove(oldPath);
-      m_model->openFiles.insert(newPath, editor);
-      m_model->fileContents.insert(newPath, content);
-    }
-  }
-
-  // 更新启动项数据（文件重命名或文件夹重命名中的 .ac 文件路径）
-  if (isDir) {
-    QString oldDirPath = QDir::cleanPath(oldPath);
-    QList<QPair<QString, QString>> renames;
-    for (const QString &sp : m_ui->fileTree()->startupFiles()) {
-      if (sp.startsWith(oldDirPath + QStringLiteral("/"))) {
-        QString newSp = newPath + sp.mid(oldDirPath.length());
-        renames.append({sp, newSp});
-      }
-    }
-    m_ui->fileTree()->renameStartupPaths(renames);
-  } else {
-    m_ui->fileTree()->renameStartupPath(oldPath, newPath);
-  }
-
-  // 刷新树
-  m_ui->fileTree()->refreshTree();
-}
-
-void MainDevMgr::onDeleteFile(const QString &path) {
-  QFileInfo info(path);
-  if (!info.exists()) return;
-
-  bool isDir = info.isDir();
-  QString name = info.fileName();
-
-  // 确认对话框
-  if (!AuiMessageBox::confirm(
-          m_ui, QStringLiteral("确认删除"),
-          isDir ? QStringLiteral("确定要删除文件夹 \"%1\" 及其所有内容吗？").arg(name)
-                : QStringLiteral("确定要删除文件 \"%1\" 吗？").arg(name))) {
-    return;
-  }
-
-  if (isDir) {
-    // 删除文件夹前，关闭所有以该路径开头的已打开文件
-    QString dirPath = QDir::cleanPath(path);
-    QStringList toClose;
-    for (const QString &filePath : m_model->openFilePaths()) {
-      if (filePath.startsWith(dirPath + QStringLiteral("/"))) {
-        toClose.append(filePath);
-      }
-    }
-    for (const QString &filePath : toClose) {
-      CodeEditor *editor = m_model->openFiles.value(filePath);
-      if (editor) {
-        for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
-          auto *tabs = m_ui->editorPanelAt(pi);
-          if (!tabs) continue;
-          for (int ti = 0; ti < tabs->count(); ++ti) {
-            if (tabs->widget(ti) == editor) {
-              closeTab(tabs, ti);
-              break;
-            }
-          }
-        }
-        m_model->openFiles.remove(filePath);
-        m_model->fileContents.remove(filePath);
-      }
-    }
-
-    QDir dir(path);
-    if (!dir.removeRecursively()) {
-      AuiMessageBox::show(m_ui, QStringLiteral("删除失败"),
-                          QStringLiteral("无法删除文件夹: %1").arg(name));
-      return;
-    }
-  } else {
-    // 删除文件前，关闭已打开的编辑器
-    CodeEditor *editor = m_model->openFiles.value(path);
-    if (editor) {
-      for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
-        auto *tabs = m_ui->editorPanelAt(pi);
-        if (!tabs) continue;
-        for (int ti = 0; ti < tabs->count(); ++ti) {
-          if (tabs->widget(ti) == editor) {
-            closeTab(tabs, ti);
-            break;
-          }
-        }
-      }
-      m_model->openFiles.remove(path);
-      m_model->fileContents.remove(path);
-    }
-
-    QFile file(path);
-    if (!file.remove()) {
-      AuiMessageBox::show(m_ui, QStringLiteral("删除失败"),
-                          QStringLiteral("无法删除文件: %1").arg(name));
-      return;
-    }
-  }
-
-  // 刷新树
-  m_ui->fileTree()->refreshTree();
-}
-
-// ──────────────────────────────────────────────────────────────
-//  右键菜单：关闭其它 / 关闭全部
-// ──────────────────────────────────────────────────────────────
-
-void MainDevMgr::onCloseOthers(int index) {
-  auto *bar = qobject_cast<DraggableTabBar *>(sender());
-  if (!bar) return;
-  auto *tabs = qobject_cast<QTabWidget *>(bar->parentWidget());
-  if (!tabs) return;
-  for (int i = tabs->count() - 1; i >= 0; --i) {
-    if (i != index) closeTab(tabs, i);
-  }
-}
-
-void MainDevMgr::onCloseAll() {
-  auto *bar = qobject_cast<DraggableTabBar *>(sender());
-  if (!bar) return;
-  auto *tabs = qobject_cast<QTabWidget *>(bar->parentWidget());
-  if (!tabs) return;
-  while (tabs->count() > 0) {
-    closeTab(tabs, 0);
-  }
-}
-
-// ──────────────────────────────────────────────────────────────
-//  事件过滤器（鼠标侧键导航）
-// ──────────────────────────────────────────────────────────────
-
-bool MainDevMgr::eventFilter(QObject *obj, QEvent *event) {
-  // 只处理鼠标按钮释放事件
-  if (event->type() == QEvent::MouseButtonRelease) {
-    auto *mouseEvent = static_cast<QMouseEvent *>(event);
-
-    // 鼠标侧键：XButton1 = 后退，XButton2 = 前进
-    if (mouseEvent->button() == Qt::XButton1) {
-      qDebug() << "Mouse XButton1 pressed (Back)";
-      navigateBack();
-      return true;  // 事件已处理
-    }
-    if (mouseEvent->button() == Qt::XButton2) {
-      qDebug() << "Mouse XButton2 pressed (Forward)";
-      navigateForward();
-      return true;  // 事件已处理
-    }
-  }
-
-  // 其他事件交给默认处理
-  return QObject::eventFilter(obj, event);
 }

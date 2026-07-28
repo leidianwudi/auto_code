@@ -48,6 +48,8 @@ protected:
   void dragMoveEvent(QDragMoveEvent *event) override;
   void dropEvent(QDropEvent *event) override;
   void paintEvent(QPaintEvent *event) override;
+  /// 标签页被移除时同步修正 m_modifiedTabs 的索引
+  void tabRemoved(int index) override;
 
 public:
   static DraggableTabBar *dragSourceBar() { return s_sourceBar; }

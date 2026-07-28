@@ -103,6 +103,12 @@ private:
   void loadFiles();
   /// 连接所有信号槽（在 onCreateWindow 中调用）
   void initUi();
+  // ── initUi 子方法（按职责拆分）──
+  void connectFileActions();   ///< 文件打开/帮助/重命名/删除
+  void connectSaveActions();   ///< 保存/Ctrl+S/保存全部
+  void connectVisualToggle();  ///< 可视化/代码切换按钮
+  void connectBuildAction();   ///< 执行按钮
+  void connectEditorPanels();  ///< 编辑器面板信号 + 事件过滤器
   /// 为文件路径创建编辑器实例（含高亮器 + 验证模式）
   CodeEditor *createEditorForFile(const QString &filePath);
   /// 在编辑器中打开文件（查重 → 读取 → 创建 → 显示）

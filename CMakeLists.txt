@@ -81,6 +81,7 @@ qt_add_executable(auto_code
     src/util/common/path_resolver.cpp
     src/util/common/http_client.h
     src/util/common/http_client.cpp
+    src/util/common/ac_log.h
     src/util/ui/code/tree_dir.h
     src/util/ui/code/tree_dir.cpp
     src/util/ui/code/bracket_matcher.h
@@ -135,6 +136,9 @@ qt_add_executable(auto_code
     src/ui/main_dev/main_dev_ui_ext.cpp
     src/ui/main_dev/main_dev_mgr.h
     src/ui/main_dev/main_dev_mgr.cpp
+    src/ui/main_dev/main_dev_mgr_file.cpp
+    src/ui/main_dev/main_dev_mgr_tab.cpp
+    src/ui/main_dev/main_dev_mgr_connect.cpp
     src/ui/main_dev/main_dev_mgr_navigate.cpp
     src/ui/main_dev/main_dev_model.h
     src/ui/main_dev/main_dev_model.cpp

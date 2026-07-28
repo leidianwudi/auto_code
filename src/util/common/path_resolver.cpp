@@ -31,8 +31,11 @@ QStringList PathResolver::fileSearchPaths(const QString &scriptPath) {
     addPath(dir + QStringLiteral("/.."));
   }
 
-  addPath(QCoreApplication::applicationDirPath() + QStringLiteral("/file"));
+  // 优先使用 PROJECT_SOURCE_DIR/file（开发期源码目录）
   addPath(QStringLiteral(PROJECT_SOURCE_DIR) + QStringLiteral("/file"));
+  addPath(QCoreApplication::applicationDirPath() + QStringLiteral("/file"));
+  addPath(QCoreApplication::applicationDirPath() + QStringLiteral("/../../file"));
+  addPath(QDir::currentPath() + QStringLiteral("/file"));
 
   return paths;
 }

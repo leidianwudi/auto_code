@@ -26,6 +26,7 @@
 #include <QVBoxLayout>
 
 #include "src/util/common/http_client.h"
+#include "src/util/common/util_json.h"
 #include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_style.h"
 
@@ -486,14 +487,14 @@ void JsonVueEditor::loadHttpConfigFromAcFile(const QString &acFilePath) {
 
   // 用正则提取 AC 脚本中的常量定义
   // 匹配: let varName: String = "value"; （支持转义引号 \"）
-  QRegularExpression rx(
+  static const QRegularExpression rx(
       QStringLiteral(R"rx(let\s+(\w+)\s*:\s*String\s*=\s*"((?:[^"\\]|\\.)*)")rx"));
   auto it = rx.globalMatch(content);
   while (it.hasNext()) {
     auto m = it.next();
     QString name = m.captured(1);
     QString value = m.captured(2);
-    // 反转义：\" → "，\\ → \
+    // 反转义: \" → "，\\ → 反斜杠
     value.replace(QStringLiteral("\\\""), QStringLiteral("\""));
     value.replace(QStringLiteral("\\\\"), QStringLiteral("\\"));
     if (name == QStringLiteral("baseUrl")) {
@@ -546,7 +547,7 @@ void JsonVueEditor::onGenerate() {
   if (method == HttpClient::Post || method == HttpClient::Put) {
     if (!m_postData.isEmpty()) {
       QJsonParseError err;
-      QJsonDocument postDoc = QJsonDocument::fromJson(m_postData.toUtf8(), &err);
+      QJsonDocument postDoc = UtilJson::fromJson(m_postData, &err);
       if (err.error == QJsonParseError::NoError && postDoc.isObject()) {
         bodyObj = postDoc.object();
       }
