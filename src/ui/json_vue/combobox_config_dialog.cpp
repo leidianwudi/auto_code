@@ -21,6 +21,7 @@
 
 #include "src/util/common/http_client.h"
 #include "src/util/common/util_json.h"
+#include "src/util/ui/component/aui_button.h"
 
 // ════════════════════════════════════════════════════════════
 //  构造
@@ -93,7 +94,10 @@ void ComboboxConfigDialog::setupUI() {
   btnRow->addStretch();
   auto *okBtn = new QPushButton(QStringLiteral("确定"), this);
   auto *cancelBtn = new QPushButton(QStringLiteral("取消"), this);
+  AuiButton::applyDialogButtonStyle(okBtn);
+  AuiButton::applyDialogButtonStyle(cancelBtn);
   btnRow->addWidget(okBtn);
+  btnRow->addSpacing(8);
   btnRow->addWidget(cancelBtn);
   layout->addLayout(btnRow);
 

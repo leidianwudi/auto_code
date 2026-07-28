@@ -73,6 +73,13 @@ private slots:
   /// 查询设置：删除查询字段
   void onRemoveQueryField();
 
+  /// 按钮配置：添加按钮
+  void onAddButton();
+  /// 按钮配置：编辑按钮
+  void onEditButton(int row);
+  /// 按钮配置：删除按钮
+  void onRemoveButton();
+
   /// 列配置：点击⚙按钮配置下拉框数据源
   void onConfigureCombobox();
   /// 查询设置：点击⚙按钮配置下拉框数据源
@@ -87,6 +94,8 @@ private:
   QWidget *buildColumnsSection();
   /// 构建查询字段区
   QWidget *buildQueryFieldsSection();
+  /// 构建操作按钮区
+  QWidget *buildButtonsSection();
   /// 应用样式
   void applyStyle();
 
@@ -121,6 +130,11 @@ private:
   QTableWidget *m_queryTable = nullptr;     ///< 查询字段表格
   QPushButton *m_addQueryBtn = nullptr;     ///< 添加查询字段
   QPushButton *m_removeQueryBtn = nullptr;  ///< 删除查询字段
+
+  // ── 操作按钮表格 ──
+  QTableWidget *m_buttonTable = nullptr;  ///< 操作按钮表格
+  QPushButton *m_addButtonBtn = nullptr;  ///< 添加按钮
+  QVector<ButtonConfig> m_buttons;        ///< 按钮配置数据
 
   // ── 状态数据 ──
   QString m_baseUrl;       ///< AC 脚本传来的 baseUrl，用于 HTTP 请求拼接
@@ -159,4 +173,15 @@ enum QueryTableCols {
   QColRelation,         ///< 查询关系
   QColConfig,           ///< 下拉框配置按钮（⚙）
   QColCount
+};
+
+/// 操作按钮表格列索引
+enum ButtonTableCols {
+  BColLabel = 0,   ///< 按钮文字
+  BColActionKey,   ///< 动作标识
+  BColPosition,    ///< 位置
+  BColActionType,  ///< 行为类型
+  BColEdit,        ///< 编辑按钮
+  BColDelete,      ///< 删除按钮
+  BColCount
 };

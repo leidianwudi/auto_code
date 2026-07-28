@@ -26,6 +26,7 @@
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
 
+#include "button_config_dialog.h"
 #include "combobox_config_dialog.h"
 #include "src/util/common/http_client.h"
 #include "src/util/common/util_json.h"
@@ -55,8 +56,10 @@ void JsonVueEditor::setupUI() {
   auto *splitter = new QSplitter(Qt::Vertical, this);
   splitter->addWidget(buildColumnsSection());
   splitter->addWidget(buildQueryFieldsSection());
+  splitter->addWidget(buildButtonsSection());
   splitter->setStretchFactor(0, 3);
   splitter->setStretchFactor(1, 2);
+  splitter->setStretchFactor(2, 1);
   mainLayout->addWidget(splitter, 1);
 
   applyStyle();
@@ -279,6 +282,39 @@ QWidget *JsonVueEditor::buildQueryFieldsSection() {
 
   connect(m_addQueryBtn, &QPushButton::clicked, this, &JsonVueEditor::onAddQueryField);
   connect(m_removeQueryBtn, &QPushButton::clicked, this, &JsonVueEditor::onRemoveQueryField);
+
+  return group;
+}
+
+QWidget *JsonVueEditor::buildButtonsSection() {
+  auto *group = new QGroupBox(QStringLiteral("操作按钮"), this);
+  auto *layout = new QVBoxLayout(group);
+  layout->setSpacing(2);
+  layout->setContentsMargins(2, 2, 2, 2);
+
+  auto *btnRow = new QHBoxLayout;
+  m_addButtonBtn = new QPushButton(QStringLiteral("+ 添加按钮"), this);
+  btnRow->addWidget(m_addButtonBtn);
+  btnRow->addStretch();
+  layout->addLayout(btnRow);
+
+  m_buttonTable = new QTableWidget(0, BColCount, this);
+  m_buttonTable->setHorizontalHeaderLabels({QStringLiteral("按钮文字"), QStringLiteral("动作标识"),
+                                            QStringLiteral("位置"), QStringLiteral("行为类型"),
+                                            QStringLiteral("编辑"), QStringLiteral("删除")});
+  m_buttonTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+  m_buttonTable->horizontalHeader()->setSectionResizeMode(BColLabel, QHeaderView::Stretch);
+  m_buttonTable->setColumnWidth(BColActionKey, 120);
+  m_buttonTable->setColumnWidth(BColPosition, 80);
+  m_buttonTable->setColumnWidth(BColActionType, 100);
+  m_buttonTable->setColumnWidth(BColEdit, 60);
+  m_buttonTable->setColumnWidth(BColDelete, 60);
+  m_buttonTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+  m_buttonTable->setMinimumHeight(60);
+  m_buttonTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+  layout->addWidget(m_buttonTable);
+
+  connect(m_addButtonBtn, &QPushButton::clicked, this, &JsonVueEditor::onAddButton);
 
   return group;
 }
@@ -676,6 +712,43 @@ void JsonVueEditor::loadConfig(const JsonVueConfig &config) {
     });
   }
 
+  // 操作按钮
+  m_buttons = config.buttons;
+  m_buttonTable->setRowCount(0);
+  for (const auto &btn : config.buttons) {
+    int row = m_buttonTable->rowCount();
+    m_buttonTable->insertRow(row);
+    m_buttonTable->setItem(row, BColLabel, new QTableWidgetItem(btn.label));
+    m_buttonTable->setItem(row, BColActionKey, new QTableWidgetItem(btn.actionKey));
+    m_buttonTable->setItem(row, BColPosition,
+                           new QTableWidgetItem(buttonPositionToString(btn.position)));
+    m_buttonTable->setItem(row, BColActionType,
+                           new QTableWidgetItem(buttonActionTypeToString(btn.actionType)));
+
+    auto *editBtn = new QPushButton(QStringLiteral("编辑"));
+    connect(editBtn, &QPushButton::clicked, this, [this, editBtn]() {
+      for (int r = 0; r < m_buttonTable->rowCount(); ++r) {
+        if (m_buttonTable->cellWidget(r, BColEdit) == editBtn) {
+          onEditButton(r);
+          break;
+        }
+      }
+    });
+    m_buttonTable->setCellWidget(row, BColEdit, editBtn);
+
+    auto *delBtn = new QPushButton(QStringLiteral("删除"));
+    connect(delBtn, &QPushButton::clicked, this, [this, delBtn]() {
+      for (int r = 0; r < m_buttonTable->rowCount(); ++r) {
+        if (m_buttonTable->cellWidget(r, BColDelete) == delBtn) {
+          m_buttonTable->selectRow(r);
+          onRemoveButton();
+          break;
+        }
+      }
+    });
+    m_buttonTable->setCellWidget(row, BColDelete, delBtn);
+  }
+
   m_loading = false;
 }
 
@@ -741,6 +814,9 @@ JsonVueConfig JsonVueEditor::collectConfig() const {
 
     if (!q.displayName.isEmpty()) cfg.queryFields.append(q);
   }
+
+  // 操作按钮（直接从 m_buttons 返回，表格只用于显示）
+  cfg.buttons = m_buttons;
 
   return cfg;
 }
@@ -1337,4 +1413,89 @@ void JsonVueEditor::onConfigureQuerySelect() {
       emit configChanged();
     }
   }
+}
+
+// ════════════════════════════════════════════════════════════
+//  操作按钮管理
+// ════════════════════════════════════════════════════════════
+
+void JsonVueEditor::onAddButton() {
+  ButtonConfigDialog dialog(this);
+  if (dialog.exec() == QDialog::Accepted) {
+    ButtonConfig btn = dialog.getData();
+    if (btn.label.isEmpty()) {
+      return;
+    }
+    // 如果 actionKey 为空，自动生成
+    if (btn.actionKey.isEmpty()) {
+      btn.actionKey = QStringLiteral("btn%1").arg(m_buttons.size() + 1);
+    }
+    m_buttons.append(btn);
+    // 刷新表格
+    int row = m_buttonTable->rowCount();
+    m_buttonTable->insertRow(row);
+    m_buttonTable->setItem(row, BColLabel, new QTableWidgetItem(btn.label));
+    m_buttonTable->setItem(row, BColActionKey, new QTableWidgetItem(btn.actionKey));
+    m_buttonTable->setItem(row, BColPosition,
+                           new QTableWidgetItem(buttonPositionToString(btn.position)));
+    m_buttonTable->setItem(row, BColActionType,
+                           new QTableWidgetItem(buttonActionTypeToString(btn.actionType)));
+
+    auto *editBtn = new QPushButton(QStringLiteral("编辑"));
+    connect(editBtn, &QPushButton::clicked, this, [this, editBtn]() {
+      for (int r = 0; r < m_buttonTable->rowCount(); ++r) {
+        if (m_buttonTable->cellWidget(r, BColEdit) == editBtn) {
+          onEditButton(r);
+          break;
+        }
+      }
+    });
+    m_buttonTable->setCellWidget(row, BColEdit, editBtn);
+
+    auto *delBtn = new QPushButton(QStringLiteral("删除"));
+    connect(delBtn, &QPushButton::clicked, this, [this, delBtn]() {
+      for (int r = 0; r < m_buttonTable->rowCount(); ++r) {
+        if (m_buttonTable->cellWidget(r, BColDelete) == delBtn) {
+          m_buttonTable->selectRow(r);
+          onRemoveButton();
+          break;
+        }
+      }
+    });
+    m_buttonTable->setCellWidget(row, BColDelete, delBtn);
+
+    emit configChanged();
+  }
+}
+
+void JsonVueEditor::onEditButton(int row) {
+  if (row < 0 || row >= m_buttons.size()) {
+    return;
+  }
+  ButtonConfigDialog dialog(m_buttons[row], this);
+  if (dialog.exec() == QDialog::Accepted) {
+    ButtonConfig btn = dialog.getData();
+    if (btn.label.isEmpty()) {
+      return;
+    }
+    m_buttons[row] = btn;
+    // 刷新表格行
+    m_buttonTable->item(row, BColLabel)->setText(btn.label);
+    m_buttonTable->item(row, BColActionKey)->setText(btn.actionKey);
+    m_buttonTable->item(row, BColPosition)->setText(buttonPositionToString(btn.position));
+    m_buttonTable->item(row, BColActionType)->setText(buttonActionTypeToString(btn.actionType));
+    emit configChanged();
+  }
+}
+
+void JsonVueEditor::onRemoveButton() {
+  int row = m_buttonTable->currentRow();
+  if (row < 0) {
+    return;
+  }
+  m_buttonTable->removeRow(row);
+  if (row < m_buttons.size()) {
+    m_buttons.removeAt(row);
+  }
+  emit configChanged();
 }

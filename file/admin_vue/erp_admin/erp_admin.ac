@@ -67,10 +67,16 @@ main {
     //        meta: { queryApi, deleteApi, updateApi, noDelete, noEdit, ... }
     //        columns: [{ dataName, queryName, queryStyle, editName, editStyle, ... }]
     //        queryFields: [{ displayName, dataName, inputStyle, relation }]
+    //        buttons: [{ label, icon, position, actionType, actionKey, apiName, ... }]
     let json = readJson(file);
     let meta: Object = json.meta;
     let rawColumns: Object[] = json.columns;
     let rawQueryFields: Object[] = json.queryFields;
+    // buttons 可能为空（旧 .jsonvue 文件没有此字段），需防御性处理
+    let rawButtons: Object[] = [];
+    if (json.buttons != null) {
+      rawButtons = json.buttons;
+    }
 
     // ── 4.2 从文件路径推导页面路径 ────────────────────────────────
     //      文件路径示例：.../erp_admin/setting/config_g.jsonvue
@@ -120,6 +126,40 @@ main {
       apiImports = apiImports + ", " + updateApi;
     }
     printLog("apiImports: " + apiImports);
+
+    // ── 4.3b 收集自定义按钮需要的额外 API ─────────────────────────
+    //      遍历 rawButtons，收集 apiName（Ajax/Confirm）和 dialogApi（Dialog）
+    //      追加到 apiImports，确保生成的 Vue 文件 import 了所有需要的 API
+    //      使用 Object 做去重集合，避免同一 API 被多个按钮重复 import
+    let rawBtnsLen = rawButtons.length;
+    let extraApiSet: Object = {};
+    let extraApiList: String[] = [];
+    for (let i = 0; i < rawBtnsLen; i = i + 1) {
+      let rawBtn: Object = rawButtons[i];
+      let actionType: String = rawBtn.actionType;
+      // Ajax / Confirm 行为使用 apiName
+      if (actionType == "ajax" || actionType == "confirm") {
+        let api: String = rawBtn.apiName;
+        if (api != "" && extraApiSet[api] == null) {
+          extraApiSet[api] = true;
+          extraApiList.push(api);
+        }
+      }
+      // Dialog 行为使用 dialogApi
+      if (actionType == "dialog") {
+        let api: String = rawBtn.dialogApi;
+        if (api != "" && extraApiSet[api] == null) {
+          extraApiSet[api] = true;
+          extraApiList.push(api);
+        }
+      }
+    }
+    // 追加到 apiImports
+    let extraLen = extraApiList.length;
+    for (let i = 0; i < extraLen; i = i + 1) {
+      apiImports = apiImports + ", " + extraApiList[i];
+    }
+    printLog("apiImports (with buttons): " + apiImports);
 
     // ── 4.4 加工列配置数据 ───────────────────────────────────────
     //      将 rawColumns 转换为模板友好的格式：
@@ -296,6 +336,203 @@ main {
     }
     printLog("queryFields count: " + queryFields.length);
 
+    // ── 4.5b 加工自定义按钮数据 ─────────────────────────────────
+    //      将 rawButtons 转换为模板友好的格式，并按位置/行为分组：
+    //        rowButtons     - 行操作列按钮（position == "row"）
+    //        toolbarButtons - 顶部工具栏按钮（position == "toolbar"）
+    //        ajaxButtons    - Ajax 行为按钮（直接调 API）
+    //        confirmButtons - Confirm 行为按钮（二次确认后调 API）
+    //        dialogButtons  - Dialog 行为按钮（打开对话框）
+    //        linkButtons    - Link 行为按钮（跳转页面）
+    //      同时计算操作列宽度 actionColumnWidth（根据按钮数量自适应）
+    let buttons: Object[] = [];
+    let rowButtons: Object[] = [];
+    let toolbarButtons: Object[] = [];
+    let ajaxButtons: Object[] = [];
+    let confirmButtons: Object[] = [];
+    let dialogButtons: Object[] = [];
+    let linkButtons: Object[] = [];
+    for (let i = 0; i < rawBtnsLen; i = i + 1) {
+      let rawBtn: Object = rawButtons[i];
+      let btn: Object = {};
+      btn["key"] = rawBtn.actionKey;
+      btn["label"] = rawBtn.label;
+      btn["icon"] = rawBtn.icon;
+      btn["type"] = rawBtn.buttonType;
+      btn["position"] = rawBtn.position;
+      btn["actionType"] = rawBtn.actionType;
+      btn["apiName"] = rawBtn.apiName;
+      btn["confirmText"] = rawBtn.confirmText;
+      btn["dialogTitle"] = rawBtn.dialogTitle;
+      btn["dialogApi"] = rawBtn.dialogApi;
+      // Dialog 行为：加工 dialogFields（添加布尔标记，供模板生成 formSchema 用）
+      let processedDialogFields: Object[] = [];
+      let rawDialogFields: Object[] = [];
+      if (rawBtn.dialogFields != null) {
+        rawDialogFields = rawBtn.dialogFields;
+      }
+      let rawDialogFieldsLen = rawDialogFields.length;
+      for (let j = 0; j < rawDialogFieldsLen; j = j + 1) {
+        let rawF: Object = rawDialogFields[j];
+        let f: Object = {};
+        f["fieldName"] = rawF.fieldName;
+        f["label"] = rawF.label;
+        f["editStyle"] = rawF.editStyle;
+        f["required"] = rawF.required;
+        // 样式标记
+        f["isText"] = (rawF.editStyle == "text");
+        f["isInt"] = (rawF.editStyle == "int");
+        f["isFloat"] = (rawF.editStyle == "float");
+        f["isDate"] = (rawF.editStyle == "date");
+        f["isSelect"] = (rawF.editStyle == "select");
+        f["isTextArea"] = (rawF.editStyle == "textarea");
+        // 样式特定配置值
+        f["placeholder"] = rawF.placeholder;
+        f["maxlength"] = rawF.maxlength;
+        f["minValue"] = rawF.minValue;
+        f["maxValue"] = rawF.maxValue;
+        f["precision"] = rawF.precision;
+        f["dateFormat"] = rawF.dateFormat;
+        f["textareaRows"] = rawF.textareaRows;
+        f["selectUrl"] = rawF.selectUrl;
+        f["selectValueField"] = rawF.selectValueField;
+        f["selectLabelField"] = rawF.selectLabelField;
+        // 预计算布尔标记（避免模板中做字符串/数值比较）
+        f["hasPlaceholder"] = (rawF.placeholder != "");
+        f["hasMaxlength"] = (rawF.maxlength > 0);
+        f["hasMinValue"] = (rawF.minValue != 0);
+        f["hasMaxValue"] = (rawF.maxValue != 0);
+        f["hasDateFormat"] = (rawF.dateFormat != "");
+
+        // 预计算 Vue 组件名（模板直接引用，避免在模板中做条件判断）
+        let comp = "Input";
+        if (f["isSelect"]) {
+          comp = "ApiSelect";
+        }
+        if (f["isInt"]) {
+          comp = "InputNumber";
+        }
+        if (f["isFloat"]) {
+          comp = "InputNumber";
+        }
+        if (f["isDate"]) {
+          comp = "DatePicker";
+        }
+        f["component"] = comp;
+
+        // 预计算 componentProps 字符串（模板直接插入，避免复杂条件渲染）
+        let propsStr = "";
+        if (f["isSelect"]) {
+          propsStr = "url: '" + f["selectUrl"] + "', valueField: '" +
+                     f["selectValueField"] + "', labelField: '" + f["selectLabelField"] + "'";
+        }
+        if (f["isDate"]) {
+          if (f["hasDateFormat"]) {
+            propsStr = "type: '" + f["dateFormat"] + "'";
+          }
+        }
+        if (f["isTextArea"]) {
+          propsStr = "type: 'textarea', rows: " + f["textareaRows"];
+          if (f["hasPlaceholder"]) {
+            propsStr = propsStr + ", placeholder: '" + f["placeholder"] + "'";
+          }
+        }
+        if (f["isInt"]) {
+          if (f["hasMinValue"]) {
+            propsStr = "min: " + f["minValue"];
+          }
+          if (f["hasMaxValue"]) {
+            if (propsStr != "") {
+              propsStr = propsStr + ", ";
+            }
+            propsStr = propsStr + "max: " + f["maxValue"];
+          }
+        }
+        if (f["isFloat"]) {
+          propsStr = "precision: " + f["precision"];
+          if (f["hasMinValue"]) {
+            propsStr = propsStr + ", min: " + f["minValue"];
+          }
+          if (f["hasMaxValue"]) {
+            propsStr = propsStr + ", max: " + f["maxValue"];
+          }
+        }
+        if (f["isText"]) {
+          if (f["hasPlaceholder"]) {
+            propsStr = "placeholder: '" + f["placeholder"] + "'";
+          }
+          if (f["hasMaxlength"]) {
+            if (propsStr != "") {
+              propsStr = propsStr + ", ";
+            }
+            propsStr = propsStr + "maxlength: " + f["maxlength"];
+          }
+        }
+        f["componentPropsStr"] = propsStr;
+        f["hasProps"] = (propsStr != "");
+        if (f["required"]) {
+          f["requiredStr"] = ",\n    required: true";
+        } else {
+          f["requiredStr"] = "";
+        }
+
+        processedDialogFields.push(f);
+      }
+      btn["dialogFields"] = processedDialogFields;
+      btn["linkPath"] = rawBtn.linkPath;
+
+      // 预计算布尔标记（避免模板中做字符串比较）
+      let isRow = (rawBtn.position == "row");
+      let isToolbar = (rawBtn.position == "toolbar");
+      let isAjax = (rawBtn.actionType == "ajax");
+      let isConfirm = (rawBtn.actionType == "confirm");
+      let isDialog = (rawBtn.actionType == "dialog");
+      let isLink = (rawBtn.actionType == "link");
+      btn["isRow"] = isRow;
+      btn["isToolbar"] = isToolbar;
+      btn["isAjax"] = isAjax;
+      btn["isConfirm"] = isConfirm;
+      btn["isDialog"] = isDialog;
+      btn["isLink"] = isLink;
+      btn["hasIcon"] = (rawBtn.icon != "");
+      btn["hasType"] = (rawBtn.buttonType != "");
+
+      buttons.push(btn);
+      // 按位置分组
+      if (isRow) {
+        rowButtons.push(btn);
+      }
+      if (isToolbar) {
+        toolbarButtons.push(btn);
+      }
+      // 按行为分组
+      if (isAjax) {
+        ajaxButtons.push(btn);
+      }
+      if (isConfirm) {
+        confirmButtons.push(btn);
+      }
+      if (isDialog) {
+        dialogButtons.push(btn);
+      }
+      if (isLink) {
+        linkButtons.push(btn);
+      }
+    }
+    printLog("buttons count: " + buttons.length + " (row: " + rowButtons.length +
+             ", toolbar: " + toolbarButtons.length + ")");
+
+    // 计算操作列宽度（每个按钮约 40px，含间距）
+    let baseActionCount = 0;
+    if (!noDetail) { baseActionCount = baseActionCount + 1; }
+    if (!noEdit) { baseActionCount = baseActionCount + 1; }
+    if (!noDelete) { baseActionCount = baseActionCount + 1; }
+    let actionColumnWidth = (baseActionCount + rowButtons.length) * 40;
+    if (actionColumnWidth < 80) {
+      actionColumnWidth = 80;  // 最小宽度兜底
+    }
+    let hasCustomButtons = (buttons.length > 0);
+
     // ── 4.6 组装传给模板的数据对象 tplData ────────────────────────
     //      模板中的所有 ${变量名} 都从这里取值
     let tplData: Object = {};
@@ -309,6 +546,19 @@ main {
     tplData["noDetail"] = noDetail;              // ${if !noDetail} 不可查看详情
     tplData["columns"] = columns;                // ${each col in columns} 列循环
     tplData["queryFields"] = queryFields;        // ${each q in queryFields} 查询字段循环
+    // 自定义按钮相关数据
+    tplData["hasCustomButtons"] = hasCustomButtons;  // ${if hasCustomButtons} 是否有自定义按钮
+    tplData["hasAjaxButtons"] = (ajaxButtons.length > 0);
+    tplData["hasConfirmButtons"] = (confirmButtons.length > 0);
+    tplData["hasDialogButtons"] = (dialogButtons.length > 0);
+    tplData["hasLinkButtons"] = (linkButtons.length > 0);
+    tplData["rowButtons"] = rowButtons;          // ${each btn in rowButtons} 行操作列按钮
+    tplData["toolbarButtons"] = toolbarButtons;  // ${each btn in toolbarButtons} 顶部工具栏按钮
+    tplData["ajaxButtons"] = ajaxButtons;        // Ajax 行为按钮（生成处理函数用）
+    tplData["confirmButtons"] = confirmButtons;  // Confirm 行为按钮
+    tplData["dialogButtons"] = dialogButtons;    // Dialog 行为按钮
+    tplData["linkButtons"] = linkButtons;        // Link 行为按钮
+    tplData["actionColumnWidth"] = actionColumnWidth;  // 操作列宽度（自适应）
 
     // ── 4.7 遍历模板配置，逐个渲染并写入文件 ─────────────────────
     for (cfg in templates) {

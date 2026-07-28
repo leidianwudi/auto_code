@@ -164,6 +164,85 @@ struct QueryFieldConfig {
   static QueryFieldConfig fromJson(const QJsonObject &obj);
 };
 
+/// 按钮位置
+enum class ButtonPosition {
+  Row = 0,     ///< 行操作列（与编辑/删除同行）
+  Toolbar = 1  ///< 顶部工具栏（与新增/删除同行）
+};
+
+/// 按钮行为类型
+enum class ButtonActionType {
+  Ajax = 0,     ///< 直接调 API（如禁用用户）
+  Confirm = 1,  ///< 二次确认后调 API（如重置密码）
+  Dialog = 2,   ///< 打开对话框填表单再提交（如修改密码）
+  Link = 3      ///< 跳转页面
+};
+
+/**
+ * @struct DialogFieldConfig
+ * @brief 自定义对话框内的表单字段配置（轻量版 ColumnConfig，复用 EditStyle）
+ */
+struct DialogFieldConfig {
+  QString fieldName;                      ///< 字段名（提交给 API 的 key）
+  QString label;                          ///< 显示标签
+  EditStyle editStyle = EditStyle::Text;  ///< 编辑样式（复用 EditStyle 枚举）
+  bool required = false;                  ///< 是否必填
+  QString placeholder;                    ///< 占位提示（text/textarea）
+  int maxlength = 0;                      ///< 最大长度（text，0=不限）
+  int textareaRows = 3;                   ///< 行数（textarea）
+  double minValue = 0;                    ///< 最小值（int/float）
+  double maxValue = 0;                    ///< 最大值（int/float）
+  int precision = 2;                      ///< 小数位数（float）
+  QString dateFormat;                     ///< 日期格式（date）
+  QString selectUrl;                      ///< 下拉框数据源 URL（select）
+  QString selectValueField;               ///< 下拉框 Value 字段名（select）
+  QString selectLabelField;               ///< 下拉框 Label 字段名（select）
+
+  /// 序列化为 JSON
+  QJsonObject toJson() const;
+  /// 从 JSON 反序列化
+  static DialogFieldConfig fromJson(const QJsonObject &obj);
+};
+
+/**
+ * @struct ButtonConfig
+ * @brief 自定义操作按钮配置
+ *
+ * 支持在顶部工具栏或行操作列添加自定义按钮，按钮行为支持：
+ * - Ajax：直接调 API
+ * - Confirm：二次确认后调 API
+ * - Dialog：打开对话框填表单再提交
+ * - Link：跳转页面
+ */
+struct ButtonConfig {
+  // ── 外观 ──
+  QString label;            ///< 按钮文字（如"修改密码"）
+  QString icon;             ///< 图标名（如"vi-mingcute:key-line"，可为空）
+  ButtonPosition position;  ///< 按钮位置（行/工具栏）
+  QString buttonType;       ///< 按钮样式（""/primary/success/danger/warning）
+
+  // ── 行为 ──
+  ButtonActionType actionType;  ///< 行为类型
+  QString actionKey;            ///< 动作唯一标识（生成的处理函数用，如"resetPwd"）
+
+  // Ajax / Confirm 行为专用
+  QString apiName;      ///< API 函数名（如"resetUserPasswordApi"）
+  QString confirmText;  ///< Confirm: 确认提示文字（如"确定重置该用户密码？"）
+
+  // Dialog 行为专用
+  QString dialogTitle;                      ///< 对话框标题
+  QString dialogApi;                        ///< 对话框提交 API 函数名
+  QVector<DialogFieldConfig> dialogFields;  ///< 对话框表单字段
+
+  // Link 行为专用
+  QString linkPath;  ///< 跳转路径（如"/user/log?id={id}"，{id} 用行数据替换）
+
+  /// 序列化为 JSON
+  QJsonObject toJson() const;
+  /// 从 JSON 反序列化
+  static ButtonConfig fromJson(const QJsonObject &obj);
+};
+
 /**
  * @class JsonVueConfig
  * @brief .jsonvue 文件完整配置
@@ -176,6 +255,8 @@ public:
   QVector<ColumnConfig> columns;
   /// 查询字段配置数组
   QVector<QueryFieldConfig> queryFields;
+  /// 自定义操作按钮配置数组
+  QVector<ButtonConfig> buttons;
 
   /// 判断是否为空配置
   bool isEmpty() const { return meta.dataUrl.isEmpty() && columns.isEmpty(); }
@@ -202,3 +283,7 @@ QString queryRelationToString(QueryRelation r);
 QueryRelation stringToQueryRelation(const QString &s);
 QString queryInputStyleToString(QueryInputStyle s);
 QueryInputStyle stringToQueryInputStyle(const QString &s);
+QString buttonPositionToString(ButtonPosition p);
+ButtonPosition stringToButtonPosition(const QString &s);
+QString buttonActionTypeToString(ButtonActionType t);
+ButtonActionType stringToButtonActionType(const QString &s);

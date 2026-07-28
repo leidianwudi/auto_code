@@ -94,6 +94,34 @@ QueryInputStyle stringToQueryInputStyle(const QString &s) {
   return QueryInputStyle::Text;
 }
 
+QString buttonPositionToString(ButtonPosition p) {
+  return p == ButtonPosition::Toolbar ? QStringLiteral("toolbar") : QStringLiteral("row");
+}
+
+ButtonPosition stringToButtonPosition(const QString &s) {
+  return s == QStringLiteral("toolbar") ? ButtonPosition::Toolbar : ButtonPosition::Row;
+}
+
+QString buttonActionTypeToString(ButtonActionType t) {
+  switch (t) {
+    case ButtonActionType::Confirm:
+      return QStringLiteral("confirm");
+    case ButtonActionType::Dialog:
+      return QStringLiteral("dialog");
+    case ButtonActionType::Link:
+      return QStringLiteral("link");
+    default:
+      return QStringLiteral("ajax");
+  }
+}
+
+ButtonActionType stringToButtonActionType(const QString &s) {
+  if (s == QStringLiteral("confirm")) return ButtonActionType::Confirm;
+  if (s == QStringLiteral("dialog")) return ButtonActionType::Dialog;
+  if (s == QStringLiteral("link")) return ButtonActionType::Link;
+  return ButtonActionType::Ajax;
+}
+
 // ════════════════════════════════════════════════════════════
 //  JsonVueMeta
 // ════════════════════════════════════════════════════════════
@@ -249,6 +277,110 @@ QueryFieldConfig QueryFieldConfig::fromJson(const QJsonObject &obj) {
 }
 
 // ════════════════════════════════════════════════════════════
+//  DialogFieldConfig
+// ════════════════════════════════════════════════════════════
+
+QJsonObject DialogFieldConfig::toJson() const {
+  QJsonObject obj;
+  obj["fieldName"] = fieldName;
+  obj["label"] = label;
+  obj["editStyle"] = editStyleToString(editStyle);
+  obj["required"] = required;
+  // 样式特定配置（仅对应 editStyle 时输出）
+  if (editStyle == EditStyle::Select) {
+    obj["selectUrl"] = selectUrl;
+    obj["selectValueField"] = selectValueField;
+    obj["selectLabelField"] = selectLabelField;
+  }
+  if (editStyle == EditStyle::Text) {
+    obj["placeholder"] = placeholder;
+    obj["maxlength"] = maxlength;
+  }
+  if (editStyle == EditStyle::TextArea) {
+    obj["placeholder"] = placeholder;
+    obj["textareaRows"] = textareaRows;
+  }
+  if (editStyle == EditStyle::Int || editStyle == EditStyle::Float) {
+    obj["minValue"] = minValue;
+    obj["maxValue"] = maxValue;
+  }
+  if (editStyle == EditStyle::Float) {
+    obj["precision"] = precision;
+  }
+  if (editStyle == EditStyle::Date) {
+    obj["dateFormat"] = dateFormat;
+  }
+  return obj;
+}
+
+DialogFieldConfig DialogFieldConfig::fromJson(const QJsonObject &obj) {
+  DialogFieldConfig f;
+  f.fieldName = obj.value("fieldName").toString();
+  f.label = obj.value("label").toString();
+  f.editStyle = stringToEditStyle(obj.value("editStyle").toString(QStringLiteral("text")));
+  f.required = obj.value("required").toBool(false);
+  f.placeholder = obj.value("placeholder").toString();
+  f.maxlength = obj.value("maxlength").toInt(0);
+  f.textareaRows = obj.value("textareaRows").toInt(3);
+  f.minValue = obj.value("minValue").toDouble(0);
+  f.maxValue = obj.value("maxValue").toDouble(0);
+  f.precision = obj.value("precision").toInt(2);
+  f.dateFormat = obj.value("dateFormat").toString();
+  f.selectUrl = obj.value("selectUrl").toString();
+  f.selectValueField = obj.value("selectValueField").toString();
+  f.selectLabelField = obj.value("selectLabelField").toString();
+  return f;
+}
+
+// ════════════════════════════════════════════════════════════
+//  ButtonConfig
+// ════════════════════════════════════════════════════════════
+
+QJsonObject ButtonConfig::toJson() const {
+  QJsonObject obj;
+  obj["label"] = label;
+  obj["icon"] = icon;
+  obj["position"] = buttonPositionToString(position);
+  obj["buttonType"] = buttonType;
+  obj["actionType"] = buttonActionTypeToString(actionType);
+  obj["actionKey"] = actionKey;
+  // Ajax / Confirm 行为专用
+  if (!apiName.isEmpty()) obj["apiName"] = apiName;
+  if (!confirmText.isEmpty()) obj["confirmText"] = confirmText;
+  // Dialog 行为专用
+  if (!dialogTitle.isEmpty()) obj["dialogTitle"] = dialogTitle;
+  if (!dialogApi.isEmpty()) obj["dialogApi"] = dialogApi;
+  if (!dialogFields.isEmpty()) {
+    QJsonArray arr;
+    for (const auto &f : dialogFields) arr.append(f.toJson());
+    obj["dialogFields"] = arr;
+  }
+  // Link 行为专用
+  if (!linkPath.isEmpty()) obj["linkPath"] = linkPath;
+  return obj;
+}
+
+ButtonConfig ButtonConfig::fromJson(const QJsonObject &obj) {
+  ButtonConfig b;
+  b.label = obj.value("label").toString();
+  b.icon = obj.value("icon").toString();
+  b.position = stringToButtonPosition(obj.value("position").toString(QStringLiteral("row")));
+  b.buttonType = obj.value("buttonType").toString();
+  b.actionType = stringToButtonActionType(obj.value("actionType").toString(QStringLiteral("ajax")));
+  b.actionKey = obj.value("actionKey").toString();
+  b.apiName = obj.value("apiName").toString();
+  b.confirmText = obj.value("confirmText").toString();
+  b.dialogTitle = obj.value("dialogTitle").toString();
+  b.dialogApi = obj.value("dialogApi").toString();
+  const QJsonArray dArr = obj.value("dialogFields").toArray();
+  for (const auto &v : dArr) {
+    b.dialogFields.append(DialogFieldConfig::fromJson(v.toObject()));
+  }
+  b.linkPath = obj.value("linkPath").toString();
+  return b;
+}
+
+// ════════════════════════════════════════════════════════════
 //  JsonVueConfig
 // ════════════════════════════════════════════════════════════
 
@@ -263,6 +395,10 @@ QJsonObject JsonVueConfig::toJsonObject() const {
   QJsonArray qArr;
   for (const auto &q : queryFields) qArr.append(q.toJson());
   root["queryFields"] = qArr;
+
+  QJsonArray btnArr;
+  for (const auto &b : buttons) btnArr.append(b.toJson());
+  root["buttons"] = btnArr;
 
   return root;
 }
@@ -383,6 +519,88 @@ QString JsonVueConfig::toJsonString() const {
   }
   out += QStringLiteral("  ],\n");
 
+  // buttons（按字母序，仅在非空时输出）
+  if (!buttons.isEmpty()) {
+    out += QStringLiteral("  buttons: [\n");
+    for (const auto &b : buttons) {
+      out += QStringLiteral("    {\n");
+      out += QStringLiteral("      actionKey: '%1',\n").arg(esc(b.actionKey));
+      out +=
+          QStringLiteral("      actionType: '%1',\n").arg(buttonActionTypeToString(b.actionType));
+      if (!b.apiName.isEmpty()) {
+        out += QStringLiteral("      apiName: '%1',\n").arg(esc(b.apiName));
+      }
+      if (!b.buttonType.isEmpty()) {
+        out += QStringLiteral("      buttonType: '%1',\n").arg(esc(b.buttonType));
+      }
+      if (!b.confirmText.isEmpty()) {
+        out += QStringLiteral("      confirmText: '%1',\n").arg(esc(b.confirmText));
+      }
+      if (!b.dialogApi.isEmpty()) {
+        out += QStringLiteral("      dialogApi: '%1',\n").arg(esc(b.dialogApi));
+      }
+      if (!b.dialogFields.isEmpty()) {
+        out += QStringLiteral("      dialogFields: [\n");
+        for (const auto &f : b.dialogFields) {
+          out += QStringLiteral("        {\n");
+          out += QStringLiteral("          editStyle: '%1',\n").arg(editStyleToString(f.editStyle));
+          out += QStringLiteral("          fieldName: '%1',\n").arg(esc(f.fieldName));
+          out += QStringLiteral("          label: '%1',\n").arg(esc(f.label));
+          // 样式特定配置（按字母序）
+          if (f.editStyle == EditStyle::Date && !f.dateFormat.isEmpty()) {
+            out += QStringLiteral("          dateFormat: '%1',\n").arg(esc(f.dateFormat));
+          }
+          if (f.editStyle == EditStyle::Text && f.maxlength > 0) {
+            out += QStringLiteral("          maxlength: %1,\n").arg(f.maxlength);
+          }
+          if ((f.editStyle == EditStyle::Int || f.editStyle == EditStyle::Float) &&
+              f.maxValue != 0) {
+            out += QStringLiteral("          maxValue: %1,\n").arg(f.maxValue);
+          }
+          if ((f.editStyle == EditStyle::Int || f.editStyle == EditStyle::Float) &&
+              f.minValue != 0) {
+            out += QStringLiteral("          minValue: %1,\n").arg(f.minValue);
+          }
+          if ((f.editStyle == EditStyle::Text || f.editStyle == EditStyle::TextArea) &&
+              !f.placeholder.isEmpty()) {
+            out += QStringLiteral("          placeholder: '%1',\n").arg(esc(f.placeholder));
+          }
+          if (f.editStyle == EditStyle::Float && f.precision != 2) {
+            out += QStringLiteral("          precision: %1,\n").arg(f.precision);
+          }
+          if (f.required) {
+            out += QStringLiteral("          required: true,\n");
+          }
+          if (f.editStyle == EditStyle::Select) {
+            out +=
+                QStringLiteral("          selectLabelField: '%1',\n").arg(esc(f.selectLabelField));
+            out += QStringLiteral("          selectUrl: '%1',\n").arg(esc(f.selectUrl));
+            out +=
+                QStringLiteral("          selectValueField: '%1',\n").arg(esc(f.selectValueField));
+          }
+          if (f.editStyle == EditStyle::TextArea && f.textareaRows != 3) {
+            out += QStringLiteral("          textareaRows: %1,\n").arg(f.textareaRows);
+          }
+          out += QStringLiteral("        },\n");
+        }
+        out += QStringLiteral("      ],\n");
+      }
+      if (!b.dialogTitle.isEmpty()) {
+        out += QStringLiteral("      dialogTitle: '%1',\n").arg(esc(b.dialogTitle));
+      }
+      if (!b.icon.isEmpty()) {
+        out += QStringLiteral("      icon: '%1',\n").arg(esc(b.icon));
+      }
+      out += QStringLiteral("      label: '%1',\n").arg(esc(b.label));
+      if (!b.linkPath.isEmpty()) {
+        out += QStringLiteral("      linkPath: '%1',\n").arg(esc(b.linkPath));
+      }
+      out += QStringLiteral("      position: '%1',\n").arg(buttonPositionToString(b.position));
+      out += QStringLiteral("    },\n");
+    }
+    out += QStringLiteral("  ],\n");
+  }
+
   out += "}\n";
   return out;
 }
@@ -399,6 +617,11 @@ JsonVueConfig JsonVueConfig::fromJson(const QJsonObject &obj) {
   const QJsonArray qArr = obj.value("queryFields").toArray();
   for (const auto &v : qArr) {
     cfg.queryFields.append(QueryFieldConfig::fromJson(v.toObject()));
+  }
+
+  const QJsonArray btnArr = obj.value("buttons").toArray();
+  for (const auto &v : btnArr) {
+    cfg.buttons.append(ButtonConfig::fromJson(v.toObject()));
   }
   return cfg;
 }

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.19)
 project(auto_code LANGUAGES CXX)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Sql Network)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Sql Network Svg)
 
 qt_standard_project_setup()
 
@@ -162,6 +162,12 @@ qt_add_executable(auto_code
     src/ui/json_vue/combobox_config_dialog.cpp
     src/ui/json_vue/style_config_dialog.h
     src/ui/json_vue/style_config_dialog.cpp
+    src/ui/json_vue/button_config_dialog.h
+    src/ui/json_vue/button_config_dialog.cpp
+    src/ui/json_vue/icon_loader.h
+    src/ui/json_vue/icon_loader.cpp
+    src/ui/json_vue/icon_picker_dialog.h
+    src/ui/json_vue/icon_picker_dialog.cpp
     src/ui/json_vue/json_vue_widget.h
     src/ui/json_vue/json_vue_widget.cpp
     src/ui/main_dev/help_key/help_key_model.h
@@ -190,6 +196,7 @@ target_link_libraries(auto_code
         Qt::Widgets
         Qt::Sql
         Qt::Network
+        Qt::Svg
         D:/tool/mysql9_0/lib/libmysql.lib
         dwmapi.lib
 )

@@ -27,7 +27,7 @@ import { BaseButton } from '@/components/button';
 import { FormSchema } from '@/components/form';
 import { Icon } from '@/components/icon';
 import { Table, TableColumn } from '@/components/table';
-import { ElTooltip, ElSwitch } from 'element-plus';
+import { ElTooltip, ElSwitch${if hasConfirmButtons}, ElMessageBox${/if} } from 'element-plus';
 import { reactive, ref, unref } from 'vue';
 import { Search } from '@/components/search';
 import { ContentWrap } from '@/components/content_wrap';
@@ -35,9 +35,11 @@ import Write from './components/write.vue';
 import { Dialog } from '@/components/dialog';
 import { ${apiImports} } from '@/api/${apiModule}';
 import { uiCrudLogic } from '@/utils/ui_crud_logic';
+${if hasLinkButtons}import { useRouter } from 'vue-router';${/if}
 
 // 定义表单引用
 const writeRef = ref<ComponentRef<typeof Write>>();
+${if hasLinkButtons}const { push } = useRouter();${/if}
 
 // 使用 CRUD Hook
 const { crudState, tableRegister, tableState, crudMethods } = uiCrudLogic({
@@ -154,7 +156,7 @@ ${/each}
   {
     field: 'action',
     label: '操作',
-    width: 120,
+    width: ${actionColumnWidth},
     slots: {
       default: (data: any) => {
         const row = data.row;
@@ -176,12 +178,81 @@ ${/each}
                 <Icon icon="vi-mingcute:delete-2-line" />
               </BaseButton>
             </ElTooltip>
+            ${each btn in rowButtons}<ElTooltip content="${btn.label}" placement="top">
+              <BaseButton size="small"${if btn.hasType} type="${btn.type}"${/if}
+                onClick={() => onCustomAction(row, '${btn.key}')}>
+                ${if btn.hasIcon}<Icon icon="${btn.icon}" />${/if}
+              </BaseButton>
+            </ElTooltip>
+            ${/each}
           </>
         );
       }
     }
   }
 ]);
+
+${if hasCustomButtons}
+// ── 自定义按钮动作处理 ──
+// row 为 null 表示工具栏按钮触发，有值表示行操作列按钮触发
+const onCustomAction = (row: any, actionKey: string) => {
+${each btn in ajaxButtons}  if (actionKey === '${btn.key}') {
+    ${btn.apiName}(row ? row.id : undefined);
+    return;
+  }
+${/each}
+${each btn in confirmButtons}  if (actionKey === '${btn.key}') {
+    ElMessageBox.confirm('${btn.confirmText}', '提示', { type: 'warning' })
+      .then(() => ${btn.apiName}(row ? row.id : undefined));
+    return;
+  }
+${/each}
+${each btn in dialogButtons}  if (actionKey === '${btn.key}') {
+    ${btn.key}Visible.value = true;
+    ${btn.key}Row.value = row;
+    return;
+  }
+${/each}
+${each btn in linkButtons}  if (actionKey === '${btn.key}') {
+    push('${btn.linkPath}');
+    return;
+  }
+${/each}
+};
+${/if}
+${if hasDialogButtons}
+${each btn in dialogButtons}
+// ── ${btn.label} 对话框 ──
+const ${btn.key}Visible = ref(false);
+const ${btn.key}Row = ref<any>(null);
+const ${btn.key}Form = reactive({
+${each f in btn.dialogFields}  ${f.fieldName}: '',
+${/each}});
+const ${btn.key}FormRef = ref();
+const ${btn.key}FormRegister = (form: any) => {
+  ${btn.key}FormRef.value = form;
+};
+const ${btn.key}Schema = reactive<FormSchema[]>([
+${each f in btn.dialogFields}  {
+    field: '${f.fieldName}',
+    label: '${f.label}',
+    component: '${f.component}'${if f.hasProps},
+    componentProps: { ${f.componentPropsStr} }${/if}${f.requiredStr}
+  },
+${/each}]);
+${/each}
+
+// 自定义对话框提交
+const onCustomDialogSubmit = async (actionKey: string) => {
+${each btn in dialogButtons}  if (actionKey === '${btn.key}') {
+    await ${btn.dialogApi}({ id: ${btn.key}Row.value?.id, ...${btn.key}Form });
+    ${btn.key}Visible.value = false;
+    Object.keys(${btn.key}Form).forEach((k: string) => (${btn.key}Form as any)[k] = '');
+    return;
+  }
+${/each}
+};
+${/if}
 
 function closeDialog() {
   crudState.dialogVisible = false;
@@ -198,6 +269,12 @@ function closeDialog() {
     <div class="mb-10px">
       <BaseButton type="primary" @click="addAction">{{ '新增' }}</BaseButton>
       <BaseButton :loading="crudState.delLoading" type="danger" @click="delData()">删除</BaseButton>
+      ${each btn in toolbarButtons}<BaseButton${if btn.hasType} type="${btn.type}"${/if}
+        @click="onCustomAction(null, '${btn.key}')">
+        ${if btn.hasIcon}<Icon icon="${btn.icon}" />${/if}
+        {{ '${btn.label}' }}
+      </BaseButton>
+      ${/each}
     </div>
 
     <Table
@@ -234,4 +311,13 @@ function closeDialog() {
       <BaseButton @click="closeDialog()">{{ '关闭' }}</BaseButton>
     </template>
   </Dialog>
+${each btn in dialogButtons}
+  <Dialog v-model="${btn.key}Visible" title="${btn.dialogTitle}">
+    <Form :schema="${btn.key}Schema" @register="${btn.key}FormRegister" />
+    <template #footer>
+      <BaseButton type="primary" @click="onCustomDialogSubmit('${btn.key}')">确定</BaseButton>
+      <BaseButton @click="${btn.key}Visible = false">取消</BaseButton>
+    </template>
+  </Dialog>
+${/each}
 </template>
