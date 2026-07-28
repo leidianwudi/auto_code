@@ -107,7 +107,7 @@ main {
     //        - 每列字段都会生成完整的 @Column(...) 参数字符串
     let param = new Param();
     param.setTableData(combined);
-    printLog("param: " + param);
+    //printLog("param: " + param);//输出所有参数
 
     let fields = param.fields;
     let fieldsLen = fields.length;

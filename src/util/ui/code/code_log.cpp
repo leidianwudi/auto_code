@@ -19,6 +19,7 @@
 
 CodeLog::CodeLog(QWidget *parent) : QPlainTextEdit(parent) {
   setReadOnly(true);
+  setLineWrapMode(QPlainTextEdit::NoWrap);  // 长行不自动换行，使用水平滚动条
   setMaximumBlockCount(5000);  // 限制行数，防止内存溢出
   document()->setDocumentMargin(0);
 
