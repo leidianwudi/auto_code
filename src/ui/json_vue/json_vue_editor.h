@@ -73,6 +73,11 @@ private slots:
   /// 查询设置：删除查询字段
   void onRemoveQueryField();
 
+  /// 列配置：点击⚙按钮配置下拉框数据源
+  void onConfigureCombobox();
+  /// 查询设置：点击⚙按钮配置下拉框数据源
+  void onConfigureQuerySelect();
+
 private:
   /// 构建界面
   void setupUI();
@@ -103,6 +108,7 @@ private:
   QCheckBox *m_noDeleteCheck = nullptr;  ///< 不可删除
   QLineEdit *m_updateApiEdit = nullptr;  ///< 修改接口
   QCheckBox *m_noEditCheck = nullptr;    ///< 不可编辑
+  QCheckBox *m_noDetailCheck = nullptr;  ///< 不可查看详情
 
   // ── 列配置表格 ──
   QTableWidget *m_columnTable = nullptr;  ///< 列配置表格
@@ -141,6 +147,7 @@ enum ColumnTableCols {
   ColEditName,        ///< 编辑界面列名
   ColEditStyle,       ///< 编辑界面样式
   ColEditEditable,    ///< 编辑界面是否可编辑
+  ColConfig,          ///< 下拉框配置按钮（⚙）
   ColCount
 };
 
@@ -150,5 +157,6 @@ enum QueryTableCols {
   QColDataName,         ///< 数据列名（下拉框）
   QColInputStyle,       ///< 输入框样式
   QColRelation,         ///< 查询关系
+  QColConfig,           ///< 下拉框配置按钮（⚙）
   QColCount
 };

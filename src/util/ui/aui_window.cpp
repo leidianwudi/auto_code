@@ -271,11 +271,8 @@ QWidget *AuiWindow::createStatusBar(QWidget *parent, QWidget *content) {
 // ════════════════════════════════════════════════════════════
 
 void AuiWindow::applyWindowFrame(QWidget *window, QWidget *titleBar, QWidget *content) {
-  // 统一设置内容控件的布局参数：零边距、零间距
-  if (auto *cl = content->layout()) {
-    cl->setContentsMargins(0, 0, 0, 0);
-    cl->setSpacing(0);
-  }
+  // 注意：不在此处重置 content->layout() 的边距和间距，由各调用方按需设置。
+  // 主窗口（满宽内容）设置 0 边距，对话框设置 8~16px 内边距。
 
   auto *frame = new QFrame(window);
   frame->setObjectName(QStringLiteral("WindowFrame"));

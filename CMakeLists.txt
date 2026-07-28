@@ -158,6 +158,10 @@ qt_add_executable(auto_code
     src/ui/json_vue/json_vue_model.cpp
     src/ui/json_vue/json_vue_editor.h
     src/ui/json_vue/json_vue_editor.cpp
+    src/ui/json_vue/combobox_config_dialog.h
+    src/ui/json_vue/combobox_config_dialog.cpp
+    src/ui/json_vue/style_config_dialog.h
+    src/ui/json_vue/style_config_dialog.cpp
     src/ui/json_vue/json_vue_widget.h
     src/ui/json_vue/json_vue_widget.cpp
     src/ui/main_dev/help_key/help_key_model.h

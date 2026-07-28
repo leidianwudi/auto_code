@@ -102,10 +102,6 @@ void HelpKeyUi::setupUI() {
 
   // ── Win32 边框拉伸（支持最大化按钮） ──
   AuiWindow::enableWin32Resize(this);
-
-  // applyWindowFrame 会重置内容布局的边距和间距，需要恢复
-  contentLayout->setContentsMargins(16, 12, 16, 16);
-  contentLayout->setSpacing(12);
 }
 
 // ════════════════════════════════════════════════════════════

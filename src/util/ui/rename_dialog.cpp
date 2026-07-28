@@ -78,9 +78,6 @@ void RenameDialog::setupUI() {
 
   // ── 应用窗口框架 ──
   AuiWindow::applyWindowFrame(this, tb.titleBar, contentWidget);
-
-  contentLayout->setContentsMargins(16, 12, 16, 16);
-  contentLayout->setSpacing(10);
 }
 
 // ════════════════════════════════════════════════════════════

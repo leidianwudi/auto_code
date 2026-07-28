@@ -103,10 +103,6 @@ void CreateUi::setupUI() {
 
   // ── 应用窗口框架（标题栏 + 内容 + 1px 边框） ──
   AuiWindow::applyWindowFrame(this, tb.titleBar, contentWidget);
-
-  // applyWindowFrame 会重置内容布局的边距和间距，需要恢复
-  contentLayout->setContentsMargins(16, 8, 16, 16);
-  contentLayout->setSpacing(12);
 }
 
 // ════════════════════════════════════════════════════════════

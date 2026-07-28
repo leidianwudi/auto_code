@@ -15,8 +15,11 @@ ${#   deleteApi     - 删除接口名                                           
 ${#   updateApi     - 修改接口名                                                 }
 ${#   noDelete      - 不可删除                                                   }
 ${#   noEdit        - 不可编辑                                                   }
-${#   queryFields   - 查询字段数组 [{displayName, dataName, component}]          }
-${#   columns       - 列配置数组 [{dataName, label, isSwitch}]                   }
+${#   queryFields   - 查询字段数组 [{displayName, dataName, isSelect, isDate,    }
+${#                    selectUrl, selectValueField, selectLabelField,            }
+${#                    placeholder, dateFormat, component}]                       }
+${#   columns       - 列配置数组 [{dataName, label, isSwitch, columnWidth,       }
+${#                    columnFixed}]                                             }
 ${# ============================================================================}
 //此代码为AutoCode框架生成，请勿手动修改
 <script setup lang="tsx">
@@ -79,11 +82,33 @@ const {
 
 // 搜索表单
 const searchSchema = reactive<FormSchema[]>([
-${each q in queryFields}  {
+${each q in queryFields}${if q.isSelect}  {
     field: '${q.dataName}',
     label: '${q.displayName}',
-    component: '${q.component}'
+    component: 'ApiSelect',
+    componentProps: {
+      url: '${q.selectUrl}',
+      valueField: '${q.selectValueField}',
+      labelField: '${q.selectLabelField}'
+    }
   },
+${else if q.isDate}  {
+    field: '${q.dataName}',
+    label: '${q.displayName}',
+    component: 'DatePicker',
+    componentProps: {
+      type: '${q.dateFormat}'
+    }
+  },
+${else}  {
+    field: '${q.dataName}',
+    label: '${q.displayName}',
+    component: '${q.component}'${if q.hasPlaceholder},
+    componentProps: {
+      placeholder: '${q.placeholder}'
+    }${/if}
+  },
+${/if}
 ${/each}]);
 
 // 表格列定义
@@ -97,7 +122,9 @@ ${if col.isSwitch}
   {
     field: '${col.dataName}',
     label: '${col.label}',
-    slots: {
+${if col.hasColumnWidth}    width: ${col.columnWidth},
+${/if}${if col.hasColumnFixed}    fixed: '${col.columnFixed}',
+${/if}    slots: {
       default: (data: any) => {
         return (
           <ElSwitch
@@ -118,10 +145,13 @@ ${if col.isSwitch}
 ${else}
   {
     field: '${col.dataName}',
-    label: '${col.label}'
+    label: '${col.label}'${if col.hasColumnWidth},
+    width: ${col.columnWidth}${/if}${if col.hasColumnFixed},
+    fixed: '${col.columnFixed}'${/if}
   },
 ${/if}
-${/each}  {
+${/each}
+  {
     field: 'action',
     label: '操作',
     width: 120,
@@ -130,6 +160,12 @@ ${/each}  {
         const row = data.row;
         return (
           <>
+            ${if !noDetail}<ElTooltip content="详情" placement="top">
+              <BaseButton size="small" onClick={() => rowAction(row, 'detail')}>
+                <Icon icon="vi-mingcute:eye-line" />
+              </BaseButton>
+            </ElTooltip>
+            ${/if}
             <ElTooltip content="编辑" placement="top">
               <BaseButton size="small" onClick={() => rowAction(row, 'edit')}>
                 <Icon icon="vi-mingcute:edit-line" />
@@ -180,9 +216,10 @@ function closeDialog() {
   <Dialog v-model="crudState.dialogVisible" :title="crudState.dialogTitle" @closed="closeDialog">
 
     <Write
-      v-if="crudState.actionType === 'edit' || crudState.actionType === 'add'"
+      v-if="crudState.actionType === 'edit' || crudState.actionType === 'add' || crudState.actionType === 'detail'"
       ref="writeRef"
       :current-row="crudState.currentRow"
+      :action-type="crudState.actionType"
     />
 
     <template #footer>

@@ -74,6 +74,8 @@ void DemoUi::setupUI() {
   // ════════════════════════════════════════════════════════════
   auto *contentWidget = new QWidget;
   auto *contentLayout = new QVBoxLayout(contentWidget);
+  contentLayout->setContentsMargins(0, 0, 0, 0);
+  contentLayout->setSpacing(0);
 
   // ── 上方分割器：左侧模板 / 右侧数据 ──
   auto *topSplitter = new QSplitter(Qt::Horizontal);

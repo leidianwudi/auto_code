@@ -54,8 +54,8 @@ private:
 
     auto *contentWidget = new QWidget;
     auto *contentLayout = new QVBoxLayout(contentWidget);
-    contentLayout->setContentsMargins(16, 12, 16, 24);
-    contentLayout->setSpacing(10);
+    contentLayout->setContentsMargins(16, 12, 16, 12);
+    contentLayout->setSpacing(5);
 
     auto *label = new QLabel(text, this);
     label->setWordWrap(true);
@@ -70,10 +70,6 @@ private:
     btns.okBtn->setFocus();
 
     AuiWindow::applyWindowFrame(this, tb.titleBar, contentWidget);
-
-    // applyWindowFrame 会重置内容布局的边距和间距，需要恢复
-    contentLayout->setContentsMargins(16, 12, 16, 12);
-    contentLayout->setSpacing(5);
   }
 
   bool m_showCancel;

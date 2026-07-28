@@ -31,8 +31,8 @@ QString editStyleToString(EditStyle style) {
       return QStringLiteral("float");
     case EditStyle::Date:
       return QStringLiteral("date");
-    case EditStyle::ComboBox:
-      return QStringLiteral("combobox");
+    case EditStyle::Select:
+      return QStringLiteral("select");
     case EditStyle::TextArea:
       return QStringLiteral("textarea");
     default:
@@ -44,7 +44,8 @@ EditStyle stringToEditStyle(const QString &s) {
   if (s == QStringLiteral("int")) return EditStyle::Int;
   if (s == QStringLiteral("float")) return EditStyle::Float;
   if (s == QStringLiteral("date")) return EditStyle::Date;
-  if (s == QStringLiteral("combobox")) return EditStyle::ComboBox;
+  // 兼容旧名称 "combobox"
+  if (s == QStringLiteral("select") || s == QStringLiteral("combobox")) return EditStyle::Select;
   if (s == QStringLiteral("textarea")) return EditStyle::TextArea;
   return EditStyle::Text;
 }
@@ -76,11 +77,21 @@ QueryRelation stringToQueryRelation(const QString &s) {
 }
 
 QString queryInputStyleToString(QueryInputStyle s) {
-  return s == QueryInputStyle::Time ? QStringLiteral("time") : QStringLiteral("text");
+  switch (s) {
+    case QueryInputStyle::Date:
+      return QStringLiteral("date");
+    case QueryInputStyle::Select:
+      return QStringLiteral("select");
+    default:
+      return QStringLiteral("text");
+  }
 }
 
 QueryInputStyle stringToQueryInputStyle(const QString &s) {
-  return s == QStringLiteral("time") ? QueryInputStyle::Time : QueryInputStyle::Text;
+  // 兼容旧名称 "time"
+  if (s == QStringLiteral("date") || s == QStringLiteral("time")) return QueryInputStyle::Date;
+  if (s == QStringLiteral("select")) return QueryInputStyle::Select;
+  return QueryInputStyle::Text;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -96,6 +107,7 @@ QJsonObject JsonVueMeta::toJson() const {
   obj["noDelete"] = noDelete;
   obj["updateApi"] = updateApi;
   obj["noEdit"] = noEdit;
+  obj["noDetail"] = noDetail;
   return obj;
 }
 
@@ -108,6 +120,7 @@ JsonVueMeta JsonVueMeta::fromJson(const QJsonObject &obj) {
   m.noDelete = obj.value("noDelete").toBool(false);
   m.updateApi = obj.value("updateApi").toString();
   m.noEdit = obj.value("noEdit").toBool(false);
+  m.noDetail = obj.value("noDetail").toBool(false);
   return m;
 }
 
@@ -126,6 +139,39 @@ QJsonObject ColumnConfig::toJson() const {
   obj["editName"] = editName;
   obj["editStyle"] = editStyleToString(editStyle);
   obj["editEditable"] = editEditable;
+  // 下拉框配置（仅 Select 时序列化）
+  if (editStyle == EditStyle::Select) {
+    obj["selectUrl"] = selectUrl;
+    obj["selectValueField"] = selectValueField;
+    obj["selectLabelField"] = selectLabelField;
+  }
+  // 样式特定配置
+  if (editStyle == EditStyle::Text) {
+    obj["placeholder"] = placeholder;
+    obj["maxlength"] = maxlength;
+  }
+  if (editStyle == EditStyle::Int) {
+    obj["minValue"] = minValue;
+    obj["maxValue"] = maxValue;
+  }
+  if (editStyle == EditStyle::Float) {
+    obj["precision"] = precision;
+    obj["minValue"] = minValue;
+    obj["maxValue"] = maxValue;
+  }
+  if (editStyle == EditStyle::Date) {
+    obj["dateFormat"] = dateFormat;
+  }
+  if (editStyle == EditStyle::TextArea) {
+    obj["placeholder"] = placeholder;
+    obj["textareaRows"] = textareaRows;
+  }
+  // 通用配置（所有样式都输出）
+  obj["required"] = required;
+  obj["columnWidth"] = columnWidth;
+  if (!columnFixed.isEmpty()) obj["columnFixed"] = columnFixed;
+  if (!formatter.isEmpty()) obj["formatter"] = formatter;
+  if (formSpan != 24) obj["formSpan"] = formSpan;
   return obj;
 }
 
@@ -140,6 +186,26 @@ ColumnConfig ColumnConfig::fromJson(const QJsonObject &obj) {
   c.editName = obj.value("editName").toString();
   c.editStyle = stringToEditStyle(obj.value("editStyle").toString(QStringLiteral("text")));
   c.editEditable = obj.value("editEditable").toBool(true);
+  // 兼容旧字段名 comboboxUrl/comboboxValueField/comboboxLabelField
+  c.selectUrl = obj.value("selectUrl").toString(obj.value("comboboxUrl").toString());
+  c.selectValueField =
+      obj.value("selectValueField").toString(obj.value("comboboxValueField").toString());
+  c.selectLabelField =
+      obj.value("selectLabelField").toString(obj.value("comboboxLabelField").toString());
+  // 样式特定配置
+  c.placeholder = obj.value("placeholder").toString();
+  c.maxlength = obj.value("maxlength").toInt(0);
+  c.minValue = obj.value("minValue").toDouble(0);
+  c.maxValue = obj.value("maxValue").toDouble(0);
+  c.precision = obj.value("precision").toInt(2);
+  c.dateFormat = obj.value("dateFormat").toString();
+  c.textareaRows = obj.value("textareaRows").toInt(3);
+  // 通用配置
+  c.required = obj.value("required").toBool(false);
+  c.columnWidth = obj.value("columnWidth").toInt(0);
+  c.columnFixed = obj.value("columnFixed").toString();
+  c.formatter = obj.value("formatter").toString();
+  c.formSpan = obj.value("formSpan").toInt(24);
   return c;
 }
 
@@ -153,6 +219,18 @@ QJsonObject QueryFieldConfig::toJson() const {
   obj["dataName"] = dataName;
   obj["inputStyle"] = queryInputStyleToString(inputStyle);
   obj["relation"] = queryRelationToString(relation);
+  // 下拉框配置（仅 Select 时序列化）
+  if (inputStyle == QueryInputStyle::Select) {
+    obj["selectUrl"] = selectUrl;
+    obj["selectValueField"] = selectValueField;
+    obj["selectLabelField"] = selectLabelField;
+  }
+  if (inputStyle == QueryInputStyle::Text) {
+    obj["placeholder"] = placeholder;
+  }
+  if (inputStyle == QueryInputStyle::Date) {
+    obj["dateFormat"] = dateFormat;
+  }
   return obj;
 }
 
@@ -162,6 +240,11 @@ QueryFieldConfig QueryFieldConfig::fromJson(const QJsonObject &obj) {
   q.dataName = obj.value("dataName").toString();
   q.inputStyle = stringToQueryInputStyle(obj.value("inputStyle").toString(QStringLiteral("text")));
   q.relation = stringToQueryRelation(obj.value("relation").toString(QStringLiteral("=")));
+  q.selectUrl = obj.value("selectUrl").toString();
+  q.selectValueField = obj.value("selectValueField").toString();
+  q.selectLabelField = obj.value("selectLabelField").toString();
+  q.placeholder = obj.value("placeholder").toString();
+  q.dateFormat = obj.value("dateFormat").toString();
   return q;
 }
 
@@ -205,6 +288,12 @@ QString JsonVueConfig::toJsonString() const {
   out += QStringLiteral("  columns: [\n");
   for (const auto &col : columns) {
     out += QStringLiteral("    {\n");
+    // 下拉框配置（仅 Select 时输出）
+    if (col.editStyle == EditStyle::Select) {
+      out += QStringLiteral("      selectLabelField: '%1',\n").arg(esc(col.selectLabelField));
+      out += QStringLiteral("      selectUrl: '%1',\n").arg(esc(col.selectUrl));
+      out += QStringLiteral("      selectValueField: '%1',\n").arg(esc(col.selectValueField));
+    }
     out += QStringLiteral("      dataName: '%1',\n").arg(esc(col.dataName));
     out += QStringLiteral("      editEditable: %1,\n").arg(boolStr(col.editEditable));
     out += QStringLiteral("      editName: '%1',\n").arg(esc(col.editName));
@@ -214,6 +303,46 @@ QString JsonVueConfig::toJsonString() const {
     out += QStringLiteral("      queryStyle: '%1',\n").arg(listStyleToString(col.queryStyle));
     out += QStringLiteral("      queryVisible: %1,\n").arg(boolStr(col.queryVisible));
     out += QStringLiteral("      switchEditable: %1,\n").arg(boolStr(col.switchEditable));
+    // 样式特定配置（按字母序）
+    if (!col.columnFixed.isEmpty()) {
+      out += QStringLiteral("      columnFixed: '%1',\n").arg(esc(col.columnFixed));
+    }
+    if (col.columnWidth > 0) {
+      out += QStringLiteral("      columnWidth: %1,\n").arg(col.columnWidth);
+    }
+    if (col.editStyle == EditStyle::Date && !col.dateFormat.isEmpty()) {
+      out += QStringLiteral("      dateFormat: '%1',\n").arg(esc(col.dateFormat));
+    }
+    if (col.formSpan != 24) {
+      out += QStringLiteral("      formSpan: %1,\n").arg(col.formSpan);
+    }
+    if (!col.formatter.isEmpty()) {
+      out += QStringLiteral("      formatter: '%1',\n").arg(esc(col.formatter));
+    }
+    if (col.editStyle == EditStyle::Text && col.maxlength > 0) {
+      out += QStringLiteral("      maxlength: %1,\n").arg(col.maxlength);
+    }
+    if ((col.editStyle == EditStyle::Int || col.editStyle == EditStyle::Float) &&
+        col.maxValue != 0) {
+      out += QStringLiteral("      maxValue: %1,\n").arg(col.maxValue);
+    }
+    if ((col.editStyle == EditStyle::Int || col.editStyle == EditStyle::Float) &&
+        col.minValue != 0) {
+      out += QStringLiteral("      minValue: %1,\n").arg(col.minValue);
+    }
+    if ((col.editStyle == EditStyle::Text || col.editStyle == EditStyle::TextArea) &&
+        !col.placeholder.isEmpty()) {
+      out += QStringLiteral("      placeholder: '%1',\n").arg(esc(col.placeholder));
+    }
+    if (col.editStyle == EditStyle::Float && col.precision != 2) {
+      out += QStringLiteral("      precision: %1,\n").arg(col.precision);
+    }
+    if (col.required) {
+      out += QStringLiteral("      required: true,\n");
+    }
+    if (col.editStyle == EditStyle::TextArea && col.textareaRows != 3) {
+      out += QStringLiteral("      textareaRows: %1,\n").arg(col.textareaRows);
+    }
     out += QStringLiteral("    },\n");
   }
   out += QStringLiteral("  ],\n");
@@ -225,6 +354,7 @@ QString JsonVueConfig::toJsonString() const {
   out += QStringLiteral("    deleteApi: '%1',\n").arg(esc(meta.deleteApi));
   out += QStringLiteral("    noDelete: %1,\n").arg(boolStr(meta.noDelete));
   out += QStringLiteral("    noEdit: %1,\n").arg(boolStr(meta.noEdit));
+  out += QStringLiteral("    noDetail: %1,\n").arg(boolStr(meta.noDetail));
   out += QStringLiteral("    queryApi: '%1',\n").arg(esc(meta.queryApi));
   out += QStringLiteral("    updateApi: '%1',\n").arg(esc(meta.updateApi));
   out += QStringLiteral("  },\n");
@@ -237,6 +367,18 @@ QString JsonVueConfig::toJsonString() const {
     out += QStringLiteral("      displayName: '%1',\n").arg(esc(q.displayName));
     out += QStringLiteral("      inputStyle: '%1',\n").arg(queryInputStyleToString(q.inputStyle));
     out += QStringLiteral("      relation: '%1',\n").arg(queryRelationToString(q.relation));
+    // 下拉框配置（仅 Select 时输出）
+    if (q.inputStyle == QueryInputStyle::Select) {
+      out += QStringLiteral("      selectLabelField: '%1',\n").arg(esc(q.selectLabelField));
+      out += QStringLiteral("      selectUrl: '%1',\n").arg(esc(q.selectUrl));
+      out += QStringLiteral("      selectValueField: '%1',\n").arg(esc(q.selectValueField));
+    }
+    if (q.inputStyle == QueryInputStyle::Date && !q.dateFormat.isEmpty()) {
+      out += QStringLiteral("      dateFormat: '%1',\n").arg(esc(q.dateFormat));
+    }
+    if (q.inputStyle == QueryInputStyle::Text && !q.placeholder.isEmpty()) {
+      out += QStringLiteral("      placeholder: '%1',\n").arg(esc(q.placeholder));
+    }
     out += QStringLiteral("    },\n");
   }
   out += QStringLiteral("  ],\n");

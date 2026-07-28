@@ -110,6 +110,7 @@ main {
     let updateApi: String = meta.updateApi;
     let noDelete: Bool = meta.noDelete;
     let noEdit: Bool = meta.noEdit;
+    let noDetail: Bool = meta.noDetail;
 
     let apiImports = queryApi;
     if (!noDelete) {
@@ -122,12 +123,28 @@ main {
 
     // ── 4.4 加工列配置数据 ───────────────────────────────────────
     //      将 rawColumns 转换为模板友好的格式：
-    //        dataName      - 数据列名
-    //        label         - 列表显示列名（使用 editName）
-    //        editName      - 编辑界面列名
-    //        isSwitch      - 是否为开关样式（queryStyle == "switch"）
-    //        isTextArea    - 是否为多行文本（editStyle == "textarea"）
-    //        editComponent - 编辑界面 Vue 组件名（Input/InputNumber/DatePicker/Select）
+    //        dataName         - 数据列名
+    //        label            - 列表显示列名（使用 editName）
+    //        editName         - 编辑界面列名
+    //        isSwitch         - 是否为开关样式（queryStyle == "switch"）
+    //        isTextArea       - 是否为多行文本（editStyle == "textarea"）
+    //        isSelect       - 是否为远程下拉框（editStyle == "select"）
+    //        selectUrl      - 下拉框数据源 URL
+    //        selectValueField - 下拉框 Value 字段名
+    //        selectLabelField - 下拉框 Label 字段名
+    //        editComponent    - 编辑界面 Vue 组件名（Input/InputNumber/DatePicker/Select/ApiSelect）
+    //        isText/isInt/isFloat/isDate - 编辑样式布尔标记
+    //        placeholder      - 占位提示文字（text/textarea）
+    //        maxlength        - 最大输入长度（text）
+    //        minValue/maxValue - 数值范围（int/float）
+    //        precision        - 小数位数（float）
+    //        dateFormat       - 日期格式（date）
+    //        textareaRows     - 行数（textarea）
+    //        required         - 是否必填
+    //        columnWidth      - 表格列宽
+    //        columnFixed      - 固定列（left/right）
+    //        formatter        - 格式化类型
+    //        formSpan         - 表单布局占比
     let columns: Object[] = [];
     let rawColsLen = rawColumns.length;
     for (let i = 0; i < rawColsLen; i = i + 1) {
@@ -151,28 +168,38 @@ main {
       }
       col["isTextArea"] = isTextArea;
 
+      // 判断是否为远程下拉框
+      let isSelect = false;
+      if (rawCol.editStyle == "select") {
+        isSelect = true;
+      }
+      col["isSelect"] = isSelect;
+      col["selectUrl"] = rawCol.selectUrl;
+      col["selectValueField"] = rawCol.selectValueField;
+      col["selectLabelField"] = rawCol.selectLabelField;
+
       // 根据 editStyle 决定编辑界面 Vue 组件名
       // 开关样式 → Select（启用/禁用下拉）
+      // select → ApiSelect（远程数据下拉）
       // int/float → InputNumber
       // date → DatePicker
-      // combobox → Select
       // textarea → Input（带 textarea componentProps）
       // 其他 → Input
       let editComp = "Input";
       if (isSwitch) {
         editComp = "Select";
       } else {
-        if (rawCol.editStyle == "int") {
-          editComp = "InputNumber";
+        if (isSelect) {
+          editComp = "ApiSelect";
         } else {
-          if (rawCol.editStyle == "float") {
+          if (rawCol.editStyle == "int") {
             editComp = "InputNumber";
           } else {
-            if (rawCol.editStyle == "date") {
-              editComp = "DatePicker";
+            if (rawCol.editStyle == "float") {
+              editComp = "InputNumber";
             } else {
-              if (rawCol.editStyle == "combobox") {
-                editComp = "Select";
+              if (rawCol.editStyle == "date") {
+                editComp = "DatePicker";
               }
             }
           }
@@ -180,15 +207,52 @@ main {
       }
       col["editComponent"] = editComp;
 
+      // 样式标记（供模板条件判断）
+      col["isText"] = (rawCol.editStyle == "text");
+      col["isInt"] = (rawCol.editStyle == "int");
+      col["isFloat"] = (rawCol.editStyle == "float");
+      col["isDate"] = (rawCol.editStyle == "date");
+
+      // 样式特定配置值
+      col["placeholder"] = rawCol.placeholder;
+      col["maxlength"] = rawCol.maxlength;
+      col["minValue"] = rawCol.minValue;
+      col["maxValue"] = rawCol.maxValue;
+      col["precision"] = rawCol.precision;
+      col["dateFormat"] = rawCol.dateFormat;
+      col["textareaRows"] = rawCol.textareaRows;
+
+      // 通用配置（3-1~3-4）
+      col["required"] = rawCol.required;
+      col["columnWidth"] = rawCol.columnWidth;
+      col["columnFixed"] = rawCol.columnFixed;
+      col["formatter"] = rawCol.formatter;
+      col["formSpan"] = rawCol.formSpan;
+
+      // 预计算布尔标记（避免模板中做字符串比较）
+      col["hasPlaceholder"] = (rawCol.placeholder != "");
+      col["hasMaxlength"] = (rawCol.maxlength > 0);
+      col["hasMinValue"] = (rawCol.minValue != 0);
+      col["hasMaxValue"] = (rawCol.maxValue != 0);
+      col["hasDateFormat"] = (rawCol.dateFormat != "");
+      col["hasColumnWidth"] = (rawCol.columnWidth > 0);
+      col["hasColumnFixed"] = (rawCol.columnFixed != "");
+      col["hasFormatter"] = (rawCol.formatter != "");
+      col["hasFormSpan"] = (rawCol.formSpan != 24);
+
       columns.push(col);
     }
     printLog("columns count: " + columns.length);
 
     // ── 4.5 加工查询字段数据 ─────────────────────────────────────
     //      将 rawQueryFields 转换为模板友好的格式：
-    //        displayName - 显示列名
-    //        dataName    - 数据列名
-    //        component   - Vue 组件名（text→Input, time→DatePicker）
+    //        displayName       - 显示列名
+    //        dataName          - 数据列名
+    //        isSelect          - 是否为远程下拉框（inputStyle == "select"）
+    //        selectUrl         - 下拉框数据源 URL
+    //        selectValueField  - 下拉框 Value 字段名
+    //        selectLabelField  - 下拉框 Label 字段名
+    //        component         - Vue 组件名（text→Input, time→DatePicker, select→ApiSelect）
     let queryFields: Object[] = [];
     let rawQfLen = rawQueryFields.length;
     for (let i = 0; i < rawQfLen; i = i + 1) {
@@ -196,11 +260,38 @@ main {
       let qf: Object = {};
       qf["displayName"] = rawQf.displayName;
       qf["dataName"] = rawQf.dataName;
+
+      // 判断是否为远程下拉框
+      let isSelect = false;
+      if (rawQf.inputStyle == "select") {
+        isSelect = true;
+      }
+      qf["isSelect"] = isSelect;
+      qf["selectUrl"] = rawQf.selectUrl;
+      qf["selectValueField"] = rawQf.selectValueField;
+      qf["selectLabelField"] = rawQf.selectLabelField;
+
       let comp = "Input";
-      if (rawQf.inputStyle == "time") {
-        comp = "DatePicker";
+      if (isSelect) {
+        comp = "ApiSelect";
+      } else {
+        if (rawQf.inputStyle == "date") {
+          comp = "DatePicker";
+        }
       }
       qf["component"] = comp;
+
+      // 样式标记
+      qf["isDate"] = (rawQf.inputStyle == "date");
+
+      // 样式特定配置值
+      qf["placeholder"] = rawQf.placeholder;
+      qf["dateFormat"] = rawQf.dateFormat;
+
+      // 预计算布尔标记
+      qf["hasPlaceholder"] = (rawQf.placeholder != "");
+      qf["hasDateFormat"] = (rawQf.dateFormat != "");
+
       queryFields.push(qf);
     }
     printLog("queryFields count: " + queryFields.length);
@@ -215,6 +306,7 @@ main {
     tplData["updateApi"] = updateApi;            // ${updateApi} 修改接口名
     tplData["noDelete"] = noDelete;              // ${if !noDelete} 不可删除
     tplData["noEdit"] = noEdit;                  // ${if !noEdit} 不可编辑
+    tplData["noDetail"] = noDetail;              // ${if !noDetail} 不可查看详情
     tplData["columns"] = columns;                // ${each col in columns} 列循环
     tplData["queryFields"] = queryFields;        // ${each q in queryFields} 查询字段循环
 
