@@ -1,6 +1,17 @@
 {
   columns: [
     {
+      dataName: 'id',
+      editEditable: true,
+      editName: 'id',
+      editStyle: 'text',
+      editVisible: true,
+      queryName: 'id',
+      queryStyle: 'text',
+      queryVisible: true,
+      switchEditable: false,
+    },
+    {
       dataName: 'desc',
       editEditable: true,
       editName: '说明',
@@ -19,17 +30,6 @@
       editVisible: true,
       queryName: '是否启用',
       queryStyle: 'switch',
-      queryVisible: true,
-      switchEditable: false,
-    },
-    {
-      dataName: 'id',
-      editEditable: true,
-      editName: 'id',
-      editStyle: 'text',
-      editVisible: true,
-      queryName: 'id',
-      queryStyle: 'text',
       queryVisible: true,
       switchEditable: false,
     },

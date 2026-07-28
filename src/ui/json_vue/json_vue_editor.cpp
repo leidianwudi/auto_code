@@ -41,8 +41,8 @@ JsonVueEditor::JsonVueEditor(QWidget *parent) : QWidget(parent) { setupUI(); }
 
 void JsonVueEditor::setupUI() {
   auto *mainLayout = new QVBoxLayout(this);
-  mainLayout->setContentsMargins(8, 8, 8, 8);
-  mainLayout->setSpacing(8);
+  mainLayout->setContentsMargins(2, 2, 2, 2);
+  mainLayout->setSpacing(2);
 
   // 接口配置区
   mainLayout->addWidget(buildMetaSection());
@@ -126,10 +126,12 @@ void JsonVueEditor::setupQueryStyleLinkage(int row) {
   });
 }
 
+// 构建接口配置区
 QWidget *JsonVueEditor::buildMetaSection() {
   auto *group = new QGroupBox(QStringLiteral("接口配置"), this);
   auto *layout = new QVBoxLayout(group);
-  layout->setSpacing(6);
+  layout->setSpacing(2);
+  layout->setContentsMargins(4, 2, 4, 2);  // 内边距
 
   // 第1行：生成数据 URL（方法下拉框 + URL 输入框 + 生成按钮）
   auto *row1 = new QHBoxLayout;
@@ -184,7 +186,8 @@ QWidget *JsonVueEditor::buildMetaSection() {
 QWidget *JsonVueEditor::buildColumnsSection() {
   auto *group = new QGroupBox(QStringLiteral("列配置（HTTP 返回的数据列）"), this);
   auto *layout = new QVBoxLayout(group);
-  layout->setSpacing(4);
+  layout->setSpacing(2);
+  layout->setContentsMargins(2, 2, 2, 2);
 
   // 操作按钮行
   auto *btnRow = new QHBoxLayout;
@@ -208,7 +211,7 @@ QWidget *JsonVueEditor::buildColumnsSection() {
   m_columnTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
   m_columnTable->horizontalHeader()->setStretchLastSection(true);
   m_columnTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-  m_columnTable->setMinimumHeight(180);
+  m_columnTable->setMinimumHeight(60);
   layout->addWidget(m_columnTable);
 
   connect(m_moveUpBtn, &QPushButton::clicked, this, &JsonVueEditor::onMoveUp);
@@ -222,7 +225,8 @@ QWidget *JsonVueEditor::buildColumnsSection() {
 QWidget *JsonVueEditor::buildQueryFieldsSection() {
   auto *group = new QGroupBox(QStringLiteral("查询设置"), this);
   auto *layout = new QVBoxLayout(group);
-  layout->setSpacing(4);
+  layout->setSpacing(2);
+  layout->setContentsMargins(2, 2, 2, 2);
 
   auto *btnRow = new QHBoxLayout;
   m_addQueryBtn = new QPushButton(QStringLiteral("+ 添加查询字段"), this);
@@ -239,7 +243,7 @@ QWidget *JsonVueEditor::buildQueryFieldsSection() {
   m_queryTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
   m_queryTable->horizontalHeader()->setStretchLastSection(true);
   m_queryTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-  m_queryTable->setMinimumHeight(150);
+  m_queryTable->setMinimumHeight(60);
   layout->addWidget(m_queryTable);
 
   connect(m_addQueryBtn, &QPushButton::clicked, this, &JsonVueEditor::onAddQueryField);
@@ -248,22 +252,71 @@ QWidget *JsonVueEditor::buildQueryFieldsSection() {
   return group;
 }
 
+/**
+ * @brief 应用可视化编辑器的全局 QSS 样式表
+ *
+ * 统一设置所有子控件的字体大小、内边距、边框等视觉属性，
+ * 使界面风格紧凑一致，避免各控件默认间距过大导致操作区域变小。
+ *
+ * 样式分以下几部分：
+ *
+ * 1. QGroupBox（接口配置 / 列配置 / 查询设置 三个分组容器）
+ *    - font-size:   统一使用 AuiStyle::dialogFontSize() 返回的字号
+ *    - font-weight: bold，标题文字加粗以突出分区
+ *    - border:      1px 实线边框，颜色取自 AuiStyle::borderColor()
+ *    - border-radius: 4px 圆角
+ *    - margin-top:  10px，为标题文字预留顶部空间，避免与上方控件贴紧
+ *    - padding-top: 5px，标题与下方内容之间的间距
+ *
+ * 2. QGroupBox::title（分组标题子控件）
+ *    - subcontrol-origin: margin，标题定位基准为外边距区域
+ *    - left: 2px，标题距离左边框 2px
+ *    - padding: 0 2px，标题左右各留 2px 内边距
+ *
+ * 3. QLabel（如"生成数据URL:"等标签）
+ *    - 仅设置字号，无额外内边距
+ *
+ * 4. QLineEdit / QComboBox（输入框和下拉框）
+ *    - padding: 1px 2px，紧凑内边距
+ *    - font-size: 统一字号
+ *
+ * 5. QPushButton（生成、上移、下移、添加列等按钮）
+ *    - padding: 2px 8px，按钮内边距
+ *    - font-size: 统一字号
+ *
+ * 6. QTableWidget（列配置表格、查询字段表格）
+ *    - font-size: 统一字号
+ *
+ * 7. QHeaderView::section（表格表头）
+ *    - padding: 2px，表头内边距
+ *    - font-size: 统一字号
+ *
+ * @note %1 占位符统一替换为 AuiStyle::dialogFontSize() 返回的字号；
+ *       %2 占位符替换为 AuiStyle::borderColor() 返回的边框颜色。
+ */
 void JsonVueEditor::applyStyle() {
   QString qss =
       QStringLiteral(
+          // ── QGroupBox 分组容器样式 ──
           "QGroupBox {"
-          "  font-size: %1px; font-weight: bold;"
-          "  border: 1px solid %2; border-radius: 4px;"
-          "  margin-top: 8px; padding-top: 12px;"
+          "  font-size: %1px; font-weight: bold;"        // 加粗标题
+          "  border: 1px solid %4; border-radius: 4px;"  // 边框 + 圆角
+          "  margin-top: 10px; padding-top: 5px;"        // 顶部留白 + 标题与内容间距
           "}"
+          // ── QGroupBox 标题子控件样式 ──
           "QGroupBox::title {"
-          "  subcontrol-origin: margin; left: 8px; padding: 0 4px;"
+          "  subcontrol-origin: margin; left: 2px; padding: 0 2px;"  // 标题定位
           "}"
+          // ── QLabel 标签样式 ──
           "QLabel { font-size: %1px; }"
-          "QLineEdit, QComboBox { padding: 2px 4px; font-size: %1px; }"
-          "QPushButton { padding: 4px 12px; font-size: %1px; }"
+          // ── QLineEdit / QComboBox 输入控件样式 ──
+          "QLineEdit, QComboBox { padding: 1px 2px; font-size: %1px; }"
+          // ── QPushButton 按钮样式 ──
+          "QPushButton { padding: 2px 8px; font-size: %1px; }"
+          // ── QTableWidget 表格样式 ──
           "QTableWidget { font-size: %1px; }"
-          "QHeaderView::section { padding: 4px; font-size: %1px; }")
+          // ── QHeaderView 表头样式 ──
+          "QHeaderView::section { padding: 2px; font-size: %1px; }")
           .arg(QString::number(AuiStyle::dialogFontSize()), AuiStyle::borderColor().name());
   setStyleSheet(qss);
 }
