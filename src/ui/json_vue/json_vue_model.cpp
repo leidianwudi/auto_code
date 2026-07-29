@@ -200,6 +200,21 @@ QJsonObject ColumnConfig::toJson() const {
   if (!columnFixed.isEmpty()) obj["columnFixed"] = columnFixed;
   if (!formatter.isEmpty()) obj["formatter"] = formatter;
   if (formSpan != 24) obj["formSpan"] = formSpan;
+  if (!displayType.isEmpty()) {
+    obj["displayType"] = displayType;
+    if (displayType == QStringLiteral("tag")) {
+      obj["tagTrueText"] = tagTrueText;
+      obj["tagTrueColor"] = tagTrueColor;
+      obj["tagFalseText"] = tagFalseText;
+      obj["tagFalseColor"] = tagFalseColor;
+    }
+    if (displayType == QStringLiteral("boolean")) {
+      obj["boolTrueText"] = boolTrueText;
+      obj["boolFalseText"] = boolFalseText;
+    }
+  }
+  if (!defaultValue.isEmpty()) obj["defaultValue"] = defaultValue;
+  if (!defaultSort.isEmpty()) obj["defaultSort"] = defaultSort;
   return obj;
 }
 
@@ -234,6 +249,16 @@ ColumnConfig ColumnConfig::fromJson(const QJsonObject &obj) {
   c.columnFixed = obj.value("columnFixed").toString();
   c.formatter = obj.value("formatter").toString();
   c.formSpan = obj.value("formSpan").toInt(24);
+  c.displayType = obj.value("displayType").toString();
+  c.tagTrueText = obj.value("tagTrueText").toString();
+  c.tagTrueColor = obj.value("tagTrueColor").toString();
+  c.tagFalseText = obj.value("tagFalseText").toString();
+  c.tagFalseColor = obj.value("tagFalseColor").toString();
+  c.boolTrueText = obj.value("boolTrueText").toString();
+  c.boolFalseText = obj.value("boolFalseText").toString();
+  // 通用配置
+  c.defaultValue = obj.value("defaultValue").toString();
+  c.defaultSort = obj.value("defaultSort").toString();
   return c;
 }
 
@@ -478,6 +503,19 @@ QString JsonVueConfig::toJsonString() const {
     }
     if (col.editStyle == EditStyle::TextArea && col.textareaRows != 3) {
       out += QStringLiteral("      textareaRows: %1,\n").arg(col.textareaRows);
+    }
+    if (!col.displayType.isEmpty()) {
+      out += QStringLiteral("      displayType: '%1',\n").arg(esc(col.displayType));
+      if (col.displayType == QStringLiteral("tag")) {
+        out += QStringLiteral("      tagTrueText: '%1',\n").arg(esc(col.tagTrueText));
+        out += QStringLiteral("      tagTrueColor: '%1',\n").arg(esc(col.tagTrueColor));
+        out += QStringLiteral("      tagFalseText: '%1',\n").arg(esc(col.tagFalseText));
+        out += QStringLiteral("      tagFalseColor: '%1',\n").arg(esc(col.tagFalseColor));
+      }
+      if (col.displayType == QStringLiteral("boolean")) {
+        out += QStringLiteral("      boolTrueText: '%1',\n").arg(esc(col.boolTrueText));
+        out += QStringLiteral("      boolFalseText: '%1',\n").arg(esc(col.boolFalseText));
+      }
     }
     out += QStringLiteral("    },\n");
   }

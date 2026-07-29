@@ -225,8 +225,8 @@ QWidget *JsonVueEditor::buildColumnsSection() {
   // 列配置表格
   m_columnTable = new QTableWidget(0, ColCount, this);
   m_columnTable->setHorizontalHeaderLabels(
-      {QStringLiteral("数据列名"), QStringLiteral("查询显示"), QStringLiteral("查询列名"),
-       QStringLiteral("查询样式"), QStringLiteral("开关可编辑"), QStringLiteral("编辑显示"),
+      {QStringLiteral("数据列名"), QStringLiteral("表格显示"), QStringLiteral("表格列名"),
+       QStringLiteral("显示样式"), QStringLiteral("开关可编辑"), QStringLiteral("编辑显示"),
        QStringLiteral("编辑列名"), QStringLiteral("编辑样式"), QStringLiteral("编辑可编辑"),
        QStringLiteral("配置")});
   m_columnTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
@@ -449,6 +449,13 @@ void storeColumnConfig(QPushButton *btn, const ColumnConfig &col) {
   btn->setProperty("columnFixed", col.columnFixed);
   btn->setProperty("formatter", col.formatter);
   btn->setProperty("formSpan", col.formSpan);
+  btn->setProperty("displayType", col.displayType);
+  btn->setProperty("tagTrueText", col.tagTrueText);
+  btn->setProperty("tagTrueColor", col.tagTrueColor);
+  btn->setProperty("tagFalseText", col.tagFalseText);
+  btn->setProperty("tagFalseColor", col.tagFalseColor);
+  btn->setProperty("boolTrueText", col.boolTrueText);
+  btn->setProperty("boolFalseText", col.boolFalseText);
 }
 
 /// 从 QPushButton 的动态属性读取 ColumnConfig 的所有配置
@@ -469,6 +476,13 @@ void readColumnConfig(QPushButton *btn, ColumnConfig &col) {
   col.columnFixed = btn->property("columnFixed").toString();
   col.formatter = btn->property("formatter").toString();
   col.formSpan = btn->property("formSpan").isValid() ? btn->property("formSpan").toInt() : 24;
+  col.displayType = btn->property("displayType").toString();
+  col.tagTrueText = btn->property("tagTrueText").toString();
+  col.tagTrueColor = btn->property("tagTrueColor").toString();
+  col.tagFalseText = btn->property("tagFalseText").toString();
+  col.tagFalseColor = btn->property("tagFalseColor").toString();
+  col.boolTrueText = btn->property("boolTrueText").toString();
+  col.boolFalseText = btn->property("boolFalseText").toString();
 }
 
 /// 生成列配置摘要文本
@@ -528,6 +542,7 @@ QString columnConfigSummary(const ColumnConfig &col) {
   if (!col.columnFixed.isEmpty()) parts << QStringLiteral("固定%1").arg(col.columnFixed);
   if (!col.formatter.isEmpty()) parts << QStringLiteral("格式:%1").arg(col.formatter);
   if (col.formSpan != 24) parts << QStringLiteral("span:%1").arg(col.formSpan);
+  if (!col.displayType.isEmpty()) parts << QStringLiteral("显示:%1").arg(col.displayType);
 
   if (parts.isEmpty()) return QStringLiteral("⚙");
   return QStringLiteral("⚙ ") + parts.join(QStringLiteral(", "));
@@ -1023,6 +1038,13 @@ void JsonVueEditor::populateColumnsFromHttp(const QJsonDocument &doc) {
       col.columnFixed = old.columnFixed;
       col.formatter = old.formatter;
       col.formSpan = old.formSpan;
+      col.displayType = old.displayType;
+      col.tagTrueText = old.tagTrueText;
+      col.tagTrueColor = old.tagTrueColor;
+      col.tagFalseText = old.tagFalseText;
+      col.tagFalseColor = old.tagFalseColor;
+      col.boolTrueText = old.boolTrueText;
+      col.boolFalseText = old.boolFalseText;
     }
 
     int row = m_columnTable->rowCount();
@@ -1350,6 +1372,15 @@ void JsonVueEditor::onConfigureCombobox() {
     dialog.setColumnFixed(col.columnFixed);
     dialog.setFormatter(col.formatter);
     dialog.setFormSpan(col.formSpan);
+    dialog.setDisplayType(col.displayType);
+    dialog.setTagTrueText(col.tagTrueText);
+    dialog.setTagTrueColor(col.tagTrueColor);
+    dialog.setTagFalseText(col.tagFalseText);
+    dialog.setTagFalseColor(col.tagFalseColor);
+    dialog.setBoolTrueText(col.boolTrueText);
+    dialog.setBoolFalseText(col.boolFalseText);
+    dialog.setDefaultValue(col.defaultValue);
+    dialog.setDefaultSort(col.defaultSort);
     if (dialog.exec() == QDialog::Accepted) {
       col.placeholder = dialog.placeholder();
       col.maxlength = dialog.maxlength();
@@ -1363,6 +1394,23 @@ void JsonVueEditor::onConfigureCombobox() {
       col.columnFixed = dialog.columnFixed();
       col.formatter = dialog.formatter();
       col.formSpan = dialog.formSpan();
+      col.displayType = dialog.displayType();
+      col.tagTrueText = dialog.tagTrueText();
+      col.tagTrueColor = dialog.tagTrueColor();
+      col.tagFalseText = dialog.tagFalseText();
+      col.tagFalseColor = dialog.tagFalseColor();
+      col.boolTrueText = dialog.boolTrueText();
+      col.boolFalseText = dialog.boolFalseText();
+      col.defaultValue = dialog.defaultValue();
+      col.defaultSort = dialog.defaultSort();
+      // 显示样式为开关时，displayType 不生效（开关优先），清空避免混淆
+      if (col.queryStyle == ListStyle::Switch && !col.displayType.isEmpty()) {
+        QMessageBox::warning(
+            this, QStringLiteral("提示"),
+            QStringLiteral("显示样式为\"开关\"时，显示类型（标签/图标/布尔文字）不生效。\n"
+                           "已自动清除显示类型设置。"));
+        col.displayType.clear();
+      }
       storeColumnConfig(configBtn, col);
       configBtn->setText(columnConfigSummary(col));
       emit configChanged();

@@ -191,8 +191,19 @@ main {
       let rawCol: Object = rawColumns[i];
       let col: Object = {};
       col["dataName"] = rawCol.dataName;
-      col["label"] = rawCol.editName;
+      // 表格列名优先用 queryName，为空则用 editName
+      let tableLabel = rawCol.queryName;
+      if (tableLabel == "") {
+        tableLabel = rawCol.editName;
+      }
+      col["label"] = tableLabel;
       col["editName"] = rawCol.editName;
+      // 可见性控制
+      col["queryVisible"] = rawCol.queryVisible;
+      col["editVisible"] = rawCol.editVisible;
+      // 可编辑性控制
+      col["editEditable"] = rawCol.editEditable;
+      col["switchEditable"] = rawCol.switchEditable;
 
       // 判断是否为开关样式
       let isSwitch = false;
@@ -200,6 +211,8 @@ main {
         isSwitch = true;
       }
       col["isSwitch"] = isSwitch;
+      // 开关禁用字符串（供模板 JSX disabled 属性使用）
+      col["switchDisabledStr"] = isSwitch ? (rawCol.switchEditable ? "false" : "true") : "false";
 
       // 判断是否为多行文本
       let isTextArea = false;
@@ -269,6 +282,36 @@ main {
       col["formatter"] = rawCol.formatter;
       col["formSpan"] = rawCol.formSpan;
 
+      // 表格列显示类型（3-5）
+      col["displayType"] = rawCol.displayType;
+      col["tagTrueText"] = rawCol.tagTrueText;
+      col["tagTrueColor"] = rawCol.tagTrueColor;
+      col["tagFalseText"] = rawCol.tagFalseText;
+      col["tagFalseColor"] = rawCol.tagFalseColor;
+      col["boolTrueText"] = rawCol.boolTrueText;
+      col["boolFalseText"] = rawCol.boolFalseText;
+      // displayType 与 isSwitch 互斥：开关样式优先，清空 displayType 相关标记
+      let isTag = false;
+      let isIcon = false;
+      let isBoolean = false;
+      let hasDisplayType = false;
+      if (!isSwitch) {
+        isTag = (rawCol.displayType == "tag");
+        isIcon = (rawCol.displayType == "icon");
+        isBoolean = (rawCol.displayType == "boolean");
+        hasDisplayType = (rawCol.displayType != "");
+      }
+      col["isTag"] = isTag;
+      col["isIcon"] = isIcon;
+      col["isBoolean"] = isBoolean;
+      col["hasDisplayType"] = hasDisplayType;
+
+      // 通用配置（3-6）
+      col["defaultValue"] = rawCol.defaultValue;
+      col["defaultSort"] = rawCol.defaultSort;
+      col["hasDefaultValue"] = (rawCol.defaultValue != "");
+      col["hasDefaultSort"] = (rawCol.defaultSort != "");
+
       // 预计算布尔标记（避免模板中做字符串比较）
       col["hasPlaceholder"] = (rawCol.placeholder != "");
       col["hasMaxlength"] = (rawCol.maxlength > 0);
@@ -278,6 +321,9 @@ main {
       col["hasColumnWidth"] = (rawCol.columnWidth > 0);
       col["hasColumnFixed"] = (rawCol.columnFixed != "");
       col["hasFormatter"] = (rawCol.formatter != "");
+      col["isFormatterDate"] = (rawCol.formatter == "date");
+      col["isFormatterStatus"] = (rawCol.formatter == "status");
+      col["isFormatterCurrency"] = (rawCol.formatter == "currency");
       col["hasFormSpan"] = (rawCol.formSpan != 24);
 
       columns.push(col);
@@ -533,6 +579,50 @@ main {
     }
     let hasCustomButtons = (buttons.length > 0);
 
+    // 检查是否有 tag 类型的列（需要导入 ElTag）
+    let hasTagColumns = false;
+    let colsLen2 = columns.length;
+    for (let i = 0; i < colsLen2; i = i + 1) {
+      if (columns[i]["isTag"]) {
+        hasTagColumns = true;
+      }
+    }
+
+    // 计算表格默认排序字段（取第一个配置了 defaultSort 的列）
+    let defaultSortField = "";
+    let defaultSortOrder = "";
+    for (let i = 0; i < colsLen2; i = i + 1) {
+      if (columns[i]["hasDefaultSort"]) {
+        defaultSortField = columns[i]["dataName"];
+        defaultSortOrder = columns[i]["defaultSort"];
+        break;
+      }
+    }
+    let hasTableDefaultSort = (defaultSortField != "");
+
+    // 检查是否有列配置了默认值（新增记录时使用）
+    let hasDefaultValues = false;
+    for (let i = 0; i < colsLen2; i = i + 1) {
+      if (columns[i]["hasDefaultValue"]) {
+        hasDefaultValues = true;
+        break;
+      }
+    }
+
+    // 收集编辑表单中隐藏的字段（editVisible=false）和只读的字段（editEditable=false）
+    let hiddenFieldsStr = "";
+    let disabledFieldsStr = "";
+    for (let i = 0; i < colsLen2; i = i + 1) {
+      if (!columns[i]["editVisible"]) {
+        hiddenFieldsStr = hiddenFieldsStr + "'" + columns[i]["dataName"] + "', ";
+      }
+      if (!columns[i]["editEditable"]) {
+        disabledFieldsStr = disabledFieldsStr + "'" + columns[i]["dataName"] + "', ";
+      }
+    }
+    let hasHiddenFields = (hiddenFieldsStr != "");
+    let hasDisabledFields = (disabledFieldsStr != "");
+
     // ── 4.6 组装传给模板的数据对象 tplData ────────────────────────
     //      模板中的所有 ${变量名} 都从这里取值
     let tplData: Object = {};
@@ -552,6 +642,7 @@ main {
     tplData["hasConfirmButtons"] = (confirmButtons.length > 0);
     tplData["hasDialogButtons"] = (dialogButtons.length > 0);
     tplData["hasLinkButtons"] = (linkButtons.length > 0);
+    tplData["hasTagColumns"] = hasTagColumns;  // ${if hasTagColumns} 需要导入 ElTag
     tplData["rowButtons"] = rowButtons;          // ${each btn in rowButtons} 行操作列按钮
     tplData["toolbarButtons"] = toolbarButtons;  // ${each btn in toolbarButtons} 顶部工具栏按钮
     tplData["ajaxButtons"] = ajaxButtons;        // Ajax 行为按钮（生成处理函数用）
@@ -559,6 +650,17 @@ main {
     tplData["dialogButtons"] = dialogButtons;    // Dialog 行为按钮
     tplData["linkButtons"] = linkButtons;        // Link 行为按钮
     tplData["actionColumnWidth"] = actionColumnWidth;  // 操作列宽度（自适应）
+    // 表格默认排序
+    tplData["hasTableDefaultSort"] = hasTableDefaultSort;
+    tplData["defaultSortField"] = defaultSortField;
+    tplData["defaultSortOrder"] = defaultSortOrder;
+    // 新增记录默认值
+    tplData["hasDefaultValues"] = hasDefaultValues;
+    // 编辑表单隐藏/只读字段
+    tplData["hasHiddenFields"] = hasHiddenFields;
+    tplData["hiddenFieldsStr"] = hiddenFieldsStr;
+    tplData["hasDisabledFields"] = hasDisabledFields;
+    tplData["disabledFieldsStr"] = disabledFieldsStr;
 
     // ── 4.7 遍历模板配置，逐个渲染并写入文件 ─────────────────────
     for (cfg in templates) {

@@ -75,6 +75,35 @@ public:
   void setFormSpan(int v);
   int formSpan() const;
 
+  // ── 表格列显示类型（3-5，仅列配置模式）──
+  void setDisplayType(const QString &v);
+  QString displayType() const;
+
+  void setTagTrueText(const QString &v);
+  QString tagTrueText() const;
+
+  void setTagTrueColor(const QString &v);
+  QString tagTrueColor() const;
+
+  void setTagFalseText(const QString &v);
+  QString tagFalseText() const;
+
+  void setTagFalseColor(const QString &v);
+  QString tagFalseColor() const;
+
+  void setBoolTrueText(const QString &v);
+  QString boolTrueText() const;
+
+  void setBoolFalseText(const QString &v);
+  QString boolFalseText() const;
+
+  // ── 通用配置（3-6，仅列配置模式）──
+  void setDefaultValue(const QString &v);
+  QString defaultValue() const;
+
+  void setDefaultSort(const QString &v);
+  QString defaultSort() const;
+
 private:
   /// 构建界面
   void setupUI();
@@ -102,4 +131,17 @@ private:
   QComboBox *m_columnFixedCombo = nullptr;  ///< 3-2: 固定列
   QComboBox *m_formatterCombo = nullptr;    ///< 3-3: 格式化类型
   QComboBox *m_formSpanCombo = nullptr;     ///< 3-4: 表单布局占比
+
+  // ── 表格列显示类型控件（3-5）──
+  QComboBox *m_displayTypeCombo = nullptr;    ///< 3-5: 显示类型
+  QLineEdit *m_tagTrueTextEdit = nullptr;     ///< tag: true 文字
+  QComboBox *m_tagTrueColorCombo = nullptr;   ///< tag: true 颜色
+  QLineEdit *m_tagFalseTextEdit = nullptr;    ///< tag: false 文字
+  QComboBox *m_tagFalseColorCombo = nullptr;  ///< tag: false 颜色
+  QLineEdit *m_boolTrueTextEdit = nullptr;    ///< boolean: true 文字
+  QLineEdit *m_boolFalseTextEdit = nullptr;   ///< boolean: false 文字
+
+  // ── 通用配置控件（3-6）──
+  QLineEdit *m_defaultValueEdit = nullptr;  ///< 3-6: 新增记录默认值
+  QComboBox *m_defaultSortCombo = nullptr;  ///< 3-6: 表格默认排序方向
 };

@@ -128,6 +128,24 @@ struct ColumnConfig {
   // ── 表单布局（3-4）──
   int formSpan = 24;  ///< 表单项占比（24=整行，12=半行，8=三分之一）
 
+  // ── 表格列显示类型（3-5）──
+  /// 表格列渲染方式（""/"text"/"tag"/"icon"/"boolean"）
+  /// text    - 纯文本（默认）
+  /// tag     - 用 ElTag 显示（如状态：启用/禁用）
+  /// icon    - 用 Icon 组件渲染图标
+  /// boolean - 布尔值转文字
+  QString displayType;
+  QString tagTrueText;    ///< tag: true 时显示的文字（如"启用"）
+  QString tagTrueColor;   ///< tag: true 时的颜色（如"success"）
+  QString tagFalseText;   ///< tag: false 时显示的文字（如"禁用"）
+  QString tagFalseColor;  ///< tag: false 时的颜色（如"danger"）
+  QString boolTrueText;   ///< boolean: true 时显示的文字（如"显示"）
+  QString boolFalseText;  ///< boolean: false 时显示的文字（如"隐藏"）
+
+  // ── 通用配置（3-6）──
+  QString defaultValue;  ///< 新增记录时的默认值（如 "1" / "0" / ""）
+  QString defaultSort;   ///< 表格默认排序方向（""/"asc"/"desc"，仅一列设置有效）
+
   /// 序列化为 JSON
   QJsonObject toJson() const;
   /// 从 JSON 反序列化

@@ -27,7 +27,7 @@ import { BaseButton } from '@/components/button';
 import { FormSchema } from '@/components/form';
 import { Icon } from '@/components/icon';
 import { Table, TableColumn } from '@/components/table';
-import { ElTooltip, ElSwitch${if hasConfirmButtons}, ElMessageBox${/if} } from 'element-plus';
+import { ElTooltip, ElSwitch${if hasConfirmButtons}, ElMessageBox${/if}${if hasTagColumns}, ElTag${/if} } from 'element-plus';
 import { reactive, ref, unref } from 'vue';
 import { Search } from '@/components/search';
 import { ContentWrap } from '@/components/content_wrap';
@@ -120,6 +120,7 @@ const tableColumns = reactive<TableColumn[]>([
     type: 'selection'
   },
 ${each col in columns}
+${if col.queryVisible}
 ${if col.isSwitch}
   {
     field: '${col.dataName}',
@@ -131,6 +132,7 @@ ${/if}    slots: {
         return (
           <ElSwitch
             modelValue={data.row.${col.dataName} === 1}
+            disabled={${col.switchDisabledStr}}
             onChange={() => {
               updateStatusAndTip(data.row);
             }}
@@ -144,13 +146,61 @@ ${/if}    slots: {
       }
     }
   },
+${else if col.isTag}
+  {
+    field: '${col.dataName}',
+    label: '${col.label}'${if col.hasDefaultSort},
+    sortable: true${/if}${if col.hasColumnWidth},
+    width: ${col.columnWidth}${/if}${if col.hasColumnFixed},
+    fixed: '${col.columnFixed}'${/if},
+    slots: {
+      default: (data: any) => {
+        return (
+          <ElTag type={data.row.${col.dataName} ? '${col.tagTrueColor}' : '${col.tagFalseColor}'}>
+            {data.row.${col.dataName} ? '${col.tagTrueText}' : '${col.tagFalseText}'}
+          </ElTag>
+        );
+      }
+    }
+  },
+${else if col.isIcon}
+  {
+    field: '${col.dataName}',
+    label: '${col.label}'${if col.hasDefaultSort},
+    sortable: true${/if}${if col.hasColumnWidth},
+    width: ${col.columnWidth}${/if}${if col.hasColumnFixed},
+    fixed: '${col.columnFixed}'${/if},
+    slots: {
+      default: (data: any) => {
+        return data.row.${col.dataName} ? <Icon icon={data.row.${col.dataName}} /> : null;
+      }
+    }
+  },
+${else if col.isBoolean}
+  {
+    field: '${col.dataName}',
+    label: '${col.label}'${if col.hasDefaultSort},
+    sortable: true${/if}${if col.hasColumnWidth},
+    width: ${col.columnWidth}${/if}${if col.hasColumnFixed},
+    fixed: '${col.columnFixed}'${/if},
+    slots: {
+      default: (data: any) => {
+        return data.row.${col.dataName} ? '${col.boolTrueText}' : '${col.boolFalseText}';
+      }
+    }
+  },
 ${else}
   {
     field: '${col.dataName}',
-    label: '${col.label}'${if col.hasColumnWidth},
+    label: '${col.label}'${if col.hasDefaultSort},
+    sortable: true${/if}${if col.hasColumnWidth},
     width: ${col.columnWidth}${/if}${if col.hasColumnFixed},
-    fixed: '${col.columnFixed}'${/if}
+    fixed: '${col.columnFixed}'${/if}${if col.hasFormatter},
+    formatter: (row: any, column: any, cellValue: any) => {
+      ${if col.isFormatterDate}return cellValue ? String(cellValue).substring(0, 10) : '';${/if}${if col.isFormatterStatus}return cellValue ? '启用' : '禁用';${/if}${if col.isFormatterCurrency}return '¥' + Number(cellValue).toFixed(2);${/if}
+    }${/if}
   },
+${/if}
 ${/if}
 ${/each}
   {
@@ -286,7 +336,8 @@ function closeDialog() {
       :columns="tableColumns"
       :data="dataList"
       :loading="loading"
-      @register="tableRegister"
+      @register="tableRegister"${if hasTableDefaultSort}
+      :default-sort="{ prop: '${defaultSortField}', order: '${defaultSortOrder}ending' }"${/if}
     />
   </ContentWrap>
 

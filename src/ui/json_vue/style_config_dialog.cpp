@@ -65,8 +65,8 @@ void StyleConfigDialog::setupUI() {
   mainLayout->addLayout(m_formLayout);
 
   if (m_isColumnMode) {
-    // ── 查询时配置 ──
-    auto *querySep = new QLabel(QStringLiteral("── 查询时配置 ──"), this);
+    // ── 表格列显示 ──
+    auto *querySep = new QLabel(QStringLiteral("── 表格列显示 ──"), this);
     querySep->setAlignment(Qt::AlignCenter);
     m_formLayout->addRow(QString(), querySep);
 
@@ -98,8 +98,47 @@ void StyleConfigDialog::setupUI() {
     m_formatterCombo->addItem(QStringLiteral("金额"), QStringLiteral("currency"));
     addRow(QStringLiteral("格式化:"), m_formatterCombo);
 
-    // ── 编辑时配置 ──
-    auto *editSep = new QLabel(QStringLiteral("── 编辑时配置 ──"), this);
+    // 表格列显示类型
+    m_displayTypeCombo = new QComboBox(this);
+    m_displayTypeCombo->addItem(QStringLiteral("纯文本"), QStringLiteral(""));
+    m_displayTypeCombo->addItem(QStringLiteral("标签(tag)"), QStringLiteral("tag"));
+    m_displayTypeCombo->addItem(QStringLiteral("图标(icon)"), QStringLiteral("icon"));
+    m_displayTypeCombo->addItem(QStringLiteral("布尔文字(boolean)"), QStringLiteral("boolean"));
+    addRow(QStringLiteral("显示类型:"), m_displayTypeCombo);
+
+    // tag 类型的子字段
+    m_tagTrueTextEdit = new QLineEdit(this);
+    m_tagTrueTextEdit->setPlaceholderText(QStringLiteral("如: 启用"));
+    addRow(QStringLiteral("  tag真值文字:"), m_tagTrueTextEdit);
+
+    m_tagTrueColorCombo = new QComboBox(this);
+    m_tagTrueColorCombo->addItem(QStringLiteral("success"), QStringLiteral("success"));
+    m_tagTrueColorCombo->addItem(QStringLiteral("primary"), QStringLiteral("primary"));
+    m_tagTrueColorCombo->addItem(QStringLiteral("warning"), QStringLiteral("warning"));
+    m_tagTrueColorCombo->addItem(QStringLiteral("info"), QStringLiteral("info"));
+    addRow(QStringLiteral("  tag真值颜色:"), m_tagTrueColorCombo);
+
+    m_tagFalseTextEdit = new QLineEdit(this);
+    m_tagFalseTextEdit->setPlaceholderText(QStringLiteral("如: 禁用"));
+    addRow(QStringLiteral("  tag假值文字:"), m_tagFalseTextEdit);
+
+    m_tagFalseColorCombo = new QComboBox(this);
+    m_tagFalseColorCombo->addItem(QStringLiteral("danger"), QStringLiteral("danger"));
+    m_tagFalseColorCombo->addItem(QStringLiteral("info"), QStringLiteral("info"));
+    m_tagFalseColorCombo->addItem(QStringLiteral("warning"), QStringLiteral("warning"));
+    addRow(QStringLiteral("  tag假值颜色:"), m_tagFalseColorCombo);
+
+    // boolean 类型的子字段
+    m_boolTrueTextEdit = new QLineEdit(this);
+    m_boolTrueTextEdit->setPlaceholderText(QStringLiteral("如: 显示"));
+    addRow(QStringLiteral("  布尔真值文字:"), m_boolTrueTextEdit);
+
+    m_boolFalseTextEdit = new QLineEdit(this);
+    m_boolFalseTextEdit->setPlaceholderText(QStringLiteral("如: 隐藏"));
+    addRow(QStringLiteral("  布尔假值文字:"), m_boolFalseTextEdit);
+
+    // ── 编辑表单 ──
+    auto *editSep = new QLabel(QStringLiteral("── 编辑表单 ──"), this);
     editSep->setAlignment(Qt::AlignCenter);
     m_formLayout->addRow(QString(), editSep);
 
@@ -223,6 +262,23 @@ void StyleConfigDialog::setupUI() {
     m_formSpanCombo->addItem(QStringLiteral("半行"), 12);
     m_formSpanCombo->addItem(QStringLiteral("三分之一"), 8);
     addRow(QStringLiteral("表单布局:"), m_formSpanCombo);
+
+    // ── 通用配置 ──
+    auto *commonSep = new QLabel(QStringLiteral("── 通用配置 ──"), this);
+    commonSep->setAlignment(Qt::AlignCenter);
+    m_formLayout->addRow(QString(), commonSep);
+
+    // 新增记录默认值
+    m_defaultValueEdit = new QLineEdit(this);
+    m_defaultValueEdit->setPlaceholderText(QStringLiteral("新增记录时的默认值"));
+    addRow(QStringLiteral("默认值:"), m_defaultValueEdit);
+
+    // 表格默认排序
+    m_defaultSortCombo = new QComboBox(this);
+    m_defaultSortCombo->addItem(QStringLiteral("无"), QString());
+    m_defaultSortCombo->addItem(QStringLiteral("升序"), QStringLiteral("asc"));
+    m_defaultSortCombo->addItem(QStringLiteral("降序"), QStringLiteral("desc"));
+    addRow(QStringLiteral("默认排序:"), m_defaultSortCombo);
   } else {
     // 查询字段模式：根据 QueryInputStyle 创建对应控件
     switch (m_queryStyle) {
@@ -405,4 +461,98 @@ void StyleConfigDialog::setFormSpan(int v) {
 
 int StyleConfigDialog::formSpan() const {
   return m_formSpanCombo ? m_formSpanCombo->currentData().toInt() : 24;
+}
+
+// ════════════════════════════════════════════════════════════
+//  表格列显示类型（3-5）
+// ════════════════════════════════════════════════════════════
+
+void StyleConfigDialog::setDisplayType(const QString &v) {
+  if (m_displayTypeCombo) {
+    int idx = m_displayTypeCombo->findData(v);
+    m_displayTypeCombo->setCurrentIndex(idx >= 0 ? idx : 0);
+  }
+}
+
+QString StyleConfigDialog::displayType() const {
+  return m_displayTypeCombo ? m_displayTypeCombo->currentData().toString() : QString();
+}
+
+void StyleConfigDialog::setTagTrueText(const QString &v) {
+  if (m_tagTrueTextEdit) m_tagTrueTextEdit->setText(v);
+}
+
+QString StyleConfigDialog::tagTrueText() const {
+  return m_tagTrueTextEdit ? m_tagTrueTextEdit->text().trimmed() : QString();
+}
+
+void StyleConfigDialog::setTagTrueColor(const QString &v) {
+  if (m_tagTrueColorCombo) {
+    int idx = m_tagTrueColorCombo->findData(v);
+    if (idx >= 0) m_tagTrueColorCombo->setCurrentIndex(idx);
+  }
+}
+
+QString StyleConfigDialog::tagTrueColor() const {
+  return m_tagTrueColorCombo ? m_tagTrueColorCombo->currentData().toString()
+                             : QStringLiteral("success");
+}
+
+void StyleConfigDialog::setTagFalseText(const QString &v) {
+  if (m_tagFalseTextEdit) m_tagFalseTextEdit->setText(v);
+}
+
+QString StyleConfigDialog::tagFalseText() const {
+  return m_tagFalseTextEdit ? m_tagFalseTextEdit->text().trimmed() : QString();
+}
+
+void StyleConfigDialog::setTagFalseColor(const QString &v) {
+  if (m_tagFalseColorCombo) {
+    int idx = m_tagFalseColorCombo->findData(v);
+    if (idx >= 0) m_tagFalseColorCombo->setCurrentIndex(idx);
+  }
+}
+
+QString StyleConfigDialog::tagFalseColor() const {
+  return m_tagFalseColorCombo ? m_tagFalseColorCombo->currentData().toString()
+                              : QStringLiteral("danger");
+}
+
+void StyleConfigDialog::setBoolTrueText(const QString &v) {
+  if (m_boolTrueTextEdit) m_boolTrueTextEdit->setText(v);
+}
+
+QString StyleConfigDialog::boolTrueText() const {
+  return m_boolTrueTextEdit ? m_boolTrueTextEdit->text().trimmed() : QString();
+}
+
+void StyleConfigDialog::setBoolFalseText(const QString &v) {
+  if (m_boolFalseTextEdit) m_boolFalseTextEdit->setText(v);
+}
+
+QString StyleConfigDialog::boolFalseText() const {
+  return m_boolFalseTextEdit ? m_boolFalseTextEdit->text().trimmed() : QString();
+}
+
+// ════════════════════════════════════════════════════════════
+//  通用配置（3-6）
+// ════════════════════════════════════════════════════════════
+
+void StyleConfigDialog::setDefaultValue(const QString &v) {
+  if (m_defaultValueEdit) m_defaultValueEdit->setText(v);
+}
+
+QString StyleConfigDialog::defaultValue() const {
+  return m_defaultValueEdit ? m_defaultValueEdit->text().trimmed() : QString();
+}
+
+void StyleConfigDialog::setDefaultSort(const QString &v) {
+  if (m_defaultSortCombo) {
+    int idx = m_defaultSortCombo->findData(v);
+    m_defaultSortCombo->setCurrentIndex(idx >= 0 ? idx : 0);
+  }
+}
+
+QString StyleConfigDialog::defaultSort() const {
+  return m_defaultSortCombo ? m_defaultSortCombo->currentData().toString() : QString();
 }

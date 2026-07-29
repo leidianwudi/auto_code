@@ -11,13 +11,14 @@ ${#   columns       - 列配置数组                                           
 ${#     [{dataName, editName, isSwitch, isSelect, isTextArea, isText,           }
 ${#      isInt, isFloat, isDate, selectUrl, selectValueField, selectLabelField,  }
 ${#      placeholder, maxlength, minValue, maxValue, precision, dateFormat,      }
-${#      textareaRows, required, formSpan, editComponent}]                       }
+${#      textareaRows, required, formSpan, editComponent,                        }
+${#      hasDefaultValue, defaultValue}]                                         }
 ${# ============================================================================}
 //此代码为AutoCode框架生成，请勿手动修改
 <script setup lang="tsx">
 import { Form, FormSchema } from '@/components/form';
 import { useForm } from '@/hooks/web/use_form';
-import { PropType, reactive, ref, computed } from 'vue';
+import { PropType, reactive, ref, computed${if hasDefaultValues}, watch, nextTick${/if} } from 'vue';
 import { useValidator } from '@/hooks/web/use_validator';
 import { uiWriteLogic } from '@/utils/ui_write_logic';
 
@@ -129,17 +130,23 @@ ${/if}    }${if col.hasFormSpan},
 ${/if}
 ${/each}]);
 
-// 详情模式下将所有组件设为只读
+// 详情模式下将所有组件设为只读；同时处理隐藏字段和只读字段
 const formSchemaComputed = computed(() => {
-  if (!isDetail.value) return formSchema.value;
-  return formSchema.value.map((item: any) => ({
-    ...item,
-    component: 'Input',
-    componentProps: {
-      ...(item.componentProps || {}),
-      disabled: true
+${if hasHiddenFields}  const hiddenFields = [${hiddenFieldsStr}];
+${/if}${if hasDisabledFields}  const disabledFields = [${disabledFieldsStr}];
+${/if}  return formSchema.value.map((item: any) => {
+    let result = { ...item };
+${if hasHiddenFields}    if (hiddenFields.includes(item.field)) {
+      result.ifShow = false;
     }
-  }));
+${/if}    if (isDetail.value) {
+      result.component = 'Input';
+      result.componentProps = { ...(item.componentProps || {}), disabled: true };
+    }${if hasDisabledFields} else if (disabledFields.includes(item.field)) {
+      result.componentProps = { ...(item.componentProps || {}), disabled: true };
+    }${/if}
+    return result;
+  });
 });
 
 // 表单验证规则（根据配置的 required 字段生成）
@@ -155,7 +162,21 @@ const { submit } = uiWriteLogic(
   formSchemaComputed,
   formMethods
 );
+${if hasDefaultValues}
+// 新增记录时的默认值
+const defaultValues: Record<string, any> = {
+${each col in columns}${if col.hasDefaultValue}  ${col.dataName}: '${col.defaultValue}',
+${/if}${/each}};
 
+// 新增时设置默认值（在表单重置后通过 nextTick 注入）
+watch(() => props.actionType, (newVal) => {
+  if (newVal === 'add') {
+    nextTick(() => {
+      formMethods.setValues(defaultValues);
+    });
+  }
+});
+${/if}
 // 向父组件暴露接口
 defineExpose({
   submit
