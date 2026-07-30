@@ -216,7 +216,7 @@ const { submit } = uiWriteLogic(
 ${if hasDefaultValues}
 // 新增记录时的默认值
 const defaultValues: Record<string, any> = {
-${each col in columns}${if col.hasDefaultValue}  ${col.dataName}: '${col.defaultValue}',
+${each col in columns}${if col.hasDefaultValue}  ${col.dataName}: ${col.defaultValueLiteral},
 ${/if}${/each}};
 
 // 新增时设置默认值（在表单重置后通过 nextTick 注入）

@@ -400,7 +400,11 @@ ColumnConfig ColumnConfig::fromJson(const QJsonObject &obj) {
     }
   }
   c.boolTrueText = obj.value("boolTrueText").toString();
+  if (c.boolTrueText.isEmpty() && c.displayType == QStringLiteral("boolean"))
+    c.boolTrueText = QStringLiteral("是");
   c.boolFalseText = obj.value("boolFalseText").toString();
+  if (c.boolFalseText.isEmpty() && c.displayType == QStringLiteral("boolean"))
+    c.boolFalseText = QStringLiteral("否");
   // 通用配置
   c.defaultValue = obj.value("defaultValue").toString();
   c.defaultSort = obj.value("defaultSort").toString();

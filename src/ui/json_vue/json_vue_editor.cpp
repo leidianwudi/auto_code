@@ -916,7 +916,12 @@ void JsonVueEditor::onGenerate() {
   // 拼接 baseUrl
   QString fullUrl = url;
   if (m_baseUrl.isEmpty()) {
-    // baseUrl 为空时直接使用 url（如果 url 已是完整 URL）
+    // baseUrl 为空时直接使用 url（必须为完整 URL）
+    if (!url.startsWith(QStringLiteral("http://")) && !url.startsWith(QStringLiteral("https://"))) {
+      QMessageBox::warning(this, QStringLiteral("提示"),
+                           QStringLiteral("baseUrl 为空时，URL 必须以 http:// 或 https:// 开头"));
+      return;
+    }
   } else {
     // 拼接 baseUrl + url
     if (url.startsWith(QStringLiteral("http://")) || url.startsWith(QStringLiteral("https://"))) {

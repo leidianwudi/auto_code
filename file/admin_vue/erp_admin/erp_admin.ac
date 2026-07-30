@@ -409,6 +409,14 @@ main {
       col["defaultSort"] = rawCol.defaultSort;
       col["hasDefaultValue"] = (rawCol.defaultValue != "");
       col["hasDefaultSort"] = (rawCol.defaultSort != "");
+      // 数值类型默认值不加引号，其它类型加引号（避免 InputNumber 收到字符串）
+      if (rawCol.defaultValue != "") {
+        if (rawCol.editStyle == "int" || rawCol.editStyle == "float" || rawCol.editStyle == "money") {
+          col["defaultValueLiteral"] = rawCol.defaultValue;
+        } else {
+          col["defaultValueLiteral"] = "'" + escapeJsStr(rawCol.defaultValue) + "'";
+        }
+      }
 
       // 预计算布尔标记（避免模板中做字符串比较）
       col["hasPlaceholder"] = (rawCol.placeholder != "");
