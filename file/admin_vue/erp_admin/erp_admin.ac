@@ -29,6 +29,25 @@ class TemplateConfig {
   let out: String = "";  // 输出文件路径模板，用 {key} 占位符从 tplData 取值
 }
 
+/// @brief 转义 JS 字符串中的单引号和反斜杠（用于生成 JS 对象字面量）
+/// @param s 原始字符串
+/// @return 转义后的字符串（单引号 ' → \'，反斜杠 \ → \\）
+function escapeJsStr(s: String): String {
+  let result = "";
+  let len = s.length;
+  for (let i = 0; i < len; i = i + 1) {
+    let c = s[i];
+    if (c == "'") {
+      result = result + "\\'";
+    } else if (c == "\\") {
+      result = result + "\\\\";
+    } else {
+      result = result + c;
+    }
+  }
+  return result;
+}
+
 main {
 
   // ── 1. HTTP 通用配置（可视化编辑器"生成"按钮使用） ─────────────────
@@ -205,14 +224,65 @@ main {
       col["editEditable"] = rawCol.editEditable;
       col["switchEditable"] = rawCol.switchEditable;
 
-      // 判断是否为开关样式
+      // 判断是否为开关样式：(displayType == "boolean" || "tag") && switchEditable
       let isSwitch = false;
-      if (rawCol.queryStyle == "switch") {
+      if ((rawCol.displayType == "boolean" || rawCol.displayType == "tag") && rawCol.switchEditable) {
         isSwitch = true;
       }
       col["isSwitch"] = isSwitch;
-      // 开关禁用字符串（供模板 JSX disabled 属性使用）
-      col["switchDisabledStr"] = isSwitch ? (rawCol.switchEditable ? "false" : "true") : "false";
+
+      // 区分开关子类型：boolean 开关 vs tag 开关
+      let isBooleanSwitch = false;
+      let isTagSwitch = false;
+      if (isSwitch) {
+        if (rawCol.displayType == "boolean") {
+          isBooleanSwitch = true;
+        } else if (rawCol.displayType == "tag") {
+          isTagSwitch = true;
+        }
+      }
+      col["isBooleanSwitch"] = isBooleanSwitch;
+      col["isTagSwitch"] = isTagSwitch;
+
+      // 开关禁用字符串（基于 editEditable，不可编辑的列开关也应禁用）
+      col["switchDisabledStr"] = isSwitch ? (rawCol.editEditable ? "false" : "true") : "false";
+
+      // 开关的激活/非激活值与文字（供模板 ElSwitch 使用）
+      // boolean: active=1, inactive=0, 用 boolTrueText/boolFalseText
+      // tag: 用 tagItems[1] 作为 active, tagItems[0] 作为 inactive（约定 tagItems 至少 2 项）
+      let switchActiveValue = "1";
+      let switchInactiveValue = "0";
+      let switchActiveText = "启用";
+      let switchInactiveText = "禁用";
+      if (isBooleanSwitch) {
+        switchActiveValue = "1";
+        switchInactiveValue = "0";
+        if (rawCol.boolTrueText != "") {
+          switchActiveText = rawCol.boolTrueText;
+        }
+        if (rawCol.boolFalseText != "") {
+          switchInactiveText = rawCol.boolFalseText;
+        }
+      } else if (isTagSwitch) {
+        // 从 tagItems 获取开关值和文字
+        let rawTagItems2: Object[] = [];
+        if (rawCol.tagItems != null) {
+          rawTagItems2 = rawCol.tagItems;
+        }
+        if (rawTagItems2.length >= 2) {
+          switchInactiveValue = rawTagItems2[0].value;
+          switchInactiveText = rawTagItems2[0].text;
+          switchActiveValue = rawTagItems2[1].value;
+          switchActiveText = rawTagItems2[1].text;
+        } else if (rawTagItems2.length == 1) {
+          switchActiveValue = rawTagItems2[0].value;
+          switchActiveText = rawTagItems2[0].text;
+        }
+      }
+      col["switchActiveValue"] = escapeJsStr(switchActiveValue);
+      col["switchInactiveValue"] = escapeJsStr(switchInactiveValue);
+      col["switchActiveText"] = escapeJsStr(switchActiveText);
+      col["switchInactiveText"] = escapeJsStr(switchInactiveText);
 
       // 判断是否为多行文本
       let isTextArea = false;
@@ -231,40 +301,34 @@ main {
       col["selectValueField"] = rawCol.selectValueField;
       col["selectLabelField"] = rawCol.selectLabelField;
 
-      // 根据 editStyle 决定编辑界面 Vue 组件名
-      // 开关样式 → Select（启用/禁用下拉）
+      // 根据 editStyle 决定编辑界面 Vue 组件名（字典映射，避免深层 if/else 嵌套）
       // select → ApiSelect（远程数据下拉）
-      // int/float → InputNumber
+      // int/float/money → InputNumber
       // date → DatePicker
-      // textarea → Input（带 textarea componentProps）
-      // 其他 → Input
-      let editComp = "Input";
-      if (isSwitch) {
-        editComp = "Select";
-      } else {
-        if (isSelect) {
-          editComp = "ApiSelect";
-        } else {
-          if (rawCol.editStyle == "int") {
-            editComp = "InputNumber";
-          } else {
-            if (rawCol.editStyle == "float") {
-              editComp = "InputNumber";
-            } else {
-              if (rawCol.editStyle == "date") {
-                editComp = "DatePicker";
-              }
-            }
-          }
-        }
-      }
+      // tag/boolean → Select（下拉选择）
+      // image/textarea/text → Input（textarea 带 componentProps，image 为 URL 输入）
+      let editCompMap: Object = {
+        "select": "ApiSelect",
+        "int": "InputNumber",
+        "float": "InputNumber",
+        "money": "InputNumber",
+        "date": "DatePicker",
+        "tag": "Select",
+        "boolean": "Select"
+      };
+      let styleKey: String = rawCol.editStyle;
+      let editComp: String = editCompMap[styleKey] || "Input";
       col["editComponent"] = editComp;
 
       // 样式标记（供模板条件判断）
       col["isText"] = (rawCol.editStyle == "text");
       col["isInt"] = (rawCol.editStyle == "int");
       col["isFloat"] = (rawCol.editStyle == "float");
+      col["isMoney"] = (rawCol.editStyle == "money");
       col["isDate"] = (rawCol.editStyle == "date");
+      col["isTagEdit"] = (rawCol.editStyle == "tag");
+      col["isBooleanEdit"] = (rawCol.editStyle == "boolean");
+      col["isImageEdit"] = (rawCol.editStyle == "image");
 
       // 样式特定配置值
       col["placeholder"] = rawCol.placeholder;
@@ -282,29 +346,63 @@ main {
       col["formatter"] = rawCol.formatter;
       col["formSpan"] = rawCol.formSpan;
 
-      // 表格列显示类型（3-5）
+      // 表格列显示样式（3-5）
       col["displayType"] = rawCol.displayType;
-      col["tagTrueText"] = rawCol.tagTrueText;
-      col["tagTrueColor"] = rawCol.tagTrueColor;
-      col["tagFalseText"] = rawCol.tagFalseText;
-      col["tagFalseColor"] = rawCol.tagFalseColor;
       col["boolTrueText"] = rawCol.boolTrueText;
       col["boolFalseText"] = rawCol.boolFalseText;
-      // displayType 与 isSwitch 互斥：开关样式优先，清空 displayType 相关标记
-      let isTag = false;
-      let isIcon = false;
-      let isBoolean = false;
+      // 显示样式标记（基于 displayType，与 isSwitch 互斥）
+      let isMoneyDisplay = false;
+      let isTagDisplay = false;
+      let isBooleanDisplay = false;
+      let isImageDisplay = false;
       let hasDisplayType = false;
       if (!isSwitch) {
-        isTag = (rawCol.displayType == "tag");
-        isIcon = (rawCol.displayType == "icon");
-        isBoolean = (rawCol.displayType == "boolean");
+        isMoneyDisplay = (rawCol.displayType == "money");
+        isTagDisplay = (rawCol.displayType == "tag");
+        isBooleanDisplay = (rawCol.displayType == "boolean");
+        isImageDisplay = (rawCol.displayType == "image");
         hasDisplayType = (rawCol.displayType != "");
       }
-      col["isTag"] = isTag;
-      col["isIcon"] = isIcon;
-      col["isBoolean"] = isBoolean;
+      col["isMoneyDisplay"] = isMoneyDisplay;
+      col["isTagDisplay"] = isTagDisplay;
+      col["isBooleanDisplay"] = isBooleanDisplay;
+      col["isImageDisplay"] = isImageDisplay;
       col["hasDisplayType"] = hasDisplayType;
+
+      // tagItems 转换为模板友好的格式（数组 + 映射字符串）
+      let rawTagItems: Object[] = [];
+      if (rawCol.tagItems != null) {
+        rawTagItems = rawCol.tagItems;
+      }
+      let tagItemsList: Object[] = [];
+      let tagItemsMapStr = "{";
+      let tagItemsMapFirst = true;
+      let rawTagItemsLen = rawTagItems.length;
+      for (let ti = 0; ti < rawTagItemsLen; ti = ti + 1) {
+        let rawTi: Object = rawTagItems[ti];
+        let ti2: Object = {};
+        ti2["value"] = rawTi.value;
+        ti2["text"] = rawTi.text;
+        ti2["color"] = rawTi.color;
+        // 转义后的值（供模板中单引号字符串使用）
+        ti2["valueEsc"] = escapeJsStr(rawTi.value);
+        ti2["textEsc"] = escapeJsStr(rawTi.text);
+        tagItemsList.push(ti2);
+        // 构建 JS 对象映射字符串: {"0":{text:"关闭",color:"info"},...}
+        // 使用 escapeJsStr 转义单引号和反斜杠，防止 JS 语法错误
+        if (!tagItemsMapFirst) {
+          tagItemsMapStr = tagItemsMapStr + ", ";
+        }
+        let escVal = escapeJsStr(rawTi.value);
+        let escText = escapeJsStr(rawTi.text);
+        let escColor = escapeJsStr(rawTi.color);
+        tagItemsMapStr = tagItemsMapStr + "'" + escVal + "': { text: '" + escText + "', color: '" + escColor + "' }";
+        tagItemsMapFirst = false;
+      }
+      tagItemsMapStr = tagItemsMapStr + "}";
+      col["tagItems"] = tagItemsList;
+      col["tagItemsMapStr"] = tagItemsMapStr;
+      col["hasTagItems"] = (tagItemsList.length > 0);
 
       // 通用配置（3-6）
       col["defaultValue"] = rawCol.defaultValue;
@@ -581,20 +679,30 @@ main {
 
     // 检查是否有 tag 类型的列（需要导入 ElTag）
     let hasTagColumns = false;
+    let hasImageColumns = false;
     let colsLen2 = columns.length;
     for (let i = 0; i < colsLen2; i = i + 1) {
-      if (columns[i]["isTag"]) {
+      if (columns[i]["isTagDisplay"]) {
         hasTagColumns = true;
+      }
+      if (columns[i]["isImageDisplay"]) {
+        hasImageColumns = true;
       }
     }
 
     // 计算表格默认排序字段（取第一个配置了 defaultSort 的列）
+    // defaultSort 原始值为 "asc"/"desc"，转换为 Element Plus 需要的 "ascending"/"descending"
     let defaultSortField = "";
     let defaultSortOrder = "";
     for (let i = 0; i < colsLen2; i = i + 1) {
       if (columns[i]["hasDefaultSort"]) {
         defaultSortField = columns[i]["dataName"];
-        defaultSortOrder = columns[i]["defaultSort"];
+        let rawSort: String = columns[i]["defaultSort"];
+        if (rawSort == "asc") {
+          defaultSortOrder = "ascending";
+        } else if (rawSort == "desc") {
+          defaultSortOrder = "descending";
+        }
         break;
       }
     }
@@ -643,6 +751,7 @@ main {
     tplData["hasDialogButtons"] = (dialogButtons.length > 0);
     tplData["hasLinkButtons"] = (linkButtons.length > 0);
     tplData["hasTagColumns"] = hasTagColumns;  // ${if hasTagColumns} 需要导入 ElTag
+    tplData["hasImageColumns"] = hasImageColumns;  // ${if hasImageColumns} 需要导入 ElImage
     tplData["rowButtons"] = rowButtons;          // ${each btn in rowButtons} 行操作列按钮
     tplData["toolbarButtons"] = toolbarButtons;  // ${each btn in toolbarButtons} 顶部工具栏按钮
     tplData["ajaxButtons"] = ajaxButtons;        // Ajax 行为按钮（生成处理函数用）

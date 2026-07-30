@@ -146,32 +146,26 @@ private:
   void connectStaticControlSignals();
   /// 连接单个 cell widget 的编辑信号到 configChanged
   void connectCellWidgetSignals(QWidget *widget);
-  /// 设置查询样式与开关可编辑的联动（查询样式为 text 时禁用开关可编辑）
-  void setupQueryStyleLinkage(int row);
 };
 
 /// 列配置表格列索引
 enum ColumnTableCols {
-  ColDataName = 0,    ///< 数据列名
-  ColQueryVisible,    ///< 查询界面是否显示
-  ColQueryName,       ///< 查询界面列名
-  ColQueryStyle,      ///< 查询界面样式
-  ColSwitchEditable,  ///< 开关样式时是否可编辑
-  ColEditVisible,     ///< 编辑界面是否显示
-  ColEditName,        ///< 编辑界面列名
-  ColEditStyle,       ///< 编辑界面样式
-  ColEditEditable,    ///< 编辑界面是否可编辑
-  ColConfig,          ///< 下拉框配置按钮（⚙）
+  ColDataName = 0,  ///< 字段名
+  ColQueryVisible,  ///< 列表页显示
+  ColQueryName,     ///< 列表页列标题
+  ColEditVisible,   ///< 编辑页显示
+  ColEditName,      ///< 编辑页列标题
+  ColConfig,        ///< 样式配置按钮（⚙，含显示类型/编辑样式/通用配置）
   ColCount
 };
 
 /// 查询字段表格列索引
 enum QueryTableCols {
-  QColDisplayName = 0,  ///< 显示的列名
-  QColDataName,         ///< 数据列名（下拉框）
-  QColInputStyle,       ///< 输入框样式
-  QColRelation,         ///< 查询关系
-  QColConfig,           ///< 下拉框配置按钮（⚙）
+  QColDataName = 0,  ///< 字段名（下拉框）
+  QColDisplayName,   ///< 标签名
+  QColInputStyle,    ///< 输入框样式
+  QColRelation,      ///< 查询关系
+  QColConfig,        ///< 下拉框配置按钮（⚙）
   QColCount
 };
 

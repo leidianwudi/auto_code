@@ -12,6 +12,79 @@
 #include "src/util/common/util_json.h"
 
 // ════════════════════════════════════════════════════════════
+//  JSON5 序列化器（通用）
+//  将 QJsonObject/QJsonArray 转换为 JSON5 格式字符串：
+//    - 键名无引号、字符串单引号、允许尾随逗号
+//    - 键按字母序排列、2 空格缩进
+//    - 跳过空字符串和空数组，使输出更简洁
+// ════════════════════════════════════════════════════════════
+
+/// 转义 JSON5 单引号字符串中的特殊字符
+static QString json5EscapeStr(const QString &s) {
+  QString r = s;
+  r.replace('\\', QStringLiteral("\\\\"));
+  r.replace('\'', QStringLiteral("\\'"));
+  r.replace('\n', QStringLiteral("\\n"));
+  r.replace('\r', QStringLiteral("\\r"));
+  r.replace('\t', QStringLiteral("\\t"));
+  return r;
+}
+
+/// 将 QJsonValue 转换为 JSON5 字符串（返回空 QString 表示该字段应跳过）
+static QString jsonValueToJson5(const QJsonValue &v, int indent);
+
+/// 将 QJsonObject 转换为 JSON5 字符串（键按字母序，2 空格缩进）
+static QString jsonObjectToJson5(const QJsonObject &obj, int indent) {
+  if (obj.isEmpty()) return QStringLiteral("{}");
+  QString pad = QString(QStringLiteral(" ")).repeated(indent);
+  QString pad2 = QString(QStringLiteral(" ")).repeated(indent + 2);
+  QStringList keys = obj.keys();
+  keys.sort();
+  QString out = "{\n";
+  bool hasField = false;
+  for (const auto &k : keys) {
+    QString valStr = jsonValueToJson5(obj.value(k), indent + 2);
+    if (valStr.isEmpty()) continue;  // 跳过空字符串/空数组
+    hasField = true;
+    out += pad2 + k + ": " + valStr + ",\n";
+  }
+  if (!hasField) return QStringLiteral("{}");
+  out += pad + "}";
+  return out;
+}
+
+/// 将 QJsonArray 转换为 JSON5 字符串（空数组返回空 QString 以便上层跳过）
+static QString jsonArrayToJson5(const QJsonArray &arr, int indent) {
+  if (arr.isEmpty()) return QString();
+  QString pad = QString(QStringLiteral(" ")).repeated(indent);
+  QString pad2 = QString(QStringLiteral(" ")).repeated(indent + 2);
+  QString out = "[\n";
+  for (const auto &v : arr) {
+    out += pad2 + jsonValueToJson5(v, indent + 2) + ",\n";
+  }
+  out += pad + "]";
+  return out;
+}
+
+/// 将 QJsonValue 转换为 JSON5 字符串
+static QString jsonValueToJson5(const QJsonValue &v, int indent) {
+  if (v.isString()) {
+    QString s = v.toString();
+    if (s.isEmpty()) return QString();  // 空字符串跳过
+    return QStringLiteral("'") + json5EscapeStr(s) + QStringLiteral("'");
+  }
+  if (v.isBool()) return v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
+  if (v.isDouble()) {
+    double d = v.toDouble();
+    if (d == static_cast<qint64>(d)) return QString::number(static_cast<qint64>(d));
+    return QString::number(d);
+  }
+  if (v.isObject()) return jsonObjectToJson5(v.toObject(), indent);
+  if (v.isArray()) return jsonArrayToJson5(v.toArray(), indent);
+  return QStringLiteral("null");
+}
+
+// ════════════════════════════════════════════════════════════
 //  枚举转换
 // ════════════════════════════════════════════════════════════
 
@@ -29,8 +102,16 @@ QString editStyleToString(EditStyle style) {
       return QStringLiteral("int");
     case EditStyle::Float:
       return QStringLiteral("float");
+    case EditStyle::Money:
+      return QStringLiteral("money");
     case EditStyle::Date:
       return QStringLiteral("date");
+    case EditStyle::Tag:
+      return QStringLiteral("tag");
+    case EditStyle::Boolean:
+      return QStringLiteral("boolean");
+    case EditStyle::Image:
+      return QStringLiteral("image");
     case EditStyle::Select:
       return QStringLiteral("select");
     case EditStyle::TextArea:
@@ -43,7 +124,11 @@ QString editStyleToString(EditStyle style) {
 EditStyle stringToEditStyle(const QString &s) {
   if (s == QStringLiteral("int")) return EditStyle::Int;
   if (s == QStringLiteral("float")) return EditStyle::Float;
+  if (s == QStringLiteral("money")) return EditStyle::Money;
   if (s == QStringLiteral("date")) return EditStyle::Date;
+  if (s == QStringLiteral("tag")) return EditStyle::Tag;
+  if (s == QStringLiteral("boolean")) return EditStyle::Boolean;
+  if (s == QStringLiteral("image")) return EditStyle::Image;
   // 兼容旧名称 "combobox"
   if (s == QStringLiteral("select") || s == QStringLiteral("combobox")) return EditStyle::Select;
   if (s == QStringLiteral("textarea")) return EditStyle::TextArea;
@@ -123,6 +208,41 @@ ButtonActionType stringToButtonActionType(const QString &s) {
 }
 
 // ════════════════════════════════════════════════════════════
+//  TagItem
+// ════════════════════════════════════════════════════════════
+
+QJsonObject TagItem::toJson() const {
+  QJsonObject obj;
+  obj["value"] = value;
+  obj["text"] = text;
+  obj["color"] = color;
+  return obj;
+}
+
+TagItem TagItem::fromJson(const QJsonObject &obj) {
+  TagItem t;
+  t.value = obj.value("value").toString();
+  t.text = obj.value("text").toString();
+  t.color = obj.value("color").toString();
+  return t;
+}
+
+QList<TagItem> defaultTagItems() {
+  QList<TagItem> items;
+  TagItem off;
+  off.value = QStringLiteral("0");
+  off.text = QStringLiteral("关闭");
+  off.color = QStringLiteral("info");
+  items.append(off);
+  TagItem on;
+  on.value = QStringLiteral("1");
+  on.text = QStringLiteral("开启");
+  on.color = QStringLiteral("success");
+  items.append(on);
+  return items;
+}
+
+// ════════════════════════════════════════════════════════════
 //  JsonVueMeta
 // ════════════════════════════════════════════════════════════
 
@@ -187,6 +307,9 @@ QJsonObject ColumnConfig::toJson() const {
     obj["minValue"] = minValue;
     obj["maxValue"] = maxValue;
   }
+  if (editStyle == EditStyle::Money) {
+    obj["precision"] = precision;
+  }
   if (editStyle == EditStyle::Date) {
     obj["dateFormat"] = dateFormat;
   }
@@ -203,10 +326,9 @@ QJsonObject ColumnConfig::toJson() const {
   if (!displayType.isEmpty()) {
     obj["displayType"] = displayType;
     if (displayType == QStringLiteral("tag")) {
-      obj["tagTrueText"] = tagTrueText;
-      obj["tagTrueColor"] = tagTrueColor;
-      obj["tagFalseText"] = tagFalseText;
-      obj["tagFalseColor"] = tagFalseColor;
+      QJsonArray arr;
+      for (const auto &t : tagItems) arr.append(t.toJson());
+      obj["tagItems"] = arr;
     }
     if (displayType == QStringLiteral("boolean")) {
       obj["boolTrueText"] = boolTrueText;
@@ -250,10 +372,33 @@ ColumnConfig ColumnConfig::fromJson(const QJsonObject &obj) {
   c.formatter = obj.value("formatter").toString();
   c.formSpan = obj.value("formSpan").toInt(24);
   c.displayType = obj.value("displayType").toString();
-  c.tagTrueText = obj.value("tagTrueText").toString();
-  c.tagTrueColor = obj.value("tagTrueColor").toString();
-  c.tagFalseText = obj.value("tagFalseText").toString();
-  c.tagFalseColor = obj.value("tagFalseColor").toString();
+  // tagItems 数组读取（displayType == "tag" 时使用）
+  // 兼容旧格式：若 tagItems 为空但存在 tagTrueText/tagFalseText，则转换
+  const QJsonArray tagArr = obj.value("tagItems").toArray();
+  for (const auto &v : tagArr) {
+    c.tagItems.append(TagItem::fromJson(v.toObject()));
+  }
+  if (c.displayType == QStringLiteral("tag") && c.tagItems.isEmpty()) {
+    // 旧格式兼容：tagTrueText/tagFalseText → tagItems
+    QString tt = obj.value("tagTrueText").toString();
+    QString tc = obj.value("tagTrueColor").toString();
+    QString ft = obj.value("tagFalseText").toString();
+    QString fc = obj.value("tagFalseColor").toString();
+    if (!tt.isEmpty() || !ft.isEmpty()) {
+      TagItem falseItem;
+      falseItem.value = QStringLiteral("0");
+      falseItem.text = ft.isEmpty() ? QStringLiteral("关闭") : ft;
+      falseItem.color = fc.isEmpty() ? QStringLiteral("info") : fc;
+      c.tagItems.append(falseItem);
+      TagItem trueItem;
+      trueItem.value = QStringLiteral("1");
+      trueItem.text = tt.isEmpty() ? QStringLiteral("开启") : tt;
+      trueItem.color = tc.isEmpty() ? QStringLiteral("success") : tc;
+      c.tagItems.append(trueItem);
+    } else {
+      c.tagItems = defaultTagItems();
+    }
+  }
   c.boolTrueText = obj.value("boolTrueText").toString();
   c.boolFalseText = obj.value("boolFalseText").toString();
   // 通用配置
@@ -429,218 +574,9 @@ QJsonObject JsonVueConfig::toJsonObject() const {
 }
 
 QString JsonVueConfig::toJsonString() const {
-  // 生成 JSON5 格式（AutoCode 支持的 JSON 格式）
-  // 键名无引号、字符串单引号、允许尾随逗号、键按字母序排列
-  auto esc = [](const QString &s) {
-    QString r = s;
-    r.replace('\\', QStringLiteral("\\\\"));
-    r.replace('\'', QStringLiteral("\\'"));
-    r.replace('\n', QStringLiteral("\\n"));
-    r.replace('\r', QStringLiteral("\\r"));
-    r.replace('\t', QStringLiteral("\\t"));
-    return r;
-  };
-  auto boolStr = [](bool b) { return b ? QStringLiteral("true") : QStringLiteral("false"); };
-
-  QString out;
-  out += "{\n";
-
-  // columns（按字母序）
-  out += QStringLiteral("  columns: [\n");
-  for (const auto &col : columns) {
-    out += QStringLiteral("    {\n");
-    // 下拉框配置（仅 Select 时输出）
-    if (col.editStyle == EditStyle::Select) {
-      out += QStringLiteral("      selectLabelField: '%1',\n").arg(esc(col.selectLabelField));
-      out += QStringLiteral("      selectUrl: '%1',\n").arg(esc(col.selectUrl));
-      out += QStringLiteral("      selectValueField: '%1',\n").arg(esc(col.selectValueField));
-    }
-    out += QStringLiteral("      dataName: '%1',\n").arg(esc(col.dataName));
-    out += QStringLiteral("      editEditable: %1,\n").arg(boolStr(col.editEditable));
-    out += QStringLiteral("      editName: '%1',\n").arg(esc(col.editName));
-    out += QStringLiteral("      editStyle: '%1',\n").arg(editStyleToString(col.editStyle));
-    out += QStringLiteral("      editVisible: %1,\n").arg(boolStr(col.editVisible));
-    out += QStringLiteral("      queryName: '%1',\n").arg(esc(col.queryName));
-    out += QStringLiteral("      queryStyle: '%1',\n").arg(listStyleToString(col.queryStyle));
-    out += QStringLiteral("      queryVisible: %1,\n").arg(boolStr(col.queryVisible));
-    out += QStringLiteral("      switchEditable: %1,\n").arg(boolStr(col.switchEditable));
-    // 样式特定配置（按字母序）
-    if (!col.columnFixed.isEmpty()) {
-      out += QStringLiteral("      columnFixed: '%1',\n").arg(esc(col.columnFixed));
-    }
-    if (col.columnWidth > 0) {
-      out += QStringLiteral("      columnWidth: %1,\n").arg(col.columnWidth);
-    }
-    if (col.editStyle == EditStyle::Date && !col.dateFormat.isEmpty()) {
-      out += QStringLiteral("      dateFormat: '%1',\n").arg(esc(col.dateFormat));
-    }
-    if (col.formSpan != 24) {
-      out += QStringLiteral("      formSpan: %1,\n").arg(col.formSpan);
-    }
-    if (!col.formatter.isEmpty()) {
-      out += QStringLiteral("      formatter: '%1',\n").arg(esc(col.formatter));
-    }
-    if (col.editStyle == EditStyle::Text && col.maxlength > 0) {
-      out += QStringLiteral("      maxlength: %1,\n").arg(col.maxlength);
-    }
-    if ((col.editStyle == EditStyle::Int || col.editStyle == EditStyle::Float) &&
-        col.maxValue != 0) {
-      out += QStringLiteral("      maxValue: %1,\n").arg(col.maxValue);
-    }
-    if ((col.editStyle == EditStyle::Int || col.editStyle == EditStyle::Float) &&
-        col.minValue != 0) {
-      out += QStringLiteral("      minValue: %1,\n").arg(col.minValue);
-    }
-    if ((col.editStyle == EditStyle::Text || col.editStyle == EditStyle::TextArea) &&
-        !col.placeholder.isEmpty()) {
-      out += QStringLiteral("      placeholder: '%1',\n").arg(esc(col.placeholder));
-    }
-    if (col.editStyle == EditStyle::Float && col.precision != 2) {
-      out += QStringLiteral("      precision: %1,\n").arg(col.precision);
-    }
-    if (col.required) {
-      out += QStringLiteral("      required: true,\n");
-    }
-    if (col.editStyle == EditStyle::TextArea && col.textareaRows != 3) {
-      out += QStringLiteral("      textareaRows: %1,\n").arg(col.textareaRows);
-    }
-    if (!col.displayType.isEmpty()) {
-      out += QStringLiteral("      displayType: '%1',\n").arg(esc(col.displayType));
-      if (col.displayType == QStringLiteral("tag")) {
-        out += QStringLiteral("      tagTrueText: '%1',\n").arg(esc(col.tagTrueText));
-        out += QStringLiteral("      tagTrueColor: '%1',\n").arg(esc(col.tagTrueColor));
-        out += QStringLiteral("      tagFalseText: '%1',\n").arg(esc(col.tagFalseText));
-        out += QStringLiteral("      tagFalseColor: '%1',\n").arg(esc(col.tagFalseColor));
-      }
-      if (col.displayType == QStringLiteral("boolean")) {
-        out += QStringLiteral("      boolTrueText: '%1',\n").arg(esc(col.boolTrueText));
-        out += QStringLiteral("      boolFalseText: '%1',\n").arg(esc(col.boolFalseText));
-      }
-    }
-    out += QStringLiteral("    },\n");
-  }
-  out += QStringLiteral("  ],\n");
-
-  // meta（按字母序）
-  out += QStringLiteral("  meta: {\n");
-  out += QStringLiteral("    dataMethod: '%1',\n").arg(esc(meta.dataMethod));
-  out += QStringLiteral("    dataUrl: '%1',\n").arg(esc(meta.dataUrl));
-  out += QStringLiteral("    deleteApi: '%1',\n").arg(esc(meta.deleteApi));
-  out += QStringLiteral("    noDelete: %1,\n").arg(boolStr(meta.noDelete));
-  out += QStringLiteral("    noEdit: %1,\n").arg(boolStr(meta.noEdit));
-  out += QStringLiteral("    noDetail: %1,\n").arg(boolStr(meta.noDetail));
-  out += QStringLiteral("    queryApi: '%1',\n").arg(esc(meta.queryApi));
-  out += QStringLiteral("    updateApi: '%1',\n").arg(esc(meta.updateApi));
-  out += QStringLiteral("  },\n");
-
-  // queryFields（按字母序）
-  out += QStringLiteral("  queryFields: [\n");
-  for (const auto &q : queryFields) {
-    out += QStringLiteral("    {\n");
-    out += QStringLiteral("      dataName: '%1',\n").arg(esc(q.dataName));
-    out += QStringLiteral("      displayName: '%1',\n").arg(esc(q.displayName));
-    out += QStringLiteral("      inputStyle: '%1',\n").arg(queryInputStyleToString(q.inputStyle));
-    out += QStringLiteral("      relation: '%1',\n").arg(queryRelationToString(q.relation));
-    // 下拉框配置（仅 Select 时输出）
-    if (q.inputStyle == QueryInputStyle::Select) {
-      out += QStringLiteral("      selectLabelField: '%1',\n").arg(esc(q.selectLabelField));
-      out += QStringLiteral("      selectUrl: '%1',\n").arg(esc(q.selectUrl));
-      out += QStringLiteral("      selectValueField: '%1',\n").arg(esc(q.selectValueField));
-    }
-    if (q.inputStyle == QueryInputStyle::Date && !q.dateFormat.isEmpty()) {
-      out += QStringLiteral("      dateFormat: '%1',\n").arg(esc(q.dateFormat));
-    }
-    if (q.inputStyle == QueryInputStyle::Text && !q.placeholder.isEmpty()) {
-      out += QStringLiteral("      placeholder: '%1',\n").arg(esc(q.placeholder));
-    }
-    out += QStringLiteral("    },\n");
-  }
-  out += QStringLiteral("  ],\n");
-
-  // buttons（按字母序，仅在非空时输出）
-  if (!buttons.isEmpty()) {
-    out += QStringLiteral("  buttons: [\n");
-    for (const auto &b : buttons) {
-      out += QStringLiteral("    {\n");
-      out += QStringLiteral("      actionKey: '%1',\n").arg(esc(b.actionKey));
-      out +=
-          QStringLiteral("      actionType: '%1',\n").arg(buttonActionTypeToString(b.actionType));
-      if (!b.apiName.isEmpty()) {
-        out += QStringLiteral("      apiName: '%1',\n").arg(esc(b.apiName));
-      }
-      if (!b.buttonType.isEmpty()) {
-        out += QStringLiteral("      buttonType: '%1',\n").arg(esc(b.buttonType));
-      }
-      if (!b.confirmText.isEmpty()) {
-        out += QStringLiteral("      confirmText: '%1',\n").arg(esc(b.confirmText));
-      }
-      if (!b.dialogApi.isEmpty()) {
-        out += QStringLiteral("      dialogApi: '%1',\n").arg(esc(b.dialogApi));
-      }
-      if (!b.dialogFields.isEmpty()) {
-        out += QStringLiteral("      dialogFields: [\n");
-        for (const auto &f : b.dialogFields) {
-          out += QStringLiteral("        {\n");
-          out += QStringLiteral("          editStyle: '%1',\n").arg(editStyleToString(f.editStyle));
-          out += QStringLiteral("          fieldName: '%1',\n").arg(esc(f.fieldName));
-          out += QStringLiteral("          label: '%1',\n").arg(esc(f.label));
-          // 样式特定配置（按字母序）
-          if (f.editStyle == EditStyle::Date && !f.dateFormat.isEmpty()) {
-            out += QStringLiteral("          dateFormat: '%1',\n").arg(esc(f.dateFormat));
-          }
-          if (f.editStyle == EditStyle::Text && f.maxlength > 0) {
-            out += QStringLiteral("          maxlength: %1,\n").arg(f.maxlength);
-          }
-          if ((f.editStyle == EditStyle::Int || f.editStyle == EditStyle::Float) &&
-              f.maxValue != 0) {
-            out += QStringLiteral("          maxValue: %1,\n").arg(f.maxValue);
-          }
-          if ((f.editStyle == EditStyle::Int || f.editStyle == EditStyle::Float) &&
-              f.minValue != 0) {
-            out += QStringLiteral("          minValue: %1,\n").arg(f.minValue);
-          }
-          if ((f.editStyle == EditStyle::Text || f.editStyle == EditStyle::TextArea) &&
-              !f.placeholder.isEmpty()) {
-            out += QStringLiteral("          placeholder: '%1',\n").arg(esc(f.placeholder));
-          }
-          if (f.editStyle == EditStyle::Float && f.precision != 2) {
-            out += QStringLiteral("          precision: %1,\n").arg(f.precision);
-          }
-          if (f.required) {
-            out += QStringLiteral("          required: true,\n");
-          }
-          if (f.editStyle == EditStyle::Select) {
-            out +=
-                QStringLiteral("          selectLabelField: '%1',\n").arg(esc(f.selectLabelField));
-            out += QStringLiteral("          selectUrl: '%1',\n").arg(esc(f.selectUrl));
-            out +=
-                QStringLiteral("          selectValueField: '%1',\n").arg(esc(f.selectValueField));
-          }
-          if (f.editStyle == EditStyle::TextArea && f.textareaRows != 3) {
-            out += QStringLiteral("          textareaRows: %1,\n").arg(f.textareaRows);
-          }
-          out += QStringLiteral("        },\n");
-        }
-        out += QStringLiteral("      ],\n");
-      }
-      if (!b.dialogTitle.isEmpty()) {
-        out += QStringLiteral("      dialogTitle: '%1',\n").arg(esc(b.dialogTitle));
-      }
-      if (!b.icon.isEmpty()) {
-        out += QStringLiteral("      icon: '%1',\n").arg(esc(b.icon));
-      }
-      out += QStringLiteral("      label: '%1',\n").arg(esc(b.label));
-      if (!b.linkPath.isEmpty()) {
-        out += QStringLiteral("      linkPath: '%1',\n").arg(esc(b.linkPath));
-      }
-      out += QStringLiteral("      position: '%1',\n").arg(buttonPositionToString(b.position));
-      out += QStringLiteral("    },\n");
-    }
-    out += QStringLiteral("  ],\n");
-  }
-
-  out += "}\n";
-  return out;
+  // 生成 JSON5 格式（键名无引号、字符串单引号、允许尾随逗号、键按字母序排列）
+  // 复用各结构体的 toJson() 方法，消除两套序列化逻辑的同步问题
+  return jsonObjectToJson5(toJsonObject(), 0) + "\n";
 }
 
 JsonVueConfig JsonVueConfig::fromJson(const QJsonObject &obj) {

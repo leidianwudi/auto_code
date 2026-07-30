@@ -27,7 +27,7 @@ import { BaseButton } from '@/components/button';
 import { FormSchema } from '@/components/form';
 import { Icon } from '@/components/icon';
 import { Table, TableColumn } from '@/components/table';
-import { ElTooltip, ElSwitch${if hasConfirmButtons}, ElMessageBox${/if}${if hasTagColumns}, ElTag${/if} } from 'element-plus';
+import { ElTooltip, ElSwitch${if hasConfirmButtons}, ElMessageBox${/if}${if hasTagColumns}, ElTag${/if}${if hasImageColumns}, ElImage${/if} } from 'element-plus';
 import { reactive, ref, unref } from 'vue';
 import { Search } from '@/components/search';
 import { ContentWrap } from '@/components/content_wrap';
@@ -113,6 +113,11 @@ ${else}  {
 ${/if}
 ${/each}]);
 
+// tag 列映射表（提前构造，避免每次单元格渲染都重建对象）
+const tagMaps: Record<string, Record<string, { text: string; color: string }>> = {
+${each col in columns}${if col.isTagDisplay}  '${col.dataName}': ${col.tagItemsMapStr},
+${/if}${/each}};
+
 // 表格列定义
 const tableColumns = reactive<TableColumn[]>([
   {
@@ -121,7 +126,7 @@ const tableColumns = reactive<TableColumn[]>([
   },
 ${each col in columns}
 ${if col.queryVisible}
-${if col.isSwitch}
+${if col.isBooleanSwitch}
   {
     field: '${col.dataName}',
     label: '${col.label}',
@@ -131,13 +136,13 @@ ${/if}    slots: {
       default: (data: any) => {
         return (
           <ElSwitch
-            modelValue={data.row.${col.dataName} === 1}
+            modelValue={data.row.${col.dataName} == 1}
             disabled={${col.switchDisabledStr}}
             onChange={() => {
               updateStatusAndTip(data.row);
             }}
-            activeText="启用"
-            inactiveText="禁用"
+            activeText="${col.switchActiveText}"
+            inactiveText="${col.switchInactiveText}"
             inlinePrompt={true}
             active-color="#13ce66"
             inactive-color="#ff4949"
@@ -146,24 +151,32 @@ ${/if}    slots: {
       }
     }
   },
-${else if col.isTag}
+${else if col.isTagSwitch}
   {
     field: '${col.dataName}',
-    label: '${col.label}'${if col.hasDefaultSort},
-    sortable: true${/if}${if col.hasColumnWidth},
-    width: ${col.columnWidth}${/if}${if col.hasColumnFixed},
-    fixed: '${col.columnFixed}'${/if},
-    slots: {
+    label: '${col.label}',
+${if col.hasColumnWidth}    width: ${col.columnWidth},
+${/if}${if col.hasColumnFixed}    fixed: '${col.columnFixed}',
+${/if}    slots: {
       default: (data: any) => {
         return (
-          <ElTag type={data.row.${col.dataName} ? '${col.tagTrueColor}' : '${col.tagFalseColor}'}>
-            {data.row.${col.dataName} ? '${col.tagTrueText}' : '${col.tagFalseText}'}
-          </ElTag>
+          <ElSwitch
+            modelValue={String(data.row.${col.dataName}) == '${col.switchActiveValue}'}
+            disabled={${col.switchDisabledStr}}
+            onChange={() => {
+              updateStatusAndTip(data.row);
+            }}
+            activeText="${col.switchActiveText}"
+            inactiveText="${col.switchInactiveText}"
+            inlinePrompt={true}
+            active-color="#13ce66"
+            inactive-color="#ff4949"
+          />
         );
       }
     }
   },
-${else if col.isIcon}
+${else if col.isMoneyDisplay}
   {
     field: '${col.dataName}',
     label: '${col.label}'${if col.hasDefaultSort},
@@ -172,11 +185,31 @@ ${else if col.isIcon}
     fixed: '${col.columnFixed}'${/if},
     slots: {
       default: (data: any) => {
-        return data.row.${col.dataName} ? <Icon icon={data.row.${col.dataName}} /> : null;
+        const v = data.row.${col.dataName};
+        if (v == null || v === '') return '';
+        const num = Number(v);
+        if (isNaN(num)) return v;
+        return num.toLocaleString('zh-CN', { minimumFractionDigits: ${col.precision}, maximumFractionDigits: ${col.precision} });
       }
     }
   },
-${else if col.isBoolean}
+${else if col.isTagDisplay}
+  {
+    field: '${col.dataName}',
+    label: '${col.label}'${if col.hasDefaultSort},
+    sortable: true${/if}${if col.hasColumnWidth},
+    width: ${col.columnWidth}${/if}${if col.hasColumnFixed},
+    fixed: '${col.columnFixed}'${/if},
+    slots: {
+      default: (data: any) => {
+        const tagMap = ${col.tagItemsMapStr};
+        const item = tagMap[String(data.row.${col.dataName})];
+        if (!item) return data.row.${col.dataName};
+        return <ElTag type={item.color}>{item.text}</ElTag>;
+      }
+    }
+  },
+${else if col.isBooleanDisplay}
   {
     field: '${col.dataName}',
     label: '${col.label}'${if col.hasDefaultSort},
@@ -186,6 +219,20 @@ ${else if col.isBoolean}
     slots: {
       default: (data: any) => {
         return data.row.${col.dataName} ? '${col.boolTrueText}' : '${col.boolFalseText}';
+      }
+    }
+  },
+${else if col.isImageDisplay}
+  {
+    field: '${col.dataName}',
+    label: '${col.label}'${if col.hasDefaultSort},
+    sortable: true${/if}${if col.hasColumnWidth},
+    width: ${col.columnWidth}${/if}${if col.hasColumnFixed},
+    fixed: '${col.columnFixed}'${/if},
+    slots: {
+      default: (data: any) => {
+        const src = data.row.${col.dataName};
+        return src ? <ElImage src={src} fit="cover" style="width: 50px; height: 50px" preview-src-list={[src]} preview-teleported /> : '';
       }
     }
   },
@@ -337,7 +384,7 @@ function closeDialog() {
       :data="dataList"
       :loading="loading"
       @register="tableRegister"${if hasTableDefaultSort}
-      :default-sort="{ prop: '${defaultSortField}', order: '${defaultSortOrder}ending' }"${/if}
+      :default-sort="{ prop: '${defaultSortField}', order: '${defaultSortOrder}' }"${/if}
     />
   </ContentWrap>
 

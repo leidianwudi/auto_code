@@ -121,21 +121,6 @@ void JsonVueEditor::connectCellWidgetSignals(QWidget *widget) {
   }
 }
 
-void JsonVueEditor::setupQueryStyleLinkage(int row) {
-  auto *qStyle = qobject_cast<QComboBox *>(m_columnTable->cellWidget(row, ColQueryStyle));
-  auto *swEdit = qobject_cast<QCheckBox *>(m_columnTable->cellWidget(row, ColSwitchEditable));
-  if (!qStyle || !swEdit) return;
-
-  // 初始状态：text 时禁用，switch 时启用
-  swEdit->setEnabled(qStyle->currentText() == QStringLiteral("switch"));
-
-  // 联动：查询样式变化时切换开关可编辑的启用状态
-  connect(qStyle, &QComboBox::currentTextChanged, this, [this, swEdit](const QString &text) {
-    swEdit->setEnabled(text == QStringLiteral("switch"));
-    if (!m_loading) emit configChanged();
-  });
-}
-
 // 构建接口配置区
 QWidget *JsonVueEditor::buildMetaSection() {
   auto *group = new QGroupBox(QStringLiteral("接口配置"), this);
@@ -225,21 +210,15 @@ QWidget *JsonVueEditor::buildColumnsSection() {
   // 列配置表格
   m_columnTable = new QTableWidget(0, ColCount, this);
   m_columnTable->setHorizontalHeaderLabels(
-      {QStringLiteral("数据列名"), QStringLiteral("表格显示"), QStringLiteral("表格列名"),
-       QStringLiteral("显示样式"), QStringLiteral("开关可编辑"), QStringLiteral("编辑显示"),
-       QStringLiteral("编辑列名"), QStringLiteral("编辑样式"), QStringLiteral("编辑可编辑"),
-       QStringLiteral("配置")});
+      {QStringLiteral("字段名"), QStringLiteral("列表页显示"), QStringLiteral("列表页列标题"),
+       QStringLiteral("编辑页显示"), QStringLiteral("编辑页标签"), QStringLiteral("配置")});
   m_columnTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
   m_columnTable->horizontalHeader()->setSectionResizeMode(ColConfig, QHeaderView::Stretch);
   m_columnTable->setColumnWidth(ColDataName, 120);
-  m_columnTable->setColumnWidth(ColQueryVisible, 60);
+  m_columnTable->setColumnWidth(ColQueryVisible, 100);
   m_columnTable->setColumnWidth(ColQueryName, 100);
-  m_columnTable->setColumnWidth(ColQueryStyle, 80);
-  m_columnTable->setColumnWidth(ColSwitchEditable, 80);
-  m_columnTable->setColumnWidth(ColEditVisible, 60);
+  m_columnTable->setColumnWidth(ColEditVisible, 100);
   m_columnTable->setColumnWidth(ColEditName, 100);
-  m_columnTable->setColumnWidth(ColEditStyle, 80);
-  m_columnTable->setColumnWidth(ColEditEditable, 80);
   m_columnTable->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_columnTable->setMinimumHeight(60);
   layout->addWidget(m_columnTable);
@@ -267,13 +246,13 @@ QWidget *JsonVueEditor::buildQueryFieldsSection() {
   layout->addLayout(btnRow);
 
   m_queryTable = new QTableWidget(0, QColCount, this);
-  m_queryTable->setHorizontalHeaderLabels({QStringLiteral("显示列名"), QStringLiteral("数据列名"),
+  m_queryTable->setHorizontalHeaderLabels({QStringLiteral("字段名"), QStringLiteral("标签名"),
                                            QStringLiteral("输入框样式"), QStringLiteral("查询关系"),
                                            QStringLiteral("配置")});
   m_queryTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
   m_queryTable->horizontalHeader()->setSectionResizeMode(QColConfig, QHeaderView::Stretch);
-  m_queryTable->setColumnWidth(QColDisplayName, 120);
   m_queryTable->setColumnWidth(QColDataName, 120);
+  m_queryTable->setColumnWidth(QColDisplayName, 120);
   m_queryTable->setColumnWidth(QColInputStyle, 100);
   m_queryTable->setColumnWidth(QColRelation, 80);
   m_queryTable->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -450,12 +429,24 @@ void storeColumnConfig(QPushButton *btn, const ColumnConfig &col) {
   btn->setProperty("formatter", col.formatter);
   btn->setProperty("formSpan", col.formSpan);
   btn->setProperty("displayType", col.displayType);
-  btn->setProperty("tagTrueText", col.tagTrueText);
-  btn->setProperty("tagTrueColor", col.tagTrueColor);
-  btn->setProperty("tagFalseText", col.tagFalseText);
-  btn->setProperty("tagFalseColor", col.tagFalseColor);
+  // tagItems 存为 QVariantList（每个元素为 QVariantMap）
+  QVariantList tagItemsVar;
+  for (const auto &t : col.tagItems) {
+    QVariantMap m;
+    m["value"] = t.value;
+    m["text"] = t.text;
+    m["color"] = t.color;
+    tagItemsVar.append(m);
+  }
+  btn->setProperty("tagItems", tagItemsVar);
   btn->setProperty("boolTrueText", col.boolTrueText);
   btn->setProperty("boolFalseText", col.boolFalseText);
+  btn->setProperty("defaultValue", col.defaultValue);
+  btn->setProperty("defaultSort", col.defaultSort);
+  // 编辑样式/编辑可编辑/开关可编辑（从表格列移入对话框后，存到 property 供读取）
+  btn->setProperty("editStyle", editStyleToString(col.editStyle));
+  btn->setProperty("editEditable", col.editEditable);
+  btn->setProperty("switchEditable", col.switchEditable);
 }
 
 /// 从 QPushButton 的动态属性读取 ColumnConfig 的所有配置
@@ -477,65 +468,144 @@ void readColumnConfig(QPushButton *btn, ColumnConfig &col) {
   col.formatter = btn->property("formatter").toString();
   col.formSpan = btn->property("formSpan").isValid() ? btn->property("formSpan").toInt() : 24;
   col.displayType = btn->property("displayType").toString();
-  col.tagTrueText = btn->property("tagTrueText").toString();
-  col.tagTrueColor = btn->property("tagTrueColor").toString();
-  col.tagFalseText = btn->property("tagFalseText").toString();
-  col.tagFalseColor = btn->property("tagFalseColor").toString();
+  // tagItems 从 QVariantList 读取
+  col.tagItems.clear();
+  const QVariantList tagItemsVar = btn->property("tagItems").toList();
+  for (const auto &v : tagItemsVar) {
+    QVariantMap m = v.toMap();
+    TagItem t;
+    t.value = m.value("value").toString();
+    t.text = m.value("text").toString();
+    t.color = m.value("color").toString();
+    col.tagItems.append(t);
+  }
   col.boolTrueText = btn->property("boolTrueText").toString();
   col.boolFalseText = btn->property("boolFalseText").toString();
+  col.defaultValue = btn->property("defaultValue").toString();
+  col.defaultSort = btn->property("defaultSort").toString();
+  // 编辑样式/编辑可编辑/开关可编辑
+  col.editStyle = stringToEditStyle(btn->property("editStyle").toString());
+  col.editEditable =
+      btn->property("editEditable").isValid() ? btn->property("editEditable").toBool() : true;
+  col.switchEditable = btn->property("switchEditable").toBool();
 }
 
 /// 生成列配置摘要文本
 QString columnConfigSummary(const ColumnConfig &col) {
   QStringList parts;
-  switch (col.editStyle) {
-    case EditStyle::Text:
-      if (col.required) parts << QStringLiteral("必填");
-      if (col.maxlength > 0) parts << QStringLiteral("max:%1").arg(col.maxlength);
-      if (!col.placeholder.isEmpty()) parts << col.placeholder;
-      break;
-    case EditStyle::Int:
-      if (col.required) parts << QStringLiteral("必填");
-      if (col.minValue != 0 || col.maxValue != 0) {
-        parts << QStringLiteral("%1~%2").arg(col.minValue).arg(col.maxValue);
-      }
-      break;
-    case EditStyle::Float:
-      if (col.required) parts << QStringLiteral("必填");
-      parts << QStringLiteral("%1位小数").arg(col.precision);
-      if (col.minValue != 0 || col.maxValue != 0) {
-        parts << QStringLiteral("%1~%2").arg(col.minValue).arg(col.maxValue);
-      }
-      break;
-    case EditStyle::Date: {
-      if (col.required) parts << QStringLiteral("必填");
-      QString fmt = col.dateFormat;
-      if (fmt == QStringLiteral("datetime"))
-        parts << QStringLiteral("年月日时分秒");
-      else if (fmt == QStringLiteral("date"))
-        parts << QStringLiteral("年月日");
-      else if (fmt == QStringLiteral("month"))
-        parts << QStringLiteral("年月");
-      else if (fmt == QStringLiteral("year"))
-        parts << QStringLiteral("年");
-      else if (fmt == QStringLiteral("daterange"))
-        parts << QStringLiteral("日期范围");
-      break;
-    }
-    case EditStyle::Select:
-      if (!col.selectUrl.isEmpty()) {
-        if (!col.selectValueField.isEmpty() && !col.selectLabelField.isEmpty()) {
-          parts << QStringLiteral("%1→%2").arg(col.selectValueField, col.selectLabelField);
-        } else {
-          parts << QStringLiteral("已配置");
+  // 判断是否为开关样式：(displayType == boolean || tag) && switchEditable
+  bool isSwitch =
+      (col.displayType == QStringLiteral("boolean") || col.displayType == QStringLiteral("tag")) &&
+      col.switchEditable;
+  if (isSwitch) {
+    parts << QStringLiteral("开关");
+    // 编辑样式摘要（开关列也显示编辑样式信息）
+    switch (col.editStyle) {
+      case EditStyle::Text:
+        if (col.required) parts << QStringLiteral("必填");
+        if (col.maxlength > 0) parts << QStringLiteral("max:%1").arg(col.maxlength);
+        if (!col.placeholder.isEmpty()) parts << col.placeholder;
+        break;
+      case EditStyle::Int:
+        if (col.required) parts << QStringLiteral("必填");
+        if (col.minValue != 0 || col.maxValue != 0) {
+          parts << QStringLiteral("%1~%2").arg(col.minValue).arg(col.maxValue);
         }
+        break;
+      case EditStyle::Float:
+      case EditStyle::Money:
+        if (col.required) parts << QStringLiteral("必填");
+        parts << QStringLiteral("%1位小数").arg(col.precision);
+        if (col.minValue != 0 || col.maxValue != 0) {
+          parts << QStringLiteral("%1~%2").arg(col.minValue).arg(col.maxValue);
+        }
+        break;
+      case EditStyle::Date: {
+        if (col.required) parts << QStringLiteral("必填");
+        QString fmt = col.dateFormat;
+        if (fmt == QStringLiteral("datetime"))
+          parts << QStringLiteral("年月日时分秒");
+        else if (fmt == QStringLiteral("date"))
+          parts << QStringLiteral("年月日");
+        else if (fmt == QStringLiteral("month"))
+          parts << QStringLiteral("年月");
+        else if (fmt == QStringLiteral("year"))
+          parts << QStringLiteral("年");
+        else if (fmt == QStringLiteral("daterange"))
+          parts << QStringLiteral("日期范围");
+        break;
       }
-      break;
-    case EditStyle::TextArea:
-      if (col.required) parts << QStringLiteral("必填");
-      parts << QStringLiteral("%1行").arg(col.textareaRows);
-      if (!col.placeholder.isEmpty()) parts << col.placeholder;
-      break;
+      case EditStyle::Select:
+        if (!col.selectUrl.isEmpty()) {
+          if (!col.selectValueField.isEmpty() && !col.selectLabelField.isEmpty()) {
+            parts << QStringLiteral("%1→%2").arg(col.selectValueField, col.selectLabelField);
+          } else {
+            parts << QStringLiteral("已配置");
+          }
+        }
+        break;
+      case EditStyle::TextArea:
+        if (col.required) parts << QStringLiteral("必填");
+        parts << QStringLiteral("%1行").arg(col.textareaRows);
+        if (!col.placeholder.isEmpty()) parts << col.placeholder;
+        break;
+      default:
+        break;
+    }
+  } else {
+    // 编辑样式摘要
+    switch (col.editStyle) {
+      case EditStyle::Text:
+        if (col.required) parts << QStringLiteral("必填");
+        if (col.maxlength > 0) parts << QStringLiteral("max:%1").arg(col.maxlength);
+        if (!col.placeholder.isEmpty()) parts << col.placeholder;
+        break;
+      case EditStyle::Int:
+        if (col.required) parts << QStringLiteral("必填");
+        if (col.minValue != 0 || col.maxValue != 0) {
+          parts << QStringLiteral("%1~%2").arg(col.minValue).arg(col.maxValue);
+        }
+        break;
+      case EditStyle::Float:
+      case EditStyle::Money:
+        if (col.required) parts << QStringLiteral("必填");
+        parts << QStringLiteral("%1位小数").arg(col.precision);
+        if (col.minValue != 0 || col.maxValue != 0) {
+          parts << QStringLiteral("%1~%2").arg(col.minValue).arg(col.maxValue);
+        }
+        break;
+      case EditStyle::Date: {
+        if (col.required) parts << QStringLiteral("必填");
+        QString fmt = col.dateFormat;
+        if (fmt == QStringLiteral("datetime"))
+          parts << QStringLiteral("年月日时分秒");
+        else if (fmt == QStringLiteral("date"))
+          parts << QStringLiteral("年月日");
+        else if (fmt == QStringLiteral("month"))
+          parts << QStringLiteral("年月");
+        else if (fmt == QStringLiteral("year"))
+          parts << QStringLiteral("年");
+        else if (fmt == QStringLiteral("daterange"))
+          parts << QStringLiteral("日期范围");
+        break;
+      }
+      case EditStyle::Select:
+        if (!col.selectUrl.isEmpty()) {
+          if (!col.selectValueField.isEmpty() && !col.selectLabelField.isEmpty()) {
+            parts << QStringLiteral("%1→%2").arg(col.selectValueField, col.selectLabelField);
+          } else {
+            parts << QStringLiteral("已配置");
+          }
+        }
+        break;
+      case EditStyle::TextArea:
+        if (col.required) parts << QStringLiteral("必填");
+        parts << QStringLiteral("%1行").arg(col.textareaRows);
+        if (!col.placeholder.isEmpty()) parts << col.placeholder;
+        break;
+      default:
+        break;
+    }
   }
   // 通用配置
   if (col.columnWidth > 0) parts << QStringLiteral("宽%1").arg(col.columnWidth);
@@ -543,6 +613,8 @@ QString columnConfigSummary(const ColumnConfig &col) {
   if (!col.formatter.isEmpty()) parts << QStringLiteral("格式:%1").arg(col.formatter);
   if (col.formSpan != 24) parts << QStringLiteral("span:%1").arg(col.formSpan);
   if (!col.displayType.isEmpty()) parts << QStringLiteral("显示:%1").arg(col.displayType);
+  if (!col.defaultValue.isEmpty()) parts << QStringLiteral("默认:%1").arg(col.defaultValue);
+  if (!col.defaultSort.isEmpty()) parts << QStringLiteral("排序:%1").arg(col.defaultSort);
 
   if (parts.isEmpty()) return QStringLiteral("⚙");
   return QStringLiteral("⚙ ") + parts.join(QStringLiteral(", "));
@@ -635,17 +707,6 @@ void JsonVueEditor::loadConfig(const JsonVueConfig &config) {
 
     m_columnTable->setItem(row, ColQueryName, new QTableWidgetItem(col.queryName));
 
-    auto *qStyle = newTableCombo();
-    qStyle->addItems({QStringLiteral("text"), QStringLiteral("switch")});
-    qStyle->setCurrentText(listStyleToString(col.queryStyle));
-    m_columnTable->setCellWidget(row, ColQueryStyle, qStyle);
-    connectCellWidgetSignals(qStyle);
-
-    auto *swEdit = new QCheckBox;
-    swEdit->setChecked(col.switchEditable);
-    m_columnTable->setCellWidget(row, ColSwitchEditable, swEdit);
-    connectCellWidgetSignals(swEdit);
-
     auto *eVis = new QCheckBox;
     eVis->setChecked(col.editVisible);
     m_columnTable->setCellWidget(row, ColEditVisible, eVis);
@@ -653,20 +714,7 @@ void JsonVueEditor::loadConfig(const JsonVueConfig &config) {
 
     m_columnTable->setItem(row, ColEditName, new QTableWidgetItem(col.editName));
 
-    auto *eStyle = newTableCombo();
-    eStyle->addItems({QStringLiteral("text"), QStringLiteral("int"), QStringLiteral("float"),
-                      QStringLiteral("date"), QStringLiteral("select"),
-                      QStringLiteral("textarea")});
-    eStyle->setCurrentText(editStyleToString(col.editStyle));
-    m_columnTable->setCellWidget(row, ColEditStyle, eStyle);
-    connectCellWidgetSignals(eStyle);
-
-    auto *eEdit = new QCheckBox;
-    eEdit->setChecked(col.editEditable);
-    m_columnTable->setCellWidget(row, ColEditEditable, eEdit);
-    connectCellWidgetSignals(eEdit);
-
-    // 配置按钮（⚙ + 摘要文本）
+    // 配置按钮（⚙ + 摘要文本，含显示类型/编辑样式/通用配置）
     auto *configBtn = new QPushButton(columnConfigSummary(col), this);
     storeColumnConfig(configBtn, col);
     m_columnTable->setCellWidget(row, ColConfig, configBtn);
@@ -679,9 +727,6 @@ void JsonVueEditor::loadConfig(const JsonVueConfig &config) {
         }
       }
     });
-
-    // 查询样式与开关可编辑联动
-    setupQueryStyleLinkage(row);
   }
 
   // 查询字段
@@ -789,19 +834,11 @@ JsonVueConfig JsonVueEditor::collectConfig() const {
     if (qVis) col.queryVisible = qVis->isChecked();
     auto *qnItem = m_columnTable->item(row, ColQueryName);
     if (qnItem) col.queryName = qnItem->text().trimmed();
-    auto *qStyle = qobject_cast<QComboBox *>(m_columnTable->cellWidget(row, ColQueryStyle));
-    if (qStyle) col.queryStyle = stringToListStyle(qStyle->currentText());
-    auto *swEdit = qobject_cast<QCheckBox *>(m_columnTable->cellWidget(row, ColSwitchEditable));
-    if (swEdit) col.switchEditable = swEdit->isChecked();
     auto *eVis = qobject_cast<QCheckBox *>(m_columnTable->cellWidget(row, ColEditVisible));
     if (eVis) col.editVisible = eVis->isChecked();
     auto *enItem = m_columnTable->item(row, ColEditName);
     if (enItem) col.editName = enItem->text().trimmed();
-    auto *eStyle = qobject_cast<QComboBox *>(m_columnTable->cellWidget(row, ColEditStyle));
-    if (eStyle) col.editStyle = stringToEditStyle(eStyle->currentText());
-    auto *eEdit = qobject_cast<QCheckBox *>(m_columnTable->cellWidget(row, ColEditEditable));
-    if (eEdit) col.editEditable = eEdit->isChecked();
-    // 读取所有配置
+    // 读取所有配置（含 editStyle/editEditable/switchEditable/displayType 等）
     auto *configBtn = qobject_cast<QPushButton *>(m_columnTable->cellWidget(row, ColConfig));
     if (configBtn) {
       readColumnConfig(configBtn, col);
@@ -979,19 +1016,11 @@ void JsonVueEditor::populateColumnsFromHttp(const QJsonDocument &doc) {
       if (qVis) c.queryVisible = qVis->isChecked();
       auto *qnItem = m_columnTable->item(row, ColQueryName);
       if (qnItem) c.queryName = qnItem->text().trimmed();
-      auto *qStyle = qobject_cast<QComboBox *>(m_columnTable->cellWidget(row, ColQueryStyle));
-      if (qStyle) c.queryStyle = stringToListStyle(qStyle->currentText());
-      auto *swEdit = qobject_cast<QCheckBox *>(m_columnTable->cellWidget(row, ColSwitchEditable));
-      if (swEdit) c.switchEditable = swEdit->isChecked();
       auto *eVis = qobject_cast<QCheckBox *>(m_columnTable->cellWidget(row, ColEditVisible));
       if (eVis) c.editVisible = eVis->isChecked();
       auto *enItem = m_columnTable->item(row, ColEditName);
       if (enItem) c.editName = enItem->text().trimmed();
-      auto *eStyle = qobject_cast<QComboBox *>(m_columnTable->cellWidget(row, ColEditStyle));
-      if (eStyle) c.editStyle = stringToEditStyle(eStyle->currentText());
-      auto *eEdit = qobject_cast<QCheckBox *>(m_columnTable->cellWidget(row, ColEditEditable));
-      if (eEdit) c.editEditable = eEdit->isChecked();
-      // 保留所有配置
+      // 保留所有配置（含 editStyle/editEditable/switchEditable/displayType 等）
       auto *cfgBtn = qobject_cast<QPushButton *>(m_columnTable->cellWidget(row, ColConfig));
       if (cfgBtn) {
         readColumnConfig(cfgBtn, c);
@@ -1039,10 +1068,7 @@ void JsonVueEditor::populateColumnsFromHttp(const QJsonDocument &doc) {
       col.formatter = old.formatter;
       col.formSpan = old.formSpan;
       col.displayType = old.displayType;
-      col.tagTrueText = old.tagTrueText;
-      col.tagTrueColor = old.tagTrueColor;
-      col.tagFalseText = old.tagFalseText;
-      col.tagFalseColor = old.tagFalseColor;
+      col.tagItems = old.tagItems;
       col.boolTrueText = old.boolTrueText;
       col.boolFalseText = old.boolFalseText;
     }
@@ -1059,17 +1085,6 @@ void JsonVueEditor::populateColumnsFromHttp(const QJsonDocument &doc) {
 
     m_columnTable->setItem(row, ColQueryName, new QTableWidgetItem(col.queryName));
 
-    auto *qStyle = newTableCombo();
-    qStyle->addItems({QStringLiteral("text"), QStringLiteral("switch")});
-    qStyle->setCurrentText(listStyleToString(col.queryStyle));
-    m_columnTable->setCellWidget(row, ColQueryStyle, qStyle);
-    connectCellWidgetSignals(qStyle);
-
-    auto *swEdit = new QCheckBox;
-    swEdit->setChecked(col.switchEditable);
-    m_columnTable->setCellWidget(row, ColSwitchEditable, swEdit);
-    connectCellWidgetSignals(swEdit);
-
     auto *eVis = new QCheckBox;
     eVis->setChecked(col.editVisible);
     m_columnTable->setCellWidget(row, ColEditVisible, eVis);
@@ -1077,20 +1092,7 @@ void JsonVueEditor::populateColumnsFromHttp(const QJsonDocument &doc) {
 
     m_columnTable->setItem(row, ColEditName, new QTableWidgetItem(col.editName));
 
-    auto *eStyle = newTableCombo();
-    eStyle->addItems({QStringLiteral("text"), QStringLiteral("int"), QStringLiteral("float"),
-                      QStringLiteral("date"), QStringLiteral("select"),
-                      QStringLiteral("textarea")});
-    eStyle->setCurrentText(editStyleToString(col.editStyle));
-    m_columnTable->setCellWidget(row, ColEditStyle, eStyle);
-    connectCellWidgetSignals(eStyle);
-
-    auto *eEdit = new QCheckBox;
-    eEdit->setChecked(col.editEditable);
-    m_columnTable->setCellWidget(row, ColEditEditable, eEdit);
-    connectCellWidgetSignals(eEdit);
-
-    // 配置按钮（⚙ + 摘要文本）
+    // 配置按钮（⚙ + 摘要文本，含显示类型/编辑样式/通用配置）
     auto *configBtn = new QPushButton(columnConfigSummary(col), this);
     storeColumnConfig(configBtn, col);
     m_columnTable->setCellWidget(row, ColConfig, configBtn);
@@ -1103,9 +1105,6 @@ void JsonVueEditor::populateColumnsFromHttp(const QJsonDocument &doc) {
         }
       }
     });
-
-    // 查询样式与开关可编辑联动
-    setupQueryStyleLinkage(row);
   }
 
   m_loading = false;
@@ -1123,41 +1122,10 @@ void JsonVueEditor::populateColumnsFromHttp(const QJsonDocument &doc) {
 void JsonVueEditor::onMoveUp() {
   int row = m_columnTable->currentRow();
   if (row <= 0) return;
-  // 简单实现：交换两行数据（因为含 cellWidget，重新构造）
-  // 收集两行配置
-  auto collectRow = [this](int r) -> ColumnConfig {
-    ColumnConfig c;
-    auto *dn = m_columnTable->item(r, ColDataName);
-    if (dn) c.dataName = dn->text();
-    auto *qVis = qobject_cast<QCheckBox *>(m_columnTable->cellWidget(r, ColQueryVisible));
-    if (qVis) c.queryVisible = qVis->isChecked();
-    auto *qn = m_columnTable->item(r, ColQueryName);
-    if (qn) c.queryName = qn->text();
-    auto *qStyle = qobject_cast<QComboBox *>(m_columnTable->cellWidget(r, ColQueryStyle));
-    if (qStyle) c.queryStyle = stringToListStyle(qStyle->currentText());
-    auto *sw = qobject_cast<QCheckBox *>(m_columnTable->cellWidget(r, ColSwitchEditable));
-    if (sw) c.switchEditable = sw->isChecked();
-    auto *eVis = qobject_cast<QCheckBox *>(m_columnTable->cellWidget(r, ColEditVisible));
-    if (eVis) c.editVisible = eVis->isChecked();
-    auto *en = m_columnTable->item(r, ColEditName);
-    if (en) c.editName = en->text();
-    auto *eStyle = qobject_cast<QComboBox *>(m_columnTable->cellWidget(r, ColEditStyle));
-    if (eStyle) c.editStyle = stringToEditStyle(eStyle->currentText());
-    auto *eEdit = qobject_cast<QCheckBox *>(m_columnTable->cellWidget(r, ColEditEditable));
-    if (eEdit) c.editEditable = eEdit->isChecked();
-    return c;
-  };
-
-  ColumnConfig a = collectRow(row);
-  ColumnConfig b = collectRow(row - 1);
-
-  // 用 JsonVueConfig 的 loadConfig 重新加载这两行（避免 cellWidget 复杂性）
-  // 这里采用简单方案：直接整体收集配置，交换位置，重新 loadConfig
+  // 简单实现：用 collectConfig + loadConfig 重新加载（避免 cellWidget 复杂性）
   JsonVueConfig cfg = collectConfig();
   if (row - 1 >= 0 && row < cfg.columns.size()) {
     cfg.columns.swapItemsAt(row, row - 1);
-    int savedQueryCount = cfg.queryFields.size();
-    Q_UNUSED(savedQueryCount);
     loadConfig(cfg);
     m_columnTable->selectRow(row - 1);
     emit configChanged();
@@ -1190,15 +1158,6 @@ void JsonVueEditor::onAddColumn() {
 
   m_columnTable->setItem(row, ColQueryName, new QTableWidgetItem());
 
-  auto *qStyle = newTableCombo();
-  qStyle->addItems({QStringLiteral("text"), QStringLiteral("switch")});
-  m_columnTable->setCellWidget(row, ColQueryStyle, qStyle);
-  connectCellWidgetSignals(qStyle);
-
-  auto *swEdit = new QCheckBox;
-  m_columnTable->setCellWidget(row, ColSwitchEditable, swEdit);
-  connectCellWidgetSignals(swEdit);
-
   auto *eVis = new QCheckBox;
   eVis->setChecked(true);
   m_columnTable->setCellWidget(row, ColEditVisible, eVis);
@@ -1206,18 +1165,7 @@ void JsonVueEditor::onAddColumn() {
 
   m_columnTable->setItem(row, ColEditName, new QTableWidgetItem());
 
-  auto *eStyle = newTableCombo();
-  eStyle->addItems({QStringLiteral("text"), QStringLiteral("int"), QStringLiteral("float"),
-                    QStringLiteral("date"), QStringLiteral("select"), QStringLiteral("textarea")});
-  m_columnTable->setCellWidget(row, ColEditStyle, eStyle);
-  connectCellWidgetSignals(eStyle);
-
-  auto *eEdit = new QCheckBox;
-  eEdit->setChecked(true);
-  m_columnTable->setCellWidget(row, ColEditEditable, eEdit);
-  connectCellWidgetSignals(eEdit);
-
-  // 配置按钮（⚙ + 摘要文本）
+  // 配置按钮（⚙ + 摘要文本，含显示类型/编辑样式/通用配置）
   ColumnConfig emptyCol;
   auto *configBtn = new QPushButton(columnConfigSummary(emptyCol), this);
   storeColumnConfig(configBtn, emptyCol);
@@ -1231,9 +1179,6 @@ void JsonVueEditor::onAddColumn() {
       }
     }
   });
-
-  // 查询样式与开关可编辑联动
-  setupQueryStyleLinkage(row);
 
   emit configChanged();
 }
@@ -1334,87 +1279,67 @@ void JsonVueEditor::onConfigureCombobox() {
   auto *configBtn = qobject_cast<QPushButton *>(m_columnTable->cellWidget(row, ColConfig));
   if (!configBtn) return;
 
-  // 读取当前编辑样式
-  auto *eStyle = qobject_cast<QComboBox *>(m_columnTable->cellWidget(row, ColEditStyle));
-  if (!eStyle) return;
-  EditStyle style = stringToEditStyle(eStyle->currentText());
-
-  // 读取当前配置到临时 ColumnConfig
+  // 读取当前配置到临时 ColumnConfig（含 editStyle/editEditable/switchEditable/displayType 等）
   ColumnConfig col;
   readColumnConfig(configBtn, col);
-  col.editStyle = style;
 
-  if (style == EditStyle::Select) {
-    // select 样式使用 ComboboxConfigDialog（含 HTTP 测试）
-    ComboboxConfigDialog dialog(this);
-    dialog.setConfig(col.selectUrl, col.selectValueField, col.selectLabelField);
-    dialog.setHttpConfig(m_baseUrl, m_authHeader, m_postData);
-    if (dialog.exec() == QDialog::Accepted) {
-      col.selectUrl = dialog.url();
-      col.selectValueField = dialog.valueField();
-      col.selectLabelField = dialog.labelField();
-      storeColumnConfig(configBtn, col);
-      configBtn->setText(columnConfigSummary(col));
-      emit configChanged();
-    }
-  } else {
-    // 其他样式使用 StyleConfigDialog
-    StyleConfigDialog dialog(style, this);
-    dialog.setPlaceholder(col.placeholder);
-    dialog.setMaxlength(col.maxlength);
-    dialog.setMinValue(col.minValue);
-    dialog.setMaxValue(col.maxValue);
-    dialog.setPrecision(col.precision);
-    dialog.setDateFormat(col.dateFormat);
-    dialog.setTextareaRows(col.textareaRows);
-    dialog.setRequired(col.required);
-    dialog.setColumnWidth(col.columnWidth);
-    dialog.setColumnFixed(col.columnFixed);
-    dialog.setFormatter(col.formatter);
-    dialog.setFormSpan(col.formSpan);
-    dialog.setDisplayType(col.displayType);
-    dialog.setTagTrueText(col.tagTrueText);
-    dialog.setTagTrueColor(col.tagTrueColor);
-    dialog.setTagFalseText(col.tagFalseText);
-    dialog.setTagFalseColor(col.tagFalseColor);
-    dialog.setBoolTrueText(col.boolTrueText);
-    dialog.setBoolFalseText(col.boolFalseText);
-    dialog.setDefaultValue(col.defaultValue);
-    dialog.setDefaultSort(col.defaultSort);
-    if (dialog.exec() == QDialog::Accepted) {
-      col.placeholder = dialog.placeholder();
-      col.maxlength = dialog.maxlength();
-      col.minValue = dialog.minValue();
-      col.maxValue = dialog.maxValue();
-      col.precision = dialog.precision();
-      col.dateFormat = dialog.dateFormat();
-      col.textareaRows = dialog.textareaRows();
-      col.required = dialog.required();
-      col.columnWidth = dialog.columnWidth();
-      col.columnFixed = dialog.columnFixed();
-      col.formatter = dialog.formatter();
-      col.formSpan = dialog.formSpan();
-      col.displayType = dialog.displayType();
-      col.tagTrueText = dialog.tagTrueText();
-      col.tagTrueColor = dialog.tagTrueColor();
-      col.tagFalseText = dialog.tagFalseText();
-      col.tagFalseColor = dialog.tagFalseColor();
-      col.boolTrueText = dialog.boolTrueText();
-      col.boolFalseText = dialog.boolFalseText();
-      col.defaultValue = dialog.defaultValue();
-      col.defaultSort = dialog.defaultSort();
-      // 显示样式为开关时，displayType 不生效（开关优先），清空避免混淆
-      if (col.queryStyle == ListStyle::Switch && !col.displayType.isEmpty()) {
-        QMessageBox::warning(
-            this, QStringLiteral("提示"),
-            QStringLiteral("显示样式为\"开关\"时，显示类型（标签/图标/布尔文字）不生效。\n"
-                           "已自动清除显示类型设置。"));
-        col.displayType.clear();
-      }
-      storeColumnConfig(configBtn, col);
-      configBtn->setText(columnConfigSummary(col));
-      emit configChanged();
-    }
+  // 统一使用 StyleConfigDialog 配置表格列显示、编辑样式、通用配置等
+  StyleConfigDialog dialog(col.editStyle, this);
+  dialog.setHttpConfig(m_baseUrl, m_authHeader, m_postData);
+  dialog.setEditStyle(col.editStyle);
+  dialog.setEditEditable(col.editEditable);
+  dialog.setSwitchEditable(col.switchEditable);
+  dialog.setPlaceholder(col.placeholder);
+  dialog.setMaxlength(col.maxlength);
+  dialog.setMinValue(col.minValue);
+  dialog.setMaxValue(col.maxValue);
+  dialog.setPrecision(col.precision);
+  dialog.setDateFormat(col.dateFormat);
+  dialog.setTextareaRows(col.textareaRows);
+  dialog.setRequired(col.required);
+  dialog.setColumnWidth(col.columnWidth);
+  dialog.setColumnFixed(col.columnFixed);
+  dialog.setFormatter(col.formatter);
+  dialog.setFormSpan(col.formSpan);
+  dialog.setDisplayType(col.displayType);
+  dialog.setTagItems(col.tagItems);
+  dialog.setBoolTrueText(col.boolTrueText);
+  dialog.setBoolFalseText(col.boolFalseText);
+  // 下拉框数据源（Select 编辑样式时在对话框内配置）
+  dialog.setSelectUrl(col.selectUrl);
+  dialog.setSelectValueField(col.selectValueField);
+  dialog.setSelectLabelField(col.selectLabelField);
+  dialog.setDefaultValue(col.defaultValue);
+  dialog.setDefaultSort(col.defaultSort);
+  if (dialog.exec() == QDialog::Accepted) {
+    col.editStyle = dialog.editStyle();
+    col.editEditable = dialog.editEditable();
+    col.switchEditable = dialog.switchEditable();
+    col.placeholder = dialog.placeholder();
+    col.maxlength = dialog.maxlength();
+    col.minValue = dialog.minValue();
+    col.maxValue = dialog.maxValue();
+    col.precision = dialog.precision();
+    col.dateFormat = dialog.dateFormat();
+    col.textareaRows = dialog.textareaRows();
+    col.required = dialog.required();
+    col.columnWidth = dialog.columnWidth();
+    col.columnFixed = dialog.columnFixed();
+    col.formatter = dialog.formatter();
+    col.formSpan = dialog.formSpan();
+    col.displayType = dialog.displayType();
+    col.tagItems = dialog.tagItems();
+    col.boolTrueText = dialog.boolTrueText();
+    col.boolFalseText = dialog.boolFalseText();
+    // 下拉框数据源（在对话框内已配置完成）
+    col.selectUrl = dialog.selectUrl();
+    col.selectValueField = dialog.selectValueField();
+    col.selectLabelField = dialog.selectLabelField();
+    col.defaultValue = dialog.defaultValue();
+    col.defaultSort = dialog.defaultSort();
+    storeColumnConfig(configBtn, col);
+    configBtn->setText(columnConfigSummary(col));
+    emit configChanged();
   }
 }
 

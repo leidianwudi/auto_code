@@ -40,22 +40,28 @@ const isDetail = computed(() => props.actionType === 'detail');
 // 表单字段定义
 const formSchema = ref<FormSchema[]>([
 ${each col in columns}
-${if col.isSwitch}
+${if col.isBooleanSwitch}
   {
     field: '${col.dataName}',
     label: '${col.editName}',
     component: 'Select',
     componentProps: {
       options: [
-        {
-          label: '禁用',
-          value: 0
-        },
-        {
-          label: '启用',
-          value: 1
-        }
+        { label: '${col.switchInactiveText}', value: '0' },
+        { label: '${col.switchActiveText}', value: '1' }
       ]
+    }${if col.hasFormSpan},
+    colProps: { span: ${col.formSpan} }${/if}
+  },
+${else if col.isTagSwitch}
+  {
+    field: '${col.dataName}',
+    label: '${col.editName}',
+    component: 'Select',
+    componentProps: {
+      options: [
+${each t in col.tagItems}        { label: '${t.textEsc}', value: '${t.valueEsc}' },
+${/each}      ]
     }${if col.hasFormSpan},
     colProps: { span: ${col.formSpan} }${/if}
   },
@@ -68,6 +74,51 @@ ${else if col.isSelect}
       url: '${col.selectUrl}',
       valueField: '${col.selectValueField}',
       labelField: '${col.selectLabelField}'
+    }${if col.hasFormSpan},
+    colProps: { span: ${col.formSpan} }${/if}
+  },
+${else if col.isTagEdit}
+  {
+    field: '${col.dataName}',
+    label: '${col.editName}',
+    component: 'Select',
+    componentProps: {
+      options: [
+${each t in col.tagItems}        { label: '${t.textEsc}', value: '${t.valueEsc}' },
+${/each}      ]
+    }${if col.hasFormSpan},
+    colProps: { span: ${col.formSpan} }${/if}
+  },
+${else if col.isBooleanEdit}
+  {
+    field: '${col.dataName}',
+    label: '${col.editName}',
+    component: 'Select',
+    componentProps: {
+      options: [
+        { label: '${col.boolFalseText}', value: '0' },
+        { label: '${col.boolTrueText}', value: '1' }
+      ]
+    }${if col.hasFormSpan},
+    colProps: { span: ${col.formSpan} }${/if}
+  },
+${else if col.isImageEdit}
+  {
+    field: '${col.dataName}',
+    label: '${col.editName}',
+    component: 'Input'${if col.hasPlaceholder},
+    componentProps: {
+      placeholder: '${col.placeholder}'
+    }${/if}${if col.hasFormSpan},
+    colProps: { span: ${col.formSpan} }${/if}
+  },
+${else if col.isMoney}
+  {
+    field: '${col.dataName}',
+    label: '${col.editName}',
+    component: 'InputNumber',
+    componentProps: {
+      precision: ${col.precision}
     }${if col.hasFormSpan},
     colProps: { span: ${col.formSpan} }${/if}
   },
@@ -151,8 +202,8 @@ ${/if}    if (isDetail.value) {
 
 // 表单验证规则（根据配置的 required 字段生成）
 const rules = reactive({
-${each col in columns}${if col.required}  ${col.dataName}: [required()],
-${/if}${/each}});
+${each col in columns}${if col.required}${if col.editVisible}  ${col.dataName}: [required()],
+${/if}${/if}${/each}});
 
 const { formRegister, formMethods } = useForm();
 

@@ -12,8 +12,26 @@
 #pragma once
 
 #include <QJsonObject>
+#include <QList>
 #include <QString>
 #include <QVector>
+
+/**
+ * @struct TagItem
+ * @brief 标签映射项（displayType == "tag" 时使用）
+ *
+ * 将数据值映射为显示文字和颜色，支持任意多个值。
+ */
+struct TagItem {
+  QString value;  ///< 数据值（如 "0" / "1"）
+  QString text;   ///< 显示文字（如 "关闭" / "开启"）
+  QString color;  ///< 颜色（success/primary/warning/info/danger）
+
+  /// 序列化为 JSON
+  QJsonObject toJson() const;
+  /// 从 JSON 反序列化
+  static TagItem fromJson(const QJsonObject &obj);
+};
 
 /**
  * @struct JsonVueMeta
@@ -43,20 +61,24 @@ struct JsonVueMeta {
   static JsonVueMeta fromJson(const QJsonObject &obj);
 };
 
-/// 列表界面样式
+/// 列表界面样式（保留向后兼容，新设计改用 displayType 字段）
 enum class ListStyle {
   Text = 0,   ///< txt 样式（文本）
   Switch = 1  ///< 开关样式
 };
 
-/// 编辑界面样式
+/// 编辑界面样式（编辑页控件类型）
 enum class EditStyle {
-  Text = 0,     ///< 文本输入
-  Int = 1,      ///< 整型输入
-  Float = 2,    ///< 浮点型输入
-  Date = 3,     ///< 日期输入
-  Select = 4,   ///< 下拉选择输入
-  TextArea = 5  ///< 多行文本输入
+  Text = 0,     ///< 纯文本
+  Int = 1,      ///< 整数
+  Float = 2,    ///< 小数
+  Money = 3,    ///< 金额（数字输入 + 小数位）
+  Date = 4,     ///< 日期
+  Tag = 5,      ///< 标签（下拉选择 tagItems）
+  Boolean = 6,  ///< 布尔（下拉选择真假文字）
+  Image = 7,    ///< 图片（URL 输入）
+  Select = 8,   ///< 下拉框（远程数据源）
+  TextArea = 9  ///< 多行文本
 };
 
 /// 查询关系
@@ -128,17 +150,17 @@ struct ColumnConfig {
   // ── 表单布局（3-4）──
   int formSpan = 24;  ///< 表单项占比（24=整行，12=半行，8=三分之一）
 
-  // ── 表格列显示类型（3-5）──
-  /// 表格列渲染方式（""/"text"/"tag"/"icon"/"boolean"）
-  /// text    - 纯文本（默认）
-  /// tag     - 用 ElTag 显示（如状态：启用/禁用）
-  /// icon    - 用 Icon 组件渲染图标
-  /// boolean - 布尔值转文字
+  // ── 表格列显示样式（3-5）──
+  /// 表格列渲染方式（""/"text"/"money"/"tag"/"boolean"/"image"）
+  /// text/""  - 纯文本（默认）
+  /// money    - 金额格式化（千分位，如 1,234.56）
+  /// tag      - 用 ElTag 显示（根据 tagItems 映射值→文字+颜色）
+  /// boolean  - 布尔值转文字（用 boolTrueText/boolFalseText）
+  /// image    - 用 ElImage 显示缩略图
   QString displayType;
-  QString tagTrueText;    ///< tag: true 时显示的文字（如"启用"）
-  QString tagTrueColor;   ///< tag: true 时的颜色（如"success"）
-  QString tagFalseText;   ///< tag: false 时显示的文字（如"禁用"）
-  QString tagFalseColor;  ///< tag: false 时的颜色（如"danger"）
+  /// 标签映射数组（仅 displayType == "tag" 时使用）
+  /// 默认值：[{value:"0",text:"关闭",color:"info"},{value:"1",text:"开启",color:"success"}]
+  QList<TagItem> tagItems;
   QString boolTrueText;   ///< boolean: true 时显示的文字（如"显示"）
   QString boolFalseText;  ///< boolean: false 时显示的文字（如"隐藏"）
 
@@ -305,3 +327,6 @@ QString buttonPositionToString(ButtonPosition p);
 ButtonPosition stringToButtonPosition(const QString &s);
 QString buttonActionTypeToString(ButtonActionType t);
 ButtonActionType stringToButtonActionType(const QString &s);
+
+/// 获取默认的 tagItems（关闭/开启）
+QList<TagItem> defaultTagItems();
