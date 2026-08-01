@@ -530,7 +530,8 @@ struct Block::Stmt {
     kSwitch,
     kBreak,
     kContinue,
-    kUsing
+    kUsing,
+    kBlock  ///< 独立块作用域 { stmts }
   } kind = kCall;
   int line = 0;  ///< 源码行号（1-based，用于符号导航）
   CallStmt call;
@@ -549,6 +550,7 @@ struct Block::Stmt {
   WhileStmt whileStmt;
   SwitchStmt switchStmt;
   UsingStmt usingStmt;
+  Block blockBody;  ///< 独立块作用域 { stmts } 的 body
 };
 
 /// @}

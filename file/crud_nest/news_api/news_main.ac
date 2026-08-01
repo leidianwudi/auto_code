@@ -59,6 +59,7 @@ main {
     { tpl: "../template/controller_.tpl",      out: "{basePath}/{modelName}/{controllerBaseClassFile}.ts" },
     { tpl: "../template/controller.tpl",       out: "{basePath}/{modelName}/{controllerClassFile}.ts" },
     { tpl: "../template/module.tpl",           out: "{basePath}/{modelName}/{moduleClassFile}.ts" },
+    { tpl: "../template/entities/enum.tpl",    out: "{basePath}/{modelName}/entities/en_{name}.enum.ts" },
   ];
 
   // ── 4. 读取所有 JSON 配置文件（文件路径由外部配置提供）────────
@@ -130,6 +131,99 @@ main {
     let sortInfo = queryData.buildSortInfo(json);
     let whereConditions = queryData.buildWhereConditions(selFields);
 
+    // ── 5.5b 查询枚举数据（来自 crud_api_enum 表）────────────
+    //      从 crud_api_enum 表读取当前表的枚举值配置，按 column_name 分组
+    //      构建成模板所需的 {enumName, columnName, columnComment, items[]} 结构
+    let enums = [];
+    let hasEnums = false;
+    {
+      // crud_api_enum 表结构：table, column, key, value, desc, sort
+      let enumRows = db.query({sql: "SELECT * FROM crud_api_enum WHERE `table` = '" + json.tableName + "' ORDER BY `column`, `sort`"});
+      let enumRowsLen = enumRows.length;
+      printLog("enum rows count: " + enumRowsLen);
+      if (enumRowsLen > 0) {
+        hasEnums = true;
+        let currentCol = "";
+        let currentEnum = null;
+        for (er in enumRows) {
+          let colName = er["column"];
+          if (colName != currentCol) {
+            // 新列，先把上一个枚举的 columnComment 构建完整再 append
+            if (currentEnum != null) {
+              let fullComment = currentEnum.columnComment;
+              let first = true;
+              for (item in currentEnum.items) {
+                if (first) {
+                  fullComment = fullComment + ":" + item.key + ":" + item.label;
+                  first = false;
+                } else {
+                  fullComment = fullComment + ";" + item.key + ":" + item.label;
+                }
+              }
+              currentEnum.columnComment = fullComment;
+              enums.append(currentEnum);
+            }
+            currentCol = colName;
+            // 从 schema 中查找列注释
+            let colComment = "";
+            for (col in schema) {
+              if (col.name == currentCol) {
+                colComment = col.comment;
+              }
+            }
+            // 构建枚举名：Enum + 实体类名(去En前缀) + 列名首字母大写
+            let modelBaseName = param.entityClass.substring(2);
+            let enumName = "Enum" + modelBaseName + colName.charAt(0).toUpperCase() + colName.slice(1);
+            // recordsName: 从 enumName 去掉 "Enum" + modelBaseName 前缀，加 "Records"
+            let recordsName = enumName.substring(4 + modelBaseName.length) + "Records";
+            let methodName = "get" + recordsName;
+            currentEnum = {
+              columnName: currentCol,
+              enumName: enumName,
+              columnComment: colComment,
+              recordsName: recordsName,
+              methodName: methodName,
+              items: []
+            };
+          }
+          currentEnum.items.append({
+            key: er["key"],
+            value: er["value"],
+            label: er["desc"]
+          });
+        }
+        // 处理最后一个枚举：构建完整 columnComment 再 append
+        if (currentEnum != null) {
+          let fullComment = currentEnum.columnComment;
+          let first = true;
+          for (item in currentEnum.items) {
+            if (first) {
+              fullComment = fullComment + ":" + item.key + ":" + item.label;
+              first = false;
+            } else {
+              fullComment = fullComment + ";" + item.key + ":" + item.label;
+            }
+          }
+          currentEnum.columnComment = fullComment;
+          enums.append(currentEnum);
+        }
+      }
+    }
+
+    // 构建 enum import 名称字符串（如 "TypeRecords, VipStatusRecords"）
+    let enumImportNames = "";
+    if (hasEnums) {
+      let firstEnum = true;
+      for (e in enums) {
+        if (firstEnum) {
+          enumImportNames = e.recordsName;
+          firstEnum = false;
+        } else {
+          enumImportNames = enumImportNames + ", " + e.recordsName;
+        }
+      }
+    }
+
     // ── 5.6 组装传给模板的数据对象 tplData ────────────────────
     //      模板中的所有 ${变量名} 都从这里取值
     let tplData: Object = {};
@@ -142,6 +236,10 @@ main {
     tplData["fields"]           = param.fields;         // ${each field in fields} 循环
     tplData["imports"]          = param.imports;        // ${each imp in imports} 循环
     tplData["relations"]        = param.relations;      // ${each rel in relations} 循环
+    // 枚举数据（来自 crud_api_enum 表）
+    tplData["enums"]            = enums;                // ${each enum in enums} 循环
+    tplData["hasEnums"]         = hasEnums;             // ${hasEnums} 是否有枚举
+    tplData["enumImportNames"]  = enumImportNames;      // ${enumImportNames} import 名称列表
     // 查询场景数据（由 QueryData 构建）
     tplData["selFields"]        = selFields;            // ${each field in selFields} InSel 字段循环
     tplData["sortDesc"]         = sortInfo.sortDesc;    // ${sortDesc} 排序描述

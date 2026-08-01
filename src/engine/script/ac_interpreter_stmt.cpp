@@ -450,6 +450,13 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       break;
     }
 
+    case Block::Stmt::kBlock: {
+      pushScope();
+      execBlock(stmt.blockBody);
+      popScope();
+      break;
+    }
+
     case Block::Stmt::kReturn:
       m_hasReturned = true;
       m_returnValue = evalExpr(stmt.returnValue);

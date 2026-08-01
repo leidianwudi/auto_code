@@ -182,6 +182,12 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
     return true;
   }
 
+  if (t.type == TOK_LBRACE) {
+    // 独立块作用域：{ stmts }
+    stmt.kind = Block::Stmt::kBlock;
+    return parseBlock(stmt.blockBody);
+  }
+
   if (t.type == TOK_IDENT) {
     return parseIdentStmt(stmt, t);
   }

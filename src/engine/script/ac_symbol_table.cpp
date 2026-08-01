@@ -254,6 +254,11 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
       break;
     }
 
+    case Block::Stmt::kBlock: {
+      buildFromBlock(m_filePath, stmt.blockBody);
+      break;
+    }
+
     case Block::Stmt::kUsing: {
       const auto &us = stmt.usingStmt;
       if (!us.varName.isEmpty()) {

@@ -23,6 +23,9 @@ import { ${insClass} } from './in/in_ins_${tableName}';
 import { ${selClass} } from './in/in_sel_${tableName}';
 import { ${outPageClass} } from './out/out_page_${tableName}';
 import { ${entityClass} } from './entities/${entityClassFile}';
+${if hasEnums}
+import { ${enumImportNames} } from './out/out_enum_${tableName}';
+${/if}
 
 
 /**
@@ -105,5 +108,20 @@ export class ${controllerBaseClass} {
     // 未使用Out_Req对返回结果进行封装, 拦截器会自动进行包装
     return OutBaseIdsCount.of(result)
   }
+${if hasEnums}
+${each enum in enums}
+  /**
+   * ${enum.columnComment}枚举列表
+   */
+  @ApiOperation({ summary: '${enum.columnComment}枚举列表' })
+  @ApiResponse({ status: 200, description: '返回${enum.columnComment}的所有枚举信息', type: StringKeyOutEnum })
+  @HttpCode(HttpStatus.OK)
+  @Post('${enum.methodName}')
+  async ${enum.methodName}(): Promise<OutBasePage<StringKeyOutEnum>> {
+    // 未使用Out_Req对返回结果进行封装, 拦截器会自动进行包装
+    return OutBasePage.ofAll(${enum.recordsName});
+  }
 
+${/each}
+${/if}
 }

@@ -162,10 +162,12 @@ bool AcParser::parseBlock(Block &block) {
     if (!parseStmt(stmt)) return false;
     block.stmts.append(stmt);
     // class/interface/enum/function 定义以 } 结尾，不需要分号
+    // block 和 if/for/while/switch 也以 } 结尾，不需要分号
     if (stmt.kind != Block::Stmt::kClassDef && stmt.kind != Block::Stmt::kInterfaceDef &&
         stmt.kind != Block::Stmt::kEnumDef && stmt.kind != Block::Stmt::kFuncDef &&
         stmt.kind != Block::Stmt::kIf && stmt.kind != Block::Stmt::kFor &&
-        stmt.kind != Block::Stmt::kWhile && stmt.kind != Block::Stmt::kSwitch) {
+        stmt.kind != Block::Stmt::kWhile && stmt.kind != Block::Stmt::kSwitch &&
+        stmt.kind != Block::Stmt::kBlock) {
       if (!expect(TOK_SEMI, QStringLiteral("expected ';' after statement"))) return false;
     }
   }
