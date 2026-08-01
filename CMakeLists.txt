@@ -180,7 +180,7 @@ qt_add_executable(auto_code
 
 target_include_directories(auto_code PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    D:/tool/mysql9_0/include
+    D:/tool/mysql_9/include
 )
 
 # 注入项目源码路径，使运行时能准确找到 file/ 目录
@@ -197,14 +197,14 @@ target_link_libraries(auto_code
         Qt::Sql
         Qt::Network
         Qt::Svg
-        D:/tool/mysql9_0/lib/libmysql.lib
+        D:/tool/mysql_9/lib/libmysql.lib
         dwmapi.lib
 )
 
 # ── MySQL 运行时依赖自动部署（libmysql.dll + OpenSSL） ──
 # 以下是 MySQL 本机的安装目录
-set(MYSQL_LIB_DIR "D:/tool/mysql9_0/lib")
-set(MYSQL_BIN_DIR "D:/tool/mysql9_0/bin")
+set(MYSQL_LIB_DIR "D:/tool/mysql_9/lib")
+set(MYSQL_BIN_DIR "D:/tool/mysql_9/bin")
 
 set(MYSQL_RUNTIME_DLLS
     "${MYSQL_LIB_DIR}/libmysql.dll"
