@@ -49,6 +49,8 @@ main {
   //    以后要新增 service/controller/dto 只需在这个数组里加配置即可
   let templates: TemplateConfig[] = [
     { tpl: "../template/entities/en.tpl",      out: "{basePath}/{modelName}/entities/en_{name}.ts" },
+    { tpl: "../template/entities/enum.tpl",    out: "{basePath}/{modelName}/entities/enum_{name}.ts" },
+    { tpl: "../template/out/out_enum.tpl",     out: "{basePath}/{modelName}/out/out_enum_{name}.ts" },
     { tpl: "../template/in/in_ins.tpl",        out: "{basePath}/{modelName}/in/in_ins_{name}.ts" },
     { tpl: "../template/in/in_sel.tpl",        out: "{basePath}/{modelName}/in/in_sel_{name}.ts" },
     { tpl: "../template/out/out_page.tpl",     out: "{basePath}/{modelName}/out/out_page_{name}.ts" },
@@ -58,8 +60,7 @@ main {
     { tpl: "../template/service.tpl",          out: "{basePath}/{modelName}/{serviceClassFile}.ts" },
     { tpl: "../template/controller_.tpl",      out: "{basePath}/{modelName}/{controllerBaseClassFile}.ts" },
     { tpl: "../template/controller.tpl",       out: "{basePath}/{modelName}/{controllerClassFile}.ts" },
-    { tpl: "../template/module.tpl",           out: "{basePath}/{modelName}/{moduleClassFile}.ts" },
-    { tpl: "../template/entities/enum.tpl",    out: "{basePath}/{modelName}/entities/en_{name}.enum.ts" },
+    { tpl: "../template/module.tpl",           out: "{basePath}/{modelName}/{moduleClassFile}.ts" },    
   ];
 
   // ── 4. 读取所有 JSON 配置文件（文件路径由外部配置提供）────────
@@ -212,14 +213,18 @@ main {
 
     // 构建 enum import 名称字符串（如 "TypeRecords, VipStatusRecords"）
     let enumImportNames = "";
+    // 构建 enum 枚举名列表字符串（如 "EnumUserType, EnumUserVipStatus"）
+    let enumNames = "";
     if (hasEnums) {
       let firstEnum = true;
       for (e in enums) {
         if (firstEnum) {
           enumImportNames = e.recordsName;
+          enumNames = e.enumName;
           firstEnum = false;
         } else {
           enumImportNames = enumImportNames + ", " + e.recordsName;
+          enumNames = enumNames + ", " + e.enumName;
         }
       }
     }
@@ -240,6 +245,7 @@ main {
     tplData["enums"]            = enums;                // ${each enum in enums} 循环
     tplData["hasEnums"]         = hasEnums;             // ${hasEnums} 是否有枚举
     tplData["enumImportNames"]  = enumImportNames;      // ${enumImportNames} import 名称列表
+    tplData["enumNames"]        = enumNames;            // ${enumNames} 枚举名列表
     // 查询场景数据（由 QueryData 构建）
     tplData["selFields"]        = selFields;            // ${each field in selFields} InSel 字段循环
     tplData["sortDesc"]         = sortInfo.sortDesc;    // ${sortDesc} 排序描述
