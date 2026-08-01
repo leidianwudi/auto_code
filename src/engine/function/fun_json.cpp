@@ -35,9 +35,10 @@ QJsonValue FunJson::readJson(const QJsonArray &args) {
     return QJsonObject();
   }
 
-  if (!doc.isObject()) {
-    FunMgr::setError(QStringLiteral("readJson() file is not a valid JSON object"));
+  if (!doc.isObject() && !doc.isArray()) {
+    FunMgr::setError(QStringLiteral("readJson() file is not a valid JSON object or array"));
     return QJsonValue();
   }
+  if (doc.isArray()) return QJsonValue(doc.array());
   return QJsonValue(doc.object());
 }

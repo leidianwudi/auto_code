@@ -69,12 +69,27 @@ main {
   printLog("files count: " + filesLen);
 
   // ── 5. 对每张表（每个 JSON 文件）执行一次完整的生成流程 ────────
+  //      JSON 文件支持两种格式：
+  //        1) 单表对象：{ tableName: 'user', modelName: 'user\\user', ... }
+  //        2) 多表数组：{ tables: [ {...}, {...} ] }
+  //      多表格式下，tables 数组中每项都是单表配置对象
   for (file in files) {
 
     // ── 5.1 读取 JSON 配置 ───────────────────────────────────────
-    //      JSON 文件里一般包含：tableName、modelName、joinTable 等元信息
-    let json = readJson(file);
-    printLog("json: " + json);
+    //      readJson 返回对象，若存在 tables 字段则按数组遍历，否则当作单表
+    let fileJson = readJson(file);
+    // 归一化为表配置数组：单表直接包一层数组，多表取 tables 字段
+    let tableConfigs = [];
+    if (fileJson["tables"] != null) {
+      tableConfigs = fileJson["tables"];
+    } else {
+      tableConfigs.append(fileJson);
+    }
+    let tableConfigsLen = tableConfigs.length;
+    printLog("[" + file + "] tables count: " + tableConfigsLen);
+
+    for (json in tableConfigs) {
+      printLog("json: " + json);
 
     // ── 5.2 从数据库读取这张表的 schema 结构 ─────────────────────
     //      db.tableSchema() 返回 columns 数组，每列包含：
@@ -316,7 +331,8 @@ main {
         printLog("生成文件: " + outPath);
       }
     }
-  }
+    }  // end for (json in tableConfigs)
+  }  // end for (file in files)
 
   // ── 6. 收尾：断开数据库连接 ─────────────────────────────────────
   db.disconnect();
