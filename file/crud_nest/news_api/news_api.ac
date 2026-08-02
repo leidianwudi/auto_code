@@ -89,7 +89,7 @@ main {
     printLog("[" + file + "] tables count: " + tableConfigsLen);
 
     for (json in tableConfigs) {
-      printLog("json: " + json);
+      //printLog("json: " + json);
 
     // ── 5.2 从数据库读取这张表的 schema 结构 ─────────────────────
     //      db.tableSchema() 返回 columns 数组，每列包含：
@@ -189,24 +189,38 @@ main {
             }
             // 构建枚举名：Enum + 实体类名(去En前缀) + 列名首字母大写
             let modelBaseName = param.entityClass.substring(2);
-            let enumName = "Enum" + modelBaseName + colName.charAt(0).toUpperCase() + colName.slice(1);
+            let colNameCap = colName.charAt(0).toUpperCase() + colName.slice(1);
+            let enumName = "Enum" + modelBaseName + colNameCap;
             // recordsName: 从 enumName 去掉 "Enum" + modelBaseName 前缀，加 "Records"
             let recordsName = enumName.substring(4 + modelBaseName.length) + "Records";
             let methodName = "get" + recordsName;
+            let enumDesc = json.tableName + " 表的 " + colNameCap + " 属性枚举";
             currentEnum = {
               columnName: currentCol,
+              columnNameCap: colNameCap,
               enumName: enumName,
               columnComment: colComment,
+              enumDesc: enumDesc,
               recordsName: recordsName,
               methodName: methodName,
+              isTableEnum: false,
               items: []
             };
           }
-          currentEnum.items.append({
-            key: er["key"],
-            value: er["value"],
-            label: er["desc"]
-          });
+          {
+            // value 为数值型时去掉引号（如 "0" → 0），字符串型保留引号（如 "Normal" → 'Normal'）
+            let v = er["value"];
+            let valueStr = "'" + v + "'";
+            if (v * 1 == v) {
+              valueStr = "" + v;
+            }
+            currentEnum.items.append({
+              key: er["key"],
+              value: v,
+              valueStr: valueStr,
+              label: er["desc"]
+            });
+          }
         }
         // 处理最后一个枚举：构建完整 columnComment 再 append
         if (currentEnum != null) {
@@ -223,6 +237,62 @@ main {
           currentEnum.columnComment = fullComment;
           enums.append(currentEnum);
         }
+      }
+    }
+
+    // ── 5.5c 查询整表枚举数据（来自 JSON 的 tableEnum 配置）──────────
+    //      当 JSON 配置了 tableEnum 时，直接查询源表的所有行，
+    //      按 {comment, key, value} 列构建整表枚举
+    //      tableEnum 格式：{ comment: 'name_zh', key: 'code', value: 'id' }
+    //        comment - 用作枚举项说明的列名
+    //        key     - 用作枚举键名的列名
+    //        value   - 用作枚举值的列名（通常为数值型主键）
+    let tableEnum = json["tableEnum"];
+    if (tableEnum != null) {
+      let commentCol = tableEnum["comment"];
+      let keyCol = tableEnum["key"];
+      let valueCol = tableEnum["value"];
+
+      // 查询源表所有行
+      let tableRows = db.query({sql: "SELECT * FROM `" + json.tableName + "`"});
+      let tableRowsLen = tableRows.length;
+      printLog("tableEnum rows count: " + tableRowsLen);
+      if (tableRowsLen > 0) {
+        hasEnums = true;
+        // 从 schema 中查找 key 列的注释
+        let keyColComment = "";
+        for (col in schema) {
+          if (col.name == keyCol) {
+            keyColComment = col.comment;
+          }
+        }
+        // 构建枚举名
+        let modelBase = param.entityClass.substring(2);
+        let keyColCap = keyCol.charAt(0).toUpperCase() + keyCol.slice(1);
+        let enumName = "Enum" + modelBase + keyColCap;
+        let recordsName = keyColCap + "Records";
+        let methodName = "get" + recordsName;
+        let enumDesc = "从 " + json.tableName + " 表的 " + keyColCap + " 属性生成的整表枚举";
+        let tableEnumObj = {
+          columnName: keyCol,
+          columnNameCap: keyColCap,
+          enumName: enumName,
+          columnComment: keyColComment,
+          enumDesc: enumDesc,
+          recordsName: recordsName,
+          methodName: methodName,
+          isTableEnum: true,
+          items: []
+        };
+        for (row in tableRows) {
+          tableEnumObj.items.append({
+            key: row[keyCol],
+            value: row[valueCol],
+            valueStr: "" + row[valueCol],
+            label: row[commentCol]
+          });
+        }
+        enums.append(tableEnumObj);
       }
     }
 

@@ -1,0 +1,60 @@
+{
+  // 多表配置示例：一个 JSON 文件可配置多张表，每项都是单表配置对象
+  // 每个表配置支持：tableName、modelName、selCols、selColsLike、selColsSort、joinTable 等字段
+  tables: [
+    {
+      // 榜单统计维度字典参数，区分运动类型与球员/球队积分
+      modelName: 'sport\\sport_score_type',
+      selCols: [
+        'sport_id',
+        'type',
+        'enable',
+      ],
+      selColsLike: [
+        'name_zh',
+        'name_en',
+      ],
+      selColsSort: {
+        id: 'ASC',
+      },
+      // 设置生成表内数据枚举
+      tableEnum: {
+        comment: 'name_zh', //说明在表的列名
+        key: 'code',  //枚举key在表的列名
+        value: 'id',
+      },
+      tableName: 'sport_score_type',
+      joinTable: [
+        {
+          inverseJoinEnClassPro: 'sportScoreTypes',
+          isJoinRelations: true,
+          joinColumn: {
+            name: 'sport_id',
+            referencedColumnName: 'id',
+          },
+          joinEnClass: 'EnSportType',
+          joinEnClassPro: 'sportType',
+          joinEnClass_Url: 'src/sport/sport_type/entities/en_sport_type',
+          joinType: 'JoinType.ManyToOne',
+        },
+        {
+          inverseJoinEnClassPro: 'scoreType',
+          isJoinRelations: false,
+          joinEnClass: 'EnSportScorePlayer',
+          joinEnClassPro: 'sportScorePlayers',
+          joinEnClass_Url: 'src/sport/sport_score_player/entities/en_sport_score_player',
+          joinType: 'JoinType.OneToMany',
+        },
+        {
+          inverseJoinEnClassPro: 'scoreType',
+          isJoinRelations: false,
+          joinEnClass: 'EnSportScoreTeam',
+          joinEnClassPro: 'sportScoreTeams',
+          joinEnClass_Url: 'src/sport/sport_score_team/entities/en_sport_score_team',
+          joinType: 'JoinType.OneToMany',
+        },
+      ],
+    },
+    
+  ],
+},

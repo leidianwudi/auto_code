@@ -441,9 +441,14 @@ int AcInterpreter::compareValues(const QJsonValue &l, const QJsonValue &r) {
     if (l.toBool() == r.toBool()) return 0;
     return l.toBool() ? 1 : -1;
   }
-  if (l.isNull() || r.isNull()) {
-    if (l.isNull() && r.isNull()) return 0;
-    return l.isNull() ? -1 : 1;
+  // JS 语义：null == undefined 为 true（宽松相等）
+  // Qt 中 isNull() 仅对 Null 类型返回 true，需同时检查 Undefined（访问不存在属性时返回）
+  auto isNullOrUndef = [](const QJsonValue &v) {
+    return v.isNull() || v.type() == QJsonValue::Undefined;
+  };
+  if (isNullOrUndef(l) || isNullOrUndef(r)) {
+    if (isNullOrUndef(l) && isNullOrUndef(r)) return 0;
+    return isNullOrUndef(l) ? -1 : 1;
   }
   QString ls =
       l.isString() ? l.toString() : (l.isDouble() ? QString::number(l.toDouble()) : l.toString());
