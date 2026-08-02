@@ -147,6 +147,10 @@ QString queryRelationToString(QueryRelation r) {
       return QStringLiteral(">");
     case QueryRelation::Less:
       return QStringLiteral("<");
+    case QueryRelation::Range:
+      return QStringLiteral("range");
+    case QueryRelation::RangeOpen:
+      return QStringLiteral("range_open");
     default:
       return QStringLiteral("=");
   }
@@ -158,6 +162,8 @@ QueryRelation stringToQueryRelation(const QString &s) {
   if (s == QStringLiteral("<=")) return QueryRelation::LessEqual;
   if (s == QStringLiteral(">")) return QueryRelation::Greater;
   if (s == QStringLiteral("<")) return QueryRelation::Less;
+  if (s == QStringLiteral("range")) return QueryRelation::Range;
+  if (s == QStringLiteral("range_open")) return QueryRelation::RangeOpen;
   return QueryRelation::Equal;
 }
 

@@ -493,6 +493,11 @@ void readColumnConfig(QPushButton *btn, ColumnConfig &col) {
 /// 生成列配置摘要文本
 QString columnConfigSummary(const ColumnConfig &col) {
   QStringList parts;
+  // 关键配置：显示样式、编辑样式始终显示，便于一眼看出列的渲染/编辑方式
+  // displayType 为空字符串时表示"纯文本(text)"
+  parts << QStringLiteral("显示:%1").arg(col.displayType.isEmpty() ? QStringLiteral("text")
+                                                                   : col.displayType);
+  parts << QStringLiteral("编辑:%1").arg(editStyleToString(col.editStyle));
   // 判断是否为开关样式：(displayType == boolean || tag) && switchEditable
   bool isSwitch =
       (col.displayType == QStringLiteral("boolean") || col.displayType == QStringLiteral("tag")) &&
@@ -612,7 +617,6 @@ QString columnConfigSummary(const ColumnConfig &col) {
   if (!col.columnFixed.isEmpty()) parts << QStringLiteral("固定%1").arg(col.columnFixed);
   if (!col.formatter.isEmpty()) parts << QStringLiteral("格式:%1").arg(col.formatter);
   if (col.formSpan != 24) parts << QStringLiteral("span:%1").arg(col.formSpan);
-  if (!col.displayType.isEmpty()) parts << QStringLiteral("显示:%1").arg(col.displayType);
   if (!col.defaultValue.isEmpty()) parts << QStringLiteral("默认:%1").arg(col.defaultValue);
   if (!col.defaultSort.isEmpty()) parts << QStringLiteral("排序:%1").arg(col.defaultSort);
 
@@ -751,9 +755,16 @@ void JsonVueEditor::loadConfig(const JsonVueConfig &config) {
     connectCellWidgetSignals(inputStyle);
 
     auto *relCombo = newTableCombo();
-    relCombo->addItems({QStringLiteral("="), QStringLiteral("like"), QStringLiteral(">="),
-                        QStringLiteral("<="), QStringLiteral(">"), QStringLiteral("<")});
-    relCombo->setCurrentText(queryRelationToString(q.relation));
+    relCombo->addItem(QStringLiteral("="), QStringLiteral("="));
+    relCombo->addItem(QStringLiteral("like"), QStringLiteral("like"));
+    relCombo->addItem(QStringLiteral(">="), QStringLiteral(">="));
+    relCombo->addItem(QStringLiteral("<="), QStringLiteral("<="));
+    relCombo->addItem(QStringLiteral(">"), QStringLiteral(">"));
+    relCombo->addItem(QStringLiteral("<"), QStringLiteral("<"));
+    relCombo->addItem(QStringLiteral("≥≤"), QStringLiteral("range"));
+    relCombo->addItem(QStringLiteral("><"), QStringLiteral("range_open"));
+    int relIdx = relCombo->findData(queryRelationToString(q.relation));
+    if (relIdx >= 0) relCombo->setCurrentIndex(relIdx);
     m_queryTable->setCellWidget(row, QColRelation, relCombo);
     connectCellWidgetSignals(relCombo);
 
@@ -857,7 +868,10 @@ JsonVueConfig JsonVueEditor::collectConfig() const {
     auto *inputStyle = qobject_cast<QComboBox *>(m_queryTable->cellWidget(row, QColInputStyle));
     if (inputStyle) q.inputStyle = stringToQueryInputStyle(inputStyle->currentText());
     auto *relCombo = qobject_cast<QComboBox *>(m_queryTable->cellWidget(row, QColRelation));
-    if (relCombo) q.relation = stringToQueryRelation(relCombo->currentText());
+    if (relCombo) {
+      QVariant d = relCombo->currentData();
+      q.relation = stringToQueryRelation(d.isValid() ? d.toString() : relCombo->currentText());
+    }
     // 读取所有配置
     auto *qConfigBtn = qobject_cast<QPushButton *>(m_queryTable->cellWidget(row, QColConfig));
     if (qConfigBtn) {
@@ -1217,8 +1231,14 @@ void JsonVueEditor::onAddQueryField() {
   connectCellWidgetSignals(inputStyle);
 
   auto *relCombo = newTableCombo();
-  relCombo->addItems({QStringLiteral("="), QStringLiteral("like"), QStringLiteral(">="),
-                      QStringLiteral("<="), QStringLiteral(">"), QStringLiteral("<")});
+  relCombo->addItem(QStringLiteral("="), QStringLiteral("="));
+  relCombo->addItem(QStringLiteral("like"), QStringLiteral("like"));
+  relCombo->addItem(QStringLiteral(">="), QStringLiteral(">="));
+  relCombo->addItem(QStringLiteral("<="), QStringLiteral("<="));
+  relCombo->addItem(QStringLiteral(">"), QStringLiteral(">"));
+  relCombo->addItem(QStringLiteral("<"), QStringLiteral("<"));
+  relCombo->addItem(QStringLiteral("≥≤"), QStringLiteral("range"));
+  relCombo->addItem(QStringLiteral("><"), QStringLiteral("range_open"));
   m_queryTable->setCellWidget(row, QColRelation, relCombo);
   connectCellWidgetSignals(relCombo);
 
@@ -1288,8 +1308,8 @@ void JsonVueEditor::onConfigureCombobox() {
   ColumnConfig col;
   readColumnConfig(configBtn, col);
 
-  // 统一使用 StyleConfigDialog 配置表格列显示、编辑样式、通用配置等
-  StyleConfigDialog dialog(col.editStyle, this);
+  // 列配置样式：使用 ColumnStyleDialog 配置表格列显示、编辑样式、通用配置等
+  ColumnStyleDialog dialog(col.editStyle, this);
   dialog.setHttpConfig(m_baseUrl, m_authHeader, m_postData);
   dialog.setEditStyle(col.editStyle);
   dialog.setEditEditable(col.editEditable);
@@ -1379,8 +1399,8 @@ void JsonVueEditor::onConfigureQuerySelect() {
       emit configChanged();
     }
   } else {
-    // text/date 样式使用 StyleConfigDialog
-    StyleConfigDialog dialog(style, this);
+    // text/date 样式使用 QueryStyleDialog
+    QueryStyleDialog dialog(style, this);
     dialog.setPlaceholder(q.placeholder);
     dialog.setDateFormat(q.dateFormat);
     if (dialog.exec() == QDialog::Accepted) {

@@ -2,7 +2,8 @@
  * @file style_config_dialog.cpp
  * @brief 字段样式配置对话框实现
  *
- * 显示类型和编辑样式在此对话框内选择，子控件根据选择动态展示。
+ * ColumnStyleDialog：列配置样式（显示样式/编辑样式/通用配置）。
+ * QueryStyleDialog：查询字段样式（占位提示/日期格式）。
  */
 
 #include "style_config_dialog.h"
@@ -19,6 +20,7 @@
 #include <QPushButton>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include "combobox_config_dialog.h"
@@ -41,23 +43,28 @@ static void clearFormLayout(QFormLayout *form) {
   }
 }
 
+/// 递归失效 widget 及其所有子 widget 的 layout 的 sizeHint 缓存。
+/// setVisible(false) 后，子布局的 sizeHint 不会立即重算（Qt 通过异步 LayoutRequest 事件触发），
+/// 导致 layout()->sizeHint() 仍返回切换前的旧值。手动递归 invalidate 才能立即拿到正确大小。
+static void invalidateAllLayouts(QWidget *widget) {
+  if (!widget) return;
+  if (QLayout *lay = widget->layout()) lay->invalidate();
+  const auto children = widget->children();
+  for (QObject *obj : children) {
+    if (auto *w = qobject_cast<QWidget *>(obj)) invalidateAllLayouts(w);
+  }
+}
+
 // ════════════════════════════════════════════════════════════
-//  构造
+//  ColumnStyleDialog 构造/析构
 // ════════════════════════════════════════════════════════════
 
-StyleConfigDialog::StyleConfigDialog(EditStyle style, QWidget *parent) : QDialog(parent) {
+ColumnStyleDialog::ColumnStyleDialog(EditStyle style, QWidget *parent) : QDialog(parent) {
   m_editStyle = style;
-  m_isColumnMode = true;
   setupUI();
 }
 
-StyleConfigDialog::StyleConfigDialog(QueryInputStyle style, QWidget *parent) : QDialog(parent) {
-  m_queryStyle = style;
-  m_isColumnMode = false;
-  setupUI();
-}
-
-StyleConfigDialog::~StyleConfigDialog() {
+ColumnStyleDialog::~ColumnStyleDialog() {
   // 析构前清空 QFormLayout，用 removeRow 正确删除其管理的 label 和 field widget
   // 避免 QFormLayout 析构时访问已被 parent widget 删除的 label 悬空指针导致崩溃
   if (m_displayTypeLayout) {
@@ -75,20 +82,20 @@ StyleConfigDialog::~StyleConfigDialog() {
 }
 
 // ════════════════════════════════════════════════════════════
-//  界面构建
+//  ColumnStyleDialog 界面构建
 // ════════════════════════════════════════════════════════════
 
-void StyleConfigDialog::setupUI() {
-  setWindowTitle(QStringLiteral("样式配置"));
+void ColumnStyleDialog::setupUI() {
+  setWindowTitle(QStringLiteral("列样式配置"));
   setMinimumWidth(520);
-  setMinimumHeight(720);
+  // 不设置 minimumHeight/maximumHeight，让对话框高度随内容自适应
 
   // ── 无边框对话框 ──
   AuiWindow::setupFramelessDialog(this);
 
   // ── 自定义标题栏 ──
   TitleBarOptions opts;
-  opts.title = QStringLiteral("样式配置");
+  opts.title = QStringLiteral("列样式配置");
   opts.showMinButton = false;
   opts.showMaxButton = false;
   opts.closeRejectsDialog = true;
@@ -106,187 +113,163 @@ void StyleConfigDialog::setupUI() {
   m_formLayout->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
   mainLayout->addLayout(m_formLayout);
 
-  if (m_isColumnMode) {
-    // ════════════════════════════════════════
-    //  列表页配置
-    // ════════════════════════════════════════
-    auto *tableSep = new QLabel(QStringLiteral("── 列表页配置 ──"), this);
-    tableSep->setAlignment(Qt::AlignCenter);
-    m_formLayout->addRow(QString(), tableSep);
+  // ════════════════════════════════════════
+  //  列表页配置
+  // ════════════════════════════════════════
+  auto *tableSep = new QLabel(QStringLiteral("── 列表页配置 ──"), this);
+  tableSep->setAlignment(Qt::AlignCenter);
+  m_formLayout->addRow(QString(), tableSep);
 
-    // 显示样式（列表页渲染方式）—— 置于列表页配置最顶部，便于标签映射表获得更大空间
-    m_displayTypeCombo = new QComboBox(this);
-    m_displayTypeCombo->addItem(QStringLiteral("纯文本(text)"), QStringLiteral(""));
-    m_displayTypeCombo->addItem(QStringLiteral("金额(money)"), QStringLiteral("money"));
-    m_displayTypeCombo->addItem(QStringLiteral("标签(tag)"), QStringLiteral("tag"));
-    m_displayTypeCombo->addItem(QStringLiteral("布尔文字(boolean)"), QStringLiteral("boolean"));
-    m_displayTypeCombo->addItem(QStringLiteral("图片(image)"), QStringLiteral("image"));
-    addRow(QStringLiteral("显示样式:"), m_displayTypeCombo);
+  // 显示样式（列表页渲染方式）—— 置于列表页配置最顶部，便于标签映射表获得更大空间
+  m_displayTypeCombo = new QComboBox(this);
+  m_displayTypeCombo->addItem(QStringLiteral("纯文本(text)"), QStringLiteral(""));
+  m_displayTypeCombo->addItem(QStringLiteral("金额(money)"), QStringLiteral("money"));
+  m_displayTypeCombo->addItem(QStringLiteral("标签(tag)"), QStringLiteral("tag"));
+  m_displayTypeCombo->addItem(QStringLiteral("布尔文字(boolean)"), QStringLiteral("boolean"));
+  m_displayTypeCombo->addItem(QStringLiteral("图片(image)"), QStringLiteral("image"));
+  addRow(QStringLiteral("显示样式:"), m_displayTypeCombo);
 
-    // 显示样式子控件容器（全宽区域，用于显示标签映射表等）
-    m_displayTypeWidget = new QWidget(this);
-    m_displayTypeLayout = new QVBoxLayout(m_displayTypeWidget);
-    m_displayTypeLayout->setContentsMargins(0, 0, 0, 0);
-    m_displayTypeLayout->setSpacing(6);
-    auto *displayTypeForm = new QFormLayout;
-    displayTypeForm->setContentsMargins(0, 0, 0, 0);
-    displayTypeForm->setSpacing(6);
-    displayTypeForm->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_displayTypeLayout->addLayout(displayTypeForm);
-    m_formLayout->addRow(QString(), m_displayTypeWidget);
-    m_displayTypeWidget->setVisible(false);  // 初始隐藏，由 rebuildDisplayTypeControls 控制
+  // 显示样式子控件容器（全宽区域，用于显示标签映射表等）
+  m_displayTypeWidget = new QWidget(this);
+  m_displayTypeLayout = new QVBoxLayout(m_displayTypeWidget);
+  m_displayTypeLayout->setContentsMargins(0, 0, 0, 0);
+  m_displayTypeLayout->setSpacing(6);
+  auto *displayTypeForm = new QFormLayout;
+  displayTypeForm->setContentsMargins(0, 0, 0, 0);
+  displayTypeForm->setSpacing(6);
+  displayTypeForm->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+  m_displayTypeLayout->addLayout(displayTypeForm);
+  m_formLayout->addRow(QString(), m_displayTypeWidget);
+  m_displayTypeWidget->setVisible(false);  // 初始隐藏，由 rebuildDisplayTypeControls 控制
 
-    // 切换显示样式时重建子控件
-    connect(m_displayTypeCombo, &QComboBox::currentTextChanged, this, [this]() {
-      // 缓存当前值
-      if (m_tagItemsTable) m_cachedTagItems = collectTagItems();
-      if (m_boolTrueTextEdit) m_cachedBoolTrueText = m_boolTrueTextEdit->text().trimmed();
-      if (m_boolFalseTextEdit) m_cachedBoolFalseText = m_boolFalseTextEdit->text().trimmed();
-      if (m_switchEditableCheck) m_cachedSwitchEditable = m_switchEditableCheck->isChecked();
-      rebuildDisplayTypeControls();
-    });
-
-    // 初次构建
+  // 切换显示样式时重建子控件
+  connect(m_displayTypeCombo, &QComboBox::currentTextChanged, this, [this]() {
+    // 缓存当前值
+    if (m_tagItemsTable) m_cachedTagItems = collectTagItems();
+    if (m_boolTrueTextEdit) m_cachedBoolTrueText = m_boolTrueTextEdit->text().trimmed();
+    if (m_boolFalseTextEdit) m_cachedBoolFalseText = m_boolFalseTextEdit->text().trimmed();
+    if (m_switchEditableCheck) m_cachedSwitchEditable = m_switchEditableCheck->isChecked();
     rebuildDisplayTypeControls();
+  });
 
-    // 表格列宽
-    m_columnWidthCombo = new QComboBox(this);
-    m_columnWidthCombo->addItem(QStringLiteral("自动"), 0);
-    for (int w : {60, 80, 100, 120, 150, 200, 250, 300}) {
-      m_columnWidthCombo->addItem(QString::number(w), w);
-    }
-    addRow(QStringLiteral("表格列宽:"), m_columnWidthCombo);
+  // 初次构建
+  rebuildDisplayTypeControls();
 
-    // 固定列
-    m_columnFixedCombo = new QComboBox(this);
-    m_columnFixedCombo->addItem(QStringLiteral("不固定"), QString());
-    m_columnFixedCombo->addItem(QStringLiteral("固定左侧"), QStringLiteral("left"));
-    m_columnFixedCombo->addItem(QStringLiteral("固定右侧"), QStringLiteral("right"));
-    addRow(QStringLiteral("固定列:"), m_columnFixedCombo);
-
-    // 格式化类型
-    m_formatterCombo = new QComboBox(this);
-    m_formatterCombo->addItem(QStringLiteral("无"), QString());
-    m_formatterCombo->addItem(QStringLiteral("日期"), QStringLiteral("date"));
-    m_formatterCombo->addItem(QStringLiteral("状态"), QStringLiteral("status"));
-    m_formatterCombo->addItem(QStringLiteral("金额"), QStringLiteral("currency"));
-    addRow(QStringLiteral("格式化:"), m_formatterCombo);
-
-    // ════════════════════════════════════════
-    //  编辑页配置
-    // ════════════════════════════════════════
-    auto *editSep = new QLabel(QStringLiteral("── 编辑页配置 ──"), this);
-    editSep->setAlignment(Qt::AlignCenter);
-    m_formLayout->addRow(QString(), editSep);
-
-    // 编辑样式
-    m_editStyleCombo = new QComboBox(this);
-    m_editStyleCombo->addItem(QStringLiteral("纯文本(text)"), QStringLiteral("text"));
-    m_editStyleCombo->addItem(QStringLiteral("整数(int)"), QStringLiteral("int"));
-    m_editStyleCombo->addItem(QStringLiteral("小数(float)"), QStringLiteral("float"));
-    m_editStyleCombo->addItem(QStringLiteral("金额(money)"), QStringLiteral("money"));
-    m_editStyleCombo->addItem(QStringLiteral("日期(date)"), QStringLiteral("date"));
-    m_editStyleCombo->addItem(QStringLiteral("标签(tag)"), QStringLiteral("tag"));
-    m_editStyleCombo->addItem(QStringLiteral("布尔文字(boolean)"), QStringLiteral("boolean"));
-    m_editStyleCombo->addItem(QStringLiteral("图片(image)"), QStringLiteral("image"));
-    m_editStyleCombo->addItem(QStringLiteral("下拉框(select)"), QStringLiteral("select"));
-    m_editStyleCombo->addItem(QStringLiteral("多行文本(textarea)"), QStringLiteral("textarea"));
-    // 设置当前编辑样式
-    int editIdx = m_editStyleCombo->findData(editStyleToString(m_editStyle));
-    if (editIdx >= 0) m_editStyleCombo->setCurrentIndex(editIdx);
-    addRow(QStringLiteral("编辑样式:"), m_editStyleCombo);
-
-    // 编辑样式子控件容器
-    m_editStyleWidget = new QWidget(this);
-    m_editStyleLayout = new QVBoxLayout(m_editStyleWidget);
-    m_editStyleLayout->setContentsMargins(0, 0, 0, 0);
-    m_editStyleLayout->setSpacing(6);
-    auto *editStyleForm = new QFormLayout;
-    editStyleForm->setContentsMargins(0, 0, 0, 0);
-    editStyleForm->setSpacing(6);
-    editStyleForm->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_editStyleLayout->addLayout(editStyleForm);
-    m_formLayout->addRow(QString(), m_editStyleWidget);
-
-    // 切换编辑样式时重建子控件
-    connect(m_editStyleCombo, &QComboBox::currentTextChanged, this, [this]() {
-      // 缓存当前值
-      if (m_placeholderEdit) m_cachedPlaceholder = m_placeholderEdit->text().trimmed();
-      if (m_maxlengthCombo) m_cachedMaxlength = m_maxlengthCombo->currentData().toInt();
-      if (m_minValueCombo) {
-        QVariant d = m_minValueCombo->currentData();
-        m_cachedMinValue = d.isValid() ? d.toDouble() : m_minValueCombo->currentText().toDouble();
-      }
-      if (m_maxValueCombo) {
-        QVariant d = m_maxValueCombo->currentData();
-        m_cachedMaxValue = d.isValid() ? d.toDouble() : m_maxValueCombo->currentText().toDouble();
-      }
-      if (m_precisionCombo) m_cachedPrecision = m_precisionCombo->currentData().toInt();
-      if (m_dateFormatCombo) m_cachedDateFormat = m_dateFormatCombo->currentData().toString();
-      if (m_textareaRowsCombo) m_cachedTextareaRows = m_textareaRowsCombo->currentData().toInt();
-      // 更新 m_editStyle
-      m_editStyle = stringToEditStyle(m_editStyleCombo->currentData().toString());
-      rebuildEditStyleControls();
-    });
-
-    // 初次构建
-    rebuildEditStyleControls();
-
-    // 编辑可编辑
-    m_editEditableCheck = new QCheckBox(this);
-    m_editEditableCheck->setChecked(true);
-    addRow(QStringLiteral("编辑可编辑:"), m_editEditableCheck);
-
-    // 必填
-    m_requiredCheck = new QCheckBox(this);
-    addRow(QStringLiteral("必填:"), m_requiredCheck);
-
-    // 表单布局
-    m_formSpanCombo = new QComboBox(this);
-    m_formSpanCombo->addItem(QStringLiteral("整行"), 24);
-    m_formSpanCombo->addItem(QStringLiteral("半行"), 12);
-    m_formSpanCombo->addItem(QStringLiteral("三分之一"), 8);
-    addRow(QStringLiteral("表单布局:"), m_formSpanCombo);
-
-    // ════════════════════════════════════════
-    //  通用配置
-    // ════════════════════════════════════════
-    auto *commonSep = new QLabel(QStringLiteral("── 通用配置 ──"), this);
-    commonSep->setAlignment(Qt::AlignCenter);
-    m_formLayout->addRow(QString(), commonSep);
-
-    m_defaultValueEdit = new QLineEdit(this);
-    m_defaultValueEdit->setPlaceholderText(QStringLiteral("新增记录时的默认值"));
-    addRow(QStringLiteral("默认值:"), m_defaultValueEdit);
-
-    m_defaultSortCombo = new QComboBox(this);
-    m_defaultSortCombo->addItem(QStringLiteral("无"), QString());
-    m_defaultSortCombo->addItem(QStringLiteral("升序"), QStringLiteral("asc"));
-    m_defaultSortCombo->addItem(QStringLiteral("降序"), QStringLiteral("desc"));
-    addRow(QStringLiteral("默认排序:"), m_defaultSortCombo);
-  } else {
-    // 查询字段模式：保持原有逻辑
-    switch (m_queryStyle) {
-      case QueryInputStyle::Text: {
-        m_placeholderEdit = new QLineEdit(this);
-        m_placeholderEdit->setPlaceholderText(QStringLiteral("请输入占位提示"));
-        addRow(QStringLiteral("占位提示:"), m_placeholderEdit);
-        break;
-      }
-      case QueryInputStyle::Date: {
-        m_dateFormatCombo = new QComboBox(this);
-        m_dateFormatCombo->addItem(QStringLiteral("年月日时分秒"), QStringLiteral("datetime"));
-        m_dateFormatCombo->addItem(QStringLiteral("年月日"), QStringLiteral("date"));
-        m_dateFormatCombo->addItem(QStringLiteral("年月"), QStringLiteral("month"));
-        m_dateFormatCombo->addItem(QStringLiteral("年"), QStringLiteral("year"));
-        m_dateFormatCombo->addItem(QStringLiteral("日期范围"), QStringLiteral("daterange"));
-        addRow(QStringLiteral("日期格式:"), m_dateFormatCombo);
-        break;
-      }
-      case QueryInputStyle::Select:
-        break;
-    }
+  // 表格列宽
+  m_columnWidthCombo = new QComboBox(this);
+  m_columnWidthCombo->addItem(QStringLiteral("自动"), 0);
+  for (int w : {60, 80, 100, 120, 150, 200, 250, 300}) {
+    m_columnWidthCombo->addItem(QString::number(w), w);
   }
+  addRow(QStringLiteral("表格列宽:"), m_columnWidthCombo);
+
+  // 固定列
+  m_columnFixedCombo = new QComboBox(this);
+  m_columnFixedCombo->addItem(QStringLiteral("不固定"), QString());
+  m_columnFixedCombo->addItem(QStringLiteral("固定左侧"), QStringLiteral("left"));
+  m_columnFixedCombo->addItem(QStringLiteral("固定右侧"), QStringLiteral("right"));
+  addRow(QStringLiteral("固定列:"), m_columnFixedCombo);
+
+  // 格式化类型
+  m_formatterCombo = new QComboBox(this);
+  m_formatterCombo->addItem(QStringLiteral("无"), QString());
+  m_formatterCombo->addItem(QStringLiteral("日期"), QStringLiteral("date"));
+  m_formatterCombo->addItem(QStringLiteral("状态"), QStringLiteral("status"));
+  m_formatterCombo->addItem(QStringLiteral("金额"), QStringLiteral("currency"));
+  addRow(QStringLiteral("格式化:"), m_formatterCombo);
+
+  // ════════════════════════════════════════
+  //  编辑页配置
+  // ════════════════════════════════════════
+  auto *editSep = new QLabel(QStringLiteral("── 编辑页配置 ──"), this);
+  editSep->setAlignment(Qt::AlignCenter);
+  m_formLayout->addRow(QString(), editSep);
+
+  // 编辑样式
+  m_editStyleCombo = new QComboBox(this);
+  m_editStyleCombo->addItem(QStringLiteral("纯文本(text)"), QStringLiteral("text"));
+  m_editStyleCombo->addItem(QStringLiteral("整数(int)"), QStringLiteral("int"));
+  m_editStyleCombo->addItem(QStringLiteral("小数(float)"), QStringLiteral("float"));
+  m_editStyleCombo->addItem(QStringLiteral("金额(money)"), QStringLiteral("money"));
+  m_editStyleCombo->addItem(QStringLiteral("日期(date)"), QStringLiteral("date"));
+  m_editStyleCombo->addItem(QStringLiteral("标签(tag)"), QStringLiteral("tag"));
+  m_editStyleCombo->addItem(QStringLiteral("布尔文字(boolean)"), QStringLiteral("boolean"));
+  m_editStyleCombo->addItem(QStringLiteral("图片(image)"), QStringLiteral("image"));
+  m_editStyleCombo->addItem(QStringLiteral("下拉框(select)"), QStringLiteral("select"));
+  m_editStyleCombo->addItem(QStringLiteral("多行文本(textarea)"), QStringLiteral("textarea"));
+  // 设置当前编辑样式
+  int editIdx = m_editStyleCombo->findData(editStyleToString(m_editStyle));
+  if (editIdx >= 0) m_editStyleCombo->setCurrentIndex(editIdx);
+  addRow(QStringLiteral("编辑样式:"), m_editStyleCombo);
+
+  // 编辑样式子控件容器
+  m_editStyleWidget = new QWidget(this);
+  m_editStyleLayout = new QVBoxLayout(m_editStyleWidget);
+  m_editStyleLayout->setContentsMargins(0, 0, 0, 0);
+  m_editStyleLayout->setSpacing(6);
+  auto *editStyleForm = new QFormLayout;
+  editStyleForm->setContentsMargins(0, 0, 0, 0);
+  editStyleForm->setSpacing(6);
+  editStyleForm->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+  m_editStyleLayout->addLayout(editStyleForm);
+  m_formLayout->addRow(QString(), m_editStyleWidget);
+
+  // 切换编辑样式时重建子控件
+  connect(m_editStyleCombo, &QComboBox::currentTextChanged, this, [this]() {
+    // 缓存当前值
+    if (m_placeholderEdit) m_cachedPlaceholder = m_placeholderEdit->text().trimmed();
+    if (m_maxlengthCombo) m_cachedMaxlength = m_maxlengthCombo->currentData().toInt();
+    if (m_minValueCombo) {
+      QVariant d = m_minValueCombo->currentData();
+      m_cachedMinValue = d.isValid() ? d.toDouble() : m_minValueCombo->currentText().toDouble();
+    }
+    if (m_maxValueCombo) {
+      QVariant d = m_maxValueCombo->currentData();
+      m_cachedMaxValue = d.isValid() ? d.toDouble() : m_maxValueCombo->currentText().toDouble();
+    }
+    if (m_precisionCombo) m_cachedPrecision = m_precisionCombo->currentData().toInt();
+    if (m_dateFormatCombo) m_cachedDateFormat = m_dateFormatCombo->currentData().toString();
+    if (m_textareaRowsCombo) m_cachedTextareaRows = m_textareaRowsCombo->currentData().toInt();
+    // 更新 m_editStyle
+    m_editStyle = stringToEditStyle(m_editStyleCombo->currentData().toString());
+    rebuildEditStyleControls();
+  });
+
+  // 初次构建
+  rebuildEditStyleControls();
+
+  // 编辑可编辑
+  m_editEditableCheck = new QCheckBox(this);
+  m_editEditableCheck->setChecked(true);
+  addRow(QStringLiteral("编辑可编辑:"), m_editEditableCheck);
+
+  // 必填
+  m_requiredCheck = new QCheckBox(this);
+  addRow(QStringLiteral("必填:"), m_requiredCheck);
+
+  // 表单布局
+  m_formSpanCombo = new QComboBox(this);
+  m_formSpanCombo->addItem(QStringLiteral("整行"), 24);
+  m_formSpanCombo->addItem(QStringLiteral("半行"), 12);
+  m_formSpanCombo->addItem(QStringLiteral("三分之一"), 8);
+  addRow(QStringLiteral("表单布局:"), m_formSpanCombo);
+
+  // ════════════════════════════════════════
+  //  通用配置
+  // ════════════════════════════════════════
+  auto *commonSep = new QLabel(QStringLiteral("── 通用配置 ──"), this);
+  commonSep->setAlignment(Qt::AlignCenter);
+  m_formLayout->addRow(QString(), commonSep);
+
+  m_defaultValueEdit = new QLineEdit(this);
+  m_defaultValueEdit->setPlaceholderText(QStringLiteral("新增记录时的默认值"));
+  addRow(QStringLiteral("默认值:"), m_defaultValueEdit);
+
+  m_defaultSortCombo = new QComboBox(this);
+  m_defaultSortCombo->addItem(QStringLiteral("无"), QString());
+  m_defaultSortCombo->addItem(QStringLiteral("升序"), QStringLiteral("asc"));
+  m_defaultSortCombo->addItem(QStringLiteral("降序"), QStringLiteral("desc"));
+  addRow(QStringLiteral("默认排序:"), m_defaultSortCombo);
 
   // ── 底部按钮 ──
   auto btns = AuiButton::createDialogButtons(this);
@@ -296,17 +279,47 @@ void StyleConfigDialog::setupUI() {
   connect(btns.cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
 
   AuiWindow::applyWindowFrame(this, tb.titleBar, contentWidget);
+
+  // 初次构建后按内容自适应高度
+  adjustToContents();
 }
 
-void StyleConfigDialog::addRow(const QString &labelText, QWidget *widget) {
+void ColumnStyleDialog::addRow(const QString &labelText, QWidget *widget) {
   if (m_formLayout) m_formLayout->addRow(labelText, widget);
+}
+
+void ColumnStyleDialog::adjustToContents() {
+  // 让对话框高度随内容自适应（支持缩小）
+  // 难点：从大尺寸内容（如 tag 标签映射表）切换到小尺寸内容（如纯文本）时，
+  //   - setVisible(false) 后子布局的 sizeHint 不会立即重算（Qt 通过异步 LayoutRequest 事件触发）
+  //   - 导致 layout()->sizeHint() 仍返回切换前的旧值，resize 到旧值当然不会缩小
+  //   - 即使 sizeHint 正确，resize(sizeHint) 对已显示窗口只能扩大、不能缩小
+  // 解决：
+  //   1. 递归 invalidate 所有子布局，清除 sizeHint 缓存
+  //   2. activate 重算并应用几何
+  //   3. setFixedSize 强制 Qt 立即应用新大小（包括缩小）
+  //   4. 恢复 min/max 为默认值，允许后续扩展和用户拖拽
+  //   5. QTimer::singleShot(0) 在事件循环后再次调整（处理异步 LayoutRequest）
+  if (!layout()) return;
+  auto doAdjust = [this]() {
+    if (!layout()) return;
+    invalidateAllLayouts(this);
+    layout()->activate();
+    QSize hint = layout()->sizeHint();
+    setFixedSize(width(), hint.height());
+    setMinimumSize(minimumWidth(), 0);
+    setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+  };
+  doAdjust();
+  // 事件循环后再调整一次，处理异步 LayoutRequest 事件
+  QTimer::singleShot(0, this, doAdjust);
 }
 
 // ════════════════════════════════════════════════════════════
 //  动态重建：显示类型子控件
 // ════════════════════════════════════════════════════════════
 
-void StyleConfigDialog::rebuildDisplayTypeControls() {
+void ColumnStyleDialog::rebuildDisplayTypeControls() {
   if (!m_displayTypeWidget) return;
   // 清空旧控件（用 removeRow 正确删除 QFormLayout 的 label 和 field）
   auto *item0 = m_displayTypeLayout->itemAt(0);
@@ -324,6 +337,7 @@ void StyleConfigDialog::rebuildDisplayTypeControls() {
   QString dtype = m_displayTypeCombo ? m_displayTypeCombo->currentData().toString() : QString();
 
   if (dtype == QStringLiteral("tag")) {
+    m_displayTypeWidget->setMaximumHeight(QWIDGETSIZE_MAX);  // 恢复高度限制
     m_displayTypeWidget->setVisible(true);
     // 标签映射表（动态增删行）—— 占据全宽
     m_tagItemsTable = new QTableWidget(0, 4, m_displayTypeWidget);
@@ -344,6 +358,7 @@ void StyleConfigDialog::rebuildDisplayTypeControls() {
     m_switchEditableCheck->setChecked(m_cachedSwitchEditable);
     form->addRow(QStringLiteral("  开关可编辑:"), m_switchEditableCheck);
   } else if (dtype == QStringLiteral("boolean")) {
+    m_displayTypeWidget->setMaximumHeight(QWIDGETSIZE_MAX);  // 恢复高度限制
     m_displayTypeWidget->setVisible(true);
     m_boolTrueTextEdit = new QLineEdit(m_displayTypeWidget);
     m_boolTrueTextEdit->setPlaceholderText(QStringLiteral("如: 显示"));
@@ -362,7 +377,10 @@ void StyleConfigDialog::rebuildDisplayTypeControls() {
   } else {
     // 非标签/布尔样式时隐藏容器，避免占用空间
     m_displayTypeWidget->setVisible(false);
+    // 强制高度为 0，绕过 QFormLayout 可能仍计算隐藏 field 高度的问题
+    m_displayTypeWidget->setMaximumHeight(0);
   }
+  adjustToContents();
 }
 
 /// 颜色选项列表（success/primary/warning/info/danger）
@@ -403,7 +421,7 @@ static QComboBox *createColorCombo(QWidget *parent, const QString &currentColor)
   return combo;
 }
 
-void StyleConfigDialog::populateTagItems(const QList<TagItem> &items) {
+void ColumnStyleDialog::populateTagItems(const QList<TagItem> &items) {
   if (!m_tagItemsTable) return;
   m_tagItemsTable->setRowCount(0);
   for (const auto &item : items) {
@@ -427,10 +445,10 @@ void StyleConfigDialog::populateTagItems(const QList<TagItem> &items) {
   }
   // 添加"+"行按钮（在表格下方）
   // 用一行特殊行表示新增
-  int addRow = m_tagItemsTable->rowCount();
-  m_tagItemsTable->insertRow(addRow);
+  int addRowIdx = m_tagItemsTable->rowCount();
+  m_tagItemsTable->insertRow(addRowIdx);
   auto *addBtn = new QPushButton(QStringLiteral("+ 添加"), m_tagItemsTable);
-  m_tagItemsTable->setCellWidget(addRow, 3, addBtn);
+  m_tagItemsTable->setCellWidget(addRowIdx, 3, addBtn);
   connect(addBtn, &QPushButton::clicked, this, [this, addBtn]() {
     // 找到当前 + 行的位置，在其前面插入新行
     for (int r = 0; r < m_tagItemsTable->rowCount(); ++r) {
@@ -460,7 +478,7 @@ void StyleConfigDialog::populateTagItems(const QList<TagItem> &items) {
   });
 }
 
-QList<TagItem> StyleConfigDialog::collectTagItems() const {
+QList<TagItem> ColumnStyleDialog::collectTagItems() const {
   QList<TagItem> items;
   if (!m_tagItemsTable) return items;
   for (int r = 0; r < m_tagItemsTable->rowCount(); ++r) {
@@ -485,7 +503,7 @@ QList<TagItem> StyleConfigDialog::collectTagItems() const {
 //  动态重建：编辑样式子控件
 // ════════════════════════════════════════════════════════════
 
-void StyleConfigDialog::rebuildEditStyleControls() {
+void ColumnStyleDialog::rebuildEditStyleControls() {
   if (!m_editStyleWidget) return;
   auto *item0 = m_editStyleLayout->itemAt(0);
   if (!item0) return;
@@ -652,13 +670,14 @@ void StyleConfigDialog::rebuildEditStyleControls() {
       break;
     }
   }
+  adjustToContents();
 }
 
 // ════════════════════════════════════════════════════════════
-//  配置读写
+//  ColumnStyleDialog 配置读写
 // ════════════════════════════════════════════════════════════
 
-void StyleConfigDialog::setEditStyle(EditStyle style) {
+void ColumnStyleDialog::setEditStyle(EditStyle style) {
   m_editStyle = style;
   if (m_editStyleCombo) {
     int idx = m_editStyleCombo->findData(editStyleToString(style));
@@ -666,40 +685,40 @@ void StyleConfigDialog::setEditStyle(EditStyle style) {
   }
 }
 
-EditStyle StyleConfigDialog::editStyle() const {
+EditStyle ColumnStyleDialog::editStyle() const {
   if (m_editStyleCombo) {
     return stringToEditStyle(m_editStyleCombo->currentData().toString());
   }
   return m_editStyle;
 }
 
-void StyleConfigDialog::setEditEditable(bool v) {
+void ColumnStyleDialog::setEditEditable(bool v) {
   if (m_editEditableCheck) m_editEditableCheck->setChecked(v);
 }
 
-bool StyleConfigDialog::editEditable() const {
+bool ColumnStyleDialog::editEditable() const {
   return m_editEditableCheck ? m_editEditableCheck->isChecked() : true;
 }
 
-void StyleConfigDialog::setSwitchEditable(bool v) {
+void ColumnStyleDialog::setSwitchEditable(bool v) {
   m_cachedSwitchEditable = v;
   if (m_switchEditableCheck) m_switchEditableCheck->setChecked(v);
 }
 
-bool StyleConfigDialog::switchEditable() const {
+bool ColumnStyleDialog::switchEditable() const {
   return m_switchEditableCheck ? m_switchEditableCheck->isChecked() : m_cachedSwitchEditable;
 }
 
-void StyleConfigDialog::setPlaceholder(const QString &v) {
+void ColumnStyleDialog::setPlaceholder(const QString &v) {
   m_cachedPlaceholder = v;
   if (m_placeholderEdit) m_placeholderEdit->setText(v);
 }
 
-QString StyleConfigDialog::placeholder() const {
+QString ColumnStyleDialog::placeholder() const {
   return m_placeholderEdit ? m_placeholderEdit->text().trimmed() : m_cachedPlaceholder;
 }
 
-void StyleConfigDialog::setMaxlength(int v) {
+void ColumnStyleDialog::setMaxlength(int v) {
   m_cachedMaxlength = v;
   if (m_maxlengthCombo) {
     int idx = m_maxlengthCombo->findData(v);
@@ -707,11 +726,11 @@ void StyleConfigDialog::setMaxlength(int v) {
   }
 }
 
-int StyleConfigDialog::maxlength() const {
+int ColumnStyleDialog::maxlength() const {
   return m_maxlengthCombo ? m_maxlengthCombo->currentData().toInt() : m_cachedMaxlength;
 }
 
-void StyleConfigDialog::setMinValue(double v) {
+void ColumnStyleDialog::setMinValue(double v) {
   m_cachedMinValue = v;
   if (m_minValueCombo) {
     int idx = m_minValueCombo->findData(v);
@@ -722,13 +741,13 @@ void StyleConfigDialog::setMinValue(double v) {
   }
 }
 
-double StyleConfigDialog::minValue() const {
+double ColumnStyleDialog::minValue() const {
   if (!m_minValueCombo) return m_cachedMinValue;
   QVariant d = m_minValueCombo->currentData();
   return d.isValid() ? d.toDouble() : m_minValueCombo->currentText().toDouble();
 }
 
-void StyleConfigDialog::setMaxValue(double v) {
+void ColumnStyleDialog::setMaxValue(double v) {
   m_cachedMaxValue = v;
   if (m_maxValueCombo) {
     int idx = m_maxValueCombo->findData(v);
@@ -739,13 +758,13 @@ void StyleConfigDialog::setMaxValue(double v) {
   }
 }
 
-double StyleConfigDialog::maxValue() const {
+double ColumnStyleDialog::maxValue() const {
   if (!m_maxValueCombo) return m_cachedMaxValue;
   QVariant d = m_maxValueCombo->currentData();
   return d.isValid() ? d.toDouble() : m_maxValueCombo->currentText().toDouble();
 }
 
-void StyleConfigDialog::setPrecision(int v) {
+void ColumnStyleDialog::setPrecision(int v) {
   m_cachedPrecision = v;
   if (m_precisionCombo) {
     int idx = m_precisionCombo->findData(v);
@@ -753,11 +772,11 @@ void StyleConfigDialog::setPrecision(int v) {
   }
 }
 
-int StyleConfigDialog::precision() const {
+int ColumnStyleDialog::precision() const {
   return m_precisionCombo ? m_precisionCombo->currentData().toInt() : m_cachedPrecision;
 }
 
-void StyleConfigDialog::setDateFormat(const QString &v) {
+void ColumnStyleDialog::setDateFormat(const QString &v) {
   m_cachedDateFormat = v;
   if (m_dateFormatCombo) {
     int idx = m_dateFormatCombo->findData(v);
@@ -765,11 +784,11 @@ void StyleConfigDialog::setDateFormat(const QString &v) {
   }
 }
 
-QString StyleConfigDialog::dateFormat() const {
+QString ColumnStyleDialog::dateFormat() const {
   return m_dateFormatCombo ? m_dateFormatCombo->currentData().toString() : m_cachedDateFormat;
 }
 
-void StyleConfigDialog::setTextareaRows(int v) {
+void ColumnStyleDialog::setTextareaRows(int v) {
   m_cachedTextareaRows = v;
   if (m_textareaRowsCombo) {
     int idx = m_textareaRowsCombo->findData(v);
@@ -777,67 +796,67 @@ void StyleConfigDialog::setTextareaRows(int v) {
   }
 }
 
-int StyleConfigDialog::textareaRows() const {
+int ColumnStyleDialog::textareaRows() const {
   return m_textareaRowsCombo ? m_textareaRowsCombo->currentData().toInt() : m_cachedTextareaRows;
 }
 
 // ── 通用配置 ──
 
-void StyleConfigDialog::setRequired(bool v) {
+void ColumnStyleDialog::setRequired(bool v) {
   if (m_requiredCheck) m_requiredCheck->setChecked(v);
 }
 
-bool StyleConfigDialog::required() const {
+bool ColumnStyleDialog::required() const {
   return m_requiredCheck ? m_requiredCheck->isChecked() : false;
 }
 
-void StyleConfigDialog::setColumnWidth(int v) {
+void ColumnStyleDialog::setColumnWidth(int v) {
   if (m_columnWidthCombo) {
     int idx = m_columnWidthCombo->findData(v);
     if (idx >= 0) m_columnWidthCombo->setCurrentIndex(idx);
   }
 }
 
-int StyleConfigDialog::columnWidth() const {
+int ColumnStyleDialog::columnWidth() const {
   return m_columnWidthCombo ? m_columnWidthCombo->currentData().toInt() : 0;
 }
 
-void StyleConfigDialog::setColumnFixed(const QString &v) {
+void ColumnStyleDialog::setColumnFixed(const QString &v) {
   if (m_columnFixedCombo) {
     int idx = m_columnFixedCombo->findData(v);
     if (idx >= 0) m_columnFixedCombo->setCurrentIndex(idx);
   }
 }
 
-QString StyleConfigDialog::columnFixed() const {
+QString ColumnStyleDialog::columnFixed() const {
   return m_columnFixedCombo ? m_columnFixedCombo->currentData().toString() : QString();
 }
 
-void StyleConfigDialog::setFormatter(const QString &v) {
+void ColumnStyleDialog::setFormatter(const QString &v) {
   if (m_formatterCombo) {
     int idx = m_formatterCombo->findData(v);
     if (idx >= 0) m_formatterCombo->setCurrentIndex(idx);
   }
 }
 
-QString StyleConfigDialog::formatter() const {
+QString ColumnStyleDialog::formatter() const {
   return m_formatterCombo ? m_formatterCombo->currentData().toString() : QString();
 }
 
-void StyleConfigDialog::setFormSpan(int v) {
+void ColumnStyleDialog::setFormSpan(int v) {
   if (m_formSpanCombo) {
     int idx = m_formSpanCombo->findData(v);
     if (idx >= 0) m_formSpanCombo->setCurrentIndex(idx);
   }
 }
 
-int StyleConfigDialog::formSpan() const {
+int ColumnStyleDialog::formSpan() const {
   return m_formSpanCombo ? m_formSpanCombo->currentData().toInt() : 24;
 }
 
 // ── 表格列显示样式 ──
 
-void StyleConfigDialog::setDisplayType(const QString &v) {
+void ColumnStyleDialog::setDisplayType(const QString &v) {
   if (m_displayTypeCombo) {
     int idx = m_displayTypeCombo->findData(v);
     int newIdx = idx >= 0 ? idx : 0;
@@ -851,53 +870,53 @@ void StyleConfigDialog::setDisplayType(const QString &v) {
   }
 }
 
-QString StyleConfigDialog::displayType() const {
+QString ColumnStyleDialog::displayType() const {
   return m_displayTypeCombo ? m_displayTypeCombo->currentData().toString() : QString();
 }
 
-void StyleConfigDialog::setTagItems(const QList<TagItem> &items) {
+void ColumnStyleDialog::setTagItems(const QList<TagItem> &items) {
   m_cachedTagItems = items;
   if (m_tagItemsTable) populateTagItems(items);
 }
 
-QList<TagItem> StyleConfigDialog::tagItems() const {
+QList<TagItem> ColumnStyleDialog::tagItems() const {
   if (m_tagItemsTable) return collectTagItems();
   return m_cachedTagItems;
 }
 
-void StyleConfigDialog::setBoolTrueText(const QString &v) {
+void ColumnStyleDialog::setBoolTrueText(const QString &v) {
   m_cachedBoolTrueText = v;
   if (m_boolTrueTextEdit) m_boolTrueTextEdit->setText(v);
 }
 
-QString StyleConfigDialog::boolTrueText() const {
+QString ColumnStyleDialog::boolTrueText() const {
   return m_boolTrueTextEdit ? m_boolTrueTextEdit->text().trimmed() : m_cachedBoolTrueText;
 }
 
-void StyleConfigDialog::setBoolFalseText(const QString &v) {
+void ColumnStyleDialog::setBoolFalseText(const QString &v) {
   m_cachedBoolFalseText = v;
   if (m_boolFalseTextEdit) m_boolFalseTextEdit->setText(v);
 }
 
-QString StyleConfigDialog::boolFalseText() const {
+QString ColumnStyleDialog::boolFalseText() const {
   return m_boolFalseTextEdit ? m_boolFalseTextEdit->text().trimmed() : m_cachedBoolFalseText;
 }
 
 // ── 下拉框数据源 ──
 
-void StyleConfigDialog::setSelectUrl(const QString &v) { m_cachedSelectUrl = v; }
+void ColumnStyleDialog::setSelectUrl(const QString &v) { m_cachedSelectUrl = v; }
 
-QString StyleConfigDialog::selectUrl() const { return m_cachedSelectUrl; }
+QString ColumnStyleDialog::selectUrl() const { return m_cachedSelectUrl; }
 
-void StyleConfigDialog::setSelectValueField(const QString &v) { m_cachedSelectValueField = v; }
+void ColumnStyleDialog::setSelectValueField(const QString &v) { m_cachedSelectValueField = v; }
 
-QString StyleConfigDialog::selectValueField() const { return m_cachedSelectValueField; }
+QString ColumnStyleDialog::selectValueField() const { return m_cachedSelectValueField; }
 
-void StyleConfigDialog::setSelectLabelField(const QString &v) { m_cachedSelectLabelField = v; }
+void ColumnStyleDialog::setSelectLabelField(const QString &v) { m_cachedSelectLabelField = v; }
 
-QString StyleConfigDialog::selectLabelField() const { return m_cachedSelectLabelField; }
+QString ColumnStyleDialog::selectLabelField() const { return m_cachedSelectLabelField; }
 
-void StyleConfigDialog::setHttpConfig(const QString &baseUrl, const QString &authHeader,
+void ColumnStyleDialog::setHttpConfig(const QString &baseUrl, const QString &authHeader,
                                       const QString &postData) {
   m_baseUrl = baseUrl;
   m_authHeader = authHeader;
@@ -906,30 +925,30 @@ void StyleConfigDialog::setHttpConfig(const QString &baseUrl, const QString &aut
 
 // ── 通用配置（默认值/排序）──
 
-void StyleConfigDialog::setDefaultValue(const QString &v) {
+void ColumnStyleDialog::setDefaultValue(const QString &v) {
   if (m_defaultValueEdit) m_defaultValueEdit->setText(v);
 }
 
-QString StyleConfigDialog::defaultValue() const {
+QString ColumnStyleDialog::defaultValue() const {
   return m_defaultValueEdit ? m_defaultValueEdit->text().trimmed() : QString();
 }
 
-void StyleConfigDialog::setDefaultSort(const QString &v) {
+void ColumnStyleDialog::setDefaultSort(const QString &v) {
   if (m_defaultSortCombo) {
     int idx = m_defaultSortCombo->findData(v);
     m_defaultSortCombo->setCurrentIndex(idx >= 0 ? idx : 0);
   }
 }
 
-QString StyleConfigDialog::defaultSort() const {
+QString ColumnStyleDialog::defaultSort() const {
   return m_defaultSortCombo ? m_defaultSortCombo->currentData().toString() : QString();
 }
 
 // ════════════════════════════════════════════════════════════
-//  数据验证
+//  ColumnStyleDialog 数据验证
 // ════════════════════════════════════════════════════════════
 
-bool StyleConfigDialog::validateTagItems(QString *error) const {
+bool ColumnStyleDialog::validateTagItems(QString *error) const {
   if (!m_tagItemsTable) return true;
   QStringList values;
   for (int r = 0; r < m_tagItemsTable->rowCount(); ++r) {
@@ -950,7 +969,7 @@ bool StyleConfigDialog::validateTagItems(QString *error) const {
   return true;
 }
 
-void StyleConfigDialog::accept() {
+void ColumnStyleDialog::accept() {
   // 验证 tagItems 数据
   QString dtype = m_displayTypeCombo ? m_displayTypeCombo->currentData().toString() : QString();
   if (dtype == QStringLiteral("tag") && m_tagItemsTable) {
@@ -961,4 +980,106 @@ void StyleConfigDialog::accept() {
     }
   }
   QDialog::accept();
+}
+
+// ════════════════════════════════════════════════════════════
+//  QueryStyleDialog：查询字段样式对话框
+// ════════════════════════════════════════════════════════════
+
+QueryStyleDialog::QueryStyleDialog(QueryInputStyle style, QWidget *parent) : QDialog(parent) {
+  m_queryStyle = style;
+  setupUI();
+}
+
+void QueryStyleDialog::setupUI() {
+  setWindowTitle(QStringLiteral("查询样式配置"));
+  setMinimumWidth(420);
+  // 不设置 minimumHeight/maximumHeight，让对话框高度随内容自适应
+
+  // ── 无边框对话框 ──
+  AuiWindow::setupFramelessDialog(this);
+
+  // ── 自定义标题栏 ──
+  TitleBarOptions opts;
+  opts.title = QStringLiteral("查询样式配置");
+  opts.showMinButton = false;
+  opts.showMaxButton = false;
+  opts.closeRejectsDialog = true;
+  auto tb = AuiWindow::createTitleBar(this, opts);
+
+  // ── 内容区域 ──
+  auto *contentWidget = new QWidget;
+  auto *mainLayout = new QVBoxLayout(contentWidget);
+  mainLayout->setContentsMargins(8, 8, 8, 8);
+  mainLayout->setSpacing(6);
+
+  auto *form = new QFormLayout;
+  form->setContentsMargins(0, 0, 0, 0);
+  form->setSpacing(6);
+  form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+  mainLayout->addLayout(form);
+
+  switch (m_queryStyle) {
+    case QueryInputStyle::Text: {
+      m_placeholderEdit = new QLineEdit(this);
+      m_placeholderEdit->setPlaceholderText(QStringLiteral("请输入占位提示"));
+      m_placeholderEdit->setText(m_cachedPlaceholder);
+      form->addRow(QStringLiteral("占位提示:"), m_placeholderEdit);
+      break;
+    }
+    case QueryInputStyle::Date: {
+      m_dateFormatCombo = new QComboBox(this);
+      m_dateFormatCombo->addItem(QStringLiteral("年月日时分秒"), QStringLiteral("datetime"));
+      m_dateFormatCombo->addItem(QStringLiteral("年月日"), QStringLiteral("date"));
+      m_dateFormatCombo->addItem(QStringLiteral("年月"), QStringLiteral("month"));
+      m_dateFormatCombo->addItem(QStringLiteral("年"), QStringLiteral("year"));
+      // 注：日期范围不属于格式，应通过查询关系（QColRelation）配置
+      int idx = m_dateFormatCombo->findData(m_cachedDateFormat);
+      m_dateFormatCombo->setCurrentIndex(idx >= 0 ? idx : 1);
+      form->addRow(QStringLiteral("日期格式:"), m_dateFormatCombo);
+      break;
+    }
+    case QueryInputStyle::Select:
+      // Select 样式由 ComboboxConfigDialog 配置，此处不构建任何控件
+      // 理论上不应进入此对话框（onConfigureQuerySelect 中 Select 直接走 ComboboxConfigDialog）
+      break;
+  }
+
+  // ── 底部按钮 ──
+  auto btns = AuiButton::createDialogButtons(this);
+  mainLayout->addLayout(btns.layout);
+
+  connect(btns.okBtn, &QPushButton::clicked, this, &QDialog::accept);
+  connect(btns.cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
+
+  AuiWindow::applyWindowFrame(this, tb.titleBar, contentWidget);
+
+  // 按内容自适应大小
+  layout()->activate();
+  resize(layout()->sizeHint());
+}
+
+// ── 配置读写 ──
+
+void QueryStyleDialog::setPlaceholder(const QString &v) {
+  m_cachedPlaceholder = v;
+  if (m_placeholderEdit) m_placeholderEdit->setText(v);
+}
+
+QString QueryStyleDialog::placeholder() const {
+  return m_placeholderEdit ? m_placeholderEdit->text().trimmed() : m_cachedPlaceholder;
+}
+
+void QueryStyleDialog::setDateFormat(const QString &v) {
+  m_cachedDateFormat = v;
+  if (m_dateFormatCombo) {
+    int idx = m_dateFormatCombo->findData(v);
+    // 若旧值为 "daterange"（已废弃），回退到默认 "date"
+    if (idx < 0) idx = m_dateFormatCombo->findData(QStringLiteral("date"));
+    if (idx >= 0) m_dateFormatCombo->setCurrentIndex(idx);
+  }
+}
+
+QString QueryStyleDialog::dateFormat() const {
+  return m_dateFormatCombo ? m_dateFormatCombo->currentData().toString() : m_cachedDateFormat;
 }

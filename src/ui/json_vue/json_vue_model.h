@@ -88,7 +88,9 @@ enum class QueryRelation {
   GreaterEqual = 2,  ///< 大于等于
   LessEqual = 3,     ///< 小于等于
   Greater = 4,       ///< 大于
-  Less = 5           ///< 小于
+  Less = 5,          ///< 小于
+  Range = 6,         ///< 范围（闭区间 [a, b]，含两端，相当于 >= AND <=）
+  RangeOpen = 7      ///< 范围（开区间 (a, b)，不含两端，相当于 > AND <）
 };
 
 /// 查询输入框样式

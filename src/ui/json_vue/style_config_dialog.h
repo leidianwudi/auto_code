@@ -2,8 +2,11 @@
  * @file style_config_dialog.h
  * @brief 字段样式配置对话框
  *
- * 统一配置表格列显示和编辑表单的所有样式。
- * 显示类型（含开关）和编辑样式在此对话框内选择，子控件根据选择动态展示。
+ * 提供两个独立的样式配置对话框：
+ *   - ColumnStyleDialog：配置表格列显示样式、编辑表单样式和通用配置
+ *   - QueryStyleDialog：配置查询字段输入样式（占位提示/日期格式）
+ *
+ * 显示类型（含开关）和编辑样式在对话框内选择，子控件根据选择动态展示。
  */
 
 #pragma once
@@ -22,31 +25,30 @@ class QTableWidget;
 class QVBoxLayout;
 class QWidget;
 
+// ════════════════════════════════════════════════════════════
+//  ColumnStyleDialog：列配置样式对话框
+// ════════════════════════════════════════════════════════════
+
 /**
- * @class StyleConfigDialog
- * @brief 字段样式配置对话框
+ * @class ColumnStyleDialog
+ * @brief 列配置样式对话框
  *
- * 支持两种模式：
- *   - 列配置模式：配置表格列显示 + 编辑表单 + 通用配置
- *   - 查询字段模式：配置查询输入样式
+ * 配置表格列显示样式 + 编辑表单样式 + 通用配置。
+ * 显示类型和编辑样式在此对话框内选择，子控件根据选择动态展示。
  */
-class StyleConfigDialog : public QDialog {
+class ColumnStyleDialog : public QDialog {
   Q_OBJECT
 
 public:
-  /// 构造为列配置模式
-  explicit StyleConfigDialog(EditStyle style, QWidget *parent = nullptr);
-  /// 构造为查询字段模式
-  explicit StyleConfigDialog(QueryInputStyle style, QWidget *parent = nullptr);
-
-  ~StyleConfigDialog() override;
+  explicit ColumnStyleDialog(EditStyle style, QWidget *parent = nullptr);
+  ~ColumnStyleDialog() override;
 
 protected:
   /// 确认时验证数据（检查 tagItems 重复/空值等）
   void accept() override;
 
 public:
-  // ── 编辑样式（从列配置表格移入）──
+  // ── 编辑样式 ──
   void setEditStyle(EditStyle style);
   EditStyle editStyle() const;
 
@@ -90,7 +92,7 @@ public:
   void setTextareaRows(int v);
   int textareaRows() const;
 
-  // ── 通用配置（仅列配置模式）──
+  // ── 通用配置 ──
   void setRequired(bool v);
   bool required() const;
 
@@ -121,7 +123,7 @@ public:
   void setBoolFalseText(const QString &v);
   QString boolFalseText() const;
 
-  // ── 通用配置 ──
+  // ── 通用配置（默认值/排序）──
   void setDefaultValue(const QString &v);
   QString defaultValue() const;
 
@@ -143,10 +145,10 @@ private:
   void populateTagItems(const QList<TagItem> &items);
   /// 验证 tagItems 数据（检查空值和重复 value）
   bool validateTagItems(QString *error) const;
+  /// 动态重建后自适应对话框大小
+  void adjustToContents();
 
   EditStyle m_editStyle = EditStyle::Text;
-  QueryInputStyle m_queryStyle = QueryInputStyle::Text;
-  bool m_isColumnMode = true;  ///< true=列配置模式, false=查询字段模式
 
   QFormLayout *m_formLayout = nullptr;         ///< 主表单布局
   QVBoxLayout *m_displayTypeLayout = nullptr;  ///< 显示样式子控件容器布局
@@ -154,10 +156,10 @@ private:
   QWidget *m_displayTypeWidget = nullptr;      ///< 显示样式子控件容器
   QWidget *m_editStyleWidget = nullptr;        ///< 编辑样式子控件容器
 
-  // ── 列配置模式：显示样式 ──
+  // ── 显示样式 ──
   QComboBox *m_displayTypeCombo = nullptr;
 
-  // ── 列配置模式：编辑样式 ──
+  // ── 编辑样式 ──
   QComboBox *m_editStyleCombo = nullptr;
   QCheckBox *m_editEditableCheck = nullptr;
   QCheckBox *m_switchEditableCheck = nullptr;
@@ -178,14 +180,14 @@ private:
   QLineEdit *m_boolTrueTextEdit = nullptr;
   QLineEdit *m_boolFalseTextEdit = nullptr;
 
-  // ── 通用配置控件（仅列配置模式）──
+  // ── 通用配置控件 ──
   QCheckBox *m_requiredCheck = nullptr;
   QComboBox *m_columnWidthCombo = nullptr;
   QComboBox *m_columnFixedCombo = nullptr;
   QComboBox *m_formatterCombo = nullptr;
   QComboBox *m_formSpanCombo = nullptr;
 
-  // ── 通用配置 ──
+  // ── 通用配置（默认值/排序）──
   QLineEdit *m_defaultValueEdit = nullptr;
   QComboBox *m_defaultSortCombo = nullptr;
 
@@ -209,4 +211,43 @@ private:
   QString m_baseUrl;
   QString m_authHeader;
   QString m_postData;
+};
+
+// ════════════════════════════════════════════════════════════
+//  QueryStyleDialog：查询字段样式对话框
+// ════════════════════════════════════════════════════════════
+
+/**
+ * @class QueryStyleDialog
+ * @brief 查询字段样式对话框
+ *
+ * 仅配置查询字段的输入样式特定字段（占位提示、日期格式）。
+ * 日期格式不包含"日期范围"——范围查询应通过查询关系（QColRelation）配置。
+ */
+class QueryStyleDialog : public QDialog {
+  Q_OBJECT
+
+public:
+  explicit QueryStyleDialog(QueryInputStyle style, QWidget *parent = nullptr);
+  ~QueryStyleDialog() override = default;
+
+  // ── 占位提示（text 样式）──
+  void setPlaceholder(const QString &v);
+  QString placeholder() const;
+
+  // ── 日期格式（date 样式，不含"日期范围"）──
+  void setDateFormat(const QString &v);
+  QString dateFormat() const;
+
+private:
+  /// 构建界面
+  void setupUI();
+
+  QueryInputStyle m_queryStyle = QueryInputStyle::Text;
+
+  QLineEdit *m_placeholderEdit = nullptr;
+  QComboBox *m_dateFormatCombo = nullptr;
+
+  QString m_cachedPlaceholder;
+  QString m_cachedDateFormat;
 };
