@@ -20,14 +20,37 @@
 // ──────────────────────────────────────────────────────────────
 
 CodeEditor *MainDevMgr::currentEditor() const {
+  // 1. 优先从焦点控件向上查找 CodeEditor（拆分后能正确定位焦点所在面板）
+  QWidget *focus = QApplication::focusWidget();
+  while (focus) {
+    auto *editor = qobject_cast<CodeEditor *>(focus);
+    if (!editor) {
+      auto *jvw = qobject_cast<JsonVueWidget *>(focus);
+      if (jvw) editor = jvw->codeEditor();
+    }
+    if (editor) return editor;
+    focus = focus->parentWidget();
+  }
+
+  // 2. fallback 到当前 TabWidget 的当前编辑器
+  QTabWidget *tabs = currentTabWidget();
+  if (tabs) {
+    auto *w = tabs->currentWidget();
+    auto *editor = qobject_cast<CodeEditor *>(w);
+    if (!editor) {
+      auto *jvw = qobject_cast<JsonVueWidget *>(w);
+      if (jvw) editor = jvw->codeEditor();
+    }
+    if (editor) return editor;
+  }
+
+  // 3. 最后 fallback 到第一个可见非空面板
   for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
-    auto *tabs = m_ui->editorPanelAt(i);
-    if (tabs && tabs->isVisible()) {
-      auto *w = tabs->currentWidget();
-      // 直接 CodeEditor
+    auto *panel = m_ui->editorPanelAt(i);
+    if (panel && panel->isVisible()) {
+      auto *w = panel->currentWidget();
       auto *editor = qobject_cast<CodeEditor *>(w);
       if (!editor) {
-        // JsonVueWidget 包装器
         auto *jvw = qobject_cast<JsonVueWidget *>(w);
         if (jvw) editor = jvw->codeEditor();
       }
@@ -101,6 +124,18 @@ void MainDevMgr::closeTab(QTabWidget *tabs, int index) {
     m_ui->setEditorPanelsUniformStretch();
     if (m_model->lastActivePanel == tabs) m_model->lastActivePanel = nullptr;
     m_ui->setWindowTitle(MainDevUi::devTitle());
+
+    // 将焦点转移到剩余面板的当前编辑器，确保 currentEditor() 返回有效编辑器
+    QTabWidget *remaining = currentTabWidget();
+    if (remaining && remaining->count() > 0) {
+      auto *w = remaining->currentWidget();
+      auto *ed = qobject_cast<CodeEditor *>(w);
+      if (!ed) {
+        auto *jvw = qobject_cast<JsonVueWidget *>(w);
+        if (jvw) ed = jvw->codeEditor();
+      }
+      if (ed) ed->setFocus();
+    }
     connectEditor(currentEditor());
     m_ui->applyTabDimming(currentTabWidget());
     return;
@@ -227,6 +262,9 @@ void MainDevMgr::onSplitRight() {
     // 复用 createEditorForFile 创建高亮器 + 验证模式一致的编辑器
     QString filePath = current->objectName();
     bool isJsonVue = filePath.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive);
+    QFileInfo fi(filePath);
+    QString tabLabel = filePath.isEmpty() ? QStringLiteral("拆分副本") : fi.fileName();
+    int tabIdx = -1;
 
     if (isJsonVue) {
       // .jsonvue 文件拆分时创建 JsonVueWidget，保持可视化能力
@@ -236,25 +274,14 @@ void MainDevMgr::onSplitRight() {
 
       // 从当前启动项 AC 脚本加载 HTTP 配置
       QString acPath = m_ui->startupCombo()->currentData().toString();
-      if (!acPath.isEmpty()) {
-        jvw->loadHttpConfigFromAcFile(acPath);
-      }
+      if (!acPath.isEmpty()) jvw->loadHttpConfigFromAcFile(acPath);
+      if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) jvw->switchToVisual();
 
-      // 可视化按钮生效时，拆分的副本也以可视化方式打开
-      if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) {
-        jvw->switchToVisual();
-      }
-
-      QFileInfo fi(filePath);
-      QString tabLabel = filePath.isEmpty() ? QStringLiteral("拆分副本") : fi.fileName();
-      int idx = newPanel->addTab(jvw, tabLabel);
-      newPanel->setTabToolTip(idx, filePath);
-      newPanel->setCurrentIndex(idx);
-
-      if (!filePath.isEmpty()) {
-        editor->setObjectName(filePath);
-        m_model->registerFile(filePath, current->toPlainText(), editor);
-      }
+      tabIdx = newPanel->addTab(jvw, tabLabel);
+      newPanel->setTabToolTip(tabIdx, filePath);
+      newPanel->setCurrentIndex(tabIdx);
+      if (!filePath.isEmpty()) editor->setObjectName(filePath);
+      // 注：拆分编辑器不调用 registerFile，避免覆盖 openFiles 中原编辑器的记录。
 
       // 连接 contentChanged 信号
       connect(jvw, &JsonVueWidget::contentChanged, this, [jvw, editor, this]() {
@@ -264,16 +291,43 @@ void MainDevMgr::onSplitRight() {
     } else {
       auto *editor = createEditorForFile(filePath);
       editor->setPlainText(current->toPlainText());
+      tabIdx = newPanel->addTab(editor, tabLabel);
+      newPanel->setTabToolTip(tabIdx, filePath);
+      newPanel->setCurrentIndex(tabIdx);
+      if (!filePath.isEmpty()) editor->setObjectName(filePath);
+      // 注：拆分编辑器不调用 registerFile，避免覆盖 openFiles 中原编辑器的记录。
+    }
 
-      QFileInfo fi(filePath);
-      QString tabLabel = filePath.isEmpty() ? QStringLiteral("拆分副本") : fi.fileName();
-      int idx = newPanel->addTab(editor, tabLabel);
-      newPanel->setTabToolTip(idx, filePath);
-      newPanel->setCurrentIndex(idx);
-
-      if (!filePath.isEmpty()) {
-        editor->setObjectName(filePath);
-        m_model->registerFile(filePath, current->toPlainText(), editor);
+    // 连接修改标记信号（拆分副本也需要红点提示）
+    {
+      QWidget *w = newPanel->widget(newPanel->currentIndex());
+      CodeEditor *editor = qobject_cast<CodeEditor *>(w);
+      if (!editor) {
+        auto *jvw = qobject_cast<JsonVueWidget *>(w);
+        if (jvw) editor = jvw->codeEditor();
+      }
+      if (editor && !filePath.isEmpty()) {
+        connect(editor->document(), &QTextDocument::modificationChanged, this,
+                [this, tabs = newPanel, editor, filePath](bool changed) {
+                  for (int i = 0; i < tabs->count(); ++i) {
+                    if (tabs->widget(i) == editor->parentWidget() || tabs->widget(i) == editor) {
+                      auto *bar = qobject_cast<DraggableTabBar *>(tabs->tabBar());
+                      if (bar) bar->setTabModified(i, changed);
+                      break;
+                    }
+                  }
+                  // 更新树形目录对应文件的修改状态
+                  m_ui->fileTree()->setFileModified(filePath, changed);
+                  // 更新保存按钮可用状态
+                  updateSaveButtonState();
+                });
+        // 恢复当前编辑器的修改状态（拆分副本可能已有修改）
+        if (editor->document()->isModified()) {
+          auto *bar = qobject_cast<DraggableTabBar *>(newPanel->tabBar());
+          if (bar) bar->setTabModified(tabIdx, true);
+          m_ui->fileTree()->setFileModified(filePath, true);
+          updateSaveButtonState();
+        }
       }
     }
   }

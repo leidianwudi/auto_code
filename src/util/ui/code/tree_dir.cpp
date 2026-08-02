@@ -169,6 +169,8 @@ void TreeDir::buildTree(const QString &dirPath) {
 
 void TreeDir::refreshTree() {
   if (m_rootPath.isEmpty()) return;
+  // 保存当前展开状态（包括勾选、启动项、展开节点），重建后由 loadState 恢复
+  saveState();
   buildTree(m_rootPath);
 }
 
@@ -398,11 +400,35 @@ void TreeDir::saveState() {
   if (!m_selectedStartup.isEmpty() && m_selectedStartup.startsWith(m_rootPath))
     selectedRel = m_selectedStartup.mid(m_rootPath.length() + 1);
 
+  // ── 展开的目录节点 ──
+  QJsonArray expandedArr;
+  QTreeWidgetItemIterator it(this);
+  while (*it) {
+    QTreeWidgetItem *item = *it;
+    if (item->isExpanded()) {
+      QString itemPath = item->data(0, Qt::UserRole + 1).toString();
+      // 目录节点的 UserRole+1 为空，用 text(0) 构建相对路径
+      if (itemPath.isEmpty()) {
+        // 构建目录的相对路径
+        QStringList parts;
+        QTreeWidgetItem *p = item;
+        while (p) {
+          parts.prepend(p->text(0));
+          p = p->parent();
+        }
+        QString rel = parts.join(QStringLiteral("/"));
+        if (!rel.isEmpty()) expandedArr.append(rel);
+      }
+    }
+    ++it;
+  }
+
   QJsonObject root;
   root[QStringLiteral("checked")] = checkedArr;
   root[QStringLiteral("startup")] = startupArr;
   if (!selectedRel.isEmpty()) root[QStringLiteral("startupSelected")] = selectedRel;
   root[QStringLiteral("visualToggle")] = m_visualToggle;
+  root[QStringLiteral("expanded")] = expandedArr;
 
   QFile file(m_configPath);
   if (file.open(QIODevice::WriteOnly | QIODevice::Truncate))
@@ -476,6 +502,40 @@ void TreeDir::loadState() {
 
   // ── 恢复可视化编辑按钮状态 ──
   m_visualToggle = obj[QStringLiteral("visualToggle")].toBool(false);
+
+  // ── 恢复展开状态 ──
+  QJsonArray expandedArr = obj[QStringLiteral("expanded")].toArray();
+  if (!expandedArr.isEmpty()) {
+    // 有保存的展开状态 → 先折叠所有，再按记录展开
+    collapseAll();
+    for (const QJsonValue &v : expandedArr) {
+      if (v.isString()) {
+        QString rel = v.toString();
+        QStringList parts = rel.split(QLatin1Char('/'));
+        // 从顶层节点开始逐层查找
+        QTreeWidgetItem *parent = nullptr;
+        int topIdx = 0;
+        while (topIdx < topLevelItemCount()) {
+          if (topLevelItem(topIdx)->text(0) == parts[0]) {
+            parent = topLevelItem(topIdx);
+            break;
+          }
+          ++topIdx;
+        }
+        for (int k = 1; parent && k < parts.size(); ++k) {
+          QTreeWidgetItem *child = nullptr;
+          for (int c = 0; c < parent->childCount(); ++c) {
+            if (parent->child(c)->text(0) == parts[k]) {
+              child = parent->child(c);
+              break;
+            }
+          }
+          parent = child;
+        }
+        if (parent) parent->setExpanded(true);
+      }
+    }
+  }
 
   m_bulkUpdating = false;
 }

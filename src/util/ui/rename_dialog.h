@@ -12,7 +12,6 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QShowEvent>
 #include <QString>
 
 class QWidget;
@@ -23,7 +22,7 @@ class QWidget;
  *
  * 提供旧名称预填充、输入校验和确认/取消交互。
  * 支持静态便捷方法 getNewName()。
- * 弹出时自动为父窗口安装半透明遮罩层，关闭时自动移除。
+ * 模态遮罩由 setupFramelessDialog 自动安装，无需手写代码。
  */
 class RenameDialog : public QDialog {
   Q_OBJECT
@@ -41,10 +40,6 @@ public:
   /// @param ok      输出参数，true 表示用户点击了确认
   static QString getNewName(QWidget *parent, const QString &oldName, bool *ok = nullptr);
 
-protected:
-  void showEvent(QShowEvent *event) override;
-  void done(int r) override;
-
 private slots:
   void onAccept();
 
@@ -55,5 +50,4 @@ private:
   QLabel *m_errorLabel = nullptr;   ///< 错误提示标签
   QPushButton *m_okBtn = nullptr;   ///< 确定按钮
   QString m_oldName;                ///< 旧名称
-  QWidget *m_overlay = nullptr;     ///< 父窗口遮罩层
 };

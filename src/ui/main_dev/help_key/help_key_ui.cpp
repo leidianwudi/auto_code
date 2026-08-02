@@ -32,8 +32,8 @@ void HelpKeyUi::setupUI() {
   setWindowTitle(QStringLiteral("快捷键"));
   resize(700, 500);
 
-  // ── 无边框对话框（保留 Qt::Dialog 标志，复用 AuiWindow 统一样式） ──
-  AuiWindow::setupFramelessDialog(this);
+  // ── 无边框非模态对话框（保留 Qt::Dialog 标志，复用 AuiWindow 统一样式） ──
+  AuiWindow::setupFramelessDialog(this, false);
 
   // ════════════════════════════════════════════════════════════
   //  自定义标题栏（AC 图标 + 标题文字 + 窗口控制按钮）

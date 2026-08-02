@@ -430,8 +430,8 @@ static OrderedKeyMap extractOrderedKeys(const QString &input) {
     }
 
     // ★ 数组开始
-    // 父类型是对象 → 用 childIdx - 1（key 索引）→ parent.path + ".arr" + idx
-    // 父类型是数组 → 用 childIdx（数组元素索引）→ parent.path + ".arr" + idx
+    // 父类型是对象 → 数组作为属性值，路径与对象属性一致：parent.path + "." + idx
+    // 父类型是数组 → 嵌套数组元素：parent.path + ".arr" + idx
     if (ch == QLatin1Char('[')) {
       QString path;
       if (stack.isEmpty()) {
@@ -439,7 +439,7 @@ static OrderedKeyMap extractOrderedKeys(const QString &input) {
       } else if (stack.last().type == QLatin1Char('O')) {
         int idx = stack.last().childIdx - 1;
         if (idx < 0) idx = 0;
-        path = stack.last().path + QStringLiteral(".arr") + QString::number(idx);
+        path = stack.last().path + QStringLiteral(".") + QString::number(idx);
       } else {
         path = stack.last().path + QStringLiteral(".arr") + QString::number(stack.last().childIdx);
       }

@@ -33,6 +33,39 @@
 #endif
 
 // ════════════════════════════════════════════════════════════
+//  模态遮罩事件过滤器（需在 setupFramelessDialog 之前定义）
+// ════════════════════════════════════════════════════════════
+
+namespace {
+
+/// 模态遮罩事件过滤器 — 在对话框显示时自动安装遮罩，隐藏时自动移除
+///
+/// 安装方式：dialog->installEventFilter(new ModalOverlayHelper(dialog))
+/// 生命周期：作为 dialog 的子对象，随 dialog 一起销毁
+class ModalOverlayHelper : public QObject {
+public:
+  explicit ModalOverlayHelper(QDialog *dialog) : QObject(dialog), m_dialog(dialog) {}
+
+protected:
+  bool eventFilter(QObject *watched, QEvent *event) override {
+    Q_UNUSED(watched)
+    if (event->type() == QEvent::Show) {
+      m_overlay = AuiWindow::installModalOverlay(m_dialog);
+    } else if (event->type() == QEvent::Hide) {
+      AuiWindow::removeModalOverlay(m_overlay);
+      m_overlay = nullptr;
+    }
+    return false;
+  }
+
+private:
+  QDialog *m_dialog;
+  QWidget *m_overlay = nullptr;
+};
+
+}  // namespace
+
+// ════════════════════════════════════════════════════════════
 //  无边框窗口基础设置
 // ════════════════════════════════════════════════════════════
 
@@ -46,11 +79,20 @@ void AuiWindow::setupFramelessWindow(QWidget *window) {
 //  无边框对话框设置
 // ════════════════════════════════════════════════════════════
 
-void AuiWindow::setupFramelessDialog(QDialog *dialog) {
-  dialog->setWindowModality(Qt::WindowModal);
+void AuiWindow::setupFramelessDialog(QDialog *dialog, bool modal) {
+  if (modal) {
+    dialog->setWindowModality(Qt::WindowModal);
+  } else {
+    dialog->setWindowModality(Qt::NonModal);
+  }
   dialog->setWindowFlags(dialog->windowFlags() | Qt::FramelessWindowHint);
   dialog->setStyleSheet(AuiStyle::mainStyleSheet() + AuiStyle::dialogStyleSheet());
   dialog->setWindowIcon(QIcon(appIconPixmap(256)));
+
+  // 模态对话框自动安装遮罩（显示时安装，隐藏时移除）
+  if (modal) {
+    dialog->installEventFilter(new ModalOverlayHelper(dialog));
+  }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -350,19 +392,20 @@ namespace {
 
 /// 单个窗口的遮罩层 — 覆盖一个应用窗口形成"变暗"效果
 ///
-/// 为应用程序的每个非对话框顶层窗口创建一个遮罩。
-/// 遮罩使用 Qt::WindowStaysOnTopHint 保证可见性，
-/// 对话框通过 SetWindowPos 放在遮罩之上。
+/// 通过 Win32 owner 关系（GWLP_HWNDPARENT）将遮罩绑定到目标窗口，
+/// 使遮罩始终保持在目标窗口之上，但不影响其他应用窗口。
 class WindowOverlay : public QWidget {
 public:
-  WindowOverlay(QDialog *dialog, const QRect &windowGeometry)
-      : QWidget(nullptr, Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint), m_dialog(dialog) {
+  WindowOverlay(QDialog *dialog, QWidget *targetWindow, const QRect &windowGeometry)
+      : QWidget(nullptr, Qt::FramelessWindowHint), m_dialog(dialog), m_targetWindow(targetWindow) {
     setStyleSheet(QStringLiteral("background: black;"));
     setWindowOpacity(AuiStyle::modalOverlayColor().alphaF());
     setCursor(Qt::ForbiddenCursor);
     setGeometry(windowGeometry);
     show();
   }
+
+  QWidget *targetWindow() const { return m_targetWindow; }
 
 #ifdef Q_OS_WIN
   bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override {
@@ -384,11 +427,12 @@ protected:
 
 private:
   QDialog *m_dialog;
+  QWidget *m_targetWindow;
 };
 
 /// 遮罩组 — 管理所有窗口的遮罩层
 ///
-/// 为应用程序的每个非对话框顶层窗口创建一个 WindowOverlay，统一管理生命周期。
+/// 为应用程序的每个可见顶层窗口（含父级对话框，支持嵌套模态）创建遮罩。
 /// 删除时自动销毁所有子遮罩。
 class OverlayGroup : public QObject {
 public:
@@ -400,8 +444,8 @@ public:
     }
   }
 
-  void addWindowOverlay(const QRect &windowGeometry) {
-    auto *overlay = new WindowOverlay(m_dialog, windowGeometry);
+  void addWindowOverlay(QWidget *targetWindow, const QRect &windowGeometry) {
+    auto *overlay = new WindowOverlay(m_dialog, targetWindow, windowGeometry);
     m_overlays.append(overlay);
   }
 
@@ -419,24 +463,30 @@ QWidget *AuiWindow::installModalOverlay(QDialog *dialog) {
 
   auto *group = new OverlayGroup(dialog);
 
-  // 为应用程序的每个可见非对话框顶层窗口创建遮罩
+  // 为应用程序的每个可见顶层窗口创建遮罩（不跳过 QDialog，支持嵌套模态对话框）
   const auto topLevels = QApplication::topLevelWidgets();
   for (auto *widget : topLevels) {
     if (widget == dialog) continue;
     if (!widget->isVisible()) continue;
-    if (qobject_cast<QDialog *>(widget)) continue;
-    group->addWindowOverlay(widget->frameGeometry());
+    group->addWindowOverlay(widget, widget->frameGeometry());
   }
 
 #ifdef Q_OS_WIN
-  // 将对话框设为 TOPMOST，并放在所有遮罩之上
-  // Z 轴顺序：应用窗口 < 遮罩(TOPMOST) < 对话框(TOPMOST)
+  // 通过 Win32 owner 关系绑定遮罩到目标窗口：
+  //   SetWindowLongPtr(GWLP_HWNDPARENT) 设置 owner（非 parent），
+  //   使遮罩始终位于目标窗口之上，且非系统级 TOPMOST，不影响其他应用。
+  // Z 轴顺序：应用窗口 < 遮罩(owned) < 对话框
   HWND dialogHwnd = reinterpret_cast<HWND>(dialog->winId());
-  SetWindowPos(dialogHwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
   for (auto *overlay : group->overlays()) {
     HWND overlayHwnd = reinterpret_cast<HWND>(overlay->winId());
-    SetWindowPos(dialogHwnd, overlayHwnd, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    HWND targetHwnd = reinterpret_cast<HWND>(overlay->targetWindow()->winId());
+    // 设置 owner 关系：遮罩 owned by 目标窗口
+    SetWindowLongPtr(overlayHwnd, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(targetHwnd));
+    // 刷新 Z 轴顺序
+    SetWindowPos(overlayHwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
   }
+  // 对话框置于所有遮罩之上
+  SetWindowPos(dialogHwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 #endif
 
   dialog->activateWindow();

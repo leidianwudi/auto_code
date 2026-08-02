@@ -81,6 +81,7 @@ StyleConfigDialog::~StyleConfigDialog() {
 void StyleConfigDialog::setupUI() {
   setWindowTitle(QStringLiteral("样式配置"));
   setMinimumWidth(520);
+  setMinimumHeight(720);
 
   // ── 无边框对话框 ──
   AuiWindow::setupFramelessDialog(this);

@@ -46,7 +46,8 @@ public:
 
   /// 无边框对话框设置：保留 Qt::Dialog 标志 + FramelessWindowHint + 基础样式表
   /// @note QDialog 必须保留 Qt::Dialog 标志，否则 exec() 无法正常显示
-  static void setupFramelessDialog(QDialog *dialog);
+  /// @param modal  true=模态对话框（自动安装遮罩），false=非模态对话框（不安装遮罩）
+  static void setupFramelessDialog(QDialog *dialog, bool modal = true);
 
   /// 模态对话框样式设置：应用统一样式表 + 设置 DWM 标题栏颜色
   /// @note QDialog 使用 exec() 必须保留原生标题栏，不能使用 FramelessWindowHint

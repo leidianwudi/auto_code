@@ -5,7 +5,7 @@
     {
       // 用户表
       modelName: 'user\\user',
-      tableName: 'user', // 模糊查询名字
+      tableName: 'user', // 模糊查询名字  
       selCols: [
         'account',
       ],

@@ -13,7 +13,6 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QShowEvent>
 
 class QWidget;
 
@@ -42,10 +41,6 @@ public:
   /// 清除错误提示
   void clearError();
 
-protected:
-  void showEvent(QShowEvent *event) override;
-  void done(int r) override;
-
 private slots:
   /// 文件类型切换时自动更新名称后缀提示
   void onFileTypeChanged(int index);
@@ -63,5 +58,4 @@ private:
   QLabel *m_errorLabel = nullptr;      ///< 错误提示标签
   QPushButton *m_okBtn = nullptr;      ///< 确定按钮
   QPushButton *m_cancelBtn = nullptr;  ///< 取消按钮
-  QWidget *m_overlay = nullptr;        ///< 父窗口遮罩层
 };

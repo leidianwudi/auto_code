@@ -81,25 +81,6 @@ void RenameDialog::setupUI() {
 }
 
 // ════════════════════════════════════════════════════════════
-//  showEvent — 显示时安装遮罩层
-// ════════════════════════════════════════════════════════════
-
-void RenameDialog::showEvent(QShowEvent *event) {
-  QDialog::showEvent(event);
-  m_overlay = AuiWindow::installModalOverlay(this);
-}
-
-// ════════════════════════════════════════════════════════════
-//  done — 关闭时移除遮罩层
-// ════════════════════════════════════════════════════════════
-
-void RenameDialog::done(int r) {
-  AuiWindow::removeModalOverlay(m_overlay);
-  m_overlay = nullptr;
-  QDialog::done(r);
-}
-
-// ════════════════════════════════════════════════════════════
 //  onAccept — 确认按钮
 // ════════════════════════════════════════════════════════════
 

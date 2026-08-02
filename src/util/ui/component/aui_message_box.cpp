@@ -9,7 +9,6 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
-#include <QShowEvent>
 #include <QVBoxLayout>
 
 #include "../aui_window.h"
@@ -24,18 +23,6 @@ public:
   MessageBoxDialog(const QString &title, const QString &text, bool showCancel, QWidget *parent)
       : QDialog(parent), m_showCancel(showCancel) {
     setupUI(title, text);
-  }
-
-protected:
-  void showEvent(QShowEvent *event) override {
-    QDialog::showEvent(event);
-    m_overlay = AuiWindow::installModalOverlay(this);
-  }
-
-  void done(int r) override {
-    AuiWindow::removeModalOverlay(m_overlay);
-    m_overlay = nullptr;
-    QDialog::done(r);
   }
 
 private:
@@ -73,7 +60,6 @@ private:
   }
 
   bool m_showCancel;
-  QWidget *m_overlay = nullptr;
 };
 
 }  // namespace
