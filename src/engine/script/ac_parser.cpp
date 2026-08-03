@@ -76,6 +76,7 @@ bool AcParser::parseProgram(Block &block) {
       advance();
       Block::Stmt stmt;
       stmt.line = t.line;
+      stmt.filePath = m_filePath;
       stmt.kind = Block::Stmt::kImport;
       if (!parseImportStmt(stmt.importStmt)) return false;
       block.stmts.append(stmt);
@@ -99,6 +100,7 @@ bool AcParser::parseProgram(Block &block) {
       advance();
       Block::Stmt stmt;
       stmt.line = t.line;
+      stmt.filePath = m_filePath;
       stmt.kind = Block::Stmt::kClassDef;
       if (!parseClassDef(stmt.classDef)) return false;
       block.stmts.append(stmt);
@@ -106,6 +108,7 @@ bool AcParser::parseProgram(Block &block) {
       advance();
       Block::Stmt stmt;
       stmt.line = t.line;
+      stmt.filePath = m_filePath;
       stmt.kind = Block::Stmt::kInterfaceDef;
       if (!parseInterfaceDef(stmt.interfaceDef)) return false;
       block.stmts.append(stmt);
@@ -113,6 +116,7 @@ bool AcParser::parseProgram(Block &block) {
       advance();
       Block::Stmt stmt;
       stmt.line = t.line;
+      stmt.filePath = m_filePath;
       stmt.kind = Block::Stmt::kEnumDef;
       if (!parseEnumDef(stmt.enumDef)) return false;
       block.stmts.append(stmt);
@@ -120,6 +124,7 @@ bool AcParser::parseProgram(Block &block) {
       advance();
       Block::Stmt stmt;
       stmt.line = t.line;
+      stmt.filePath = m_filePath;
       stmt.kind = Block::Stmt::kFuncDef;
       if (!parseMethodDef(stmt.funcDef)) return false;
       block.stmts.append(stmt);
@@ -132,6 +137,7 @@ bool AcParser::parseProgram(Block &block) {
       m_declaredVars->insert(peek().text);
       Block::Stmt stmt;
       stmt.line = t.line;
+      stmt.filePath = m_filePath;
       stmt.kind = Block::Stmt::kAssign;
       if (!parseAssignStmt(stmt.assign)) return false;
       stmt.assign.line = t.line;

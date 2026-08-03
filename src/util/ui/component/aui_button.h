@@ -61,6 +61,9 @@ public:
   /// 创建「停止」按钮（QPushButton，方形停止图标）
   static QPushButton *createStopButton(int size = 18);
 
+  /// 创建「调试」按钮（QPushButton，红色 bug 图标，用于启动/继续调试）
+  static QPushButton *createDebugButton(int size = 18);
+
   /// 创建「保存」按钮（QPushButton，软盘图标）
   static QPushButton *createSaveButton(int size = 18);
 

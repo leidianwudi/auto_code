@@ -202,6 +202,52 @@ QPushButton *AuiButton::createStopButton(int size) {
 }
 
 // ════════════════════════════════════════════════════════════
+//  调试按钮
+// ════════════════════════════════════════════════════════════
+
+QPushButton *AuiButton::createDebugButton(int size) {
+  auto *btn = new QPushButton;
+  // 绘制红色 bug 图标（与 VSCode 调试按钮风格一致；禁用时使用灰色图标）
+  QColor red = AuiStyle::errorTextColor();
+  QColor gray = AuiStyle::inactiveTabColor();
+  auto drawBug = [&](const QColor &color) {
+    QPixmap px(size, size);
+    px.fill(Qt::transparent);
+    QPainter p(&px);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(QPen(color, 1.4));
+    p.setBrush(Qt::NoBrush);
+    const qreal m = 4.0;
+    const qreal w = size - 2 * m;
+    // 两段触角
+    p.drawLine(QPointF(m + 2, m), QPointF(size * 0.35, m + 3));
+    p.drawLine(QPointF(size - m - 2, m), QPointF(size * 0.65, m + 3));
+    // 身体（椭圆）
+    p.drawEllipse(QPointF(size / 2, size * 0.55), w * 0.32, w * 0.30);
+    // 中缝
+    p.drawLine(QPointF(size / 2, m + 3), QPointF(size / 2, size * 0.85));
+    // 六条腿
+    for (int i = 0; i < 3; ++i) {
+      qreal y = size * 0.45 + i * size * 0.12;
+      p.drawLine(QPointF(size * 0.30, y), QPointF(size * 0.12, y - 2));
+      p.drawLine(QPointF(size * 0.70, y), QPointF(size * 0.88, y - 2));
+    }
+    p.end();
+    return px;
+  };
+  QIcon icon;
+  icon.addPixmap(drawBug(red), QIcon::Normal, QIcon::Off);
+  icon.addPixmap(drawBug(gray), QIcon::Disabled, QIcon::Off);
+  btn->setIcon(icon);
+  btn->setIconSize(QSize(size, size));
+  btn->setCursor(Qt::PointingHandCursor);
+  btn->setFocusPolicy(Qt::NoFocus);
+  btn->setToolTip(QStringLiteral("开始调试 (F5)"));
+  applyIconButtonStyle(btn);
+  return btn;
+}
+
+// ════════════════════════════════════════════════════════════
 //  保存按钮
 // ════════════════════════════════════════════════════════════
 

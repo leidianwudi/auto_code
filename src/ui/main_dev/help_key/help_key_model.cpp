@@ -38,4 +38,10 @@ void HelpKeyModel::loadDefaults() {
 
   // ── 执行 ──
   m_entries.append({QStringLiteral("执行"), QStringLiteral("执行脚本"), QStringLiteral("F5")});
+
+  // ── 调试 ──
+  m_entries.append({QStringLiteral("调试"), QStringLiteral("开始/继续调试"), QStringLiteral("F5")});
+  m_entries.append({QStringLiteral("调试"), QStringLiteral("单步跳过"), QStringLiteral("F10")});
+  m_entries.append({QStringLiteral("调试"), QStringLiteral("单步进入"), QStringLiteral("F11")});
+  m_entries.append({QStringLiteral("调试"), QStringLiteral("单步跳出"), QStringLiteral("Shift+F11")});
 }

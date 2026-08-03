@@ -32,6 +32,7 @@ bool AcExecutor::parse(const QString &source) {
   if (!m_error.isEmpty()) return false;
 
   // ── 步骤 2：语法分析 ──
+  m_parser.setFilePath(m_scriptFile);
   if (!m_parser.parse(m_tokens, m_program, m_declaredVars)) {
     m_error = m_parser.error();
     return false;
@@ -115,6 +116,7 @@ QJsonValue AcExecutor::execute() {
   m_interpreter.setRootDir(m_rootDir);
   m_interpreter.setLogCallback(m_logCallback);
   m_interpreter.setCancelFlag(m_cancelFlag);
+  m_interpreter.setDebugger(m_debugger);
 
 #ifdef AC_DEBUG
   qDebug() << "[AcExecutor::execute] m_logCallback is null:" << !m_logCallback;
@@ -245,6 +247,7 @@ bool AcExecutor::linkImportsRecursive(Block &program, const QString &baseDir,
 
     AcLexer lexer;
     AcParser parser;
+    parser.setFilePath(absPath);  // 记录该模块语句所属源文件，供断点定位
     Block moduleAst;
     QSet<QString> moduleVars;
     QString moduleError;

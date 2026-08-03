@@ -29,6 +29,8 @@ qt_add_executable(auto_code
     src/engine/script/ac_interpreter.cpp
     src/engine/script/ac_interpreter_expr.cpp
     src/engine/script/ac_interpreter_stmt.cpp
+    src/engine/script/ac_debugger.h
+    src/engine/script/ac_debugger.cpp
     src/engine/script/ac_builtin_eval.h
     src/engine/script/ac_builtin_eval.cpp
     src/engine/script/ac_object_manager.h
@@ -141,6 +143,8 @@ qt_add_executable(auto_code
     src/ui/main_dev/main_dev_ui.cpp
     src/ui/main_dev/main_dev_ui_ext.h
     src/ui/main_dev/main_dev_ui_ext.cpp
+    src/ui/main_dev/debug_panel.h
+    src/ui/main_dev/debug_panel.cpp
     src/ui/main_dev/main_dev_mgr.h
     src/ui/main_dev/main_dev_mgr.cpp
     src/ui/main_dev/main_dev_mgr_file.cpp

@@ -33,6 +33,7 @@ QString AcEngine::execute(const QString &acFilePath) {
   executor.setScriptDir(dir);
   executor.setScriptFile(fi.absoluteFilePath());
   executor.setCancelFlag(&m_cancelRequested);
+  executor.setDebugger(m_debugger);
   if (!m_rootDir.isEmpty()) executor.setRootDir(m_rootDir);
   if (m_logCallback) executor.setLogCallback(m_logCallback);
 #ifdef AC_DEBUG

@@ -33,6 +33,7 @@
 #include "code_validator.h"
 #include "indent_guide.h"
 #include "src/engine/schema_validator.h"
+#include "src/engine/script/ac_debugger.h"
 #include "src/engine/validation_result.h"
 #include "symbol_navigator.h"
 
@@ -112,6 +113,29 @@ public:
    */
   QVector<QPair<int, QString>> findSymbolReferences(const QString &name) const;
 
+  // ── 接口：断点调试 ──
+
+  /// 切换指定行号（0-based blockNumber）的断点状态
+  void toggleBreakpoint(int blockNumber);
+  /// 根据行号区 y 坐标切换断点（供 LineNumberArea 调用）
+  void toggleBreakpointAtY(int y);
+  /// 指定行号（1-based）是否有断点
+  bool hasBreakpoint(int line) const;
+  /// 获取当前断点行号集合（1-based）
+  QSet<int> breakpoints() const;
+  /// 覆盖设置断点集合（1-based）
+  void setBreakpoints(const QSet<int> &lines);
+  /// 清空所有断点
+  void clearBreakpoints();
+  /// 设置当前调试暂停行（1-based），<=0 表示清除高亮
+  void setDebugLine(int line);
+  /// 清除当前调试行高亮
+  void clearDebugLine();
+  /// 设置当前调试变量的快照（鼠标悬停时显示类型/值）
+  void setDebugVariables(const QList<AcDebugVar> &vars);
+  /// 清除调试变量快照
+  void clearDebugVariables();
+
 signals:
   void validationMessage(const QString &message, int errorCount = 0);
   void requestGoToLine(const QString &filePath, int line);
@@ -119,6 +143,11 @@ signals:
   void requestFindReferences(const QString &filePath, int line, const QString &context);
   void requestFindReferencesAll(const QString &symbolName);  ///< 跨文件查找引用
   void requestWorkspaceSymbols();                            ///< 工作区符号搜索 (Ctrl+T)
+  void breakpointsChanged();                                 ///< 断点集合发生变化
+  void requestDebugStart();                                  ///< F5：启动调试/继续
+  void requestDebugStepOver();                               ///< F10：单步跳过
+  void requestDebugStepInto();                               ///< F11：单步进入
+  void requestDebugStepOut();                                ///< Shift+F11：单步跳出
 
 protected:
   void resizeEvent(QResizeEvent *event) override;
@@ -143,6 +172,8 @@ private:
   void showErrorTooltip(const QPoint &pos, const QString &text);
   void hideErrorTooltip();
   int calculateNewLineIndent(const QString &linePrefix) const;
+  /// 当前文件是否为可调试的 .ac 脚本（objectName 即文件路径）
+  bool isDebuggableFile() const;
 
   // ── 补全相关 ──
   void initCompleter(ValidationMode mode);
@@ -218,6 +249,11 @@ private:
   CodeFindBar *m_findBar = nullptr;                   ///< 查找/替换栏控件
   QList<QTextEdit::ExtraSelection> m_findSelections;  ///< 查找匹配高亮（由 CodeFindBar 写入）
 
+  // 断点调试
+  QSet<int> m_breakpoints;        ///< 断点行号集合（1-based）
+  int m_debugLine = -1;           ///< 当前调试暂停行（1-based），-1 表示无
+  QList<AcDebugVar> m_debugVars;  ///< 当前调试变量快照（悬停显示用）
+
   struct ErrorRange {
     int start;
     int length;
@@ -242,6 +278,8 @@ protected:
     QRect area = rect();
     m_codeEditor->lineNumberAreaPaintEvent(event, area);
   }
+
+  void mousePressEvent(QMouseEvent *event) override;
 
 private:
   CodeEditor *m_codeEditor;

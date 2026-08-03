@@ -25,6 +25,7 @@
 #include <QVBoxLayout>
 
 #include "code_find_bar.h"
+#include "src/engine/ac_language.h"
 #include "src/engine/json_validator.h"
 #include "src/engine/script/ac_validator.h"
 #include "src/engine/tpl/tpl_validator.h"
@@ -339,10 +340,11 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area)
 
   while (block.isValid() && top <= event->rect().bottom()) {
     if (block.isVisible() && bottom >= event->rect().top()) {
-      QString number = QString::number(blockNumber + 1);
+      int line = blockNumber + 1;
+      QString number = QString::number(line);
 
       // 错误行号显示红色，否则用默认颜色
-      if (m_errorLines.contains(blockNumber + 1)) {
+      if (m_errorLines.contains(line)) {
         painter.setPen(AuiStyle::errorTextColor());
       } else {
         painter.setPen(AuiStyle::textColor());
@@ -350,6 +352,16 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area)
 
       painter.drawText(0, top, m_lineNumberArea->width() - 6, fontMetrics().height(),
                        Qt::AlignRight, number);
+
+      // 绘制断点圆点（红色，位于行号左侧）
+      if (m_breakpoints.contains(line)) {
+        int dotR = 5;
+        int cx = 5;
+        int cy = top + fontMetrics().height() / 2;
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor(0xf4, 0x47, 0x47));  // 红色断点
+        painter.drawEllipse(QPoint(cx, cy), dotR, dotR);
+      }
     }
 
     block = block.next();
@@ -358,6 +370,87 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area)
     ++blockNumber;
   }
 }
+
+// ── 行号区点击：切换断点 ──
+void LineNumberArea::mousePressEvent(QMouseEvent *event) {
+  if (event->button() == Qt::LeftButton) {
+    m_codeEditor->toggleBreakpointAtY(event->pos().y());
+    event->accept();
+    return;
+  }
+  QWidget::mousePressEvent(event);
+}
+
+// ── 根据行号区 y 坐标切换断点 ──
+void CodeEditor::toggleBreakpointAtY(int y) {
+  QTextBlock block = firstVisibleBlock();
+  int blockNumber = block.blockNumber();
+  int top = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
+  int bottom = top + qRound(blockBoundingRect(block).height());
+
+  while (block.isValid()) {
+    if (y >= top && y < bottom) {
+      toggleBreakpoint(blockNumber);
+      return;
+    }
+    block = block.next();
+    top = bottom;
+    bottom = top + qRound(blockBoundingRect(block).height());
+    ++blockNumber;
+  }
+}
+
+// ── 断点调试接口 ──
+bool CodeEditor::isDebuggableFile() const {
+  return objectName().endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive);
+}
+
+void CodeEditor::toggleBreakpoint(int blockNumber) {
+  if (blockNumber < 0) return;
+  // 仅 .ac 脚本支持断点调试；json/tpl 等数据文件不可调试，忽略点击
+  if (!isDebuggableFile()) return;
+  int line = blockNumber + 1;
+  if (m_breakpoints.contains(line)) {
+    m_breakpoints.remove(line);
+  } else {
+    m_breakpoints.insert(line);
+  }
+  m_lineNumberArea->update();
+  emit breakpointsChanged();
+}
+
+bool CodeEditor::hasBreakpoint(int line) const { return m_breakpoints.contains(line); }
+
+QSet<int> CodeEditor::breakpoints() const { return m_breakpoints; }
+
+void CodeEditor::setBreakpoints(const QSet<int> &lines) {
+  m_breakpoints = lines;
+  m_lineNumberArea->update();
+}
+
+void CodeEditor::clearBreakpoints() {
+  m_breakpoints.clear();
+  m_lineNumberArea->update();
+}
+
+void CodeEditor::setDebugLine(int line) {
+  m_debugLine = line;
+  highlightCurrentLine();
+  if (line > 0) {
+    // 将调试行滚动到可见区域
+    QTextBlock block = document()->findBlockByNumber(line - 1);
+    if (block.isValid()) {
+      QTextCursor cursor(block);
+      setTextCursor(cursor);
+    }
+  }
+}
+
+void CodeEditor::clearDebugLine() { setDebugLine(-1); }
+
+void CodeEditor::setDebugVariables(const QList<AcDebugVar> &vars) { m_debugVars = vars; }
+
+void CodeEditor::clearDebugVariables() { m_debugVars.clear(); }
 
 // ──────────────────────────────────────────────────────────────
 //  绘制与事件处理
@@ -596,6 +689,19 @@ void CodeEditor::highlightCurrentLine() {
   // 错误波浪下划线
   extra.append(m_errorSelections);
 
+  // 调试当前行高亮（黄色背景，标红箭头）
+  if (m_debugLine > 0) {
+    QTextBlock block = document()->findBlockByNumber(m_debugLine - 1);
+    if (block.isValid()) {
+      QTextEdit::ExtraSelection debugSel;
+      debugSel.format.setBackground(QColor(0xff, 0xf0, 0x8a));  // 淡黄背景
+      debugSel.format.setProperty(QTextFormat::FullWidthSelection, true);
+      debugSel.cursor = QTextCursor(block);
+      debugSel.cursor.clearSelection();
+      extra.append(debugSel);
+    }
+  }
+
   // 查找匹配高亮（由 CodeFindBar 管理，追加到行高亮之后）
   if (m_findBar && m_findBar->isFindBarVisible()) {
     extra.append(m_findSelections);
@@ -611,6 +717,28 @@ void CodeEditor::refreshExtraSelections() { highlightCurrentLine(); }
 // ──────────────────────────────────────────────────────────────
 
 void CodeEditor::keyPressEvent(QKeyEvent *event) {
+  // ── 调试快捷键：F5 启动/继续、F10 单步跳过、F11 单步进入、Shift+F11 单步跳出 ──
+  if (event->key() == Qt::Key_F5 && !event->modifiers()) {
+    emit requestDebugStart();
+    event->accept();
+    return;
+  }
+  if (event->key() == Qt::Key_F10 && !event->modifiers()) {
+    emit requestDebugStepOver();
+    event->accept();
+    return;
+  }
+  if (event->key() == Qt::Key_F11 && !event->modifiers()) {
+    emit requestDebugStepInto();
+    event->accept();
+    return;
+  }
+  if (event->key() == Qt::Key_F11 && (event->modifiers() & Qt::ShiftModifier)) {
+    emit requestDebugStepOut();
+    event->accept();
+    return;
+  }
+
   // Ctrl+F 查找
   if ((event->modifiers() & Qt::ControlModifier) && event->key() == Qt::Key_F) {
     showFindBar();

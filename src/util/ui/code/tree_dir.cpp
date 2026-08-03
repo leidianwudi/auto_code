@@ -120,7 +120,7 @@ void ModifiedFileDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
 TreeDir::TreeDir(QWidget *parent) : QTreeWidget(parent) {
   setHeaderLabel(QStringLiteral("文件"));
   setMinimumWidth(kMinWidth);
-  setMaximumWidth(kMaxWidth);
+  // 不设最大宽度，允许用户拖动分隔条自由加宽目录树
   setAnimated(true);
   setIndentation(16);
   setSortingEnabled(false);

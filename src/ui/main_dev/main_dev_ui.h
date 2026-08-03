@@ -20,6 +20,7 @@
 
 class QVBoxLayout;
 
+#include "debug_panel.h"
 #include "main_dev_ui_ext.h"
 #include "src/util/ui/code/code_log.h"
 #include "src/util/ui/code/tree_dir.h"
@@ -74,6 +75,7 @@ public:
   // ════════════════════════════════════════════════════════════
 
   TreeDir *fileTree() const { return m_fileTree; }
+  DebugPanel *debugPanel() const { return m_debugPanel; }
 
   // ════════════════════════════════════════════════════════════
   //  主分割器
@@ -117,6 +119,7 @@ public:
   QAction *helpKeyAction() const { return m_helpKeyAction; }
   QPushButton *buildBtn() const { return m_buildBtn; }
   QPushButton *stopBtn() const { return m_stopBtn; }
+  QPushButton *debugBtn() const { return m_debugBtn; }
   QComboBox *startupCombo() const { return m_startupCombo; }
   QPushButton *saveBtn() const { return m_saveBtn; }
   QPushButton *saveAllBtn() const { return m_saveAllBtn; }
@@ -143,6 +146,7 @@ private:
 
   // ── 成员变量 ──
   TreeDir *m_fileTree = nullptr;
+  DebugPanel *m_debugPanel = nullptr;  ///< 调试面板（调用栈 + 变量）
   QSplitter *m_mainSplitter = nullptr;
   QSplitter *m_editorSplitter = nullptr;
   QLabel *m_cursorPositionLabel = nullptr;
@@ -160,7 +164,8 @@ private:
   QPushButton *m_splitBtn = nullptr;
   QPushButton *m_visualToggleBtn = nullptr;  ///< 可视化/代码切换按钮
   QPushButton *m_buildBtn = nullptr;
-  QPushButton *m_stopBtn = nullptr;  ///< 停止脚本执行按钮
+  QPushButton *m_stopBtn = nullptr;   ///< 停止脚本执行按钮
+  QPushButton *m_debugBtn = nullptr;  ///< 调试按钮（启动/继续调试）
   QComboBox *m_startupCombo = nullptr;
   QPushButton *m_saveBtn = nullptr;
   QPushButton *m_saveAllBtn = nullptr;

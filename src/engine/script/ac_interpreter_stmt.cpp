@@ -21,7 +21,14 @@
 // ═════════════════════════════════════════════════════════════════════════════
 
 QJsonValue AcInterpreter::execCallBody(const QVector<ParamDef> &params, const QJsonValue &callArgs,
-                                       const Block &body, const QJsonObject *thisObj) {
+                                       const Block &body, const QJsonObject *thisObj,
+                                       const QString &funcName) {
+  ++m_callDepth;
+  if (m_debugger) {
+    int frameLine = body.stmts.isEmpty() ? 0 : body.stmts.first().line;
+    m_callStack.append(AcDebugFrame{funcName, frameLine});
+  }
+
   QJsonArray argsArr = callArgs.toArray();
   QJsonObject oldThis = m_currentThis;
 
@@ -52,12 +59,15 @@ QJsonValue AcInterpreter::execCallBody(const QVector<ParamDef> &params, const QJ
 
   m_currentThis = oldThis;
 
+  if (m_debugger) m_callStack.removeLast();
+  --m_callDepth;
+
   return result;
 }
 
 QJsonValue AcInterpreter::execMethod(const MethodDef &method, const QJsonObject &thisObj,
                                      const QJsonValue &callArgs) {
-  return execCallBody(method.params, callArgs, method.body, &thisObj);
+  return execCallBody(method.params, callArgs, method.body, &thisObj, method.name);
 }
 
 void AcInterpreter::initStaticVars(const ClassDef &cd) {
@@ -123,7 +133,7 @@ QJsonObject AcInterpreter::createBaseInstance(const QString &baseClassName) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 QJsonValue AcInterpreter::execUserFunction(const MethodDef &func, const QJsonValue &callArgs) {
-  return execCallBody(func.params, callArgs, func.body, nullptr);
+  return execCallBody(func.params, callArgs, func.body, nullptr, func.name);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -476,6 +486,24 @@ void AcInterpreter::execBlock(const Block &block) {
       return;
     }
     const auto &stmt = block.stmts[i];
+    // 声明类语句（class/function/interface/enum/import）不参与断点/单步暂停，
+    // 避免单步调试时在声明行上显示"错位"的高亮
+    const bool isDeclStmt =
+        (stmt.kind == Block::Stmt::kClassDef || stmt.kind == Block::Stmt::kFuncDef ||
+         stmt.kind == Block::Stmt::kInterfaceDef || stmt.kind == Block::Stmt::kEnumDef ||
+         stmt.kind == Block::Stmt::kImport);
+    // 调试：命中断点/单步时暂停（阻塞等待 GUI 指令），返回 false 表示用户停止
+    if (m_debugger && !isDeclStmt) {
+      bool cont =
+          m_debugger->onStatement(stmt.filePath, stmt.line, m_callDepth,
+                                  [this](QVector<AcDebugFrame> &stack, QList<AcDebugVar> &vars) {
+                                    buildDebugSnapshot(stack, vars);
+                                  });
+      if (!cont) {
+        m_error = QStringLiteral("执行已取消");
+        return;
+      }
+    }
     execStmt(stmt);
     if (!m_error.isEmpty()) return;
     if (m_hasReturned || m_hasBreak || m_hasContinue) return;
@@ -502,5 +530,40 @@ void AcInterpreter::execIfStmt(const IfStmt &ifStmt) {
     pushScope();
     execBlock(ifStmt.elseBlock);
     popScope();
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  调试快照
+// ═════════════════════════════════════════════════════════════════════════════
+
+void AcInterpreter::buildDebugSnapshot(QVector<AcDebugFrame> &stack,
+                                       QList<AcDebugVar> &vars) const {
+  // 调用栈（从外层到内层）
+  stack = m_callStack;
+
+  // 变量：所有作用域（从内到外展示）+ 静态变量 + this
+  for (int i = m_scopeStack.size() - 1; i >= 0; --i) {
+    const QString scopeName =
+        QStringLiteral("%1").arg(i == 0 ? QStringLiteral("全局") : QStringLiteral("局部"));
+    const auto &scope = m_scopeStack[i];
+    for (auto it = scope.cbegin(); it != scope.cend(); ++it) {
+      vars.append(AcDebugVar{scopeName, it.key(), it.value()});
+    }
+  }
+
+  // 静态变量
+  for (auto it = m_staticVars.cbegin(); it != m_staticVars.cend(); ++it) {
+    const QJsonObject &sv = it.value();
+    for (auto sit = sv.cbegin(); sit != sv.cend(); ++sit) {
+      vars.append(AcDebugVar{QStringLiteral("静态.%1").arg(it.key()), sit.key(), sit.value()});
+    }
+  }
+
+  // this 对象的属性
+  if (!m_currentThis.isEmpty()) {
+    for (auto it = m_currentThis.cbegin(); it != m_currentThis.cend(); ++it) {
+      vars.append(AcDebugVar{QStringLiteral("this"), it.key(), it.value()});
+    }
   }
 }

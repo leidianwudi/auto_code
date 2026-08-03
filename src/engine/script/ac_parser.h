@@ -21,6 +21,9 @@ public:
   /// @return true 解析成功，false 解析失败（调用 error() 获取错误信息）
   bool parse(const QVector<Token> &tokens, Block &program, QSet<QString> &declaredVars);
 
+  /// @brief 设置当前解析的源文件路径（用于断点定位）
+  void setFilePath(const QString &path) { m_filePath = path; }
+
   /// @brief 获取错误信息
   QString error() const { return m_error; }
 
@@ -97,5 +100,6 @@ private:
   int m_pos = 0;
   QVector<Token> m_tokens;
   QString m_error;
+  QString m_filePath;  ///< 当前解析的源文件路径
   QSet<QString> *m_declaredVars = nullptr;
 };

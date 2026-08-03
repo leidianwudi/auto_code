@@ -11,6 +11,7 @@
 bool AcParser::parseStmt(Block::Stmt &stmt) {
   Token t = peek();
   stmt.line = t.line;  // 记录语句起始行号
+  stmt.filePath = m_filePath;  // 记录语句所属源文件
 
   // ── import { A, B } from "file" ──
   if (t.type == TOK_IMPORT) {

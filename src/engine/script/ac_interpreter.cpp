@@ -20,7 +20,6 @@
 #include "ac_builtin_loader.h"
 #include "ac_object_manager.h"
 
-
 // ═════════════════════════════════════════════════════════════════════════════
 //  变量操作
 // ═════════════════════════════════════════════════════════════════════════════
@@ -251,6 +250,13 @@ QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
   m_generatedFiles.clear();
   m_funcExprCounter = 0;
 
+  // 顶层脚本帧：供调试器调用栈展示
+  if (m_debugger) {
+    ++m_callDepth;
+    int topLine = program.stmts.isEmpty() ? 0 : program.stmts.first().line;
+    m_callStack.append(AcDebugFrame{QString(), topLine});
+  }
+
   pushScope();
 
   AcBuiltinLoader::registerNativeClasses(m_classes);
@@ -281,11 +287,20 @@ QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
   if (!m_error.isEmpty()) {
     error = m_error;
     m_objMgr.cleanup();
+    if (m_debugger) {
+      m_callStack.removeLast();
+      --m_callDepth;
+    }
     return QJsonValue();
   }
 
   while (!m_scopeStack.isEmpty()) {
     popScope();
+  }
+
+  if (m_debugger) {
+    m_callStack.removeLast();
+    --m_callDepth;
   }
 
   return m_hasReturned ? m_returnValue : QJsonValue();

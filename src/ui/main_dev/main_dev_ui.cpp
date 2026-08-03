@@ -31,6 +31,7 @@
 #include <QTabBar>
 #include <QTextBlock>
 #include <QTextCursor>
+#include <QTextStream>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -140,6 +141,11 @@ void MainDevUi::setupTitleBar() {
   titleLayout->insertWidget(tb.contentInsertIndex, m_stopBtn);
   tb.contentInsertIndex++;
 
+  // ── 调试按钮（红色 bug 图标，启动/继续调试） ──
+  m_debugBtn = AuiButton::createDebugButton();
+  titleLayout->insertWidget(tb.contentInsertIndex, m_debugBtn);
+  tb.contentInsertIndex++;
+
   // ── 启动项下拉框 ──
   m_startupCombo = AuiComboBox::create();
   m_startupCombo->setMinimumWidth(120);
@@ -178,8 +184,14 @@ void MainDevUi::setupTitleBar() {
 // ──────────────────────────────────────────────────────────────
 
 void MainDevUi::setupEditorArea() {
-  // ── 左侧文件树 ──
+  // ── 左侧：文件树 + 调试面板 双 tab ──
   m_fileTree = new TreeDir;
+  m_debugPanel = new DebugPanel;
+
+  auto *leftTabs = new QTabWidget;
+  leftTabs->setDocumentMode(true);
+  leftTabs->addTab(m_fileTree, QStringLiteral("文件"));
+  leftTabs->addTab(m_debugPanel, QStringLiteral("调试"));
 
   connect(m_fileTree, &TreeDir::startupItemsChanged, this, &MainDevUi::refreshStartupCombo);
 
@@ -208,9 +220,9 @@ void MainDevUi::setupEditorArea() {
   m_contentSplitter->setStretchFactor(0, 1);
   m_contentSplitter->setStretchFactor(1, 0);
 
-  // ── 主分割器：文件树 + 右侧区域 ──
+  // ── 主分割器：文件树(tab) + 右侧区域 ──
   m_mainSplitter = new QSplitter(Qt::Horizontal);
-  m_mainSplitter->addWidget(m_fileTree);
+  m_mainSplitter->addWidget(leftTabs);
   m_mainSplitter->addWidget(m_contentSplitter);
   m_mainSplitter->setStretchFactor(0, 0);
   m_mainSplitter->setStretchFactor(1, 1);
@@ -287,8 +299,9 @@ void MainDevUi::showEvent(QShowEvent *event) {
     firstShow = false;
     const int w = width();
     const int h = height();
-    m_mainSplitter->setSizes(
-        {qMax(TreeDir::kMinWidth, w / 5), w - qMax(TreeDir::kMinWidth, w / 5)});
+    // 初始目录树宽度固定为 260（不小于最小宽度），避免大窗口下过宽
+    const int leftW = qBound(TreeDir::kMinWidth, 260, w / 2);
+    m_mainSplitter->setSizes({leftW, w - leftW});
     m_contentSplitter->setSizes({h - 120, 120});
   }
 }

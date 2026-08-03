@@ -14,6 +14,7 @@
 #include <atomic>
 #include <functional>
 
+#include "ac_debugger.h"
 #include "ac_object_manager.h"
 #include "ac_type.h"
 
@@ -42,6 +43,9 @@ public:
 
   /// @brief 设置取消标志（工作线程中由解释器轮询检查）
   void setCancelFlag(std::atomic<bool> *flag) { m_cancelFlag = flag; }
+
+  /// @brief 设置调试器（为空则不启用调试，零开销）
+  void setDebugger(AcDebugger *dbg) { m_debugger = dbg; }
 
   /// @brief 设置项目根目录
   void setRootDir(const QString &dir) { m_rootDir = dir; }
@@ -152,7 +156,8 @@ private:
                         const QJsonValue &callArgs);
   /// @brief 执行带 this 上下文的函数体（method/function 通用）
   QJsonValue execCallBody(const QVector<ParamDef> &params, const QJsonValue &callArgs,
-                          const Block &body, const QJsonObject *thisObj);
+                          const Block &body, const QJsonObject *thisObj,
+                          const QString &funcName = QString());
   void initStaticVars(const ClassDef &cd);
 
   // ── 继承辅助 ──
@@ -162,11 +167,18 @@ private:
   // ── 顶层函数执行 ──
   QJsonValue execUserFunction(const MethodDef &func, const QJsonValue &callArgs);
 
+  // ── 调试支持 ──
+  /// 暂停时构建调用栈与变量快照
+  void buildDebugSnapshot(QVector<AcDebugFrame> &stack, QList<AcDebugVar> &vars) const;
+
   // ── 运行状态 ──
   QString m_error;
   QString m_scriptDir;
   QString m_rootDir;
   std::atomic<bool> *m_cancelFlag = nullptr;  ///< 取消标志（指向 AcEngine 的原子标志）
+  AcDebugger *m_debugger = nullptr;           ///< 调试器（为空则不启用调试）
+  int m_callDepth = 0;
+  QVector<AcDebugFrame> m_callStack;  ///< 调用栈（仅调试时维护）
   AcObjectManager m_objMgr;
   QVector<QHash<QString, QJsonValue>> m_scopeStack;
   QVector<QVector<QString>> m_usingStack;

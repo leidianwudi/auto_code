@@ -536,6 +536,7 @@ struct Block::Stmt {
     kBlock  ///< 独立块作用域 { stmts }
   } kind = kCall;
   int line = 0;  ///< 源码行号（1-based，用于符号导航）
+  QString filePath;  ///< 语句所属源文件路径（import 内联后用于断点定位）
   CallStmt call;
   AssignStmt assign;
   IndexAssignStmt indexAssign;

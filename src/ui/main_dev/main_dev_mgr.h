@@ -13,9 +13,13 @@
 #pragma once
 
 #include <QFuture>
+#include <QHash>
+#include <QMap>
 #include <QObject>
+#include <QSet>
 #include <QStack>
 
+#include "src/engine/script/ac_debugger.h"
 #include "src/util/ui/aui_mgr.h"
 
 class QTabWidget;
@@ -100,6 +104,25 @@ private slots:
   void navigateForward();
   /// 停止正在执行的脚本（设置取消标志，工作线程轮询检查）
   void onStopScript();
+  /// 调试按钮点击：启动调试会话（若已暂停则继续执行）
+  void onDebugBtnClicked();
+  /// 编辑器 F5：启动调试/继续
+  void onDebugStart();
+  /// 编辑器 F10：单步跳过
+  void onDebugStepOver();
+  /// 编辑器 F11：单步进入
+  void onDebugStepInto();
+  /// 编辑器 Shift+F11：单步跳出
+  void onDebugStepOut();
+  /// 双击断点面板条目：打开文件并定位到断点行
+  void onBreakpointActivated(const QString &filePath, int line);
+  /// 调试器暂停（工作线程阻塞中），高亮当前行
+  void onDebuggerPaused(const QString &filePath, int line, const QVector<AcDebugFrame> &stack,
+                        const QList<AcDebugVar> &vars);
+  /// 调试器恢复执行，清除行高亮
+  void onDebuggerResumed();
+  /// 调试会话结束，复位状态
+  void onDebuggerFinished();
 
 private:
   /// 查找并加载 file/ 目录
@@ -111,6 +134,7 @@ private:
   void connectSaveActions();   ///< 保存/Ctrl+S/保存全部
   void connectVisualToggle();  ///< 可视化/代码切换按钮
   void connectBuildAction();   ///< 执行按钮
+  void connectDebugAction();   ///< 调试按钮与调试器信号
   void connectEditorPanels();  ///< 编辑器面板信号 + 事件过滤器
   /// 为文件路径创建编辑器实例（含高亮器 + 验证模式）
   CodeEditor *createEditorForFile(const QString &filePath);
@@ -118,6 +142,10 @@ private:
   CodeEditor *openFileInEditor(const QString &filePath);
   /// 获取当前活跃的编辑器
   CodeEditor *currentEditor() const;
+  /// 收集所有编辑器中的断点并刷新调试面板「断点」页
+  void refreshBreakpointList();
+  /// 收集全部已打开编辑器及持久化断点（文件路径 → 行号集合），供调试器使用
+  QMap<QString, QSet<int>> debugBreakpoints();
   /// 获取当前活跃的面板组
   QTabWidget *currentTabWidget() const;
   /// 连接编辑器的光标位置信号
@@ -154,4 +182,15 @@ protected:
   // 脚本执行（工作线程）
   QFuture<void> m_scriptFuture;  ///< 脚本执行任务（工作线程）
   bool m_scriptRunning = false;  ///< 脚本是否正在执行
+
+  // 调试会话
+  AcDebugger *m_debugger = nullptr;     ///< 调试器（由 MainDevMgr 创建并持有）
+  bool m_debugging = false;             ///< 是否处于调试模式
+  CodeEditor *m_debugEditor = nullptr;  ///< 当前调试会话的目标编辑器（用于行高亮）
+
+  // 断点持久化：按文件路径保存断点，关闭后重新打开仍保留
+  QHash<QString, QSet<int>> m_persistedBreakpoints;
+
+  /// 启动一次调试会话（收集当前编辑器断点，运行脚本）
+  void startDebugSession();
 };

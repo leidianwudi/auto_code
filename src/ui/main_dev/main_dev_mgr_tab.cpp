@@ -61,16 +61,19 @@ CodeEditor *MainDevMgr::currentEditor() const {
 }
 
 QTabWidget *MainDevMgr::currentTabWidget() const {
-  // 1. 优先从焦点控件向上查找 QTabWidget 祖先
+  // 1. 优先从焦点控件向上查找编辑器面板 QTabWidget（排除左侧文件树/调试 tab）
   QWidget *focus = QApplication::focusWidget();
   while (focus) {
-    if (auto *tabs = qobject_cast<QTabWidget *>(focus)) return tabs;
+    if (auto *tabs = qobject_cast<QTabWidget *>(focus)) {
+      // 仅接受位于编辑器分栏中的面板，避免误把左侧 tab（文件/调试）当作编辑器
+      if (m_ui->editorPanelIndex(tabs) >= 0) return tabs;
+    }
     focus = focus->parentWidget();
   }
 
-  // 2. 再 fallback 到最后活跃面板
-  if (m_model->lastActivePanel && m_model->lastActivePanel->isVisible() &&
-      m_model->lastActivePanel->count() > 0) {
+  // 2. 再 fallback 到最后活跃面板（仅限编辑器面板）
+  if (m_model->lastActivePanel && m_ui->editorPanelIndex(m_model->lastActivePanel) >= 0 &&
+      m_model->lastActivePanel->isVisible() && m_model->lastActivePanel->count() > 0) {
     return m_model->lastActivePanel;
   }
 

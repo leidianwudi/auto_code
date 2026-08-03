@@ -3,8 +3,6 @@
  * @brief 编辑器信号连接实现（MainDevMgr 的编辑器信号、焦点、验证、事件过滤）
  */
 
-#include "main_dev_mgr.h"
-
 #include <QApplication>
 #include <QFileInfo>
 #include <QInputDialog>
@@ -13,6 +11,7 @@
 #include <QRegularExpression>
 #include <QTextCursor>
 
+#include "main_dev_mgr.h"
 #include "main_dev_model.h"
 #include "main_dev_ui.h"
 #include "src/ui/json_vue/json_vue_widget.h"
@@ -34,6 +33,10 @@ void MainDevMgr::connectEditor(CodeEditor *editor) {
                &MainDevMgr::onAboutToNavigate);
     disconnect(m_model->connectedEditor, &CodeEditor::requestFindReferencesAll, this, nullptr);
     disconnect(m_model->connectedEditor, &CodeEditor::requestWorkspaceSymbols, this, nullptr);
+    disconnect(m_model->connectedEditor, &CodeEditor::requestDebugStart, this, nullptr);
+    disconnect(m_model->connectedEditor, &CodeEditor::requestDebugStepOver, this, nullptr);
+    disconnect(m_model->connectedEditor, &CodeEditor::requestDebugStepInto, this, nullptr);
+    disconnect(m_model->connectedEditor, &CodeEditor::requestDebugStepOut, this, nullptr);
   }
 
   m_model->connectedEditor = editor;
@@ -108,6 +111,11 @@ void MainDevMgr::connectEditor(CodeEditor *editor) {
       }
       m_ui->appendOutput(QStringLiteral("共 %1 处匹配").arg(totalFound), false);
     });
+    // 调试快捷键：F5 启动/继续、F10 单步跳过、F11 单步进入、Shift+F11 单步跳出
+    connect(editor, &CodeEditor::requestDebugStart, this, &MainDevMgr::onDebugStart);
+    connect(editor, &CodeEditor::requestDebugStepOver, this, &MainDevMgr::onDebugStepOver);
+    connect(editor, &CodeEditor::requestDebugStepInto, this, &MainDevMgr::onDebugStepInto);
+    connect(editor, &CodeEditor::requestDebugStepOut, this, &MainDevMgr::onDebugStepOut);
     updateCursorPosition();
     editor->validate();
   } else {
@@ -127,7 +135,10 @@ void MainDevMgr::onFocusChanged(QWidget * /*oldFocus*/, QWidget *newFocus) {
   CodeEditor *foundEditor = nullptr;
 
   while (w) {
-    if (auto *tabs = qobject_cast<QTabWidget *>(w)) m_model->lastActivePanel = tabs;
+    if (auto *tabs = qobject_cast<QTabWidget *>(w)) {
+      // 仅记录编辑器面板，避免把左侧「文件/调试」tab 误当作活跃编辑器
+      if (m_ui->editorPanelIndex(tabs) >= 0) m_model->lastActivePanel = tabs;
+    }
     if (!foundEditor) {
       if (auto *editor = qobject_cast<CodeEditor *>(w)) foundEditor = editor;
     }

@@ -39,6 +39,9 @@ public:
   /// @brief 设置取消标志（工作线程中由解释器轮询检查）
   void setCancelFlag(std::atomic<bool> *flag) { m_cancelFlag = flag; }
 
+  /// @brief 设置调试器（为空则不启用调试）
+  void setDebugger(AcDebugger *dbg) { m_debugger = dbg; }
+
   /// 日志回调：print() 的输出通过此回调通知 UI
   using LogCallback = std::function<void(const QString &text, bool isError)>;
   void setLogCallback(LogCallback cb) { m_logCallback = std::move(cb); }
@@ -89,4 +92,5 @@ private:
   AcSymbolTable m_symbolTable;                ///< 符号表
   QStringList m_sourceLines;                  ///< 源码行列表（用于引用上下文）
   std::atomic<bool> *m_cancelFlag = nullptr;  ///< 取消标志（指向 AcEngine 的原子标志）
+  AcDebugger *m_debugger = nullptr;           ///< 调试器（为空则不启用调试）
 };

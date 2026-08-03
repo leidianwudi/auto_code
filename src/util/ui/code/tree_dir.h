@@ -41,8 +41,7 @@ class TreeDir : public QTreeWidget {
   Q_OBJECT
 
 public:
-  static constexpr int kMinWidth = 200;
-  static constexpr int kMaxWidth = 400;
+  static constexpr int kMinWidth = 20;
 
 public:
   explicit TreeDir(QWidget *parent = nullptr);

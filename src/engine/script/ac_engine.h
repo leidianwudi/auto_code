@@ -19,6 +19,8 @@
 #include <atomic>
 #include <functional>
 
+class AcDebugger;
+
 /**
  * @class AcEngine
  * @brief .ac 脚本引擎 — 解析并执行 .ac 脚本文件
@@ -37,6 +39,8 @@ public:
 
   void setLogCallback(LogCallback cb) { m_logCallback = std::move(cb); }
   void setRootDir(const QString &dir) { m_rootDir = dir; }
+  /// @brief 设置调试器（为空则不启用调试）
+  void setDebugger(AcDebugger *dbg) { m_debugger = dbg; }
 
   /// @brief 请求取消正在执行的脚本（工作线程中由解释器轮询检查）
   void requestCancel() { m_cancelRequested.store(true); }
@@ -61,5 +65,6 @@ private:
   QString m_rootDir;
   QStringList m_generatedFiles;
   LogCallback m_logCallback;
+  AcDebugger *m_debugger = nullptr;            ///< 调试器（为空则不启用调试）
   std::atomic<bool> m_cancelRequested{false};  ///< 取消标志（工作线程执行时检查）
 };

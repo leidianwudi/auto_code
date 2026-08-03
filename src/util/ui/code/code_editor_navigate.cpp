@@ -13,6 +13,9 @@
  */
 
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QToolTip>
 
 #include "code_editor.h"
@@ -403,6 +406,64 @@ QVector<QPair<int, QString>> CodeEditor::findSymbolReferences(const QString &nam
   return refs;
 }
 
+/// @brief 格式化调试变量的悬停提示（类型 + 值）
+static QString debugVarTooltip(const AcDebugVar &v) {
+  const QJsonValue &val = v.value;
+  QString type;
+  QString value;
+  if (val.isString()) {
+    type = QStringLiteral("String");
+    value = val.toString();
+  } else if (val.isDouble()) {
+    type = QStringLiteral("Number");
+    value = QString::number(val.toDouble());
+  } else if (val.isBool()) {
+    type = QStringLiteral("Boolean");
+    value = val.toBool() ? QStringLiteral("true") : QStringLiteral("false");
+  } else if (val.isNull()) {
+    type = QStringLiteral("Null");
+    value = QStringLiteral("null");
+  } else if (val.isUndefined()) {
+    type = QStringLiteral("Undefined");
+    value = QStringLiteral("undefined");
+  } else if (val.isArray()) {
+    type = QStringLiteral("Array");
+    const QJsonArray &a = val.toArray();
+    value = QStringLiteral("Array(%1)").arg(a.size());
+    QStringList preview;
+    int n = qMin(a.size(), 5);
+    for (int i = 0; i < n; ++i) {
+      const QJsonValue &elem = a[i];
+      if (elem.isString())
+        preview << elem.toString();
+      else if (elem.isDouble())
+        preview << QString::number(elem.toDouble());
+      else if (elem.isBool())
+        preview << (elem.toBool() ? QStringLiteral("true") : QStringLiteral("false"));
+      else if (elem.isArray())
+        preview << QStringLiteral("Array");
+      else if (elem.isObject())
+        preview << QStringLiteral("Object");
+      else if (elem.isNull())
+        preview << QStringLiteral("null");
+      else
+        preview << QStringLiteral("undefined");
+    }
+    if (!preview.isEmpty())
+      value += QStringLiteral(" [") + preview.join(QStringLiteral(", ")) + QStringLiteral("]");
+  } else if (val.isObject()) {
+    type = QStringLiteral("Object");
+    value = QStringLiteral("Object(%1)").arg(val.toObject().size());
+  } else {
+    type = QStringLiteral("Any");
+  }
+
+  QString text = QStringLiteral("%1").arg(v.name);
+  text += QStringLiteral("\n类型: ") + type;
+  if (!value.isEmpty()) text += QStringLiteral("\n值: ") + value;
+  return text;
+}
+
 void CodeEditor::showSymbolHover(int pos, const QPoint &globalPos) {
   if (m_validationMode != AcValidation) return;
 
@@ -411,6 +472,17 @@ void CodeEditor::showSymbolHover(int pos, const QPoint &globalPos) {
   if (identifier.isEmpty()) {
     QToolTip::hideText();
     return;
+  }
+
+  // 调试暂停时：命中调试变量则优先显示类型与值
+  if (!m_debugVars.isEmpty()) {
+    for (const auto &v : m_debugVars) {
+      if (v.name == identifier) {
+        m_currentHoverSymbol = identifier;
+        QToolTip::showText(globalPos, debugVarTooltip(v), this);
+        return;
+      }
+    }
   }
 
   // 同一符号不重复显示

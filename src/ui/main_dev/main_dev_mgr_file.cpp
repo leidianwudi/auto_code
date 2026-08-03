@@ -125,8 +125,14 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
   // ── 记录状态 ──
   m_model->registerFile(filePath, content, editor);
   editor->setObjectName(filePath);
+  // 恢复该文件持久化的断点（关闭重开后保留）
+  editor->setBreakpoints(m_persistedBreakpoints.value(filePath));
   editor->setFocus();
   m_ui->setWindowTitle(MainDevUi::fileTitle(fi.fileName()));
+
+  // ── 断点变化时刷新调试面板「断点」列表 ──
+  connect(editor, &CodeEditor::breakpointsChanged, this, &MainDevMgr::refreshBreakpointList);
+  refreshBreakpointList();
 
   // ── 修改标记：内容变化时标签页和树节点绘制红色 "*" ──
   connect(editor->document(), &QTextDocument::modificationChanged, this,
