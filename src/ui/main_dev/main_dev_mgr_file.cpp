@@ -3,14 +3,14 @@
  * @brief 文件操作实现（MainDevMgr 的编辑器创建、文件打开、重命名、删除）
  */
 
-#include "main_dev_mgr.h"
-
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QScrollBar>
 #include <QTextStream>
 
+#include "main_dev_mgr.h"
 #include "main_dev_model.h"
 #include "main_dev_ui.h"
 #include "src/engine/ac_language.h"
@@ -154,8 +154,52 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
 }
 
 // ──────────────────────────────────────────────────────────────
-//  重命名
+//  保存 + 同步（拆分副本场景）
 // ──────────────────────────────────────────────────────────────
+
+bool MainDevMgr::saveAndSync(CodeEditor *editor) {
+  if (!editor) return false;
+  if (!m_model->saveEditor(editor)) return false;
+  // 保存成功后，同步其他打开同一文件的编辑器实例内容
+  syncEditorsForFile(editor->objectName(), editor->toPlainText(), editor);
+  return true;
+}
+
+void MainDevMgr::syncEditorsForFile(const QString &filePath, const QString &content,
+                                    CodeEditor *sourceEditor) {
+  if (filePath.isEmpty()) return;
+  // 遍历所有面板的所有标签页，找到同路径的其他编辑器实例
+  for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
+    auto *tabs = m_ui->editorPanelAt(pi);
+    if (!tabs) continue;
+    for (int ti = 0; ti < tabs->count(); ++ti) {
+      auto *w = tabs->widget(ti);
+      CodeEditor *editor = qobject_cast<CodeEditor *>(w);
+      if (!editor) {
+        auto *jvw = qobject_cast<JsonVueWidget *>(w);
+        if (jvw) editor = jvw->codeEditor();
+      }
+      if (!editor || editor == sourceEditor) continue;
+      if (editor->objectName() != filePath) continue;
+
+      // 保存光标位置和滚动位置
+      QTextCursor cursor = editor->textCursor();
+      int pos = qMin(cursor.position(), content.length());
+      int anchor = qMin(cursor.anchor(), content.length());
+      int scrollY = editor->verticalScrollBar()->value();
+
+      // 更新内容（setPlainText 会重置 undo 栈）
+      editor->setPlainText(content);
+      editor->document()->setModified(false);
+
+      // 恢复光标和滚动位置
+      cursor.setPosition(anchor);
+      cursor.setPosition(pos, QTextCursor::KeepAnchor);
+      editor->setTextCursor(cursor);
+      editor->verticalScrollBar()->setValue(scrollY);
+    }
+  }
+}
 
 void MainDevMgr::onRenameFile(const QString &oldPath, const QString &newName) {
   // 校验新名称

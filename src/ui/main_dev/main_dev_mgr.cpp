@@ -115,14 +115,14 @@ void MainDevMgr::connectSaveActions() {
   // ── 保存按钮 ──
   connect(m_ui->saveBtn(), &QPushButton::clicked, this, [this]() {
     syncJsonVueBeforeSave();
-    m_model->saveEditor(currentEditor());
+    saveAndSync(currentEditor());
   });
 
   // ── Ctrl+S 快捷键 ──
   auto *saveShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+S")), m_ui);
   connect(saveShortcut, &QShortcut::activated, this, [this]() {
     syncJsonVueBeforeSave();
-    m_model->saveEditor(currentEditor());
+    saveAndSync(currentEditor());
   });
 
   // ── Alt+Left 后退 / Alt+Right 前进 ──
@@ -150,7 +150,7 @@ void MainDevMgr::connectSaveActions() {
           editor = qobject_cast<CodeEditor *>(w);
         }
         if (editor && (wasModified || editor->document()->isModified())) {
-          m_model->saveEditor(editor);
+          saveAndSync(editor);
         }
       }
     }
@@ -253,8 +253,24 @@ void MainDevMgr::loadFiles() {
 // ──────────────────────────────────────────────────────────────
 
 void MainDevMgr::updateSaveButtonState() {
-  m_ui->saveBtn()->setEnabled(currentEditor() && currentEditor()->document()->isModified());
-  m_ui->saveAllBtn()->setEnabled(m_model->hasAnyModified());
+  CodeEditor *cur = currentEditor();
+  m_ui->saveBtn()->setEnabled(cur && cur->document()->isModified());
+  // 全部保存：遍历所有面板的所有编辑器（含拆分副本，拆分副本不在 openFiles 中）
+  bool anyModified = false;
+  for (int pi = 0; pi < m_ui->editorPanelCount() && !anyModified; ++pi) {
+    auto *tabs = m_ui->editorPanelAt(pi);
+    if (!tabs) continue;
+    for (int ti = 0; ti < tabs->count() && !anyModified; ++ti) {
+      auto *w = tabs->widget(ti);
+      CodeEditor *editor = qobject_cast<CodeEditor *>(w);
+      if (!editor) {
+        auto *jvw = qobject_cast<JsonVueWidget *>(w);
+        if (jvw) editor = jvw->codeEditor();
+      }
+      if (editor && editor->document()->isModified()) anyModified = true;
+    }
+  }
+  m_ui->saveAllBtn()->setEnabled(anyModified);
 }
 
 void MainDevMgr::syncJsonVueBeforeSave() {

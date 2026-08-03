@@ -123,6 +123,12 @@ private:
   void closeTab(QTabWidget *tabs, int index);
   /// 检查所有编辑器的修改状态，更新保存按钮可用性
   void updateSaveButtonState();
+  /// 保存编辑器并同步其他打开同一文件的编辑器实例内容
+  /// （拆分副本场景：一个编辑器保存后，其他副本自动更新为最新内容）
+  bool saveAndSync(CodeEditor *editor);
+  /// 同步指定文件的所有其他编辑器实例内容（排除 sourceEditor）
+  void syncEditorsForFile(const QString &filePath, const QString &content,
+                          CodeEditor *sourceEditor);
   /// 保存前同步 JsonVueWidget 可视化数据到代码编辑器
   void syncJsonVueBeforeSave();
   /// 推入导航历史记录
