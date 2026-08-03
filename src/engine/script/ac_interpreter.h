@@ -62,6 +62,9 @@ public:
   /// @brief 推导类型名称
   static QString inferTypeName(const QJsonValue &val);
 
+  /// @brief 记录变量的推导类型（供类型检查使用）
+  void recordInferredType(const QString &name, const QJsonValue &val);
+
 private:
   // ── 执行 ──
   void execBlock(const Block &block);
@@ -117,7 +120,8 @@ private:
   // ── 变量操作 ──
   QJsonValue resolveVar(const QString &name) const;
   void setVar(const QString &name, const QJsonValue &val);
-  void declareVar(const QString &name, const QJsonValue &val);  ///< 在最新作用域内声明变量，不覆盖外层同名变量
+  void declareVar(const QString &name,
+                  const QJsonValue &val);  ///< 在最新作用域内声明变量，不覆盖外层同名变量
   bool containsVar(const QString &name) const;
   void pushScope();
   void popScope();
@@ -179,8 +183,6 @@ private:
   bool m_hasContinue = false;
   QJsonValue m_returnValue;
   QStringList m_generatedFiles;
-  int m_currentLine = 0;        ///< 当前正在执行的语句行号（用于卡死诊断）
-  long long m_stmtCounter = 0;  ///< 已执行语句计数（用于节流日志）
 
   LogCallback m_logCallback;
 };

@@ -4,8 +4,6 @@
  */
 
 #include <QDir>
-#include <QFile>
-#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <cmath>
@@ -265,7 +263,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       }
 
       if (!stmt.assign.hasTypeAnnotation) {
-        m_inferredTypes[stmt.assign.name] = inferTypeName(val);
+        recordInferredType(stmt.assign.name, val);
       }
       break;
     }
@@ -306,19 +304,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
           popScope();
           return;
         }
-        long long iterCount = 0;
         while (isTruthy(evalExpr(stmt.forStmt.condition))) {
-          if (++iterCount > 1000000) {
-            QFile f(QStringLiteral("d:/interp_debug.log"));
-            if (f.open(QIODevice::Append | QIODevice::Text)) {
-              f.write(QStringLiteral("  [INFINITE-LOOP] standard for, iter=%1 forLine=%2\n")
-                          .arg(iterCount)
-                          .arg(stmt.forStmt.line)
-                          .toUtf8());
-              f.flush();
-            }
-            break;
-          }
           execBlock(stmt.forStmt.body);
           if (!m_error.isEmpty()) {
             popScope();
@@ -351,19 +337,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
           arr = iterVal.toArray();
           if (arr.isEmpty() && iterVal.isArray()) break;
         }
-        long long forInCount = 0;
         for (const QJsonValue &v : arr) {
-          if (++forInCount > 1000000) {
-            QFile f(QStringLiteral("d:/interp_debug.log"));
-            if (f.open(QIODevice::Append | QIODevice::Text)) {
-              f.write(QStringLiteral("  [INFINITE-LOOP] for-in var=%1 forLine=%2\n")
-                          .arg(stmt.forStmt.varName)
-                          .arg(stmt.forStmt.line)
-                          .toUtf8());
-              f.flush();
-            }
-            break;
-          }
           pushScope();
           declareVar(stmt.forStmt.varName, v);
           execBlock(stmt.forStmt.body);
@@ -385,18 +359,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
 
     case Block::Stmt::kWhile: {
       pushScope();
-      long long whileCount = 0;
       while (isTruthy(evalExpr(stmt.whileStmt.condition))) {
-        if (++whileCount > 1000000) {
-          QFile f(QStringLiteral("d:/interp_debug.log"));
-          if (f.open(QIODevice::Append | QIODevice::Text)) {
-            f.write(QStringLiteral("  [INFINITE-LOOP] while forLine=%1\n")
-                        .arg(stmt.whileStmt.condition.line)
-                        .toUtf8());
-            f.flush();
-          }
-          break;
-        }
         execBlock(stmt.whileStmt.body);
         if (!m_error.isEmpty()) {
           popScope();
@@ -482,7 +445,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       if (!m_error.isEmpty()) return;
       retainIfInstance(val);
       declareVar(stmt.usingStmt.varName, val);
-      m_inferredTypes[stmt.usingStmt.varName] = inferTypeName(val);
+      recordInferredType(stmt.usingStmt.varName, val);
       if (!m_usingStack.isEmpty()) {
         m_usingStack.last().append(stmt.usingStmt.varName);
       }
@@ -513,18 +476,6 @@ void AcInterpreter::execBlock(const Block &block) {
       return;
     }
     const auto &stmt = block.stmts[i];
-    m_currentLine = stmt.line;
-    // 节流日志：每 20 万条语句记录一次当前行，用于定位卡死位置（卡在 C++ 内置函数时，此计数不动）
-    if (++m_stmtCounter % 200000 == 0) {
-      QFile f(QStringLiteral("d:/interp_debug.log"));
-      if (f.open(QIODevice::Append | QIODevice::Text)) {
-        f.write(QStringLiteral("[STUCK] currentLine=%1 counter=%2\n")
-                    .arg(m_currentLine)
-                    .arg(m_stmtCounter)
-                    .toUtf8());
-        f.flush();
-      }
-    }
     execStmt(stmt);
     if (!m_error.isEmpty()) return;
     if (m_hasReturned || m_hasBreak || m_hasContinue) return;

@@ -480,6 +480,10 @@ QString AcInterpreter::inferTypeName(const QJsonValue &val) {
   return QStringLiteral("Any");
 }
 
+void AcInterpreter::recordInferredType(const QString &name, const QJsonValue &val) {
+  m_inferredTypes[name] = inferTypeName(val);
+}
+
 QJsonValue AcInterpreter::evalUnary(const Expr &expr) {
   QJsonValue val = evalExpr(*expr.operand);
   switch (expr.unaryOp) {

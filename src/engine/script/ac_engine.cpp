@@ -44,7 +44,6 @@ QString AcEngine::execute(const QString &acFilePath) {
   qDebug() << "[AcEngine::execute] parse succeeded";
 #endif
 
-  if (m_logCallback) m_logCallback(QStringLiteral("[BUILD-MARKER] let-scope-fix"), false);
   QJsonValue result = executor.execute();
   m_generatedFiles = executor.generatedFiles();
   if (!executor.error().isEmpty()) return executor.error();
