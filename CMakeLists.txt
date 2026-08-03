@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.19)
 project(auto_code LANGUAGES CXX)
 
+# 设置 Qt 安装路径，使 CMake 能找到 Qt6Config.cmake
+if(NOT DEFINED CMAKE_PREFIX_PATH)
+    set(CMAKE_PREFIX_PATH "D:/tool/Qt/6.12.0/msvc2022_64")
+endif()
+
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Sql Network Svg)
 
 qt_standard_project_setup()
