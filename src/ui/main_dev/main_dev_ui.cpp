@@ -294,6 +294,8 @@ void MainDevUi::showEvent(QShowEvent *event) {
 }
 
 void MainDevUi::closeEvent(QCloseEvent *event) {
+  // 关闭窗口前保存目录树状态（勾选、启动项、展开节点等），供下次启动恢复
+  if (m_fileTree) m_fileTree->saveState();
   QApplication::quit();
   QMainWindow::closeEvent(event);
 }
