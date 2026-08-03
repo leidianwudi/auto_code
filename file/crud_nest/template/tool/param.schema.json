@@ -1,0 +1,160 @@
+{
+  // 根入口：描述整个文档的结构（user.json / sport.json 以 tables 数组包裹多张表配置）
+  root: "AutoConfig",
+
+  definitions: {
+    // ── 文档根对象：包含多张表配置的数组 ──
+    AutoConfig: {
+      properties: {
+        tables: {
+          type: "array",
+          items: "TableConfig",
+          description: "多表配置列表，每项为一张表的生成配置"
+        }
+      },
+      required: ["tables"]
+    },
+
+    // ── 单张表配置 ──
+    TableConfig: {
+      properties: {
+        modelName: {
+          type: "string",
+          description: "模块名，可以包括路径（如 user\\user）"
+        },
+        tableName: {
+          type: "string",
+          description: "表名"
+        },
+        manualUpdateTime: {
+          type: "bool",
+          description: "update_time 是否由业务代码维护，默认由 TypeORM 自动更新"
+        },
+        selCols: {
+          type: "array",
+          items: "string",
+          description: "精确查询的字段"
+        },
+        selColsGap: {
+          type: "array",
+          items: "string",
+          description: "范围查询的字段"
+        },
+        selColsLike: {
+          type: "array",
+          items: "string",
+          description: "模糊查询的字段"
+        },
+        selColsSum: {
+          type: "array",
+          items: "string",
+          description: "汇总查询的字段"
+        },
+        selColsSort: {
+          type: "object",
+          class: "SortConfig",
+          description: "排序字段，键为字段名，值为'ASC'或'DESC'"
+        },
+        joinTable: {
+          type: "array",
+          items: "JoinTable",
+          description: "关联表配置"
+        },
+        tableEnum: {
+          type: "object",
+          class: "TableEnumConfig",
+          description: "表枚举配置"
+        }
+      },
+      required: ["modelName", "tableName"]
+    },
+
+    // ── 排序配置：任意键对象，键为字段名，值为 ASC/DESC ──
+    SortConfig: {
+      additionalProperties: {
+        type: "string",
+        enum: ["ASC", "DESC"]
+      }
+    },
+
+    // ── 关联表配置 ──
+    JoinTable: {
+      properties: {
+        joinEnClass: {
+          type: "string",
+          description: "关联的副表实体类名"
+        },
+        joinEnClass_Url: {
+          type: "string",
+          description: "关联的副表实体类URL"
+        },
+        joinEnClassPro: {
+          type: "string",
+          description: "副表在主表中的属性名"
+        },
+        joinType: {
+          type: "string",
+          enum: ["OneToOne", "ManyToOne", "OneToMany", "ManyToMany"],
+          description: "主到副的关联类型"
+        },
+        inverseJoinEnClassPro: {
+          type: "string",
+          description: "主表在副表中的属性名"
+        },
+        joinColumn: {
+          type: "object",
+          class: "JoinColumn",
+          description: "主副表关联字段配置"
+        },
+        isArray: {
+          type: "bool",
+          description: "外部不用设置，会自动根据关联类型(JoinType)判断是否为数组关联字段"
+        },
+        isJoinRelations: {
+          type: "bool",
+          description: "是否为关联关系生成sql语句"
+        },
+        joinQueryMode: {
+          type: "string",
+          enum: ["leftJoin", "innerJoin"],
+          description: "关联查询模式，默认值为LeftJoin"
+        }
+      },
+      required: ["joinEnClass", "joinEnClass_Url", "joinEnClassPro", "joinType", "isJoinRelations"]
+    },
+
+    // ── 关联字段配置 ──
+    JoinColumn: {
+      properties: {
+        name: {
+          type: "string",
+          description: "主表中关联的字段名"
+        },
+        referencedColumnName: {
+          type: "string",
+          description: "副表中关联的字段名"
+        }
+      },
+      required: ["name", "referencedColumnName"]
+    },
+
+    // ── 表枚举配置 ──
+    TableEnumConfig: {
+      properties: {
+        key: {
+          type: "string",
+          description: "枚举键字段"
+        },
+        value: {
+          type: "string",
+          description: "枚举值字段"
+        },
+        comment: {
+          type: "string",
+          description: "枚举注释字段"
+        }
+      },
+      required: ["key", "value"]
+    }
+  }
+}

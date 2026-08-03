@@ -58,6 +58,7 @@ export class QueryData {
         sf.isLike = false;
         selFields.append(sf);
         selFieldNames.append(field.name);
+      
       }
     }
 

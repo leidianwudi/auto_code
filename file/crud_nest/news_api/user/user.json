@@ -1,4 +1,6 @@
 {
+  // 指定 schema 文件，用于智能提示与校验
+  $schema: '../../template/tool/param.schema.json',
   // 多表配置示例：一个 JS2ON 文件可配置多张表，每项都是单表配置对象
   // 每个表配置支持：tableName、modelName、selCols、selColsLike、selColsSort、joinTable 等字段
   tables: [

@@ -51,23 +51,39 @@ void CodeEditor::showCompleter() {
     return;
   }
 
-  // 构建补全列表（从符号表）
+  // 构建补全列表
   QStringList completions;
-  for (auto it = m_symbolTable.begin(); it != m_symbolTable.end(); ++it) {
-    if (it.key().startsWith(identifier, Qt::CaseInsensitive)) {
-      completions.append(it.key());
+  if (m_validationMode == JsonValidation && m_schemaLoaded) {
+    // JSON + schema：按 schema 提示属性名 / 枚举值
+    completions = m_schema.completions(cachedText(), pos);
+  } else {
+    // 其它模式：从符号表提示
+    for (auto it = m_symbolTable.begin(); it != m_symbolTable.end(); ++it) {
+      if (it.key().startsWith(identifier, Qt::CaseInsensitive)) {
+        completions.append(it.key());
+      }
     }
   }
 
-  if (!m_completer || completions.isEmpty()) {
+  // 按已输入前缀过滤并去重
+  QStringList filtered;
+  for (const QString &c : completions) {
+    if (c.startsWith(identifier, Qt::CaseInsensitive) && !filtered.contains(c)) {
+      filtered.append(c);
+    }
+  }
+
+  if (!m_completer || filtered.isEmpty()) {
     if (m_completer && m_completer->popup()) {
       m_completer->popup()->hide();
     }
     return;
   }
 
-  if (m_completer->model()) {
-    m_completer->model()->sort(0);
+  auto *model = qobject_cast<QStringListModel *>(m_completer->model());
+  if (model) {
+    model->setStringList(filtered);
+    model->sort(0);
   }
   m_completer->setCompletionPrefix(identifier);
 

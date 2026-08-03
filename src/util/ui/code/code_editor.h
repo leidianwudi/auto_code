@@ -32,6 +32,8 @@
 #include "bracket_matcher.h"
 #include "code_validator.h"
 #include "indent_guide.h"
+#include "src/engine/schema_validator.h"
+#include "src/engine/validation_result.h"
 #include "symbol_navigator.h"
 
 class CodeFindBar;
@@ -148,6 +150,8 @@ private:
 
   // ── 验证相关（委托给 CodeValidator）──
   void validateWithValidator(IValidator *validator);
+  void applyValidationResults(const QVector<ValidationResult> &results);
+  void runSchemaValidation(const QJsonObject &doc, QVector<ValidationResult> &results);
 
   // ── 导航快捷方法（委托给各模块）──
   void goToDefinition(const QString &name);
@@ -185,6 +189,11 @@ private:
 
   // 符号表（用于补全和导航）
   QHash<QString, AcSymbolEntry> m_symbolTable;  ///< 当前文件的符号表
+
+  // JSON Schema 校验与提示（由 $schema 字段指定）
+  SchemaValidator m_schema;     ///< 已加载的 schema 校验器
+  QString m_schemaPath;         ///< 当前生效的 schema 文件路径（用于缓存）
+  bool m_schemaLoaded = false;  ///< schema 是否已成功加载
 
   // UI 组件
   QWidget *m_lineNumberArea = nullptr;       ///< 行号显示区域

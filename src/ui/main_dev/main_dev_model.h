@@ -9,6 +9,7 @@
 #pragma once
 
 #include <QHash>
+#include <QPointer>
 #include <QString>
 #include <QTabWidget>
 
@@ -82,5 +83,6 @@ public:
   QTabWidget *lastActivePanel = nullptr;
 
   /// 当前已连接光标位置信号的编辑器
-  CodeEditor *connectedEditor = nullptr;
+  /// 使用 QPointer，编辑器被销毁时自动置空，避免悬空指针导致崩溃
+  QPointer<CodeEditor> connectedEditor = nullptr;
 };

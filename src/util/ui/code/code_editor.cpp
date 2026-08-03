@@ -8,11 +8,16 @@
 #include <QAbstractItemView>
 #include <QApplication>
 #include <QCompleter>
+#include <QDir>
 #include <QFileInfo>
 #include <QFont>
 #include <QFontDatabase>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
 #include <QMenu>
 #include <QPainter>
+#include <QRegularExpression>
 #include <QScrollBar>
 #include <QShortcut>
 #include <QStringListModel>
@@ -24,6 +29,7 @@
 #include "src/engine/script/ac_validator.h"
 #include "src/engine/tpl/tpl_validator.h"
 #include "src/util/common/code_constants.h"
+#include "src/util/common/util_json.h"
 #include "src/util/ui/code/format_code.h"
 #include "src/util/ui/component/aui_error_tool_tip.h"
 #include "src/util/ui/component/aui_style.h"
@@ -121,8 +127,16 @@ void CodeEditor::performValidation() {
   // 根据验证模式创建对应的验证器，使用统一的 IValidator 接口
   switch (m_validationMode) {
     case JsonValidation: {
+      // 语法校验
       JsonValidator validator;
-      validateWithValidator(&validator);
+      QVector<ValidationResult> results = validator.validate(cachedText());
+      // 语法通过后，再按 $schema 做结构校验
+      QJsonParseError perr;
+      QJsonDocument doc = UtilJson::fromJson(cachedText(), &perr);
+      if (perr.error == QJsonParseError::NoError && doc.isObject()) {
+        runSchemaValidation(doc.object(), results);
+      }
+      applyValidationResults(results);
       break;
     }
     case TemplateValidation: {
@@ -163,7 +177,11 @@ void CodeEditor::validateWithValidator(IValidator *validator) {
   if (text.trimmed().isEmpty()) return;
 
   QVector<ValidationResult> results = validator->validate(text);
+  applyValidationResults(results);
+}
 
+// 统一应用验证结果：标记错误 + 发出消息
+void CodeEditor::applyValidationResults(const QVector<ValidationResult> &results) {
   // 收集错误信息字符串
   QStringList errors;
   for (const auto &result : results) {
@@ -199,6 +217,66 @@ void CodeEditor::validateWithValidator(IValidator *validator) {
     emit validationMessage(QString(), 0);
   } else {
     emit validationMessage(errors.join(QLatin1Char('\n')), errors.size());
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+//  JSON Schema 校验（$schema 字段驱动）
+// ──────────────────────────────────────────────────────────────
+
+namespace {
+/// 从错误消息中提取出错路径，如 "'tables.0.modelName' is required" → "tables.0.modelName"
+QString extractSchemaPath(const QString &msg) {
+  int s = msg.indexOf(QLatin1Char('\''));
+  int e = msg.indexOf(QLatin1Char('\''), s + 1);
+  if (s < 0 || e < 0) return QString();
+  return msg.mid(s + 1, e - s - 1);
+}
+
+/// 在 JSON5 文本中查找指定键（作为属性名）所在的行号；找不到返回 1
+int findSchemaKeyLine(const QString &text, const QString &key) {
+  if (key.isEmpty()) return 1;
+  QRegularExpression re(QStringLiteral("(['\"]?)%1\\1\\s*:").arg(QRegularExpression::escape(key)));
+  auto m = re.match(text);
+  if (!m.hasMatch()) return 1;
+  int matchPos = m.capturedStart();
+  int line = 1;
+  for (int i = 0; i < matchPos && i < text.size(); ++i) {
+    if (text[i] == QLatin1Char('\n')) ++line;
+  }
+  return line;
+}
+}  // namespace
+
+// 按 $schema 加载并校验，将错误追加到 results
+void CodeEditor::runSchemaValidation(const QJsonObject &doc, QVector<ValidationResult> &results) {
+  QString schemaRef = doc.value(QStringLiteral("$schema")).toString();
+  if (schemaRef.isEmpty()) {
+    m_schemaLoaded = false;
+    return;
+  }
+
+  // 解析 schema 路径（相对文件目录）
+  QString schemaPath = schemaRef;
+  if (QFileInfo(schemaRef).isRelative()) {
+    QFileInfo fi(objectName());
+    schemaPath = fi.absolutePath() + QLatin1Char('/') + schemaRef;
+  }
+  schemaPath = QDir::cleanPath(schemaPath);
+
+  // 缓存加载：路径变化才重新加载
+  if (schemaPath != m_schemaPath || !m_schemaLoaded) {
+    m_schemaPath = schemaPath;
+    m_schemaLoaded = m_schema.load(schemaPath);
+  }
+  if (!m_schemaLoaded || !m_schema.hasRoot()) return;
+
+  const QString &text = cachedText();
+  const QVector<QString> errs = m_schema.validateDocument(doc);
+  for (const QString &e : errs) {
+    QString prop = extractSchemaPath(e).section(QLatin1Char('.'), -1);
+    int line = findSchemaKeyLine(text, prop);
+    results.append(ValidationResult(line, 1, 1, QStringLiteral("Schema: %1").arg(e)));
   }
 }
 
@@ -605,6 +683,22 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
     return;
   }
 
+  // 补全器处理：补全弹窗可见时，Enter/Tab/Backtab 用于选中补全项
+  // 必须放在 Enter 自动缩进之前，否则弹窗可见时按 Enter 会变成换行
+  if (m_completer && m_completer->popup() && m_completer->popup()->isVisible() &&
+      (event->key() == Qt::Key_Enter || event->key() == Qt::Key_Return ||
+       event->key() == Qt::Key_Tab || event->key() == Qt::Key_Backtab)) {
+    if (event->key() == Qt::Key_Enter || event->key() == Qt::Key_Return) {
+      QModelIndex idx = m_completer->popup()->currentIndex();
+      if (idx.isValid()) {
+        insertCompletion(idx.data(Qt::DisplayRole).toString());
+      }
+    }
+    m_completer->popup()->hide();
+    event->accept();
+    return;
+  }
+
   // Enter 自动缩进
   if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
     QTextCursor cursor = textCursor();
@@ -623,15 +717,6 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
     insertPlainText(QString(spaces, QLatin1Char(' ')));
     event->accept();
     return;
-  }
-
-  // 补全器处理
-  if (m_completer && (event->key() == Qt::Key_Enter || event->key() == Qt::Key_Return ||
-                      event->key() == Qt::Key_Tab || event->key() == Qt::Key_Backtab)) {
-    if (m_completer->popup() && m_completer->popup()->isVisible()) {
-      event->accept();
-      return;
-    }
   }
 
   QPlainTextEdit::keyPressEvent(event);
