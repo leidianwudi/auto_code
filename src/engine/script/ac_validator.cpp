@@ -15,6 +15,8 @@
 #include "../../util/common/util_file.h"
 #include "../ac_language.h"
 #include "ac_builtin_loader.h"
+#include "ac_lexer.h"
+#include "ac_parser.h"
 
 QVector<ValidationResult> AcValidator::validate(const QString &source) {
   QVector<ValidationResult> results;
@@ -27,28 +29,13 @@ QVector<ValidationResult> AcValidator::validate(const QString &source) {
   m_classes.clear();
   m_functions.clear();
 
-  // ── 步骤 1：词法分析 ──
-  QString lexError;
-  QVector<Token> tokens = m_lexer.tokenize(source, lexError);
-  if (!lexError.isEmpty()) {
-    int line = 1;
-    // 尝试从错误信息中提取行号
-    QRegularExpression re(QStringLiteral("at line (\\d+)"));
-    auto match = re.match(lexError);
-    if (match.hasMatch()) line = match.captured(1).toInt();
-    results.append(ValidationResult::atLine(line, lexError));
-    return results;
-  }
-
-  // ── 步骤 2：语法分析 ──
+  // ── 步骤 1+2：词法+语法分析 + AST 构建 ──
   m_declaredVars.clear();
   m_program = Block();
-  if (!m_parser.parse(tokens, m_program, m_declaredVars)) {
-    QString parseErrMsg = m_parser.error();
-    int line = 1;
-    QRegularExpression re(QStringLiteral("at line (\\d+)"));
-    auto match = re.match(parseErrMsg);
-    if (match.hasMatch()) line = match.captured(1).toInt();
+  QString parseErrMsg;
+  if (!parseSource(source, m_program, m_declaredVars, parseErrMsg)) {
+    int line = extractLine(parseErrMsg);
+    if (line == 0) line = 1;
     results.append(ValidationResult::atLine(line, parseErrMsg));
     return results;
   }
@@ -168,15 +155,11 @@ void AcValidator::collectSymbolsFromFile(const QString &filePath, const QStringL
   QString source = UtilFile::readUtf8(filePath);
   if (source.trimmed().isEmpty()) return;
 
-  // 词法分析
-  QString lexError;
-  QVector<Token> tokens = m_lexer.tokenize(source, lexError);
-  if (!lexError.isEmpty()) return;
-
-  // 语法分析
+  // ANTLR 词法+语法分析 + AST 构建
   QSet<QString> declaredVars;
   Block program;
-  if (!m_parser.parse(tokens, program, declaredVars)) return;
+  QString parseError;
+  if (!parseSource(source, program, declaredVars, parseError)) return;
 
   // 构建目标文件的符号表
   AcSymbolTable importedTable;
@@ -206,6 +189,24 @@ void AcValidator::collectSymbolsFromFile(const QString &filePath, const QStringL
   m_filePath = filePath;
   resolveImportedSymbols(program);
   m_filePath = savedFilePath;
+}
+
+bool AcValidator::parseSource(const QString &source, Block &program, QSet<QString> &declaredVars,
+                              QString &error) {
+  // ── 旧递归下降词法分析 ──
+  QVector<Token> tokens = AcLexer::tokenize(source, error);
+  if (tokens.isEmpty()) {
+    if (error.isEmpty()) error = QStringLiteral("lexer returned empty token list");
+    return false;
+  }
+
+  // ── 旧递归下降语法分析 ──
+  AcParser parser;
+  if (!parser.parse(tokens, program, declaredVars)) {
+    error = parser.error();
+    return false;
+  }
+  return true;
 }
 
 int AcValidator::extractLine(const QString &msg) const {

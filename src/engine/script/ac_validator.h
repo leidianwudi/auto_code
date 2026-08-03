@@ -14,8 +14,6 @@
 #include <QVector>
 
 #include "../validation_result.h"
-#include "ac_lexer.h"
-#include "ac_parser.h"
 #include "ac_symbol_table.h"
 #include "ac_type.h"
 #include "ac_type_checker.h"
@@ -72,9 +70,16 @@ private:
   /// @return 行号（1-based），未找到返回 0
   int extractLine(const QString &msg) const;
 
+  /// @brief 用旧递归下降解析器解析源码为 AST
+  /// @param source .ac 源码字符串
+  /// @param[out] program 输出的 AST 根节点
+  /// @param[out] declaredVars 已声明的变量名集合（解析过程中会新增）
+  /// @param[out] error 错误信息（解析失败时设置）
+  /// @return true 解析成功，false 失败
+  bool parseSource(const QString &source, Block &program, QSet<QString> &declaredVars,
+                   QString &error);
+
   // ── 子模块 ──
-  AcLexer m_lexer;
-  AcParser m_parser;
   UndeclaredIdentValidator m_undeclaredValidator;
   AcTypeChecker m_typeChecker;
 
@@ -87,6 +92,6 @@ private:
   // ── 符号表 ──
   AcSymbolTable m_symbolTable;
   QStringList m_sourceLines;
-  QString m_filePath;  ///< 当前文件路径（用于解析 import 相对路径）
+  QString m_filePath;            ///< 当前文件路径（用于解析 import 相对路径）
   QSet<QString> m_visitedFiles;  ///< 已解析的文件集合（防止循环 import）
 };

@@ -29,26 +29,28 @@ public:
 
 protected:
   // ── AstVisitor 重写 ──
+  // 只重写需要自定义逻辑的方法，其余由 AstVisitor 基类虚分派处理
   void visitAssignStmt(const AssignStmt &as) override;
   void visitForStmt(const ForStmt &fs) override;
   void visitClassDef(const ClassDef &cd) override;
-  void visitInterfaceDef(const InterfaceDef &iface) override;
   void visitFuncDef(const MethodDef &md) override;
-  void visitReturnStmt(const Expr &retExpr) override;
-  void visitExprStmt(const Expr &expr) override;
   void visitImportStmt(const ImportStmt &imp) override;
   void visitUsingStmt(const UsingStmt &us) override;
 
   void visitIdentExpr(const Expr &expr) override;
   void visitPropAccessExpr(const Expr &expr) override;
-  void visitIndexAccessExpr(const Expr &expr) override;
   void visitFuncCallExpr(const Expr &expr) override;
   void visitMethodCallExpr(const Expr &expr) override;
+  void visitFuncExprExpr(const Expr &expr) override;
+
+  // ── 以下 getter 方法仅用于使 vtable 布局与旧编译单元一致 ──
+  // 保留旧符号避免链接器找不到 ac_executor.cpp.obj 等旧编译单元中的符号引用
+  void visitInterfaceDef(const InterfaceDef &iface) override;
+  void visitReturnStmt(const Expr &retExpr) override;
+  void visitExprStmt(const Expr &expr) override;
+  void visitIndexAccessExpr(const Expr &expr) override;
   void visitStaticAccessExpr(const Expr &expr) override;
   void visitObjectExpr(const Expr &expr) override;
-  void visitArrayExpr(const Expr &expr) override;
-  void visitBinaryExpr(const Expr &expr) override;
-  void visitFuncExprExpr(const Expr &expr) override;
 
 private:
   /// @brief 验证辅助数据结构：类方法名列表 + 变量→类名映射

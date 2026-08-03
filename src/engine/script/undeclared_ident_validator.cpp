@@ -5,7 +5,6 @@
 
 #include "undeclared_ident_validator.h"
 
-#include <QDebug>
 #include <QFileInfo>
 
 #include "../ac_language.h"
@@ -19,7 +18,7 @@ void UndeclaredIdentValidator::validate(const Block &program, const QSet<QString
   // 预扫描收集类定义和 new 赋值信息
   collectValidationInfo(program);
 
-  // 遍历 AST 检查
+  // 遍历 AST 检查（利用基类 AstVisitor 虚分派）
   visitBlock(program);
 }
 
@@ -75,7 +74,6 @@ void UndeclaredIdentValidator::reportError(const QString &msg, int line) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 void UndeclaredIdentValidator::visitAssignStmt(const AssignStmt &as) {
-  // 先遍历值表达式
   AstVisitor::visitAssignStmt(as);
 
   // 记录 let x = new Car() → 变量→类名
@@ -87,7 +85,7 @@ void UndeclaredIdentValidator::visitAssignStmt(const AssignStmt &as) {
 }
 
 void UndeclaredIdentValidator::visitUsingStmt(const UsingStmt &us) {
-  if (us.value) visitExpr(*us.value);
+  AstVisitor::visitUsingStmt(us);
   if (!us.varName.isEmpty() && us.value && us.value->kind == Expr::kNewInstance &&
       !us.value->className.isEmpty()) {
     m_ctx.varClass.insert(us.varName, us.value->className);
@@ -96,10 +94,11 @@ void UndeclaredIdentValidator::visitUsingStmt(const UsingStmt &us) {
 }
 
 void UndeclaredIdentValidator::visitForStmt(const ForStmt &fs) {
+  // 先访问数组表达式（当前作用域）
   visitExpr(fs.arrayExpr);
+  // for 循环变量在 body 中可见（不调基类 AstVisitor::visitForStmt，避免 body 被遍历两次）
   QSet<QString> bodyScope = m_scopeVars;
   bodyScope.insert(fs.varName);
-  // 在 body 子作用域中遍历
   QSet<QString> savedScope = m_scopeVars;
   m_scopeVars = bodyScope;
   visitBlock(fs.body);
@@ -129,8 +128,6 @@ void UndeclaredIdentValidator::visitClassDef(const ClassDef &cd) {
   }
 }
 
-void UndeclaredIdentValidator::visitInterfaceDef(const InterfaceDef &iface) { Q_UNUSED(iface); }
-
 void UndeclaredIdentValidator::visitFuncDef(const MethodDef &md) {
   QSet<QString> funcScope = m_scopeVars;
   funcScope.insert(md.name);  // 函数体内允许递归调用
@@ -141,10 +138,6 @@ void UndeclaredIdentValidator::visitFuncDef(const MethodDef &md) {
   m_scopeVars = savedScope;
   m_scopeVars.insert(md.name);  // 定义后后续语句可调用
 }
-
-void UndeclaredIdentValidator::visitReturnStmt(const Expr &retExpr) { visitExpr(retExpr); }
-
-void UndeclaredIdentValidator::visitExprStmt(const Expr &expr) { visitExpr(expr); }
 
 void UndeclaredIdentValidator::visitImportStmt(const ImportStmt &imp) {
   // import 语句中的符号名由模块链接器注册，此处使用别名或原始名
@@ -168,15 +161,11 @@ void UndeclaredIdentValidator::visitIdentExpr(const Expr &expr) {
 
 void UndeclaredIdentValidator::visitPropAccessExpr(const Expr &expr) {
   if (expr.propObject) {
-    AstVisitor::visitPropAccessExpr(expr);
+    visitExpr(*expr.propObject);
   } else if (!expr.ident.isEmpty() && expr.ident != QString::fromLatin1(AcKeyword::kThis) &&
              expr.ident != QStringLiteral("JSON") && !m_scopeVars.contains(expr.ident)) {
     reportError(expr.ident, expr.line);
   }
-}
-
-void UndeclaredIdentValidator::visitIndexAccessExpr(const Expr &expr) {
-  AstVisitor::visitIndexAccessExpr(expr);
 }
 
 void UndeclaredIdentValidator::visitFuncCallExpr(const Expr &expr) {
@@ -231,22 +220,6 @@ void UndeclaredIdentValidator::visitMethodCallExpr(const Expr &expr) {
   }
 }
 
-void UndeclaredIdentValidator::visitStaticAccessExpr(const Expr &expr) {
-  AstVisitor::visitStaticAccessExpr(expr);
-}
-
-void UndeclaredIdentValidator::visitObjectExpr(const Expr &expr) {
-  AstVisitor::visitObjectExpr(expr);
-}
-
-void UndeclaredIdentValidator::visitArrayExpr(const Expr &expr) {
-  AstVisitor::visitArrayExpr(expr);
-}
-
-void UndeclaredIdentValidator::visitBinaryExpr(const Expr &expr) {
-  AstVisitor::visitBinaryExpr(expr);
-}
-
 void UndeclaredIdentValidator::visitFuncExprExpr(const Expr &expr) {
   // 函数表达式：将参数加入作用域，遍历函数体
   QSet<QString> savedScopeVars = m_scopeVars;
@@ -255,4 +228,30 @@ void UndeclaredIdentValidator::visitFuncExprExpr(const Expr &expr) {
   }
   visitBlock(expr.funcExpr.body);
   m_scopeVars = savedScopeVars;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 以下委托方法仅用于保持 vtable 布局与旧编译单元一致，避免链接错误
+// ═════════════════════════════════════════════════════════════════════════════
+
+void UndeclaredIdentValidator::visitInterfaceDef(const InterfaceDef &iface) {
+  AstVisitor::visitInterfaceDef(iface);
+}
+
+void UndeclaredIdentValidator::visitReturnStmt(const Expr &retExpr) {
+  AstVisitor::visitReturnStmt(retExpr);
+}
+
+void UndeclaredIdentValidator::visitExprStmt(const Expr &expr) { AstVisitor::visitExprStmt(expr); }
+
+void UndeclaredIdentValidator::visitIndexAccessExpr(const Expr &expr) {
+  AstVisitor::visitIndexAccessExpr(expr);
+}
+
+void UndeclaredIdentValidator::visitStaticAccessExpr(const Expr &expr) {
+  AstVisitor::visitStaticAccessExpr(expr);
+}
+
+void UndeclaredIdentValidator::visitObjectExpr(const Expr &expr) {
+  AstVisitor::visitObjectExpr(expr);
 }
