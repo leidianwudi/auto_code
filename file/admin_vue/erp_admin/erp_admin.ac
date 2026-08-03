@@ -72,7 +72,9 @@ main {
   ];
 
   // ── 3. 读取所有打勾的 .jsonvue 配置文件 ──────────────────────────
-  let files = getCheckedFiles();
+  //    传入 scriptDir() 确保只处理本项目下的勾选文件，
+  //    其它项目的勾选文件即使被选中也不会被执行
+  let files = getCheckedFiles(scriptDir());
   let filesLen = files.length;
   printLog("files count: " + filesLen);
 
@@ -107,6 +109,7 @@ main {
 
     // 统一路径分隔符为 /
     let normPath = file.replace("\\", "/");
+    printLog("normPath1: " + normPath);
     // 去掉文件名，得到目录路径
     let dirPath = normPath.replace("/" + fileName, "");
     // 获取目录路径的最后一级目录名

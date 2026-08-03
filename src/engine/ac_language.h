@@ -122,8 +122,11 @@ inline constexpr const char *kWriteFile = "writeFile";
 inline constexpr const char *kPrintLog = "printLog";
 /// @brief 打印错误到控制台：printError("message") → 无返回值（log 面板显示为红色）
 inline constexpr const char *kPrintError = "printError";
-/// @brief 获取 tree.config 中勾选的文件列表：getCheckedFiles() → 返回字符串数组
+/// @brief 获取 tree.config 中勾选的文件列表：getCheckedFiles([basePath]) → 返回字符串数组
+/// 传入 basePath 时只返回该路径下的文件
 inline constexpr const char *kGetCheckedFiles = "getCheckedFiles";
+/// @brief 获取当前 .ac 脚本所在目录：scriptDir() → 返回绝对路径
+inline constexpr const char *kScriptDir = "scriptDir";
 /// @brief 合并两个 JSON 对象：merge(obj1, obj2) → 返回新对象
 inline constexpr const char *kMerge = "merge";
 /// @brief 获取文件无后缀基名：basename("path/file.cpp") → 返回 "file"
@@ -139,10 +142,10 @@ inline constexpr const char *kAssert = "assert";
 
 /// @brief 一级函数名列表（供解析器校验、高亮、补全使用）
 inline const QStringList kAll = {
-    QString(kCall),      QString(kReadJson), QString(kReadFile),   QString(kRenderTpl),
-    QString(kWriteFile), QString(kPrintLog), QString(kPrintError), QString(kGetCheckedFiles),
-    QString(kMerge),     QString(kBasename), QString(kFileExists), QString(kFormatPath),
-    QString(kAssert),
+    QString(kCall),       QString(kReadJson), QString(kReadFile),   QString(kRenderTpl),
+    QString(kWriteFile),  QString(kPrintLog), QString(kPrintError), QString(kGetCheckedFiles),
+    QString(kScriptDir),  QString(kMerge),    QString(kBasename),   QString(kFileExists),
+    QString(kFormatPath), QString(kAssert),
 };
 }  // namespace AcBuiltin
 

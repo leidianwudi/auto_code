@@ -211,8 +211,9 @@ struct AcType {
 
 /// @brief 参数定义：带可选类型注解
 struct ParamDef {
-  QString name;  ///< 参数名
-  AcType type;   ///< 类型（默认 Any，无注解时）
+  QString name;       ///< 参数名
+  AcType type;        ///< 类型（默认 Any，无注解时）
+  bool isOptional = false;  ///< 是否为可选参数（param?: Type 语法）
 };
 
 /// @brief 语句块 — 由 { } 包裹的一组语句

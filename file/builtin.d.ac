@@ -29,7 +29,12 @@ export function printLog(message: String): Void;
 export function printError(message: String): Void;
 
 /// 获取 IDE 中勾选的文件列表
-export function getCheckedFiles(): String[];
+/// 传入 basePath 时只返回该路径下的文件（用于多项目场景，只处理当前脚本所在项目的勾选文件）
+/// basePath 可省略，省略时返回全部勾选文件
+export function getCheckedFiles(basePath?: String): String[];
+
+/// 获取当前 .ac 脚本所在目录（绝对路径）
+export function scriptDir(): String;
 
 /// 深度合并两个对象（b 的键覆盖 a 的同名键）
 export function merge(a: Object, b: Object): Object;

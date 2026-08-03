@@ -40,6 +40,7 @@ void FunBuiltin::init() {
           {QString::fromLatin1(AcBuiltin::kPrintLog), printLog},
           {QString::fromLatin1(AcBuiltin::kPrintError), printError},
           {QString::fromLatin1(AcBuiltin::kGetCheckedFiles), getCheckedFiles},
+          {QString::fromLatin1(AcBuiltin::kScriptDir), scriptDir},
           {QString::fromLatin1(AcBuiltin::kMerge), merge},
           {QString::fromLatin1(AcBuiltin::kBasename), basename},
           {QString::fromLatin1(AcBuiltin::kFormatPath), formatPath},
@@ -175,21 +176,41 @@ QJsonValue FunBuiltin::printError(const QJsonArray &args) {
 // getCheckedFiles — 获取 tree.config 中勾选的文件列表
 // ============================================================================
 
-QJsonValue FunBuiltin::getCheckedFiles(const QJsonArray & /*args*/) {
+QJsonValue FunBuiltin::getCheckedFiles(const QJsonArray &args) {
   QString treePath = s_ctx.rootDir.isEmpty() ? s_ctx.scriptDir + QStringLiteral("/tree.config")
                                              : s_ctx.rootDir + QStringLiteral("/tree.config");
+  // 可选参数：基准路径，传入后只返回该路径下的文件
+  QString basePath;
+  if (!args.isEmpty() && args[0].isString()) {
+    basePath = QDir::cleanPath(args[0].toString());
+  }
+
   QJsonArray result;
   QJsonDocument doc = UtilJson::loadFile(treePath);
   if (!doc.isNull()) {
     QJsonArray checked = doc.object().value(QStringLiteral("checked")).toArray();
     for (const QJsonValue &v : checked) {
-      if (v.isString())
-        result.append(QDir::cleanPath(s_ctx.rootDir.isEmpty()
-                                          ? s_ctx.scriptDir
-                                          : s_ctx.rootDir + QStringLiteral("/") + v.toString()));
+      if (!v.isString()) continue;
+      QString absPath = QDir::cleanPath(s_ctx.rootDir.isEmpty()
+                                            ? s_ctx.scriptDir
+                                            : s_ctx.rootDir + QStringLiteral("/") + v.toString());
+      // 指定基准路径时，只保留该路径下的文件（避免处理其它项目的勾选文件）
+      if (!basePath.isEmpty() && absPath != basePath &&
+          !absPath.startsWith(basePath + QStringLiteral("/"))) {
+        continue;
+      }
+      result.append(absPath);
     }
   }
   return result;
+}
+
+// ============================================================================
+// scriptDir — 获取当前 .ac 脚本所在目录
+// ============================================================================
+
+QJsonValue FunBuiltin::scriptDir(const QJsonArray & /*args*/) {
+  return QJsonValue(s_ctx.scriptDir);
 }
 
 // ============================================================================

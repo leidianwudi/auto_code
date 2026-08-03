@@ -64,7 +64,9 @@ main {
   ];
 
   // ── 4. 读取所有 JSON 配置文件（文件路径由外部配置提供）────────
-  let files = getCheckedFiles();
+  //    传入 scriptDir() 确保只处理本项目下的勾选文件，
+  //    其它项目的勾选文件即使被选中也不会被执行
+  let files = getCheckedFiles(scriptDir());
   let filesLen = files.length;
   printLog("files count: " + filesLen);
 

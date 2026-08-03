@@ -720,6 +720,10 @@ bool AcParser::parseClassDef(ClassDef &cd) {
       while (peek().type == TOK_IDENT) {
         ParamDef pd;
         pd.name = advance().text;
+        if (peek().type == TOK_QUESTION) {
+          advance();
+          pd.isOptional = true;
+        }
         if (peek().type == TOK_COLON) {
           advance();
           pd.type = parseType();
@@ -786,6 +790,10 @@ bool AcParser::parseInterfaceDef(InterfaceDef &iface) {
       while (peek().type == TOK_IDENT) {
         ParamDef pd;
         pd.name = advance().text;
+        if (peek().type == TOK_QUESTION) {
+          advance();
+          pd.isOptional = true;
+        }
         if (peek().type != TOK_COLON) {
           m_error =
               QStringLiteral("parameter '%1' requires a type annotation (e.g. %1: Type) at line %2")
@@ -866,6 +874,10 @@ bool AcParser::parseMethodDef(MethodDef &md) {
   while (peek().type == TOK_IDENT) {
     ParamDef pd;
     pd.name = advance().text;
+    if (peek().type == TOK_QUESTION) {
+      advance();
+      pd.isOptional = true;
+    }
     if (peek().type != TOK_COLON) {
       m_error =
           QStringLiteral("parameter '%1' requires a type annotation (e.g. %1: Type) at line %2")

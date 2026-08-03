@@ -83,7 +83,11 @@ private:
   static QJsonValue printError(const QJsonArray &args);
 
   /// 获取 tree.config 中勾选的文件列表（绝对路径）
+  /// @param args [0] 可选基准路径，传入后只返回该路径下的文件
   static QJsonValue getCheckedFiles(const QJsonArray &args);
+
+  /// 获取当前 .ac 脚本所在目录（绝对路径）
+  static QJsonValue scriptDir(const QJsonArray &args);
 
   /// 合并两个 JSON 对象（浅合并，b 覆盖 a 的同名键）
   /// @param args [0] 基础对象, [1] 覆盖对象
