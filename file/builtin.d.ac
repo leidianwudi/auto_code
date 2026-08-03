@@ -39,8 +39,11 @@ export function scriptDir(): String;
 /// 深度合并两个对象（b 的键覆盖 a 的同名键）
 export function merge(a: Object, b: Object): Object;
 
-/// 从文件路径中提取文件名（含扩展名）
+/// 从文件路径中提取文件名（不含扩展名）
 export function basename(path: String): String;
+
+/// 从文件路径中提取文件名（含扩展名）
+export function fileName(path: String): String;
 
 /// 判断文件是否存在
 export function fileExists(path: String): Bool;

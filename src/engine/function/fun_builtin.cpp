@@ -43,6 +43,7 @@ void FunBuiltin::init() {
           {QString::fromLatin1(AcBuiltin::kScriptDir), scriptDir},
           {QString::fromLatin1(AcBuiltin::kMerge), merge},
           {QString::fromLatin1(AcBuiltin::kBasename), basename},
+          {QString::fromLatin1(AcBuiltin::kFileName), fileName},
           {QString::fromLatin1(AcBuiltin::kFormatPath), formatPath},
           {QString::fromLatin1(AcBuiltin::kAssert), assertFn},
       });
@@ -242,6 +243,19 @@ QJsonValue FunBuiltin::basename(const QJsonArray &args) {
   }
 
   return QJsonValue(QFileInfo(args[0].toString()).completeBaseName());
+}
+
+// ============================================================================
+// fileName — 获取文件名（含扩展名）
+// ============================================================================
+
+QJsonValue FunBuiltin::fileName(const QJsonArray &args) {
+  if (args.isEmpty() || !args[0].isString()) {
+    FunMgr::setError(QStringLiteral("fileName() requires a file path argument"));
+    return QJsonValue();
+  }
+
+  return QJsonValue(QFileInfo(args[0].toString()).fileName());
 }
 
 // ============================================================================

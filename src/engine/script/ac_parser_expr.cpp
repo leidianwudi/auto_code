@@ -289,6 +289,7 @@ bool AcParser::parsePrimary(Expr &expr) {
         return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
       }
       expr.kind = Expr::kPropAccess;
+      expr.line = t.line;
       expr.ident = QString::fromLatin1(AcKeyword::kThis);
       expr.prop = propName;
       return true;
@@ -351,6 +352,7 @@ bool AcParser::parsePrimary(Expr &expr) {
       return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
     }
     expr.kind = Expr::kPropAccess;
+    expr.line = t.line;
     expr.ident = QString::fromLatin1(AcKeyword::kSuper);
     expr.prop = methodName;
     return true;

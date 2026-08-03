@@ -24,6 +24,9 @@ public:
   /// @param[out] errors 错误信息列表
   void validate(const Block &program, const QSet<QString> &declaredVars, QStringList &errors);
 
+  /// @brief 设置当前文件路径（用于错误消息中显示文件名）
+  void setFilePath(const QString &path) { m_filePath = path; }
+
 protected:
   // ── AstVisitor 重写 ──
   void visitAssignStmt(const AssignStmt &as) override;
@@ -64,4 +67,5 @@ private:
   QStringList *m_errors = nullptr;
   QSet<QString> m_scopeVars;
   ValidationContext m_ctx;
+  QString m_filePath;  ///< 当前文件路径（用于错误消息）
 };

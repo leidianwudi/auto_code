@@ -104,14 +104,16 @@ main {
     //      推导结果：pagePath = "setting/config_g"
     //      方法：取 basename 去掉 .jsonvue 后缀得到页面名，
     //            从完整路径中提取所在目录名作为模块名
-    let fileName = basename(file);              // config_g.jsonvue
-    let pageName = fileName.replace(".jsonvue", "");  // config_g
+    let fullName = fileName(file);              // config_g.jsonvue
+    printLog("fullName: " + fullName);
+    let pageName = fullName.replace(".jsonvue", "");  // config_g
 
     // 统一路径分隔符为 /
     let normPath = file.replace("\\", "/");
     printLog("normPath1: " + normPath);
     // 去掉文件名，得到目录路径
-    let dirPath = normPath.replace("/" + fileName, "");
+    let dirPath = normPath.replace("/" + fullName, "");
+    printLog("dirPath1: " + dirPath);
     // 获取目录路径的最后一级目录名
     let dirParts = dirPath.split("/");
     let dirName = "";

@@ -97,6 +97,10 @@ private:
   /// @param args [0] 文件路径
   static QJsonValue basename(const QJsonArray &args);
 
+  /// 获取文件名（含扩展名）
+  /// @param args [0] 文件路径
+  static QJsonValue fileName(const QJsonArray &args);
+
   /// 格式化路径：用 {key} 占位符从数据对象中取值替换
   /// @param args [0] 路径模板（如 "{basePath}/{name}.ts"），[1] 数据对象
   static QJsonValue formatPath(const QJsonArray &args);

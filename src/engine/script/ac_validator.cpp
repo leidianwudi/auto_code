@@ -84,6 +84,7 @@ QVector<ValidationResult> AcValidator::validate(const QString &source) {
 
   // ── 步骤 3：未声明标识符检查 ──
   QStringList undeclaredErrors;
+  m_undeclaredValidator.setFilePath(m_filePath);
   m_undeclaredValidator.validate(m_program, m_declaredVars, undeclaredErrors);
   for (const QString &err : undeclaredErrors) {
     if (!err.isEmpty()) results.append(parseError(err));
@@ -208,6 +209,7 @@ void AcValidator::collectSymbolsFromFile(const QString &filePath, const QStringL
 }
 
 int AcValidator::extractLine(const QString &msg) const {
+  // 匹配 "at line N" 或 "at line N in file"
   QRegularExpression re(QStringLiteral("at line (\\d+)"));
   auto match = re.match(msg);
   if (match.hasMatch()) return match.captured(1).toInt();
@@ -217,12 +219,15 @@ int AcValidator::extractLine(const QString &msg) const {
 ValidationResult AcValidator::parseError(const QString &msg) const {
   int line = extractLine(msg);
 
-  // 尝试提取错误类型前缀
+  // 清理消息：去掉行号和文件名后缀，只保留错误描述
   QString cleanMsg = msg;
-  // 去掉 "type error: " 或 "undefined variable " 等前缀中可能附加的行号信息
-  // 如果行号已提取，从消息中去除行号后缀
   if (line > 0) {
-    QRegularExpression re(QStringLiteral(" at line \\d+$"));
+    // 去掉 " at line N in file.ac" 或 " at line N" 后缀
+    QRegularExpression re(QStringLiteral(" at line \\d+( in \\S+)?$"));
+    cleanMsg = cleanMsg.remove(re);
+  } else {
+    // 去掉 " (line unknown) in file.ac" 或 " (line unknown)" 后缀
+    QRegularExpression re(QStringLiteral(" \\(line unknown\\)( in \\S+)?$"));
     cleanMsg = cleanMsg.remove(re);
   }
 

@@ -131,6 +131,8 @@ inline constexpr const char *kScriptDir = "scriptDir";
 inline constexpr const char *kMerge = "merge";
 /// @brief 获取文件无后缀基名：basename("path/file.cpp") → 返回 "file"
 inline constexpr const char *kBasename = "basename";
+/// @brief 获取文件名（含扩展名）：fileName("path/file.cpp") → 返回 "file.cpp"
+inline constexpr const char *kFileName = "fileName";
 /// @brief 判断文件是否存在（模板专用）：fileExists("path.txt") → 返回 bool
 inline constexpr const char *kFileExists = "fileExists";
 /// @brief 格式化路径：formatPath("{basePath}/{name}.ts", {basePath:"D:/out", name:"user"})
@@ -144,7 +146,8 @@ inline constexpr const char *kAssert = "assert";
 inline const QStringList kAll = {
     QString(kCall),       QString(kReadJson), QString(kReadFile),   QString(kRenderTpl),
     QString(kWriteFile),  QString(kPrintLog), QString(kPrintError), QString(kGetCheckedFiles),
-    QString(kScriptDir),  QString(kMerge),    QString(kBasename),   QString(kFileExists),
+    QString(kScriptDir),   QString(kMerge),       QString(kBasename),   QString(kFileName),
+    QString(kFileExists),
     QString(kFormatPath), QString(kAssert),
 };
 }  // namespace AcBuiltin
