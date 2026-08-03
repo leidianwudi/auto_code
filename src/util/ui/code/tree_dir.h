@@ -16,7 +16,10 @@
 #include <QSet>
 #include <QStringList>
 #include <QStyledItemDelegate>
+#include <QTimer>
 #include <QTreeWidget>
+
+#include "tree_state_store.h"
 
 class QTreeWidgetItem;
 class QContextMenuEvent;
@@ -135,6 +138,26 @@ private:
   /// 根据启动项集合更新树中所有 .ac 文件的图标
   void refreshStartupIcons();
 
+  /// 按绝对路径查找树节点（找不到返回 nullptr）
+  QTreeWidgetItem *findItemByPath(const QString &absPath) const;
+
+  /// 收集所有已勾选 json 文件的相对路径
+  QStringList collectCheckedRelPaths() const;
+  /// 收集所有启动项 .ac 文件的相对路径
+  QStringList collectStartupRelPaths() const;
+  /// 收集所有展开目录节点的相对路径
+  QStringList collectExpandedRelPaths() const;
+  /// 将绝对路径转换为相对根目录的路径（根目录外返回空串）
+  QString toRelPath(const QString &absPath) const;
+
+  /// 将保存的勾选状态应用到树
+  void applyCheckedToTree(const QStringList &checkedRelPaths);
+  /// 将保存的展开状态应用到树（无记录时默认全部展开）
+  void applyExpandedToTree(const QStringList &expandedRelPaths);
+
+  /// 防抖保存（复选框频繁变化时合并写入）
+  void scheduleSave();
+
   /// 拦截鼠标释放以判断点击位置是否在复选框区域
   void mouseReleaseEvent(QMouseEvent *event) override;
 
@@ -151,4 +174,7 @@ private:
   QString m_selectedStartup;     ///< 当前下拉框选中的启动项路径
 
   bool m_visualToggle = false;  ///< 可视化编辑按钮状态
+
+  TreeStateStore m_store;         ///< 状态持久化数据层（相对路径）
+  QTimer *m_saveTimer = nullptr;  ///< 保存防抖定时器
 };
