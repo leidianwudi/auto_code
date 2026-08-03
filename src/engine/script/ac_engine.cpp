@@ -22,6 +22,7 @@ QString AcEngine::readFileUtf8(const QString &path) {
 }
 
 QString AcEngine::execute(const QString &acFilePath) {
+  resetCancel();
   QString source = readFileUtf8(acFilePath);
   if (source.isEmpty()) return QStringLiteral("failed to read file: %1").arg(acFilePath);
 
@@ -31,6 +32,7 @@ QString AcEngine::execute(const QString &acFilePath) {
   AcExecutor executor;
   executor.setScriptDir(dir);
   executor.setScriptFile(fi.absoluteFilePath());
+  executor.setCancelFlag(&m_cancelRequested);
   if (!m_rootDir.isEmpty()) executor.setRootDir(m_rootDir);
   if (m_logCallback) executor.setLogCallback(m_logCallback);
 #ifdef AC_DEBUG
@@ -42,6 +44,7 @@ QString AcEngine::execute(const QString &acFilePath) {
   qDebug() << "[AcEngine::execute] parse succeeded";
 #endif
 
+  if (m_logCallback) m_logCallback(QStringLiteral("[BUILD-MARKER] let-scope-fix"), false);
   QJsonValue result = executor.execute();
   m_generatedFiles = executor.generatedFiles();
   if (!executor.error().isEmpty()) return executor.error();

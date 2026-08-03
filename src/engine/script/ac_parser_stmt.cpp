@@ -35,6 +35,7 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
       stmt.kind = Block::Stmt::kAssign;
       if (!parseAssignStmt(stmt.assign)) return false;
       stmt.assign.isExported = true;
+      stmt.assign.isDeclaration = true;
       return true;
     }
 
@@ -179,6 +180,7 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
     stmt.kind = Block::Stmt::kAssign;
     if (!parseAssignStmt(stmt.assign)) return false;
     stmt.assign.line = t.line;
+    stmt.assign.isDeclaration = true;
     return true;
   }
 
@@ -507,6 +509,7 @@ bool AcParser::parseForStmt(ForStmt &fs) {
       Block::Stmt initStmt;
       initStmt.kind = Block::Stmt::kAssign;
       initStmt.assign.name = fs.varName;
+      initStmt.assign.isDeclaration = true;  // let 声明须在最新作用域创建，不覆盖外层同名变量
       if (!expect(TOK_EQUALS, QStringLiteral("expected '='"))) return false;
       if (!parseExpr(initStmt.assign.value)) return false;
       fs.initBlock.stmts.push_back(std::move(initStmt));

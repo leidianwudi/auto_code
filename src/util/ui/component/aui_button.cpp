@@ -128,9 +128,8 @@ QPushButton *AuiButton::createVisualToggleButton() {
   btn->setToolTip(QStringLiteral("可视化编辑 / 代码编辑切换"));
 
   // 切换状态时更新图标
-  QObject::connect(btn, &QPushButton::toggled, btn, [btn, drawIcon](bool checked) {
-    btn->setIcon(QIcon(drawIcon(checked)));
-  });
+  QObject::connect(btn, &QPushButton::toggled, btn,
+                   [btn, drawIcon](bool checked) { btn->setIcon(QIcon(drawIcon(checked))); });
 
   applyCommonStyle(btn);
   return btn;
@@ -165,6 +164,39 @@ QPushButton *AuiButton::createBuildButton(int size) {
   btn->setIconSize(QSize(size, size));
   btn->setCursor(Qt::PointingHandCursor);
   btn->setFocusPolicy(Qt::NoFocus);
+  applyIconButtonStyle(btn);
+  return btn;
+}
+
+// ════════════════════════════════════════════════════════════
+//  停止按钮
+// ════════════════════════════════════════════════════════════
+
+QPushButton *AuiButton::createStopButton(int size) {
+  auto *btn = new QPushButton;
+  // 绘制方形停止图标（红色，与 VSCode 停止按钮一致；禁用时使用灰色图标）
+  QColor red = AuiStyle::errorTextColor();
+  QColor gray = AuiStyle::inactiveTabColor();
+  const int m = 4;  // margin
+  auto drawSquare = [&](const QColor &color) {
+    QPixmap px(size, size);
+    px.fill(Qt::transparent);
+    QPainter p(&px);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(QPen(color, 1.2));
+    p.setBrush(QBrush(color));
+    p.drawRect(m, m, size - 2 * m, size - 2 * m);
+    p.end();
+    return px;
+  };
+  QIcon icon;
+  icon.addPixmap(drawSquare(red), QIcon::Normal, QIcon::Off);
+  icon.addPixmap(drawSquare(gray), QIcon::Disabled, QIcon::Off);
+  btn->setIcon(icon);
+  btn->setIconSize(QSize(size, size));
+  btn->setCursor(Qt::PointingHandCursor);
+  btn->setFocusPolicy(Qt::NoFocus);
+  btn->setToolTip(QStringLiteral("停止脚本执行"));
   applyIconButtonStyle(btn);
   return btn;
 }

@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <QFuture>
 #include <QObject>
 #include <QStack>
 
@@ -47,7 +48,7 @@ class MainDevMgr : public AuiMgr<MainDevMgr> {
 
 public:
   MainDevMgr() = default;
-  ~MainDevMgr() override = default;
+  ~MainDevMgr() override;
 
   // ── 静态方法：供其他模块调用 ──
 
@@ -97,6 +98,8 @@ private slots:
   void navigateBack();
   /// 鼠标侧键：前进（XButton2）
   void navigateForward();
+  /// 停止正在执行的脚本（设置取消标志，工作线程轮询检查）
+  void onStopScript();
 
 private:
   /// 查找并加载 file/ 目录
@@ -147,4 +150,8 @@ protected:
   QStack<NavigationEntry> m_navHistory;       ///< 后退栈
   QStack<NavigationEntry> m_navForwardStack;  ///< 前进栈
   bool m_navigating = false;                  ///< 是否正在执行导航（避免循环记录）
+
+  // 脚本执行（工作线程）
+  QFuture<void> m_scriptFuture;  ///< 脚本执行任务（工作线程）
+  bool m_scriptRunning = false;  ///< 脚本是否正在执行
 };

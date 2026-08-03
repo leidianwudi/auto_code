@@ -54,6 +54,12 @@ void AcInterpreter::setVar(const QString &name, const QJsonValue &val) {
   m_scopeStack.last()[name] = val;
 }
 
+void AcInterpreter::declareVar(const QString &name, const QJsonValue &val) {
+  // let 声明只在最新（最内层）作用域内创建变量，绝不覆盖外层同名变量
+  retainIfInstance(val);
+  m_scopeStack.last()[name] = val;
+}
+
 void AcInterpreter::pushScope() {
   m_scopeStack.append(QHash<QString, QJsonValue>());
   m_usingStack.append(QVector<QString>());

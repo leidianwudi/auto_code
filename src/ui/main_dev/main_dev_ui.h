@@ -116,6 +116,7 @@ public:
   QAction *helpExampleAction() const { return m_helpExampleAction; }
   QAction *helpKeyAction() const { return m_helpKeyAction; }
   QPushButton *buildBtn() const { return m_buildBtn; }
+  QPushButton *stopBtn() const { return m_stopBtn; }
   QComboBox *startupCombo() const { return m_startupCombo; }
   QPushButton *saveBtn() const { return m_saveBtn; }
   QPushButton *saveAllBtn() const { return m_saveAllBtn; }
@@ -159,6 +160,7 @@ private:
   QPushButton *m_splitBtn = nullptr;
   QPushButton *m_visualToggleBtn = nullptr;  ///< 可视化/代码切换按钮
   QPushButton *m_buildBtn = nullptr;
+  QPushButton *m_stopBtn = nullptr;  ///< 停止脚本执行按钮
   QComboBox *m_startupCombo = nullptr;
   QPushButton *m_saveBtn = nullptr;
   QPushButton *m_saveAllBtn = nullptr;

@@ -134,6 +134,12 @@ void MainDevUi::setupTitleBar() {
   titleLayout->insertWidget(tb.contentInsertIndex, m_buildBtn);
   tb.contentInsertIndex++;
 
+  // ── 停止按钮（默认禁用，执行脚本时启用） ──
+  m_stopBtn = AuiButton::createStopButton();
+  m_stopBtn->setEnabled(false);
+  titleLayout->insertWidget(tb.contentInsertIndex, m_stopBtn);
+  tb.contentInsertIndex++;
+
   // ── 启动项下拉框 ──
   m_startupCombo = AuiComboBox::create();
   m_startupCombo->setMinimumWidth(120);

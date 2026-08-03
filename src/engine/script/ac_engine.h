@@ -16,6 +16,7 @@
 
 #include <QString>
 #include <QStringList>
+#include <atomic>
 #include <functional>
 
 /**
@@ -37,6 +38,13 @@ public:
   void setLogCallback(LogCallback cb) { m_logCallback = std::move(cb); }
   void setRootDir(const QString &dir) { m_rootDir = dir; }
 
+  /// @brief 请求取消正在执行的脚本（工作线程中由解释器轮询检查）
+  void requestCancel() { m_cancelRequested.store(true); }
+  /// @brief 复位取消标志（每次执行前调用）
+  void resetCancel() { m_cancelRequested.store(false); }
+  /// @brief 是否已请求取消
+  bool isCancelRequested() const { return m_cancelRequested.load(); }
+
   /**
    * @brief 执行 .ac 脚本文件
    * @param acFilePath .ac 文件的绝对路径
@@ -53,4 +61,5 @@ private:
   QString m_rootDir;
   QStringList m_generatedFiles;
   LogCallback m_logCallback;
+  std::atomic<bool> m_cancelRequested{false};  ///< 取消标志（工作线程执行时检查）
 };

@@ -19,6 +19,7 @@
 #include <QFileInfo>
 #include <QShortcut>
 #include <QTabWidget>
+#include <QtConcurrent/QtConcurrent>
 
 #include "main_dev_model.h"
 #include "main_dev_ui.h"
@@ -44,6 +45,17 @@ void MainDevMgr::splitRight() { ins().onSplitRight(); }
 void MainDevMgr::closeCurrentEditor() { ins().onCloseEditor(); }
 
 // ──────────────────────────────────────────────────────────────
+//  析构 — 等待脚本线程结束，避免异步回调访问已释放对象
+// ──────────────────────────────────────────────────────────────
+
+MainDevMgr::~MainDevMgr() {
+  if (m_scriptFuture.isRunning()) {
+    AcEngine::ins().requestCancel();
+    m_scriptFuture.waitForFinished();
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
 //  onCreateWindow — 创建 MainDevUi 窗口（首次 open() 时调用）
 // ──────────────────────────────────────────────────────────────
 
@@ -61,8 +73,11 @@ QWidget *MainDevMgr::onCreateWindow() {
   initUi();
 
   // ── 设置日志回调：脚本中 printLog() 输出到 UI 面板 ──
-  AcEngine::ins().setLogCallback(
-      [this](const QString &text, bool isError) { m_ui->appendOutput(text, isError); });
+  // 脚本在工作线程执行，日志回调可能从工作线程触发，需投递到 GUI 线程
+  AcEngine::ins().setLogCallback([this](const QString &text, bool isError) {
+    QMetaObject::invokeMethod(
+        m_ui, [this, text, isError]() { m_ui->appendOutput(text, isError); }, Qt::QueuedConnection);
+  });
 
   // ── 加载文件树 ──
   loadFiles();
@@ -184,22 +199,56 @@ void MainDevMgr::connectVisualToggle() {
 /// 执行按钮
 void MainDevMgr::connectBuildAction() {
   connect(m_ui->buildBtn(), &QPushButton::clicked, this, [this]() {
+    if (m_scriptRunning) {
+      m_ui->appendOutput(QStringLiteral("脚本正在执行中，请先停止"), true);
+      return;
+    }
     QString scriptPath = m_ui->startupCombo()->currentData().toString();
     if (scriptPath.isEmpty()) {
       m_ui->appendOutput(QStringLiteral("未选择启动项"), true);
       return;
     }
     m_ui->appendOutput(QStringLiteral("执行: %1").arg(scriptPath), false);
-    AcEngine::ins().setRootDir(m_ui->fileTree()->rootPath());
-    QString err = AcEngine::ins().execute(scriptPath);
-    if (!err.isEmpty()) {
-      m_ui->appendOutput(err, true);
-    } else {
-      m_ui->appendOutput(QStringLiteral("执行完成"), false);
-      QStringList files = AcEngine::ins().generatedFiles();
-      for (const QString &f : files) m_ui->appendOutput(QStringLiteral("  生成: %1").arg(f), false);
-    }
+    m_scriptRunning = true;
+    m_ui->buildBtn()->setEnabled(false);
+    m_ui->stopBtn()->setEnabled(true);
+
+    // 在工作线程执行脚本，避免卡住 GUI 线程
+    QString rootDir = m_ui->fileTree()->rootPath();
+    m_scriptFuture = QtConcurrent::run([this, scriptPath, rootDir]() {
+      AcEngine::ins().setRootDir(rootDir);
+      QString err = AcEngine::ins().execute(scriptPath);
+      // 结果投递回 GUI 线程处理
+      QMetaObject::invokeMethod(
+          this,
+          [this, err]() {
+            m_scriptRunning = false;
+            m_ui->buildBtn()->setEnabled(true);
+            m_ui->stopBtn()->setEnabled(false);
+            if (AcEngine::ins().isCancelRequested()) {
+              m_ui->appendOutput(QStringLiteral("执行已取消"), true);
+            } else if (!err.isEmpty()) {
+              m_ui->appendOutput(err, true);
+            } else {
+              m_ui->appendOutput(QStringLiteral("执行完成"), false);
+              const QStringList files = AcEngine::ins().generatedFiles();
+              for (const QString &f : files)
+                m_ui->appendOutput(QStringLiteral("  生成: %1").arg(f), false);
+            }
+          },
+          Qt::QueuedConnection);
+    });
   });
+
+  // 停止按钮：设置取消标志，由工作线程轮询检查
+  connect(m_ui->stopBtn(), &QPushButton::clicked, this, &MainDevMgr::onStopScript);
+}
+
+/// 停止正在执行的脚本
+void MainDevMgr::onStopScript() {
+  if (!m_scriptRunning) return;
+  AcEngine::ins().requestCancel();
+  m_ui->appendOutput(QStringLiteral("正在请求取消..."), false);
 }
 
 /// 编辑器面板信号 + 事件过滤器

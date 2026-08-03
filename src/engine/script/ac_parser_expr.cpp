@@ -426,6 +426,7 @@ bool AcParser::parsePrimary(Expr &expr) {
     }
 
     case TOK_IDENT: {
+      int identLine = peek().line;
       QString name = advance().text;
       if (peek().type == TOK_SCOPE) {
         int scopeLine = peek().line;
@@ -477,6 +478,7 @@ bool AcParser::parsePrimary(Expr &expr) {
           return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
         }
         expr.kind = Expr::kPropAccess;
+        expr.line = identLine;
         expr.ident = name;
         expr.prop = propName;
         return true;

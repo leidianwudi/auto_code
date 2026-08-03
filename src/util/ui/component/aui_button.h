@@ -58,6 +58,9 @@ public:
   /// 创建「构建 / 生成」按钮（QPushButton，三角形图标）
   static QPushButton *createBuildButton(int size = 18);
 
+  /// 创建「停止」按钮（QPushButton，方形停止图标）
+  static QPushButton *createStopButton(int size = 18);
+
   /// 创建「保存」按钮（QPushButton，软盘图标）
   static QPushButton *createSaveButton(int size = 18);
 

@@ -11,6 +11,7 @@
 #include <QSet>
 #include <QString>
 #include <QStringList>
+#include <atomic>
 #include <functional>
 
 #include "ac_object_manager.h"
@@ -38,6 +39,9 @@ public:
 
   /// @brief 设置脚本目录
   void setScriptDir(const QString &dir) { m_scriptDir = dir; }
+
+  /// @brief 设置取消标志（工作线程中由解释器轮询检查）
+  void setCancelFlag(std::atomic<bool> *flag) { m_cancelFlag = flag; }
 
   /// @brief 设置项目根目录
   void setRootDir(const QString &dir) { m_rootDir = dir; }
@@ -113,6 +117,7 @@ private:
   // ── 变量操作 ──
   QJsonValue resolveVar(const QString &name) const;
   void setVar(const QString &name, const QJsonValue &val);
+  void declareVar(const QString &name, const QJsonValue &val);  ///< 在最新作用域内声明变量，不覆盖外层同名变量
   bool containsVar(const QString &name) const;
   void pushScope();
   void popScope();
@@ -157,6 +162,7 @@ private:
   QString m_error;
   QString m_scriptDir;
   QString m_rootDir;
+  std::atomic<bool> *m_cancelFlag = nullptr;  ///< 取消标志（指向 AcEngine 的原子标志）
   AcObjectManager m_objMgr;
   QVector<QHash<QString, QJsonValue>> m_scopeStack;
   QVector<QVector<QString>> m_usingStack;
@@ -173,6 +179,8 @@ private:
   bool m_hasContinue = false;
   QJsonValue m_returnValue;
   QStringList m_generatedFiles;
+  int m_currentLine = 0;        ///< 当前正在执行的语句行号（用于卡死诊断）
+  long long m_stmtCounter = 0;  ///< 已执行语句计数（用于节流日志）
 
   LogCallback m_logCallback;
 };

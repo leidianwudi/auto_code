@@ -52,7 +52,11 @@ QJsonValue AcInterpreter::resolveClassPropOrMethod(const QString &className,
 }
 
 void AcInterpreter::setError(const QString &msg, int line) {
-  m_error = QStringLiteral("%1 at line %2").arg(msg, QString::number(line));
+  if (line > 0) {
+    m_error = QStringLiteral("%1 at line %2").arg(msg, QString::number(line));
+  } else {
+    m_error = msg;
+  }
 }
 
 QJsonValue AcInterpreter::makeClassRef(const QString &className) const {
@@ -104,14 +108,18 @@ QJsonValue AcInterpreter::evalPropertyChain(const Expr &expr) {
     obj = QJsonValue(m_currentThis);
   } else {
     obj = resolveVar(expr.ident);
-    if (obj.isNull()) {
+    if (obj.isUndefined() || obj.isNull()) {
       QString enumMemberName = QStringLiteral("%1.%2").arg(expr.ident, expr.prop);
       if (containsVar(enumMemberName)) return resolveVar(enumMemberName);
       if (m_classes.contains(expr.ident)) {
         QJsonValue result = resolveClassPropOrMethod(expr.ident, expr.prop);
         if (!result.isUndefined()) return result;
       }
-      setError(QStringLiteral("undefined variable '%1'").arg(expr.ident), expr.line);
+      if (obj.isNull()) {
+        setError(QStringLiteral("variable '%1' is null").arg(expr.ident), expr.line);
+      } else {
+        setError(QStringLiteral("undefined variable '%1'").arg(expr.ident), expr.line);
+      }
       return QJsonValue();
     }
   }

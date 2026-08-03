@@ -114,6 +114,7 @@ QJsonValue AcExecutor::execute() {
   m_interpreter.setScriptDir(m_scriptDir);
   m_interpreter.setRootDir(m_rootDir);
   m_interpreter.setLogCallback(m_logCallback);
+  m_interpreter.setCancelFlag(m_cancelFlag);
 
 #ifdef AC_DEBUG
   qDebug() << "[AcExecutor::execute] m_logCallback is null:" << !m_logCallback;
@@ -158,6 +159,10 @@ QJsonValue AcExecutor::execute() {
   // 步骤 4：执行
   QJsonValue result = m_interpreter.execute(m_program, m_error);
   if (!m_error.isEmpty()) {
+    // 在解释器错误信息前加上文件名
+    if (!m_scriptFile.isEmpty()) {
+      m_error = QStringLiteral("%1: %2").arg(QFileInfo(m_scriptFile).fileName(), m_error);
+    }
 #ifdef AC_DEBUG
     qDebug() << "[AcExecutor::execute] execution error:" << m_error;
 #endif

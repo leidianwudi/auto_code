@@ -11,6 +11,7 @@
 #include <QSet>
 #include <QString>
 #include <QStringList>
+#include <atomic>
 #include <functional>
 
 #include "ac_interpreter.h"
@@ -34,6 +35,9 @@ public:
   void setRootDir(const QString &dir) { m_rootDir = dir; }
   void setJsonFile(const QString &path) { m_jsonPath = path; }
   QStringList generatedFiles() const { return m_interpreter.generatedFiles(); }
+
+  /// @brief 设置取消标志（工作线程中由解释器轮询检查）
+  void setCancelFlag(std::atomic<bool> *flag) { m_cancelFlag = flag; }
 
   /// 日志回调：print() 的输出通过此回调通知 UI
   using LogCallback = std::function<void(const QString &text, bool isError)>;
@@ -82,6 +86,7 @@ private:
   Block m_program;               ///< 解析后的 AST 根节点
   QStringList m_typeErrors;      ///< 类型检查错误列表
   LogCallback m_logCallback;
-  AcSymbolTable m_symbolTable;  ///< 符号表
-  QStringList m_sourceLines;    ///< 源码行列表（用于引用上下文）
+  AcSymbolTable m_symbolTable;                ///< 符号表
+  QStringList m_sourceLines;                  ///< 源码行列表（用于引用上下文）
+  std::atomic<bool> *m_cancelFlag = nullptr;  ///< 取消标志（指向 AcEngine 的原子标志）
 };

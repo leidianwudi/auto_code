@@ -211,8 +211,8 @@ struct AcType {
 
 /// @brief 参数定义：带可选类型注解
 struct ParamDef {
-  QString name;       ///< 参数名
-  AcType type;        ///< 类型（默认 Any，无注解时）
+  QString name;             ///< 参数名
+  AcType type;              ///< 类型（默认 Any，无注解时）
   bool isOptional = false;  ///< 是否为可选参数（param?: Type 语法）
 };
 
@@ -430,12 +430,13 @@ struct AssignStmt {
   QString name;
   QString thisProp;
   Expr value;
-  int line = 0;                               ///< 源码行号（1-based，用于符号导航）
-  bool isStatic = false;                      ///< 是否为静态属性赋值
-  QString staticClassName;                    ///< 静态类名（isStatic=true 时有效）
-  AcType typeAnnotation;                      ///< let 声明时的类型注解（如 let x: Number = 1）
-  bool hasTypeAnnotation = false;             ///< 是否有类型注解
-  bool isExported = false;                    ///< 是否导出
+  int line = 0;                    ///< 源码行号（1-based，用于符号导航）
+  bool isStatic = false;           ///< 是否为静态属性赋值
+  QString staticClassName;         ///< 静态类名（isStatic=true 时有效）
+  AcType typeAnnotation;           ///< let 声明时的类型注解（如 let x: Number = 1）
+  bool hasTypeAnnotation = false;  ///< 是否有类型注解
+  bool isExported = false;         ///< 是否导出
+  bool isDeclaration = false;  ///< 是否为 let 变量声明（须在最新作用域内创建，不覆盖外层同名变量）
   CompoundOp compoundOp = CompoundOp::kNone;  ///< 复合赋值运算符
 };
 

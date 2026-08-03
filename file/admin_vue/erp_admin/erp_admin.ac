@@ -33,9 +33,16 @@ class TemplateConfig {
 /// @param s 原始字符串
 /// @return 转义后的字符串（单引号 ' → \'，反斜杠 \ → \\）
 function escapeJsStr(s: String): String {
+  if (s == null) {
+    return "";
+  }
+  printLog("[DIAG-ESC] s=" + s + " len=" + s.length);
   let result = "";
   let len = s.length;
   for (let i = 0; i < len; i = i + 1) {
+    if (i % 100000 == 0) {
+      printLog("[DIAG-ESC] i=" + i + " len=" + len);
+    }
     let c = s[i];
     if (c == "'") {
       result = result + "\\'";
@@ -211,7 +218,9 @@ main {
     //        formSpan         - 表单布局占比
     let columns: Object[] = [];
     let rawColsLen = rawColumns.length;
+    printLog("[DIAG] rawColsLen: " + rawColsLen);
     for (let i = 0; i < rawColsLen; i = i + 1) {
+      printLog("[DIAG] i: " + i + " / " + rawColsLen);
       let rawCol: Object = rawColumns[i];
       let col: Object = {};
       col["dataName"] = rawCol.dataName;
@@ -288,6 +297,7 @@ main {
       col["switchInactiveValue"] = escapeJsStr(switchInactiveValue);
       col["switchActiveText"] = escapeJsStr(switchActiveText);
       col["switchInactiveText"] = escapeJsStr(switchInactiveText);
+      printLog("[DIAG] S1 i=" + i);
 
       // 判断是否为多行文本
       let isTextArea = false;
@@ -437,6 +447,7 @@ main {
       col["isFormatterCurrency"] = (rawCol.formatter == "currency");
       col["hasFormSpan"] = (rawCol.formSpan != 24);
 
+      printLog("[DIAG] END i: " + i);
       columns.push(col);
     }
     printLog("columns count: " + columns.length);
