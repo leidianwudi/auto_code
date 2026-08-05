@@ -231,8 +231,12 @@ public:
   /// 确保 QTabBar 使用 Fusion 风格（Windows 原生风格忽略 setTabTextColor）
   static void ensureFusionTabBar(QTabBar *bar);
 
-  /// QTabBar 样式表
+  /// QTabBar 样式表（简洁版：仅区分文字颜色，未选中灰 / 选中深）
   static QString tabBarStyleSheet();
+
+  /// 设置 tab 头上下左右空白（像素）：用代理样式覆盖 PM_TabBarTabHSpace/VSpace
+  /// 注：HSpace 取 left+right、VSpace 取 top+bottom（Qt 按每边 HSpace/2 计算）
+  static void applyTabBarPadding(QTabBar *bar, int left, int top, int right, int bottom);
 
   /// 补全弹出列表样式表
   static QString popupListStyleSheet();

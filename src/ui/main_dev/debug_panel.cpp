@@ -62,12 +62,9 @@ DebugPanel::DebugPanel(QWidget *parent) : QWidget(parent) {
   // ── 调用栈 / 变量 双 tab ──
   auto *tabs = new QTabWidget;
   tabs->setDocumentMode(true);
-  // 未选中的 tab 文字用与「未调试」一致的灰色（inactiveTabColor），选中则用深色
-  // 注：Windows 原生风格忽略 tab 文字颜色，必须用 Fusion 风格才能生效
-  AuiStyle::ensureFusionTabBar(tabs->tabBar());
-  tabs->tabBar()->setStyleSheet(
-      QStringLiteral("QTabBar::tab { color: %1; } QTabBar::tab:selected { color: %2; }")
-          .arg(AuiStyle::inactiveTabColor().name(), AuiStyle::textColor().name()));
+  // 指定 tab 头四边空白（左/右 6px，上/下 3px），并保留文字颜色（未选中灰 / 选中深）
+  AuiStyle::applyTabBarPadding(tabs->tabBar(), 10, 5, 10, 5);
+  tabs->tabBar()->setStyleSheet(AuiStyle::tabBarStyleSheet());
 
   m_stackTree = AuiTree::createListTree();
   m_stackTree->setColumnCount(2);

@@ -189,11 +189,8 @@ DimmableTabWidget::DimmableTabWidget(QWidget *parent) : QTabWidget(parent) {
   // setTabBar 之后设置，确保作用到 DraggableTabBar
   setTabsClosable(true);
 
-  // 强制 Fusion 风格使 setTabTextColor 生效
-  AuiStyle::ensureFusionTabBar(bar);
-
-  // tab 样式
-  bar->setStyleSheet(AuiStyle::tabBarStyleSheet());
+  // tab 样式：指定编辑框 tab 头四边空白（左/右 1px，上/下 6px，与调试面板一致）
+  AuiStyle::applyTabBarPadding(bar, 4, 4, 0, 4);
 
   // 跨面板拖拽：标签移动
   connect(bar, &DraggableTabBar::tabDropped, this,

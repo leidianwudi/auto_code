@@ -6,9 +6,14 @@
 #include "aui_style.h"
 
 #include <QLabel>
+#include <QProxyStyle>
 #include <QStyle>
 #include <QStyleFactory>
+#include <QStyleOption>
 #include <QTabBar>
+
+/// 标记 tab bar 已基于 Fusion（含自定义空白），供 ensureFusionTabBar 跳过覆盖
+static const char *kFusionTabProperty = "aui_fusion_tab";
 
 // ════════════════════════════════════════════════════════════
 //  全局样式表 — 所有窗口共用
@@ -61,28 +66,52 @@ QString AuiStyle::dialogStyleSheet() {
 }
 
 QString AuiStyle::tabBarStyleSheet() {
+  // 简洁版 tab 样式：仅区分文字颜色（未选中灰 / 选中深），不加背景与边框
   return QStringLiteral(
-             "QTabBar::tab {"
-             "  padding: 6px 2px 6px 4px;"
-             "  border: 1px solid %1;"
-             "  border-bottom: none;"
-             "  border-top-left-radius: 4px;"
-             "  border-top-right-radius: 4px;"
-             "  background: %2;"
-             "  margin-right: 0px;"
-             "}"
-             "QTabBar::tab:selected {"
-             "  background: %3;"
-             "}"
-             "QTabBar::tab:hover:!selected {"
-             "  background: %4;"
-             "}"
-             "QTabBar::close-button {"
-             "  padding: 0px;"
-             "  margin: 0px;"
-             "}")
-      .arg(borderColor().name(), tabUnselectedBackground().name(), panelBackground().name(),
-           tabHoverBackground().name());
+             "QTabBar::tab { color: %1; }"
+             "QTabBar::tab:selected { color: %2; }")
+      .arg(inactiveTabColor().name(), textColor().name());
+}
+
+/// 覆盖 tab 上下左右空白的内边距代理样式
+/// 通过像素度量控制 tab 整体尺寸，并重写文本矩形实现四边不对称空白
+class TabBarPaddingProxyStyle : public QProxyStyle {
+public:
+  explicit TabBarPaddingProxyStyle(const QMargins &m, QStyle *base) : QProxyStyle(base), m_m(m) {}
+
+  int pixelMetric(PixelMetric metric, const QStyleOption *opt,
+                  const QWidget *widget) const override {
+    if (metric == PM_TabBarTabHSpace) return m_m.left() + m_m.right();
+    if (metric == PM_TabBarTabVSpace) return m_m.top() + m_m.bottom();
+    return QProxyStyle::pixelMetric(metric, opt, widget);
+  }
+
+  QRect subElementRect(SubElement element, const QStyleOption *opt,
+                       const QWidget *widget) const override {
+    QRect r = QProxyStyle::subElementRect(element, opt, widget);
+    if (element == SE_TabBarTabText) {
+      // 基础文本矩形按对称的 (left+right)/2、(top+bottom)/2 内缩，这里修正为四边各自的值
+      const int hpad = (m_m.left() + m_m.right()) / 2;
+      const int vpad = (m_m.top() + m_m.bottom()) / 2;
+      r.adjust(m_m.left() - hpad, m_m.top() - vpad, -(m_m.right() - hpad), -(m_m.bottom() - vpad));
+    }
+    return r;
+  }
+
+private:
+  QMargins m_m;
+};
+
+void AuiStyle::applyTabBarPadding(QTabBar *bar, int left, int top, int right, int bottom) {
+  ensureFusionTabBar(bar);  // 先确保基于 Fusion（便于统一渲染；文字颜色由 setTabTextColor 控制）
+  QStyle *base = bar->style();
+  auto *proxy = new TabBarPaddingProxyStyle(QMargins(left, top, right, bottom), base);
+  proxy->setParent(bar);
+  bar->setStyle(proxy);
+  // 标记该 tab bar 已基于 Fusion（含自定义空白），供 ensureFusionTabBar 跳过覆盖
+  bar->setProperty(kFusionTabProperty, true);
+  // 注意：不要在此设置样式表，否则 Qt 会用 QStyleSheetStyle 包裹代理样式，
+  // 使上面对 SE_TabBarTabText 的覆盖失效。文字颜色由 applyTabDimming 的 setTabTextColor 负责。
 }
 
 QString AuiStyle::popupListStyleSheet() {
@@ -117,8 +146,19 @@ QString AuiStyle::errorToolTipStyleSheet() {
 // ════════════════════════════════════════════════════════════
 void AuiStyle::ensureFusionTabBar(QTabBar *bar) {
 #ifdef Q_OS_WIN
-  bool isFusion = bar->style() && QString::fromLatin1(bar->style()->metaObject()->className())
-                                      .contains(QStringLiteral("Fusion"));
+  // 已由 applyTabBarPadding 标记为基于 Fusion（含自定义空白），直接跳过，避免覆盖
+  if (bar->property(kFusionTabProperty).toBool()) return;
+  auto isFusionStyle = [](QStyle *s) {
+    return s &&
+           QString::fromLatin1(s->metaObject()->className()).contains(QStringLiteral("Fusion"));
+  };
+  // 当前已基于 Fusion（含我们的代理样式包裹 Fusion）则跳过，避免覆盖自定义 tab 空白
+  bool isFusion = isFusionStyle(bar->style());
+  if (!isFusion) {
+    if (auto *proxy = qobject_cast<QProxyStyle *>(bar->style())) {
+      isFusion = isFusionStyle(proxy->baseStyle());
+    }
+  }
   if (!isFusion) {
     QStyle *fs = QStyleFactory::create(QStringLiteral("Fusion"));
     if (fs) {
