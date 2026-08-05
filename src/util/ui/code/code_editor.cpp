@@ -257,9 +257,13 @@ void CodeEditor::runSchemaValidation(const QJsonObject &doc, QVector<ValidationR
     return;
   }
 
-  // 解析 schema 路径（相对文件目录）
+  // 解析 schema 路径：
+  //   - 以 / 开头 → 基于项目根目录（PROJECT_SOURCE_DIR/file），供所有 json 文件复制使用
+  //   - 相对路径   → 基于当前文件所在目录
   QString schemaPath = schemaRef;
-  if (QFileInfo(schemaRef).isRelative()) {
+  if (schemaRef.startsWith(QLatin1Char('/'))) {
+    schemaPath = QStringLiteral(PROJECT_SOURCE_DIR) + QStringLiteral("/file") + schemaRef;
+  } else if (QFileInfo(schemaRef).isRelative()) {
     QFileInfo fi(objectName());
     schemaPath = fi.absolutePath() + QLatin1Char('/') + schemaRef;
   }
