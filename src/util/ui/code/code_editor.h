@@ -145,7 +145,7 @@ signals:
   void requestWorkspaceSymbols();                            ///< 工作区符号搜索 (Ctrl+T)
   void breakpointsChanged();                                 ///< 断点集合发生变化
   void requestDebugStart();                                  ///< F5：启动调试/继续
-  void requestDebugStepOver();                               ///< F10：单步跳过
+  void requestDebugStepOver();                               ///< F10：单步执行
   void requestDebugStepInto();                               ///< F11：单步进入
   void requestDebugStepOut();                                ///< Shift+F11：单步跳出
 

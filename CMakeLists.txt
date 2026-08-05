@@ -125,6 +125,8 @@ qt_add_executable(auto_code
     src/util/ui/component/aui_button.cpp
     src/util/ui/component/aui_icon.h
     src/util/ui/component/aui_icon.cpp
+    src/util/ui/component/aui_tree.h
+    src/util/ui/component/aui_tree.cpp
     src/util/ui/component/aui_combo_box.h
     src/util/ui/component/aui_combo_box.cpp
     src/util/ui/aui_window.h

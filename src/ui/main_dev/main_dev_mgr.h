@@ -108,7 +108,7 @@ private slots:
   void onDebugBtnClicked();
   /// 编辑器 F5：启动调试/继续
   void onDebugStart();
-  /// 编辑器 F10：单步跳过
+  /// 编辑器 F10：单步执行
   void onDebugStepOver();
   /// 编辑器 F11：单步进入
   void onDebugStepInto();
@@ -136,14 +136,24 @@ private:
   void connectBuildAction();   ///< 执行按钮
   void connectDebugAction();   ///< 调试按钮与调试器信号
   void connectEditorPanels();  ///< 编辑器面板信号 + 事件过滤器
+  /// 连接单个编辑器面板的信号（关闭/切换/标签栏交互）
+  void connectEditorPanel(QTabWidget *tabs);
   /// 为文件路径创建编辑器实例（含高亮器 + 验证模式）
   CodeEditor *createEditorForFile(const QString &filePath);
   /// 在编辑器中打开文件（查重 → 读取 → 创建 → 显示）
-  CodeEditor *openFileInEditor(const QString &filePath);
+  CodeEditor *openFileInEditor(const QString &filePath, QTabWidget *target = nullptr);
   /// 获取当前活跃的编辑器
   CodeEditor *currentEditor() const;
   /// 收集所有编辑器中的断点并刷新调试面板「断点」页
   void refreshBreakpointList();
+  /// 将当前全部断点持久化到磁盘（程序重启后还原）
+  void saveBreakpointsToDisk();
+  /// 从磁盘加载断点到持久存储（程序启动时调用）
+  void loadBreakpointsFromDisk();
+  /// 保存当前打开的文件列表到设置（下次启动还原）
+  void saveOpenFilesToSettings();
+  /// 从设置还原上次打开的文件列表并重新打开
+  void restoreOpenFilesFromSettings();
   /// 收集全部已打开编辑器及持久化断点（文件路径 → 行号集合），供调试器使用
   QMap<QString, QSet<int>> debugBreakpoints();
   /// 获取当前活跃的面板组

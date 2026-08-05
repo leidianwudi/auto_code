@@ -17,31 +17,39 @@ HelpKeyModel::HelpKeyModel() { loadDefaults(); }
 
 void HelpKeyModel::loadDefaults() {
   // ── 文件操作 ──
-  m_entries.append({QStringLiteral("文件操作"), QStringLiteral("打开文件"), QStringLiteral("Ctrl+O")});
-  m_entries.append({QStringLiteral("文件操作"), QStringLiteral("保存当前文件"), QStringLiteral("Ctrl+S")});
-  m_entries.append({QStringLiteral("文件操作"), QStringLiteral("关闭标签页"), QStringLiteral("Ctrl+W")});
+  m_entries.append(
+      {QStringLiteral("文件操作"), QStringLiteral("打开文件"), QStringLiteral("Ctrl+O")});
+  m_entries.append(
+      {QStringLiteral("文件操作"), QStringLiteral("保存当前文件"), QStringLiteral("Ctrl+S")});
+  m_entries.append(
+      {QStringLiteral("文件操作"), QStringLiteral("关闭标签页"), QStringLiteral("Ctrl+W")});
 
   // ── 编辑操作 ──
   m_entries.append({QStringLiteral("编辑操作"), QStringLiteral("查找"), QStringLiteral("Ctrl+F")});
   m_entries.append({QStringLiteral("编辑操作"), QStringLiteral("替换"), QStringLiteral("Ctrl+H")});
-  m_entries.append({QStringLiteral("编辑操作"), QStringLiteral("跳转到匹配括号"), QStringLiteral("Ctrl+M")});
-  m_entries.append({QStringLiteral("编辑操作"), QStringLiteral("选中括号内所有内容"), QStringLiteral("Ctrl+Shift+M")});
+  m_entries.append(
+      {QStringLiteral("编辑操作"), QStringLiteral("跳转到匹配括号"), QStringLiteral("Ctrl+M")});
+  m_entries.append({QStringLiteral("编辑操作"), QStringLiteral("选中括号内所有内容"),
+                    QStringLiteral("Ctrl+Shift+M")});
 
   // ── 导航 ──
   m_entries.append({QStringLiteral("导航"), QStringLiteral("转到定义"), QStringLiteral("F12")});
   m_entries.append({QStringLiteral("导航"), QStringLiteral("后退"), QStringLiteral("Alt+Left")});
   m_entries.append({QStringLiteral("导航"), QStringLiteral("前进"), QStringLiteral("Alt+Right")});
-  m_entries.append({QStringLiteral("导航"), QStringLiteral("搜索工作区符号"), QStringLiteral("Ctrl+T")});
+  m_entries.append(
+      {QStringLiteral("导航"), QStringLiteral("搜索工作区符号"), QStringLiteral("Ctrl+T")});
 
   // ── 视图操作 ──
-  m_entries.append({QStringLiteral("视图操作"), QStringLiteral("向右拆分编辑器"), QStringLiteral("Ctrl+\\")});
+  m_entries.append(
+      {QStringLiteral("视图操作"), QStringLiteral("向右拆分编辑器"), QStringLiteral("Ctrl+\\")});
 
   // ── 执行 ──
   m_entries.append({QStringLiteral("执行"), QStringLiteral("执行脚本"), QStringLiteral("F5")});
 
   // ── 调试 ──
   m_entries.append({QStringLiteral("调试"), QStringLiteral("开始/继续调试"), QStringLiteral("F5")});
-  m_entries.append({QStringLiteral("调试"), QStringLiteral("单步跳过"), QStringLiteral("F10")});
+  m_entries.append({QStringLiteral("调试"), QStringLiteral("单步执行"), QStringLiteral("F10")});
   m_entries.append({QStringLiteral("调试"), QStringLiteral("单步进入"), QStringLiteral("F11")});
-  m_entries.append({QStringLiteral("调试"), QStringLiteral("单步跳出"), QStringLiteral("Shift+F11")});
+  m_entries.append(
+      {QStringLiteral("调试"), QStringLiteral("单步跳出"), QStringLiteral("Shift+F11")});
 }

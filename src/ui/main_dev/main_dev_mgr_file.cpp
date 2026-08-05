@@ -45,7 +45,7 @@ CodeEditor *MainDevMgr::createEditorForFile(const QString &filePath) {
   return editor;
 }
 
-CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
+CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *target) {
   // ── 查重：遍历所有面板组的所有标签页 ──
   // 支持 CodeEditor 和 JsonVueWidget（包装器）两种类型
   for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
@@ -107,15 +107,12 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
     tabWidget = editor;
   }
 
-  // 内容加载完成后立即执行一次验证（setPlainText 不会自动触发验证，
-  // 否则打开文件时不会有错误提示，直到用户编辑才出现）
-  editor->validate();
-
   // ── 获取 / 创建面板组 ──
-  QTabWidget *tabs = currentTabWidget();
+  QTabWidget *tabs = target ? target : currentTabWidget();
   if (!tabs) {
     tabs = m_ui->createEditorPanel();
     m_ui->addEditorPanel(tabs);
+    connectEditorPanel(tabs);  // 连接关闭/切换等信号，否则标签关闭按钮无效
   }
 
   QFileInfo fi(filePath);
@@ -128,7 +125,10 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
 
   // ── 记录状态 ──
   m_model->registerFile(filePath, content, editor);
+  // 必须先设置 objectName（文件路径），再触发验证；
+  // 否则验证时 m_filePath 为空，import 解析被跳过，导致误报 "class X has no method" 类型错误
   editor->setObjectName(filePath);
+  editor->validate();
   // 恢复该文件持久化的断点（关闭重开后保留）
   editor->setBreakpoints(m_persistedBreakpoints.value(filePath));
   editor->setFocus();
@@ -159,6 +159,9 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
     connect(jvw, &JsonVueWidget::contentChanged, this,
             [jvw, editor]() { editor->document()->setModified(true); });
   }
+
+  // ── 打开文件后保存当前打开列表，供下次启动还原 ──
+  saveOpenFilesToSettings();
 
   return editor;
 }

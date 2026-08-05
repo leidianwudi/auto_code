@@ -64,6 +64,10 @@ public:
   /// 创建「调试」按钮（QPushButton，红色 bug 图标，用于启动/继续调试）
   static QPushButton *createDebugButton(int size = 18);
 
+  /// 创建「调试单步」图标按钮（仅图标，无文字）
+  /// @param kind 0=继续 1=单步执行 2=单步进入 3=单步跳出
+  static QPushButton *createDebugStepButton(int kind);
+
   /// 创建「保存」按钮（QPushButton，软盘图标）
   static QPushButton *createSaveButton(int size = 18);
 

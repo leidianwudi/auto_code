@@ -27,7 +27,8 @@
 /// @brief 调用栈帧
 struct AcDebugFrame {
   QString funcName;  ///< 函数/方法名
-  int line = 0;      ///< 调用处行号
+  QString filePath;  ///< 函数所在源文件（用于双击定位）
+  int line = 0;      ///< 函数起始行号（用于双击定位）
 };
 
 /// @brief 调试变量条目
@@ -35,6 +36,9 @@ struct AcDebugVar {
   QString scope;     ///< 作用域名（如 "局部"/"全局"/"静态.类名"/"this"）
   QString name;      ///< 变量名
   QJsonValue value;  ///< 变量值
+  QString filePath;  ///< 变量声明所在源文件（用于双击定位）
+  int line = 0;      ///< 变量声明行号（用于双击定位）
+  QString funcName;  ///< 变量所在函数名（用于位置列展示）
 };
 
 /**
@@ -78,7 +82,7 @@ public:
   void continueRun();
   /// 单步进入（F11）
   void stepInto();
-  /// 单步跳过（F10）
+  /// 单步执行（F10）
   void stepOver();
   /// 单步跳出（Shift+F11）
   void stepOut();

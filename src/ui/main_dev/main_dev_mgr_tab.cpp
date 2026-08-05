@@ -86,7 +86,12 @@ QTabWidget *MainDevMgr::currentTabWidget() const {
       if (!emptyPanel) emptyPanel = tabs;
     }
   }
-  return emptyPanel;
+  if (emptyPanel) return emptyPanel;
+
+  // 4. 启动早期窗口尚未显示、所有面板均不可见时，退到第一个面板，
+  //    避免为每个还原文件新建右侧面板导致文件堆到界面右边
+  if (m_ui->editorPanelCount() > 0) return m_ui->editorPanelAt(0);
+  return nullptr;
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -119,6 +124,9 @@ void MainDevMgr::closeTab(QTabWidget *tabs, int index) {
 
   tabs->removeTab(index);
   container->deleteLater();
+
+  // ── 关闭文件后保存当前打开列表，供下次启动还原 ──
+  saveOpenFilesToSettings();
 
   // ── 空面板且存在多个面板 → 删除面板组 ──
   if (tabs->count() == 0 && m_ui->editorPanelCount() > 1) {

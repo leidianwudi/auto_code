@@ -15,9 +15,15 @@
 #include <QAction>
 #include <QApplication>
 #include <QDir>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QShortcut>
+#include <QStandardPaths>
+#include <QStringList>
 #include <QTabWidget>
 #include <QTextBlock>
 #include <QTextCursor>
@@ -91,6 +97,16 @@ QWidget *MainDevMgr::onCreateWindow() {
   // ── 加载文件树 ──
   loadFiles();
 
+  // ── 恢复上次保存的断点（程序重启后还原） ──
+  loadBreakpointsFromDisk();
+  refreshBreakpointList();
+
+  // ── 恢复上次打开的文件（程序重启后还原） ──
+  restoreOpenFilesFromSettings();
+
+  // ── 还原窗口几何与分割器大小（在还原文件/面板之后，确保面板数量匹配） ──
+  m_ui->restoreLayout();
+
   // ── 恢复可视化编辑按钮状态 ──
   m_ui->visualToggleBtn()->setChecked(m_ui->fileTree()->visualToggle());
 
@@ -108,6 +124,11 @@ void MainDevMgr::initUi() {
   connectBuildAction();
   connectEditorPanels();
   connectDebugAction();
+  // 窗口关闭前保存断点与会话状态
+  connect(m_ui, &MainDevUi::uiClosing, this, [this]() {
+    saveBreakpointsToDisk();
+    saveOpenFilesToSettings();
+  });
 }
 
 /// 文件打开、帮助、重命名、删除信号
@@ -126,7 +147,8 @@ void MainDevMgr::connectFileActions() {
 
   connect(m_ui->splitAction(), &QAction::triggered, this, &MainDevMgr::onSplitRight);
   connect(m_ui->closeAction(), &QAction::triggered, this, &MainDevMgr::onCloseEditor);
-  connect(m_ui->fileTree(), &TreeDir::fileActivated, this, &MainDevMgr::openFileInEditor);
+  connect(m_ui->fileTree(), &TreeDir::fileActivated, this,
+          [this](const QString &fp) { openFileInEditor(fp); });
 
   // ── 帮助 → 快捷键 ──
   connect(m_ui->helpKeyAction(), &QAction::triggered, this, []() { HelpKeyMgr::ins().open(); });
@@ -283,6 +305,10 @@ void MainDevMgr::connectDebugAction() {
   connect(panel, &DebugPanel::stepOutClicked, this, &MainDevMgr::onDebugStepOut);
   // 双击断点条目：打开对应文件并定位到断点行
   connect(panel, &DebugPanel::breakpointActivated, this, &MainDevMgr::onBreakpointActivated);
+  // 双击调用栈条目：打开对应文件并定位到函数所在行
+  connect(panel, &DebugPanel::stackFrameActivated, this, &MainDevMgr::onBreakpointActivated);
+  // 双击变量条目：打开对应文件并定位到变量声明行
+  connect(panel, &DebugPanel::varActivated, this, &MainDevMgr::onBreakpointActivated);
 }
 
 /// 调试按钮：未调试则启动会话；已暂停则继续执行
@@ -436,21 +462,24 @@ void MainDevMgr::onDebuggerFinished() {
   m_ui->debugPanel()->setStatus(QStringLiteral("已停止"));
 }
 
+/// 连接单个编辑器面板的信号（关闭/切换/标签栏交互）
+void MainDevMgr::connectEditorPanel(QTabWidget *tabs) {
+  if (!tabs) return;
+  connect(tabs, &QTabWidget::tabCloseRequested, this, &MainDevMgr::onTabCloseRequested);
+  connect(tabs, &QTabWidget::currentChanged, this, &MainDevMgr::onCurrentTabChanged);
+  auto *bar = qobject_cast<DraggableTabBar *>(tabs->tabBar());
+  if (bar) {
+    connect(bar, &DraggableTabBar::closeOthersRequested, this, &MainDevMgr::onCloseOthers);
+    connect(bar, &DraggableTabBar::closeAllRequested, this, &MainDevMgr::onCloseAll);
+    connect(bar, &QTabBar::tabBarClicked, this, &MainDevMgr::onTabBarClicked);
+  }
+}
+
 /// 编辑器面板信号 + 事件过滤器
 void MainDevMgr::connectEditorPanels() {
-  // 连接初始编辑器面板组的信号
+  // 连接所有已存在编辑器面板组的信号
   for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
-    auto *tabs = m_ui->editorPanelAt(i);
-    if (tabs) {
-      connect(tabs, &QTabWidget::tabCloseRequested, this, &MainDevMgr::onTabCloseRequested);
-      connect(tabs, &QTabWidget::currentChanged, this, &MainDevMgr::onCurrentTabChanged);
-      auto *bar = qobject_cast<DraggableTabBar *>(tabs->tabBar());
-      if (bar) {
-        connect(bar, &DraggableTabBar::closeOthersRequested, this, &MainDevMgr::onCloseOthers);
-        connect(bar, &DraggableTabBar::closeAllRequested, this, &MainDevMgr::onCloseAll);
-        connect(bar, &QTabBar::tabBarClicked, this, &MainDevMgr::onTabBarClicked);
-      }
-    }
+    connectEditorPanel(m_ui->editorPanelAt(i));
   }
 
   // 安装事件过滤器以捕获鼠标侧键（前进/后退）
@@ -537,6 +566,131 @@ void MainDevMgr::refreshBreakpointList() {
   // 3) 调试期间将断点变更同步到调试器，否则删除/新增断点不会生效
   if (m_debugging && m_debugger) {
     m_debugger->setBreakpoints(debugBreakpoints());
+  }
+
+  // 4) 断点变更后持久化到磁盘，程序重启后还原
+  saveBreakpointsToDisk();
+}
+
+/// @brief 断点存储文件路径（AppData 目录下，目录不存在则创建）
+static QString breakpointStorePath() {
+  QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  if (dir.isEmpty()) dir = QDir::homePath() + QStringLiteral("/.auto_code");
+  QDir().mkpath(dir);
+  return dir + QStringLiteral("/breakpoints.json");
+}
+
+void MainDevMgr::saveBreakpointsToDisk() {
+  // 先从所有已打开编辑器同步到持久存储，再落盘
+  for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
+    auto *tabs = m_ui->editorPanelAt(pi);
+    if (!tabs) continue;
+    for (int ti = 0; ti < tabs->count(); ++ti) {
+      auto *w = tabs->widget(ti);
+      CodeEditor *editor = qobject_cast<CodeEditor *>(w);
+      if (!editor) {
+        auto *jvw = qobject_cast<JsonVueWidget *>(w);
+        if (jvw) editor = jvw->codeEditor();
+      }
+      if (!editor) continue;
+      const QString filePath = editor->objectName();
+      if (!filePath.isEmpty()) m_persistedBreakpoints[filePath] = editor->breakpoints();
+    }
+  }
+
+  QJsonObject root;
+  QJsonArray arr;
+  for (auto it = m_persistedBreakpoints.cbegin(); it != m_persistedBreakpoints.cend(); ++it) {
+    if (it.value().isEmpty()) continue;
+    QJsonArray lines;
+    for (int line : it.value()) lines.append(line);
+    QJsonObject entry;
+    entry[QStringLiteral("file")] = it.key();
+    entry[QStringLiteral("lines")] = lines;
+    arr.append(entry);
+  }
+  root[QStringLiteral("breakpoints")] = arr;
+
+  QFile f(breakpointStorePath());
+  if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+    f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+  }
+}
+
+void MainDevMgr::loadBreakpointsFromDisk() {
+  m_persistedBreakpoints.clear();
+  QFile f(breakpointStorePath());
+  if (!f.open(QIODevice::ReadOnly)) return;
+  const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+  const QJsonArray arr = doc.object().value(QStringLiteral("breakpoints")).toArray();
+  for (const QJsonValue &v : arr) {
+    const QJsonObject entry = v.toObject();
+    const QString file = entry.value(QStringLiteral("file")).toString();
+    if (file.isEmpty()) continue;
+    QSet<int> lines;
+    const QJsonArray lineArr = entry.value(QStringLiteral("lines")).toArray();
+    for (const QJsonValue &lv : lineArr) lines.insert(lv.toInt());
+    if (!lines.isEmpty()) m_persistedBreakpoints[file] = lines;
+  }
+}
+
+/// @brief 会话状态存储文件（记录上次打开的文件列表）
+static QString sessionSettingsPath() {
+  QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  if (dir.isEmpty()) dir = QDir::homePath() + QStringLiteral("/.auto_code");
+  QDir().mkpath(dir);
+  return dir + QStringLiteral("/session.ini");
+}
+
+void MainDevMgr::saveOpenFilesToSettings() {
+  // 按编辑器面板分组保存（还原拆分数量与每个面板的文件）
+  QList<QVariant> groups;
+  for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
+    auto *tabs = m_ui->editorPanelAt(pi);
+    if (!tabs) continue;
+    QStringList files;
+    for (int ti = 0; ti < tabs->count(); ++ti) {
+      auto *w = tabs->widget(ti);
+      CodeEditor *editor = qobject_cast<CodeEditor *>(w);
+      if (!editor) {
+        auto *jvw = qobject_cast<JsonVueWidget *>(w);
+        if (jvw) editor = jvw->codeEditor();
+      }
+      if (!editor) continue;
+      const QString fp = editor->objectName();
+      if (!fp.isEmpty()) files.append(fp);
+    }
+    if (files.isEmpty()) continue;  // 跳过空面板
+    groups << QVariant(files);
+  }
+  QSettings s(sessionSettingsPath(), QSettings::IniFormat);
+  s.setValue(QStringLiteral("session/editorPanels"), QVariant(groups));
+}
+
+void MainDevMgr::restoreOpenFilesFromSettings() {
+  QSettings s(sessionSettingsPath(), QSettings::IniFormat);
+  const QList<QVariant> groups = s.value(QStringLiteral("session/editorPanels")).toList();
+
+  QTabWidget *target = nullptr;  // nullptr → 打开到默认（第一个）面板
+  for (int gi = 0; gi < groups.size(); ++gi) {
+    const QStringList files = groups[gi].toStringList();
+    for (const QString &fp : files) {
+      if (QFileInfo::exists(fp)) openFileInEditor(fp, target);
+    }
+    // 下一组文件应放到新建的编辑器面板中，还原拆分数量
+    if (gi < groups.size() - 1) {
+      auto *panel = m_ui->createEditorPanel();
+      m_ui->addEditorPanel(panel);
+      connectEditorPanel(panel);  // 连接关闭/切换等信号，否则标签关闭按钮无效
+      target = panel;
+    }
+  }
+
+  // 清理还原过程中产生的空面板（其文件已不存在），避免在编辑器区出现空白条
+  for (int pi = m_ui->editorPanelCount() - 1; pi >= 0; --pi) {
+    if (m_ui->editorPanelCount() <= 1) break;  // 至少保留一个编辑面板
+    auto *panel = m_ui->editorPanelAt(pi);
+    if (panel && panel->count() == 0) m_ui->removeEditorPanelAt(pi);
   }
 }
 

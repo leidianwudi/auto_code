@@ -62,6 +62,7 @@ void AcInterpreter::declareVar(const QString &name, const QJsonValue &val) {
 void AcInterpreter::pushScope() {
   m_scopeStack.append(QHash<QString, QJsonValue>());
   m_usingStack.append(QVector<QString>());
+  m_varLocStack.append(QHash<QString, QPair<QString, int>>());
 }
 
 void AcInterpreter::popScope() {
@@ -95,7 +96,15 @@ void AcInterpreter::popScope() {
   for (auto it = scope.begin(); it != scope.end(); ++it) {
     releaseDeep(it.value());
   }
+  if (!m_varLocStack.isEmpty()) m_varLocStack.takeLast();
   collectCycles();
+}
+
+void AcInterpreter::recordVarLoc(const QString &name, const QString &filePath, int line) {
+  // 仅调试时记录，避免常规执行开销；作用域为空时忽略
+  if (m_debugger && !m_varLocStack.isEmpty()) {
+    m_varLocStack.last()[name] = QPair<QString, int>(filePath, line);
+  }
 }
 
 bool AcInterpreter::containsVar(const QString &name) const {
@@ -242,6 +251,7 @@ QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
   m_error.clear();
   m_scopeStack.clear();
   m_usingStack.clear();
+  m_varLocStack.clear();
   m_classes.clear();
   m_functions.clear();
   m_currentThis = QJsonObject();
@@ -250,11 +260,18 @@ QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
   m_generatedFiles.clear();
   m_funcExprCounter = 0;
 
-  // 顶层脚本帧：供调试器调用栈展示
+  // 顶层脚本帧：供调试器调用栈展示（始终指向入口脚本，而非被注入的 import 模块）
   if (m_debugger) {
     ++m_callDepth;
-    int topLine = program.stmts.isEmpty() ? 0 : program.stmts.first().line;
-    m_callStack.append(AcDebugFrame{QString(), topLine});
+    int topLine = 0;
+    QString topFile = m_scriptFile;
+    for (const auto &s : program.stmts) {
+      if (m_scriptFile.isEmpty() || s.filePath == m_scriptFile) {
+        topLine = s.line;
+        break;
+      }
+    }
+    m_callStack.append(AcDebugFrame{QString(), topFile, topLine});
   }
 
   pushScope();

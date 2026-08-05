@@ -111,7 +111,7 @@ void MainDevMgr::connectEditor(CodeEditor *editor) {
       }
       m_ui->appendOutput(QStringLiteral("共 %1 处匹配").arg(totalFound), false);
     });
-    // 调试快捷键：F5 启动/继续、F10 单步跳过、F11 单步进入、Shift+F11 单步跳出
+    // 调试快捷键：F5 启动/继续、F10 单步执行、F11 单步进入、Shift+F11 单步跳出
     connect(editor, &CodeEditor::requestDebugStart, this, &MainDevMgr::onDebugStart);
     connect(editor, &CodeEditor::requestDebugStepOver, this, &MainDevMgr::onDebugStepOver);
     connect(editor, &CodeEditor::requestDebugStepInto, this, &MainDevMgr::onDebugStepInto);

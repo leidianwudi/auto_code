@@ -128,9 +128,18 @@ public:
   /// 刷新启动项下拉框
   void refreshStartupCombo();
 
+  /// 还原上次保存的窗口几何与分割器大小（程序启动时调用）
+  void restoreLayout();
+
+signals:
+  /// 窗口关闭前发出，供 MainDevMgr 保存断点/打开文件等会话状态
+  void uiClosing();
+
 private:
   /// 构建自定义标题栏
   void setupTitleBar();
+  /// 保存窗口几何与分割器大小（关闭窗口时调用）
+  void saveLayout();
   /// 构建编辑器区域（文件树 + 分割器 + 编辑器面板）
   void setupEditorArea();
   /// 构建底部状态栏并返回内容控件
@@ -149,6 +158,7 @@ private:
   DebugPanel *m_debugPanel = nullptr;  ///< 调试面板（调用栈 + 变量）
   QSplitter *m_mainSplitter = nullptr;
   QSplitter *m_editorSplitter = nullptr;
+  bool m_layoutRestored = false;  ///< 是否已从设置还原布局（首显时不再覆盖默认比例）
   QLabel *m_cursorPositionLabel = nullptr;
   QPlainTextEdit *m_errorLabel = nullptr;
   QAction *m_splitAction = nullptr;

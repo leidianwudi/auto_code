@@ -41,6 +41,9 @@ public:
   /// @brief 设置脚本目录
   void setScriptDir(const QString &dir) { m_scriptDir = dir; }
 
+  /// @brief 设置入口脚本文件绝对路径（用于调用栈顶层帧定位）
+  void setScriptFile(const QString &path) { m_scriptFile = path; }
+
   /// @brief 设置取消标志（工作线程中由解释器轮询检查）
   void setCancelFlag(std::atomic<bool> *flag) { m_cancelFlag = flag; }
 
@@ -126,6 +129,8 @@ private:
   void setVar(const QString &name, const QJsonValue &val);
   void declareVar(const QString &name,
                   const QJsonValue &val);  ///< 在最新作用域内声明变量，不覆盖外层同名变量
+  /// 记录变量的声明位置（文件 + 行号），供调试面板定位
+  void recordVarLoc(const QString &name, const QString &filePath, int line);
   bool containsVar(const QString &name) const;
   void pushScope();
   void popScope();
@@ -174,6 +179,7 @@ private:
   // ── 运行状态 ──
   QString m_error;
   QString m_scriptDir;
+  QString m_scriptFile;  ///< 入口脚本文件绝对路径（用于调用栈顶层帧定位）
   QString m_rootDir;
   std::atomic<bool> *m_cancelFlag = nullptr;  ///< 取消标志（指向 AcEngine 的原子标志）
   AcDebugger *m_debugger = nullptr;           ///< 调试器（为空则不启用调试）
@@ -182,6 +188,9 @@ private:
   AcObjectManager m_objMgr;
   QVector<QHash<QString, QJsonValue>> m_scopeStack;
   QVector<QVector<QString>> m_usingStack;
+  /// 变量声明位置（与 m_scopeStack 一一对应）：变量名 → (文件, 行号)
+  QVector<QHash<QString, QPair<QString, int>>> m_varLocStack;
+  QString m_currentFuncName;  ///< 当前正在执行的函数名（用于变量定位列展示）
   QHash<QString, ClassDef> m_classes;
   QHash<QString, MethodDef> m_functions;
   int m_funcExprCounter = 0;  ///< 函数表达式计数器（生成唯一 lambda 名）

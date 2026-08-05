@@ -113,6 +113,7 @@ QJsonValue AcExecutor::execute() {
 
   // 步骤 1：配置解释器
   m_interpreter.setScriptDir(m_scriptDir);
+  m_interpreter.setScriptFile(m_scriptFile);
   m_interpreter.setRootDir(m_rootDir);
   m_interpreter.setLogCallback(m_logCallback);
   m_interpreter.setCancelFlag(m_cancelFlag);

@@ -13,6 +13,81 @@
 #include "aui_icon.h"
 #include "aui_style.h"
 
+/// 调试单步按钮边长（唯一修改点：只需改这一处，图标和按钮尺寸会同步缩放）
+static constexpr int kDebugStepSize = 23;
+
+/// @brief 绘制调试单步按钮图标（继续/跳过/进入/跳出）
+static QIcon makeDebugStepIcon(int kind) {
+  const int S = kDebugStepSize;
+  const qreal k = S / 24.0;  // 坐标以 24 为基准，按尺寸线性缩放
+  auto pt = [k](qreal x, qreal y) { return QPointF(x * k, y * k); };
+  QPixmap pm(S, S);
+  pm.fill(Qt::transparent);
+  QPainter p(&pm);
+  p.setRenderHint(QPainter::Antialiasing);
+  const QColor c = AuiStyle::textColor();
+  QPen pen(c, 2.2);
+  p.setPen(pen);
+  p.setBrush(Qt::NoBrush);
+  switch (kind) {
+    case 0: {  // 继续 ▶
+      QPolygonF tri;
+      tri << pt(8, 5) << pt(8, 19) << pt(19, 12);
+      p.setBrush(c);
+      p.setPen(Qt::NoPen);
+      p.drawPolygon(tri);
+      break;
+    }
+    case 1: {  // 单步执行：先向下再向右下的箭头
+      p.drawLine(pt(6, 5), pt(6, 15));
+      p.drawLine(pt(6, 15), pt(18, 15));
+      p.drawLine(pt(18, 15), pt(15, 12));
+      p.drawLine(pt(18, 15), pt(15, 18));
+      break;
+    }
+    case 2: {  // 单步进入：向下箭头落入一条线
+      p.drawLine(pt(6, 5), pt(6, 13));
+      p.drawLine(pt(6, 13), pt(13, 13));
+      p.drawLine(pt(13, 13), pt(10, 10));
+      p.drawLine(pt(13, 13), pt(10, 16));
+      p.drawLine(pt(4, 19), pt(18, 19));
+      break;
+    }
+    case 3: {  // 单步跳出：从一条线向上跳出
+      p.drawLine(pt(4, 5), pt(18, 5));
+      p.drawLine(pt(6, 5), pt(6, 13));
+      p.drawLine(pt(6, 13), pt(13, 13));
+      p.drawLine(pt(13, 13), pt(10, 10));
+      p.drawLine(pt(13, 13), pt(10, 16));
+      break;
+    }
+  }
+  p.end();
+  return QIcon(pm);
+}
+
+/// @brief 调试单步图标按钮样式表（浅色背景 + 边框 + hover/pressed 反馈）
+static QString debugStepButtonStyleSheet() {
+  return QStringLiteral(
+             "QPushButton {"
+             "  background: %1;"
+             "  border: 1px solid %2;"
+             "  border-radius: 4px;"
+             "  margin: 1px;"
+             "  padding: 0px;"
+             "}"
+             "QPushButton:hover {"
+             "  background: %3;"
+             "  border: 1px solid %2;"
+             "}"
+             "QPushButton:pressed {"
+             "  background: %4;"
+             "}")
+      .arg(AuiStyle::background().name(), AuiStyle::borderColor().name(),
+           AuiStyle::hoverBackground().name(),
+           AuiStyle::iconButtonPressedBg().name(QColor::HexArgb));
+}
+
 // ════════════════════════════════════════════════════════════
 //  通用按钮样式
 // ════════════════════════════════════════════════════════════
@@ -244,6 +319,18 @@ QPushButton *AuiButton::createDebugButton(int size) {
   btn->setFocusPolicy(Qt::NoFocus);
   btn->setToolTip(QStringLiteral("开始调试 (F5)"));
   applyIconButtonStyle(btn);
+  return btn;
+}
+
+QPushButton *AuiButton::createDebugStepButton(int kind) {
+  auto *btn = new QPushButton;
+  btn->setIcon(makeDebugStepIcon(kind));
+  // 图标略小于按钮，留出 1px 边框内边距，避免被裁切
+  btn->setIconSize(QSize(kDebugStepSize - 2, kDebugStepSize - 2));
+  btn->setFixedSize(kDebugStepSize, kDebugStepSize);
+  btn->setCursor(Qt::PointingHandCursor);
+  btn->setFocusPolicy(Qt::NoFocus);
+  btn->setStyleSheet(debugStepButtonStyleSheet());
   return btn;
 }
 

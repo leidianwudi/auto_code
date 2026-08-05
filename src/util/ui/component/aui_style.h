@@ -63,6 +63,15 @@ public:
   /// 面板背景色（白色），对应 #ffffff
   static QColor panelBackground() { return QColor(Qt::white); }
 
+  /// 列表交替行背景色（浅灰）
+  static QColor listAlternateBackground() { return QColor(0xf5, 0xf5, 0xf5); }
+
+  /// 列表项悬停背景色（浅蓝）
+  static QColor listHoverBackground() { return QColor(0xe8, 0xf0, 0xff); }
+
+  /// 列表项选中背景色（浅蓝）
+  static QColor listSelectionBackground() { return QColor(0xcc, 0xe4, 0xff); }
+
   /// 图标按钮 hover 半透明背景色
   static QColor iconButtonHoverBg() { return QColor(128, 128, 128, 40); }
 

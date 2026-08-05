@@ -24,10 +24,16 @@ QJsonValue AcInterpreter::execCallBody(const QVector<ParamDef> &params, const QJ
                                        const Block &body, const QJsonObject *thisObj,
                                        const QString &funcName) {
   ++m_callDepth;
+  QString frameFile;
+  int frameLine = 0;
   if (m_debugger) {
-    int frameLine = body.stmts.isEmpty() ? 0 : body.stmts.first().line;
-    m_callStack.append(AcDebugFrame{funcName, frameLine});
+    frameLine = body.stmts.isEmpty() ? 0 : body.stmts.first().line;
+    frameFile = body.stmts.isEmpty() ? QString() : body.stmts.first().filePath;
+    m_callStack.append(AcDebugFrame{funcName, frameFile, frameLine});
   }
+
+  QString oldFuncName = m_currentFuncName;
+  m_currentFuncName = funcName;  // 记录当前函数名，供变量定位列展示
 
   QJsonArray argsArr = callArgs.toArray();
   QJsonObject oldThis = m_currentThis;
@@ -46,6 +52,7 @@ QJsonValue AcInterpreter::execCallBody(const QVector<ParamDef> &params, const QJ
 
   for (int i = 0; i < params.size(); ++i) {
     declareVar(params[i].name, i < argsArr.size() ? argsArr[i] : QJsonValue());
+    recordVarLoc(params[i].name, frameFile, frameLine);
   }
 
   execBlock(body);
@@ -58,6 +65,7 @@ QJsonValue AcInterpreter::execCallBody(const QVector<ParamDef> &params, const QJ
   m_returnValue = savedReturnValue;
 
   m_currentThis = oldThis;
+  m_currentFuncName = oldFuncName;
 
   if (m_debugger) m_callStack.removeLast();
   --m_callDepth;
@@ -67,7 +75,11 @@ QJsonValue AcInterpreter::execCallBody(const QVector<ParamDef> &params, const QJ
 
 QJsonValue AcInterpreter::execMethod(const MethodDef &method, const QJsonObject &thisObj,
                                      const QJsonValue &callArgs) {
-  return execCallBody(method.params, callArgs, method.body, &thisObj, method.name);
+  // 用「类名.方法名」作为函数名，供调用栈与变量位置列展示
+  QString qualified = method.name;
+  const QString cls = thisObj.value(QString::fromLatin1(AcRuntime::kClassKey)).toString();
+  if (!cls.isEmpty()) qualified = QStringLiteral("%1.%2").arg(cls, method.name);
+  return execCallBody(method.params, callArgs, method.body, &thisObj, qualified);
 }
 
 void AcInterpreter::initStaticVars(const ClassDef &cd) {
@@ -268,6 +280,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
 
       if (stmt.assign.isDeclaration) {
         declareVar(stmt.assign.name, val);
+        recordVarLoc(stmt.assign.name, stmt.filePath, stmt.line);
       } else {
         setVar(stmt.assign.name, val);
       }
@@ -350,6 +363,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
         for (const QJsonValue &v : arr) {
           pushScope();
           declareVar(stmt.forStmt.varName, v);
+          recordVarLoc(stmt.forStmt.varName, stmt.filePath, stmt.line);
           execBlock(stmt.forStmt.body);
           popScope();
           if (!m_error.isEmpty()) return;
@@ -455,6 +469,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       if (!m_error.isEmpty()) return;
       retainIfInstance(val);
       declareVar(stmt.usingStmt.varName, val);
+      recordVarLoc(stmt.usingStmt.varName, stmt.filePath, stmt.line);
       recordInferredType(stmt.usingStmt.varName, val);
       if (!m_usingStack.isEmpty()) {
         m_usingStack.last().append(stmt.usingStmt.varName);
@@ -481,11 +496,11 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
 
 void AcInterpreter::execBlock(const Block &block) {
   for (int i = 0; i < block.stmts.size(); ++i) {
+    const auto &stmt = block.stmts[i];
     if (m_cancelFlag && m_cancelFlag->load()) {
       m_error = QStringLiteral("执行已取消");
       return;
     }
-    const auto &stmt = block.stmts[i];
     // 声明类语句（class/function/interface/enum/import）不参与断点/单步暂停，
     // 避免单步调试时在声明行上显示"错位"的高亮
     const bool isDeclStmt =
@@ -547,8 +562,19 @@ void AcInterpreter::buildDebugSnapshot(QVector<AcDebugFrame> &stack,
     const QString scopeName =
         QStringLiteral("%1").arg(i == 0 ? QStringLiteral("全局") : QStringLiteral("局部"));
     const auto &scope = m_scopeStack[i];
+    // 变量位置表（与作用域同步维护）；越界时视为空表
+    QHash<QString, QPair<QString, int>> loc;
+    if (i < m_varLocStack.size()) loc = m_varLocStack[i];
     for (auto it = scope.cbegin(); it != scope.cend(); ++it) {
-      vars.append(AcDebugVar{scopeName, it.key(), it.value()});
+      QString filePath;
+      int line = 0;
+      auto lit = loc.constFind(it.key());
+      if (lit != loc.cend()) {
+        filePath = lit->first;
+        line = lit->second;
+      }
+      vars.append(AcDebugVar{scopeName, it.key(), it.value(), filePath, line,
+                             i == 0 ? QString() : m_currentFuncName});
     }
   }
 
@@ -556,14 +582,16 @@ void AcInterpreter::buildDebugSnapshot(QVector<AcDebugFrame> &stack,
   for (auto it = m_staticVars.cbegin(); it != m_staticVars.cend(); ++it) {
     const QJsonObject &sv = it.value();
     for (auto sit = sv.cbegin(); sit != sv.cend(); ++sit) {
-      vars.append(AcDebugVar{QStringLiteral("静态.%1").arg(it.key()), sit.key(), sit.value()});
+      vars.append(AcDebugVar{QStringLiteral("静态.%1").arg(it.key()), sit.key(), sit.value(),
+                             QString(), 0, it.key()});
     }
   }
 
   // this 对象的属性
   if (!m_currentThis.isEmpty()) {
     for (auto it = m_currentThis.cbegin(); it != m_currentThis.cend(); ++it) {
-      vars.append(AcDebugVar{QStringLiteral("this"), it.key(), it.value()});
+      vars.append(AcDebugVar{QStringLiteral("this"), it.key(), it.value(), QString(), 0,
+                             m_currentFuncName});
     }
   }
 }

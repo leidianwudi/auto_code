@@ -721,7 +721,7 @@ void CodeEditor::refreshExtraSelections() { highlightCurrentLine(); }
 // ──────────────────────────────────────────────────────────────
 
 void CodeEditor::keyPressEvent(QKeyEvent *event) {
-  // ── 调试快捷键：F5 启动/继续、F10 单步跳过、F11 单步进入、Shift+F11 单步跳出 ──
+  // ── 调试快捷键：F5 启动/继续、F10 单步执行、F11 单步进入、Shift+F11 单步跳出 ──
   if (event->key() == Qt::Key_F5 && !event->modifiers()) {
     emit requestDebugStart();
     event->accept();

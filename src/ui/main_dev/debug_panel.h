@@ -3,7 +3,7 @@
  * @brief 调试面板 — 在目录树区域以 tab 展示调用栈与变量快照
  *
  * 当脚本命中断点或单步暂停时，由 MainDevMgr 将 AcDebugger 携带的
- * 调用栈与变量快照填充到本面板，并提供 继续/单步跳过/单步进入/单步跳出
+ * 调用栈与变量快照填充到本面板，并提供 继续/单步执行/单步进入/单步跳出
  * 控制按钮与暂停状态提示。
  */
 
@@ -44,11 +44,15 @@ public:
 
 signals:
   void continueClicked();  ///< 继续执行（F5）
-  void stepOverClicked();  ///< 单步跳过（F10）
+  void stepOverClicked();  ///< 单步执行（F10）
   void stepIntoClicked();  ///< 单步进入（F11）
   void stepOutClicked();   ///< 单步跳出（Shift+F11）
   /// 双击断点条目：请求打开对应文件并定位到断点位置
   void breakpointActivated(const QString &filePath, int line);
+  /// 双击调用栈条目：请求打开对应文件并定位到函数所在行
+  void stackFrameActivated(const QString &filePath, int line);
+  /// 双击变量条目：请求打开对应文件并定位到变量声明行
+  void varActivated(const QString &filePath, int line);
 
 private:
   QTreeWidget *m_stackTree = nullptr;  ///< 调用栈树
@@ -62,6 +66,12 @@ private:
 
   /// 将 QJsonValue 格式化为可读字符串
   static QString formatValue(const QJsonValue &v);
+  /// 格式化变量/函数定位文本（如 "setTableData  param.ac:12"）
+  static QString formatLocation(const QString &filePath, int line, const QString &funcName);
   /// 递归展开复杂变量（数组/对象）为子节点
   void appendVarValue(QTreeWidgetItem *parent, const QString &key, const QJsonValue &val);
+  /// 保存各列表的表头状态（列宽），供下次启动还原
+  void saveHeaderStates();
+  /// 还原各列表的表头状态（列宽）
+  void restoreHeaderStates();
 };

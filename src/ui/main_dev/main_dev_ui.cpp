@@ -7,6 +7,7 @@
 
 #include <QApplication>
 #include <QCloseEvent>
+#include <QDir>
 #include <QDrag>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -26,7 +27,9 @@
 #include <QPlainTextEdit>
 #include <QPointer>
 #include <QScrollBar>
+#include <QSettings>
 #include <QSizeGrip>
+#include <QStandardPaths>
 #include <QStyle>
 #include <QTabBar>
 #include <QTextBlock>
@@ -293,9 +296,9 @@ QTabWidget *MainDevUi::createEditorPanel() {
 
 void MainDevUi::showEvent(QShowEvent *event) {
   QMainWindow::showEvent(event);
-  // 仅在首次显示时设置分割器初始比例
+  // 仅在首次显示时设置分割器初始比例（若已从设置还原布局则跳过）
   static bool firstShow = true;
-  if (firstShow) {
+  if (firstShow && !m_layoutRestored) {
     firstShow = false;
     const int w = width();
     const int h = height();
@@ -306,9 +309,66 @@ void MainDevUi::showEvent(QShowEvent *event) {
   }
 }
 
+/// @brief 窗口布局状态存储路径（AppData 目录下）
+static QString uiLayoutSettingsPath() {
+  QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  if (dir.isEmpty()) dir = QDir::homePath() + QStringLiteral("/.auto_code");
+  QDir().mkpath(dir);
+  return dir + QStringLiteral("/window.ini");
+}
+
+void MainDevUi::restoreLayout() {
+  QSettings s(uiLayoutSettingsPath(), QSettings::IniFormat);
+  bool restored = false;
+  const QByteArray geo = s.value(QStringLiteral("window/geometry")).toByteArray();
+  if (!geo.isEmpty()) {
+    restoreGeometry(geo);
+    restored = true;
+  }
+  if (m_mainSplitter) {
+    const QByteArray st = s.value(QStringLiteral("window/mainSplitter")).toByteArray();
+    if (!st.isEmpty()) {
+      m_mainSplitter->restoreState(st);
+      restored = true;
+    }
+  }
+  if (m_contentSplitter) {
+    const QByteArray st = s.value(QStringLiteral("window/contentSplitter")).toByteArray();
+    if (!st.isEmpty()) {
+      m_contentSplitter->restoreState(st);
+      restored = true;
+    }
+  }
+  if (m_editorSplitter) {
+    const QByteArray st = s.value(QStringLiteral("window/editorSplitter")).toByteArray();
+    if (!st.isEmpty()) {
+      m_editorSplitter->restoreState(st);
+      restored = true;
+    }
+  }
+  // 仅当确实有保存的数据时才标记已还原；
+  // 首次启动（无数据）时保持不变，让 showEvent 应用默认分割比例
+  m_layoutRestored = restored;
+}
+
+void MainDevUi::saveLayout() {
+  QSettings s(uiLayoutSettingsPath(), QSettings::IniFormat);
+  s.setValue(QStringLiteral("window/geometry"), saveGeometry());
+  if (m_mainSplitter)
+    s.setValue(QStringLiteral("window/mainSplitter"), m_mainSplitter->saveState());
+  if (m_contentSplitter)
+    s.setValue(QStringLiteral("window/contentSplitter"), m_contentSplitter->saveState());
+  if (m_editorSplitter)
+    s.setValue(QStringLiteral("window/editorSplitter"), m_editorSplitter->saveState());
+}
+
 void MainDevUi::closeEvent(QCloseEvent *event) {
   // 关闭窗口前保存目录树状态（勾选、启动项、展开节点等），供下次启动恢复
   if (m_fileTree) m_fileTree->saveState();
+  // 保存窗口几何与分割器大小
+  saveLayout();
+  // 通知 MainDevMgr 保存断点等会话状态
+  emit uiClosing();
   QApplication::quit();
   QMainWindow::closeEvent(event);
 }
