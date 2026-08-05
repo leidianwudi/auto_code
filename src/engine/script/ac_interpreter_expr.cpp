@@ -615,13 +615,20 @@ QJsonValue AcInterpreter::resolveMethodCallTarget(const Expr &expr) {
     objVal = QJsonValue(m_currentThis);
   } else {
     objVal = resolveVar(expr.methodCall.objName);
-    if (objVal.isNull() && expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis)) {
+    if (expr.methodCall.objName != QString::fromLatin1(AcKeyword::kThis)) {
       if (m_classes.contains(expr.methodCall.objName)) {
         objVal = makeClassRef(expr.methodCall.objName);
-      } else {
+      } else if (!containsVar(expr.methodCall.objName)) {
+        // 变量根本未定义（类似 TS 的 "Cannot find name 'x'"）
         setError(
             QStringLiteral("undefined variable '%1' in method call").arg(expr.methodCall.objName),
             expr.line);
+        return QJsonValue();
+      } else if (objVal.isNull() || objVal.isUndefined()) {
+        // 变量已定义但值为 null/undefined（类似 TS 的 "Cannot read properties of null"）
+        setError(QStringLiteral("cannot call method '%1' on null value of variable '%2'")
+                     .arg(expr.methodCall.methodName, expr.methodCall.objName),
+                 expr.line);
         return QJsonValue();
       }
     }
