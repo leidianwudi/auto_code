@@ -22,6 +22,18 @@
 #include "src/engine/script/ac_symbol_table.h"
 #include "src/util/ui/component/aui_style.h"
 
+// #region debug-point probe-helper
+#include <QFile>
+static void dbgProbe(const char *id) {
+  QFile f(QStringLiteral(".dbg/dblclick-stringview-null.log"));
+  if (f.open(QIODevice::WriteOnly | QIODevice::Append)) {
+    f.write(id, qstrlen(id));
+    f.write("\n", 1);
+    f.flush();
+  }
+}
+// #endregion
+
 // ──────────────────────────────────────────────────────────────
 //  标识符提取与符号查找
 // ──────────────────────────────────────────────────────────────
@@ -465,6 +477,9 @@ static QString debugVarTooltip(const AcDebugVar &v) {
 }
 
 void CodeEditor::showSymbolHover(int pos, const QPoint &globalPos) {
+  // #region debug-point B:show-hover
+  dbgProbe("B:show-hover");
+  // #endregion
   if (m_validationMode != AcValidation) return;
 
   int idStart = 0, idEnd = 0;

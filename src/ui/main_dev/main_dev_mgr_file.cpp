@@ -107,6 +107,10 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath) {
     tabWidget = editor;
   }
 
+  // 内容加载完成后立即执行一次验证（setPlainText 不会自动触发验证，
+  // 否则打开文件时不会有错误提示，直到用户编辑才出现）
+  editor->validate();
+
   // ── 获取 / 创建面板组 ──
   QTabWidget *tabs = currentTabWidget();
   if (!tabs) {

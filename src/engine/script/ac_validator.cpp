@@ -36,7 +36,8 @@ QVector<ValidationResult> AcValidator::validate(const QString &source) {
   if (!parseSource(source, m_program, m_declaredVars, parseErrMsg)) {
     int line = extractLine(parseErrMsg);
     if (line == 0) line = 1;
-    results.append(ValidationResult::atLine(line, parseErrMsg));
+    ValidationResult vr = ValidationResult::atLine(line, parseErrMsg);
+    results.append(vr);
     return results;
   }
 

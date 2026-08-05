@@ -10,7 +10,7 @@
 
 bool AcParser::parseStmt(Block::Stmt &stmt) {
   Token t = peek();
-  stmt.line = t.line;  // 记录语句起始行号
+  stmt.line = t.line;          // 记录语句起始行号
   stmt.filePath = m_filePath;  // 记录语句所属源文件
 
   // ── import { A, B } from "file" ──
@@ -690,6 +690,7 @@ bool AcParser::parseClassDef(ClassDef &cd) {
   if (!expect(TOK_LBRACE, QStringLiteral("expected '{' after class name"))) return false;
 
   while (peek().type != TOK_RBRACE && peek().type != TOK_EOF) {
+    int loopStartPos = m_pos;  // 记录迭代起点，用于死循环检测
     // 访问修饰符
     AccessLevel access = AccessLevel::kPublic;
     if (peek().type == TOK_PUBLIC) {
@@ -768,6 +769,16 @@ bool AcParser::parseClassDef(ClassDef &cd) {
 
     // 方法体以 } 结束，不需要分号；属性声明以 ; 结束，跳过即可
     if (peek().type == TOK_SEMI) advance();
+
+    // 死循环兜底：若本轮未消费任何 token，说明遇到无法识别的类成员，
+    // 直接报错退出，避免 m_pos 停滞导致的无限循环（如漏写 function 的方法）
+    if (m_pos == loopStartPos) {
+      m_error = QStringLiteral(
+                    "unexpected token '%1' in class body at line %2 (possible missing "
+                    "'function' keyword or invalid member)")
+                    .arg(peek().text, QString::number(peek().line));
+      return false;
+    }
   }
   return expect(TOK_RBRACE, QStringLiteral("expected '}' after class body"));
 }
@@ -936,6 +947,16 @@ bool AcParser::parseClassProperty(ClassDef &cd, AccessLevel access, bool isStati
     return false;
   }
   Token nameToken = advance();
+  // 属性名后紧跟 '(' 说明是漏写了 function 关键字的方法定义（如 line2UpLow(...)），
+  // 直接报错并返回，避免下方解析把 '(' 遗留下来导致 parseClassDef 死循环
+  if (peek().type == TOK_LPAREN) {
+    m_error = QStringLiteral(
+                  "method '%1' requires the 'function' keyword (e.g. function "
+                  "%2(...)) at line %3")
+                  .arg(nameToken.text, nameToken.text)
+                  .arg(nameToken.line);
+    return false;
+  }
   ObjectEntry prop;
   prop.key = nameToken.text;
   prop.line = nameToken.line;  // 记录属性名所在行号

@@ -64,7 +64,11 @@ bool AcParser::parse(const QVector<Token> &tokens, Block &program, QSet<QString>
   m_error.clear();
   m_declaredVars = &declaredVars;
   program = Block();
-  return parseProgram(program);
+  bool ok = parseProgram(program);
+  // parseType() 的类型名错误（如大小写错误 string/number）会设置 m_error 但返回 any() 继续解析，
+  // 此处兜底：解析过程中只要设置了错误消息，即使 parseProgram 返回 true 也视为解析失败
+  if (ok && !m_error.isEmpty()) return false;
+  return ok;
 }
 
 bool AcParser::parseProgram(Block &block) {
@@ -205,7 +209,8 @@ AcType AcParser::parseType() {
     return AcType::any();
   }
 
-  QString typeName = advance().text;
+  Token typeToken = advance();
+  QString typeName = typeToken.text;
 
   // 泛型参数：Array<T>
   if (peek().type == TOK_LT) {
@@ -239,6 +244,37 @@ AcType AcParser::parseType() {
   } else if (typeName == "Object") {
     baseType = AcType::classType(QStringLiteral("Object"));
   } else {
+    // 内建类型名必须严格区分大小写：若匹配到内建类型但大小写不同（如 string、number），
+    // 报错并提示正确写法，避免被静默当作自定义类名
+    QString suggestion;
+    if (typeName.compare("Number", Qt::CaseInsensitive) == 0 ||
+        typeName.compare("Int", Qt::CaseInsensitive) == 0 ||
+        typeName.compare("Float", Qt::CaseInsensitive) == 0 ||
+        typeName.compare("Double", Qt::CaseInsensitive) == 0) {
+      suggestion = QStringLiteral("Number");
+    } else if (typeName.compare("String", Qt::CaseInsensitive) == 0) {
+      suggestion = QStringLiteral("String");
+    } else if (typeName.compare("Bool", Qt::CaseInsensitive) == 0 ||
+               typeName.compare("Boolean", Qt::CaseInsensitive) == 0) {
+      suggestion = QStringLiteral("Bool");
+    } else if (typeName.compare("Any", Qt::CaseInsensitive) == 0) {
+      suggestion = QStringLiteral("Any");
+    } else if (typeName.compare("Void", Qt::CaseInsensitive) == 0) {
+      suggestion = QStringLiteral("Void");
+    } else if (typeName.compare("Array", Qt::CaseInsensitive) == 0) {
+      suggestion = QStringLiteral("Array");
+    } else if (typeName.compare("Object", Qt::CaseInsensitive) == 0) {
+      suggestion = QStringLiteral("Object");
+    }
+    if (!suggestion.isEmpty()) {
+      m_error = QStringLiteral(
+                    "unknown type '%1' at line %2 — type names are case-sensitive, did you mean "
+                    "'%3'?")
+                    .arg(typeName)
+                    .arg(typeToken.line)
+                    .arg(suggestion);
+      return AcType::any();
+    }
     // 自定义类类型
     baseType = AcType::classType(typeName);
   }
