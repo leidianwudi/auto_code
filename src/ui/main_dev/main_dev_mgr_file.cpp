@@ -62,8 +62,11 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
       }
       if (editor && editor->objectName() == filePath) {
         tabs->setCurrentIndex(j);
-        tabs->setFocus();
-        editor->setFocus();
+        // 会话恢复阶段不主动抢焦点，让用户首次点击时触发 focusChanged → 定位目录树
+        if (!m_restoringSession) {
+          tabs->setFocus();
+          editor->setFocus();
+        }
         return editor;
       }
     }
@@ -151,7 +154,8 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
     }
   }
   editor->setBreakpoints(restoredBps);
-  editor->setFocus();
+  // 会话恢复阶段不主动抢焦点，让用户首次点击时触发 focusChanged → 定位目录树
+  if (!m_restoringSession) editor->setFocus();
   m_ui->setWindowTitle(MainDevUi::fileTitle(fi.fileName()));
 
   // ── 断点变化时刷新调试面板「断点」列表 ──
