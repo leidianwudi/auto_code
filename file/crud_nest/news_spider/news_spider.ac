@@ -1,0 +1,413 @@
+// ============================================================================
+// news_main.ac — 代码生成主脚本
+// ----------------------------------------------------------------------------
+// 整体流程（从数据库到 TypeScript 文件）：
+//
+//   ┌─────────────┐   schema   ┌──────────┐   fields[]   ┌────────────┐
+//   │ MySQL 数据库 │ ──────►    │ Param    │ ──────────►  │ entity.tpl │
+//   │ (news 库)   │    列信息   │ (加工器)  │   关联信息     │  (模板)     │
+//   └─────────────┘            └──────────┘   imports[]  └────────────┘
+//                                                         │
+//                                     renderTpl()         ▼
+//                                                  生成 xxx.entity.ts
+//
+// 本脚本是主入口，负责：
+//   1. 连接 MySQL 数据库
+//   2. 遍历输入的 JSON 配置文件（每个文件描述一张表）
+//   3. 读取每张表的 schema 结构（字段名、类型、主键、默认值等）
+//   4. 合并 JSON 配置 + schema → 传给 Param 加工 → 得到模板数据
+//   5. 调用 renderTpl() 渲染模板 → 写入 xxx.entity.ts
+// ============================================================================
+import { Param } from "../template/param.ac";
+import { QueryData } from "../template/query_data.ac";
+
+/// @brief 模板配置（一个模板对应一个生成的代码文件）
+class TemplateConfig {
+  let tpl: String = "";  // 模板文件路径（相对脚本目录）
+  let out: String = "";  // 输出文件路径模板，用 {key} 占位符从 tplData 取值
+}
+
+main {
+
+  // ── 1. 数据库连接配置 ──────────────────────────────────────────────
+  let db = new DB({
+    host: "192.168.5.103",
+    port: 3306,
+    user: "root",
+    password: "123456",
+    database: "news_spider"
+  });
+
+  // ── 2. 输出文件的根目录（所有 entity.ts 都写到这个目录下）──────
+  let basePath : String = "D:/work/github/news_spider/src";
+
+  // ── 3. 模板配置：一个模板对应一个生成的代码文件 ───────────────
+  //    字段说明：
+  //      tpl  - 模板文件路径（相对脚本目录）
+  //      out  - 输出文件路径模板，用 {key} 占位符从 tplData 取值
+  //             支持的占位符：{basePath}、{modelName}、{name}、{tableName} 等
+  //    以后要新增 service/controller/dto 只需在这个数组里加配置即可
+  let templates: TemplateConfig[] = [
+    { tpl: "../template/entities/en.tpl",      out: "{basePath}/{modelName}/entities/en_{name}.ts" },
+    { tpl: "../template/entities/enum.tpl",    out: "{basePath}/{modelName}/entities/enum_{name}.ts" },
+    { tpl: "../template/out/out_enum.tpl",     out: "{basePath}/{modelName}/out/out_enum_{name}.ts" },
+    { tpl: "../template/in/in_ins.tpl",        out: "{basePath}/{modelName}/in/in_ins_{name}.ts" },
+    { tpl: "../template/in/in_sel.tpl",        out: "{basePath}/{modelName}/in/in_sel_{name}.ts" },
+    { tpl: "../template/out/out_page.tpl",     out: "{basePath}/{modelName}/out/out_page_{name}.ts" },
+    { tpl: "../template/model/db_.tpl",        out: "{basePath}/{modelName}/model/{dbBaseClassFile}.ts" },
+    { tpl: "../template/model/db.tpl",         out: "{basePath}/{modelName}/model/{dbClassFile}.ts" },
+    { tpl: "../template/service_.tpl",         out: "{basePath}/{modelName}/{serviceBaseClassFile}.ts" },
+    { tpl: "../template/service.tpl",          out: "{basePath}/{modelName}/{serviceClassFile}.ts" },
+    { tpl: "../template/controller_.tpl",      out: "{basePath}/{modelName}/{controllerBaseClassFile}.ts" },
+    { tpl: "../template/controller.tpl",       out: "{basePath}/{modelName}/{controllerClassFile}.ts" },
+    { tpl: "../template/module.tpl",           out: "{basePath}/{modelName}/{moduleClassFile}.ts" },    
+  ];
+
+  // ── 4. 读取所有 JSON 配置文件（文件路径由外部配置提供）────────
+  //    传入 scriptDir() 确保只处理本项目下的勾选文件，
+  //    其它项目的勾选文件即使被选中也不会被执行
+  let files = getCheckedFiles(scriptDir());
+  let filesLen = files.length;
+  printLog("files count: " + filesLen);
+
+  // ── 5. 对每张表（每个 JSON 文件）执行一次完整的生成流程 ────────
+  //      JSON 文件支持两种格式：
+  //        1) 单表对象：{ tableName: 'user', modelName: 'user\\user', ... }
+  //        2) 多表数组：{ tables: [ {...}, {...} ] }
+  //      多表格式下，tables 数组中每项都是单表配置对象
+  for (file in files) {
+
+    // ── 5.1 读取 JSON 配置 ───────────────────────────────────────
+    //      readJson 返回对象，若存在 tables 字段则按数组遍历，否则当作单表
+    let fileJson = readJson(file);
+    // 归一化为表配置数组：单表直接包一层数组，多表取 tables 字段
+    let tableConfigs = [];
+    if (fileJson["tables"] != null) {
+      tableConfigs = fileJson["tables"];
+    } else {
+      tableConfigs.append(fileJson);
+    }
+    let tableConfigsLen = tableConfigs.length;
+    printLog("[" + file + "] tables count: " + tableConfigsLen);
+
+    for (json in tableConfigs) {
+      //printLog("json: " + json);
+
+    // ── 5.2 从数据库读取这张表的 schema 结构 ─────────────────────
+    //      db.tableSchema() 返回 columns 数组，每列包含：
+    //        name   - 字段名
+    //        type   - MySQL 类型（如 "varchar(100)"）
+    //        key    - 索引类型（"PRI" = 主键，"" = 普通）
+    //        extra  - 附加信息（"auto_increment" = 自增）
+    //        comment- 字段注释（DDL 中的 COMMENT 内容）
+    //        default- 默认值
+    let schema = db.tableSchema({ table: json.tableName });
+    let schemaLen = schema.length;
+    printLog("schema count: " + schemaLen);
+
+    // ── 5.2b 获取表的元信息（表注释、引擎等）──────────────────────
+    //      db.tableInfo() 返回 { comment: "用户表", engine: "InnoDB" }
+    //      表注释来自 DDL 中的 COMMENT '用户表'
+    let tblInfo = db.tableInfo({ table: json.tableName });
+    printLog("table comment: " + tblInfo.comment);
+
+    // ── 5.3 合并 JSON 配置和 schema ─
+    //      merge() 只能合并对象，schema 是数组会被 toObject() 丢弃，
+    //      所以需要单独把 schema 列数组挂到 combined["columns"] 上供 Param 读取
+    let combined = json;
+    combined["columns"] = schema;                 // 表字段信息
+    combined["tableDesc"] = tblInfo.comment;      // 表说明（从 DDL COMMENT 取）
+
+    // ── 5.4 用 Param 类把原始数据加工成模板可直接使用的结构 ─────
+    //      核心转换：
+    //        - MySQL "int"           →  tsType "number"
+    //        - MySQL "decimal(10,2)" →  tsType "Coin" + columnOptions
+    //        - colKey "PRI"          →  isPrimary true
+    //        - 每列字段都会生成完整的 @Column(...) 参数字符串
+    let param = new Param();
+    param.setTableData(combined);
+    //printLog("param: " + param);//输出所有参数
+
+    let fields = param.fields;
+    let fieldsLen = fields.length;
+    printLog("fields count: " + fieldsLen);
+
+    // ── 调试输出：打印第一个字段的加工结果，验证转换是否正确 ─────
+    if (fieldsLen > 0) {
+      let firstField = fields[0];
+      printLog("first field columnOptions: " + firstField.columnOptions);
+      printLog("first field colType: " + firstField.colType);
+      printLog("first field tsType: " + firstField.tsType);
+    }
+
+    // ── 5.5 用 QueryData 构建查询场景数据 ──────────────────────
+    //      selFields       - InSel 查询字段列表（主键+selCols+selColsLike）
+    //      sortInfo        - 排序信息（sortDesc、orderByDef、defaultOrder）
+    //      whereConditions - getWhereByIn 中的条件语句
+    let queryData = new QueryData();
+    let selFields = queryData.buildSelFields(json, param);
+    let sortInfo = queryData.buildSortInfo(json);
+    let whereConditions = queryData.buildWhereConditions(selFields);
+
+    // ── 5.5b 查询枚举数据（来自 crud_api_enum 表）────────────
+    //      从 crud_api_enum 表读取当前表的枚举值配置，按 column_name 分组
+    //      构建成模板所需的 {enumName, columnName, columnComment, items[]} 结构
+    let enums = [];
+    let hasEnums = false;
+    {
+      // crud_api_enum 表结构：table, column, key, value, desc, sort
+      let enumRows = db.query({sql: "SELECT * FROM crud_api_enum WHERE `table` = '" + json.tableName + "' ORDER BY `column`, `sort`"});
+      let enumRowsLen = enumRows.length;
+      printLog("enum rows count: " + enumRowsLen);
+      if (enumRowsLen > 0) {
+        hasEnums = true;
+        let currentCol = "";
+        let currentEnum = null;
+        for (er in enumRows) {
+          let colName = er["column"];
+          if (colName != currentCol) {
+            // 新列，先把上一个枚举的 columnComment 构建完整再 append
+            if (currentEnum != null) {
+              let fullComment = currentEnum.columnComment;
+              let first = true;
+              for (item in currentEnum.items) {
+                if (first) {
+                  fullComment = fullComment + ":" + item.key + ":" + item.label;
+                  first = false;
+                } else {
+                  fullComment = fullComment + ";" + item.key + ":" + item.label;
+                }
+              }
+              currentEnum.columnComment = fullComment;
+              enums.append(currentEnum);
+            }
+            currentCol = colName;
+            // 从 schema 中查找列注释
+            let colComment = "";
+            for (col in schema) {
+              if (col.name == currentCol) {
+                colComment = col.comment;
+              }
+            }
+            // 构建枚举名：Enum + 实体类名(去En前缀) + 列名首字母大写
+            let modelBaseName = param.entityClass.substring(2);
+            let colNameCap = colName.charAt(0).toUpperCase() + colName.slice(1);
+            let enumName = "Enum" + modelBaseName + colNameCap;
+            // recordsName: 从 enumName 去掉 "Enum" + modelBaseName 前缀，加 "Records"
+            let recordsName = enumName.substring(4 + modelBaseName.length) + "Records";
+            let methodName = "get" + recordsName;
+            let enumDesc = json.tableName + " 表的 " + colNameCap + " 属性枚举";
+            currentEnum = {
+              columnName: currentCol,
+              columnNameCap: colNameCap,
+              enumName: enumName,
+              columnComment: colComment,
+              enumDesc: enumDesc,
+              recordsName: recordsName,
+              methodName: methodName,
+              isTableEnum: false,
+              items: []
+            };
+          }
+          {
+            // value 为数值型时去掉引号（如 "0" → 0），字符串型保留引号（如 "Normal" → 'Normal'）
+            let v = er["value"];
+            let valueStr = "'" + v + "'";
+            if (v * 1 == v) {
+              valueStr = "" + v;
+            }
+            currentEnum.items.append({
+              key: er["key"],
+              value: v,
+              valueStr: valueStr,
+              label: er["desc"]
+            });
+          }
+        }
+        // 处理最后一个枚举：构建完整 columnComment 再 append
+        if (currentEnum != null) {
+          let fullComment = currentEnum.columnComment;
+          let first = true;
+          for (item in currentEnum.items) {
+            if (first) {
+              fullComment = fullComment + ":" + item.key + ":" + item.label;
+              first = false;
+            } else {
+              fullComment = fullComment + ";" + item.key + ":" + item.label;
+            }
+          }
+          currentEnum.columnComment = fullComment;
+          enums.append(currentEnum);
+        }
+      }
+    }
+
+    // ── 5.5c 查询整表枚举数据（来自 JSON 的 tableEnum 配置）──────────
+    //      当 JSON 配置了 tableEnum 时，直接查询源表的所有行，
+    //      按 {comment, key, value} 列构建整表枚举
+    //      tableEnum 格式：{ comment: 'name_zh', key: 'code', value: 'id' }
+    //        comment - 用作枚举项说明的列名
+    //        key     - 用作枚举键名的列名
+    //        value   - 用作枚举值的列名（通常为数值型主键）
+    let tableEnum = json["tableEnum"];
+    if (tableEnum != null) {
+      let commentCol = tableEnum["comment"];
+      let keyCol = tableEnum["key"];
+      let valueCol = tableEnum["value"];
+
+      // 查询源表所有行
+      let tableRows = db.query({sql: "SELECT * FROM `" + json.tableName + "`"});
+      let tableRowsLen = tableRows.length;
+      printLog("tableEnum rows count: " + tableRowsLen);
+      if (tableRowsLen > 0) {
+        hasEnums = true;
+        // 从 schema 中查找 key 列的注释
+        let keyColComment = "";
+        for (col in schema) {
+          if (col.name == keyCol) {
+            keyColComment = col.comment;
+          }
+        }
+        // 构建枚举名
+        let modelBase = param.entityClass.substring(2);
+        let keyColCap = keyCol.charAt(0).toUpperCase() + keyCol.slice(1);
+        let enumName = "Enum" + modelBase + keyColCap;
+        let recordsName = keyColCap + "Records";
+        let methodName = "get" + recordsName;
+        let enumDesc = "从 " + json.tableName + " 表的 " + keyColCap + " 属性生成的整表枚举";
+        let tableEnumObj = {
+          columnName: keyCol,
+          columnNameCap: keyColCap,
+          enumName: enumName,
+          columnComment: keyColComment,
+          enumDesc: enumDesc,
+          recordsName: recordsName,
+          methodName: methodName,
+          isTableEnum: true,
+          items: []
+        };
+        for (row in tableRows) {
+          tableEnumObj.items.append({
+            key: row[keyCol],
+            value: row[valueCol],
+            valueStr: "" + row[valueCol],
+            label: row[commentCol]
+          });
+        }
+        enums.append(tableEnumObj);
+      }
+    }
+
+    // 构建 enum import 名称字符串（如 "TypeRecords, VipStatusRecords"）
+    let enumImportNames = "";
+    // 构建 enum 枚举名列表字符串（如 "EnumUserType, EnumUserVipStatus"）
+    let enumNames = "";
+    if (hasEnums) {
+      let firstEnum = true;
+      for (e in enums) {
+        if (firstEnum) {
+          enumImportNames = e.recordsName;
+          enumNames = e.enumName;
+          firstEnum = false;
+        } else {
+          enumImportNames = enumImportNames + ", " + e.recordsName;
+          enumNames = enumNames + ", " + e.enumName;
+        }
+      }
+    }
+
+    // ── 5.6 组装传给模板的数据对象 tplData ────────────────────
+    //      模板中的所有 ${变量名} 都从这里取值
+    let tplData: Object = {};
+    tplData["entityClass"]      = param.entityClass;   // ${entityClass} 实体类名，如 EnUser
+    tplData["insClass"]         = "InIns" + param.entityClass.substring(2);  // ${insClass} InIns类名，如 InInsUser
+    tplData["selClass"]         = "InSel" + param.entityClass.substring(2);  // ${selClass} InSel类名，如 InSelUser
+    tplData["entityClassFile"]  = "en_" + param.tableName;  // ${entityClassFile} 实体文件名，如 en_user
+    tplData["tableName"]        = param.tableName;     // ${tableName}
+    tplData["tableDesc"]        = combined["tableDesc"]; // ${tableDesc}
+    tplData["fields"]           = param.fields;         // ${each field in fields} 循环
+    tplData["imports"]          = param.imports;        // ${each imp in imports} 循环
+    tplData["relations"]        = param.relations;      // ${each rel in relations} 循环
+    // 枚举数据（来自 crud_api_enum 表）
+    tplData["enums"]            = enums;                // ${each enum in enums} 循环
+    tplData["hasEnums"]         = hasEnums;             // ${hasEnums} 是否有枚举
+    tplData["enumImportNames"]  = enumImportNames;      // ${enumImportNames} import 名称列表
+    tplData["enumNames"]        = enumNames;            // ${enumNames} 枚举名列表
+    // 查询场景数据（由 QueryData 构建）
+    tplData["selFields"]        = selFields;            // ${each field in selFields} InSel 字段循环
+    tplData["sortDesc"]         = sortInfo.sortDesc;    // ${sortDesc} 排序描述
+    tplData["whereConditions"]  = whereConditions;      // ${each cond in whereConditions} where 条件循环
+    tplData["orderByDef"]       = sortInfo.orderByDef;  // ${orderByDef} 排序对象字面量
+    tplData["defaultOrderField"] = sortInfo.defaultOrderField;  // ${defaultOrderField} 默认排序字段
+    tplData["defaultOrderDir"]  = sortInfo.defaultOrderDir;     // ${defaultOrderDir} 默认排序方向
+    // Db 模型类名
+    let modelBaseName = param.entityClass.substring(2);  // 如 "User"
+    tplData["dbBaseClass"]      = modelBaseName + "Db_"; // ${dbBaseClass} 如 UserDb_
+    tplData["dbClass"]          = modelBaseName + "Db";  // ${dbClass} 如 UserDb
+    tplData["dbBaseClassFile"]  = param.tableName + ".db_";  // ${dbBaseClassFile} 如 user.db_
+    tplData["dbClassFile"]      = param.tableName + ".db";   // ${dbClassFile} 如 user.db
+    tplData["dbVarName"]        = param.tableName + "Db";    // ${dbVarName} 如 userDb
+    // OutPage 类名
+    tplData["outPageClass"]     = "OutPage" + modelBaseName; // ${outPageClass} 如 OutPageUser
+    // Service 类名
+    tplData["serviceBaseClass"] = modelBaseName + "Service_"; // ${serviceBaseClass} 如 UserService_
+    tplData["serviceClass"]     = modelBaseName + "Service";  // ${serviceClass} 如 UserService
+    tplData["serviceBaseClassFile"] = param.tableName + ".service_"; // ${serviceBaseClassFile} 如 user.service_
+    tplData["serviceClassFile"]     = param.tableName + ".service";  // ${serviceClassFile} 如 user.service
+    tplData["serviceVarName"]       = param.tableName + "Service";   // ${serviceVarName} 如 userService
+    // Controller 类名
+    tplData["controllerBaseClass"] = modelBaseName + "Controller_"; // ${controllerBaseClass} 如 UserController_
+    tplData["controllerClass"]     = modelBaseName + "Controller";  // ${controllerClass} 如 UserController
+    tplData["controllerBaseClassFile"] = param.tableName + ".controller_"; // ${controllerBaseClassFile} 如 user.controller_
+    tplData["controllerClassFile"]     = param.tableName + ".controller";  // ${controllerClassFile} 如 user.controller
+    tplData["modelBaseName"]       = modelBaseName;  // ${modelBaseName} 如 User（供 ApiTags/Module 使用）
+    // Module 类名
+    tplData["moduleClassFile"]     = param.tableName + ".module"; // ${moduleClassFile} 如 user.module
+
+    // ── 5.7 基础路径数据（供 formatPath 占位符替换）────────────
+    let name = basename(file);
+
+    // ── 5.8 遍历模板配置，逐个渲染并写入文件 ───────────────────
+    //      每个模板 cfg 的输出路径由 cfg.out 模板 + formatPath 替换得到
+    for (cfg in templates) {
+      printLog("tpl path: " + cfg.tpl);
+
+      // 用 formatPath 替换 {basePath}/{name} 等占位符，得到输出文件路径
+      let outPath = formatPath(cfg.out, {
+        basePath: basePath,
+        modelName: json.modelName,
+        name: name,
+        tableName: json.tableName,
+        entityClass: param.entityClass,
+        insClass: tplData["insClass"],
+        selClass: tplData["selClass"],
+        dbBaseClassFile: tplData["dbBaseClassFile"],
+        dbClassFile: tplData["dbClassFile"],
+        serviceBaseClassFile: tplData["serviceBaseClassFile"],
+        serviceClassFile: tplData["serviceClassFile"],
+        controllerBaseClassFile: tplData["controllerBaseClassFile"],
+        controllerClassFile: tplData["controllerClassFile"],
+        moduleClassFile: tplData["moduleClassFile"]
+      });
+      tplData["outputPath"] = outPath;  // 供模板内的 fileExists(outputPath) 守卫使用
+
+      // 核心：调用模板引擎，把 tpl 中的 ${变量名} 替换为实际值，
+      //      ${if ...} / ${each ...} 做条件判断和循环
+      let result = renderTpl(cfg.tpl, tplData);
+      let resultLen = result.length;
+      printLog("result length: " + resultLen);
+
+      // 渲染成功 → 写入磁盘
+      if (result) {
+        writeFile(outPath, result);
+        printLog("生成文件: " + outPath);
+      }
+    }
+    }  // end for (json in tableConfigs)
+  }  // end for (file in files)
+
+  // ── 6. 收尾：断开数据库连接 ─────────────────────────────────────
+  db.disconnect();
+
+  printLog("--- 代码生成结束 ---");
+}

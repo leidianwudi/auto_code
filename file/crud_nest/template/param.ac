@@ -149,21 +149,21 @@ export class Param {
     let ormType = this.mapTypeToOrm(colType);
     let options = "{ type: '" + ormType + "'";
 
-    // 非主键字段需要设置默认值（主键一般是自增，不需要 default）
-    if (!this.isPrimaryKey(field.colKey)) {
-      if (this.isCoinType(colType)) {
-        // decimal 金额字段：默认 0.00，精度和缩放用全局常量统一管理
-        options += ", default: 0.00, precision: COIN_PRECISION, scale: COIN_SCALE, transformer: new CoinTransformer()";
-      } else if (colType.includes("varchar") || colType.includes("char")) {
-        // 字符串字段：默认空字符串
-        options += ", default: ''";
-      } else if (colType.includes("int") && !this.isAutoIncrement(field.extra)) {
-        // 非自增的整数字段：默认 0
-        options += ", default: 0";
+      // 非主键字段需要设置默认值（主键一般是自增，不需要 default）
+      if (!this.isPrimaryKey(field.colKey)) {
+        if (this.isCoinType(colType)) {
+          // decimal 金额字段：默认 0.00，精度和缩放用全局常量统一管理
+          options += ", default: 0.00, precision: COIN_PRECISION, scale: COIN_SCALE, transformer: new CoinTransformer()";
+        } else if (colType.includes("varchar") || colType.includes("char")) {
+          // 字符串字段：默认空字符串
+          options += ", default: ''";
+        } else if (colType.includes("int") && !this.isAutoIncrement(field.extra)) {
+          // 非自增的整数字段：默认 0
+          options += ", default: 0";
+        }
       }
-    }
 
-    options += " }";
+      options += " }";
     return options;
   }
 
@@ -215,6 +215,8 @@ export class Param {
   //
   // 输出：本实例的 fields / imports / relations 被填充，entity.tpl 可以直接取值
   // --------------------------------------------------------------------------
+
+
   function setTableData(data: TableSchemaData): Void {
     this.tableName = data.tableName;
     this.tableDesc = data.tableDesc;
@@ -224,7 +226,7 @@ export class Param {
     //   例如 "news\\news" → "news" → 首字母大写 → "EnNews"
     let parts = data.modelName.split("\\");
     let lastPart = parts[parts.length - 1];
-    this.entityClass = "En" + lastPart.charAt(0).toUpperCase() + lastPart.slice(1);
+    this.entityClass = "En" + this.line2UpLow(tableName);
 
     // ── 处理字段：把原始 schema 列转换成模板需要的结构 ────────────────
     this.fields = [];
@@ -267,4 +269,19 @@ export class Param {
       }
     }
   }
+  
+  
+  function line2UpLow(str: String): String {
+    let arr: String[] = str.split("_");
+    let res = "";
+    for (let i = 0; i < arr.length; i++) {
+      //首字母大写
+      res += arr[i].substring(0, 1).toUpperCase() + arr[i].substring(1);
+    }
+    return res;
+  }
+
+
 }
+
+

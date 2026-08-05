@@ -1,0 +1,88 @@
+{
+  tables: [
+    {
+      // 爬虫任务配置表
+      modelName: 'task\\task',
+      tableName: 'task',
+
+      selCols: [
+        'code',
+        'name',
+        'depth_max',
+        'depth',
+        'beg_url',
+        'term',
+        'is_open',
+        'status',
+        'beg_time',
+        'update_time',
+        'progress',
+        'desc',
+      ],
+
+      selColsLike: [
+        'code',
+        'name',
+        'beg_url',
+        'term',
+        'desc',
+      ],
+
+      selColsSort: {
+        id: 'ASC',
+      },
+
+      // task 表没有物理外键
+      joinTable: [
+      {
+            joinEnClass: 'EnTaskUrl',
+            joinEnClass_Url: 'src/task/task_url/entities/en_task_url.ts',
+            joinEnClassPro: 'taskUrls',
+            joinType: 'OneToMany',
+            inverseJoinEnClassPro: 'task',
+            isJoinRelations: false
+        }],
+    },
+
+    {   
+      // URL 逐级爬取任务表
+      modelName: 'task\\task_url',
+      tableName: 'task_url',
+
+      selCols: [
+        'up_id',
+        'task_id',
+        'term',
+        'depth',
+        'url',
+        'status',
+        'create_time',
+        'update_time',
+      ],
+
+      selColsLike: [
+        'url',
+      ],
+
+      selColsSort: {
+        id: 'ASC',
+      },
+
+      // 数据库没有实际外键，这里根据字段注释配置业务关联
+      joinTable: [
+        {
+          inverseJoinEnClassPro: 'taskUrls',
+          isJoinRelations: true,
+          joinColumn: {
+            name: 'task_id',
+            referencedColumnName: 'id',
+          },
+          joinEnClass: 'EnTask',
+          joinEnClassPro: 'task',
+          joinEnClass_Url: 'src/task/task/entities/en_task',
+          joinType: 'ManyToOne',
+        },
+      ],
+    },
+  ],
+}
