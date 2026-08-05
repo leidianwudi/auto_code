@@ -220,8 +220,8 @@ void SchemaValidator::validateValue(const PropertyDef &pd, const QJsonValue &val
         errors->append(QStringLiteral("'%1[%2]' should be object").arg(childPath).arg(i));
         continue;
       }
-      validateObject(itemIt.value(), arr[i].toObject(),
-                     childPath + QStringLiteral("[%1]").arg(i), errors);
+      validateObject(itemIt.value(), arr[i].toObject(), childPath + QStringLiteral("[%1]").arg(i),
+                     errors);
     }
   } else if (type == QString::fromLatin1(kTypeObject)) {
     if (!val.isObject()) {
@@ -395,6 +395,21 @@ CursorCtx findCursorCtx(const QString &text, int pos) {
   return ctx;
 }
 
+/// 提取 text 中 pos 处的完整属性键（支持引号包裹的键），非键字符位置返回空串
+QString keyTokenAt(const QString &text, int pos) {
+  if (text.isEmpty()) return QString();
+  pos = qBound(0, pos, text.size());
+  auto isKeyChar = [](QChar c) {
+    return c.isLetterOrNumber() || c == QLatin1Char('_') || c == QLatin1Char('$') ||
+           c == QLatin1Char('-');
+  };
+  int start = pos, end = pos;
+  while (start > 0 && isKeyChar(text[start - 1])) --start;
+  while (end < text.size() && isKeyChar(text[end])) ++end;
+  if (start == end) return QString();
+  return text.mid(start, end - start);
+}
+
 }  // namespace
 
 // completions — 根据光标位置返回 schema 智能提示
@@ -444,4 +459,127 @@ QStringList SchemaValidator::completions(const QString &text, int pos) const {
     result.append(p.key());
   }
   return result;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  属性定位（悬停提示 / Ctrl+点击跳转）
+// ═════════════════════════════════════════════════════════════════════════════
+
+// resolveProperty — 解析 JSON 路径到叶子属性定义
+bool SchemaValidator::resolveProperty(const QString &jsonPath, QString *ownerClass,
+                                      const PropertyDef **out) const {
+  if (jsonPath.isEmpty() || m_rootClass.isEmpty()) return false;
+
+  QStringList segs = jsonPath.split(QLatin1Char('.'));
+  QString currentClass = m_rootClass;
+  const PropertyDef *leaf = nullptr;
+  QString leafOwner;
+
+  for (const QString &seg : segs) {
+    if (seg.isEmpty()) continue;
+
+    // 是否为数组索引段（全数字）
+    bool isIndex = true;
+    for (const QChar &c : seg) {
+      if (!c.isDigit()) {
+        isIndex = false;
+        break;
+      }
+    }
+
+    auto it = m_classes.find(currentClass);
+    if (it == m_classes.end()) return false;
+    const ClassDef &def = it.value();
+
+    if (isIndex) {
+      // 数组索引：属性类不变（当前类应为数组元素类 items），跳过
+      continue;
+    }
+
+    const PropertyDef *pd = propertyOf(def, seg);
+    if (!pd) return false;
+    leaf = pd;
+    leafOwner = currentClass;
+
+    // 进入下一级类
+    if (pd->type == QString::fromLatin1(kTypeObject)) {
+      currentClass = pd->className;
+    } else if (pd->type == QString::fromLatin1(kTypeArray)) {
+      currentClass = isPrimitiveType(pd->items) ? QString() : pd->items;
+    } else {
+      currentClass = QString();
+    }
+  }
+
+  if (!leaf) return false;
+  if (ownerClass) *ownerClass = leafOwner;
+  if (out) *out = leaf;
+  return true;
+}
+
+// propertyDescription — 根据 JSON 路径返回属性说明文本（供悬停提示）
+QString SchemaValidator::propertyDescription(const QString &jsonPath) const {
+  QString ownerClass;
+  const PropertyDef *pd = nullptr;
+  if (!resolveProperty(jsonPath, &ownerClass, &pd)) return QString();
+
+  QStringList lines;
+  const QString leafName = jsonPath.section(QLatin1Char('.'), -1);
+
+  // 类型
+  QString typeStr = pd->type;
+  if (pd->type == QString::fromLatin1(kTypeArray)) {
+    typeStr = QStringLiteral("array<%1>").arg(pd->items);
+  } else if (pd->type == QString::fromLatin1(kTypeObject)) {
+    typeStr = QStringLiteral("object<%1>").arg(pd->className);
+  }
+  lines << QStringLiteral("类型: ") + typeStr;
+
+  // 必填
+  auto cit = m_classes.find(ownerClass);
+  if (cit != m_classes.end() && cit.value().required.contains(leafName)) {
+    lines << QStringLiteral("必填: 是");
+  }
+
+  // 枚举
+  if (!pd->enumValues.isEmpty()) {
+    lines << QStringLiteral("枚举: ") + pd->enumValues.join(QStringLiteral(", "));
+  }
+
+  // 描述
+  if (!pd->description.isEmpty()) {
+    lines << pd->description;
+  }
+
+  return lines.join(QLatin1Char('\n'));
+}
+
+// propertyContext — 返回属性所在类名与属性名（供在 schema 文件中定位）
+bool SchemaValidator::propertyContext(const QString &jsonPath, QString *className,
+                                      QString *propName) const {
+  QString owner;
+  const PropertyDef *pd = nullptr;
+  if (!resolveProperty(jsonPath, &owner, &pd)) return false;
+  if (className) *className = owner;
+  if (propName) *propName = jsonPath.section(QLatin1Char('.'), -1);
+  return true;
+}
+
+// propertyPathAt — 根据光标位置返回该处属性的 JSON 路径
+QString SchemaValidator::propertyPathAt(const QString &text, int pos) const {
+  if (m_rootClass.isEmpty()) return QString();
+
+  CursorCtx ctx = findCursorCtx(text, pos);
+  if (ctx.afterColon) return QString();  // 值位置，非属性键
+
+  QString key = keyTokenAt(text, pos);
+  if (key.isEmpty()) return QString();
+
+  // 构建路径：非空帧键 + 当前键
+  QStringList segs;
+  for (const auto &f : ctx.stack) {
+    if (!f.key.isEmpty()) segs.push_back(f.key);
+  }
+  segs.push_back(key);
+  return segs.join(QLatin1Char('.'));
 }

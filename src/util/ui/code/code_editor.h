@@ -218,6 +218,10 @@ private:
   // ── 悬停提示（使用 SymbolNavigator）──
   void showSymbolHover(int pos, const QPoint &gpos);
 
+  // ── JSON 属性悬停提示与 Ctrl+点击跳转（基于 $schema）──
+  void showJsonPropertyHover(const QString &jsonPath, const QPoint &gpos);
+  int findSchemaPropertyLine(const QString &className, const QString &propName) const;
+
   // ── 成员变量（精简后）──
 
   ValidationMode m_validationMode = NoValidation;

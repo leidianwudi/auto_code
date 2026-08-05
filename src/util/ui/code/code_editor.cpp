@@ -9,6 +9,7 @@
 #include <QApplication>
 #include <QCompleter>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QFont>
 #include <QFontDatabase>
@@ -1056,10 +1057,35 @@ void CodeEditor::formatCode() {
 void CodeEditor::mouseMoveEvent(QMouseEvent *event) {
   QPlainTextEdit::mouseMoveEvent(event);
 
-  if (m_validationMode != AcValidation) return;
+  if (m_validationMode == NoValidation) return;
 
   QTextCursor cursor = cursorForPosition(event->pos());
   int pos = cursor.position();
+
+  // ── JSON 模式：属性悬停提示（基于 $schema）──
+  if (m_validationMode == JsonValidation && m_schemaLoaded) {
+    QString path = m_schema.propertyPathAt(cachedText(), pos);
+    if (event->modifiers() & Qt::ControlModifier) {
+      viewport()->setCursor(path.isEmpty() ? Qt::IBeamCursor : Qt::PointingHandCursor);
+    } else {
+      viewport()->setCursor(Qt::IBeamCursor);
+    }
+    if (!path.isEmpty()) {
+      m_hoverTimer->stop();
+      QPoint gpos = event->globalPosition().toPoint();
+      m_hoverTimer->start();
+      disconnect(m_hoverTimer, &QTimer::timeout, this, nullptr);
+      connect(m_hoverTimer, &QTimer::timeout, this,
+              [this, path, gpos]() { showJsonPropertyHover(path, gpos); });
+    } else {
+      m_currentHoverSymbol.clear();
+      m_hoverTimer->stop();
+      QToolTip::hideText();
+    }
+    return;
+  }
+
+  if (m_validationMode != AcValidation) return;
 
   int idStart = 0, idEnd = 0;
   QString identifier = identifierAtCursor(pos, &idStart, &idEnd);
@@ -1091,6 +1117,20 @@ void CodeEditor::mouseReleaseEvent(QMouseEvent *event) {
   if (event->button() == Qt::LeftButton && (event->modifiers() & Qt::ControlModifier)) {
     QTextCursor cursor = cursorForPosition(event->pos());
     int pos = cursor.position();
+
+    // ── JSON 模式：Ctrl+点击属性 → 跳转到 schema 中对应字段 ──
+    if (m_validationMode == JsonValidation && m_schemaLoaded) {
+      QString path = m_schema.propertyPathAt(cachedText(), pos);
+      QString className, propName;
+      if (!path.isEmpty() && m_schema.propertyContext(path, &className, &propName) &&
+          !propName.isEmpty()) {
+        int line = findSchemaPropertyLine(className, propName);
+        emit aboutToNavigate(m_schemaPath, line);
+        emit requestGoToLine(m_schemaPath, line);
+        return;
+      }
+    }
+
     int idStart = 0, idEnd = 0;
     QString identifier = identifierAtCursor(pos, &idStart, &idEnd);
     if (!identifier.isEmpty()) {
@@ -1100,6 +1140,50 @@ void CodeEditor::mouseReleaseEvent(QMouseEvent *event) {
   }
 
   QPlainTextEdit::mouseReleaseEvent(event);
+}
+
+// ── JSON 属性悬停提示（基于 $schema）──
+void CodeEditor::showJsonPropertyHover(const QString &jsonPath, const QPoint &gpos) {
+  if (m_validationMode != JsonValidation || !m_schemaLoaded) return;
+  QString desc = m_schema.propertyDescription(jsonPath);
+  if (desc.isEmpty()) {
+    QToolTip::hideText();
+    return;
+  }
+  QToolTip::showText(gpos, desc, this);
+}
+
+// ── 在 schema 文件中定位 className 类下 propName 属性的行号 ──
+int CodeEditor::findSchemaPropertyLine(const QString &className, const QString &propName) const {
+  QString text;
+  {
+    QFile f(m_schemaPath);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return 1;
+    text = QString::fromUtf8(f.readAll());
+  }
+
+  // 先定位类定义块
+  QRegularExpression classRe(
+      QStringLiteral("[\"']?%1[\"']?\\s*:").arg(QRegularExpression::escape(className)));
+  auto cm = classRe.match(text);
+  if (!cm.hasMatch()) return 1;
+  int searchFrom = cm.capturedStart();
+
+  // 类块内优先定位 properties 块，再在其中找属性
+  int propsIdx = text.indexOf(QStringLiteral("properties"), searchFrom);
+  if (propsIdx >= 0 && (propsIdx - searchFrom) < 2000) searchFrom = propsIdx;
+
+  QRegularExpression propRe(
+      QStringLiteral("[\"']?%1[\"']?\\s*:").arg(QRegularExpression::escape(propName)));
+  auto pm = propRe.match(text, searchFrom);
+  if (!pm.hasMatch()) return 1;
+
+  int matchPos = pm.capturedStart();
+  int line = 1;
+  for (int i = 0; i < matchPos && i < text.size(); ++i) {
+    if (text[i] == QLatin1Char('\n')) ++line;
+  }
+  return line;
 }
 
 void CodeEditor::setSymbolTable(const QHash<QString, AcSymbolEntry> &symbols) {

@@ -111,6 +111,33 @@ public:
   /// 是否已设置根类
   bool hasRoot() const { return !m_rootClass.isEmpty(); }
 
+  /**
+   * @brief 根据 JSON 路径返回属性说明文本（供悬停提示）
+   * @param jsonPath 形如 "tables.0.tableName"（数字段表示数组索引）
+   * @return 格式化说明文本（类型 / 枚举 / 描述），找不到返回空串
+   */
+  QString propertyDescription(const QString &jsonPath) const;
+
+  /**
+   * @brief 根据 JSON 路径返回属性所在类名与属性名（供在 schema 文件中定位）
+   * @param jsonPath 形如 "tables.0.tableName"
+   * @param[out] className 属性所属的 schema 类名
+   * @param[out] propName  叶子属性名
+   * @return true 表示能在 schema 中解析到该属性
+   */
+  bool propertyContext(const QString &jsonPath, QString *className, QString *propName) const;
+
+  /**
+   * @brief 根据 JSON5 文本与光标位置返回该处属性的 JSON 路径
+   *
+   * 仅当光标位于某个属性键（key）上时返回路径（形如 "tables.0.tableName"，
+   * 数组索引可省略，仅用于定位属性所属类）；光标位于值/结构字符上时返回空串。
+   * @param text 当前 JSON5 文本
+   * @param pos 光标位置（0-based）
+   * @return 属性路径，非属性键位置返回空串
+   */
+  QString propertyPathAt(const QString &text, int pos) const;
+
 private:
   struct PropertyDef {
     QString type;            // int / string / double / bool / array / object
@@ -143,6 +170,9 @@ private:
 
   /// 判断是否为基本类型名（int/string/double/bool）
   static bool isPrimitiveType(const QString &type);
+
+  /// 解析 JSON 路径到叶子属性；输出叶子所属类名与属性定义
+  bool resolveProperty(const QString &jsonPath, QString *ownerClass, const PropertyDef **out) const;
 
   QMap<QString, ClassDef> m_classes;
   QString m_rootClass;  // 根入口类名

@@ -1,7 +1,7 @@
 {
   // 指定 schema 文件，用于智能提示与校验
   // 以 / 开头的路径基于项目根目录（file/），所有 json 文件均可复制此行
-  $schema: '/template/tool/param.schema.json',
+  $schema: '/crud_nest/template/tool/param.schema.json',
   // 多表配置示例：一个 JSON 文件可配置多张表，每项都是单表配置对象
   // 每个表配 置支持：tableName、modelName、selCols、selColsLike、selColsSort、joinTable 等字段
   tables: [
