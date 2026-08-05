@@ -54,6 +54,8 @@ void AcTypeChecker::checkBlock(const Block &block, TypeEnv &env) {
 }
 
 void AcTypeChecker::checkStmt(const Block::Stmt &stmt, TypeEnv &env) {
+  // 记录语句所属的真实源文件，使 import 导入文件的错误能正确归因
+  if (!stmt.filePath.isEmpty()) m_currentFile = stmt.filePath;
   switch (stmt.kind) {
     case Block::Stmt::kCall:
       checkCallStmt(stmt.call, env);
@@ -979,12 +981,14 @@ QString AcTypeChecker::typeToString(const AcType &type) const {
 }
 
 void AcTypeChecker::reportError(const QString &msg, int line) {
-  if (m_filePath.isEmpty()) {
+  // 优先使用当前语句所属文件（import 导入文件的真实路径），否则回退到入口脚本
+  const QString file = m_currentFile.isEmpty() ? m_filePath : m_currentFile;
+  if (file.isEmpty()) {
     m_errors->append(QStringLiteral("type error: %1 at line %2").arg(msg).arg(line));
   } else {
     m_errors->append(QStringLiteral("type error: %1 at line %2 in %3")
                          .arg(msg)
                          .arg(line)
-                         .arg(QFileInfo(m_filePath).fileName()));
+                         .arg(QFileInfo(file).fileName()));
   }
 }

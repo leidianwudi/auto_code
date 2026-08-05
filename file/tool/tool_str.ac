@@ -1,0 +1,37 @@
+/// @file tool_str.ac — 字符串通用工具函数
+/// @brief 供各项目 .ac 脚本复用的字符串处理函数
+///
+/// 公共工具函数集中存放在本目录（file/tool/），
+/// 命名采用 tool_<类别>.ac 的形式。各项目入口脚本通过 import 引用。
+
+/// @brief 转义 JS 字符串中的单引号和反斜杠（用于生成 JS 对象字面量）
+/// @param s 原始字符串
+/// @return 转义后的字符串（单引号 ' → \'，反斜杠 \ → \\）
+export function escapeJsStr(s: String): String {
+  if (s == null) {
+    return "";
+  }
+  let result = "";
+  let len = s.length;
+  for (let i = 0; i < len; i = i + 1) {
+    let c = s[i];
+    if (c == "'") {
+      result = result + "\\'";
+    } else if (c == "\\") {
+      result = result + "\\\\";
+    } else {
+      result = result + c;
+    }
+  }
+  return result;
+}
+
+/// @brief 首字母大写
+/// @param s 原始字符串
+/// @return 首字母大写后的字符串（如 "user" → "User"）
+export function capitalizeFirst(s: String): String {
+  if (s == null || s.length == 0) {
+    return s;
+  }
+  return s[0].toUpperCase() + s.substring(1);
+}

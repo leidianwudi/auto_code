@@ -41,6 +41,12 @@ struct AcDebugVar {
   QString funcName;  ///< 变量所在函数名（用于位置列展示）
 };
 
+/// @brief 断点条目
+struct AcBreakpoint {
+  int line = 0;         ///< 断点行号（1-based）
+  bool enabled = true;  ///< 是否生效（失效的断点不触发暂停）
+};
+
 /**
  * @class AcDebugger
  * @brief AC 脚本调试器
@@ -70,8 +76,8 @@ public:
   void begin();
   /// 结束调试会话
   void end();
-  /// 设置断点集合（文件路径 → 行号集合，覆盖）
-  void setBreakpoints(const QMap<QString, QSet<int>> &breakpoints);
+  /// 设置断点集合（文件路径 → 行号 → 是否生效，覆盖）
+  void setBreakpoints(const QMap<QString, QMap<int, bool>> &breakpoints);
   /// 添加断点
   void addBreakpoint(const QString &filePath, int line);
   /// 移除断点
@@ -106,9 +112,9 @@ private:
   mutable QMutex m_mutex;
   QWaitCondition m_cond;
 
-  QMap<QString, QSet<int>> m_breakpoints;  ///< 断点集合（文件路径 → 行号集合）
-  bool m_debugging = false;                ///< 是否处于调试模式
-  bool m_paused = false;                   ///< 是否已暂停
+  QMap<QString, QMap<int, bool>> m_breakpoints;  ///< 断点集合（文件 → 行号 → 是否生效）
+  bool m_debugging = false;                      ///< 是否处于调试模式
+  bool m_paused = false;                         ///< 是否已暂停
   bool m_stopRequested = false;
   bool m_skipNext = false;  ///< 恢复后跳过紧邻的同一行，避免立即再次命中
   QString m_pausedFile;     ///< 最近一次暂停的文件路径

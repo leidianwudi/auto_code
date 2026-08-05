@@ -37,7 +37,8 @@ public:
   void setFilePath(const QString &path) { m_filePath = path; }
 
 private:
-  QString m_filePath;  ///< 当前检查的文件路径（用于错误消息）
+  QString m_filePath;     ///< 入口脚本文件路径（错误消息兜底）
+  QString m_currentFile;  ///< 当前正在检查的语句所属文件路径（import 导入文件的真实路径）
 
   /// @brief 类型环境 — 变量名 → 类型映射
   struct TypeEnv {

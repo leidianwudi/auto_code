@@ -321,9 +321,11 @@ bool AcExecutor::linkImportsRecursive(Block &program, const QString &baseDir,
       }
 
       if (!imp.names.contains(exportName)) {
-        // 不在 import 列表中的导出类也注入，作为类型依赖
-        // （例如 Param 内部使用 RelationDef，需要 RelationDef 在类型表中可用）
-        if (isExported && stmt.kind == Block::Stmt::kClassDef) {
+        // 不在 import 列表中的导出符号也注入，作为依赖：
+        // - 类：类型依赖（例如 Param 内部使用 RelationDef）
+        // - 函数：已导出函数的传递依赖（例如 main_api 使用 tool_str 的 escapeJsStr/capitalizeFirst）
+        if (isExported && (stmt.kind == Block::Stmt::kClassDef ||
+                           stmt.kind == Block::Stmt::kFuncDef)) {
           importedStmts.append(stmt);
         }
         continue;

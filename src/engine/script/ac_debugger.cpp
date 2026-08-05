@@ -23,7 +23,8 @@ bool AcDebugger::onStatement(const QString &filePath, int line, int callDepth,
   m_skipNext = false;
 
   bool shouldPause = false;
-  if (m_breakpoints.value(filePath).contains(line)) {
+  // 仅在断点存在且生效时命中；失效断点（enabled=false）不触发暂停
+  if (m_breakpoints.value(filePath).value(line, false)) {
     shouldPause = true;
   } else if (m_stepMode == StepInto) {
     shouldPause = true;
@@ -94,14 +95,14 @@ void AcDebugger::end() {
   m_cond.wakeAll();
 }
 
-void AcDebugger::setBreakpoints(const QMap<QString, QSet<int>> &breakpoints) {
+void AcDebugger::setBreakpoints(const QMap<QString, QMap<int, bool>> &breakpoints) {
   QMutexLocker lock(&m_mutex);
   m_breakpoints = breakpoints;
 }
 
 void AcDebugger::addBreakpoint(const QString &filePath, int line) {
   QMutexLocker lock(&m_mutex);
-  if (line > 0 && !filePath.isEmpty()) m_breakpoints[filePath].insert(line);
+  if (line > 0 && !filePath.isEmpty()) m_breakpoints[filePath][line] = true;
 }
 
 void AcDebugger::removeBreakpoint(const QString &filePath, int line) {

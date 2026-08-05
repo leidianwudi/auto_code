@@ -116,6 +116,12 @@ private slots:
   void onDebugStepOut();
   /// 双击断点面板条目：打开文件并定位到断点行
   void onBreakpointActivated(const QString &filePath, int line);
+  /// 断点面板切换生效状态：更新对应编辑器中该断点的生效标记
+  void onBreakpointToggleEnabledRequested(const QString &filePath, int line, bool enabled);
+  /// 断点面板删除单个断点
+  void onBreakpointDeleteRequested(const QString &filePath, int line);
+  /// 断点面板删除全部断点
+  void onBreakpointRemoveAllRequested();
   /// 调试器暂停（工作线程阻塞中），高亮当前行
   void onDebuggerPaused(const QString &filePath, int line, const QVector<AcDebugFrame> &stack,
                         const QList<AcDebugVar> &vars);
@@ -144,6 +150,8 @@ private:
   CodeEditor *openFileInEditor(const QString &filePath, QTabWidget *target = nullptr);
   /// 获取当前活跃的编辑器
   CodeEditor *currentEditor() const;
+  /// 在所有编辑面板中查找已打开指定文件的编辑器（未打开则返回 nullptr）
+  CodeEditor *findEditorForFile(const QString &filePath) const;
   /// 收集所有编辑器中的断点并刷新调试面板「断点」页
   void refreshBreakpointList();
   /// 将当前全部断点持久化到磁盘（程序重启后还原）
@@ -154,8 +162,8 @@ private:
   void saveOpenFilesToSettings();
   /// 从设置还原上次打开的文件列表并重新打开
   void restoreOpenFilesFromSettings();
-  /// 收集全部已打开编辑器及持久化断点（文件路径 → 行号集合），供调试器使用
-  QMap<QString, QSet<int>> debugBreakpoints();
+  /// 收集全部已打开编辑器及持久化断点（文件路径 → 行号 → 是否生效），供调试器使用
+  QMap<QString, QMap<int, bool>> debugBreakpoints();
   /// 获取当前活跃的面板组
   QTabWidget *currentTabWidget() const;
   /// 连接编辑器的光标位置信号
@@ -198,8 +206,8 @@ protected:
   bool m_debugging = false;             ///< 是否处于调试模式
   CodeEditor *m_debugEditor = nullptr;  ///< 当前调试会话的目标编辑器（用于行高亮）
 
-  // 断点持久化：按文件路径保存断点，关闭后重新打开仍保留
-  QHash<QString, QSet<int>> m_persistedBreakpoints;
+  // 断点持久化：按文件路径保存断点（行号 → 是否生效），关闭后重新打开仍保留
+  QHash<QString, QMap<int, bool>> m_persistedBreakpoints;
 
   /// 启动一次调试会话（收集当前编辑器断点，运行脚本）
   void startDebugSession();

@@ -19,6 +19,7 @@
 
 #include <QCompleter>
 #include <QHash>
+#include <QMap>
 #include <QPainterPath>
 #include <QPlainTextEdit>
 #include <QPointer>
@@ -117,14 +118,20 @@ public:
 
   /// 切换指定行号（0-based blockNumber）的断点状态
   void toggleBreakpoint(int blockNumber);
+  /// 根据行号区 y 坐标返回所在行（1-based），无命中返回 0
+  int lineAtY(int y) const;
   /// 根据行号区 y 坐标切换断点（供 LineNumberArea 调用）
   void toggleBreakpointAtY(int y);
   /// 指定行号（1-based）是否有断点
   bool hasBreakpoint(int line) const;
-  /// 获取当前断点行号集合（1-based）
-  QSet<int> breakpoints() const;
-  /// 覆盖设置断点集合（1-based）
-  void setBreakpoints(const QSet<int> &lines);
+  /// 指定行号（1-based）的断点是否生效
+  bool isBreakpointEnabled(int line) const;
+  /// 设置指定行号（1-based）断点是否生效
+  void setBreakpointEnabled(int line, bool enabled);
+  /// 获取当前断点集合（行号 → 是否生效，行号 1-based）
+  QMap<int, bool> breakpoints() const;
+  /// 覆盖设置断点集合（行号 → 是否生效，行号 1-based）
+  void setBreakpoints(const QMap<int, bool> &lines);
   /// 清空所有断点
   void clearBreakpoints();
   /// 设置当前调试暂停行（1-based），<=0 表示清除高亮
@@ -172,9 +179,12 @@ private:
   void showErrorTooltip(const QPoint &pos, const QString &text);
   void hideErrorTooltip();
   int calculateNewLineIndent(const QString &linePrefix) const;
+
+public:
   /// 当前文件是否为可调试的 .ac 脚本（objectName 即文件路径）
   bool isDebuggableFile() const;
 
+private:
   // ── 补全相关 ──
   void initCompleter(ValidationMode mode);
   void showCompleter();
@@ -250,7 +260,7 @@ private:
   QList<QTextEdit::ExtraSelection> m_findSelections;  ///< 查找匹配高亮（由 CodeFindBar 写入）
 
   // 断点调试
-  QSet<int> m_breakpoints;        ///< 断点行号集合（1-based）
+  QMap<int, bool> m_breakpoints;  ///< 断点集合（行号 → 是否生效，行号 1-based）
   int m_debugLine = -1;           ///< 当前调试暂停行（1-based），-1 表示无
   QList<AcDebugVar> m_debugVars;  ///< 当前调试变量快照（悬停显示用）
 
@@ -280,6 +290,7 @@ protected:
   }
 
   void mousePressEvent(QMouseEvent *event) override;
+  void contextMenuEvent(QContextMenuEvent *event) override;
 
 private:
   CodeEditor *m_codeEditor;

@@ -130,7 +130,27 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
   editor->setObjectName(filePath);
   editor->validate();
   // 恢复该文件持久化的断点（关闭重开后保留）
-  editor->setBreakpoints(m_persistedBreakpoints.value(filePath));
+  // 若文件被重构导致行数减少，行号超出当前文件长度的断点视为失效，自动清除
+  const int totalLines = editor->document()->blockCount();
+  QMap<int, bool> restoredBps;
+  bool bpsChanged = false;
+  auto bpIt = m_persistedBreakpoints.find(filePath);
+  if (bpIt != m_persistedBreakpoints.end()) {
+    for (auto lit = bpIt.value().cbegin(); lit != bpIt.value().cend(); ++lit) {
+      if (lit.key() >= 1 && lit.key() <= totalLines) {
+        restoredBps.insert(lit.key(), lit.value());
+      } else {
+        bpsChanged = true;  // 该断点行已不存在，清除
+      }
+    }
+    if (bpsChanged) {
+      if (restoredBps.isEmpty())
+        m_persistedBreakpoints.erase(bpIt);
+      else
+        bpIt.value() = restoredBps;
+    }
+  }
+  editor->setBreakpoints(restoredBps);
   editor->setFocus();
   m_ui->setWindowTitle(MainDevUi::fileTitle(fi.fileName()));
 

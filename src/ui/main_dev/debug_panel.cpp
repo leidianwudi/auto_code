@@ -11,9 +11,13 @@
 #include <QHeaderView>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QMenu>
+#include <QPainter>
+#include <QPixmap>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTabWidget>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include "src/util/ui/component/aui_button.h"
@@ -110,23 +114,80 @@ DebugPanel::DebugPanel(QWidget *parent) : QWidget(parent) {
   });
 
   // ── 断点列表（类似 VSCode 的 BREAKPOINTS 视图）──
+  //    生效列(复选框)  |  文件  |  行
+  m_removeBreakBtn = new QPushButton(QStringLiteral("移除全部断点"));
+  m_removeBreakBtn->setToolTip(QStringLiteral("移除所有已设置断点"));
+  m_removeBreakBtn->setStyleSheet(
+      QStringLiteral(
+          "QPushButton { border: none; background: transparent; color: %1; text-align: left; "
+          "padding: 2px 4px; } "
+          "QPushButton:hover { background: rgba(128,128,128,0.15); }")
+          .arg(AuiStyle::inactiveTabColor().name()));
+  connect(m_removeBreakBtn, &QPushButton::clicked, this,
+          [this]() { emit breakpointRemoveAllRequested(); });
+
+  auto *breakTab = new QWidget;
+  auto *breakLayout = new QVBoxLayout(breakTab);
+  breakLayout->setContentsMargins(0, 0, 0, 0);
+  breakLayout->setSpacing(2);
+  breakLayout->addWidget(m_removeBreakBtn);
+
   m_breakTree = AuiTree::createListTree();
-  m_breakTree->setColumnCount(2);
-  m_breakTree->setHeaderLabels({QStringLiteral("文件"), QStringLiteral("行")});
+  m_breakTree->setColumnCount(3);
+  m_breakTree->setHeaderLabels(
+      {QStringLiteral("生效"), QStringLiteral("文件"), QStringLiteral("行")});
   m_breakTree->setRootIsDecorated(false);
-  m_breakTree->setColumnWidth(0, 150);
-  m_breakTree->setColumnWidth(1, 50);
-  tabs->addTab(m_breakTree, QStringLiteral("断点"));
+  m_breakTree->setColumnWidth(0, 34);
+  m_breakTree->setColumnWidth(1, 130);
+  m_breakTree->setColumnWidth(2, 40);
+  breakLayout->addWidget(m_breakTree, 1);
+  tabs->addTab(breakTab, QStringLiteral("断点"));
+
+  // 点击「生效」列图标：切换断点生效状态（延迟触发，避免在信号处理中重建清树导致崩溃）
+  connect(m_breakTree, &QTreeWidget::itemClicked, this, [this](QTreeWidgetItem *item, int column) {
+    if (!item || column != 0) return;
+    const QString filePath = item->data(1, Qt::UserRole).toString();
+    bool ok = false;
+    const int line = item->data(2, Qt::UserRole).toInt(&ok);
+    if (filePath.isEmpty() || !ok || line <= 0) return;
+    const bool enabled = item->data(3, Qt::UserRole).toBool();
+    QTimer::singleShot(0, this, [this, filePath, line, enabled]() {
+      emit breakpointToggleEnabledRequested(filePath, line, !enabled);
+    });
+  });
 
   // 双击断点条目：打开对应文件并定位到断点行
   connect(m_breakTree, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem *item, int) {
     if (!item) return;
-    const QString filePath = item->data(0, Qt::UserRole).toString();
+    const QString filePath = item->data(1, Qt::UserRole).toString();
     bool ok = false;
-    const int line = item->data(1, Qt::UserRole).toInt(&ok);
+    const int line = item->data(2, Qt::UserRole).toInt(&ok);
     if (!filePath.isEmpty() && ok && line > 0) {
       emit breakpointActivated(filePath, line);
     }
+  });
+
+  // 右键菜单：删除单个断点 / 启用或禁用断点
+  m_breakTree->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(m_breakTree, &QWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
+    auto *item = m_breakTree->itemAt(pos);
+    if (!item) return;
+    const QString filePath = item->data(1, Qt::UserRole).toString();
+    bool ok = false;
+    const int line = item->data(2, Qt::UserRole).toInt(&ok);
+    if (filePath.isEmpty() || !ok || line <= 0) return;
+    const bool enabled = item->data(3, Qt::UserRole).toBool();
+
+    QMenu menu(m_breakTree);
+    QAction *toggleAction =
+        menu.addAction(enabled ? QStringLiteral("禁用断点") : QStringLiteral("启用断点"));
+    connect(toggleAction, &QAction::triggered, this, [this, filePath, line, enabled]() {
+      emit breakpointToggleEnabledRequested(filePath, line, !enabled);
+    });
+    QAction *delAction = menu.addAction(QStringLiteral("移除断点"));
+    connect(delAction, &QAction::triggered, this,
+            [this, filePath, line]() { emit breakpointDeleteRequested(filePath, line); });
+    menu.exec(m_breakTree->viewport()->mapToGlobal(pos));
   });
 
   root->addWidget(tabs, 1);
@@ -213,18 +274,45 @@ void DebugPanel::appendVarValue(QTreeWidgetItem *parent, const QString &key,
   }
 }
 
-void DebugPanel::setBreakpoints(const QList<QPair<QString, int>> &breakpoints) {
+// ── 生成断点生效列图标：生效=实心红圆，失效=空心红圆 ──
+static QIcon breakpointIcon(bool enabled) {
+  QPixmap pm(16, 16);
+  pm.fill(Qt::transparent);
+  QPainter p(&pm);
+  p.setRenderHint(QPainter::Antialiasing);
+  const QColor red(0xf4, 0x47, 0x47);
+  if (enabled) {
+    p.setPen(Qt::NoPen);
+    p.setBrush(red);
+    p.drawEllipse(4, 4, 8, 8);
+  } else {
+    p.setPen(QPen(red, 1.5));
+    p.setBrush(Qt::NoBrush);
+    p.drawEllipse(4, 4, 8, 8);
+  }
+  p.end();
+  return QIcon(pm);
+}
+
+void DebugPanel::setBreakpoints(const QList<QPair<QString, AcBreakpoint>> &breakpoints) {
+  m_breakTree->blockSignals(true);  // 重建时避免触发 itemClicked
   m_breakTree->clear();
   for (const auto &bp : breakpoints) {
     auto *item = new QTreeWidgetItem;
-    item->setText(0, QFileInfo(bp.first).fileName());
-    item->setToolTip(0, bp.first);
-    item->setText(1, QString::number(bp.second));
-    // 存储完整路径与行号，供双击定位使用
-    item->setData(0, Qt::UserRole, bp.first);
-    item->setData(1, Qt::UserRole, bp.second);
+    item->setIcon(0, breakpointIcon(bp.second.enabled));
+    item->setText(1, QFileInfo(bp.first).fileName());
+    item->setToolTip(0, bp.second.enabled ? QStringLiteral("生效（点击禁用）")
+                                          : QStringLiteral("失效（点击启用）"));
+    item->setToolTip(1, bp.first);
+    item->setText(2, QString::number(bp.second.line));
+    // 存储完整路径、行号与当前生效状态，供点击/定位使用
+    item->setData(1, Qt::UserRole, bp.first);
+    item->setData(2, Qt::UserRole, bp.second.line);
+    item->setData(3, Qt::UserRole, bp.second.enabled);
     m_breakTree->addTopLevelItem(item);
   }
+  m_breakTree->blockSignals(false);
+  m_removeBreakBtn->setEnabled(!breakpoints.isEmpty());
 }
 
 void DebugPanel::clear() {

@@ -357,14 +357,23 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area)
       painter.drawText(0, top, m_lineNumberArea->width() - 6, fontMetrics().height(),
                        Qt::AlignRight, number);
 
-      // 绘制断点圆点（红色，位于行号左侧）
+      // 绘制断点圆点（生效=实心红圆，失效=空心红圆，位于行号左侧）
       if (m_breakpoints.contains(line)) {
         int dotR = 5;
         int cx = 5;
         int cy = top + fontMetrics().height() / 2;
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(QColor(0xf4, 0x47, 0x47));  // 红色断点
-        painter.drawEllipse(QPoint(cx, cy), dotR, dotR);
+        QColor red(0xf4, 0x47, 0x47);
+        if (m_breakpoints.value(line)) {
+          // 生效：实心红圆
+          painter.setPen(Qt::NoPen);
+          painter.setBrush(red);
+          painter.drawEllipse(QPoint(cx, cy), dotR, dotR);
+        } else {
+          // 失效：空心红圆（仅描边）
+          painter.setPen(QPen(red, 1.5));
+          painter.setBrush(Qt::NoBrush);
+          painter.drawEllipse(QPoint(cx, cy), dotR, dotR);
+        }
       }
     }
 
@@ -385,23 +394,64 @@ void LineNumberArea::mousePressEvent(QMouseEvent *event) {
   QWidget::mousePressEvent(event);
 }
 
-// ── 根据行号区 y 坐标切换断点 ──
-void CodeEditor::toggleBreakpointAtY(int y) {
+// ── 根据行号区 y 坐标返回所在行（1-based），无命中返回 0 ──
+int CodeEditor::lineAtY(int y) const {
   QTextBlock block = firstVisibleBlock();
   int blockNumber = block.blockNumber();
   int top = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
   int bottom = top + qRound(blockBoundingRect(block).height());
 
   while (block.isValid()) {
-    if (y >= top && y < bottom) {
-      toggleBreakpoint(blockNumber);
-      return;
-    }
+    if (y >= top && y < bottom) return blockNumber + 1;
     block = block.next();
     top = bottom;
     bottom = top + qRound(blockBoundingRect(block).height());
     ++blockNumber;
   }
+  return 0;
+}
+
+// ── 根据行号区 y 坐标切换断点 ──
+void CodeEditor::toggleBreakpointAtY(int y) {
+  const int line = lineAtY(y);
+  if (line > 0) toggleBreakpoint(line - 1);
+}
+
+// ── 行号区右键：添加/移除/启用/禁用断点（模仿 VSCode）──
+void LineNumberArea::contextMenuEvent(QContextMenuEvent *event) {
+  // 仅 .ac 可调试文件支持断点操作
+  if (!m_codeEditor->isDebuggableFile()) {
+    event->ignore();
+    return;
+  }
+  const int line = m_codeEditor->lineAtY(event->pos().y());
+  if (line <= 0) {
+    event->ignore();
+    return;
+  }
+  const bool hasBp = m_codeEditor->hasBreakpoint(line);
+  const bool bpEnabled = hasBp && m_codeEditor->isBreakpointEnabled(line);
+
+  QMenu menu(this);
+  QAction *toggleAction =
+      menu.addAction(hasBp ? QStringLiteral("移除断点") : QStringLiteral("添加断点"));
+  connect(toggleAction, &QAction::triggered, this,
+          [this, line]() { m_codeEditor->toggleBreakpoint(line - 1); });
+
+  if (hasBp) {
+    QAction *enableAction =
+        menu.addAction(bpEnabled ? QStringLiteral("禁用断点") : QStringLiteral("启用断点"));
+    connect(enableAction, &QAction::triggered, this,
+            [this, line, bpEnabled]() { m_codeEditor->setBreakpointEnabled(line, !bpEnabled); });
+  }
+
+  if (!m_codeEditor->breakpoints().isEmpty()) {
+    QAction *removeAllAction = menu.addAction(QStringLiteral("移除断点..."));
+    connect(removeAllAction, &QAction::triggered, m_codeEditor, &CodeEditor::clearBreakpoints);
+  }
+
+  menu.exec(event->globalPos());
+  event->accept();
 }
 
 // ── 断点调试接口 ──
@@ -417,7 +467,7 @@ void CodeEditor::toggleBreakpoint(int blockNumber) {
   if (m_breakpoints.contains(line)) {
     m_breakpoints.remove(line);
   } else {
-    m_breakpoints.insert(line);
+    m_breakpoints.insert(line, true);  // 新增断点默认生效
   }
   m_lineNumberArea->update();
   emit breakpointsChanged();
@@ -425,9 +475,20 @@ void CodeEditor::toggleBreakpoint(int blockNumber) {
 
 bool CodeEditor::hasBreakpoint(int line) const { return m_breakpoints.contains(line); }
 
-QSet<int> CodeEditor::breakpoints() const { return m_breakpoints; }
+bool CodeEditor::isBreakpointEnabled(int line) const {
+  return m_breakpoints.contains(line) && m_breakpoints.value(line);
+}
 
-void CodeEditor::setBreakpoints(const QSet<int> &lines) {
+void CodeEditor::setBreakpointEnabled(int line, bool enabled) {
+  if (!m_breakpoints.contains(line)) return;
+  m_breakpoints[line] = enabled;
+  m_lineNumberArea->update();
+  emit breakpointsChanged();
+}
+
+QMap<int, bool> CodeEditor::breakpoints() const { return m_breakpoints; }
+
+void CodeEditor::setBreakpoints(const QMap<int, bool> &lines) {
   m_breakpoints = lines;
   m_lineNumberArea->update();
 }
@@ -924,6 +985,36 @@ void CodeEditor::contextMenuEvent(QContextMenuEvent *event) {
     QAction *fmtAction = menu->addAction(QStringLiteral("格式化代码"));
     fmtAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+F")));
     connect(fmtAction, &QAction::triggered, this, &CodeEditor::formatCode);
+  }
+
+  // ── 断点操作（仅 .ac 可调试文件，模仿 VSCode）──
+  if (isDebuggableFile()) {
+    // 计算右键位置对应的行号（1-based）
+    int line = cursorForPosition(event->pos()).blockNumber() + 1;
+    bool hasBp = hasBreakpoint(line);
+    bool bpEnabled = hasBp && isBreakpointEnabled(line);
+
+    menu->addSeparator();
+    QAction *toggleBpAction =
+        menu->addAction(hasBp ? QStringLiteral("移除断点") : QStringLiteral("添加断点"));
+    toggleBpAction->setShortcut(QKeySequence(QStringLiteral("F9")));
+    connect(toggleBpAction, &QAction::triggered, this,
+            [this, line]() { toggleBreakpoint(line - 1); });
+
+    // 仅在已有断点时才提供启用/禁用
+    if (hasBp) {
+      QAction *enableBpAction =
+          menu->addAction(bpEnabled ? QStringLiteral("禁用断点") : QStringLiteral("启用断点"));
+      enableBpAction->setEnabled(true);
+      connect(enableBpAction, &QAction::triggered, this,
+              [this, line, bpEnabled]() { setBreakpointEnabled(line, !bpEnabled); });
+    }
+
+    // 移除当前文件所有断点（仅当存在断点时）
+    if (!m_breakpoints.isEmpty()) {
+      QAction *removeAllBpAction = menu->addAction(QStringLiteral("移除断点..."));
+      connect(removeAllBpAction, &QAction::triggered, this, &CodeEditor::clearBreakpoints);
+    }
   }
 
   menu->exec(event->globalPos());

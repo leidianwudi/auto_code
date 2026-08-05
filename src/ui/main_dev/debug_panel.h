@@ -31,8 +31,8 @@ public:
 
   /// 填充暂停时的调用栈与变量快照
   void setSnapshot(const QVector<AcDebugFrame> &stack, const QList<AcDebugVar> &vars);
-  /// 设置全部断点列表（文件路径 + 行号），供「断点」页展示
-  void setBreakpoints(const QList<QPair<QString, int>> &breakpoints);
+  /// 设置全部断点列表（文件路径 + 行号 + 是否生效），供「断点」页展示
+  void setBreakpoints(const QList<QPair<QString, AcBreakpoint>> &breakpoints);
   /// 清空所有内容
   void clear();
   /// 设置暂停状态（暂停时启用单步按钮，运行时禁用）
@@ -53,11 +53,18 @@ signals:
   void stackFrameActivated(const QString &filePath, int line);
   /// 双击变量条目：请求打开对应文件并定位到变量声明行
   void varActivated(const QString &filePath, int line);
+  /// 用户切换断点生效状态（复选框点击）
+  void breakpointToggleEnabledRequested(const QString &filePath, int line, bool enabled);
+  /// 用户删除单个断点（右键菜单）
+  void breakpointDeleteRequested(const QString &filePath, int line);
+  /// 用户删除全部断点（工具栏按钮）
+  void breakpointRemoveAllRequested();
 
 private:
-  QTreeWidget *m_stackTree = nullptr;  ///< 调用栈树
-  QTreeWidget *m_varTree = nullptr;    ///< 变量树
-  QTreeWidget *m_breakTree = nullptr;  ///< 断点列表树
+  QTreeWidget *m_stackTree = nullptr;       ///< 调用栈树
+  QTreeWidget *m_varTree = nullptr;         ///< 变量树
+  QTreeWidget *m_breakTree = nullptr;       ///< 断点列表树
+  QPushButton *m_removeBreakBtn = nullptr;  ///< 移除全部断点按钮
   QPushButton *m_continueBtn = nullptr;
   QPushButton *m_stepOverBtn = nullptr;
   QPushButton *m_stepIntoBtn = nullptr;

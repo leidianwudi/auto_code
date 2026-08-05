@@ -320,6 +320,13 @@ void MainDevMgr::connectDebugAction() {
   connect(panel, &DebugPanel::stackFrameActivated, this, &MainDevMgr::onBreakpointActivated);
   // 双击变量条目：打开对应文件并定位到变量声明行
   connect(panel, &DebugPanel::varActivated, this, &MainDevMgr::onBreakpointActivated);
+  // 断点面板：切换生效状态 / 删除单个 / 删除全部
+  connect(panel, &DebugPanel::breakpointToggleEnabledRequested, this,
+          &MainDevMgr::onBreakpointToggleEnabledRequested);
+  connect(panel, &DebugPanel::breakpointDeleteRequested, this,
+          &MainDevMgr::onBreakpointDeleteRequested);
+  connect(panel, &DebugPanel::breakpointRemoveAllRequested, this,
+          &MainDevMgr::onBreakpointRemoveAllRequested);
 }
 
 /// 调试按钮：未调试则启动会话；已暂停则继续执行
@@ -368,6 +375,69 @@ void MainDevMgr::onBreakpointActivated(const QString &filePath, int line) {
       editor->setTextCursor(cursor);
     }
   }
+}
+
+/// 断点面板切换生效状态：更新对应编辑器（或持久存储）中该断点的生效标记
+void MainDevMgr::onBreakpointToggleEnabledRequested(const QString &filePath, int line,
+                                                    bool enabled) {
+  CodeEditor *editor = findEditorForFile(filePath);
+  if (editor) {
+    editor->setBreakpointEnabled(line, enabled);
+  } else if (m_persistedBreakpoints.contains(filePath)) {
+    if (m_persistedBreakpoints[filePath].contains(line)) {
+      m_persistedBreakpoints[filePath][line] = enabled;
+    }
+  }
+  refreshBreakpointList();
+}
+
+/// 断点面板删除单个断点
+void MainDevMgr::onBreakpointDeleteRequested(const QString &filePath, int line) {
+  CodeEditor *editor = findEditorForFile(filePath);
+  if (editor) {
+    if (editor->hasBreakpoint(line)) editor->toggleBreakpoint(line - 1);  // 存在则移除
+  } else if (m_persistedBreakpoints.contains(filePath)) {
+    m_persistedBreakpoints[filePath].remove(line);
+    if (m_persistedBreakpoints[filePath].isEmpty()) m_persistedBreakpoints.remove(filePath);
+  }
+  refreshBreakpointList();
+}
+
+/// 断点面板删除全部断点
+void MainDevMgr::onBreakpointRemoveAllRequested() {
+  for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
+    auto *tabs = m_ui->editorPanelAt(pi);
+    if (!tabs) continue;
+    for (int ti = 0; ti < tabs->count(); ++ti) {
+      auto *w = tabs->widget(ti);
+      CodeEditor *editor = qobject_cast<CodeEditor *>(w);
+      if (!editor) {
+        auto *jvw = qobject_cast<JsonVueWidget *>(w);
+        if (jvw) editor = jvw->codeEditor();
+      }
+      if (editor) editor->clearBreakpoints();
+    }
+  }
+  m_persistedBreakpoints.clear();
+  refreshBreakpointList();
+}
+
+/// 在所有编辑面板中查找已打开指定文件的编辑器
+CodeEditor *MainDevMgr::findEditorForFile(const QString &filePath) const {
+  for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
+    auto *tabs = m_ui->editorPanelAt(pi);
+    if (!tabs) continue;
+    for (int ti = 0; ti < tabs->count(); ++ti) {
+      auto *w = tabs->widget(ti);
+      CodeEditor *editor = qobject_cast<CodeEditor *>(w);
+      if (!editor) {
+        auto *jvw = qobject_cast<JsonVueWidget *>(w);
+        if (jvw) editor = jvw->codeEditor();
+      }
+      if (editor && editor->objectName() == filePath) return editor;
+    }
+  }
+  return nullptr;
 }
 
 /// 启动一次调试会话：收集当前编辑器断点，运行脚本
@@ -568,9 +638,11 @@ void MainDevMgr::refreshBreakpointList() {
   }
 
   // 2) 从持久存储构建断点列表（含已关闭文件），刷新调试面板
-  QList<QPair<QString, int>> bps;
+  QList<QPair<QString, AcBreakpoint>> bps;
   for (auto it = m_persistedBreakpoints.cbegin(); it != m_persistedBreakpoints.cend(); ++it) {
-    for (int line : it.value()) bps.append({it.key(), line});
+    for (auto lit = it.value().cbegin(); lit != it.value().cend(); ++lit) {
+      bps.append({it.key(), AcBreakpoint{lit.key(), lit.value()}});
+    }
   }
   m_ui->debugPanel()->setBreakpoints(bps);
 
@@ -614,10 +686,15 @@ void MainDevMgr::saveBreakpointsToDisk() {
   for (auto it = m_persistedBreakpoints.cbegin(); it != m_persistedBreakpoints.cend(); ++it) {
     if (it.value().isEmpty()) continue;
     QJsonArray lines;
-    for (int line : it.value()) lines.append(line);
+    for (auto lit = it.value().cbegin(); lit != it.value().cend(); ++lit) {
+      QJsonObject bp;
+      bp[QStringLiteral("line")] = lit.key();
+      bp[QStringLiteral("enabled")] = lit.value();
+      lines.append(bp);
+    }
     QJsonObject entry;
     entry[QStringLiteral("file")] = it.key();
-    entry[QStringLiteral("lines")] = lines;
+    entry[QStringLiteral("breakpoints")] = lines;
     arr.append(entry);
   }
   root[QStringLiteral("breakpoints")] = arr;
@@ -638,9 +715,19 @@ void MainDevMgr::loadBreakpointsFromDisk() {
     const QJsonObject entry = v.toObject();
     const QString file = entry.value(QStringLiteral("file")).toString();
     if (file.isEmpty()) continue;
-    QSet<int> lines;
-    const QJsonArray lineArr = entry.value(QStringLiteral("lines")).toArray();
-    for (const QJsonValue &lv : lineArr) lines.insert(lv.toInt());
+    QMap<int, bool> lines;
+    const QJsonArray lineArr = entry.value(QStringLiteral("breakpoints")).toArray();
+    if (lineArr.isEmpty()) {
+      // 兼容旧格式：直接是行号数组
+      const QJsonArray oldArr = entry.value(QStringLiteral("lines")).toArray();
+      for (const QJsonValue &lv : oldArr) lines.insert(lv.toInt(), true);
+    } else {
+      for (const QJsonValue &lv : lineArr) {
+        const QJsonObject bpo = lv.toObject();
+        lines.insert(bpo.value(QStringLiteral("line")).toInt(),
+                     bpo.value(QStringLiteral("enabled")).toBool(true));
+      }
+    }
     if (!lines.isEmpty()) m_persistedBreakpoints[file] = lines;
   }
 }
@@ -706,8 +793,8 @@ void MainDevMgr::restoreOpenFilesFromSettings() {
 }
 
 /// 收集全部断点（已打开编辑器 + 已关闭的持久化断点），供调试器按文件命中
-QMap<QString, QSet<int>> MainDevMgr::debugBreakpoints() {
-  QMap<QString, QSet<int>> result;
+QMap<QString, QMap<int, bool>> MainDevMgr::debugBreakpoints() {
+  QMap<QString, QMap<int, bool>> result;
   // 1) 已打开编辑器内的断点
   for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
     auto *tabs = m_ui->editorPanelAt(pi);
@@ -722,14 +809,17 @@ QMap<QString, QSet<int>> MainDevMgr::debugBreakpoints() {
       if (!editor) continue;
       const QString filePath = editor->objectName();
       if (filePath.isEmpty()) continue;
-      QSet<int> lines = editor->breakpoints();
+      QMap<int, bool> lines = editor->breakpoints();
       if (!lines.isEmpty()) result.insert(filePath, lines);
     }
   }
   // 2) 已关闭文件的持久化断点
   for (auto it = m_persistedBreakpoints.cbegin(); it != m_persistedBreakpoints.cend(); ++it) {
     if (it.value().isEmpty()) continue;
-    result[it.key()].unite(it.value());
+    auto &target = result[it.key()];
+    for (auto lit = it.value().cbegin(); lit != it.value().cend(); ++lit) {
+      target.insert(lit.key(), lit.value());
+    }
   }
   return result;
 }
