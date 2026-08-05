@@ -58,6 +58,9 @@ void MainDevMgr::closeCurrentEditor() { ins().onCloseEditor(); }
 
 MainDevMgr::~MainDevMgr() {
   if (m_scriptFuture.isRunning()) {
+    // 调试中：解释器可能阻塞在调试器的等待条件上（断点暂停），
+    // 需先唤醒它（stop 会设置停止标志并 wakeAll），否则线程无法响应取消导致无法退出
+    if (m_debugger) m_debugger->stop();
     AcEngine::ins().requestCancel();
     m_scriptFuture.waitForFinished();
   }
@@ -86,6 +89,14 @@ QWidget *MainDevMgr::onCreateWindow() {
   connect(m_debugger, &AcDebugger::paused, this, &MainDevMgr::onDebuggerPaused);
   connect(m_debugger, &AcDebugger::resumed, this, &MainDevMgr::onDebuggerResumed);
   connect(m_debugger, &AcDebugger::finished, this, &MainDevMgr::onDebuggerFinished);
+
+  // 应用退出前（aboutToQuit 在事件循环退出前、静态析构之前触发），
+  // 先唤醒可能阻塞在调试等待条件上的工作线程并请求取消，
+  // 否则 Qt 全局线程池析构时 waitForDone() 会因线程阻塞而挂起，导致进程无法退出
+  connect(qApp, &QCoreApplication::aboutToQuit, this, [this]() {
+    if (m_debugger) m_debugger->stop();
+    AcEngine::ins().requestCancel();
+  });
 
   // ── 设置日志回调：脚本中 printLog() 输出到 UI 面板 ──
   // 脚本在工作线程执行，日志回调可能从工作线程触发，需投递到 GUI 线程
