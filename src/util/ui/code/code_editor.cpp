@@ -35,20 +35,6 @@
 #include "src/util/ui/component/aui_error_tool_tip.h"
 #include "src/util/ui/component/aui_style.h"
 
-// #region debug-point probe-helper
-// 临时调试探针：同步追加到日志文件（崩溃 abort 前可靠落盘）
-#include <QFile>
-#include <QTextStream>
-static void dbgProbe(const char *id) {
-  QFile f(QStringLiteral(".dbg/dblclick-stringview-null.log"));
-  if (f.open(QIODevice::WriteOnly | QIODevice::Append)) {
-    f.write(id, qstrlen(id));
-    f.write("\n", 1);
-    f.flush();
-  }
-}
-// #endregion
-
 // ──────────────────────────────────────────────────────────────
 //  构造与初始化（精简后）
 // ──────────────────────────────────────────────────────────────
@@ -132,9 +118,6 @@ void CodeEditor::scheduleValidation() {
 }
 
 void CodeEditor::performValidation() {
-  // #region debug-point D:perform-validation
-  dbgProbe("D:perform-validation");
-  // #endregion
   if (m_validationMode == NoValidation) return;
 
   // 清除旧的错误标记
@@ -648,9 +631,6 @@ void CodeEditor::hideErrorTooltip() {
 // ──────────────────────────────────────────────────────────────
 
 void CodeEditor::highlightCurrentLine() {
-  // #region debug-point C:highlight-line
-  dbgProbe("C:highlight-line");
-  // #endregion
   QList<QTextEdit::ExtraSelection> extra;
 
   if (!isReadOnly()) {
@@ -983,9 +963,6 @@ void CodeEditor::formatCode() {
 }
 
 void CodeEditor::mouseMoveEvent(QMouseEvent *event) {
-  // #region debug-point A:mouse-move
-  dbgProbe("A:mouse-move");
-  // #endregion
   QPlainTextEdit::mouseMoveEvent(event);
 
   if (m_validationMode != AcValidation) return;

@@ -226,7 +226,7 @@ export class Param {
     //   例如 "news\\news" → "news" → 首字母大写 → "EnNews"
     let parts = data.modelName.split("\\");
     let lastPart = parts[parts.length - 1];
-    this.entityClass = "En" + this.line2UpLow(tableName);
+    this.entityClass = "En" + this.line2UpLow(this.tableName);
 
     // ── 处理字段：把原始 schema 列转换成模板需要的结构 ────────────────
     this.fields = [];

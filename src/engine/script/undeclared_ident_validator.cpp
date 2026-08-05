@@ -111,7 +111,8 @@ void UndeclaredIdentValidator::visitClassDef(const ClassDef &cd) {
     if (prop.value) visitExpr(*prop.value);
   }
   classScope.insert(QString::fromLatin1(AcKeyword::kThis));
-  for (const auto &prop : cd.properties) classScope.insert(prop.key);
+  // 注意：类属性必须通过 this.xxx 访问，不加入裸作用域。
+  // 这样误写属性名（如把 this.tableName 写成 tableName）会被正确标记为未定义变量。
 
   // 继承：子类可访问父类属性
   if (!cd.baseClass.isEmpty()) {
