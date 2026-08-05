@@ -507,6 +507,11 @@ void AcInterpreter::execBlock(const Block &block) {
         (stmt.kind == Block::Stmt::kClassDef || stmt.kind == Block::Stmt::kFuncDef ||
          stmt.kind == Block::Stmt::kInterfaceDef || stmt.kind == Block::Stmt::kEnumDef ||
          stmt.kind == Block::Stmt::kImport);
+    // 顶层脚本帧：实时更新其行号为当前执行语句行，使调用栈展示当前所在位置
+    if (m_debugger && m_callDepth == 1 && !m_callStack.isEmpty() &&
+        (m_scriptFile.isEmpty() || stmt.filePath == m_scriptFile)) {
+      m_callStack[0].line = stmt.line;
+    }
     // 调试：命中断点/单步时暂停（阻塞等待 GUI 指令），返回 false 表示用户停止
     if (m_debugger && !isDeclStmt) {
       bool cont =
