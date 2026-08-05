@@ -148,8 +148,9 @@ void MainDevMgr::onFocusChanged(QWidget * /*oldFocus*/, QWidget *newFocus) {
   if (foundEditor) {
     connectEditor(foundEditor);
     // 焦点切换到编辑器时，同步定位树形目录到当前文件（处理拆分面板间切换的场景）
+    // 会话恢复阶段抑制定位，避免启动还原文件时自动展开/滚动目录树
     QString filePath = foundEditor->objectName();
-    if (!filePath.isEmpty()) {
+    if (!filePath.isEmpty() && !m_restoringSession) {
       m_ui->fileTree()->locateFile(filePath);
     }
   }

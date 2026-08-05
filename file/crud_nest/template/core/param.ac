@@ -2,6 +2,9 @@
 // 数据类型定义 — 字段和关联关系的强类型结构
 // ============================================================================
 
+import { snakeToPascal } from "../../../tool/tool_str.ac";
+import { mapTypeToTs, mapTypeToOrm, isPrimaryKey, isAutoIncrement, isCoinType } from "../../../tool/tool_db.ac";
+
 /// @brief 数据库列 schema（db.tableSchema() 返回的原始列信息）
 export class ColumnSchema {
   let name: String = "";         // 字段名
@@ -65,6 +68,10 @@ export class TableSchemaData {
 //
 // 核心流程：
 //   db.tableSchema() → Param.setTableData() 加工 → entity.tpl 直接取值渲染
+//
+// 说明：
+//   类型映射（mapType/mapTypeToOrm/isPrimaryKey/isAutoIncrement/isCoinType）
+//   与 snakeToPascal 已提取到 file/tool/ 供多项目复用，本类直接调用。
 // ============================================================================
 export class Param {
   let entityClass: String = "";        // 生成的 TS 实体类名，如 EnUser (由 user 派生)
@@ -73,65 +80,6 @@ export class Param {
   let fields: FieldDef[] = [];         // 加工后的字段数组
   let imports: String[] = [];          // 额外的 import 语句字符串（用于关联表）
   let relations: RelationDef[] = [];   // 关联关系配置 (OneToMany / ManyToOne 等)
-
-  // --------------------------------------------------------------------------
-  // MySQL 列类型 → TypeScript 类型 的映射表
-  //   输入：varchar(50)、int、decimal(10,2)、datetime 等
-  //   输出：number / string / Date / boolean / Coin
-  // --------------------------------------------------------------------------
-  function mapType(colType: String): String {
-    let t = colType.toLowerCase();
-
-    // 整数类型：int / tinyint / smallint / bigint → number
-    if (t.includes("int") || t.includes("tinyint") || t.includes("smallint") || t.includes("bigint")) {
-      return "number";
-    }
-    // 浮点/小数类型：decimal / float / double → Coin (自定义高精度金额类型)
-    if (t.includes("decimal") || t.includes("float") || t.includes("double")) {
-      return "Coin";
-    }
-    // 字符串类型：varchar / char / text → string
-    if (t.includes("varchar") || t.includes("char") || t.includes("text")) {
-      return "string";
-    }
-    // 日期时间类型：datetime / timestamp → Date
-    if (t.includes("datetime") || t.includes("timestamp")) {
-      return "Date";
-    }
-    // 布尔类型：boolean / bool / tinyint(1) → boolean
-    if (t.includes("boolean") || t.includes("bool") || t.includes("tinyint(1)")) {
-      return "boolean";
-    }
-    // 默认返回 string (兜底，未知类型当字符串处理)
-    return "string";
-  }
-
-  // --------------------------------------------------------------------------
-  // 判断字段是否为主键
-  //   MySQL INFORMATION_SCHEMA 中，主键列的 COLUMN_KEY = 'PRI'
-  // --------------------------------------------------------------------------
-  function isPrimaryKey(colKey: String): Bool {
-    return colKey == "PRI";
-  }
-
-  // --------------------------------------------------------------------------
-  // 判断字段是否为自增列
-  //   MySQL INFORMATION_SCHEMA 中，自增列的 EXTRA 包含 'auto_increment'
-  // --------------------------------------------------------------------------
-  function isAutoIncrement(extra: String): Bool {
-    return extra.toLowerCase().includes("auto_increment");
-  }
-
-  // --------------------------------------------------------------------------
-  // 判断字段是否为 decimal/Coin 类型（金额字段需要特殊处理）
-  //   - 数据库用 decimal(10,2) 存储
-  //   - TypeScript 用自定义 Coin 类型（高精度、防浮点误差）
-  //   - 通过 CoinTransformer 做数据库值和业务对象之间的转换
-  // --------------------------------------------------------------------------
-  function isCoinType(colType: String): Bool {
-    let t = colType.toLowerCase();
-    return t.includes("decimal") || t.includes("float") || t.includes("double");
-  }
 
   // --------------------------------------------------------------------------
   // 生成 @Column 装饰器的参数字符串
@@ -146,18 +94,18 @@ export class Param {
     let colDefault = field.colDefault;
 
     // 先映射到 TypeORM 的 type 值（varchar / int / decimal / datetime / boolean）
-    let ormType = this.mapTypeToOrm(colType);
+    let ormType = mapTypeToOrm(colType);
     let options = "{ type: '" + ormType + "'";
 
       // 非主键字段需要设置默认值（主键一般是自增，不需要 default）
-      if (!this.isPrimaryKey(field.colKey)) {
-        if (this.isCoinType(colType)) {
+      if (!isPrimaryKey(field.colKey)) {
+        if (isCoinType(colType)) {
           // decimal 金额字段：默认 0.00，精度和缩放用全局常量统一管理
           options += ", default: 0.00, precision: COIN_PRECISION, scale: COIN_SCALE, transformer: new CoinTransformer()";
         } else if (colType.includes("varchar") || colType.includes("char")) {
           // 字符串字段：默认空字符串
           options += ", default: ''";
-        } else if (colType.includes("int") && !this.isAutoIncrement(field.extra)) {
+        } else if (colType.includes("int") && !isAutoIncrement(field.extra)) {
           // 非自增的整数字段：默认 0
           options += ", default: 0";
         }
@@ -165,31 +113,6 @@ export class Param {
 
       options += " }";
     return options;
-  }
-
-  // --------------------------------------------------------------------------
-  // MySQL 列类型 → TypeORM 的 type 值
-  //   与 mapType 区别：mapType 输出的是 TS 语言类型，这里输出的是 ORM 列类型
-  //   例如 "int" 同时被 mapType 映射为 "number"，被这里映射为 "int"
-  // --------------------------------------------------------------------------
-  function mapTypeToOrm(colType: String): String {
-    let t = colType.toLowerCase();
-    if (t.includes("varchar") || t.includes("char") || t.includes("text")) {
-      return "varchar";
-    }
-    if (t.includes("int") || t.includes("tinyint") || t.includes("smallint") || t.includes("bigint")) {
-      return "int";
-    }
-    if (t.includes("decimal") || t.includes("float") || t.includes("double")) {
-      return "decimal";
-    }
-    if (t.includes("datetime") || t.includes("timestamp")) {
-      return "datetime";
-    }
-    if (t.includes("boolean") || t.includes("bool")) {
-      return "boolean";
-    }
-    return "varchar";
   }
 
   // --------------------------------------------------------------------------
@@ -216,7 +139,6 @@ export class Param {
   // 输出：本实例的 fields / imports / relations 被填充，entity.tpl 可以直接取值
   // --------------------------------------------------------------------------
 
-
   function setTableData(data: TableSchemaData): Void {
     this.tableName = data.tableName;
     this.tableDesc = data.tableDesc;
@@ -226,7 +148,7 @@ export class Param {
     //   例如 "news\\news" → "news" → 首字母大写 → "EnNews"
     let parts = data.modelName.split("\\");
     let lastPart = parts[parts.length - 1];
-    this.entityClass = "En" + this.line2UpLow(this.tableName);
+    this.entityClass = "En" + snakeToPascal(this.tableName);
 
     // ── 处理字段：把原始 schema 列转换成模板需要的结构 ────────────────
     this.fields = [];
@@ -238,10 +160,10 @@ export class Param {
       field.colKey = col.key;                                    // 列索引类型 ("PRI" = 主键)
       field.colDefault = col["default"];                        // 列默认值（"default" 是 AC 关键字，用方括号访问）
       field.extra = col.extra;                                   // 列附加信息 ("auto_increment" = 自增)
-      field.tsType = this.mapType(col.type);                     // → TypeScript 类型
-      field.isPrimary = this.isPrimaryKey(col.key);              // → 是否主键
-      field.isAutoInc = this.isAutoIncrement(col.extra);         // → 是否自增
-      field.isCoin = this.isCoinType(col.type);                  // → 是否金额类型
+      field.tsType = mapTypeToTs(col.type);                      // → TypeScript 类型
+      field.isPrimary = isPrimaryKey(col.key);                   // → 是否主键
+      field.isAutoInc = isAutoIncrement(col.extra);              // → 是否自增
+      field.isCoin = isCoinType(col.type);                       // → 是否金额类型
       field.columnOptions = this.getColumnOptions(field);        // → @Column 的完整参数字符串
       this.fields.append(field);
     }
@@ -269,20 +191,4 @@ export class Param {
       }
     }
   }
-
-
-  function line2UpLow(str: String): String {
-    let arr: String[] = str.split("_");
-    let res = "";
-    for (let i = 0; i < arr.length; i++) {
-      //首字母大写
-      res += arr[i].substring(0, 1).toUpperCase() + arr[i].substring(1);
-    }
-    return res;
-  }
-
-
 }
-
-
-

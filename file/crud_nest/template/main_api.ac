@@ -20,8 +20,8 @@
 ///   - templates 可选，模板配置数组（省略时使用本文件默认模板）
 /// ----------------------------------------------------------------------------
 
-import { Param } from "./param.ac";
-import { QueryData } from "./query_data.ac";
+import { Param } from "./core/param.ac";
+import { QueryData } from "./core/query_data.ac";
 import { escapeJsStr, capitalizeFirst } from "../../tool/tool_str.ac";
 
 /// @brief 模板配置（一个模板对应一个生成的代码文件）

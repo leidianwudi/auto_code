@@ -1,0 +1,78 @@
+/// @file tool_db.ac — 数据库类型映射通用工具函数
+/// @brief 供各项目 .ac 脚本复用的 MySQL 类型 → TypeScript/TypeORM 映射函数
+///
+/// 从 crud_nest/template/core/param.ac 的 Param 类方法中提取，
+/// 与字符串工具（tool_str.ac）分离，按用途归类到 tool_db.ac。
+/// 各项目入口脚本或模板模块通过 import 引用。
+
+/// @brief MySQL 列类型 → TypeScript 类型
+/// @param colType 原始 MySQL 类型，如 varchar(50)、int、decimal(10,2)、datetime
+/// @return number / string / Date / boolean / Coin
+export function mapTypeToTs(colType: String): String {
+  let t = colType.toLowerCase();
+
+  // 整数类型：int / tinyint / smallint / bigint → number
+  if (t.includes("int") || t.includes("tinyint") || t.includes("smallint") || t.includes("bigint")) {
+    return "number";
+  }
+  // 浮点/小数类型：decimal / float / double → Coin (自定义高精度金额类型)
+  if (t.includes("decimal") || t.includes("float") || t.includes("double")) {
+    return "Coin";
+  }
+  // 字符串类型：varchar / char / text → string
+  if (t.includes("varchar") || t.includes("char") || t.includes("text")) {
+    return "string";
+  }
+  // 日期时间类型：datetime / timestamp → Date
+  if (t.includes("datetime") || t.includes("timestamp")) {
+    return "Date";
+  }
+  // 布尔类型：boolean / bool / tinyint(1) → boolean
+  if (t.includes("boolean") || t.includes("bool") || t.includes("tinyint(1)")) {
+    return "boolean";
+  }
+  // 默认返回 string (兜底，未知类型当字符串处理)
+  return "string";
+}
+
+/// @brief MySQL 列类型 → TypeORM 的 type 值
+/// @param colType 原始 MySQL 类型
+/// @return varchar / int / decimal / datetime / boolean
+export function mapTypeToOrm(colType: String): String {
+  let t = colType.toLowerCase();
+  if (t.includes("varchar") || t.includes("char") || t.includes("text")) {
+    return "varchar";
+  }
+  if (t.includes("int") || t.includes("tinyint") || t.includes("smallint") || t.includes("bigint")) {
+    return "int";
+  }
+  if (t.includes("decimal") || t.includes("float") || t.includes("double")) {
+    return "decimal";
+  }
+  if (t.includes("datetime") || t.includes("timestamp")) {
+    return "datetime";
+  }
+  if (t.includes("boolean") || t.includes("bool")) {
+    return "boolean";
+  }
+  return "varchar";
+}
+
+/// @brief 判断字段是否为主键
+/// @param colKey MySQL INFORMATION_SCHEMA 的 COLUMN_KEY 值（'PRI' = 主键）
+export function isPrimaryKey(colKey: String): Bool {
+  return colKey == "PRI";
+}
+
+/// @brief 判断字段是否为自增列
+/// @param extra MySQL INFORMATION_SCHEMA 的 EXTRA 值（含 'auto_increment' = 自增）
+export function isAutoIncrement(extra: String): Bool {
+  return extra.toLowerCase().includes("auto_increment");
+}
+
+/// @brief 判断字段是否为 decimal/Coin 类型（金额字段需要特殊处理）
+/// @param colType 原始 MySQL 类型
+export function isCoinType(colType: String): Bool {
+  let t = colType.toLowerCase();
+  return t.includes("decimal") || t.includes("float") || t.includes("double");
+}

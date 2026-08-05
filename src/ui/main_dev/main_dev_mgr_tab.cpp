@@ -207,7 +207,8 @@ void MainDevMgr::onCurrentTabChanged(int index) {
     QFileInfo fi(fullPath);
     m_ui->setWindowTitle(MainDevUi::fileTitle(fi.fileName()));
     // 标签页切换时，同步定位树形目录到当前文件
-    m_ui->fileTree()->locateFile(fullPath);
+    // （会话恢复阶段由 m_restoringSession 抑制，避免破坏保存的展开状态）
+    if (!m_restoringSession) m_ui->fileTree()->locateFile(fullPath);
   }
 
   // ── 同步可视化切换按钮状态 ──

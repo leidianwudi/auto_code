@@ -225,10 +225,11 @@ void TreeDir::onItemClicked(QTreeWidgetItem *item, int column) {
       // 单击文本/图标区域 → 打开文件
       emit fileActivated(filePath);
     }
-  } else {
-    // .ac / .tpl 文件：直接打开
-    emit fileActivated(filePath);
   }
+  // .ac / .tpl 文件：单击仅选中，双击才打开。
+  // 若单击即打开，会在双击的两次点击之间抢走焦点并触发 locateFile 滚动目录树，
+  // 导致第二次点击落在其它节点上，出现"刷新定位到其它节点"的异常。
+  // 文件打开统一由 onItemDoubleClicked 处理。
 }
 
 void TreeDir::onItemDoubleClicked(QTreeWidgetItem *item, int column) {
@@ -503,9 +504,15 @@ void TreeDir::applyCheckedToTree(const QStringList &checkedRelPaths) {
 }
 
 void TreeDir::applyExpandedToTree(const QStringList &expandedRelPaths) {
+  // 动画开启时，对尚未显示（程序启动阶段）或不可见节点的 setExpanded 会被打断/
+  // 延迟，导致恢复的展开状态失效。这里先临时关闭动画，确保展开状态被正确写入。
+  const bool wasAnimated = isAnimated();
+  setAnimated(false);
+
   if (expandedRelPaths.isEmpty()) {
     // 无展开记录 → 默认全部展开
     expandAll();
+    setAnimated(wasAnimated);
     return;
   }
 
@@ -520,6 +527,8 @@ void TreeDir::applyExpandedToTree(const QStringList &expandedRelPaths) {
     QTreeWidgetItem *item = pathMap.value(rel);
     if (item) item->setExpanded(true);
   }
+
+  setAnimated(wasAnimated);
 }
 
 void TreeDir::scheduleSave() {

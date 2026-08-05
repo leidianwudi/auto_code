@@ -22,6 +22,13 @@ void UndeclaredIdentValidator::validate(const Block &program, const QSet<QString
   visitBlock(program);
 }
 
+/// 每个语句在递归前记录其所属文件，供错误消息定位到真实来源
+/// （import 导入的模块语句携带各自的 filePath，与入口脚本文件不同）
+void UndeclaredIdentValidator::visitStmt(const Block::Stmt &stmt) {
+  if (!stmt.filePath.isEmpty()) m_currentFile = stmt.filePath;
+  AstVisitor::visitStmt(stmt);
+}
+
 void UndeclaredIdentValidator::collectValidationInfo(const Block &block) {
   for (const auto &stmt : block.stmts) {
     switch (stmt.kind) {
@@ -57,7 +64,9 @@ void UndeclaredIdentValidator::collectValidationInfo(const Block &block) {
 
 void UndeclaredIdentValidator::reportError(const QString &msg, int line) {
   if (m_errors) {
-    QString fileTag = m_filePath.isEmpty() ? QString() : QFileInfo(m_filePath).fileName();
+    // 优先使用当前语句所属文件（import 导入的真实文件），否则回退到入口文件
+    const QString &file = m_currentFile.isEmpty() ? m_filePath : m_currentFile;
+    QString fileTag = file.isEmpty() ? QString() : QFileInfo(file).fileName();
     QString location =
         line > 0 ? QStringLiteral("at line %1").arg(line) : QStringLiteral("(line unknown)");
     if (!fileTag.isEmpty()) {
@@ -175,8 +184,16 @@ void UndeclaredIdentValidator::visitFuncCallExpr(const Expr &expr) {
   // 检查函数名是否已知（内置函数或用户自定义函数）
   if (!AcBuiltin::kAll.contains(expr.funcCall.name) && !m_scopeVars.contains(expr.funcCall.name)) {
     if (m_errors) {
-      m_errors->append(QStringLiteral("unknown function '%1' at line %2")
-                           .arg(expr.funcCall.name, QString::number(expr.line)));
+      // 优先使用当前语句所属文件（import 导入的真实文件），否则回退到入口文件
+      const QString &file = m_currentFile.isEmpty() ? m_filePath : m_currentFile;
+      QString fileTag = file.isEmpty() ? QString() : QFileInfo(file).fileName();
+      QString loc = QStringLiteral("at line %1").arg(expr.line);
+      if (!fileTag.isEmpty()) {
+        m_errors->append(
+            QStringLiteral("unknown function '%1' %2 in %3").arg(expr.funcCall.name, loc, fileTag));
+      } else {
+        m_errors->append(QStringLiteral("unknown function '%1' %2").arg(expr.funcCall.name, loc));
+      }
     }
   }
 

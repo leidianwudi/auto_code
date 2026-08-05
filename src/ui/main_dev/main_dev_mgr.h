@@ -209,6 +209,10 @@ protected:
   // 断点持久化：按文件路径保存断点（行号 → 是否生效），关闭后重新打开仍保留
   QHash<QString, QMap<int, bool>> m_persistedBreakpoints;
 
+  // 会话恢复：为 true 时抑制由打开文件触发的目录树定位，
+  // 避免启动还原上次打开的文件时自动展开/滚动目录树，破坏保存的展开状态
+  bool m_restoringSession = false;
+
   /// 启动一次调试会话（收集当前编辑器断点，运行脚本）
   void startDebugSession();
 };

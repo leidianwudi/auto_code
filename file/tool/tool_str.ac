@@ -35,3 +35,16 @@ export function capitalizeFirst(s: String): String {
   }
   return s[0].toUpperCase() + s.substring(1);
 }
+
+/// @brief 下划线命名 → 帕斯卡命名（PascalCase）
+/// @param str 下划线字符串，如 "user_role"
+/// @return 帕斯卡命名，如 "user_role" → "UserRole"
+export function snakeToPascal(str: String): String {
+  let arr: String[] = str.split("_");
+  let res = "";
+  for (let i = 0; i < arr.length; i++) {
+    // 每段首字母大写
+    res += arr[i].substring(0, 1).toUpperCase() + arr[i].substring(1);
+  }
+  return res;
+}

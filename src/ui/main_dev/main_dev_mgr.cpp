@@ -766,6 +766,10 @@ void MainDevMgr::saveOpenFilesToSettings() {
 }
 
 void MainDevMgr::restoreOpenFilesFromSettings() {
+  // 还原期间抑制目录树定位：打开文件会触发 setCurrentIndex/焦点变化，
+  // 进而 locateFile 自动展开并滚动目录树，破坏保存的展开状态
+  m_restoringSession = true;
+
   QSettings s(sessionSettingsPath(), QSettings::IniFormat);
   const QList<QVariant> groups = s.value(QStringLiteral("session/editorPanels")).toList();
 
@@ -790,6 +794,8 @@ void MainDevMgr::restoreOpenFilesFromSettings() {
     auto *panel = m_ui->editorPanelAt(pi);
     if (panel && panel->count() == 0) m_ui->removeEditorPanelAt(pi);
   }
+
+  m_restoringSession = false;
 }
 
 /// 收集全部断点（已打开编辑器 + 已关闭的持久化断点），供调试器按文件命中

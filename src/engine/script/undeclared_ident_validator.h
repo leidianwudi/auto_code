@@ -30,6 +30,7 @@ public:
 protected:
   // ── AstVisitor 重写 ──
   // 只重写需要自定义逻辑的方法，其余由 AstVisitor 基类虚分派处理
+  void visitStmt(const Block::Stmt &stmt) override;
   void visitAssignStmt(const AssignStmt &as) override;
   void visitForStmt(const ForStmt &fs) override;
   void visitClassDef(const ClassDef &cd) override;
@@ -69,5 +70,6 @@ private:
   QStringList *m_errors = nullptr;
   QSet<QString> m_scopeVars;
   ValidationContext m_ctx;
-  QString m_filePath;  ///< 当前文件路径（用于错误消息）
+  QString m_filePath;     ///< 当前文件路径（用于错误消息）
+  QString m_currentFile;  ///< 当前正在检查的语句所属文件（import 导入文件的真实路径）
 };
