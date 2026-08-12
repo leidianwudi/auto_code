@@ -6,26 +6,30 @@
 // 构造函数：初始化所有高亮规则
 // 注释规则单独存储在 m_commentFormat 中，由 highlightBlock 统一处理
 // m_rules 只包含非注释的 JSON 语法元素规则（避免注释内的内容被错误着色）
-LightJson::LightJson(QTextDocument *parent) : QSyntaxHighlighter(parent) {
+LightJson::LightJson(QTextDocument *parent) : QSyntaxHighlighter(parent) { buildRules(); }
+
+// 重建所有高亮规则（构造与主题刷新共用）
+void LightJson::buildRules() {
   using namespace LightColor;
+  m_rules.clear();
 
   // ── 注释格式（灰色斜体，与 AC 脚本高亮器风格一致） ──
   // 注释规则不放入 m_rules，而是由 highlightBlock 单独处理
   // 这样可以确保注释内的数字、关键字等不会被其他规则覆盖
-  m_commentFormat.setForeground(comment);
+  m_commentFormat.setForeground(comment());
   m_commentFormat.setFontItalic(true);
 
   // ── 1. JSON 键名（蓝色加粗） ──
   // 匹配带引号的字符串后跟冒号和可选空格，例："name": 或 "age" :
   QTextCharFormat keyFormat;
-  keyFormat.setForeground(keyword);
+  keyFormat.setForeground(keyword());
   keyFormat.setFontWeight(QFont::Bold);
   m_rules.append({QRegularExpression(QStringLiteral("\"[^\"]+\"\\s*:")), keyFormat});
 
   // ── 1b. JSON5 无引号键名（蓝色加粗） ──
   // 匹配无引号的标识符后跟冒号，例：name: 或 $key:
   QTextCharFormat key5Format;
-  key5Format.setForeground(keyword);
+  key5Format.setForeground(keyword());
   key5Format.setFontWeight(QFont::Bold);
   m_rules.append({QRegularExpression(QStringLiteral("\\b[a-zA-Z_$][\\w$]*\\s*:")), key5Format});
 
@@ -33,7 +37,7 @@ LightJson::LightJson(QTextDocument *parent) : QSyntaxHighlighter(parent) {
   // 匹配所有带引号的字符串（包括键名，会被键名规则覆盖）
   // 例："Hello World"、"/path/to/file"
   QTextCharFormat stringFormat;
-  stringFormat.setForeground(variable);
+  stringFormat.setForeground(variable());
   m_rules.append({QRegularExpression(QStringLiteral("\"[^\"]*\"")), stringFormat});
 
   // ── 2b. JSON5 单引号字符串值（绿色） ──
@@ -43,14 +47,14 @@ LightJson::LightJson(QTextDocument *parent) : QSyntaxHighlighter(parent) {
   // ── 3. 数字（橙色加粗） ──
   // 支持整数、浮点数、负数，例：42、3.14、-100
   QTextCharFormat numberFormat;
-  numberFormat.setForeground(number);
+  numberFormat.setForeground(number());
   numberFormat.setFontWeight(QFont::Bold);
   m_rules.append({QRegularExpression(QStringLiteral("\\b-?\\d+(?:\\.\\d+)?\\b")), numberFormat});
 
   // ── 4. 布尔值（红色加粗） ──
   // 匹配 true 和 false 关键字
   QTextCharFormat boolFormat;
-  boolFormat.setForeground(boolean_);
+  boolFormat.setForeground(boolean_());
   boolFormat.setFontWeight(QFont::Bold);
   m_rules.append(
       {QRegularExpression(QStringLiteral("\\b(?:") + QString::fromLatin1(AcKeyword::kTrue) +
@@ -61,9 +65,15 @@ LightJson::LightJson(QTextDocument *parent) : QSyntaxHighlighter(parent) {
   // ── 5. null 值（紫色加粗） ──
   // 匹配 null 关键字
   QTextCharFormat nullFormat;
-  nullFormat.setForeground(builtin);
+  nullFormat.setForeground(builtin());
   nullFormat.setFontWeight(QFont::Bold);
   m_rules.append({QRegularExpression(QStringLiteral("\\bnull\\b")), nullFormat});
+}
+
+// 重新从 SettingStore 读取颜色并刷新高亮
+void LightJson::reloadColors() {
+  buildRules();
+  rehighlight();
 }
 
 // 对单个文本块进行高亮处理

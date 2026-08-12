@@ -341,34 +341,54 @@ QWidget *JsonVueEditor::buildButtonsSection() {
  *       %2 占位符替换为 AuiStyle::borderColor() 返回的边框颜色。
  */
 void JsonVueEditor::applyStyle() {
-  QString qss =
-      QStringLiteral(
-          // ── QGroupBox 分组容器样式 ──
-          "QGroupBox {"
-          "  font-size: %1px; font-weight: bold;"        // 加粗标题
-          "  border: 1px solid %4; border-radius: 4px;"  // 边框 + 圆角
-          "  margin-top: 10px; padding-top: 5px;"        // 顶部留白 + 标题与内容间距
-          "}"
-          // ── QGroupBox 标题子控件样式 ──
-          "QGroupBox::title {"
-          "  subcontrol-origin: margin; left: 2px; padding: 0 2px;"  // 标题定位
-          "}"
-          // ── QLabel 标签样式 ──
-          "QLabel { font-size: %1px; }"
-          // ── QLineEdit 输入框样式 ──
-          "QLineEdit { padding: 1px 2px; font-size: %1px; }"
-          // ── QComboBox 下拉框样式（去掉内边距，给文字最大空间）──
-          "QComboBox { padding: 0px; font-size: %1px; }"
-          "QComboBox QAbstractItemView::item { padding: 0px 2px; }"
-          // ── QPushButton 按钮样式 ──
-          "QPushButton { padding: 2px 8px; font-size: %1px; }"
-          // ── QTableWidget 表格样式 ──
-          "QTableWidget { font-size: %1px; }"
-          // ── QHeaderView 表头样式 ──
-          "QHeaderView::section { padding: 2px; font-size: %1px; }")
-          .arg(QString::number(AuiStyle::dialogFontSize()), AuiStyle::borderColor().name());
+  // 从主题取色，保证深色/浅色下表格行线、表头、标签、分组标题、输入框均清晰可读
+  const auto fontPx = QString::number(AuiStyle::dialogFontSize());
+  const auto text = AuiStyle::textColor().name();
+  const auto border = AuiStyle::borderColor().name();
+  const auto bg = AuiStyle::panelBackground().name();
+  const auto headerBg = AuiStyle::background().name();
+  const auto alt = AuiStyle::listAlternateBackground().name();
+
+  QString qss = QStringLiteral(
+                    // ── QGroupBox 分组容器 + 标题 ──
+                    "QGroupBox {"
+                    "  font-size: %1px; font-weight: bold; color: %2;"
+                    "  border: 1px solid %3; border-radius: 4px;"
+                    "  margin-top: 10px; padding-top: 5px;"
+                    "  background: transparent;"
+                    "}"
+                    "QGroupBox::title {"
+                    "  subcontrol-origin: margin; left: 2px; padding: 0 2px; color: %2;"
+                    "}"
+                    // ── QLabel 标签 ──
+                    "QLabel { font-size: %1px; color: %2; background: transparent; }"
+                    // ── QCheckBox 复选框 ──
+                    "QCheckBox { font-size: %1px; color: %2; }"
+                    // ── QLineEdit 输入框 ──
+                    "QLineEdit { padding: 1px 2px; font-size: %1px;"
+                    "  background: %4; color: %2; border: 1px solid %3; }"
+                    // ── QComboBox 下拉框 ──
+                    "QComboBox { padding: 0px; font-size: %1px; color: %2; background: %4; }"
+                    "QComboBox QAbstractItemView { background: %4; color: %2;"
+                    "  selection-background-color: %5; selection-color: %2; }"
+                    // ── QPushButton 按钮 ──
+                    "QPushButton { padding: 2px 8px; font-size: %1px; color: %2; }"
+                    // ── QTableWidget 表格（背景/文字/行线/交替行色）──
+                    "QTableWidget { font-size: %1px; background: %4; color: %2;"
+                    "  gridline-color: %3; alternate-background-color: %5; }"
+                    "QTableWidget::item { color: %2; }"
+                    // ── QHeaderView 表头 ──
+                    "QHeaderView::section { padding: 2px; font-size: %1px;"
+                    "  background: %6; color: %2; border: none;"
+                    "  border-right: 1px solid %3; border-bottom: 1px solid %3; }"
+                    // ── 滚动条 ──
+                    "QScrollBar:vertical, QScrollBar:horizontal { background: %4; }")
+                    .arg(fontPx, text, border, bg, alt, headerBg);
   setStyleSheet(qss);
 }
+
+/// 主题/颜色变化后重新应用样式表
+void JsonVueEditor::reloadStyle() { applyStyle(); }
 
 // ════════════════════════════════════════════════════════════
 //  辅助函数：配置属性存储/读取/摘要
@@ -386,15 +406,13 @@ protected:
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
 
-    // 背景
-    QColor bg = hasFocus() ? palette().color(QPalette::Highlight) : palette().color(QPalette::Base);
+    // 背景（直接用主题色，深色主题下也能看清）
+    QColor bg = hasFocus() ? AuiStyle::listSelectionBackground() : AuiStyle::panelBackground();
     p.fillRect(rect(), bg);
 
     // 文字
     QRect textRect = rect().adjusted(2, 0, -18, 0);
-    QColor textColor =
-        hasFocus() ? palette().color(QPalette::HighlightedText) : palette().color(QPalette::Text);
-    p.setPen(textColor);
+    p.setPen(AuiStyle::textColor());
     p.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, currentText());
 
     // 向下箭头
@@ -403,7 +421,7 @@ protected:
     arrowOpt.rect = arrowRect.adjusted(3, 0, -3, 0);
     arrowOpt.palette = palette();
     arrowOpt.state = QStyle::State_Enabled;
-    p.setPen(textColor);
+    p.setPen(AuiStyle::textColor());
     style()->drawPrimitive(QStyle::PE_IndicatorArrowDown, &arrowOpt, &p, this);
   }
 };

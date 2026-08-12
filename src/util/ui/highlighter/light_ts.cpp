@@ -7,7 +7,6 @@
 
 #include "light_color.h"
 
-
 /**
  * @brief 构造函数
  * @param parent 父文档
@@ -22,34 +21,38 @@
  * - 数字（紫色）：整数和浮点数
  * - 装饰器（洋红色）：@Component 等
  */
-LightTs::LightTs(QTextDocument *parent) : QSyntaxHighlighter(parent) {
+LightTs::LightTs(QTextDocument *parent) : QSyntaxHighlighter(parent) { buildRules(); }
+
+// 重建所有高亮规则（构造与主题刷新共用）
+void LightTs::buildRules() {
   using namespace LightColor;
+  m_rules.clear();
 
   // ── 关键字格式（蓝色加粗） ──
   QTextCharFormat keywordFormat;
-  keywordFormat.setForeground(keyword);
+  keywordFormat.setForeground(keyword());
   keywordFormat.setFontWeight(QFont::Bold);
 
   // ── 类型格式（青色） ──
   QTextCharFormat typeFormat;
-  typeFormat.setForeground(type);
+  typeFormat.setForeground(type());
 
   // ── 字符串格式（橙色） ──
   QTextCharFormat stringFormat;
-  stringFormat.setForeground(string_);
+  stringFormat.setForeground(string_());
 
   // ── 注释格式（灰色斜体） ──
   QTextCharFormat commentFormat;
-  commentFormat.setForeground(comment);
+  commentFormat.setForeground(comment());
   commentFormat.setFontItalic(true);
 
   // ── 数字格式（紫色） ──
   QTextCharFormat numberFormat;
-  numberFormat.setForeground(builtin);
+  numberFormat.setForeground(builtin());
 
   // ── 装饰器格式（洋红色） ──
   QTextCharFormat decoratorFormat;
-  decoratorFormat.setForeground(decorator);
+  decoratorFormat.setForeground(decorator());
 
   // TypeScript 关键字列表
   // 包含 ES6+ 关键字和 TypeScript 特有关键字
@@ -106,6 +109,12 @@ LightTs::LightTs(QTextDocument *parent) : QSyntaxHighlighter(parent) {
   m_rules.append({QRegularExpression("@\\w+"), decoratorFormat});
 }
 
+// 重新从 SettingStore 读取颜色并刷新高亮
+void LightTs::reloadColors() {
+  buildRules();
+  rehighlight();
+}
+
 /**
  * @brief 对单个文本块进行高亮处理
  * @param text 当前行的文本内容
@@ -151,7 +160,7 @@ void LightTs::highlightBlock(const QString &text) {
     }
 
     QTextCharFormat commentFormat;
-    commentFormat.setForeground(LightColor::comment);
+    commentFormat.setForeground(LightColor::comment());
     commentFormat.setFontItalic(true);
     setFormat(startIndex, commentLength, commentFormat);
 

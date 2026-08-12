@@ -38,6 +38,9 @@ public:
   /// 获取当前日志行数
   int logLineCount() const { return m_lineNumber; }
 
+  /// 主题切换后重新应用样式表（背景/文字色随主题更新）
+  void reloadStyle();
+
 private:
   // ════════════════════════════════════════════════════════════
   //  行号区域

@@ -119,6 +119,8 @@ qt_add_executable(auto_code
     src/util/ui/highlighter/light_ac.h
     src/util/ui/highlighter/light_ac.cpp
     src/util/ui/aui_mgr.h
+    src/util/ui/setting_store.h
+    src/util/ui/setting_store.cpp
     src/util/ui/component/aui_style.h
     src/util/ui/component/aui_style.cpp
     src/util/ui/component/aui_button.h
@@ -183,12 +185,12 @@ qt_add_executable(auto_code
     src/ui/json_vue/icon_picker_dialog.cpp
     src/ui/json_vue/json_vue_widget.h
     src/ui/json_vue/json_vue_widget.cpp
-    src/ui/main_dev/help_key/help_key_model.h
-    src/ui/main_dev/help_key/help_key_model.cpp
-    src/ui/main_dev/help_key/help_key_ui.h
-    src/ui/main_dev/help_key/help_key_ui.cpp
-    src/ui/main_dev/help_key/help_key_mgr.h
-    src/ui/main_dev/help_key/help_key_mgr.cpp
+    src/ui/setting/setting_model.h
+    src/ui/setting/setting_model.cpp
+    src/ui/setting/setting_ui.h
+    src/ui/setting/setting_ui.cpp
+    src/ui/setting/setting_mgr.h
+    src/ui/setting/setting_mgr.cpp
 )
 
 target_include_directories(auto_code PRIVATE

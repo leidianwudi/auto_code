@@ -17,9 +17,11 @@
 // ════════════════════════════════════════════════════════════
 
 JsonVueWidget::JsonVueWidget(QWidget *parent) : QStackedWidget(parent) {
-  // 代码编辑器
+  // 代码编辑器（高亮器通过 setSyntaxHighlighter 注册，主题切换时同步刷新，
+  // 与普通 .json 文件使用同一个 LightJson，保证文字颜色一致）
   m_editor = new CodeEditor;
-  new LightJson(m_editor->document());
+  auto *hl = new LightJson(m_editor->document());
+  m_editor->setSyntaxHighlighter(hl);
   m_editor->setValidationMode(CodeEditor::JsonValidation);
   addWidget(m_editor);
 
@@ -27,7 +29,8 @@ JsonVueWidget::JsonVueWidget(QWidget *parent) : QStackedWidget(parent) {
   m_visual = new JsonVueEditor;
   addWidget(m_visual);
 
-  // 默认显示代码编辑器
+  // 默认显示代码编辑器；打开文件时由 MainDevMgr 依据可视化开关决定
+  // （switchToVisual() 会先同步内容再切换，避免可视化视图未填充）
   setCurrentIndex(0);
 
   // 可视化编辑器配置变化时，写回代码编辑器
@@ -87,9 +90,7 @@ void JsonVueWidget::syncVisualToCode() {
   m_syncing = false;
 }
 
-void JsonVueWidget::setBaseUrl(const QString &baseUrl) {
-  m_visual->setBaseUrl(baseUrl);
-}
+void JsonVueWidget::setBaseUrl(const QString &baseUrl) { m_visual->setBaseUrl(baseUrl); }
 
 void JsonVueWidget::loadHttpConfigFromAcFile(const QString &acFilePath) {
   m_visual->loadHttpConfigFromAcFile(acFilePath);

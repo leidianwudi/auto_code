@@ -23,6 +23,7 @@
 #include "src/util/ui/aui_mgr.h"
 
 class QTabWidget;
+class QTimer;
 class CodeEditor;
 class MainDevUi;
 class MainDevModel;
@@ -180,6 +181,8 @@ private:
                           CodeEditor *sourceEditor);
   /// 保存前同步 JsonVueWidget 可视化数据到代码编辑器
   void syncJsonVueBeforeSave();
+  /// 应用设置后刷新全局样式与编辑器高亮（主题/颜色变化时调用）
+  void refreshTheme();
   /// 推入导航历史记录
   void pushNavigationHistory(const QString &filePath, int line, int column = 0);
   /// 跳转到指定位置（内部使用，不推入历史）
@@ -209,9 +212,12 @@ protected:
   // 断点持久化：按文件路径保存断点（行号 → 是否生效），关闭后重新打开仍保留
   QHash<QString, QMap<int, bool>> m_persistedBreakpoints;
 
-  // 会话恢复：为 true 时抑制由打开文件触发的目录树定位，
-  // 避免启动还原上次打开的文件时自动展开/滚动目录树，破坏保存的展开状态
+  /// 会话恢复：为 true 时抑制由打开文件触发的目录树定位，
+  /// 避免启动还原上次打开的文件时自动展开/滚动目录树，破坏保存的展开状态
   bool m_restoringSession = false;
+
+  /// 主题刷新防抖定时器：合并短时间内多次颜色变化，减少切换卡顿
+  QTimer *m_themeTimer = nullptr;
 
   /// 启动一次调试会话（收集当前编辑器断点，运行脚本）
   void startDebugSession();

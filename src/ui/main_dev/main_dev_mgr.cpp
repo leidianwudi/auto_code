@@ -14,6 +14,8 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QDebug>
+#include <QDialog>
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
@@ -27,6 +29,7 @@
 #include <QTabWidget>
 #include <QTextBlock>
 #include <QTextCursor>
+#include <QToolButton>
 #include <QtConcurrent/QtConcurrent>
 
 #include "main_dev_model.h"
@@ -34,10 +37,14 @@
 #include "main_dev_ui_ext.h"
 #include "src/engine/ac_language.h"
 #include "src/engine/script/ac_engine.h"
+#include "src/ui/json_vue/json_vue_editor.h"
 #include "src/ui/json_vue/json_vue_widget.h"
-#include "src/ui/main_dev/help_key/help_key_mgr.h"
+#include "src/ui/setting/setting_mgr.h"
 #include "src/util/common/path_resolver.h"
 #include "src/util/ui/code/code_editor.h"
+#include "src/util/ui/component/aui_button.h"
+#include "src/util/ui/component/aui_style.h"
+#include "src/util/ui/setting_store.h"
 
 // ──────────────────────────────────────────────────────────────
 //  静态方法（通过单例转发）
@@ -112,14 +119,16 @@ QWidget *MainDevMgr::onCreateWindow() {
   loadBreakpointsFromDisk();
   refreshBreakpointList();
 
+  // ── 恢复可视化编辑按钮状态 ──
+  // 必须在还原文件之前设置，否则 openFileInEditor 打开 .jsonvue 时
+  // visualToggleBtn()->isChecked() 仍为 false，导致无法按按钮状态切到可视化模式
+  m_ui->visualToggleBtn()->setChecked(m_ui->fileTree()->visualToggle());
+
   // ── 恢复上次打开的文件（程序重启后还原） ──
   restoreOpenFilesFromSettings();
 
   // ── 还原窗口几何与分割器大小（在还原文件/面板之后，确保面板数量匹配） ──
   m_ui->restoreLayout();
-
-  // ── 恢复可视化编辑按钮状态 ──
-  m_ui->visualToggleBtn()->setChecked(m_ui->fileTree()->visualToggle());
 
   return m_ui;
 }
@@ -140,6 +149,17 @@ void MainDevMgr::initUi() {
     saveBreakpointsToDisk();
     saveOpenFilesToSettings();
   });
+
+  // ── 设置：打开设置对话框，并在设置变化时实时刷新主题 ──
+  connect(m_ui->settingsAction(), &QAction::triggered, this, []() { SettingMgr::ins().open(); });
+  SettingStore &store = SettingStore::ins();
+  // 防抖：主题/颜色变化时短暂延迟后一次性刷新，合并取色器拖动产生的连续信号，避免卡顿
+  m_themeTimer = new QTimer(this);
+  m_themeTimer->setSingleShot(true);
+  m_themeTimer->setInterval(60);
+  connect(m_themeTimer, &QTimer::timeout, this, &MainDevMgr::refreshTheme);
+  connect(&store, &SettingStore::themeChanged, m_themeTimer, qOverload<>(&QTimer::start));
+  connect(&store, &SettingStore::colorsChanged, m_themeTimer, qOverload<>(&QTimer::start));
 }
 
 /// 文件打开、帮助、重命名、删除信号
@@ -161,8 +181,6 @@ void MainDevMgr::connectFileActions() {
   connect(m_ui->fileTree(), &TreeDir::fileActivated, this,
           [this](const QString &fp) { openFileInEditor(fp); });
 
-  // ── 帮助 → 快捷键 ──
-  connect(m_ui->helpKeyAction(), &QAction::triggered, this, []() { HelpKeyMgr::ins().open(); });
   connect(m_ui->fileTree(), &TreeDir::renameRequested, this, &MainDevMgr::onRenameFile);
   connect(m_ui->fileTree(), &TreeDir::deleteRequested, this, &MainDevMgr::onDeleteFile);
   connect(qApp, &QApplication::focusChanged, this, &MainDevMgr::onFocusChanged);
@@ -743,6 +761,7 @@ static QString sessionSettingsPath() {
 void MainDevMgr::saveOpenFilesToSettings() {
   // 按编辑器面板分组保存（还原拆分数量与每个面板的文件）
   QList<QVariant> groups;
+  QList<QVariant> activeIdxes;
   for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
     auto *tabs = m_ui->editorPanelAt(pi);
     if (!tabs) continue;
@@ -760,9 +779,12 @@ void MainDevMgr::saveOpenFilesToSettings() {
     }
     if (files.isEmpty()) continue;  // 跳过空面板
     groups << QVariant(files);
+    // 保存当前激活标签页，保证重启后仍停留在关闭前正在编辑的文件
+    activeIdxes << tabs->currentIndex();
   }
   QSettings s(sessionSettingsPath(), QSettings::IniFormat);
   s.setValue(QStringLiteral("session/editorPanels"), QVariant(groups));
+  s.setValue(QStringLiteral("session/activeIndexes"), QVariant(activeIdxes));
 }
 
 void MainDevMgr::restoreOpenFilesFromSettings() {
@@ -772,6 +794,7 @@ void MainDevMgr::restoreOpenFilesFromSettings() {
 
   QSettings s(sessionSettingsPath(), QSettings::IniFormat);
   const QList<QVariant> groups = s.value(QStringLiteral("session/editorPanels")).toList();
+  const QList<QVariant> activeIdxes = s.value(QStringLiteral("session/activeIndexes")).toList();
 
   QTabWidget *target = nullptr;  // nullptr → 打开到默认（第一个）面板
   for (int gi = 0; gi < groups.size(); ++gi) {
@@ -779,12 +802,16 @@ void MainDevMgr::restoreOpenFilesFromSettings() {
     for (const QString &fp : files) {
       if (QFileInfo::exists(fp)) openFileInEditor(fp, target);
     }
+    // 恢复该面板的当前（激活）标签，停留在关闭前正在编辑的文件
+    int active = (gi < activeIdxes.size()) ? activeIdxes[gi].toInt() : files.size() - 1;
+    QTabWidget *panel = target ? target : currentTabWidget();
+    if (panel && active >= 0 && active < panel->count()) panel->setCurrentIndex(active);
     // 下一组文件应放到新建的编辑器面板中，还原拆分数量
     if (gi < groups.size() - 1) {
-      auto *panel = m_ui->createEditorPanel();
-      m_ui->addEditorPanel(panel);
-      connectEditorPanel(panel);  // 连接关闭/切换等信号，否则标签关闭按钮无效
-      target = panel;
+      auto *panel2 = m_ui->createEditorPanel();
+      m_ui->addEditorPanel(panel2);
+      connectEditorPanel(panel2);  // 连接关闭/切换等信号，否则标签关闭按钮无效
+      target = panel2;
     }
   }
 
@@ -836,4 +863,107 @@ void MainDevMgr::syncJsonVueBeforeSave() {
   auto *w = tabs->currentWidget();
   auto *jvw = qobject_cast<JsonVueWidget *>(w);
   if (jvw) jvw->syncVisualToCode();
+}
+
+/// 应用设置后刷新全局样式与编辑器高亮
+void MainDevMgr::refreshTheme() {
+  if (!m_ui) return;
+
+  // ── 调试：打印主题切换时的调色板关键文字角色颜色，排查深色主题文字看不清问题 ──
+  qDebug() << "[ThemeDebug] == 切换前（旧值） theme="
+           << static_cast<int>(SettingStore::ins().theme())
+           << " textColor=" << AuiStyle::textColor().name();
+
+  // 全局 Fusion 风格 + 调色板（原生控件菜单/下拉/表格/滚动条等随主题变化）
+  SettingStore::ins().applyGlobalStyle();
+
+  // 重新应用主窗口全局样式表（背景、边框等随主题变化）
+  m_ui->setStyleSheet(AuiStyle::mainStyleSheet());
+
+  // 刷新标题栏及菜单按钮颜色（标题栏背景、文件/视图按钮文字等）
+  m_ui->refreshTitleBarStyle();
+
+  // ── 调试：应用后打印最终生效的颜色 ──
+  qDebug() << "[ThemeDebug] == 切换后（最终） theme="
+           << static_cast<int>(SettingStore::ins().theme())
+           << " textColor=" << AuiStyle::textColor().name();
+  const QPalette ap2 = QApplication::palette();
+  qDebug() << "[ThemeDebug] qApp palette  ButtonText=" << ap2.color(QPalette::ButtonText).name()
+           << " WindowText=" << ap2.color(QPalette::WindowText).name()
+           << " Text=" << ap2.color(QPalette::Text).name()
+           << " HighlightedText=" << ap2.color(QPalette::HighlightedText).name();
+  if (QToolButton *fb = m_ui->findChild<QToolButton *>()) {
+    const QPalette bp = fb->palette();
+    qDebug() << "[ThemeDebug] first QToolButton palette ButtonText="
+             << bp.color(QPalette::ButtonText).name()
+             << " WindowText=" << bp.color(QPalette::WindowText).name()
+             << " Text=" << bp.color(QPalette::Text).name();
+  }
+
+  // 刷新主窗口 log 输出面板（背景/文字色随主题更新）
+  if (m_ui->outputPanel()) m_ui->outputPanel()->reloadStyle();
+
+  // 刷新调试面板（调用栈/变量/断点页签栏与列表的颜色随主题重建）
+  if (m_ui->debugPanel()) m_ui->debugPanel()->refreshStyle();
+
+  // 刷新所有已打开编辑器的高亮颜色（语法高亮 / 行号 / 当前行等），
+  // 以及 .jsonvue 的代码编辑器与可视化编辑器样式
+  for (int p = 0; p < m_ui->editorPanelCount(); ++p) {
+    QTabWidget *tabs = m_ui->editorPanelAt(p);
+    if (!tabs) continue;
+    for (int i = 0; i < tabs->count(); ++i) {
+      QWidget *w = tabs->widget(i);
+      if (auto *ed = qobject_cast<CodeEditor *>(w)) {
+        ed->reloadColors();
+      } else if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) {
+        if (jvw->codeEditor()) jvw->codeEditor()->reloadColors();
+        if (jvw->visualEditor()) jvw->visualEditor()->reloadStyle();
+      }
+    }
+  }
+
+  // ── 刷新所有打开的顶层窗口（主窗口 + 对话框），保证文字随主题变色 ──
+  // 背景色由全局调色板自动变化，但文字控件（QLabel/QPushButton）若持有创建时
+  // 固化的样式表，深色下仍是浅色主题的深色文字而看不清，这里统一用当前文字色重建。
+  const QWidgetList toplevels = qApp->topLevelWidgets();
+  for (QWidget *w : toplevels) {
+    // 对话框重建窗口级样式表与标题栏
+    if (auto *dlg = qobject_cast<QDialog *>(w)) {
+      dlg->setStyleSheet(AuiStyle::mainStyleSheet() + AuiStyle::dialogStyleSheet());
+      const auto bars = dlg->findChildren<QWidget *>(QStringLiteral("AuiTitleBar"));
+      for (QWidget *tb : bars) {
+        AuiStyle::applyTitleBarStyle(tb);
+        tb->update();
+        for (QWidget *child : tb->findChildren<QWidget *>()) child->update();
+      }
+      // 刷新标题文字（如「设置」）颜色
+      if (QLabel *tl = dlg->findChild<QLabel *>(QStringLiteral("AuiTitleLabel")))
+        AuiStyle::applyTitleLabelStyle(tl);
+      // 重建对话框标准按钮样式 + 标题栏控制按钮图标
+      AuiButton::refreshThemedButtons(dlg);
+    }
+    // 重建无专门样式表的普通 QLabel 文字色（标题文字与有自定义样式的标签除外），
+    // 用 auiAutoLabel 属性标记，使每次切换主题都用当前文字色重建、不固化旧色
+    for (QLabel *l : w->findChildren<QLabel *>()) {
+      if (l->objectName() == QStringLiteral("AuiTitleLabel")) continue;
+      if (l->styleSheet().isEmpty() || l->property("auiAutoLabel").toBool()) {
+        l->setProperty("auiAutoLabel", true);
+        l->setStyleSheet(QStringLiteral("color: %1;").arg(AuiStyle::textColor().name()));
+      }
+    }
+    // 强制 repolish，确保已存在子控件（含 QToolButton/QPushButton/QLabel/QMenu 等）重新解析
+    // 新的样式表颜色。只 repolish 顶层窗口不够，子控件的 QSS 颜色需各自 unpolish/polish 才会重算。
+    auto repolish = [](QWidget *root) {
+      QList<QWidget *> all;
+      all.reserve(64);
+      all << root;
+      all << root->findChildren<QWidget *>();
+      for (QWidget *c : all) {
+        c->style()->unpolish(c);
+        c->style()->polish(c);
+        c->update();
+      }
+    };
+    repolish(w);
+  }
 }

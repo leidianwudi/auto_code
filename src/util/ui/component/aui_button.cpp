@@ -96,34 +96,16 @@ void AuiButton::applyCommonStyle(QPushButton *btn) {
   btn->setFixedSize(AuiStyle::titleBarButtonSize());
   btn->setFlat(true);
   btn->setFocusPolicy(Qt::NoFocus);
-  btn->setStyleSheet(
-      QStringLiteral("QPushButton { background: transparent; border: 1px solid transparent; }"
-                     "QPushButton:hover { background: %1; border: 1px solid %2; }"
-                     "QPushButton:pressed { background: %3; }")
-          .arg(AuiStyle::hoverBackground().name(), AuiStyle::borderColor().name(),
-               AuiStyle::iconButtonPressedBg().name(QColor::HexArgb)));
+  // 标记为「标题栏控制按钮」，供主题切换时 refreshThemedButtons 重绘图标
+  btn->setProperty("auiTitleBarBtn", true);
+  // 不在按钮上单独 setStyleSheet：颜色统一由 app 级 mainStyleSheet 动态管理，
+  // 否则切换主题时按钮文字会固化旧的 textColor（浅色主题的深灰），深色下看不清
 }
 
 void AuiButton::applyIconButtonStyle(QPushButton *btn) {
-  btn->setStyleSheet(QStringLiteral("QPushButton {"
-                                    "  background: transparent;"
-                                    "  border: 1px solid transparent;"
-                                    "  margin: 2px 4px;"
-                                    "  padding: 2px 4px;"
-                                    "}"
-                                    "QPushButton:hover {"
-                                    "  background: %1;"
-                                    "  border: 1px solid %3;"
-                                    "}"
-                                    "QPushButton:pressed {"
-                                    "  background: %2;"
-                                    "}"
-                                    "QPushButton:disabled {"
-                                    "  color: transparent;"
-                                    "}")
-                         .arg(AuiStyle::hoverBackground().name(),
-                              AuiStyle::iconButtonPressedBg().name(QColor::HexArgb),
-                              AuiStyle::borderColor().name()));
+  // 颜色统一由 app 级 mainStyleSheet 动态管理（QPushButton 透明背景 + 动态文字色），
+  // 不在按钮上单独 setStyleSheet，避免切换主题时文字固化旧色导致深色下看不清
+  btn->setFlat(true);
 }
 
 QString AuiButton::dialogButtonStyleSheet() {
@@ -131,23 +113,26 @@ QString AuiButton::dialogButtonStyleSheet() {
   return QStringLiteral(
              "QPushButton {"
              "  background: %1; border: 1px solid %2; border-radius: 3px;"
-             "  padding: 6px 20px; font-size: %3;"
+             "  padding: 6px 20px; font-size: %3; color: %7;"
              "}"
              "QPushButton:hover {"
-             "  background: %4; border: 1px solid %2;"
+             "  background: %4; border: 1px solid %2; color: %7;"
              "}"
              "QPushButton:pressed {"
-             "  background: %5;"
+             "  background: %5; color: %7;"
              "}"
              "QPushButton:disabled {"
-             "  color: gray;"
+             "  color: %6;"
              "}")
       .arg(AuiStyle::background().name(), AuiStyle::borderColor().name(), fs,
            AuiStyle::hoverBackground().name(),
-           AuiStyle::iconButtonPressedBg().name(QColor::HexArgb));
+           AuiStyle::iconButtonPressedBg().name(QColor::HexArgb), AuiStyle::mutedTextColor().name(),
+           AuiStyle::textColor().name());
 }
 
 void AuiButton::applyDialogButtonStyle(QPushButton *btn) {
+  // 标记为「对话框标准按钮」，供主题切换时 refreshThemedButtons 重建样式
+  btn->setProperty("auiDialogBtn", true);
   btn->setStyleSheet(dialogButtonStyleSheet());
 }
 
@@ -324,6 +309,7 @@ QPushButton *AuiButton::createDebugButton(int size) {
 
 QPushButton *AuiButton::createDebugStepButton(int kind) {
   auto *btn = new QPushButton;
+  btn->setProperty("auiDebugStepBtn", kind);  // 标记调试单步按钮，供主题切换时重绘
   btn->setIcon(makeDebugStepIcon(kind));
   // 图标略小于按钮，留出 1px 边框内边距，避免被裁切
   btn->setIconSize(QSize(kDebugStepSize - 2, kDebugStepSize - 2));
@@ -444,6 +430,8 @@ DialogButtons AuiButton::createDialogButtons(QWidget *parent, bool showCancel) {
 //  图标更新
 // ════════════════════════════════════════════════════════════
 void AuiButton::updateMaximizeIcon(QPushButton *btn, bool isMaximized) {
+  // 记录状态到属性，供主题切换时 refreshThemedButtons 用当前文字色重绘图标
+  btn->setProperty("auiMaximized", isMaximized);
   QPixmap px(14, 14);
   px.fill(Qt::transparent);
   QPainter p(&px);
@@ -459,4 +447,26 @@ void AuiButton::updateMaximizeIcon(QPushButton *btn, bool isMaximized) {
   p.end();
   btn->setIcon(QIcon(px));
   btn->setIconSize(QSize(14, 14));
+}
+
+/// 主题切换后重建按钮的样式/图标（颜色用当前主题色）
+/// 用于对话框内标准按钮（背景/边框/文字）和标题栏控制按钮（最大化图标）
+void AuiButton::refreshThemedButtons(QWidget *root) {
+  if (!root) return;
+  const auto btns = root->findChildren<QPushButton *>();
+  for (QPushButton *b : btns) {
+    if (b->property("auiDialogBtn").toBool()) {
+      applyDialogButtonStyle(b);
+    } else if (b->property("auiDebugStepBtn").isValid()) {
+      // 调试单步按钮：样式表和图标颜色在创建时固化，用当前主题色重建
+      const int kind = b->property("auiDebugStepBtn").toInt();
+      b->setStyleSheet(debugStepButtonStyleSheet());
+      b->setIcon(makeDebugStepIcon(kind));
+    } else if (b->property("auiTitleBarBtn").toBool()) {
+      // 最大化按钮是自绘图标（颜色固化在绘制时），用当前文字色重绘
+      if (b->property("auiMaximized").isValid()) {
+        updateMaximizeIcon(b, b->property("auiMaximized").toBool());
+      }
+    }
+  }
 }

@@ -96,6 +96,13 @@ void CodeLog::clearLog() {
   updateLineNumberAreaWidth(0);
 }
 
+void CodeLog::reloadStyle() {
+  // 重新应用样式表（背景/文字色随当前主题重建），并重绘行号与正文
+  setStyleSheet(AuiStyle::logPanelStyleSheet());
+  viewport()->update();
+  m_lineNumberArea->update();
+}
+
 // ════════════════════════════════════════════════════════════════
 //  行号区域
 // ════════════════════════════════════════════════════════════════

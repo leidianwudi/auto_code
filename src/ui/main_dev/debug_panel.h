@@ -11,6 +11,7 @@
 
 #include <QLabel>
 #include <QPushButton>
+#include <QTabWidget>
 #include <QTreeWidget>
 #include <QWidget>
 
@@ -41,6 +42,8 @@ public:
   void setActive(bool active);
   /// 设置状态提示文本（如 "已暂停 @ 行 12" / "运行中"）
   void setStatus(const QString &text);
+  /// 主题切换时刷新面板各控件样式（页签栏、列表、状态文字等，颜色随主题重建）
+  void refreshStyle();
 
 signals:
   void continueClicked();  ///< 继续执行（F5）
@@ -70,6 +73,7 @@ private:
   QPushButton *m_stepIntoBtn = nullptr;
   QPushButton *m_stepOutBtn = nullptr;
   QLabel *m_statusLabel = nullptr;
+  QTabWidget *m_tabs = nullptr;  ///< 调用栈 / 变量 / 断点 页签容器
 
   /// 将 QJsonValue 格式化为可读字符串
   static QString formatValue(const QJsonValue &v);

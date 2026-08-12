@@ -98,11 +98,15 @@ void MainDevUi::setupTitleBar() {
   m_openAction = fileMenu->addAction(QStringLiteral("打开(&O)..."));
   m_openAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+O")));
   m_openFolderAction = fileMenu->addAction(QStringLiteral("打开文件夹(&F)..."));
+  fileMenu->addSeparator();
+  m_settingsAction = fileMenu->addAction(QStringLiteral("设置(&S)..."));
 
   auto *fileBtn = new QToolButton;
   fileBtn->setText(QStringLiteral("文件(&F)"));
   fileBtn->setPopupMode(QToolButton::InstantPopup);
+  AuiStyle::applyMenuButtonStyle(fileBtn);
   fileBtn->setMenu(fileMenu);
+  AuiStyle::applyMenuStyle(fileMenu);
   titleLayout->insertWidget(tb.contentInsertIndex, fileBtn);
   tb.contentInsertIndex++;
 
@@ -116,19 +120,22 @@ void MainDevUi::setupTitleBar() {
   auto *viewBtn = new QToolButton;
   viewBtn->setText(QStringLiteral("视图(&V)"));
   viewBtn->setPopupMode(QToolButton::InstantPopup);
+  AuiStyle::applyMenuButtonStyle(viewBtn);
   viewBtn->setMenu(viewMenu);
+  AuiStyle::applyMenuStyle(viewMenu);
   titleLayout->insertWidget(tb.contentInsertIndex, viewBtn);
   tb.contentInsertIndex++;
 
   // ── 帮助菜单 ──
   auto *helpMenu = new QMenu(m_titleBar);
   m_helpExampleAction = helpMenu->addAction(QStringLiteral("例子(&E)..."));
-  m_helpKeyAction = helpMenu->addAction(QStringLiteral("快捷键(&K)..."));
 
   auto *helpBtn = new QToolButton;
   helpBtn->setText(QStringLiteral("帮助(&H)"));
   helpBtn->setPopupMode(QToolButton::InstantPopup);
+  AuiStyle::applyMenuButtonStyle(helpBtn);
   helpBtn->setMenu(helpMenu);
+  AuiStyle::applyMenuStyle(helpMenu);
   titleLayout->insertWidget(tb.contentInsertIndex, helpBtn);
   tb.contentInsertIndex++;
 
@@ -290,7 +297,10 @@ QTabWidget *MainDevUi::createEditorPanel() {
   auto *tabs = new DimmableTabWidget;
   tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
   tabs->setContentsMargins(0, 0, 0, 0);
-  tabs->setStyleSheet(QStringLiteral("QTabWidget::pane { margin: 0; border: none; }"));
+  // 用 documentMode 去掉内容区外框，避免给 QTabWidget 设置样式表
+  // （一旦设置样式表，QTabBar 会被 QStyleSheetStyle 渲染，导致 setTabTextColor 失效，
+  //   聚焦/非聚焦面板就无法从 tab 头文字颜色区分）
+  tabs->setDocumentMode(true);
   return tabs;
 }
 
@@ -432,14 +442,35 @@ void MainDevUi::applyTabDimming(QTabWidget *active) {
   for (int i = 0; i < editorPanelCount(); ++i) {
     auto *tabs = editorPanelAt(i);
     if (!tabs) continue;
-
-    QTabBar *bar = tabs->tabBar();
-    AuiStyle::ensureFusionTabBar(bar);
-
-    bool isActive = (tabs == active);
-    for (int j = 0; j < bar->count(); ++j)
-      bar->setTabTextColor(j, isActive ? QColor() : AuiStyle::inactiveTabColor());
+    // 通过可聚焦代理样式按面板聚焦状态自绘文字颜色（不依赖 setTabTextColor）：
+    // 聚焦面板当前标签用正文色、其余灰；非聚焦面板整体压暗为灰
+    AuiStyle::setTabFocusState(tabs->tabBar(), tabs == active);
   }
+}
+
+void MainDevUi::refreshTitleBarStyle() {
+  if (!m_titleBar) return;
+  // 清除标题栏上可能残留的旧样式表（避免 QStyleSheetStyle 干扰子控件颜色）
+  m_titleBar->setStyleSheet(QString());
+  // 重新应用标题栏背景（调色板方式，不设样式表）
+  AuiStyle::applyTitleBarStyle(m_titleBar);
+  // 刷新标题文字样式
+  if (m_titleLabel) AuiStyle::applyTitleLabelStyle(m_titleLabel);
+  // 刷新菜单按钮（QToolButton）和弹出菜单（QMenu）的样式表 + 调色板，
+  // 确保主题切换后文字色随主题更新
+  for (QToolButton *btn : m_titleBar->findChildren<QToolButton *>()) {
+    AuiStyle::applyMenuButtonStyle(btn);
+  }
+  for (QMenu *menu : m_titleBar->findChildren<QMenu *>()) {
+    AuiStyle::applyMenuStyle(menu);
+  }
+  // 重绘标题栏控制按钮图标（最大化按钮自绘图标随主题变色）
+  AuiButton::refreshThemedButtons(m_titleBar);
+  // 重绘标题栏 AC 应用图标（背景/文字色随主题变色）
+  AuiWindow::refreshAppIcons(m_titleBar);
+  // 触发标题栏及所有子控件重绘（同步 repaint 确保主题切换即时生效）
+  m_titleBar->repaint();
+  for (QWidget *child : m_titleBar->findChildren<QWidget *>()) child->update();
 }
 
 // ══════════════════════════════════════════════════════════════

@@ -64,7 +64,8 @@ void ButtonConfigDialog::setupUI() {
 
   // ── 基本信息 ──
   auto *basicGroup = new QLabel(QStringLiteral("基本信息"));
-  basicGroup->setStyleSheet(QStringLiteral("font-weight: bold; color: #555;"));
+  basicGroup->setStyleSheet(
+      QStringLiteral("font-weight: bold; color: %1;").arg(AuiStyle::secondaryTextColor().name()));
   mainLayout->addWidget(basicGroup);
 
   auto *basicForm = new QFormLayout();
@@ -109,8 +110,9 @@ void ButtonConfigDialog::setupUI() {
   m_iconClearBtn = new QPushButton(QStringLiteral("✕"));
   m_iconClearBtn->setFixedSize(24, 28);
   m_iconClearBtn->setStyleSheet(
-      QStringLiteral("QPushButton { border: none; color: #999; font-size: 14px; }"
-                     "QPushButton:hover { color: #333; }"));
+      QStringLiteral("QPushButton { border: none; color: %1; font-size: 14px; }"
+                     "QPushButton:hover { color: %2; }")
+          .arg(AuiStyle::mutedTextColor().name(), AuiStyle::textColor().name()));
   m_iconClearBtn->setVisible(false);  // 无图标时隐藏
   connect(m_iconClearBtn, &QPushButton::clicked, this, [this]() { setIconName(QString()); });
 
@@ -157,7 +159,8 @@ void ButtonConfigDialog::setupUI() {
   ajaxLayout->setContentsMargins(0, 0, 0, 0);
   ajaxLayout->setSpacing(4);
   auto *ajaxTitle = new QLabel(QStringLiteral("API 配置"));
-  ajaxTitle->setStyleSheet(QStringLiteral("font-weight: bold; color: #555;"));
+  ajaxTitle->setStyleSheet(
+      QStringLiteral("font-weight: bold; color: %1;").arg(AuiStyle::secondaryTextColor().name()));
   ajaxLayout->addWidget(ajaxTitle);
   auto *ajaxForm = new QFormLayout();
   ajaxForm->setSpacing(6);
@@ -174,7 +177,8 @@ void ButtonConfigDialog::setupUI() {
   confirmLayout->setContentsMargins(0, 0, 0, 0);
   confirmLayout->setSpacing(4);
   auto *confirmTitle = new QLabel(QStringLiteral("确认配置"));
-  confirmTitle->setStyleSheet(QStringLiteral("font-weight: bold; color: #555;"));
+  confirmTitle->setStyleSheet(
+      QStringLiteral("font-weight: bold; color: %1;").arg(AuiStyle::secondaryTextColor().name()));
   confirmLayout->addWidget(confirmTitle);
   auto *confirmForm = new QFormLayout();
   confirmForm->setSpacing(6);
@@ -194,7 +198,8 @@ void ButtonConfigDialog::setupUI() {
   dialogLayout->setContentsMargins(0, 0, 0, 0);
   dialogLayout->setSpacing(4);
   auto *dialogTitle = new QLabel(QStringLiteral("对话框配置"));
-  dialogTitle->setStyleSheet(QStringLiteral("font-weight: bold; color: #555;"));
+  dialogTitle->setStyleSheet(
+      QStringLiteral("font-weight: bold; color: %1;").arg(AuiStyle::secondaryTextColor().name()));
   dialogLayout->addWidget(dialogTitle);
   auto *dialogForm = new QFormLayout();
   dialogForm->setSpacing(6);
@@ -235,7 +240,8 @@ void ButtonConfigDialog::setupUI() {
   linkLayout->setContentsMargins(0, 0, 0, 0);
   linkLayout->setSpacing(4);
   auto *linkTitle = new QLabel(QStringLiteral("跳转配置"));
-  linkTitle->setStyleSheet(QStringLiteral("font-weight: bold; color: #555;"));
+  linkTitle->setStyleSheet(
+      QStringLiteral("font-weight: bold; color: %1;").arg(AuiStyle::secondaryTextColor().name()));
   linkLayout->addWidget(linkTitle);
   auto *linkForm = new QFormLayout();
   linkForm->setSpacing(6);
@@ -368,9 +374,9 @@ void ButtonConfigDialog::onAddDialogField() {
                      "  padding: 2px 6px; font-size: 12px;"
                      "}"
                      "QPushButton:hover { background: %3; }"
-                     "QPushButton:disabled { color: gray; background: %1; }")
+                     "QPushButton:disabled { color: %4; background: %1; }")
           .arg(AuiStyle::background().name(), AuiStyle::borderColor().name(),
-               AuiStyle::hoverBackground().name()));
+               AuiStyle::hoverBackground().name(), AuiStyle::mutedTextColor().name()));
   configBtn->setProperty("row", row);
   connect(configBtn, &QPushButton::clicked, this, [this, configBtn]() {
     // 动态获取当前行（按钮可能在行移动后位置变化）
@@ -393,9 +399,9 @@ void ButtonConfigDialog::onAddDialogField() {
                      "  padding: 2px 6px; font-size: 12px;"
                      "}"
                      "QPushButton:hover { background: %3; }"
-                     "QPushButton:disabled { color: gray; }")
+                     "QPushButton:disabled { color: %4; }")
           .arg(AuiStyle::background().name(), AuiStyle::borderColor().name(),
-               AuiStyle::hoverBackground().name()));
+               AuiStyle::hoverBackground().name(), AuiStyle::mutedTextColor().name()));
   connect(delBtn, &QPushButton::clicked, this, [this, delBtn]() {
     for (int i = 0; i < m_dialogFieldsTable->rowCount(); ++i) {
       if (m_dialogFieldsTable->cellWidget(i, 5) == delBtn) {

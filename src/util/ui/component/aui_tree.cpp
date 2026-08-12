@@ -64,23 +64,6 @@ QString AuiTree::listStyleSheet() {
              "  border-bottom: 1px solid %2;"
              "  padding: 3px 6px;"
              "  font-weight: bold;"
-             "}"
-             // 滚动条透明背景（仅显示圆角滑块），避免盖住右侧边框线
-             "QScrollBar:vertical {"
-             "  background: transparent; width: 12px; margin: 0; border: none;"
-             "}"
-             "QScrollBar::handle:vertical {"
-             "  background: %7; border-radius: 4px; min-height: 20px; margin: 2px;"
-             "}"
-             "QScrollBar:horizontal {"
-             "  background: transparent; height: 12px; margin: 0; border: none;"
-             "}"
-             "QScrollBar::handle:horizontal {"
-             "  background: %7; border-radius: 4px; min-width: 20px; margin: 2px;"
-             "}"
-             "QScrollBar::add-line, QScrollBar::sub-line,"
-             "QScrollBar::add-page, QScrollBar::sub-page {"
-             "  background: transparent; width: 0; height: 0;"
              "}")
       .arg(AuiStyle::panelBackground().name(), AuiStyle::borderColor().name(),
            AuiStyle::listAlternateBackground().name(), AuiStyle::listHoverBackground().name(),

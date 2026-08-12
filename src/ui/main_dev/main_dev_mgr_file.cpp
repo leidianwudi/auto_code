@@ -29,16 +29,16 @@ CodeEditor *MainDevMgr::createEditorForFile(const QString &filePath) {
   auto *editor = new CodeEditor;
 
   if (filePath.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive)) {
-    new LightJson(editor->document());
+    editor->setSyntaxHighlighter(new LightJson(editor->document()));
     editor->setValidationMode(CodeEditor::JsonValidation);
   } else if (filePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive)) {
-    new LightAc(editor->document());
+    editor->setSyntaxHighlighter(new LightAc(editor->document()));
     editor->setValidationMode(CodeEditor::AcValidation);
   } else if (filePath.endsWith(AcFileSuffix::kTpl, Qt::CaseInsensitive)) {
-    new LightTpl(editor->document());
+    editor->setSyntaxHighlighter(new LightTpl(editor->document()));
     editor->setValidationMode(CodeEditor::TemplateValidation);
   } else {
-    new LightTpl(editor->document());
+    editor->setSyntaxHighlighter(new LightTpl(editor->document()));
     editor->setValidationMode(CodeEditor::TemplateValidation);
   }
 

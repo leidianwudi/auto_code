@@ -22,6 +22,7 @@
 #include "src/util/common/http_client.h"
 #include "src/util/common/util_json.h"
 #include "src/util/ui/component/aui_button.h"
+#include "src/util/ui/component/aui_style.h"
 
 // ════════════════════════════════════════════════════════════
 //  构造
@@ -60,7 +61,8 @@ void ComboboxConfigDialog::setupUI() {
 
   // ── 状态标签 ──
   m_statusLabel = new QLabel(this);
-  m_statusLabel->setStyleSheet(QStringLiteral("color: gray; font-size: 12px;"));
+  m_statusLabel->setStyleSheet(
+      QStringLiteral("color: %1; font-size: 12px;").arg(AuiStyle::mutedTextColor().name()));
   layout->addWidget(m_statusLabel);
 
   // ── 数据预览表格 ──
@@ -151,7 +153,7 @@ void ComboboxConfigDialog::onTest() {
   }
 
   m_statusLabel->setText(QStringLiteral("正在请求..."));
-  m_statusLabel->setStyleSheet(QStringLiteral("color: gray;"));
+  m_statusLabel->setStyleSheet(QStringLiteral("color: %1;").arg(AuiStyle::mutedTextColor().name()));
 
   // 构建请求头
   HttpClient::Headers headers;
@@ -197,7 +199,8 @@ void ComboboxConfigDialog::onHttpFinished(const QString &url, const QJsonDocumen
 
   if (list.isEmpty()) {
     m_statusLabel->setText(QStringLiteral("未找到 data.list 数据"));
-    m_statusLabel->setStyleSheet(QStringLiteral("color: red;"));
+    m_statusLabel->setStyleSheet(
+        QStringLiteral("color: %1;").arg(AuiStyle::errorTextColor().name()));
     return;
   }
 
@@ -207,7 +210,8 @@ void ComboboxConfigDialog::onHttpFinished(const QString &url, const QJsonDocumen
 
   if (fieldNames.isEmpty()) {
     m_statusLabel->setText(QStringLiteral("返回数据无字段"));
-    m_statusLabel->setStyleSheet(QStringLiteral("color: red;"));
+    m_statusLabel->setStyleSheet(
+        QStringLiteral("color: %1;").arg(AuiStyle::errorTextColor().name()));
     return;
   }
 
@@ -241,11 +245,12 @@ void ComboboxConfigDialog::onHttpFinished(const QString &url, const QJsonDocumen
 
   m_statusLabel->setText(
       QStringLiteral("成功获取 %1 条数据，%2 个字段").arg(list.size()).arg(fieldNames.size()));
-  m_statusLabel->setStyleSheet(QStringLiteral("color: green;"));
+  m_statusLabel->setStyleSheet(
+      QStringLiteral("color: %1;").arg(AuiStyle::successTextColor().name()));
 }
 
 void ComboboxConfigDialog::onHttpError(const QString &url, const QString &errorMsg) {
   Q_UNUSED(url);
   m_statusLabel->setText(QStringLiteral("请求失败: %1").arg(errorMsg));
-  m_statusLabel->setStyleSheet(QStringLiteral("color: red;"));
+  m_statusLabel->setStyleSheet(QStringLiteral("color: %1;").arg(AuiStyle::errorTextColor().name()));
 }

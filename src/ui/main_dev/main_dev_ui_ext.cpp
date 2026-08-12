@@ -59,26 +59,47 @@ void DraggableTabBar::tabRemoved(int index) {
 }
 
 void DraggableTabBar::paintEvent(QPaintEvent *event) {
-  // 先绘制默认标签栏
-  QTabBar::paintEvent(event);
-
-  // 在已修改标签上叠加红色 "*"
+  // 直接自绘所有标签，完全绕过 QTabBar/style 的文字渲染
+  // （Windows 原生风格用 DrawThemeText 画 tab 文字，忽略 setTabTextColor；
+  //   代理样式也无法拦截 Fusion 内部的子元素绘制）
   QPainter painter(this);
-  painter.setPen(AuiStyle::modifiedColor());
-  QFont font = painter.font();
-  font.setBold(true);
-  font.setPixelSize(14);
-  painter.setFont(font);
+  painter.setRenderHint(QPainter::Antialiasing);
+
+  const bool active = property("aui_focus_tab").toBool();
+  const int cur = currentIndex();
+  const QColor activeColor = AuiStyle::activeTabTextColor();
+  const QColor dimColor = AuiStyle::inactiveTabColor();
 
   for (int i = 0; i < count(); ++i) {
-    if (!m_modifiedTabs.contains(i)) continue;
-    // 绘制在文字右侧，紧贴文字
     QStyleOptionTab opt;
     initStyleOption(&opt, i);
+
+    // 用 style 画 tab 的背景和边框（CE_TabBarTab），但不画文字
+    // 先保存文字，清空后画背景，再恢复
+    QString text = opt.text;
+    opt.text.clear();
+    style()->drawControl(QStyle::CE_TabBarTab, &opt, &painter, this);
+
+    // 自己画文字：聚焦面板的当前标签用正文色，其余灰色
+    bool isSelected = (i == cur);
+    QColor c = (active && isSelected) ? activeColor : dimColor;
+    opt.text = text;
     QRect textRect = style()->subElementRect(QStyle::SE_TabBarTabText, &opt, this);
-    int starX = textRect.right() + 2;
-    int starY = textRect.top() + font.pixelSize() - 2;
-    painter.drawText(starX, starY, QStringLiteral("*"));
+    painter.setPen(c);
+    painter.setFont(font());
+    painter.drawText(textRect, Qt::AlignCenter, text);
+
+    // 已修改标签右侧叠加红色 "*"
+    if (m_modifiedTabs.contains(i)) {
+      QFont starFont = painter.font();
+      starFont.setBold(true);
+      starFont.setPixelSize(14);
+      painter.setFont(starFont);
+      painter.setPen(AuiStyle::modifiedColor());
+      int starX = textRect.right() + 2;
+      int starY = textRect.top() + starFont.pixelSize() - 2;
+      painter.drawText(starX, starY, QStringLiteral("*"));
+    }
   }
 }
 
@@ -189,7 +210,8 @@ DimmableTabWidget::DimmableTabWidget(QWidget *parent) : QTabWidget(parent) {
   // setTabBar 之后设置，确保作用到 DraggableTabBar
   setTabsClosable(true);
 
-  // tab 样式：指定编辑框 tab 头四边空白（左/右 1px，上/下 6px，与调试面板一致）
+  // tab 样式：指定编辑框 tab 头四边空白
+  // 文字颜色由 paintEvent 直接自绘，不依赖 setTabTextColor 或代理样式
   AuiStyle::applyTabBarPadding(bar, 4, 4, 0, 4);
 
   // 跨面板拖拽：标签移动

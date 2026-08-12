@@ -6,27 +6,32 @@
 // 构造函数：初始化所有高亮规则
 // 注释格式单独存储，由 highlightBlock 统一处理
 // m_rules 只包含非注释的 AC 语法元素规则（避免注释内的内容被错误着色）
-LightAc::LightAc(QTextDocument *parent) : QSyntaxHighlighter(parent) {
+LightAc::LightAc(QTextDocument *parent) : QSyntaxHighlighter(parent) { buildRules(); }
+
+// 重建所有高亮规则（构造与主题刷新共用）
+void LightAc::buildRules() {
   using namespace LightColor;
+  m_rules.clear();
 
   // ── 注释格式（灰色斜体） ──
   // 不放入 m_rules，由 highlightBlock 单独处理
-  m_commentFormat.setForeground(comment);
+  m_commentFormat.setForeground(comment());
   m_commentFormat.setFontItalic(true);
 
-  m_blockCommentFormat.setForeground(comment);
+  m_blockCommentFormat.setForeground(comment());
   m_blockCommentFormat.setFontItalic(true);
 
-  // ── 0. 变量（绿色） ──
-  // 放在最前面作为兜底规则，后面更具体的规则会覆盖它
+  // ── 0. 变量（浅蓝/深蓝色，VSCode 变量色） ──
+  // 放在最前面作为兜底规则，后面更具体的规则会覆盖它。
+  // 使用 hl.variable 颜色（浅色=#001080 深蓝，深色=#9CDCFE 浅蓝），与关键字蓝色有区分。
   QTextCharFormat variableFormat;
-  variableFormat.setForeground(variable);
+  variableFormat.setForeground(variable());
   m_rules.append({QRegularExpression(QStringLiteral("\\b[a-zA-Z_]\\w*\\b")), variableFormat});
 
   // ── 1. 关键字（蓝色加粗） ──
   // 使用 (?<!\.) 负向后顾，排除属性访问（如 col.default）中的关键字高亮
   QTextCharFormat keywordFormat;
-  keywordFormat.setForeground(keyword);
+  keywordFormat.setForeground(keyword());
   keywordFormat.setFontWeight(QFont::Bold);
   m_rules.append(
       {QRegularExpression(QStringLiteral("(?<![\\.\\w])\\b(?:") +
@@ -35,7 +40,7 @@ LightAc::LightAc(QTextDocument *parent) : QSyntaxHighlighter(parent) {
 
   // ── 2. 内置函数（紫色加粗） ──
   QTextCharFormat builtinFormat;
-  builtinFormat.setForeground(builtin);
+  builtinFormat.setForeground(builtin());
   builtinFormat.setFontWeight(QFont::Bold);
   m_rules.append(
       {QRegularExpression(QStringLiteral("\\b(?:") + AcBuiltin::kAll.join(QStringLiteral("|")) +
@@ -44,12 +49,12 @@ LightAc::LightAc(QTextDocument *parent) : QSyntaxHighlighter(parent) {
 
   // ── 3. 字符串（橙色） ──
   QTextCharFormat stringFormat;
-  stringFormat.setForeground(string_);
+  stringFormat.setForeground(string_());
   m_rules.append({QRegularExpression(QStringLiteral("\"[^\"]*\"|'[^']*'|`[^`]*`")), stringFormat});
 
   // ── 4. 数字（橙色加粗） ──
   QTextCharFormat numberFormat;
-  numberFormat.setForeground(number);
+  numberFormat.setForeground(number());
   numberFormat.setFontWeight(QFont::Bold);
   m_rules.append({QRegularExpression(QStringLiteral("\\b\\d+(?:\\.\\d+)?\\b")), numberFormat});
 
@@ -58,28 +63,74 @@ LightAc::LightAc(QTextDocument *parent) : QSyntaxHighlighter(parent) {
       QString::fromLatin1(AcKeyword::kTrue), QString::fromLatin1(AcKeyword::kFalse),
       QString::fromLatin1(AcKeyword::kNull), QString::fromLatin1(AcKeyword::kUndefined)};
   QTextCharFormat boolFormat;
-  boolFormat.setForeground(boolean_);
+  boolFormat.setForeground(boolean_());
   boolFormat.setFontWeight(QFont::Bold);
   m_rules.append(
       {QRegularExpression(QStringLiteral("\\b(?:") + kBoolLiterals.join(QStringLiteral("|")) +
                           QStringLiteral(")\\b")),
        boolFormat});
 
-  // ── 6. 函数调用（紫色） ──
-  // 匹配任何非关键字的标识符后跟括号
+  // ── 6. 函数调用（黄色） ──
+  // 匹配非关键字、非内置函数的标识符后跟括号
+  // 排除关键字和内置函数，避免覆盖它们的颜色
+  const QStringList excludedFromCall = AcKeyword::kAll + AcBuiltin::kAll;
   QTextCharFormat callFormat;
-  callFormat.setForeground(call);
+  callFormat.setForeground(call());
   m_rules.append(
-      {QRegularExpression(QStringLiteral("\\b(?!(?:") + AcKeyword::kAll.join(QStringLiteral("|")) +
+      {QRegularExpression(QStringLiteral("\\b(?!(?:") + excludedFromCall.join(QStringLiteral("|")) +
                           QStringLiteral(")\\b)\\w+(?=\\s*\\()")),
        callFormat});
 
   // ── 7. 运算符（青色加粗） ──
   QTextCharFormat opFormat;
-  opFormat.setForeground(operator_);
+  opFormat.setForeground(operator_());
   opFormat.setFontWeight(QFont::Bold);
   m_rules.append(
       {QRegularExpression(QStringLiteral("\\|\\||&&|!=|==|<=|>=|<|>|!|[+\\-*/]=?|\\?")), opFormat});
+
+  // ── 8. 内建类型名（青色，VSCode 类型色） ──
+  // String / Number / Int / Float / Double / Bool / Boolean / Any / Void / Array / Object
+  // 严格区分大小写；(?<![\.\w]) 排除属性访问（如 obj.String）
+  static const QStringList kTypeNames = {
+      QStringLiteral("Number"),  QStringLiteral("Int"),    QStringLiteral("Float"),
+      QStringLiteral("Double"),  QStringLiteral("String"), QStringLiteral("Bool"),
+      QStringLiteral("Boolean"), QStringLiteral("Any"),    QStringLiteral("Void"),
+      QStringLiteral("Array"),   QStringLiteral("Object")};
+  QTextCharFormat typeFormat;
+  typeFormat.setForeground(type());
+  m_rules.append({QRegularExpression(QStringLiteral("(?<![\\.\\w])(?:") +
+                                     kTypeNames.join(QStringLiteral("|")) + QStringLiteral(")\\b")),
+                  typeFormat});
+
+  // ── 9. 类 / 接口 / 枚举 声明名（青绿色，VSCode 类名色） ──
+  // class Foo / interface Bar / enum Baz → 名字用类名色
+  QTextCharFormat classNameFormat;
+  classNameFormat.setForeground(className());
+  m_rules.append(
+      {QRegularExpression(QStringLiteral("(?<=\\b(?:class|interface|enum)\\s)[A-Za-z_]\\w*")),
+       classNameFormat});
+
+  // ── 10. 函数声明名（黄色，VSCode 函数声明色） ──
+  // function foo(...) → foo 用函数声明色（放在 call 规则之后覆盖）
+  QTextCharFormat funcNameFormat;
+  funcNameFormat.setForeground(funcDecl());
+  m_rules.append(
+      {QRegularExpression(QStringLiteral("(?<=\\bfunction\\s)[A-Za-z_]\\w*")), funcNameFormat});
+
+  // ── 11. new 实例化类名（青色） ──
+  // new DB(...) / new File() → 类名用类型色
+  QTextCharFormat newClassFormat;
+  newClassFormat.setForeground(type());
+  m_rules.append(
+      {QRegularExpression(QStringLiteral("(?<=\\bnew\\s)(?:") +
+                          AcClass::kAll.join(QStringLiteral("|")) + QStringLiteral(")\\b")),
+       newClassFormat});
+}
+
+// 重新从 SettingStore 读取颜色并刷新高亮
+void LightAc::reloadColors() {
+  buildRules();
+  rehighlight();
 }
 
 // 对单个文本块进行高亮处理

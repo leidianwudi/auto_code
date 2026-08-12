@@ -1,0 +1,488 @@
+/**
+ * @file setting_store.cpp
+ * @brief 运行时设置存储实现
+ */
+
+#include "setting_store.h"
+
+#include <QApplication>
+#include <QColor>
+#include <QDir>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
+#include <QStandardPaths>
+#include <QStyle>
+
+#include "src/util/ui/component/aui_style.h"
+
+// ──────────────────────────────────────────────────────────────
+//  颜色 key 常量（与 AuiStyle / LightColor 读取保持一致）
+// ──────────────────────────────────────────────────────────────
+
+namespace {
+
+// 界面颜色
+inline const char *kUI_Bg = "ui.background";
+inline const char *kUI_TitleBar = "ui.titleBarBackground";
+inline const char *kUI_Text = "ui.textColor";
+inline const char *kUI_Hover = "ui.hoverBackground";
+inline const char *kUI_InactiveTab = "ui.inactiveTabColor";
+inline const char *kUI_Border = "ui.borderColor";
+inline const char *kUI_BorderDark = "ui.borderDarkColor";
+inline const char *kUI_Panel = "ui.panelBackground";
+inline const char *kUI_ListAlt = "ui.listAlternateBackground";
+inline const char *kUI_ListHover = "ui.listHoverBackground";
+inline const char *kUI_ListSel = "ui.listSelectionBackground";
+inline const char *kUI_TabUnselBg = "ui.tabUnselectedBackground";
+inline const char *kUI_TabHoverBg = "ui.tabHoverBackground";
+inline const char *kUI_ErrorText = "ui.errorTextColor";
+inline const char *kUI_ErrorTipBg = "ui.errorToolTipBackground";
+inline const char *kUI_Modified = "ui.modifiedColor";
+inline const char *kUI_Compile = "ui.compileButtonColor";
+inline const char *kUI_SecondaryText = "ui.secondaryTextColor";
+inline const char *kUI_MutedText = "ui.mutedTextColor";
+inline const char *kUI_SuccessText = "ui.successTextColor";
+
+// 编辑器颜色
+inline const char *kEd_LineNumBg = "editor.lineNumberBackground";
+inline const char *kEd_LineNumText = "editor.lineNumberText";
+inline const char *kEd_CurrentLine = "editor.currentLineBackground";
+inline const char *kEd_Bg = "editor.background";
+inline const char *kEd_Text = "editor.text";
+inline const char *kEd_BracketMatch = "editor.bracketMatch";
+inline const char *kEd_BracketParen = "editor.bracketParen";
+inline const char *kEd_BracketSquare = "editor.bracketSquare";
+inline const char *kEd_BracketBrace = "editor.bracketBrace";
+inline const char *kEd_BracketMismatch = "editor.bracketMismatch";
+inline const char *kEd_ErrorUnderline = "editor.errorUnderline";
+inline const char *kEd_ErrorLine = "editor.errorLineBackground";
+inline const char *kEd_IndentGuide = "editor.indentGuide";
+inline const char *kEd_IndentActive = "editor.indentGuideActive";
+inline const char *kEd_FindMatch = "editor.findMatchBackground";
+inline const char *kEd_FindCurrent = "editor.findCurrentMatchBackground";
+
+// 代码高亮颜色
+inline const char *kHL_Keyword = "hl.keyword";
+inline const char *kHL_Comment = "hl.comment";
+inline const char *kHL_String = "hl.string";
+inline const char *kHL_Number = "hl.number";
+inline const char *kHL_Boolean = "hl.boolean";
+inline const char *kHL_Builtin = "hl.builtin";
+inline const char *kHL_Call = "hl.call";
+inline const char *kHL_Variable = "hl.variable";
+inline const char *kHL_Operator = "hl.operator";
+inline const char *kHL_Type = "hl.type";
+inline const char *kHL_Decorator = "hl.decorator";
+inline const char *kHL_ClassName = "hl.classname";
+inline const char *kHL_FuncDecl = "hl.funcdecl";
+
+// ──────────────────────────────────────────────────────────────
+//  快捷键 key 常量
+// ──────────────────────────────────────────────────────────────
+
+inline const char *kSC_Open = "sc.openFile";
+inline const char *kSC_OpenFolder = "sc.openFolder";
+inline const char *kSC_Split = "sc.splitEditor";
+inline const char *kSC_Close = "sc.closeTab";
+inline const char *kSC_Save = "sc.save";
+inline const char *kSC_SaveAll = "sc.saveAll";
+inline const char *kSC_Find = "sc.find";
+inline const char *kSC_DebugStart = "sc.debugStart";
+inline const char *kSC_DebugStepOver = "sc.debugStepOver";
+inline const char *kSC_DebugStepInto = "sc.debugStepInto";
+inline const char *kSC_DebugStepOut = "sc.debugStepOut";
+inline const char *kSC_Settings = "sc.settings";
+
+}  // namespace
+
+SettingStore &SettingStore::ins() {
+  static SettingStore instance;
+  return instance;
+}
+
+SettingStore::SettingStore() : QObject(nullptr) {
+  // ── 界面颜色 ──
+  registerColor(QString::fromLatin1(kUI_Bg), QStringLiteral("窗口背景"), QStringLiteral("界面"),
+                QColor(0xf3, 0xf3, 0xf3), QColor(0x1e, 0x1e, 0x1e));
+  registerColor(QString::fromLatin1(kUI_TitleBar), QStringLiteral("标题栏背景"),
+                QStringLiteral("界面"), QColor(0xdd, 0xdd, 0xdd), QColor(0x3c, 0x3c, 0x3c));
+  registerColor(QString::fromLatin1(kUI_Text), QStringLiteral("文字"), QStringLiteral("界面"),
+                QColor(0x33, 0x33, 0x33), QColor(0xd4, 0xd4, 0xd4));
+  registerColor(QString::fromLatin1(kUI_Hover), QStringLiteral("悬停背景"), QStringLiteral("界面"),
+                QColor(0xe4, 0xe4, 0xe4), QColor(0x2a, 0x2d, 0x2e));
+  registerColor(QString::fromLatin1(kUI_InactiveTab), QStringLiteral("未选中标签文字"),
+                QStringLiteral("界面"), QColor(0x88, 0x88, 0x88), QColor(0x88, 0x88, 0x88));
+  registerColor(QString::fromLatin1(kUI_Border), QStringLiteral("边框"), QStringLiteral("界面"),
+                QColor(0xd4, 0xd4, 0xd4), QColor(0x4a, 0x4a, 0x4a));
+  registerColor(QString::fromLatin1(kUI_BorderDark), QStringLiteral("深边框"),
+                QStringLiteral("界面"), QColor(0xb0, 0xb0, 0xb0), QColor(0x5a, 0x5a, 0x5a));
+  registerColor(QString::fromLatin1(kUI_Panel), QStringLiteral("面板背景"), QStringLiteral("界面"),
+                QColor(Qt::white), QColor(0x25, 0x25, 0x26));
+  registerColor(QString::fromLatin1(kUI_ListAlt), QStringLiteral("列表交替行背景"),
+                QStringLiteral("界面"), QColor(0xf5, 0xf5, 0xf5), QColor(0x25, 0x25, 0x26));
+  registerColor(QString::fromLatin1(kUI_ListHover), QStringLiteral("列表悬停背景"),
+                QStringLiteral("界面"), QColor(0xe8, 0xf0, 0xff), QColor(0x2a, 0x2d, 0x2e));
+  registerColor(QString::fromLatin1(kUI_ListSel), QStringLiteral("列表选中背景"),
+                QStringLiteral("界面"), QColor(0xcc, 0xe4, 0xff), QColor(0x26, 0x4f, 0x78));
+  registerColor(QString::fromLatin1(kUI_TabUnselBg), QStringLiteral("标签未选中背景"),
+                QStringLiteral("界面"), QColor(0xe8, 0xe8, 0xe8), QColor(0x2d, 0x2d, 0x2d));
+  registerColor(QString::fromLatin1(kUI_TabHoverBg), QStringLiteral("标签悬停背景"),
+                QStringLiteral("界面"), QColor(0xdc, 0xdc, 0xdc), QColor(0x3c, 0x3c, 0x3c));
+  registerColor(QString::fromLatin1(kUI_ErrorText), QStringLiteral("错误文字"),
+                QStringLiteral("界面"), QColor(0xf4, 0x47, 0x47), QColor(0xff, 0x6b, 0x6b));
+  registerColor(QString::fromLatin1(kUI_ErrorTipBg), QStringLiteral("错误提示背景"),
+                QStringLiteral("界面"), QColor(0xff, 0xff, 0xcc), QColor(0x4a, 0x3a, 0x1e));
+  registerColor(QString::fromLatin1(kUI_SecondaryText), QStringLiteral("次要文字"),
+                QStringLiteral("界面"), QColor(0x55, 0x55, 0x55), QColor(0xb0, 0xb0, 0xb0));
+  registerColor(QString::fromLatin1(kUI_MutedText), QStringLiteral("弱化文字"),
+                QStringLiteral("界面"), QColor(0x99, 0x99, 0x99), QColor(0x88, 0x88, 0x88));
+  registerColor(QString::fromLatin1(kUI_SuccessText), QStringLiteral("成功文字"),
+                QStringLiteral("界面"), QColor(0x2e, 0x7d, 0x32), QColor(0x4c, 0xaf, 0x50));
+  registerColor(QString::fromLatin1(kUI_Modified), QStringLiteral("文件修改标记"),
+                QStringLiteral("界面"), QColor(0xcc, 0x33, 0x33), QColor(0xff, 0x6b, 0x6b));
+  registerColor(QString::fromLatin1(kUI_Compile), QStringLiteral("编译按钮"),
+                QStringLiteral("界面"), QColor(0x44, 0x99, 0x00), QColor(0x66, 0xcc, 0x00));
+
+  // ── 编辑器颜色 ──
+  registerColor(QString::fromLatin1(kEd_Bg), QStringLiteral("编辑器背景"), QStringLiteral("编辑器"),
+                QColor(Qt::white), QColor(0x1e, 0x1e, 0x1e));
+  registerColor(QString::fromLatin1(kEd_Text), QStringLiteral("编辑器文字"),
+                QStringLiteral("编辑器"), QColor(Qt::black), QColor(0xd4, 0xd4, 0xd4));
+  registerColor(QString::fromLatin1(kEd_LineNumBg), QStringLiteral("行号背景"),
+                QStringLiteral("编辑器"), QColor(Qt::lightGray).lighter(110),
+                QColor(0x1e, 0x1e, 0x1e));
+  registerColor(QString::fromLatin1(kEd_LineNumText), QStringLiteral("行号文字"),
+                QStringLiteral("编辑器"), QColor(0x80, 0x80, 0x80), QColor(0x85, 0x85, 0x85));
+  registerColor(QString::fromLatin1(kEd_CurrentLine), QStringLiteral("当前行高亮"),
+                QStringLiteral("编辑器"), QColor(230, 240, 255), QColor(0x28, 0x28, 0x28));
+  registerColor(QString::fromLatin1(kEd_BracketMatch), QStringLiteral("括号匹配"),
+                QStringLiteral("编辑器"), QColor(0, 200, 200), QColor(0x00, 0x88, 0x88));
+  registerColor(QString::fromLatin1(kEd_BracketParen), QStringLiteral("圆括号匹配"),
+                QStringLiteral("编辑器"), QColor(255, 127, 80), QColor(0xff, 0x8c, 0x50));
+  registerColor(QString::fromLatin1(kEd_BracketSquare), QStringLiteral("方括号匹配"),
+                QStringLiteral("编辑器"), QColor(60, 179, 113), QColor(0x3c, 0xb3, 0x71));
+  registerColor(QString::fromLatin1(kEd_BracketBrace), QStringLiteral("花括号匹配"),
+                QStringLiteral("编辑器"), QColor(65, 105, 225), QColor(0x41, 0x69, 0xe1));
+  registerColor(QString::fromLatin1(kEd_BracketMismatch), QStringLiteral("括号不匹配"),
+                QStringLiteral("编辑器"), QColor(255, 0, 0), QColor(0xff, 0x50, 0x50));
+  registerColor(QString::fromLatin1(kEd_ErrorUnderline), QStringLiteral("错误波浪线"),
+                QStringLiteral("编辑器"), QColor(Qt::red), QColor(0xff, 0x55, 0x55));
+  registerColor(QString::fromLatin1(kEd_ErrorLine), QStringLiteral("错误行背景"),
+                QStringLiteral("编辑器"), QColor(0xf2, 0xde, 0xde), QColor(0x44, 0x2b, 0x2b));
+  registerColor(QString::fromLatin1(kEd_IndentGuide), QStringLiteral("缩进参考线"),
+                QStringLiteral("编辑器"), QColor(0xd3, 0xd3, 0xd3), QColor(0x3a, 0x3a, 0x3a));
+  registerColor(QString::fromLatin1(kEd_IndentActive), QStringLiteral("缩进参考线(当前)"),
+                QStringLiteral("编辑器"), QColor(0xa0, 0xa0, 0xa0), QColor(0x66, 0x66, 0x66));
+  registerColor(QString::fromLatin1(kEd_FindMatch), QStringLiteral("查找匹配"),
+                QStringLiteral("编辑器"), QColor(0xff, 0xc6, 0x6d), QColor(0x9a, 0x6d, 0x2a));
+  registerColor(QString::fromLatin1(kEd_FindCurrent), QStringLiteral("查找当前匹配"),
+                QStringLiteral("编辑器"), QColor(0xff, 0x99, 0x33), QColor(0xb0, 0x6a, 0x1e));
+
+  // ── 代码高亮颜色（浅色=Light+，深色=Dark+，对齐 VSCode 配色） ──
+  registerColor(QString::fromLatin1(kHL_Keyword), QStringLiteral("关键字"),
+                QStringLiteral("代码高亮"), QColor(0x00, 0x00, 0xFF), QColor(0x56, 0x9C, 0xD6));
+  registerColor(QString::fromLatin1(kHL_Comment), QStringLiteral("注释"),
+                QStringLiteral("代码高亮"), QColor(0x80, 0x80, 0x80), QColor(0x8A, 0x8A, 0x8A));
+  registerColor(QString::fromLatin1(kHL_String), QStringLiteral("字符串"),
+                QStringLiteral("代码高亮"), QColor(0xA3, 0x15, 0x15), QColor(0xCE, 0x91, 0x78));
+  registerColor(QString::fromLatin1(kHL_Number), QStringLiteral("数字"), QStringLiteral("代码高亮"),
+                QColor(0x09, 0x86, 0x58), QColor(0xB5, 0xCE, 0xA8));
+  registerColor(QString::fromLatin1(kHL_Boolean), QStringLiteral("布尔值"),
+                QStringLiteral("代码高亮"), QColor(0x00, 0x00, 0xFF), QColor(0x56, 0x9C, 0xD6));
+  registerColor(QString::fromLatin1(kHL_Builtin), QStringLiteral("内置函数"),
+                QStringLiteral("代码高亮"), QColor(0xAF, 0x00, 0xDB), QColor(0xC5, 0x86, 0xC0));
+  registerColor(QString::fromLatin1(kHL_Call), QStringLiteral("函数调用"),
+                QStringLiteral("代码高亮"), QColor(0x79, 0x5E, 0x26), QColor(0xDC, 0xDC, 0xAA));
+  registerColor(QString::fromLatin1(kHL_Variable), QStringLiteral("变量"),
+                QStringLiteral("代码高亮"), QColor(0x00, 0x10, 0x80), QColor(0x9C, 0xDC, 0xFE));
+  // 运算符：中性色（非蓝色），与关键字区分
+  registerColor(QString::fromLatin1(kHL_Operator), QStringLiteral("运算符"),
+                QStringLiteral("代码高亮"), QColor(0x38, 0x3A, 0x42), QColor(0xD4, 0xD4, 0xD4));
+  registerColor(QString::fromLatin1(kHL_Type), QStringLiteral("类型标注"),
+                QStringLiteral("代码高亮"), QColor(0x26, 0x7F, 0x99), QColor(0x4E, 0xC9, 0xB0));
+  registerColor(QString::fromLatin1(kHL_Decorator), QStringLiteral("装饰器"),
+                QStringLiteral("代码高亮"), QColor(0xAF, 0x00, 0xDB), QColor(0xD7, 0xBA, 0x7D));
+  // 类/接口/枚举声明名（青绿色，VSCode 类名色）
+  registerColor(QString::fromLatin1(kHL_ClassName), QStringLiteral("类名"),
+                QStringLiteral("代码高亮"), QColor(0x26, 0x7F, 0x99), QColor(0x4E, 0xC9, 0xB0));
+  // 函数声明名（黄色，VSCode 函数声明色）
+  registerColor(QString::fromLatin1(kHL_FuncDecl), QStringLiteral("函数声明名"),
+                QStringLiteral("代码高亮"), QColor(0x79, 0x5E, 0x26), QColor(0xDC, 0xDC, 0xAA));
+
+  // ── 快捷键 ──
+  registerShortcut(QString::fromLatin1(kSC_Open), QStringLiteral("打开文件"),
+                   QStringLiteral("文件"), QStringLiteral("Ctrl+O"));
+  registerShortcut(QString::fromLatin1(kSC_OpenFolder), QStringLiteral("打开文件夹"),
+                   QStringLiteral("文件"), QStringLiteral(""));
+  registerShortcut(QString::fromLatin1(kSC_Save), QStringLiteral("保存"), QStringLiteral("文件"),
+                   QStringLiteral("Ctrl+S"));
+  registerShortcut(QString::fromLatin1(kSC_SaveAll), QStringLiteral("保存全部"),
+                   QStringLiteral("文件"), QStringLiteral("Ctrl+Shift+S"));
+  registerShortcut(QString::fromLatin1(kSC_Split), QStringLiteral("向右拆分编辑器"),
+                   QStringLiteral("视图"), QStringLiteral("Ctrl+\\"));
+  registerShortcut(QString::fromLatin1(kSC_Close), QStringLiteral("关闭标签页"),
+                   QStringLiteral("视图"), QStringLiteral("Ctrl+W"));
+  registerShortcut(QString::fromLatin1(kSC_Find), QStringLiteral("查找/替换"),
+                   QStringLiteral("编辑"), QStringLiteral("Ctrl+F"));
+  registerShortcut(QString::fromLatin1(kSC_DebugStart), QStringLiteral("启动/继续调试"),
+                   QStringLiteral("调试"), QStringLiteral("F5"));
+  registerShortcut(QString::fromLatin1(kSC_DebugStepOver), QStringLiteral("单步跳过"),
+                   QStringLiteral("调试"), QStringLiteral("F10"));
+  registerShortcut(QString::fromLatin1(kSC_DebugStepInto), QStringLiteral("单步进入"),
+                   QStringLiteral("调试"), QStringLiteral("F11"));
+  registerShortcut(QString::fromLatin1(kSC_DebugStepOut), QStringLiteral("单步跳出"),
+                   QStringLiteral("调试"), QStringLiteral("Shift+F11"));
+  registerShortcut(QString::fromLatin1(kSC_Settings), QStringLiteral("打开设置"),
+                   QStringLiteral("视图"), QStringLiteral(""));
+}
+
+// init — 加载配置文件
+void SettingStore::init() {
+  if (m_initialized) return;
+  m_initialized = true;
+  loadFromFile();
+}
+
+void SettingStore::registerColor(const QString &key, const QString &label, const QString &category,
+                                 const QColor &light, const QColor &dark) {
+  m_themeLight[key] = light;
+  m_themeDark[key] = dark;
+  m_labels[key] = label;
+  m_categories[key] = category;
+  if (!m_colorOrder.contains(key)) m_colorOrder.append(key);
+}
+
+void SettingStore::registerShortcut(const QString &key, const QString &label,
+                                    const QString &category, const QString &defaultSeq) {
+  m_shortcuts[key] = QKeySequence(defaultSeq);
+  m_shortcutLabels[key] = label;
+  m_shortcutCategories[key] = category;
+  if (!m_shortcutOrder.contains(key)) m_shortcutOrder.append(key);
+}
+
+QString SettingStore::storePath() const {
+  QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  if (dir.isEmpty()) dir = QDir::homePath() + QStringLiteral("/.auto_code");
+  QDir().mkpath(dir);
+  return dir + QStringLiteral("/settings.json");
+}
+
+void SettingStore::loadFromFile() {
+  QFile f(storePath());
+  if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+  QJsonParseError perr;
+  QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &perr);
+  if (perr.error != QJsonParseError::NoError || !doc.isObject()) return;
+  QJsonObject root = doc.object();
+
+  // 主题
+  QString theme = root.value(QStringLiteral("theme")).toString();
+  if (theme == QStringLiteral("dark"))
+    m_theme = ThemeDark;
+  else if (theme == QStringLiteral("custom"))
+    m_theme = ThemeCustom;
+  else
+    m_theme = ThemeLight;
+
+  // 自定义颜色
+  QJsonObject colors = root.value(QStringLiteral("colors")).toObject();
+  for (auto it = colors.begin(); it != colors.end(); ++it) {
+    const QString name = it.value().toString();
+    QColor c(name);
+    if (c.isValid()) m_custom[it.key()] = c;
+  }
+
+  // 自定义快捷键
+  QJsonObject scs = root.value(QStringLiteral("shortcuts")).toObject();
+  for (auto it = scs.begin(); it != scs.end(); ++it) {
+    QKeySequence seq(it.value().toString());
+    if (!seq.isEmpty() && m_shortcuts.contains(it.key())) m_shortcuts[it.key()] = seq;
+  }
+}
+
+QColor SettingStore::color(const QString &key) const {
+  if (m_custom.contains(key)) return m_custom.value(key);
+  const QHash<QString, QColor> &base = (m_theme == ThemeDark) ? m_themeDark : m_themeLight;
+  auto it = base.find(key);
+  return (it != base.end()) ? it.value() : QColor();
+}
+
+void SettingStore::setColor(const QString &key, const QColor &c) {
+  if (!m_themeLight.contains(key)) return;
+  if (!c.isValid()) {
+    m_custom.remove(key);
+  } else {
+    m_custom[key] = c;
+  }
+  if (m_theme != ThemeCustom) m_theme = ThemeCustom;
+  emit colorsChanged();
+}
+
+bool SettingStore::hasCustomColor(const QString &key) const { return m_custom.contains(key); }
+
+QStringList SettingStore::colorKeys() const { return m_colorOrder; }
+
+QString SettingStore::colorLabel(const QString &key) const { return m_labels.value(key, key); }
+
+QString SettingStore::colorCategory(const QString &key) const {
+  return m_categories.value(key, QStringLiteral("其他"));
+}
+
+void SettingStore::resetColor(const QString &key) {
+  if (!m_custom.contains(key)) return;
+  m_custom.remove(key);
+  emit colorsChanged();
+}
+
+void SettingStore::resetAllColors() {
+  if (m_custom.isEmpty()) return;
+  m_custom.clear();
+  emit colorsChanged();
+}
+
+void SettingStore::setTheme(Theme t) {
+  if (m_theme == t) return;
+  m_theme = t;
+  if (t != ThemeCustom) m_custom.clear();  // 切回内置主题时丢弃自定义覆盖
+  emit themeChanged();
+}
+
+QString SettingStore::themeName(Theme t) const {
+  switch (t) {
+    case ThemeLight:
+      return QStringLiteral("浅色");
+    case ThemeDark:
+      return QStringLiteral("深色");
+    case ThemeCustom:
+      return QStringLiteral("自定义");
+  }
+  return QStringLiteral("浅色");
+}
+
+// ── 快捷键 ──
+
+QKeySequence SettingStore::shortcut(const QString &key) const { return m_shortcuts.value(key); }
+
+void SettingStore::setShortcut(const QString &key, const QKeySequence &seq) {
+  if (!m_shortcutOrder.contains(key)) return;
+  m_shortcuts[key] = seq;
+  emit shortcutsChanged();
+}
+
+QStringList SettingStore::shortcutKeys() const { return m_shortcutOrder; }
+
+QString SettingStore::shortcutLabel(const QString &key) const {
+  return m_shortcutLabels.value(key, key);
+}
+
+QString SettingStore::shortcutCategory(const QString &key) const {
+  return m_shortcutCategories.value(key, QStringLiteral("其他"));
+}
+
+// ── 持久化 ──
+
+void SettingStore::save() {
+  QJsonObject root;
+  switch (m_theme) {
+    case ThemeLight:
+      root[QStringLiteral("theme")] = QStringLiteral("light");
+      break;
+    case ThemeDark:
+      root[QStringLiteral("theme")] = QStringLiteral("dark");
+      break;
+    case ThemeCustom:
+      root[QStringLiteral("theme")] = QStringLiteral("custom");
+      break;
+  }
+
+  QJsonObject colors;
+  for (auto it = m_custom.begin(); it != m_custom.end(); ++it) {
+    colors[it.key()] = it.value().name();
+  }
+  root[QStringLiteral("colors")] = colors;
+
+  QJsonObject scs;
+  for (auto it = m_shortcuts.begin(); it != m_shortcuts.end(); ++it) {
+    scs[it.key()] = it.value().toString();
+  }
+  root[QStringLiteral("shortcuts")] = scs;
+
+  QFile f(storePath());
+  if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) return;
+  f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+}
+
+void SettingStore::apply() {
+  save();
+  emit themeChanged();
+  emit colorsChanged();
+  emit shortcutsChanged();
+}
+
+// ── 全局风格 ──
+
+QPalette SettingStore::buildPalette() const {
+  QPalette p;
+  const QColor bg = color(QStringLiteral("ui.background"));
+  const QColor text = color(QStringLiteral("ui.textColor"));
+  const QColor panel = color(QStringLiteral("ui.panelBackground"));
+  const QColor border = color(QStringLiteral("ui.borderColor"));
+  const QColor sel = color(QStringLiteral("ui.listSelectionBackground"));
+  const QColor alt = color(QStringLiteral("ui.listAlternateBackground"));
+  const QColor tipBg = color(QStringLiteral("ui.errorToolTipBackground"));
+  const QColor editorBg = color(QStringLiteral("editor.background"));
+  const QColor editorText = color(QStringLiteral("editor.text"));
+
+  // 基础色（正常态）
+  p.setColor(QPalette::Window, bg);
+  p.setColor(QPalette::WindowText, text);
+  p.setColor(QPalette::Base, editorBg);
+  p.setColor(QPalette::AlternateBase, alt);
+  p.setColor(QPalette::Text, editorText);
+  p.setColor(QPalette::PlaceholderText, text);
+  p.setColor(QPalette::Button, panel);
+  p.setColor(QPalette::ButtonText, text);
+  // Fusion 用 Light/Midlight 提亮选中 tab / 凸起控件的棱边。深色主题下若不显式设置，
+  // 会回落到系统计算的偏亮颜色，导致选中 tab 背景被提亮成浅色、与文字对比度不足。
+  // 这里把 Light/Midlight 设为面板的轻微提亮，保证选中 tab 背景始终贴近面板深色。
+  p.setColor(QPalette::Light, panel.lighter(108));
+  p.setColor(QPalette::Midlight, panel.lighter(104));
+  p.setColor(QPalette::Dark, border.darker(120));
+  p.setColor(QPalette::Mid, border);
+  p.setColor(QPalette::BrightText, QColor(255, 0, 0));
+  p.setColor(QPalette::Highlight, sel);
+  p.setColor(QPalette::HighlightedText, text);
+  p.setColor(QPalette::ToolTipBase, tipBg);
+  p.setColor(QPalette::ToolTipText, text);
+  p.setColor(QPalette::Link, sel);
+
+  // 禁用态统一降为边框色，避免原生控件回落到系统主题色
+  p.setColor(QPalette::Disabled, QPalette::WindowText, border);
+  p.setColor(QPalette::Disabled, QPalette::Text, border);
+  p.setColor(QPalette::Disabled, QPalette::ButtonText, border);
+  p.setColor(QPalette::Disabled, QPalette::Highlight, border);
+  p.setColor(QPalette::Disabled, QPalette::HighlightedText, bg);
+
+  return p;
+}
+
+void SettingStore::applyGlobalStyle() {
+  if (!qApp) return;
+  // 全局风格只应用一次：Fusion 基础风格 + 程序化复选框/单选框指示器代理。
+  // Fusion 使用 QPalette 渲染，彻底脱离 Windows 系统主题色；
+  // 指示器代理用 QPainter 自绘打勾/圆点，绕开 QSS image 对图片支持不稳定的问题。
+  if (!m_globalStyleApplied) {
+    m_globalStyleApplied = true;
+    if (QStyle *s = AuiStyle::createAppStyle()) {
+      s->setParent(qApp);
+      qApp->setStyle(s);
+    }
+  }
+  qApp->setPalette(buildPalette());
+
+  // 全局样式表应用到 QApplication 级，保证弹出菜单/右键菜单/下拉弹出等
+  // 顶层弹出控件能可靠继承主题色（仅窗口级样式表无法覆盖这些弹窗）
+  qApp->setStyleSheet(AuiStyle::mainStyleSheet());
+}

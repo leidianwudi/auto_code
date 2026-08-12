@@ -44,6 +44,9 @@ public:
   /// 设置 baseUrl（用于 HTTP 请求拼接）
   void setBaseUrl(const QString &baseUrl) { m_baseUrl = baseUrl; }
 
+  /// 主题/颜色变化后重新应用样式表（深色主题下保证表格行线/标签/文字可读）
+  void reloadStyle();
+
   /// 从 AC 脚本文件加载 HTTP 配置（baseUrl、authHeader、postData）
   void loadHttpConfigFromAcFile(const QString &acFilePath);
 

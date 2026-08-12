@@ -18,6 +18,7 @@
 #include <QStandardPaths>
 #include <QTabWidget>
 #include <QTimer>
+#include <QTreeWidget>
 #include <QVBoxLayout>
 
 #include "src/util/ui/component/aui_button.h"
@@ -57,18 +58,16 @@ DebugPanel::DebugPanel(QWidget *parent) : QWidget(parent) {
   m_stepOutBtn->setToolTip(QStringLiteral("单步跳出 (Shift+F11)"));
 
   m_statusLabel = new QLabel(QStringLiteral("未调试"));
-  m_statusLabel->setStyleSheet(QStringLiteral("color: %1; background: transparent;")
-                                   .arg(AuiStyle::inactiveTabColor().name()));
   controlBar->addWidget(m_statusLabel, 1);
 
   root->addLayout(controlBar);
 
   // ── 调用栈 / 变量 双 tab ──
-  auto *tabs = new QTabWidget;
+  m_tabs = new QTabWidget;
+  QTabWidget *tabs = m_tabs;
   tabs->setDocumentMode(true);
   // 指定 tab 头四边空白（左/右 6px，上/下 3px），并保留文字颜色（未选中灰 / 选中深）
   AuiStyle::applyTabBarPadding(tabs->tabBar(), 10, 5, 10, 5);
-  tabs->tabBar()->setStyleSheet(AuiStyle::tabBarStyleSheet());
 
   m_stackTree = AuiTree::createListTree();
   m_stackTree->setColumnCount(2);
@@ -117,12 +116,6 @@ DebugPanel::DebugPanel(QWidget *parent) : QWidget(parent) {
   //    生效列(复选框)  |  文件  |  行
   m_removeBreakBtn = new QPushButton(QStringLiteral("移除全部断点"));
   m_removeBreakBtn->setToolTip(QStringLiteral("移除所有已设置断点"));
-  m_removeBreakBtn->setStyleSheet(
-      QStringLiteral(
-          "QPushButton { border: none; background: transparent; color: %1; text-align: left; "
-          "padding: 2px 4px; } "
-          "QPushButton:hover { background: rgba(128,128,128,0.15); }")
-          .arg(AuiStyle::inactiveTabColor().name()));
   connect(m_removeBreakBtn, &QPushButton::clicked, this,
           [this]() { emit breakpointRemoveAllRequested(); });
 
@@ -201,6 +194,9 @@ DebugPanel::DebugPanel(QWidget *parent) : QWidget(parent) {
 
   // 默认未激活
   setActive(false);
+
+  // 应用当前主题样式（页签栏背景、列表、状态文字等）
+  refreshStyle();
 }
 
 void DebugPanel::saveHeaderStates() {
@@ -340,6 +336,63 @@ void DebugPanel::setActive(bool active) {
 }
 
 void DebugPanel::setStatus(const QString &text) { m_statusLabel->setText(text); }
+
+void DebugPanel::refreshStyle() {
+  // ── 页签栏（调用栈 / 变量 / 断点）──
+  // VSCode 风格：简洁无边框，选中 tab 顶部蓝色指示条 + 文字高亮，
+  // 未选中 tab 灰色文字，hover 时文字微亮。颜色随主题即时重建。
+  if (m_tabs) {
+    m_tabs->setStyleSheet(
+        QStringLiteral(
+            // 面板区域：无额外边框，背景用面板色
+            "QTabWidget::pane { border: none; background: %1; }"
+            // tab 栏背景
+            "QTabBar { background: %1; }"
+            // 未选中 tab：灰色文字，上下留白，顶部 2px 透明边框（占位，避免选中时高度跳动）
+            "QTabBar::tab {"
+            "  color: %2; padding: 6px 14px;"
+            "  border-top: 2px solid transparent;"
+            "  border-bottom: 1px solid %4;"
+            "  background: transparent;"
+            "}"
+            // hover：文字微亮（用次要文字色）
+            "QTabBar::tab:hover { color: %5; }"
+            // 选中 tab：正文色 + 顶部蓝色指示条
+            "QTabBar::tab:selected {"
+            "  color: %3; border-top: 2px solid %6;"
+            "}")
+            .arg(AuiStyle::panelBackground().name(),     // %1 面板背景
+                 AuiStyle::inactiveTabColor().name(),    // %2 未选中灰
+                 AuiStyle::textColor().name(),           // %3 选中正文色
+                 AuiStyle::borderColor().name(),         // %4 底部分隔线
+                 AuiStyle::secondaryTextColor().name(),  // %5 hover 文字
+                 QStringLiteral("#0e7afe")));            // %6 蓝色指示条
+  }
+
+  // ── 三个列表（调用栈 / 变量 / 断点）── 重新生成带当前主题色的列表样式
+  for (QTreeWidget *tree : {m_stackTree, m_varTree, m_breakTree}) {
+    if (tree) tree->setStyleSheet(AuiTree::listStyleSheet());
+  }
+
+  // ── 状态文字 ──
+  if (m_statusLabel) {
+    m_statusLabel->setStyleSheet(QStringLiteral("color: %1; background: transparent;")
+                                     .arg(AuiStyle::inactiveTabColor().name()));
+  }
+
+  // ── 移除全部断点按钮 ──
+  if (m_removeBreakBtn) {
+    m_removeBreakBtn->setStyleSheet(
+        QStringLiteral(
+            "QPushButton { border: none; background: transparent; color: %1; text-align: left; "
+            "padding: 2px 4px; } "
+            "QPushButton:hover { background: rgba(128,128,128,0.15); }")
+            .arg(AuiStyle::inactiveTabColor().name()));
+  }
+
+  // ── 4 个调试单步按钮（继续/单步执行/进入/跳出）── 重建样式与图标颜色
+  AuiButton::refreshThemedButtons(this);
+}
 
 QString DebugPanel::formatValue(const QJsonValue &v) {
   if (v.isString()) return v.toString();

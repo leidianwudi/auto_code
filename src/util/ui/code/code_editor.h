@@ -26,6 +26,7 @@
 #include <QRegularExpression>
 #include <QSet>
 #include <QString>
+#include <QSyntaxHighlighter>
 #include <QTextBlock>
 #include <QTimer>
 #include <QVector>
@@ -142,6 +143,12 @@ public:
   void setDebugVariables(const QList<AcDebugVar> &vars);
   /// 清除调试变量快照
   void clearDebugVariables();
+  /// 注册当前文件对应的语法高亮器（主题切换时刷新）
+  void setSyntaxHighlighter(QSyntaxHighlighter *h);
+  /// 当前文件对应的语法高亮器
+  QSyntaxHighlighter *syntaxHighlighter() const { return m_highlighter; }
+  /// 从 SettingStore 重新读取颜色并刷新高亮（主题切换时调用）
+  void reloadColors();
 
 signals:
   void validationMessage(const QString &message, int errorCount = 0);
@@ -267,6 +274,9 @@ private:
   QMap<int, bool> m_breakpoints;  ///< 断点集合（行号 → 是否生效，行号 1-based）
   int m_debugLine = -1;           ///< 当前调试暂停行（1-based），-1 表示无
   QList<AcDebugVar> m_debugVars;  ///< 当前调试变量快照（悬停显示用）
+
+  // 语法高亮器（主题切换时刷新）
+  QSyntaxHighlighter *m_highlighter = nullptr;
 
   struct ErrorRange {
     int start;

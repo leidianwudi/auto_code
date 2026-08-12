@@ -146,8 +146,21 @@ QPixmap AuiWindow::appIconPixmap(int size) {
 
 QLabel *AuiWindow::createAppIcon(QWidget *parent, int size) {
   auto *label = new QLabel(parent);
+  // 标记并记录尺寸，供主题切换时 refreshAppIcons 用当前主题色重绘
+  label->setObjectName(QStringLiteral("AuiAppIcon"));
+  label->setProperty("auiAppIconSize", size);
   label->setPixmap(appIconPixmap(size));
   return label;
+}
+
+void AuiWindow::refreshAppIcons(QWidget *root) {
+  if (!root) return;
+  for (QLabel *label : root->findChildren<QLabel *>()) {
+    if (label->objectName() == QLatin1String("AuiAppIcon")) {
+      const int size = label->property("auiAppIconSize").toInt();
+      label->setPixmap(appIconPixmap(size));
+    }
+  }
 }
 
 // ════════════════════════════════════════════════════════════

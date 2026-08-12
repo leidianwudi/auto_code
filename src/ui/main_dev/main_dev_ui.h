@@ -98,6 +98,9 @@ public:
 
   void applyTabDimming(QTabWidget *active);
 
+  /// 刷新标题栏及菜单按钮的颜色（主题切换时调用）
+  void refreshTitleBarStyle();
+
   // ════════════════════════════════════════════════════════════
   //  输出面板
   // ════════════════════════════════════════════════════════════
@@ -116,7 +119,7 @@ public:
   QAction *openAction() const { return m_openAction; }
   QAction *openFolderAction() const { return m_openFolderAction; }
   QAction *helpExampleAction() const { return m_helpExampleAction; }
-  QAction *helpKeyAction() const { return m_helpKeyAction; }
+  QAction *settingsAction() const { return m_settingsAction; }
   QPushButton *buildBtn() const { return m_buildBtn; }
   QPushButton *stopBtn() const { return m_stopBtn; }
   QPushButton *debugBtn() const { return m_debugBtn; }
@@ -166,7 +169,7 @@ private:
   QAction *m_openAction = nullptr;
   QAction *m_openFolderAction = nullptr;
   QAction *m_helpExampleAction = nullptr;
-  QAction *m_helpKeyAction = nullptr;
+  QAction *m_settingsAction = nullptr;
 
   // ── 自定义标题栏 ──
   QWidget *m_titleBar = nullptr;

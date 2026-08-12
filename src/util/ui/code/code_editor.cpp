@@ -35,6 +35,10 @@
 #include "src/util/ui/code/format_code.h"
 #include "src/util/ui/component/aui_error_tool_tip.h"
 #include "src/util/ui/component/aui_style.h"
+#include "src/util/ui/highlighter/light_ac.h"
+#include "src/util/ui/highlighter/light_json.h"
+#include "src/util/ui/highlighter/light_tpl.h"
+#include "src/util/ui/highlighter/light_ts.h"
 
 // ──────────────────────────────────────────────────────────────
 //  构造与初始化（精简后）
@@ -101,6 +105,21 @@ const QString &CodeEditor::cachedText() const {
     m_cacheVersion = document()->revision();
   }
   return m_cachedText;
+}
+
+void CodeEditor::setSyntaxHighlighter(QSyntaxHighlighter *h) { m_highlighter = h; }
+
+void CodeEditor::reloadColors() {
+  // 按高亮器具体类型刷新颜色（主题/自定义颜色变化时调用）
+  if (auto *lj = dynamic_cast<LightJson *>(m_highlighter)) {
+    lj->reloadColors();
+  } else if (auto *la = dynamic_cast<LightAc *>(m_highlighter)) {
+    la->reloadColors();
+  } else if (auto *lt = dynamic_cast<LightTpl *>(m_highlighter)) {
+    lt->reloadColors();
+  } else if (auto *lts = dynamic_cast<LightTs *>(m_highlighter)) {
+    lts->reloadColors();
+  }
 }
 
 void CodeEditor::setValidationMode(ValidationMode mode) {
@@ -295,7 +314,7 @@ void CodeEditor::applyErrorUnderline(int from, int length, const QString &toolti
   QTextEdit::ExtraSelection sel;
   sel.cursor = cursor;
   sel.format.setProperty(QTextFormat::TextUnderlineStyle, QTextCharFormat::WaveUnderline);
-  sel.format.setProperty(QTextFormat::TextUnderlineColor, QColor(Qt::red));
+  sel.format.setProperty(QTextFormat::TextUnderlineColor, AuiStyle::errorUnderlineColor());
   sel.format.setToolTip(tooltip);
   selections.append(sel);
 }
@@ -352,7 +371,7 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area)
       if (m_errorLines.contains(line)) {
         painter.setPen(AuiStyle::errorTextColor());
       } else {
-        painter.setPen(AuiStyle::textColor());
+        painter.setPen(AuiStyle::lineNumberTextColor());
       }
 
       painter.drawText(0, top, m_lineNumberArea->width() - 6, fontMetrics().height(),

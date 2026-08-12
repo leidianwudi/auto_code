@@ -998,16 +998,19 @@ void IconPickerDialog::setupUI() {
                      "  border: none;"
                      "  border-radius: 4px;"
                      "  background: transparent;"
-                     "  color: #888;"
+                     "  color: %1;"
                      "}"
                      "QTabBar::tab:selected {"
-                     "  background: #d0d0d0;"
-                     "  color: #222;"
+                     "  background: %2;"
+                     "  color: %3;"
                      "}"
                      "QTabBar::tab:hover:!selected {"
-                     "  background: #e4e4e4;"
-                     "  color: #555;"
-                     "}"));
+                     "  background: %4;"
+                     "  color: %5;"
+                     "}")
+          .arg(AuiStyle::inactiveTabColor().name(), AuiStyle::tabHoverBackground().name(),
+               AuiStyle::textColor().name(), AuiStyle::hoverBackground().name(),
+               AuiStyle::secondaryTextColor().name()));
   mainLayout->addWidget(m_tabWidget);
 
   connect(m_tabWidget, &QTabWidget::currentChanged, this, &IconPickerDialog::switchTab);

@@ -28,6 +28,9 @@ class LightTs : public QSyntaxHighlighter {
 public:
   explicit LightTs(QTextDocument *parent = nullptr);
 
+  /// 重新从 SettingStore 读取颜色并刷新高亮（主题切换时调用）
+  void reloadColors();
+
 protected:
   /**
    * @brief 对单个文本块进行高亮处理
@@ -40,9 +43,12 @@ private:
    * @brief 高亮规则
    */
   struct HighlightRule {
-    QRegularExpression pattern; ///< 匹配模式
-    QTextCharFormat format;     ///< 文本格式
+    QRegularExpression pattern;  ///< 匹配模式
+    QTextCharFormat format;      ///< 文本格式
   };
 
-  QVector<HighlightRule> m_rules; ///< 高亮规则列表
+  /// 从 SettingStore 重建所有高亮规则（构造与主题刷新共用）
+  void buildRules();
+
+  QVector<HighlightRule> m_rules;  ///< 高亮规则列表
 };

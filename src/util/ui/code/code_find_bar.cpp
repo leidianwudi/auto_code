@@ -153,7 +153,8 @@ void CodeFindBar::setupUI() {
   m_closeBtn->setToolTip(QStringLiteral("关闭 (Esc)"));
   m_closeBtn->setStyleSheet(
       QStringLiteral("QPushButton#findCloseBtn { font-size: 13px; border: none; }"
-                     "QPushButton#findCloseBtn:hover { background: #e0e0e0; }"));
+                     "QPushButton#findCloseBtn:hover { background: %1; }")
+          .arg(AuiStyle::hoverBackground().name()));
   connect(m_closeBtn, &QPushButton::clicked, this, &CodeFindBar::hideFindBar);
   findRow->addWidget(m_closeBtn);
 

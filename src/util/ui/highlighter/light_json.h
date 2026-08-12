@@ -23,6 +23,9 @@ class LightJson : public QSyntaxHighlighter {
 public:
   explicit LightJson(QTextDocument *parent = nullptr);  // 构造函数，初始化所有高亮规则
 
+  /// 重新从 SettingStore 读取颜色并刷新高亮（主题切换时调用）
+  void reloadColors();
+
 protected:
   void highlightBlock(
       const QString &text) override;  // 重写：对单行文本进行高亮处理（优先处理注释）
@@ -32,6 +35,9 @@ private:
     QRegularExpression pattern;  ///< 正则表达式匹配模式
     QTextCharFormat format;      ///< 对应的文本格式（颜色、字体等）
   };
+
+  /// 从 SettingStore 重建所有高亮规则（构造与主题刷新共用）
+  void buildRules();
 
   void highlightNonCommentText(const QString &text);  // 辅助函数：对非注释文本应用所有高亮规则
 

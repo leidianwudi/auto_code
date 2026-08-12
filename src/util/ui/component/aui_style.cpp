@@ -5,15 +5,24 @@
 
 #include "aui_style.h"
 
+#include <QApplication>
 #include <QLabel>
+#include <QMenu>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPalette>
 #include <QProxyStyle>
 #include <QStyle>
 #include <QStyleFactory>
 #include <QStyleOption>
 #include <QTabBar>
+#include <QToolButton>
 
 /// 标记 tab bar 已基于 Fusion（含自定义空白），供 ensureFusionTabBar 跳过覆盖
 static const char *kFusionTabProperty = "aui_fusion_tab";
+
+/// 标记编辑器标签栏的聚焦状态（true=所在面板有焦点），供代理样式绘制文字颜色
+static const char *kFocusTabProperty = "aui_focus_tab";
 
 // ════════════════════════════════════════════════════════════
 //  全局样式表 — 所有窗口共用
@@ -41,16 +50,63 @@ QString AuiStyle::mainStyleSheet() {
   return QStringLiteral(
              "QToolButton { color: %2; border: 1px solid transparent; padding: 2px 6px; }"
              "QToolButton:hover { background: %3; border: 1px solid %5; }"
-             "QPushButton { color: %2; border: 1px solid transparent; }"
+             "QPushButton { color: %2; background: transparent; border: 1px solid transparent; }"
              "QPushButton:hover { background: %3; border: 1px solid %5; }"
+             "QPushButton:pressed { background: %4; }"
+             // 下拉框：面板底 + 细边框 + 圆角；隐藏原生箭头（QSS 的 down-arrow 画不出可靠图标，
+             // 统一由 AuiComboBoxWidget 在 paintEvent 里用 QPainter 绘制居中三角箭头）
+             "QComboBox { color: %2; background: %6; border: 1px solid %5; border-radius: 3px; "
+             "padding: 2px 8px; }"
+             "QComboBox:hover { border: 1px solid %4; }"
+             "QComboBox::drop-down { border: none; width: 20px; }"
+             "QComboBox::down-arrow { image: none; border: none; width: 0; height: 0; }"
+             "QComboBox QAbstractItemView { background: %6; color: %2; border: 1px solid %5; "
+             "outline: 0; selection-background-color: %3; selection-color: %2; }"
+             "QComboBox QAbstractItemView::item { padding: 4px 8px; }"
+             // 其余文字控件统一用当前主题文字色，保证深色主题下文字与背景有足够对比度。
+             // 这些规则只设 color，不设 background，避免覆盖各控件的自定义背景；控件自身的
+             // 样式表（per-widget）优先级更高，可覆盖这里的默认文字色。
+             "QLabel { color: %2; }"
+             "QRadioButton { color: %2; }"
+             "QCheckBox { color: %2; }"
+             "QGroupBox { color: %2; }"
+             "QSpinBox, QDoubleSpinBox, QDateTimeEdit { color: %2; }"
+             "QLineEdit { color: %2; }"
+             "QTableWidget, QTreeWidget, QListWidget, QListView, QTreeView, QTableView { color: "
+             "%2; }"
+             "QHeaderView::section { color: %2; }"
+             "QMenuBar { color: %2; }"
+             "QMenuBar::item { color: %2; }"
+             "QToolTip { color: %2; }"
              "QStatusBar { background: %1; color: %2; }"
              "QStatusBar::item { border: none; }"
              "QMenu { background: %1; border: 1px solid %5; padding: 4px 0px; }"
-             "QMenu::item { padding: 6px 24px; }"
+             "QMenu::item { padding: 6px 24px; color: %2; }"
              "QMenu::item:selected { background: %3; color: %2; }"
-             "#WindowFrame { background: %1; border: 1px solid %4; }")
+             "#WindowFrame { background: %1; border: 1px solid %4; }"
+             "#AuiTitleBar { background: %7; }"
+             // 细窄滚动条：透明背景 + 半透明灰色滑块（深浅主题通用，类似 VS Code），无箭头
+             "QScrollBar:vertical { background: transparent; width: 10px; margin: 0; border: none; "
+             "}"
+             "QScrollBar::handle:vertical {"
+             "  background: rgba(120, 120, 120, 100); border-radius: 5px;"
+             "  min-height: 20px; margin: 2px;"
+             "}"
+             "QScrollBar::handle:vertical:hover { background: rgba(120, 120, 120, 150); }"
+             "QScrollBar:horizontal { background: transparent; height: 10px; margin: 0; border: "
+             "none; }"
+             "QScrollBar::handle:horizontal {"
+             "  background: rgba(120, 120, 120, 100); border-radius: 5px;"
+             "  min-width: 20px; margin: 2px;"
+             "}"
+             "QScrollBar::handle:horizontal:hover { background: rgba(120, 120, 120, 150); }"
+             "QScrollBar::add-line, QScrollBar::sub-line,"
+             "QScrollBar::add-page, QScrollBar::sub-page {"
+             "  background: transparent; width: 0; height: 0;"
+             "}")
       .arg(background().name(), textColor().name(), hoverBackground().name(),
-           borderDarkColor().name(), borderColor().name());
+           borderDarkColor().name(), borderColor().name(), panelBackground().name(),
+           titleBarBackground().name());
 }
 
 QString AuiStyle::dialogStyleSheet() {
@@ -58,11 +114,60 @@ QString AuiStyle::dialogStyleSheet() {
   return QStringLiteral(
              "QDialog { background: %1; }"
              "QLabel { color: %2; font-size: %3; }"
+             "QRadioButton { color: %2; font-size: %3; }"
+             "QCheckBox { color: %2; font-size: %3; }"
+             "QGroupBox { color: %2; font-size: %3; }"
              "QLineEdit {"
              "  border: 1px solid %4; border-radius: 3px;"
              "  padding: 4px 6px; font-size: %3;"
              "}")
       .arg(background().name(), textColor().name(), fs, borderColor().name());
+}
+
+QString AuiStyle::menuButtonStyleSheet() {
+  // 直接设置到 QToolButton 上，优先级高于全局/窗口级样式表，
+  // 确保深色主题下按钮文字色不被动继承的默认值覆盖
+  return QStringLiteral(
+             "QToolButton { color: %1; background: transparent; "
+             "border: 1px solid transparent; padding: 2px 6px; }"
+             "QToolButton:hover { background: %2; border: 1px solid %3; }")
+      .arg(textColor().name(), hoverBackground().name(), borderColor().name());
+}
+
+QString AuiStyle::menuStyleSheet() {
+  // 直接设置到 QMenu 上，QMenu 是弹出式顶层窗口，不继承主窗口样式表
+  return QStringLiteral(
+             "QMenu { background: %1; border: 1px solid %2; padding: 4px 0px; }"
+             "QMenu::item { padding: 6px 24px; color: %3; }"
+             "QMenu::item:selected { background: %4; color: %3; }"
+             "QMenu::separator { height: 1px; background: %2; margin: 4px 8px; }")
+      .arg(background().name(), borderColor().name(), textColor().name(), hoverBackground().name());
+}
+
+void AuiStyle::applyMenuButtonStyle(QToolButton *btn) {
+  if (!btn) return;
+  // 样式表 + 调色板双保险：Fusion 绘制 QToolButton 文字优先读调色板 ButtonText/WindowText
+  btn->setStyleSheet(menuButtonStyleSheet());
+  QPalette p = btn->palette();
+  const QColor tc = textColor();
+  p.setColor(QPalette::ButtonText, tc);
+  p.setColor(QPalette::WindowText, tc);
+  p.setColor(QPalette::Text, tc);
+  p.setColor(QPalette::HighlightedText, tc);
+  btn->setPalette(p);
+}
+
+void AuiStyle::applyMenuStyle(QMenu *menu) {
+  if (!menu) return;
+  // 弹出菜单是独立顶层窗口，不继承主窗口样式；显式设样式表 + 调色板
+  menu->setStyleSheet(menuStyleSheet());
+  QPalette p = menu->palette();
+  const QColor tc = textColor();
+  p.setColor(QPalette::Window, background());
+  p.setColor(QPalette::WindowText, tc);
+  p.setColor(QPalette::Text, tc);
+  p.setColor(QPalette::HighlightedText, tc);
+  menu->setPalette(p);
 }
 
 QString AuiStyle::tabBarStyleSheet() {
@@ -102,6 +207,37 @@ private:
   QMargins m_m;
 };
 
+// 可聚焦标签栏代理：继承空白代理，额外按「面板聚焦状态」直接修改绘制选项的调色板。
+// 不依赖 setTabTextColor（它在某些样式/代理组合下不生效），而是在 CE_TabBarTab
+// 层面修改 QStyleOptionTab 的调色板，Fusion 内部绘制标签文字时会读到修改后的颜色。
+class TabBarFocusProxyStyle : public TabBarPaddingProxyStyle {
+public:
+  explicit TabBarFocusProxyStyle(const QMargins &m, QStyle *base)
+      : TabBarPaddingProxyStyle(m, base) {}
+
+  void drawControl(ControlElement element, const QStyleOption *opt, QPainter *painter,
+                   const QWidget *widget) const override {
+    if (element == CE_TabBarTab) {
+      const auto *tabOpt = static_cast<const QStyleOptionTab *>(opt);
+      QStyleOptionTab o = *tabOpt;
+      const QTabBar *bar = qobject_cast<const QTabBar *>(widget);
+      const bool active = bar ? bar->property(kFocusTabProperty).toBool() : true;
+      const bool selected = (o.state & QStyle::State_Selected);
+      // 聚焦面板的当前标签用醒目的正文色，其余（含非聚焦面板）一律灰色
+      const QColor c =
+          (active && selected) ? AuiStyle::activeTabTextColor() : AuiStyle::inactiveTabColor();
+      // 覆盖调色板中所有可能用于绘制标签文字的颜色角色
+      o.palette.setColor(QPalette::Text, c);
+      o.palette.setColor(QPalette::WindowText, c);
+      o.palette.setColor(QPalette::ButtonText, c);
+      o.palette.setColor(QPalette::HighlightedText, c);
+      QProxyStyle::drawControl(element, &o, painter, widget);
+      return;
+    }
+    QProxyStyle::drawControl(element, opt, painter, widget);
+  }
+};
+
 void AuiStyle::applyTabBarPadding(QTabBar *bar, int left, int top, int right, int bottom) {
   ensureFusionTabBar(bar);  // 先确保基于 Fusion（便于统一渲染；文字颜色由 setTabTextColor 控制）
   QStyle *base = bar->style();
@@ -112,6 +248,24 @@ void AuiStyle::applyTabBarPadding(QTabBar *bar, int left, int top, int right, in
   bar->setProperty(kFusionTabProperty, true);
   // 注意：不要在此设置样式表，否则 Qt 会用 QStyleSheetStyle 包裹代理样式，
   // 使上面对 SE_TabBarTabText 的覆盖失效。文字颜色由 applyTabDimming 的 setTabTextColor 负责。
+}
+
+void AuiStyle::applyFocusTabBar(QTabBar *bar, int left, int top, int right, int bottom) {
+  ensureFusionTabBar(bar);
+  QStyle *base = bar->style();
+  auto *proxy = new TabBarFocusProxyStyle(QMargins(left, top, right, bottom), base);
+  proxy->setParent(bar);
+  bar->setStyle(proxy);
+  bar->setProperty(kFusionTabProperty, true);
+  bar->setProperty(kFocusTabProperty, true);
+}
+
+void AuiStyle::setTabFocusState(QTabBar *bar, bool active) {
+  if (!bar) return;
+  if (bar->property(kFocusTabProperty).toBool() != active) {
+    bar->setProperty(kFocusTabProperty, active);
+    bar->update();
+  }
 }
 
 QString AuiStyle::popupListStyleSheet() {
@@ -172,13 +326,156 @@ void AuiStyle::ensureFusionTabBar(QTabBar *bar) {
 }
 
 void AuiStyle::applyTitleLabelStyle(QLabel *label) {
+  // 标记对象名，供主题切换时快速找到标题文字并重建颜色
+  label->setObjectName(QStringLiteral("AuiTitleLabel"));
   label->setStyleSheet(QStringLiteral("color: %1; font-size: %2px; background: transparent;"
                                       "padding: 0px 2px;")
                            .arg(textColor().name(), QString::number(titleFontSize())));
+  // 调色板双保险：Fusion 绘制文字优先读 WindowText/Text 角色
+  QPalette p = label->palette();
+  const QColor tc = textColor();
+  p.setColor(QPalette::WindowText, tc);
+  p.setColor(QPalette::Text, tc);
+  p.setColor(QPalette::ButtonText, tc);
+  p.setColor(QPalette::HighlightedText, tc);
+  label->setPalette(p);
   label->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
 }
 
 void AuiStyle::applyTitleBarStyle(QWidget *titleBar) {
-  titleBar->setStyleSheet(QStringLiteral("background: %1; margin-left: -2px; margin-right: -2px;")
-                              .arg(titleBarBackground().name()));
+  // 用对象名 + 全局样式表控制标题栏背景，避免在标题栏上单独 setStyleSheet
+  // （单独 setStyleSheet 会让 Qt 对标题栏及子控件启用 QStyleSheetStyle，
+  //   可能干扰 QToolButton/QMenu 的文字颜色渲染）
+  titleBar->setObjectName(QStringLiteral("AuiTitleBar"));
+  titleBar->setAutoFillBackground(true);
+  QPalette p = titleBar->palette();
+  p.setColor(QPalette::Window, titleBarBackground());
+  titleBar->setPalette(p);
+  // 强制重解析样式表并重绘，保证主题切换时标题栏背景即时更新（无需重启）
+  titleBar->style()->unpolish(titleBar);
+  titleBar->style()->polish(titleBar);
+  titleBar->update();
+}
+
+// ════════════════════════════════════════════════════════════
+//  程序化复选框 / 单选框指示器（代理风格）
+// ════════════════════════════════════════════════════════════
+//  Qt QSS 的 image 属性对图片（尤其 SVG / data URI）支持不稳定，导致打勾/圆点经常
+//  显示不出来。这里改用 QProxyStyle 直接拦截 PE_IndicatorCheckBox / PE_IndicatorRadioButton
+//  / PE_IndicatorItemViewItemCheck，用 QPainter 程序化绘制，颜色取当前主题色，随主题即时更新。
+namespace {
+
+class IndicatorProxyStyle : public QProxyStyle {
+public:
+  explicit IndicatorProxyStyle(QStyle *base) : QProxyStyle(base) {}
+
+  void drawPrimitive(PrimitiveElement element, const QStyleOption *option, QPainter *painter,
+                     const QWidget *widget) const override {
+    switch (element) {
+      case PE_IndicatorCheckBox:
+        drawCheckBox(option, painter);
+        return;
+      case PE_IndicatorRadioButton:
+        drawRadio(option, painter);
+        return;
+      case PE_IndicatorItemViewItemCheck:
+        drawItemCheck(option, painter);
+        return;
+      default:
+        QProxyStyle::drawPrimitive(element, option, painter, widget);
+    }
+  }
+
+private:
+  static bool isChecked(const QStyleOption *o) { return o->state & QStyle::State_On; }
+
+  static QRectF innerRect(const QStyleOption *o) {
+    return QRectF(o->rect).adjusted(1.0, 1.0, -1.0, -1.0);
+  }
+
+  static QColor accent() { return QColor(0x0e, 0x7a, 0xfe); }
+  static QColor boxFill() { return AuiStyle::panelBackground(); }
+  static QColor boxBorder() { return AuiStyle::textColor(); }
+
+  /// 绘制白色打勾（勾在填充色上方，用于复选框 / 树复选框选中态）
+  static void drawCheckMark(QPainter *p, const QRectF &r, qreal w) {
+    QPen pen(Qt::white, w);
+    pen.setCapStyle(Qt::RoundCap);
+    pen.setJoinStyle(Qt::RoundJoin);
+    p->setPen(pen);
+    p->setBrush(Qt::NoBrush);
+    QPainterPath path;
+    path.moveTo(r.left() + r.width() * 0.24, r.top() + r.height() * 0.52);
+    path.lineTo(r.left() + r.width() * 0.44, r.top() + r.height() * 0.72);
+    path.lineTo(r.left() + r.width() * 0.78, r.top() + r.height() * 0.30);
+    p->drawPath(path);
+  }
+
+  void drawCheckBox(const QStyleOption *o, QPainter *p) const {
+    p->save();
+    p->setRenderHint(QPainter::Antialiasing, true);
+    const QRectF r = innerRect(o);
+    if (isChecked(o)) {
+      p->setPen(Qt::NoPen);
+      p->setBrush(accent());
+      p->drawRoundedRect(r, 2.0, 2.0);
+      drawCheckMark(p, r, 2.0);
+    } else {
+      p->setPen(QPen(boxBorder(), 1.0));
+      p->setBrush(boxFill());
+      p->drawRoundedRect(r, 2.0, 2.0);
+    }
+    p->restore();
+  }
+
+  void drawRadio(const QStyleOption *o, QPainter *p) const {
+    p->save();
+    p->setRenderHint(QPainter::Antialiasing, true);
+    const QRectF r = innerRect(o);
+    const QPointF c = r.center();
+    const qreal radius = qMin(r.width(), r.height()) / 2.0;
+    if (isChecked(o)) {
+      // 蓝色外环 + 中心实心圆点（经典单选样式）
+      p->setPen(QPen(accent(), 2.0));
+      p->setBrush(boxFill());
+      p->drawEllipse(c, radius - 1.0, radius - 1.0);
+      p->setPen(Qt::NoPen);
+      p->setBrush(accent());
+      p->drawEllipse(c, radius * 0.42, radius * 0.42);
+    } else {
+      p->setPen(QPen(boxBorder(), 1.0));
+      p->setBrush(boxFill());
+      p->drawEllipse(c, radius, radius);
+    }
+    p->restore();
+  }
+
+  void drawItemCheck(const QStyleOption *o, QPainter *p) const {
+    p->save();
+    p->setRenderHint(QPainter::Antialiasing, true);
+    const QRectF r = innerRect(o);
+    if (isChecked(o)) {
+      p->setPen(Qt::NoPen);
+      p->setBrush(accent());
+      p->drawRect(r);
+      drawCheckMark(p, r, 1.6);
+    } else {
+      p->setPen(QPen(boxBorder(), 1.0));
+      p->setBrush(boxFill());
+      p->drawRect(r);
+    }
+    p->restore();
+  }
+};
+
+}  // namespace
+
+QStyle *AuiStyle::createAppStyle() {
+  // 基础风格：Fusion（使用 QPalette 渲染，彻底脱离 Windows 系统主题色）
+  QStyle *base = QStyleFactory::create(QStringLiteral("Fusion"));
+  if (!base) return nullptr;
+  // 包一层代理，程序化绘制复选框 / 单选框指示器；base 归代理所有，避免泄漏
+  auto *proxy = new IndicatorProxyStyle(base);
+  base->setParent(proxy);
+  return proxy;
 }

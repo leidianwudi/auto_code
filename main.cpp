@@ -19,6 +19,7 @@
 #include "src/util/common/util_json.h"
 #include "src/util/ui/aui_window.h"
 #include "src/util/ui/code/format_code.h"
+#include "src/util/ui/setting_store.h"
 
 static void appendLog(QTextStream &ts, const QString &title, const QString &content) {
   ts << "=== " << title << " ===" << Qt::endl;
@@ -39,6 +40,11 @@ int main(int argc, char *argv[]) {
 
   // 注册所有 C++ 函数到 FunMgr（模板引擎 ${...} 调用基础）
   FunMgr::init();
+
+  // 初始化全局设置存储（加载主题/颜色/快捷键配置，在窗口样式应用前）
+  SettingStore::ins().init();
+  // 应用全局 Fusion 风格 + 调色板，隔离系统主题色（程序不随 Windows 主题变色）
+  SettingStore::ins().applyGlobalStyle();
 
   // 单例创建并打开开发模式主窗口（可重复调用）
   MainDevMgr::ins().open();

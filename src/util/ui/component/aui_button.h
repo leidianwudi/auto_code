@@ -86,6 +86,10 @@ public:
   /// 更新最大化 / 还原按钮图标
   static void updateMaximizeIcon(QPushButton *btn, bool isMaximized);
 
+  // ════════════════════════════════════════════════════════════
+  /// 主题切换后重建窗口内按钮样式/图标（对话框标准按钮 + 标题栏控制按钮）
+  static void refreshThemedButtons(QWidget *root);
+
 private:
   AuiButton() = delete;
 };

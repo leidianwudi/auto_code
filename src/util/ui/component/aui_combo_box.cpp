@@ -5,9 +5,11 @@
 
 #include "aui_combo_box.h"
 
+#include <QAbstractItemView>
 #include <QPainter>
 #include <QStyleOption>
 #include <QStylePainter>
+#include <QTimer>
 
 #include "aui_style.h"
 
@@ -26,6 +28,16 @@ public:
   using QComboBox::QComboBox;
 
 protected:
+  // 强制弹出列表始终向下展开：标题栏处的下拉框若可向下空间不足，Qt 默认会往上弹，
+  // 视觉上很别扭；这里在弹出后把列表移动到下拉框正下方（左对齐 + 顶边对齐）
+  void showPopup() override {
+    QComboBox::showPopup();
+    if (QWidget *popup = view()->window()) {
+      const QPoint pos = mapToGlobal(QPoint(0, height()));
+      QTimer::singleShot(0, popup, [popup, pos]() { popup->move(pos); });
+    }
+  }
+
   void paintEvent(QPaintEvent *e) override {
     // ── 1. 让 QComboBox 自身（含样式表）完成框架渲染 ──
     QComboBox::paintEvent(e);
@@ -45,14 +57,14 @@ protected:
       QRect arrowRect =
           style()->subControlRect(QStyle::CC_ComboBox, &opt, QStyle::SC_ComboBoxArrow, this);
 
-      // 居中绘制倒三角，留 6px 边距，小尺寸
-      QRect r = arrowRect.adjusted(6, 7, -6, -7);
-      if (r.width() >= 2 && r.height() >= 2) {
-        QPolygonF tri;
-        tri << QPointF(r.left(), r.top()) << QPointF(r.right(), r.top())
-            << QPointF(r.center().x(), r.bottom());
-        painter.drawPolygon(tri);
-      }
+      // 在 drop-down 区域中央绘制一个小尺寸倒三角（固定尺寸，避免随区域收缩变形）
+      const qreal aw = 8.0;  // 箭头宽
+      const qreal ah = 4.5;  // 箭头高
+      const QPointF c(arrowRect.center().x(), arrowRect.center().y() + 0.5);
+      QPolygonF tri;
+      tri << QPointF(c.x() - aw / 2.0, c.y() - ah / 2.0)
+          << QPointF(c.x() + aw / 2.0, c.y() - ah / 2.0) << QPointF(c.x(), c.y() + ah / 2.0);
+      painter.drawPolygon(tri);
     }
   }
 };
@@ -68,26 +80,8 @@ QComboBox *AuiComboBox::create(QWidget *parent) {
 }
 
 void AuiComboBox::applyStyle(QComboBox *combo) {
-  const QString fs = QString::number(AuiStyle::dialogFontSize()) + QStringLiteral("px");
-  combo->setStyleSheet(QStringLiteral("QComboBox {"
-                                      "  background: %1;"
-                                      "  border: 1px solid %2; border-radius: 3px;"
-                                      "  padding: 4px 6px; font-size: %6;"
-                                      "}"
-                                      "QComboBox:hover {"
-                                      "  border: 1px solid %3;"
-                                      "}"
-                                      "QComboBox::drop-down {"
-                                      "  border: none; width: 24px;"
-                                      "}"
-                                      "QComboBox QAbstractItemView {"
-                                      "  background: %1;"
-                                      "  border: 1px solid %2;"
-                                      "  selection-background-color: %4;"
-                                      "  selection-color: %5;"
-                                      "}")
-                           .arg(AuiStyle::panelBackground().name(), AuiStyle::borderColor().name(),
-                                AuiStyle::borderDarkColor().name(),
-                                AuiStyle::hoverBackground().name(), AuiStyle::textColor().name(),
-                                fs));
+  // 颜色统一由 app 级 mainStyleSheet 动态管理（含背景/边框/文字/下拉列表），
+  // 不在控件上单独 setStyleSheet，避免切换主题时文字固化旧色导致深色下看不清
+  combo->setProperty("auiNoSheet", true);
+  combo->update();
 }

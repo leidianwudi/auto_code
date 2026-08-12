@@ -24,12 +24,16 @@
  * 注意：规则按顺序应用，先匹配控制标签（更具体），再匹配变量表达式（通用），
  * 正则的顺序决定了优先级。
  */
-LightTpl::LightTpl(QTextDocument *parent) : QSyntaxHighlighter(parent) {
+LightTpl::LightTpl(QTextDocument *parent) : QSyntaxHighlighter(parent) { buildRules(); }
+
+// 重建所有高亮规则（构造与主题刷新共用）
+void LightTpl::buildRules() {
   using namespace LightColor;
+  m_rules.clear();
 
   // ── 1. 模板控制标签（蓝色加粗） ──
   QTextCharFormat keywordFormat;
-  keywordFormat.setForeground(keyword);
+  keywordFormat.setForeground(keyword());
   keywordFormat.setFontWeight(QFont::Bold);
   m_rules.append(
       {QRegularExpression(
@@ -43,39 +47,45 @@ LightTpl::LightTpl(QTextDocument *parent) : QSyntaxHighlighter(parent) {
 
   // ── 2. 模板注释（灰色斜体） ──
   QTextCharFormat tplCommentFormat;
-  tplCommentFormat.setForeground(comment);
+  tplCommentFormat.setForeground(comment());
   tplCommentFormat.setFontItalic(true);
   m_rules.append({QRegularExpression(QStringLiteral("\\$\\{#[^}]*\\}")), tplCommentFormat});
 
   // ── 3. 模板变量（绿色） ──
   QTextCharFormat variableFormat;
-  variableFormat.setForeground(variable);
+  variableFormat.setForeground(variable());
   m_rules.append({QRegularExpression(QStringLiteral("\\$\\{[^}]+\\}")), variableFormat});
 
   // ── 4. 字符串（橙色） ──
   QTextCharFormat stringFormat;
-  stringFormat.setForeground(string_);
+  stringFormat.setForeground(string_());
   m_rules.append({QRegularExpression(QStringLiteral("\"[^\"]*\"|'[^']*'")), stringFormat});
 
   // ── 5. 行注释定界符（灰色斜体） ──
   // .tpl 中 // 是输出文本（非模板注释），只把 // 本身标灰
   // 后续文字交给正常规则处理（如 ${var} 显示为变量绿色）
   QTextCharFormat commentFormat;
-  commentFormat.setForeground(comment);
+  commentFormat.setForeground(comment());
   commentFormat.setFontItalic(true);
   m_rules.append({QRegularExpression(QStringLiteral("//")), commentFormat});
 
   // ── 6. 算术运算符（红色加粗） ──
   QTextCharFormat operatorFormat;
-  operatorFormat.setForeground(operator_);
+  operatorFormat.setForeground(operator_());
   operatorFormat.setFontWeight(QFont::Bold);
   m_rules.append({QRegularExpression(QStringLiteral("[+\\-*/]")), operatorFormat});
 
   // ── 7. 函数调用（紫色） ──
   // 匹配任何标识符后跟括号，如 render()、write()、readJson() 等
   QTextCharFormat callFormat;
-  callFormat.setForeground(call);
+  callFormat.setForeground(call());
   m_rules.append({QRegularExpression(QStringLiteral("\\b\\w+(?=\\s*\\()")), callFormat});
+}
+
+// 重新从 SettingStore 读取颜色并刷新高亮
+void LightTpl::reloadColors() {
+  buildRules();
+  rehighlight();
 }
 
 /**
@@ -93,7 +103,7 @@ void LightTpl::highlightBlock(const QString &text) {
   // ── 预扫描：处理 ${# 注释（深度计数，跳过内部 ${...}） ──
   // 不能用正则 \\$\\{#[^}]*\\}，因为注释里可能包含 ${...} 示例
   QTextCharFormat commentFormat;
-  commentFormat.setForeground(LightColor::comment);
+  commentFormat.setForeground(LightColor::comment());
   commentFormat.setFontItalic(true);
 
   int idx = 0;
@@ -135,7 +145,7 @@ void LightTpl::highlightBlock(const QString &text) {
   // 只把 /* 和 */ 定界符标灰斜体，中间内容默认色（${...} 由变量规则标绿）。
   // 但需标记中间位置防止运算符规则把 * / 标红。
   QTextCharFormat jsCommentDelimFormat;
-  jsCommentDelimFormat.setForeground(LightColor::comment);
+  jsCommentDelimFormat.setForeground(LightColor::comment());
   jsCommentDelimFormat.setFontItalic(true);
 
   setCurrentBlockState(0);  // 默认不在注释中

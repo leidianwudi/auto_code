@@ -28,6 +28,9 @@ class LightAc : public QSyntaxHighlighter {
 public:
   explicit LightAc(QTextDocument *parent = nullptr);
 
+  /// 重新从 SettingStore 读取颜色并刷新高亮（主题切换时调用）
+  void reloadColors();
+
 protected:
   /**
    * @brief 对单个文本块进行高亮处理
@@ -45,6 +48,9 @@ private:
   };
 
   void highlightNonCommentText(const QString &text, int offset = 0);
+
+  /// 从 SettingStore 重建所有高亮规则（构造与主题刷新共用）
+  void buildRules();
 
   QVector<HighlightRule> m_rules;
   QTextCharFormat m_commentFormat;

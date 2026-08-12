@@ -65,6 +65,9 @@ public:
   /// 获取 AC 程序图标 Pixmap，可用于 setWindowIcon() 等场景
   static QPixmap appIconPixmap(int size = 20);
 
+  /// 主题切换后重绘 root 内所有 AC 程序图标（用当前主题色）
+  static void refreshAppIcons(QWidget *root);
+
   /// 创建底部状态栏（状态文字 + QSizeGrip 可拖拽三角）
   /// @param parent 父控件
   /// @param text   初始状态文字（如 "就绪"）
