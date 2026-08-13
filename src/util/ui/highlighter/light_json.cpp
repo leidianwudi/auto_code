@@ -33,14 +33,14 @@ void LightJson::buildRules() {
   key5Format.setFontWeight(QFont::Bold);
   m_rules.append({QRegularExpression(QStringLiteral("\\b[a-zA-Z_$][\\w$]*\\s*:")), key5Format});
 
-  // ── 2. JSON 字符串值（绿色） ──
+  // ── 2. JSON 字符串值（字符串色 红/橙，对齐 VSCode） ──
   // 匹配所有带引号的字符串（包括键名，会被键名规则覆盖）
   // 例："Hello World"、"/path/to/file"
   QTextCharFormat stringFormat;
-  stringFormat.setForeground(variable());
+  stringFormat.setForeground(string_());
   m_rules.append({QRegularExpression(QStringLiteral("\"[^\"]*\"")), stringFormat});
 
-  // ── 2b. JSON5 单引号字符串值（绿色） ──
+  // ── 2b. JSON5 单引号字符串值（字符串色） ──
   // 例：'Hello World'、'/path/to/file'
   m_rules.append({QRegularExpression(QStringLiteral("'[^']*'")), stringFormat});
 
@@ -62,10 +62,10 @@ void LightJson::buildRules() {
                           QStringLiteral(")\\b")),
        boolFormat});
 
-  // ── 5. null 值（紫色加粗） ──
+  // ── 5. null 值（紫色加粗，对齐 VSCode 空值色） ──
   // 匹配 null 关键字
   QTextCharFormat nullFormat;
-  nullFormat.setForeground(builtin());
+  nullFormat.setForeground(null_());
   nullFormat.setFontWeight(QFont::Bold);
   m_rules.append({QRegularExpression(QStringLiteral("\\bnull\\b")), nullFormat});
 }

@@ -58,6 +58,7 @@ inline const char *kEd_BracketBrace = "editor.bracketBrace";
 inline const char *kEd_BracketMismatch = "editor.bracketMismatch";
 inline const char *kEd_ErrorUnderline = "editor.errorUnderline";
 inline const char *kEd_ErrorLine = "editor.errorLineBackground";
+inline const char *kEd_Warning = "editor.warning";
 inline const char *kEd_IndentGuide = "editor.indentGuide";
 inline const char *kEd_IndentActive = "editor.indentGuideActive";
 inline const char *kEd_FindMatch = "editor.findMatchBackground";
@@ -66,17 +67,24 @@ inline const char *kEd_FindCurrent = "editor.findCurrentMatchBackground";
 // 代码高亮颜色
 inline const char *kHL_Keyword = "hl.keyword";
 inline const char *kHL_Comment = "hl.comment";
+inline const char *kHL_CommentBlock = "hl.commentBlock";
 inline const char *kHL_String = "hl.string";
+inline const char *kHL_StringTemplate = "hl.stringTemplate";
 inline const char *kHL_Number = "hl.number";
 inline const char *kHL_Boolean = "hl.boolean";
+inline const char *kHL_Null = "hl.null";
+inline const char *kHL_Special = "hl.special";
 inline const char *kHL_Builtin = "hl.builtin";
 inline const char *kHL_Call = "hl.call";
 inline const char *kHL_Variable = "hl.variable";
+inline const char *kHL_Constant = "hl.constant";
 inline const char *kHL_Operator = "hl.operator";
+inline const char *kHL_Punctuation = "hl.punctuation";
 inline const char *kHL_Type = "hl.type";
 inline const char *kHL_Decorator = "hl.decorator";
 inline const char *kHL_ClassName = "hl.classname";
 inline const char *kHL_FuncDecl = "hl.funcdecl";
+inline const char *kHL_Import = "hl.import";
 
 // ──────────────────────────────────────────────────────────────
 //  快捷键 key 常量
@@ -125,7 +133,7 @@ SettingStore::SettingStore() : QObject(nullptr) {
   registerColor(QString::fromLatin1(kUI_ListHover), QStringLiteral("列表悬停背景"),
                 QStringLiteral("界面"), QColor(0xe8, 0xf0, 0xff), QColor(0x2a, 0x2d, 0x2e));
   registerColor(QString::fromLatin1(kUI_ListSel), QStringLiteral("列表选中背景"),
-                QStringLiteral("界面"), QColor(0xcc, 0xe4, 0xff), QColor(0x26, 0x4f, 0x78));
+                QStringLiteral("界面"), QColor(0xc7, 0xe0, 0xff), QColor(0x26, 0x4f, 0x78));
   registerColor(QString::fromLatin1(kUI_TabUnselBg), QStringLiteral("标签未选中背景"),
                 QStringLiteral("界面"), QColor(0xe8, 0xe8, 0xe8), QColor(0x2d, 0x2d, 0x2d));
   registerColor(QString::fromLatin1(kUI_TabHoverBg), QStringLiteral("标签悬停背景"),
@@ -154,11 +162,11 @@ SettingStore::SettingStore() : QObject(nullptr) {
                 QStringLiteral("编辑器"), QColor(Qt::lightGray).lighter(110),
                 QColor(0x1e, 0x1e, 0x1e));
   registerColor(QString::fromLatin1(kEd_LineNumText), QStringLiteral("行号文字"),
-                QStringLiteral("编辑器"), QColor(0x80, 0x80, 0x80), QColor(0x85, 0x85, 0x85));
+                QStringLiteral("编辑器"), QColor(0x99, 0x99, 0x99), QColor(0x85, 0x85, 0x85));
   registerColor(QString::fromLatin1(kEd_CurrentLine), QStringLiteral("当前行高亮"),
-                QStringLiteral("编辑器"), QColor(230, 240, 255), QColor(0x28, 0x28, 0x28));
+                QStringLiteral("编辑器"), QColor(0xf2, 0xf2, 0xf2), QColor(0x2a, 0x2a, 0x2a));
   registerColor(QString::fromLatin1(kEd_BracketMatch), QStringLiteral("括号匹配"),
-                QStringLiteral("编辑器"), QColor(0, 200, 200), QColor(0x00, 0x88, 0x88));
+                QStringLiteral("编辑器"), QColor(0xe8, 0xf0, 0xfe), QColor(0x3c, 0x3c, 0x3c));
   registerColor(QString::fromLatin1(kEd_BracketParen), QStringLiteral("圆括号匹配"),
                 QStringLiteral("编辑器"), QColor(255, 127, 80), QColor(0xff, 0x8c, 0x50));
   registerColor(QString::fromLatin1(kEd_BracketSquare), QStringLiteral("方括号匹配"),
@@ -168,48 +176,79 @@ SettingStore::SettingStore() : QObject(nullptr) {
   registerColor(QString::fromLatin1(kEd_BracketMismatch), QStringLiteral("括号不匹配"),
                 QStringLiteral("编辑器"), QColor(255, 0, 0), QColor(0xff, 0x50, 0x50));
   registerColor(QString::fromLatin1(kEd_ErrorUnderline), QStringLiteral("错误波浪线"),
-                QStringLiteral("编辑器"), QColor(Qt::red), QColor(0xff, 0x55, 0x55));
+                QStringLiteral("编辑器"), QColor(0xd3, 0x2f, 0x2f), QColor(0xf4, 0x87, 0x71));
   registerColor(QString::fromLatin1(kEd_ErrorLine), QStringLiteral("错误行背景"),
                 QStringLiteral("编辑器"), QColor(0xf2, 0xde, 0xde), QColor(0x44, 0x2b, 0x2b));
+  registerColor(QString::fromLatin1(kEd_Warning), QStringLiteral("代码警告"),
+                QStringLiteral("编辑器"), QColor(0xf5, 0x7c, 0x00), QColor(0xcc, 0xa7, 0x00));
   registerColor(QString::fromLatin1(kEd_IndentGuide), QStringLiteral("缩进参考线"),
-                QStringLiteral("编辑器"), QColor(0xd3, 0xd3, 0xd3), QColor(0x3a, 0x3a, 0x3a));
+                QStringLiteral("编辑器"), QColor(0xdd, 0xdd, 0xdd), QColor(0x33, 0x33, 0x33));
   registerColor(QString::fromLatin1(kEd_IndentActive), QStringLiteral("缩进参考线(当前)"),
-                QStringLiteral("编辑器"), QColor(0xa0, 0xa0, 0xa0), QColor(0x66, 0x66, 0x66));
+                QStringLiteral("编辑器"), QColor(0xbb, 0xbb, 0xbb), QColor(0x55, 0x55, 0x55));
   registerColor(QString::fromLatin1(kEd_FindMatch), QStringLiteral("查找匹配"),
                 QStringLiteral("编辑器"), QColor(0xff, 0xc6, 0x6d), QColor(0x9a, 0x6d, 0x2a));
   registerColor(QString::fromLatin1(kEd_FindCurrent), QStringLiteral("查找当前匹配"),
                 QStringLiteral("编辑器"), QColor(0xff, 0x99, 0x33), QColor(0xb0, 0x6a, 0x1e));
 
-  // ── 代码高亮颜色（浅色=Light+，深色=Dark+，对齐 VSCode 配色） ──
+  // ── 代码高亮颜色（浅色 / 深色，对齐 Trae ICube 主题） ──
+  // 关键字（流程控制）
   registerColor(QString::fromLatin1(kHL_Keyword), QStringLiteral("关键字"),
-                QStringLiteral("代码高亮"), QColor(0x00, 0x00, 0xFF), QColor(0x56, 0x9C, 0xD6));
-  registerColor(QString::fromLatin1(kHL_Comment), QStringLiteral("注释"),
-                QStringLiteral("代码高亮"), QColor(0x80, 0x80, 0x80), QColor(0x8A, 0x8A, 0x8A));
+                QStringLiteral("代码高亮"), QColor(0x5F, 0x36, 0xB2), QColor(0xB3, 0x8C, 0xFF));
+  // 单行注释（灰色斜体）
+  registerColor(QString::fromLatin1(kHL_Comment), QStringLiteral("单行注释"),
+                QStringLiteral("代码高亮"), QColor(0x83, 0x93, 0xA3), QColor(0x73, 0x77, 0x80));
+  // 块注释（灰色斜体，略深以作区分）
+  registerColor(QString::fromLatin1(kHL_CommentBlock), QStringLiteral("块注释"),
+                QStringLiteral("代码高亮"), QColor(0x7C, 0x8C, 0x9C), QColor(0x6F, 0x73, 0x7A));
+  // 普通字符串
   registerColor(QString::fromLatin1(kHL_String), QStringLiteral("字符串"),
-                QStringLiteral("代码高亮"), QColor(0xA3, 0x15, 0x15), QColor(0xCE, 0x91, 0x78));
+                QStringLiteral("代码高亮"), QColor(0x4D, 0xA6, 0x21), QColor(0x82, 0xD9, 0x9F));
+  // 模板字符串
+  registerColor(QString::fromLatin1(kHL_StringTemplate), QStringLiteral("模板字符串"),
+                QStringLiteral("代码高亮"), QColor(0x4D, 0xA6, 0x21), QColor(0x82, 0xD9, 0x9F));
+  // 数字
   registerColor(QString::fromLatin1(kHL_Number), QStringLiteral("数字"), QStringLiteral("代码高亮"),
-                QColor(0x09, 0x86, 0x58), QColor(0xB5, 0xCE, 0xA8));
+                QColor(0xE5, 0x45, 0x95), QColor(0xF4, 0x8C, 0xCA));
+  // 布尔值 true/false（constant.language）
   registerColor(QString::fromLatin1(kHL_Boolean), QStringLiteral("布尔值"),
-                QStringLiteral("代码高亮"), QColor(0x00, 0x00, 0xFF), QColor(0x56, 0x9C, 0xD6));
+                QStringLiteral("代码高亮"), QColor(0x17, 0x5C, 0xE6), QColor(0x80, 0xBB, 0xFF));
+  // 空值 null/undefined（constant.language）
+  registerColor(QString::fromLatin1(kHL_Null), QStringLiteral("空值"), QStringLiteral("代码高亮"),
+                QColor(0x17, 0x5C, 0xE6), QColor(0x80, 0xBB, 0xFF));
+  // 内置变量 this/self/super
+  registerColor(QString::fromLatin1(kHL_Special), QStringLiteral("内置变量(this/self)"),
+                QStringLiteral("代码高亮"), QColor(0xC9, 0x91, 0x00), QColor(0xDE, 0xD4, 0x7E));
+  // 内置函数（function 色）
   registerColor(QString::fromLatin1(kHL_Builtin), QStringLiteral("内置函数"),
-                QStringLiteral("代码高亮"), QColor(0xAF, 0x00, 0xDB), QColor(0xC5, 0x86, 0xC0));
+                QStringLiteral("代码高亮"), QColor(0x40, 0x78, 0xF2), QColor(0xF2, 0x9D, 0x79));
+  // 函数调用 / 函数声明名（function 色）
   registerColor(QString::fromLatin1(kHL_Call), QStringLiteral("函数调用"),
-                QStringLiteral("代码高亮"), QColor(0x79, 0x5E, 0x26), QColor(0xDC, 0xDC, 0xAA));
-  registerColor(QString::fromLatin1(kHL_Variable), QStringLiteral("变量"),
-                QStringLiteral("代码高亮"), QColor(0x00, 0x10, 0x80), QColor(0x9C, 0xDC, 0xFE));
-  // 运算符：中性色（非蓝色），与关键字区分
-  registerColor(QString::fromLatin1(kHL_Operator), QStringLiteral("运算符"),
-                QStringLiteral("代码高亮"), QColor(0x38, 0x3A, 0x42), QColor(0xD4, 0xD4, 0xD4));
-  registerColor(QString::fromLatin1(kHL_Type), QStringLiteral("类型标注"),
-                QStringLiteral("代码高亮"), QColor(0x26, 0x7F, 0x99), QColor(0x4E, 0xC9, 0xB0));
-  registerColor(QString::fromLatin1(kHL_Decorator), QStringLiteral("装饰器"),
-                QStringLiteral("代码高亮"), QColor(0xAF, 0x00, 0xDB), QColor(0xD7, 0xBA, 0x7D));
-  // 类/接口/枚举声明名（青绿色，VSCode 类名色）
-  registerColor(QString::fromLatin1(kHL_ClassName), QStringLiteral("类名"),
-                QStringLiteral("代码高亮"), QColor(0x26, 0x7F, 0x99), QColor(0x4E, 0xC9, 0xB0));
-  // 函数声明名（黄色，VSCode 函数声明色）
+                QStringLiteral("代码高亮"), QColor(0x40, 0x78, 0xF2), QColor(0xF2, 0x9D, 0x79));
   registerColor(QString::fromLatin1(kHL_FuncDecl), QStringLiteral("函数声明名"),
-                QStringLiteral("代码高亮"), QColor(0x79, 0x5E, 0x26), QColor(0xDC, 0xDC, 0xAA));
+                QStringLiteral("代码高亮"), QColor(0x40, 0x78, 0xF2), QColor(0xF2, 0x9D, 0x79));
+  // 变量（形参 / 对象属性）
+  registerColor(QString::fromLatin1(kHL_Variable), QStringLiteral("变量"),
+                QStringLiteral("代码高亮"), QColor(0xC9, 0x91, 0x00), QColor(0xDE, 0xD4, 0x7E));
+  // 常量
+  registerColor(QString::fromLatin1(kHL_Constant), QStringLiteral("常量"),
+                QStringLiteral("代码高亮"), QColor(0x98, 0x68, 0x01), QColor(0x80, 0xBB, 0xFF));
+  // 运算符
+  registerColor(QString::fromLatin1(kHL_Operator), QStringLiteral("运算符"),
+                QStringLiteral("代码高亮"), QColor(0x00, 0x00, 0x00), QColor(0xD5, 0xD8, 0xE0));
+  // 标点符号
+  registerColor(QString::fromLatin1(kHL_Punctuation), QStringLiteral("标点符号"),
+                QStringLiteral("代码高亮"), QColor(0x17, 0x18, 0x1A), QColor(0xD5, 0xD8, 0xE0));
+  // 类型标注 / 类名
+  registerColor(QString::fromLatin1(kHL_Type), QStringLiteral("类型标注"),
+                QStringLiteral("代码高亮"), QColor(0xB1, 0x5E, 0xF2), QColor(0x81, 0xCF, 0xE0));
+  registerColor(QString::fromLatin1(kHL_ClassName), QStringLiteral("类名"),
+                QStringLiteral("代码高亮"), QColor(0xB1, 0x5E, 0xF2), QColor(0x81, 0xCF, 0xE0));
+  // 装饰器
+  registerColor(QString::fromLatin1(kHL_Decorator), QStringLiteral("装饰器"),
+                QStringLiteral("代码高亮"), QColor(0x5F, 0x36, 0xB2), QColor(0xB3, 0x8C, 0xFF));
+  // 导入模块名
+  registerColor(QString::fromLatin1(kHL_Import), QStringLiteral("导入模块名"),
+                QStringLiteral("代码高亮"), QColor(0x5F, 0x36, 0xB2), QColor(0xB3, 0x8C, 0xFF));
 
   // ── 快捷键 ──
   registerShortcut(QString::fromLatin1(kSC_Open), QStringLiteral("打开文件"),

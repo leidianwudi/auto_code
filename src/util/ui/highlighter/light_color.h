@@ -38,14 +38,30 @@ inline QColor keyword() { return SettingStore::ins().color(QStringLiteral("hl.ke
 /// @brief 注释
 inline QColor comment() { return SettingStore::ins().color(QStringLiteral("hl.comment")); }
 
+/// @brief 块注释
+inline QColor commentBlock() {
+  return SettingStore::ins().color(QStringLiteral("hl.commentBlock"));
+}
+
 /// @brief 字符串
 inline QColor string_() { return SettingStore::ins().color(QStringLiteral("hl.string")); }
+
+/// @brief 模板字符串
+inline QColor stringTemplate() {
+  return SettingStore::ins().color(QStringLiteral("hl.stringTemplate"));
+}
 
 /// @brief 数字
 inline QColor number() { return SettingStore::ins().color(QStringLiteral("hl.number")); }
 
 /// @brief 布尔值
 inline QColor boolean_() { return SettingStore::ins().color(QStringLiteral("hl.boolean")); }
+
+/// @brief 空值 null/undefined
+inline QColor null_() { return SettingStore::ins().color(QStringLiteral("hl.null")); }
+
+/// @brief 内置变量 this/self/super
+inline QColor special() { return SettingStore::ins().color(QStringLiteral("hl.special")); }
 
 /// @brief 内置函数 / null
 inline QColor builtin() { return SettingStore::ins().color(QStringLiteral("hl.builtin")); }
@@ -56,8 +72,14 @@ inline QColor call() { return SettingStore::ins().color(QStringLiteral("hl.call"
 /// @brief 变量 / JSON 字符串值
 inline QColor variable() { return SettingStore::ins().color(QStringLiteral("hl.variable")); }
 
+/// @brief 常量
+inline QColor constant() { return SettingStore::ins().color(QStringLiteral("hl.constant")); }
+
 /// @brief 算术运算符
 inline QColor operator_() { return SettingStore::ins().color(QStringLiteral("hl.operator")); }
+
+/// @brief 标点符号
+inline QColor punctuation() { return SettingStore::ins().color(QStringLiteral("hl.punctuation")); }
 
 /// @brief 类型标注
 inline QColor type() { return SettingStore::ins().color(QStringLiteral("hl.type")); }
@@ -70,5 +92,8 @@ inline QColor className() { return SettingStore::ins().color(QStringLiteral("hl.
 
 /// @brief 函数声明名
 inline QColor funcDecl() { return SettingStore::ins().color(QStringLiteral("hl.funcdecl")); }
+
+/// @brief 导入模块名
+inline QColor import_() { return SettingStore::ins().color(QStringLiteral("hl.import")); }
 
 }  // namespace LightColor

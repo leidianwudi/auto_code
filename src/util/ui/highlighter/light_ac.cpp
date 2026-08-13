@@ -18,7 +18,7 @@ void LightAc::buildRules() {
   m_commentFormat.setForeground(comment());
   m_commentFormat.setFontItalic(true);
 
-  m_blockCommentFormat.setForeground(comment());
+  m_blockCommentFormat.setForeground(commentBlock());
   m_blockCommentFormat.setFontItalic(true);
 
   // ── 0. 变量（浅蓝/深蓝色，VSCode 变量色） ──
@@ -47,21 +47,24 @@ void LightAc::buildRules() {
                           QStringLiteral(")\\b")),
        builtinFormat});
 
-  // ── 3. 字符串（橙色） ──
+  // ── 3. 字符串（红/橙） ──
   QTextCharFormat stringFormat;
   stringFormat.setForeground(string_());
-  m_rules.append({QRegularExpression(QStringLiteral("\"[^\"]*\"|'[^']*'|`[^`]*`")), stringFormat});
+  m_rules.append({QRegularExpression(QStringLiteral("\"[^\"]*\"|'[^']*'")), stringFormat});
+  // 模板字符串（反引号，用模板字符串色）
+  QTextCharFormat tplStringFormat;
+  tplStringFormat.setForeground(stringTemplate());
+  m_rules.append({QRegularExpression(QStringLiteral("`[^`]*`")), tplStringFormat});
 
-  // ── 4. 数字（橙色加粗） ──
+  // ── 4. 数字（绿） ──
   QTextCharFormat numberFormat;
   numberFormat.setForeground(number());
   numberFormat.setFontWeight(QFont::Bold);
   m_rules.append({QRegularExpression(QStringLiteral("\\b\\d+(?:\\.\\d+)?\\b")), numberFormat});
 
-  // ── 5. 布尔值/null/undefined（红色加粗） ──
-  static const QStringList kBoolLiterals = {
-      QString::fromLatin1(AcKeyword::kTrue), QString::fromLatin1(AcKeyword::kFalse),
-      QString::fromLatin1(AcKeyword::kNull), QString::fromLatin1(AcKeyword::kUndefined)};
+  // ── 5. 布尔值 true/false（蓝/青） ──
+  static const QStringList kBoolLiterals = {QString::fromLatin1(AcKeyword::kTrue),
+                                            QString::fromLatin1(AcKeyword::kFalse)};
   QTextCharFormat boolFormat;
   boolFormat.setForeground(boolean_());
   boolFormat.setFontWeight(QFont::Bold);
@@ -69,6 +72,23 @@ void LightAc::buildRules() {
       {QRegularExpression(QStringLiteral("\\b(?:") + kBoolLiterals.join(QStringLiteral("|")) +
                           QStringLiteral(")\\b")),
        boolFormat});
+
+  // ── 5b. 空值 null/undefined（紫） ──
+  static const QStringList kNullLiterals = {QString::fromLatin1(AcKeyword::kNull),
+                                            QString::fromLatin1(AcKeyword::kUndefined)};
+  QTextCharFormat nullFormat;
+  nullFormat.setForeground(null_());
+  nullFormat.setFontWeight(QFont::Bold);
+  m_rules.append(
+      {QRegularExpression(QStringLiteral("\\b(?:") + kNullLiterals.join(QStringLiteral("|")) +
+                          QStringLiteral(")\\b")),
+       nullFormat});
+
+  // ── 5c. 内置变量 this/self/super（蓝） ──
+  QTextCharFormat specialFormat;
+  specialFormat.setForeground(special());
+  specialFormat.setFontWeight(QFont::Bold);
+  m_rules.append({QRegularExpression(QStringLiteral("\\b(?:this|super)\\b")), specialFormat});
 
   // ── 6. 函数调用（黄色） ──
   // 匹配非关键字、非内置函数的标识符后跟括号
@@ -125,6 +145,21 @@ void LightAc::buildRules() {
       {QRegularExpression(QStringLiteral("(?<=\\bnew\\s)(?:") +
                           AcClass::kAll.join(QStringLiteral("|")) + QStringLiteral(")\\b")),
        newClassFormat});
+
+  // ── 12. 导入模块名（红/橙） ──
+  // import "module" / import { a } from "module" / from "module"
+  QTextCharFormat importFormat;
+  importFormat.setForeground(import_());
+  m_rules.append(
+      {QRegularExpression(QStringLiteral("(?<=\\b(?:import|from)\\s+)(?:\"[^\"]*\"|'[^']*'|"
+                                         "\\S+)")),
+       importFormat});
+
+  // ── 13. 标点符号（深灰/浅灰） ──
+  // 括号、分号、逗号、冒号、点号等（排除运算符与数字/标识符）
+  QTextCharFormat punctFormat;
+  punctFormat.setForeground(punctuation());
+  m_rules.append({QRegularExpression(QStringLiteral("[(){}\\[\\];,:.]")), punctFormat});
 }
 
 // 重新从 SettingStore 读取颜色并刷新高亮

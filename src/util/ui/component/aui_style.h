@@ -241,6 +241,11 @@ public:
     return SettingStore::ins().color(QStringLiteral("editor.errorLineBackground"));
   }
 
+  /// 代码警告文字色（浅色橙黄 / 深色黄）
+  static QColor warningColor() {
+    return SettingStore::ins().color(QStringLiteral("editor.warning"));
+  }
+
   /// 缩进参考线颜色（浅灰，类似 VS Code 的 indent guide）
   static QColor indentGuideColor() {
     return SettingStore::ins().color(QStringLiteral("editor.indentGuide"));
