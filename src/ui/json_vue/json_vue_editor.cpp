@@ -22,6 +22,7 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollArea>
+#include <QSet>
 #include <QSplitter>
 #include <QTableWidget>
 #include <QTableWidgetItem>
@@ -1052,73 +1053,26 @@ void JsonVueEditor::populateColumnsFromHttp(const QJsonDocument &doc) {
     return;
   }
 
-  // 保留旧的列配置（用于合并），按 dataName 索引
-  QHash<QString, ColumnConfig> oldCols;
+  // 收集当前列配置中已有的 dataName（已有列不允许任何修改）
+  QSet<QString> existingNames;
   for (int row = 0; row < m_columnTable->rowCount(); ++row) {
     auto *item = m_columnTable->item(row, ColDataName);
     if (item && !item->text().trimmed().isEmpty()) {
-      ColumnConfig c;
-      c.dataName = item->text().trimmed();
-      auto *qVis = qobject_cast<QCheckBox *>(m_columnTable->cellWidget(row, ColQueryVisible));
-      if (qVis) c.queryVisible = qVis->isChecked();
-      auto *qnItem = m_columnTable->item(row, ColQueryName);
-      if (qnItem) c.queryName = qnItem->text().trimmed();
-      auto *eVis = qobject_cast<QCheckBox *>(m_columnTable->cellWidget(row, ColEditVisible));
-      if (eVis) c.editVisible = eVis->isChecked();
-      auto *enItem = m_columnTable->item(row, ColEditName);
-      if (enItem) c.editName = enItem->text().trimmed();
-      // 保留所有配置（含 editStyle/editEditable/switchEditable/displayType 等）
-      auto *cfgBtn = qobject_cast<QPushButton *>(m_columnTable->cellWidget(row, ColConfig));
-      if (cfgBtn) {
-        readColumnConfig(cfgBtn, c);
-      }
-      oldCols[c.dataName] = c;
+      existingNames.insert(item->text().trimmed());
     }
   }
 
-  // 清空并重新填充
+  // 仅把网络数据中新增（当前列配置里没有）的列追加到表格末尾，已有列保持原顺序不变
   m_loading = true;
-  m_columnTable->setRowCount(0);
-
   for (auto it = firstRow.begin(); it != firstRow.end(); ++it) {
     QString colName = it.key();
+    if (existingNames.contains(colName)) continue;  // 已有列跳过，不修改
+
     ColumnConfig col;
     col.dataName = colName;
     // 默认查询列名和编辑列名等于数据列名
     col.queryName = colName;
     col.editName = colName;
-
-    // 如果旧配置中已有该列，保留旧配置
-    if (oldCols.contains(colName)) {
-      ColumnConfig old = oldCols[colName];
-      col.queryVisible = old.queryVisible;
-      col.queryName = old.queryName.isEmpty() ? colName : old.queryName;
-      col.queryStyle = old.queryStyle;
-      col.switchEditable = old.switchEditable;
-      col.editVisible = old.editVisible;
-      col.editName = old.editName.isEmpty() ? colName : old.editName;
-      col.editStyle = old.editStyle;
-      col.editEditable = old.editEditable;
-      col.selectUrl = old.selectUrl;
-      col.selectValueField = old.selectValueField;
-      col.selectLabelField = old.selectLabelField;
-      col.placeholder = old.placeholder;
-      col.maxlength = old.maxlength;
-      col.minValue = old.minValue;
-      col.maxValue = old.maxValue;
-      col.precision = old.precision;
-      col.dateFormat = old.dateFormat;
-      col.textareaRows = old.textareaRows;
-      col.required = old.required;
-      col.columnWidth = old.columnWidth;
-      col.columnFixed = old.columnFixed;
-      col.formatter = old.formatter;
-      col.formSpan = old.formSpan;
-      col.displayType = old.displayType;
-      col.tagItems = old.tagItems;
-      col.boolTrueText = old.boolTrueText;
-      col.boolFalseText = old.boolFalseText;
-    }
 
     int row = m_columnTable->rowCount();
     m_columnTable->insertRow(row);
@@ -1153,7 +1107,6 @@ void JsonVueEditor::populateColumnsFromHttp(const QJsonDocument &doc) {
       }
     });
   }
-
   m_loading = false;
 
   // 刷新查询字段下拉框
