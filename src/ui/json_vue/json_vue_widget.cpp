@@ -95,3 +95,7 @@ void JsonVueWidget::setBaseUrl(const QString &baseUrl) { m_visual->setBaseUrl(ba
 void JsonVueWidget::loadHttpConfigFromAcFile(const QString &acFilePath) {
   m_visual->loadHttpConfigFromAcFile(acFilePath);
 }
+
+QString JsonVueWidget::findNearestHtmlUrlAc(const QString &jsonvueFilePath) {
+  return JsonVueEditor::findNearestHtmlUrlAc(jsonvueFilePath);
+}

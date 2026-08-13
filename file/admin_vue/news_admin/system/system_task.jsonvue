@@ -1,7 +1,7 @@
 {
   meta: {
-    dataMethod: 'GET',
-    dataUrl: '/api/systemtask/selectByIn',
+    dataMethod: 'POST',
+    dataUrl: '/systemtask/selectByIn',
     noDelete: false,
     noDetail: false,
     noEdit: false,

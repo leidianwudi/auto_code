@@ -95,8 +95,12 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
     editor = jvw->codeEditor();
     editor->setPlainText(content);
     tabWidget = jvw;
-    // 从当前启动项 AC 脚本加载 HTTP 配置（baseUrl、authHeader、postData）
-    QString acPath = m_ui->startupCombo()->currentData().toString();
+    // 优先从 .jsonvue 文件向上查找最近的 html_url.ac 加载 HTTP 配置；
+    // 找不到时回落到启动项 AC 脚本（向后兼容）
+    QString acPath = JsonVueWidget::findNearestHtmlUrlAc(filePath);
+    if (acPath.isEmpty()) {
+      acPath = m_ui->startupCombo()->currentData().toString();
+    }
     if (!acPath.isEmpty()) {
       jvw->loadHttpConfigFromAcFile(acPath);
     }

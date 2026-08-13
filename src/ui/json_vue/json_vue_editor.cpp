@@ -7,6 +7,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDir>
 #include <QFile>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -909,6 +910,20 @@ JsonVueConfig JsonVueEditor::collectConfig() const {
 //  HTTP 生成
 // ════════════════════════════════════════════════════════════
 
+QString JsonVueEditor::findNearestHtmlUrlAc(const QString &jsonvueFilePath) {
+  if (jsonvueFilePath.isEmpty()) return {};
+  // 从 .jsonvue 文件所在目录开始，逐级向上查找 html_url.ac
+  QDir dir = QFileInfo(jsonvueFilePath).absoluteDir();
+  while (true) {
+    QFileInfo candidate(dir.absoluteFilePath(QStringLiteral("html_url.ac")));
+    if (candidate.isFile()) {
+      return candidate.absoluteFilePath();
+    }
+    if (!dir.cdUp()) break;  // 已到根目录
+  }
+  return {};
+}
+
 void JsonVueEditor::loadHttpConfigFromAcFile(const QString &acFilePath) {
   if (acFilePath.isEmpty()) return;
   QFile f(acFilePath);
@@ -917,9 +932,10 @@ void JsonVueEditor::loadHttpConfigFromAcFile(const QString &acFilePath) {
   f.close();
 
   // 用正则提取 AC 脚本中的常量定义
-  // 匹配: let varName: String = "value"; （支持转义引号 \"）
+  // 匹配: let varName: String = "value"; 或 public varName: String = "value";
+  // （支持转义引号 \"）
   static const QRegularExpression rx(
-      QStringLiteral(R"rx(let\s+(\w+)\s*:\s*String\s*=\s*"((?:[^"\\]|\\.)*)")rx"));
+      QStringLiteral(R"rx((?:let|public)\s+(\w+)\s*:\s*String\s*=\s*"((?:[^"\\]|\\.)*)")rx"));
   auto it = rx.globalMatch(content);
   while (it.hasNext()) {
     auto m = it.next();

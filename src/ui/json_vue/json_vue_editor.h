@@ -50,6 +50,9 @@ public:
   /// 从 AC 脚本文件加载 HTTP 配置（baseUrl、authHeader、postData）
   void loadHttpConfigFromAcFile(const QString &acFilePath);
 
+  /// 从 jsonvue 文件所在目录向上查找最近的 html_url.ac，返回其完整路径；找不到返回空
+  static QString findNearestHtmlUrlAc(const QString &jsonvueFilePath);
+
 signals:
   /// 配置发生变化时发射
   void configChanged();
