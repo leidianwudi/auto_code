@@ -71,13 +71,12 @@ export function processColumns(rawColumns: Object[]): Object[] {
     let rawCol: Object = rawColumns[i];
     let col: Object = {};
     col["dataName"] = rawCol.dataName;
-    // 表格列名优先用 queryName，为空则用 editName
-    let tableLabel: String = rawCol.queryName;
-    if (tableLabel == "") {
-      tableLabel = rawCol.editName;
+    // 标题（列表页列标题与编辑页标签已合并为同一值）
+    col["label"] = rawCol.queryName;
+    if (col["label"] == "") {
+      col["label"] = rawCol.editName;
     }
-    col["label"] = tableLabel;
-    col["editName"] = rawCol.editName;
+    col["editName"] = col["label"];
     // 可见性控制
     col["queryVisible"] = rawCol.queryVisible;
     col["editVisible"] = rawCol.editVisible;

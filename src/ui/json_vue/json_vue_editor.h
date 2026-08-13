@@ -47,6 +47,9 @@ public:
   /// 主题/颜色变化后重新应用样式表（深色主题下保证表格行线/标签/文字可读）
   void reloadStyle();
 
+  /// 事件过滤器：拦截列配置表格的空格键，避免第一次空格被输入到编辑框
+  bool eventFilter(QObject *obj, QEvent *ev) override;
+
   /// 从 AC 脚本文件加载 HTTP 配置（baseUrl、authHeader、postData）
   void loadHttpConfigFromAcFile(const QString &acFilePath);
 
@@ -106,13 +109,17 @@ private:
   void applyStyle();
 
   /// 从 HTTP 返回数据中提取列名，填充到列表
-  void populateColumnsFromHttp(const QJsonDocument &doc);
+  /// @return 新增列的数量；-1 表示解析/校验失败（错误提示已弹出）
+  int populateColumnsFromHttp(const QJsonDocument &doc);
 
   /// 获取列配置表格中的数据列名列表（供查询字段下拉框使用）
   QStringList columnDataNames() const;
 
   /// 刷新查询字段下拉框选项
   void refreshQueryFieldDataNames();
+
+  /// 显示配置按钮的右键菜单（复制配置 / 粘贴配置）
+  void showColumnConfigMenu(int row, const QPoint &globalPos);
 
   // ── 接口配置区控件 ──
   QComboBox *m_methodCombo = nullptr;    ///< 生成数据 URL 的 HTTP 方法
@@ -138,15 +145,21 @@ private:
   QPushButton *m_removeQueryBtn = nullptr;  ///< 删除查询字段
 
   // ── 操作按钮表格 ──
-  QTableWidget *m_buttonTable = nullptr;  ///< 操作按钮表格
-  QPushButton *m_addButtonBtn = nullptr;  ///< 添加按钮
-  QVector<ButtonConfig> m_buttons;        ///< 按钮配置数据
+  QTableWidget *m_buttonTable = nullptr;     ///< 操作按钮表格
+  QPushButton *m_addButtonBtn = nullptr;     ///< 添加按钮
+  QPushButton *m_removeButtonBtn = nullptr;  ///< 删除按钮
+  QVector<ButtonConfig> m_buttons;           ///< 按钮配置数据
 
   // ── 状态数据 ──
-  QString m_baseUrl;       ///< AC 脚本传来的 baseUrl，用于 HTTP 请求拼接
-  QString m_authHeader;    ///< Authorization 请求头值（如 "Bearer xxx"）
-  QString m_postData;      ///< POST 请求的默认数据（JSON 字符串）
-  bool m_loading = false;  ///< 加载配置时抑制 configChanged 信号
+  QString m_baseUrl;           ///< AC 脚本传来的 baseUrl，用于 HTTP 请求拼接
+  QString m_authHeader;        ///< Authorization 请求头值（如 "Bearer xxx"）
+  QString m_postData;          ///< POST 请求的默认数据（JSON 字符串）
+  QString m_acConfigFilePath;  ///< 最近一次加载 HTTP 配置的 AC 文件路径（用于点击"生成"时重读）
+  bool m_loading = false;      ///< 加载配置时抑制 configChanged 信号
+
+  /// 已复制的列配置（用于"粘贴配置"到其它行）
+  ColumnConfig m_copiedColumnConfig;
+  bool m_hasCopiedConfig = false;  ///< 是否存在已复制的列配置
 
   /// 连接静态输入控件的编辑信号到 configChanged
   void connectStaticControlSignals();
@@ -157,10 +170,9 @@ private:
 /// 列配置表格列索引
 enum ColumnTableCols {
   ColDataName = 0,  ///< 字段名
+  ColTitle,         ///< 标题（列表页列标题与编辑页标签共用）
   ColQueryVisible,  ///< 列表页显示
-  ColQueryName,     ///< 列表页列标题
   ColEditVisible,   ///< 编辑页显示
-  ColEditName,      ///< 编辑页列标题
   ColConfig,        ///< 样式配置按钮（⚙，含显示类型/编辑样式/通用配置）
   ColCount
 };
@@ -181,7 +193,6 @@ enum ButtonTableCols {
   BColActionKey,   ///< 动作标识
   BColPosition,    ///< 位置
   BColActionType,  ///< 行为类型
-  BColEdit,        ///< 编辑按钮
-  BColDelete,      ///< 删除按钮
+  BColConfig,      ///< 配置按钮（⚙ + 摘要文本，双击打开配置）
   BColCount
 };

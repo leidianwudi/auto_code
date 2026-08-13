@@ -28,7 +28,7 @@ public:
 private:
   void setupUI(const QString &title, const QString &text) {
     setWindowTitle(title);
-    setFixedSize(360, 180);
+    setFixedSize(480, 280);
 
     AuiWindow::setupFramelessDialog(this);
 
@@ -47,6 +47,8 @@ private:
     auto *label = new QLabel(text, this);
     label->setWordWrap(true);
     label->setAlignment(Qt::AlignCenter);
+    // 允许鼠标/键盘选中文本，方便复制错误内容
+    label->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
     contentLayout->addWidget(label, 1);
 
     auto btns = AuiButton::createDialogButtons(this, m_showCancel);

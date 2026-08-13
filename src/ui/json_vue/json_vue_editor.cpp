@@ -15,8 +15,10 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPainter>
 #include <QPushButton>
@@ -26,6 +28,7 @@
 #include <QSplitter>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include "button_config_dialog.h"
@@ -33,6 +36,7 @@
 #include "src/util/common/http_client.h"
 #include "src/util/common/util_json.h"
 #include "src/util/ui/component/aui_button.h"
+#include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/component/aui_style.h"
 #include "style_config_dialog.h"
 
@@ -211,18 +215,18 @@ QWidget *JsonVueEditor::buildColumnsSection() {
 
   // 列配置表格
   m_columnTable = new QTableWidget(0, ColCount, this);
-  m_columnTable->setHorizontalHeaderLabels(
-      {QStringLiteral("字段名"), QStringLiteral("列表页显示"), QStringLiteral("列表页列标题"),
-       QStringLiteral("编辑页显示"), QStringLiteral("编辑页标签"), QStringLiteral("配置")});
+  m_columnTable->setHorizontalHeaderLabels({QStringLiteral("字段名"), QStringLiteral("标题"),
+                                            QStringLiteral("列表页显示"),
+                                            QStringLiteral("编辑页显示"), QStringLiteral("配置")});
   m_columnTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
   m_columnTable->horizontalHeader()->setSectionResizeMode(ColConfig, QHeaderView::Stretch);
   m_columnTable->setColumnWidth(ColDataName, 120);
+  m_columnTable->setColumnWidth(ColTitle, 120);
   m_columnTable->setColumnWidth(ColQueryVisible, 100);
-  m_columnTable->setColumnWidth(ColQueryName, 100);
   m_columnTable->setColumnWidth(ColEditVisible, 100);
-  m_columnTable->setColumnWidth(ColEditName, 100);
   m_columnTable->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_columnTable->setMinimumHeight(60);
+  m_columnTable->installEventFilter(this);  // 拦截空格键：仅进入编辑，不输入空格
   layout->addWidget(m_columnTable);
 
   connect(m_moveUpBtn, &QPushButton::clicked, this, &JsonVueEditor::onMoveUp);
@@ -275,27 +279,29 @@ QWidget *JsonVueEditor::buildButtonsSection() {
 
   auto *btnRow = new QHBoxLayout;
   m_addButtonBtn = new QPushButton(QStringLiteral("+ 添加按钮"), this);
+  m_removeButtonBtn = new QPushButton(QStringLiteral("- 删除按钮"), this);
   btnRow->addWidget(m_addButtonBtn);
+  btnRow->addWidget(m_removeButtonBtn);
   btnRow->addStretch();
   layout->addLayout(btnRow);
 
   m_buttonTable = new QTableWidget(0, BColCount, this);
   m_buttonTable->setHorizontalHeaderLabels({QStringLiteral("按钮文字"), QStringLiteral("动作标识"),
                                             QStringLiteral("位置"), QStringLiteral("行为类型"),
-                                            QStringLiteral("编辑"), QStringLiteral("删除")});
+                                            QStringLiteral("配置")});
   m_buttonTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
-  m_buttonTable->horizontalHeader()->setSectionResizeMode(BColLabel, QHeaderView::Stretch);
+  m_buttonTable->horizontalHeader()->setSectionResizeMode(BColConfig, QHeaderView::Stretch);
+  m_buttonTable->setColumnWidth(BColLabel, 120);
   m_buttonTable->setColumnWidth(BColActionKey, 120);
   m_buttonTable->setColumnWidth(BColPosition, 80);
   m_buttonTable->setColumnWidth(BColActionType, 100);
-  m_buttonTable->setColumnWidth(BColEdit, 60);
-  m_buttonTable->setColumnWidth(BColDelete, 60);
   m_buttonTable->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_buttonTable->setMinimumHeight(60);
   m_buttonTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
   layout->addWidget(m_buttonTable);
 
   connect(m_addButtonBtn, &QPushButton::clicked, this, &JsonVueEditor::onAddButton);
+  connect(m_removeButtonBtn, &QPushButton::clicked, this, &JsonVueEditor::onRemoveButton);
 
   return group;
 }
@@ -404,6 +410,16 @@ public:
   explicit NoBorderCombo(QWidget *parent = nullptr) : QComboBox(parent) {}
 
 protected:
+  // 强制弹出列表始终向下展开：若控件下方空间不足，Qt 默认会往上弹，
+  // 视觉上很别扭；这里在弹出后把列表移动到下拉框正下方（左对齐 + 顶边对齐）
+  void showPopup() override {
+    QComboBox::showPopup();
+    if (QWidget *popup = view()->window()) {
+      const QPoint pos = mapToGlobal(QPoint(0, height()));
+      QTimer::singleShot(0, popup, [popup, pos]() { popup->move(pos); });
+    }
+  }
+
   void paintEvent(QPaintEvent *) override {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
@@ -697,6 +713,31 @@ QString queryConfigSummary(const QueryFieldConfig &q) {
   return QStringLiteral("⚙ ") + parts.join(QStringLiteral(", "));
 }
 
+/// 生成操作按钮配置摘要文本（按行为类型显示关键配置）
+QString buttonConfigSummary(const ButtonConfig &btn) {
+  QStringList parts;
+  switch (btn.actionType) {
+    case ButtonActionType::Ajax:
+      if (!btn.apiName.isEmpty()) parts << btn.apiName;
+      break;
+    case ButtonActionType::Confirm:
+      if (!btn.apiName.isEmpty()) parts << btn.apiName;
+      if (!btn.confirmText.isEmpty()) parts << QStringLiteral("确认:%1").arg(btn.confirmText);
+      break;
+    case ButtonActionType::Dialog:
+      if (!btn.dialogTitle.isEmpty()) parts << btn.dialogTitle;
+      parts << QStringLiteral("字段数:%1").arg(btn.dialogFields.size());
+      break;
+    case ButtonActionType::Link:
+      if (!btn.linkPath.isEmpty()) parts << btn.linkPath;
+      break;
+  }
+  // 按钮样式（primary/success/danger/warning 等）
+  if (!btn.buttonType.isEmpty()) parts << QStringLiteral("样式:%1").arg(btn.buttonType);
+  if (parts.isEmpty()) return QStringLiteral("⚙");
+  return QStringLiteral("⚙ ") + parts.join(QStringLiteral(", "));
+}
+
 }  // namespace
 
 // ════════════════════════════════════════════════════════════
@@ -724,33 +765,36 @@ void JsonVueEditor::loadConfig(const JsonVueConfig &config) {
 
     m_columnTable->setItem(row, ColDataName, new QTableWidgetItem(col.dataName));
 
+    // 标题：优先用列表页列标题（queryName），为空则用编辑页标签（editName）
+    QString title = col.queryName.isEmpty() ? col.editName : col.queryName;
+    m_columnTable->setItem(row, ColTitle, new QTableWidgetItem(title));
+
     auto *qVis = new QCheckBox;
     qVis->setChecked(col.queryVisible);
     m_columnTable->setCellWidget(row, ColQueryVisible, qVis);
     connectCellWidgetSignals(qVis);
-
-    m_columnTable->setItem(row, ColQueryName, new QTableWidgetItem(col.queryName));
 
     auto *eVis = new QCheckBox;
     eVis->setChecked(col.editVisible);
     m_columnTable->setCellWidget(row, ColEditVisible, eVis);
     connectCellWidgetSignals(eVis);
 
-    m_columnTable->setItem(row, ColEditName, new QTableWidgetItem(col.editName));
-
     // 配置按钮（⚙ + 摘要文本，含显示类型/编辑样式/通用配置）
     auto *configBtn = new QPushButton(columnConfigSummary(col), this);
     storeColumnConfig(configBtn, col);
     m_columnTable->setCellWidget(row, ColConfig, configBtn);
-    connect(configBtn, &QPushButton::clicked, this, [this, configBtn]() {
-      for (int r = 0; r < m_columnTable->rowCount(); ++r) {
-        if (m_columnTable->cellWidget(r, ColConfig) == configBtn) {
-          m_columnTable->selectRow(r);
-          onConfigureCombobox();
-          break;
-        }
-      }
-    });
+    configBtn->installEventFilter(this);  // 双击打开样式配置
+    // 右键菜单：复制配置 / 粘贴配置
+    configBtn->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(configBtn, &QPushButton::customContextMenuRequested, this,
+            [this, configBtn](const QPoint &pos) {
+              for (int r = 0; r < m_columnTable->rowCount(); ++r) {
+                if (m_columnTable->cellWidget(r, ColConfig) == configBtn) {
+                  showColumnConfigMenu(r, configBtn->mapToGlobal(pos));
+                  break;
+                }
+              }
+            });
   }
 
   // 查询字段
@@ -786,15 +830,7 @@ void JsonVueEditor::loadConfig(const JsonVueConfig &config) {
     auto *qConfigBtn = new QPushButton(queryConfigSummary(q), this);
     storeQueryConfig(qConfigBtn, q);
     m_queryTable->setCellWidget(row, QColConfig, qConfigBtn);
-    connect(qConfigBtn, &QPushButton::clicked, this, [this, qConfigBtn]() {
-      for (int r = 0; r < m_queryTable->rowCount(); ++r) {
-        if (m_queryTable->cellWidget(r, QColConfig) == qConfigBtn) {
-          m_queryTable->selectRow(r);
-          onConfigureQuerySelect();
-          break;
-        }
-      }
-    });
+    qConfigBtn->installEventFilter(this);  // 双击打开查询样式配置
   }
 
   // 操作按钮
@@ -810,28 +846,10 @@ void JsonVueEditor::loadConfig(const JsonVueConfig &config) {
     m_buttonTable->setItem(row, BColActionType,
                            new QTableWidgetItem(buttonActionTypeToString(btn.actionType)));
 
-    auto *editBtn = new QPushButton(QStringLiteral("编辑"));
-    connect(editBtn, &QPushButton::clicked, this, [this, editBtn]() {
-      for (int r = 0; r < m_buttonTable->rowCount(); ++r) {
-        if (m_buttonTable->cellWidget(r, BColEdit) == editBtn) {
-          onEditButton(r);
-          break;
-        }
-      }
-    });
-    m_buttonTable->setCellWidget(row, BColEdit, editBtn);
-
-    auto *delBtn = new QPushButton(QStringLiteral("删除"));
-    connect(delBtn, &QPushButton::clicked, this, [this, delBtn]() {
-      for (int r = 0; r < m_buttonTable->rowCount(); ++r) {
-        if (m_buttonTable->cellWidget(r, BColDelete) == delBtn) {
-          m_buttonTable->selectRow(r);
-          onRemoveButton();
-          break;
-        }
-      }
-    });
-    m_buttonTable->setCellWidget(row, BColDelete, delBtn);
+    // 配置按钮（⚙ + 摘要文本），双击打开配置对话框
+    auto *configBtn = new QPushButton(buttonConfigSummary(btn), this);
+    m_buttonTable->setCellWidget(row, BColConfig, configBtn);
+    configBtn->installEventFilter(this);  // 双击打开按钮配置
   }
 
   m_loading = false;
@@ -857,12 +875,15 @@ JsonVueConfig JsonVueEditor::collectConfig() const {
     if (dnItem) col.dataName = dnItem->text().trimmed();
     auto *qVis = qobject_cast<QCheckBox *>(m_columnTable->cellWidget(row, ColQueryVisible));
     if (qVis) col.queryVisible = qVis->isChecked();
-    auto *qnItem = m_columnTable->item(row, ColQueryName);
-    if (qnItem) col.queryName = qnItem->text().trimmed();
     auto *eVis = qobject_cast<QCheckBox *>(m_columnTable->cellWidget(row, ColEditVisible));
     if (eVis) col.editVisible = eVis->isChecked();
-    auto *enItem = m_columnTable->item(row, ColEditName);
-    if (enItem) col.editName = enItem->text().trimmed();
+    // 标题（合并后的单列）同时写回 queryName 和 editName
+    auto *titleItem = m_columnTable->item(row, ColTitle);
+    if (titleItem) {
+      QString title = titleItem->text().trimmed();
+      col.queryName = title;
+      col.editName = title;
+    }
     // 读取所有配置（含 editStyle/editEditable/switchEditable/displayType 等）
     auto *configBtn = qobject_cast<QPushButton *>(m_columnTable->cellWidget(row, ColConfig));
     if (configBtn) {
@@ -921,6 +942,7 @@ QString JsonVueEditor::findNearestHtmlUrlAc(const QString &jsonvueFilePath) {
 
 void JsonVueEditor::loadHttpConfigFromAcFile(const QString &acFilePath) {
   if (acFilePath.isEmpty()) return;
+  m_acConfigFilePath = acFilePath;  // 记住路径，供点击"生成"时重读
   QFile f(acFilePath);
   if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return;
   QString content = QString::fromUtf8(f.readAll());
@@ -950,9 +972,15 @@ void JsonVueEditor::loadHttpConfigFromAcFile(const QString &acFilePath) {
 }
 
 void JsonVueEditor::onGenerate() {
+  // 每次点击"生成"时重新读取 html_url.ac 的 HTTP 配置（baseUrl/authHeader/postData），
+  // 保证 ac 文件被修改后无需重启程序即可生效
+  if (!m_acConfigFilePath.isEmpty()) {
+    loadHttpConfigFromAcFile(m_acConfigFilePath);
+  }
+
   QString url = m_dataUrlEdit->text().trimmed();
   if (url.isEmpty()) {
-    QMessageBox::warning(this, QStringLiteral("提示"), QStringLiteral("请输入生成数据URL"));
+    AuiMessageBox::show(this, QStringLiteral("提示"), QStringLiteral("请输入生成数据URL"));
     return;
   }
 
@@ -961,8 +989,8 @@ void JsonVueEditor::onGenerate() {
   if (m_baseUrl.isEmpty()) {
     // baseUrl 为空时直接使用 url（必须为完整 URL）
     if (!url.startsWith(QStringLiteral("http://")) && !url.startsWith(QStringLiteral("https://"))) {
-      QMessageBox::warning(this, QStringLiteral("提示"),
-                           QStringLiteral("baseUrl 为空时，URL 必须以 http:// 或 https:// 开头"));
+      AuiMessageBox::show(this, QStringLiteral("提示"),
+                          QStringLiteral("baseUrl 为空时，URL 必须以 http:// 或 https:// 开头"));
       return;
     }
   } else {
@@ -1015,17 +1043,113 @@ void JsonVueEditor::onHttpFinished(const QString &url, const QJsonDocument &doc)
   m_generateBtn->setEnabled(true);
   m_generateBtn->setText(QStringLiteral("生成"));
 
-  populateColumnsFromHttp(doc);
+  int added = populateColumnsFromHttp(doc);
+  if (added < 0) return;  // 解析/校验失败，错误提示已在 populateColumnsFromHttp 中弹出
+
+  // 生成成功提示
+  QString msg;
+  if (added > 0) {
+    msg = QStringLiteral("生成成功，已从接口获取 %1 个新列并追加到列配置。").arg(added);
+  } else {
+    msg = QStringLiteral("生成成功，但网络返回的列已全部存在于列配置中，未新增任何列。");
+  }
+  AuiMessageBox::show(this, QStringLiteral("生成成功"), msg);
 }
 
 void JsonVueEditor::onHttpError(const QString &url, const QString &errorMsg) {
-  Q_UNUSED(url);
   m_generateBtn->setEnabled(true);
   m_generateBtn->setText(QStringLiteral("生成"));
-  QMessageBox::warning(this, QStringLiteral("请求失败"), errorMsg);
+
+  // 详细错误信息，便于用户定位问题
+  QString method = m_methodCombo->currentText();
+  QString msg =
+      QStringLiteral("请求地址：%1\n请求方法：%2\n错误详情：%3\n\n").arg(url, method, errorMsg);
+  msg += QStringLiteral("排查建议：\n");
+  msg += QStringLiteral("1. 确认后端服务已启动，且端口未被占用；\n");
+  msg += QStringLiteral("2. 检查 baseUrl 配置是否正确（可在 html_url.ac 中修改）；\n");
+  msg += QStringLiteral("3. 检查 Authorization 令牌是否过期或无效；\n");
+  msg += QStringLiteral("4. 可在浏览器中直接访问上述地址，验证接口是否可用。");
+  AuiMessageBox::show(this, QStringLiteral("请求失败"), msg);
 }
 
-void JsonVueEditor::populateColumnsFromHttp(const QJsonDocument &doc) {
+bool JsonVueEditor::eventFilter(QObject *obj, QEvent *ev) {
+  // 拦截列配置表格中的空格键：第一次按空格仅进入编辑状态，
+  // 不把空格字符输入到编辑框（与 Excel 行为一致）。
+  // 编辑器打开时键盘事件由编辑器（QLineEdit）处理，不会经过本过滤器，
+  // 因此无需额外判断编辑状态。
+  if (obj == m_columnTable && ev->type() == QEvent::KeyPress) {
+    auto *keyEv = static_cast<QKeyEvent *>(ev);
+    if (keyEv->key() == Qt::Key_Space && !keyEv->isAutoRepeat()) {
+      QModelIndex idx = m_columnTable->currentIndex();
+      if (idx.isValid() && idx.column() == ColTitle) {
+        m_columnTable->edit(idx);  // 仅进入编辑，不传递空格键
+        return true;               // 消费事件，阻止空格输入
+      }
+    }
+    return QWidget::eventFilter(obj, ev);
+  }
+
+  // 配置按钮双击：列配置按钮打开样式配置，查询配置按钮打开查询样式配置
+  if (ev->type() == QEvent::MouseButtonDblClick) {
+    auto *btn = qobject_cast<QPushButton *>(obj);
+    if (btn) {
+      // 列配置表格的配置按钮
+      for (int r = 0; r < m_columnTable->rowCount(); ++r) {
+        if (m_columnTable->cellWidget(r, ColConfig) == btn) {
+          m_columnTable->selectRow(r);
+          onConfigureCombobox();
+          return true;  // 消费双击事件，避免按钮再触发其它行为
+        }
+      }
+      // 查询设置表格的配置按钮
+      for (int r = 0; r < m_queryTable->rowCount(); ++r) {
+        if (m_queryTable->cellWidget(r, QColConfig) == btn) {
+          m_queryTable->selectRow(r);
+          onConfigureQuerySelect();
+          return true;
+        }
+      }
+      // 操作按钮表格的配置按钮
+      for (int r = 0; r < m_buttonTable->rowCount(); ++r) {
+        if (m_buttonTable->cellWidget(r, BColConfig) == btn) {
+          m_buttonTable->selectRow(r);
+          onEditButton(r);
+          return true;
+        }
+      }
+    }
+  }
+  return QWidget::eventFilter(obj, ev);
+}
+
+void JsonVueEditor::showColumnConfigMenu(int row, const QPoint &globalPos) {
+  if (row < 0 || row >= m_columnTable->rowCount()) return;
+
+  QMenu menu(this);
+  QAction *copyAct = menu.addAction(QStringLiteral("复制配置"));
+  QAction *pasteAct = menu.addAction(QStringLiteral("粘贴配置"));
+  pasteAct->setEnabled(m_hasCopiedConfig);
+
+  QAction *chosen = menu.exec(globalPos);
+  if (chosen == copyAct) {
+    // 复制该行的配置
+    auto *srcBtn = qobject_cast<QPushButton *>(m_columnTable->cellWidget(row, ColConfig));
+    if (srcBtn) {
+      readColumnConfig(srcBtn, m_copiedColumnConfig);
+      m_hasCopiedConfig = true;
+    }
+  } else if (chosen == pasteAct) {
+    // 粘贴配置到目标行（保留其字段名、标题、可见性，仅覆盖样式配置）
+    auto *dstBtn = qobject_cast<QPushButton *>(m_columnTable->cellWidget(row, ColConfig));
+    if (dstBtn) {
+      storeColumnConfig(dstBtn, m_copiedColumnConfig);
+      dstBtn->setText(columnConfigSummary(m_copiedColumnConfig));
+      if (!m_loading) emit configChanged();
+    }
+  }
+}
+
+int JsonVueEditor::populateColumnsFromHttp(const QJsonDocument &doc) {
   // 解析 { code, msg, data: { list: [ { col1, col2, ... } ] } }
   QJsonObject root = doc.object();
   QJsonValue dataVal = root.value(QStringLiteral("data"));
@@ -1041,16 +1165,15 @@ void JsonVueEditor::populateColumnsFromHttp(const QJsonDocument &doc) {
   }
 
   if (listArr.isEmpty()) {
-    QMessageBox::information(this, QStringLiteral("提示"),
-                             QStringLiteral("返回数据中未找到 list 数组"));
-    return;
+    AuiMessageBox::show(this, QStringLiteral("提示"), QStringLiteral("返回数据中未找到 list 数组"));
+    return -1;
   }
 
   // 取第一行的列名
   QJsonObject firstRow = listArr.at(0).toObject();
   if (firstRow.isEmpty()) {
-    QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("返回数据第一行为空"));
-    return;
+    AuiMessageBox::show(this, QStringLiteral("提示"), QStringLiteral("返回数据第一行为空"));
+    return -1;
   }
 
   // 收集当前列配置中已有的 dataName（已有列不允许任何修改）
@@ -1063,6 +1186,7 @@ void JsonVueEditor::populateColumnsFromHttp(const QJsonDocument &doc) {
   }
 
   // 仅把网络数据中新增（当前列配置里没有）的列追加到表格末尾，已有列保持原顺序不变
+  int addedCount = 0;
   m_loading = true;
   for (auto it = firstRow.begin(); it != firstRow.end(); ++it) {
     QString colName = it.key();
@@ -1079,33 +1203,38 @@ void JsonVueEditor::populateColumnsFromHttp(const QJsonDocument &doc) {
 
     m_columnTable->setItem(row, ColDataName, new QTableWidgetItem(col.dataName));
 
+    // 标题：优先用列表页列标题（queryName），为空则用编辑页标签（editName）
+    QString title = col.queryName.isEmpty() ? col.editName : col.queryName;
+    m_columnTable->setItem(row, ColTitle, new QTableWidgetItem(title));
+
     auto *qVis = new QCheckBox;
     qVis->setChecked(col.queryVisible);
     m_columnTable->setCellWidget(row, ColQueryVisible, qVis);
     connectCellWidgetSignals(qVis);
-
-    m_columnTable->setItem(row, ColQueryName, new QTableWidgetItem(col.queryName));
 
     auto *eVis = new QCheckBox;
     eVis->setChecked(col.editVisible);
     m_columnTable->setCellWidget(row, ColEditVisible, eVis);
     connectCellWidgetSignals(eVis);
 
-    m_columnTable->setItem(row, ColEditName, new QTableWidgetItem(col.editName));
-
     // 配置按钮（⚙ + 摘要文本，含显示类型/编辑样式/通用配置）
     auto *configBtn = new QPushButton(columnConfigSummary(col), this);
     storeColumnConfig(configBtn, col);
     m_columnTable->setCellWidget(row, ColConfig, configBtn);
-    connect(configBtn, &QPushButton::clicked, this, [this, configBtn]() {
-      for (int r = 0; r < m_columnTable->rowCount(); ++r) {
-        if (m_columnTable->cellWidget(r, ColConfig) == configBtn) {
-          m_columnTable->selectRow(r);
-          onConfigureCombobox();
-          break;
-        }
-      }
-    });
+    configBtn->installEventFilter(this);  // 双击打开样式配置
+    // 右键菜单：复制配置 / 粘贴配置
+    configBtn->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(configBtn, &QPushButton::customContextMenuRequested, this,
+            [this, configBtn](const QPoint &pos) {
+              for (int r = 0; r < m_columnTable->rowCount(); ++r) {
+                if (m_columnTable->cellWidget(r, ColConfig) == configBtn) {
+                  showColumnConfigMenu(r, configBtn->mapToGlobal(pos));
+                  break;
+                }
+              }
+            });
+
+    ++addedCount;  // 记录新增列数
   }
   m_loading = false;
 
@@ -1113,6 +1242,7 @@ void JsonVueEditor::populateColumnsFromHttp(const QJsonDocument &doc) {
   refreshQueryFieldDataNames();
 
   emit configChanged();
+  return addedCount;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -1156,29 +1286,30 @@ void JsonVueEditor::onAddColumn() {
   m_columnTable->setCellWidget(row, ColQueryVisible, qVis);
   connectCellWidgetSignals(qVis);
 
-  m_columnTable->setItem(row, ColQueryName, new QTableWidgetItem());
+  m_columnTable->setItem(row, ColTitle, new QTableWidgetItem());
 
   auto *eVis = new QCheckBox;
   eVis->setChecked(true);
   m_columnTable->setCellWidget(row, ColEditVisible, eVis);
   connectCellWidgetSignals(eVis);
 
-  m_columnTable->setItem(row, ColEditName, new QTableWidgetItem());
-
   // 配置按钮（⚙ + 摘要文本，含显示类型/编辑样式/通用配置）
   ColumnConfig emptyCol;
   auto *configBtn = new QPushButton(columnConfigSummary(emptyCol), this);
   storeColumnConfig(configBtn, emptyCol);
   m_columnTable->setCellWidget(row, ColConfig, configBtn);
-  connect(configBtn, &QPushButton::clicked, this, [this, configBtn]() {
-    for (int r = 0; r < m_columnTable->rowCount(); ++r) {
-      if (m_columnTable->cellWidget(r, ColConfig) == configBtn) {
-        m_columnTable->selectRow(r);
-        onConfigureCombobox();
-        break;
-      }
-    }
-  });
+  configBtn->installEventFilter(this);  // 双击打开样式配置
+  // 右键菜单：复制配置 / 粘贴配置
+  configBtn->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(configBtn, &QPushButton::customContextMenuRequested, this,
+          [this, configBtn](const QPoint &pos) {
+            for (int r = 0; r < m_columnTable->rowCount(); ++r) {
+              if (m_columnTable->cellWidget(r, ColConfig) == configBtn) {
+                showColumnConfigMenu(r, configBtn->mapToGlobal(pos));
+                break;
+              }
+            }
+          });
 
   emit configChanged();
 }
@@ -1186,6 +1317,10 @@ void JsonVueEditor::onAddColumn() {
 void JsonVueEditor::onRemoveColumn() {
   int row = m_columnTable->currentRow();
   if (row < 0) return;
+  if (!AuiMessageBox::confirm(this, QStringLiteral("确认删除"),
+                              QStringLiteral("确定要删除当前列配置吗？"))) {
+    return;
+  }
   m_columnTable->removeRow(row);
   refreshQueryFieldDataNames();
   emit configChanged();
@@ -1222,15 +1357,7 @@ void JsonVueEditor::onAddQueryField() {
   auto *qConfigBtn = new QPushButton(queryConfigSummary(emptyQ), this);
   storeQueryConfig(qConfigBtn, emptyQ);
   m_queryTable->setCellWidget(row, QColConfig, qConfigBtn);
-  connect(qConfigBtn, &QPushButton::clicked, this, [this, qConfigBtn]() {
-    for (int r = 0; r < m_queryTable->rowCount(); ++r) {
-      if (m_queryTable->cellWidget(r, QColConfig) == qConfigBtn) {
-        m_queryTable->selectRow(r);
-        onConfigureQuerySelect();
-        break;
-      }
-    }
-  });
+  qConfigBtn->installEventFilter(this);  // 双击打开查询样式配置
 
   emit configChanged();
 }
@@ -1238,6 +1365,10 @@ void JsonVueEditor::onAddQueryField() {
 void JsonVueEditor::onRemoveQueryField() {
   int row = m_queryTable->currentRow();
   if (row < 0) return;
+  if (!AuiMessageBox::confirm(this, QStringLiteral("确认删除"),
+                              QStringLiteral("确定要删除当前查询字段吗？"))) {
+    return;
+  }
   m_queryTable->removeRow(row);
   emit configChanged();
 }
@@ -1414,28 +1545,10 @@ void JsonVueEditor::onAddButton() {
     m_buttonTable->setItem(row, BColActionType,
                            new QTableWidgetItem(buttonActionTypeToString(btn.actionType)));
 
-    auto *editBtn = new QPushButton(QStringLiteral("编辑"));
-    connect(editBtn, &QPushButton::clicked, this, [this, editBtn]() {
-      for (int r = 0; r < m_buttonTable->rowCount(); ++r) {
-        if (m_buttonTable->cellWidget(r, BColEdit) == editBtn) {
-          onEditButton(r);
-          break;
-        }
-      }
-    });
-    m_buttonTable->setCellWidget(row, BColEdit, editBtn);
-
-    auto *delBtn = new QPushButton(QStringLiteral("删除"));
-    connect(delBtn, &QPushButton::clicked, this, [this, delBtn]() {
-      for (int r = 0; r < m_buttonTable->rowCount(); ++r) {
-        if (m_buttonTable->cellWidget(r, BColDelete) == delBtn) {
-          m_buttonTable->selectRow(r);
-          onRemoveButton();
-          break;
-        }
-      }
-    });
-    m_buttonTable->setCellWidget(row, BColDelete, delBtn);
+    // 配置按钮（⚙ + 摘要文本），双击打开配置对话框
+    auto *configBtn = new QPushButton(buttonConfigSummary(btn), this);
+    m_buttonTable->setCellWidget(row, BColConfig, configBtn);
+    configBtn->installEventFilter(this);  // 双击打开按钮配置
 
     emit configChanged();
   }
@@ -1457,6 +1570,11 @@ void JsonVueEditor::onEditButton(int row) {
     m_buttonTable->item(row, BColActionKey)->setText(btn.actionKey);
     m_buttonTable->item(row, BColPosition)->setText(buttonPositionToString(btn.position));
     m_buttonTable->item(row, BColActionType)->setText(buttonActionTypeToString(btn.actionType));
+    // 刷新配置按钮摘要
+    auto *configBtn = qobject_cast<QPushButton *>(m_buttonTable->cellWidget(row, BColConfig));
+    if (configBtn) {
+      configBtn->setText(buttonConfigSummary(btn));
+    }
     emit configChanged();
   }
 }
@@ -1464,6 +1582,10 @@ void JsonVueEditor::onEditButton(int row) {
 void JsonVueEditor::onRemoveButton() {
   int row = m_buttonTable->currentRow();
   if (row < 0) {
+    return;
+  }
+  if (!AuiMessageBox::confirm(this, QStringLiteral("确认删除"),
+                              QStringLiteral("确定要删除当前操作按钮吗？"))) {
     return;
   }
   m_buttonTable->removeRow(row);
