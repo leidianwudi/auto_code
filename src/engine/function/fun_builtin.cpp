@@ -63,12 +63,17 @@ QJsonValue FunBuiltin::renderTpl(const QJsonArray &args) {
   QString tplPath = args[0].toString();
   QFileInfo tplInfo(tplPath);
   if (tplInfo.isRelative()) tplPath = s_ctx.scriptDir + QStringLiteral("/") + tplPath;
+  fprintf(stderr, "[renderTpl] scriptDir=%s resolvedTpl=%s\n", s_ctx.scriptDir.toUtf8().constData(),
+          tplPath.toUtf8().constData());
 
   QFile f(tplPath);
   if (!f.open(QIODevice::ReadOnly)) {
     FunMgr::setError(QStringLiteral("template not found: '%1'").arg(tplPath));
     return QJsonValue();
   }
+  QString tplContent = QString::fromUtf8(f.readAll());
+  fprintf(stderr, "[renderTpl] contentLen=%d head=%.80s\n", (int)tplContent.size(),
+          tplContent.left(80).toUtf8().constData());
 
   TplEngine engine;
   if (s_ctx.logCallback) engine.setLogCallback(s_ctx.logCallback);
@@ -78,7 +83,16 @@ QJsonValue FunBuiltin::renderTpl(const QJsonArray &args) {
     return QJsonValue();
   }
 
-  return QJsonValue(engine.render(QString::fromUtf8(f.readAll()), args[1].toObject()));
+  // TEMP DEBUG: dump tplData
+  {
+    QFile df(QStringLiteral("d:/work/github/auto_code/build/tpldata_debug.json"));
+    if (df.open(QIODevice::WriteOnly)) {
+      df.write(QJsonDocument(args[1].toObject()).toJson(QJsonDocument::Indented));
+      df.close();
+    }
+  }
+
+  return QJsonValue(engine.render(tplContent, args[1].toObject()));
 }
 
 // ============================================================================
@@ -188,17 +202,51 @@ QJsonValue FunBuiltin::getCheckedFiles(const QJsonArray &args) {
 
   QJsonArray result;
   QJsonDocument doc = UtilJson::loadFile(treePath);
+  {
+    QFile df(QStringLiteral("d:/work/github/auto_code/build/gcf_debug.txt"));
+    if (df.open(QIODevice::WriteOnly)) {
+      QTextStream ts(&df);
+      ts << "treePath=" << treePath << " rootDir=" << s_ctx.rootDir
+         << " scriptDir=" << s_ctx.scriptDir << " basePath=" << basePath
+         << " docNull=" << doc.isNull() << "\n";
+      if (!doc.isNull()) {
+        QJsonArray checked = doc.object().value(QStringLiteral("checked")).toArray();
+        ts << "checkedCount=" << checked.size() << "\n";
+        for (const QJsonValue &v : checked) {
+          ts << "  v=" << v.toString() << "\n";
+          if (v.isString()) {
+            QString absPath = QDir::cleanPath(
+                s_ctx.rootDir.isEmpty() ? s_ctx.scriptDir
+                                        : s_ctx.rootDir + QStringLiteral("/") + v.toString());
+            ts << "    absPath=" << absPath << "\n";
+          }
+        }
+      }
+      df.close();
+    }
+  }
   if (!doc.isNull()) {
     QJsonArray checked = doc.object().value(QStringLiteral("checked")).toArray();
+    fprintf(stderr, "[gcf] treePath=%s checkedCount=%d basePath=%s\n",
+            treePath.toUtf8().constData(), (int)checked.size(), basePath.toUtf8().constData());
     for (const QJsonValue &v : checked) {
       if (!v.isString()) continue;
       QString absPath = QDir::cleanPath(s_ctx.rootDir.isEmpty()
                                             ? s_ctx.scriptDir
                                             : s_ctx.rootDir + QStringLiteral("/") + v.toString());
-      // 指定基准路径时，只保留该路径下的文件（避免处理其它项目的勾选文件）
-      if (!basePath.isEmpty() && absPath != basePath &&
-          !absPath.startsWith(basePath + QStringLiteral("/"))) {
-        continue;
+      fprintf(stderr, "[gcf]   absPath=%s\n", absPath.toUtf8().constData());
+      // 指定基准路径时，只保留该路径下的文件（避免处理其它项目的勾选文件）。
+      // 统一用 '/' 规范化分隔符后比较，避免 Windows 下 cleanPath 返回 '\' 与
+      // 字符串拼接的 '/' 不一致导致过滤失效。
+      if (!basePath.isEmpty()) {
+        QString normBase = basePath;
+        normBase.replace(QLatin1Char('\\'), QLatin1Char('/'));
+        if (!normBase.endsWith(QLatin1Char('/'))) normBase += QLatin1Char('/');
+        QString normAbs = absPath;
+        normAbs.replace(QLatin1Char('\\'), QLatin1Char('/'));
+        if (normAbs != basePath && !normAbs.startsWith(normBase)) {
+          continue;
+        }
       }
       result.append(absPath);
     }

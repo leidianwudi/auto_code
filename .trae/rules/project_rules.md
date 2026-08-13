@@ -1,3 +1,7 @@
+---
+alwaysApply: false
+description: 
+---
 # Project Rules
 
 ## Qt 开发注意事项

@@ -136,34 +136,12 @@ EditStyle stringToEditStyle(const QString &s) {
 }
 
 QString queryRelationToString(QueryRelation r) {
-  switch (r) {
-    case QueryRelation::Like:
-      return QStringLiteral("like");
-    case QueryRelation::GreaterEqual:
-      return QStringLiteral(">=");
-    case QueryRelation::LessEqual:
-      return QStringLiteral("<=");
-    case QueryRelation::Greater:
-      return QStringLiteral(">");
-    case QueryRelation::Less:
-      return QStringLiteral("<");
-    case QueryRelation::Range:
-      return QStringLiteral("range");
-    case QueryRelation::RangeOpen:
-      return QStringLiteral("range_open");
-    default:
-      return QStringLiteral("=");
-  }
+  if (r == QueryRelation::Range) return QStringLiteral("range");
+  return QStringLiteral("=");
 }
 
 QueryRelation stringToQueryRelation(const QString &s) {
-  if (s == QStringLiteral("like")) return QueryRelation::Like;
-  if (s == QStringLiteral(">=")) return QueryRelation::GreaterEqual;
-  if (s == QStringLiteral("<=")) return QueryRelation::LessEqual;
-  if (s == QStringLiteral(">")) return QueryRelation::Greater;
-  if (s == QStringLiteral("<")) return QueryRelation::Less;
   if (s == QStringLiteral("range")) return QueryRelation::Range;
-  if (s == QStringLiteral("range_open")) return QueryRelation::RangeOpen;
   return QueryRelation::Equal;
 }
 

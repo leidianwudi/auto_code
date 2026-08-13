@@ -18,6 +18,16 @@
 import { escapeJsStr } from "../../../tool/tool_str.ac";
 
 // ---------------------------------------------------------------------------
+// 0) 通用辅助
+// ---------------------------------------------------------------------------
+// 判断值是否非空字符串（null / 空字符串 均视为空）。
+// 避免缺失字段（null）与 "" 比较时被误判为非空。
+export function isNotEmpty(v: Any): Bool {
+  if (v == null) { return false; }
+  return (v != "");
+}
+
+// ---------------------------------------------------------------------------
 // 1) 从文件路径推导页面路径 / API 模块名
 //    文件路径示例：.../erp_admin/setting/config_g.jsonvue
 //    推导结果：pagePath = "setting/config_g"，apiModule = "setting"
@@ -170,6 +180,7 @@ export function processColumns(rawColumns: Object[]): Object[] {
     col["isFloat"] = (rawCol.editStyle == "float");
     col["isMoney"] = (rawCol.editStyle == "money");
     col["isDate"] = (rawCol.editStyle == "date");
+    col["isTime"] = (rawCol.editStyle == "date" && rawCol.dateFormat == "time");
     col["isTagEdit"] = (rawCol.editStyle == "tag");
     col["isBooleanEdit"] = (rawCol.editStyle == "boolean");
     col["isImageEdit"] = (rawCol.editStyle == "image");
@@ -205,7 +216,7 @@ export function processColumns(rawColumns: Object[]): Object[] {
       isTagDisplay = (rawCol.displayType == "tag");
       isBooleanDisplay = (rawCol.displayType == "boolean");
       isImageDisplay = (rawCol.displayType == "image");
-      hasDisplayType = (rawCol.displayType != "");
+      hasDisplayType = isNotEmpty(rawCol.displayType);
     }
     col["isMoneyDisplay"] = isMoneyDisplay;
     col["isTagDisplay"] = isTagDisplay;
@@ -250,10 +261,10 @@ export function processColumns(rawColumns: Object[]): Object[] {
     // 通用配置（3-6）
     col["defaultValue"] = rawCol.defaultValue;
     col["defaultSort"] = rawCol.defaultSort;
-    col["hasDefaultValue"] = (rawCol.defaultValue != "");
-    col["hasDefaultSort"] = (rawCol.defaultSort != "");
+    col["hasDefaultValue"] = isNotEmpty(rawCol.defaultValue);
+    col["hasDefaultSort"] = isNotEmpty(rawCol.defaultSort);
     // 数值类型默认值不加引号，其它类型加引号（避免 InputNumber 收到字符串）
-    if (rawCol.defaultValue != "") {
+    if (isNotEmpty(rawCol.defaultValue)) {
       if (rawCol.editStyle == "int" || rawCol.editStyle == "float" || rawCol.editStyle == "money") {
         col["defaultValueLiteral"] = rawCol.defaultValue;
       } else {
@@ -262,18 +273,18 @@ export function processColumns(rawColumns: Object[]): Object[] {
     }
 
     // 预计算布尔标记（避免模板中做字符串比较）
-    col["hasPlaceholder"] = (rawCol.placeholder != "");
+    col["hasPlaceholder"] = isNotEmpty(rawCol.placeholder);
     col["hasMaxlength"] = (rawCol.maxlength > 0);
-    col["hasMinValue"] = (rawCol.minValue != 0);
-    col["hasMaxValue"] = (rawCol.maxValue != 0);
-    col["hasDateFormat"] = (rawCol.dateFormat != "");
+    col["hasMinValue"] = (rawCol.minValue != null && rawCol.minValue != 0);
+    col["hasMaxValue"] = (rawCol.maxValue != null && rawCol.maxValue != 0);
+    col["hasDateFormat"] = isNotEmpty(rawCol.dateFormat);
     col["hasColumnWidth"] = (rawCol.columnWidth > 0);
-    col["hasColumnFixed"] = (rawCol.columnFixed != "");
-    col["hasFormatter"] = (rawCol.formatter != "");
+    col["hasColumnFixed"] = isNotEmpty(rawCol.columnFixed);
+    col["hasFormatter"] = isNotEmpty(rawCol.formatter);
     col["isFormatterDate"] = (rawCol.formatter == "date");
     col["isFormatterStatus"] = (rawCol.formatter == "status");
     col["isFormatterCurrency"] = (rawCol.formatter == "currency");
-    col["hasFormSpan"] = (rawCol.formSpan != 24);
+    col["hasFormSpan"] = (rawCol.formSpan != null && rawCol.formSpan != 24);
     columns.push(col);
   }
   return columns;
@@ -314,13 +325,22 @@ export function processQueryFields(rawQueryFields: Object[]): Object[] {
     // 样式标记
     qf["isDate"] = (rawQf.inputStyle == "date");
 
+    // 查询关系：范围（生成开始/结束两个控件）
+    let isRange = (rawQf.relation == "range");
+    qf["isRange"] = isRange;
+    let rangeComp: String = "Input";
+    if (rawQf.inputStyle == "date") {
+      rangeComp = "DatePicker";
+    }
+    qf["rangeComp"] = rangeComp;
+
     // 样式特定配置值
     qf["placeholder"] = rawQf.placeholder;
     qf["dateFormat"] = rawQf.dateFormat;
 
     // 预计算布尔标记
-    qf["hasPlaceholder"] = (rawQf.placeholder != "");
-    qf["hasDateFormat"] = (rawQf.dateFormat != "");
+    qf["hasPlaceholder"] = isNotEmpty(rawQf.placeholder);
+    qf["hasDateFormat"] = isNotEmpty(rawQf.dateFormat);
 
     queryFields.push(qf);
   }
@@ -657,18 +677,16 @@ export function buildAdminTplData(json: Object, file: String): Object {
     }
   }
 
-  // ── 编辑表单中隐藏的字段（editVisible=false）和只读字段（editEditable=false）──
-  let hiddenFieldsStr = "";
+  // ── 编辑表单中只读的字段（editEditable=false）──
+  // 注：editVisible=false 的字段已由 write.tpl 通过 ${if col.editVisible} 过滤，不再生成，
+  //     因此无需 hiddenFields（隐藏字段列表）。
   let disabledFieldsStr = "";
   for (let i = 0; i < colsLen2; i = i + 1) {
-    if (!columns[i]["editVisible"]) {
-      hiddenFieldsStr = hiddenFieldsStr + "'" + columns[i]["dataName"] + "', ";
-    }
     if (!columns[i]["editEditable"]) {
       disabledFieldsStr = disabledFieldsStr + "'" + columns[i]["dataName"] + "', ";
     }
   }
-  let hasHiddenFields = (hiddenFieldsStr != "");
+  let hasHiddenFields = false;
   let hasDisabledFields = (disabledFieldsStr != "");
 
   // ── 组装 tplData（模板中的所有 ${变量名} 从这里取值）────────────
@@ -707,7 +725,7 @@ export function buildAdminTplData(json: Object, file: String): Object {
   tplData["hasDefaultValues"] = hasDefaultValues;
   // 编辑表单隐藏/只读字段
   tplData["hasHiddenFields"] = hasHiddenFields;
-  tplData["hiddenFieldsStr"] = hiddenFieldsStr;
+  tplData["hiddenFieldsStr"] = "";
   tplData["hasDisabledFields"] = hasDisabledFields;
   tplData["disabledFieldsStr"] = disabledFieldsStr;
 

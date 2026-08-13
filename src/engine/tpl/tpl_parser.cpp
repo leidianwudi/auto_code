@@ -170,7 +170,9 @@ static QList<QSharedPointer<TplAst::AstNode>> parseNodes(const QList<TplLexer::T
             firstBranch = false;
           } else {
             // 后续分支：${else if condition} 或 ${else}
-            const TplLexer::Token &branchTok = tokens[bodyEnd];
+            // 分支头部 Token 位于 branchPos-1（即上一个分支体的终止符），
+            // 而非 bodyEnd（当前分支体的终止符），避免条件与分支体错位。
+            const TplLexer::Token &branchTok = tokens[branchPos - 1];
             if (branchTok.type == TplLexer::TokenType::ElseIf) {
               // ${else if condition}：提取 condition
               // branchTok.value = "else if condition"

@@ -81,16 +81,10 @@ enum class EditStyle {
   TextArea = 9  ///< 多行文本
 };
 
-/// 查询关系
+/// 查询关系（普通 / 范围）
 enum class QueryRelation {
-  Equal = 0,         ///< 等于
-  Like = 1,          ///< 模糊
-  GreaterEqual = 2,  ///< 大于等于
-  LessEqual = 3,     ///< 小于等于
-  Greater = 4,       ///< 大于
-  Less = 5,          ///< 小于
-  Range = 6,         ///< 范围（闭区间 [a, b]，含两端，相当于 >= AND <=）
-  RangeOpen = 7      ///< 范围（开区间 (a, b)，不含两端，相当于 > AND <）
+  Equal = 0,  ///< 普通（单个输入框）
+  Range = 1   ///< 范围（生成两个输入控件，如起始/结束）
 };
 
 /// 查询输入框样式

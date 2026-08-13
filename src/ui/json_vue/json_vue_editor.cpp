@@ -774,14 +774,8 @@ void JsonVueEditor::loadConfig(const JsonVueConfig &config) {
     connectCellWidgetSignals(inputStyle);
 
     auto *relCombo = newTableCombo();
-    relCombo->addItem(QStringLiteral("="), QStringLiteral("="));
-    relCombo->addItem(QStringLiteral("like"), QStringLiteral("like"));
-    relCombo->addItem(QStringLiteral(">="), QStringLiteral(">="));
-    relCombo->addItem(QStringLiteral("<="), QStringLiteral("<="));
-    relCombo->addItem(QStringLiteral(">"), QStringLiteral(">"));
-    relCombo->addItem(QStringLiteral("<"), QStringLiteral("<"));
-    relCombo->addItem(QStringLiteral("≥≤"), QStringLiteral("range"));
-    relCombo->addItem(QStringLiteral("><"), QStringLiteral("range_open"));
+    relCombo->addItem(QStringLiteral("普通"), QStringLiteral("="));
+    relCombo->addItem(QStringLiteral("范围"), QStringLiteral("range"));
     int relIdx = relCombo->findData(queryRelationToString(q.relation));
     if (relIdx >= 0) relCombo->setCurrentIndex(relIdx);
     m_queryTable->setCellWidget(row, QColRelation, relCombo);
@@ -1265,14 +1259,8 @@ void JsonVueEditor::onAddQueryField() {
   connectCellWidgetSignals(inputStyle);
 
   auto *relCombo = newTableCombo();
-  relCombo->addItem(QStringLiteral("="), QStringLiteral("="));
-  relCombo->addItem(QStringLiteral("like"), QStringLiteral("like"));
-  relCombo->addItem(QStringLiteral(">="), QStringLiteral(">="));
-  relCombo->addItem(QStringLiteral("<="), QStringLiteral("<="));
-  relCombo->addItem(QStringLiteral(">"), QStringLiteral(">"));
-  relCombo->addItem(QStringLiteral("<"), QStringLiteral("<"));
-  relCombo->addItem(QStringLiteral("≥≤"), QStringLiteral("range"));
-  relCombo->addItem(QStringLiteral("><"), QStringLiteral("range_open"));
+  relCombo->addItem(QStringLiteral("普通"), QStringLiteral("="));
+  relCombo->addItem(QStringLiteral("范围"), QStringLiteral("range"));
   m_queryTable->setCellWidget(row, QColRelation, relCombo);
   connectCellWidgetSignals(relCombo);
 

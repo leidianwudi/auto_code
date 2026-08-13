@@ -202,7 +202,7 @@ target_include_directories(auto_code PRIVATE
 target_compile_definitions(auto_code PRIVATE
     PROJECT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
     # 开启调试模式,打开会输出ac引擎和模板引擎的日志
-    # AC_DEBUG
+    AC_DEBUG
 )
 
 target_link_libraries(auto_code

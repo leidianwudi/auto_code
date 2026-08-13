@@ -14,8 +14,8 @@ ${#      placeholder, maxlength, minValue, maxValue, precision, dateFormat,     
 ${#      textareaRows, required, formSpan, editComponent,                        }
 ${#      hasDefaultValue, defaultValue}]                                         }
 ${# ============================================================================}
-//此代码为AutoCode框架生成，请勿手动修改
 <script setup lang="tsx">
+//此代码为AutoCode框架生成，请勿手动修改
 import { Form, FormSchema } from '@/components/form';
 import { useForm } from '@/hooks/web/use_form';
 import { PropType, reactive, ref, computed${if hasDefaultValues}, watch, nextTick${/if} } from 'vue';
@@ -39,7 +39,7 @@ const isDetail = computed(() => props.actionType === 'detail');
 
 // 表单字段定义
 const formSchema = ref<FormSchema[]>([
-${each col in columns}
+${each col in columns}${if col.editVisible}
 ${if col.isBooleanSwitch}
   {
     field: '${col.dataName}',
@@ -47,8 +47,8 @@ ${if col.isBooleanSwitch}
     component: 'Select',
     componentProps: {
       options: [
-        { label: '${col.switchInactiveText}', value: '0' },
-        { label: '${col.switchActiveText}', value: '1' }
+        { label: '${col.switchInactiveText}', value: 0 },
+        { label: '${col.switchActiveText}', value: 1 }
       ]
     }${if col.hasFormSpan},
     colProps: { span: ${col.formSpan} }${/if}
@@ -135,7 +135,17 @@ ${if col.hasPlaceholder},      placeholder: '${col.placeholder}'${/if}
     colProps: { span: ${col.formSpan} }${/if}
   },
 ${else if col.isDate}
-  {
+${if col.isTime}  {
+    field: '${col.dataName}',
+    label: '${col.editName}',
+    component: 'TimePicker',
+    componentProps: {
+      format: 'HH:mm:ss',
+      valueFormat: 'HH:mm:ss'
+    }${if col.hasFormSpan},
+    colProps: { span: ${col.formSpan} }${/if}
+  },
+${else}  {
     field: '${col.dataName}',
     label: '${col.editName}',
     component: 'DatePicker',
@@ -144,6 +154,7 @@ ${else if col.isDate}
     }${if col.hasFormSpan},
     colProps: { span: ${col.formSpan} }${/if}
   },
+${/if}
 ${else if col.isInt}
   {
     field: '${col.dataName}',
@@ -179,6 +190,7 @@ ${/if}    }${if col.hasFormSpan},
     colProps: { span: ${col.formSpan} }${/if}
   },
 ${/if}
+${/if}
 ${/each}]);
 
 // 详情模式下将所有组件设为只读；同时处理隐藏字段和只读字段
@@ -186,12 +198,11 @@ const formSchemaComputed = computed(() => {
 ${if hasHiddenFields}  const hiddenFields = [${hiddenFieldsStr}];
 ${/if}${if hasDisabledFields}  const disabledFields = [${disabledFieldsStr}];
 ${/if}  return formSchema.value.map((item: any) => {
-    let result = { ...item };
+    const result = { ...item };
 ${if hasHiddenFields}    if (hiddenFields.includes(item.field)) {
       result.ifShow = false;
     }
 ${/if}    if (isDetail.value) {
-      result.component = 'Input';
       result.componentProps = { ...(item.componentProps || {}), disabled: true };
     }${if hasDisabledFields} else if (disabledFields.includes(item.field)) {
       result.componentProps = { ...(item.componentProps || {}), disabled: true };

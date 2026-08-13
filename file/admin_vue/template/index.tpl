@@ -88,7 +88,23 @@ const {
 
 // 搜索表单
 const searchSchema = reactive<FormSchema[]>([
-${each q in queryFields}${if q.isSelect}  {
+${each q in queryFields}${if q.isRange}  {
+    field: '${q.dataName}Start',
+    label: '${q.displayName}开始',
+    component: '${q.rangeComp}',
+    componentProps: {
+      ${if q.isDate}type: '${q.dateFormat}'${else}placeholder: '${q.placeholder}'${/if}
+    }
+  },
+  {
+    field: '${q.dataName}End',
+    label: '${q.displayName}结束',
+    component: '${q.rangeComp}',
+    componentProps: {
+      ${if q.isDate}type: '${q.dateFormat}'${else}placeholder: '${q.placeholder}'${/if}
+    }
+  },
+${else if q.isSelect}  {
     field: '${q.dataName}',
     label: '${q.displayName}',
     component: 'ApiSelect',
@@ -396,9 +412,10 @@ function closeDialog() {
   <Dialog v-model="crudState.dialogVisible" :title="crudState.dialogTitle" @closed="closeDialog">
 
     <Write
-      v-if="crudState.actionType === 'edit' || crudState.actionType === 'add'"
+      v-if="crudState.actionType === 'edit' || crudState.actionType === 'add' || crudState.actionType === 'detail'"
       ref="writeRef"
       :current-row="crudState.currentRow"
+      :action-type="crudState.actionType"
     />
 
     <template #footer>
