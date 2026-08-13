@@ -869,11 +869,6 @@ void MainDevMgr::syncJsonVueBeforeSave() {
 void MainDevMgr::refreshTheme() {
   if (!m_ui) return;
 
-  // ── 调试：打印主题切换时的调色板关键文字角色颜色，排查深色主题文字看不清问题 ──
-  qDebug() << "[ThemeDebug] == 切换前（旧值） theme="
-           << static_cast<int>(SettingStore::ins().theme())
-           << " textColor=" << AuiStyle::textColor().name();
-
   // 全局 Fusion 风格 + 调色板（原生控件菜单/下拉/表格/滚动条等随主题变化）
   SettingStore::ins().applyGlobalStyle();
 
@@ -882,23 +877,6 @@ void MainDevMgr::refreshTheme() {
 
   // 刷新标题栏及菜单按钮颜色（标题栏背景、文件/视图按钮文字等）
   m_ui->refreshTitleBarStyle();
-
-  // ── 调试：应用后打印最终生效的颜色 ──
-  qDebug() << "[ThemeDebug] == 切换后（最终） theme="
-           << static_cast<int>(SettingStore::ins().theme())
-           << " textColor=" << AuiStyle::textColor().name();
-  const QPalette ap2 = QApplication::palette();
-  qDebug() << "[ThemeDebug] qApp palette  ButtonText=" << ap2.color(QPalette::ButtonText).name()
-           << " WindowText=" << ap2.color(QPalette::WindowText).name()
-           << " Text=" << ap2.color(QPalette::Text).name()
-           << " HighlightedText=" << ap2.color(QPalette::HighlightedText).name();
-  if (QToolButton *fb = m_ui->findChild<QToolButton *>()) {
-    const QPalette bp = fb->palette();
-    qDebug() << "[ThemeDebug] first QToolButton palette ButtonText="
-             << bp.color(QPalette::ButtonText).name()
-             << " WindowText=" << bp.color(QPalette::WindowText).name()
-             << " Text=" << bp.color(QPalette::Text).name();
-  }
 
   // 刷新主窗口 log 输出面板（背景/文字色随主题更新）
   if (m_ui->outputPanel()) m_ui->outputPanel()->reloadStyle();

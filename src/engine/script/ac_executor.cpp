@@ -270,8 +270,6 @@ bool AcExecutor::linkImportsRecursive(Block &program, const QString &baseDir,
     visited.remove(absPath);
 
     // 从目标 AST 中提取 export 符号并注入当前程序
-    qDebug() << "[linkImports] module" << imp.filePath << "has" << moduleAst.stmts.size()
-             << "stmts, importing:" << imp.names;
     for (const auto &stmt : moduleAst.stmts) {
       bool isExported = false;
 
