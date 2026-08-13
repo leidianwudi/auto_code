@@ -612,6 +612,7 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
     case EditStyle::Date: {
       m_dateFormatCombo = new QComboBox(m_editStyleWidget);
       m_dateFormatCombo->addItem(QStringLiteral("年月日时分秒"), QStringLiteral("datetime"));
+      m_dateFormatCombo->addItem(QStringLiteral("时分秒"), QStringLiteral("time"));
       m_dateFormatCombo->addItem(QStringLiteral("年月日"), QStringLiteral("date"));
       m_dateFormatCombo->addItem(QStringLiteral("年月"), QStringLiteral("month"));
       m_dateFormatCombo->addItem(QStringLiteral("年"), QStringLiteral("year"));
@@ -1030,6 +1031,7 @@ void QueryStyleDialog::setupUI() {
     case QueryInputStyle::Date: {
       m_dateFormatCombo = new QComboBox(this);
       m_dateFormatCombo->addItem(QStringLiteral("年月日时分秒"), QStringLiteral("datetime"));
+      m_dateFormatCombo->addItem(QStringLiteral("时分秒"), QStringLiteral("time"));
       m_dateFormatCombo->addItem(QStringLiteral("年月日"), QStringLiteral("date"));
       m_dateFormatCombo->addItem(QStringLiteral("年月"), QStringLiteral("month"));
       m_dateFormatCombo->addItem(QStringLiteral("年"), QStringLiteral("year"));

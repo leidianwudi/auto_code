@@ -21,7 +21,6 @@ ${#                    placeholder, dateFormat, component}]                     
 ${#   columns       - 列配置数组 [{dataName, label, isSwitch, columnWidth,       }
 ${#                    columnFixed}]                                             }
 ${# ============================================================================}
-//此代码为AutoCode框架生成，请勿手动修改
 <script setup lang="tsx">
 import { BaseButton } from '@/components/button';
 import { FormSchema } from '@/components/form';
@@ -34,6 +33,7 @@ import { ContentWrap } from '@/components/content_wrap';
 import Write from './components/write.vue';
 import { Dialog } from '@/components/dialog';
 import { ${apiImports} } from '@/api/${apiModule}';
+
 import { uiCrudLogic } from '@/utils/ui_crud_logic';
 ${if hasLinkButtons}import { useRouter } from 'vue-router';${/if}
 
@@ -59,15 +59,17 @@ const { crudState, tableRegister, tableState, crudMethods } = uiCrudLogic({
       total: response.data.total || 0
     };
   },
-${if !noDelete}
-  // 设置删除接口
+
+${if !noDelete}  // 设置删除接口
   fetchDelApi: (ids) => ${deleteApi}(ids),
+
 ${/if}
-${if !noEdit}
-  // 设置更新接口
-  fetchUpdateApi: (data) => ${updateApi}(data),
+${if !noEdit}  // 设置更新接口
+  fetchUpdateApi: (data) => ${updateApi}(data)
 ${/if}
 });
+
+
 
 // 解构需要的状态和方法
 const { dataList, loading, total, currentPage, pageSize } = tableState;
@@ -81,6 +83,8 @@ const {
   rowAction,
   save
 } = crudMethods;
+
+
 
 // 搜索表单
 const searchSchema = reactive<FormSchema[]>([
@@ -113,11 +117,12 @@ ${else}  {
 ${/if}
 ${/each}]);
 
-// tag 列映射表（提前构造，避免每次单元格渲染都重建对象）
+${if hasTagColumns}// tag 列映射表（提前构造，避免每次单元格渲染都重建对象）
 const tagMaps: Record<string, Record<string, { text: string; color: string }>> = {
 ${each col in columns}${if col.isTagDisplay}  '${col.dataName}': ${col.tagItemsMapStr},
 ${/if}${/each}};
 
+${/if}
 // 表格列定义
 const tableColumns = reactive<TableColumn[]>([
   {
@@ -391,10 +396,9 @@ function closeDialog() {
   <Dialog v-model="crudState.dialogVisible" :title="crudState.dialogTitle" @closed="closeDialog">
 
     <Write
-      v-if="crudState.actionType === 'edit' || crudState.actionType === 'add' || crudState.actionType === 'detail'"
+      v-if="crudState.actionType === 'edit' || crudState.actionType === 'add'"
       ref="writeRef"
       :current-row="crudState.currentRow"
-      :action-type="crudState.actionType"
     />
 
     <template #footer>

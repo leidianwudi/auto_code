@@ -13,18 +13,9 @@
 import { generateAdminMain } from "../template/main_admin.ac";
 
 main {
-
-  // ── 1. HTTP 通用配置（可视化编辑器"生成"按钮使用） ─────────────────
-  //    baseUrl     - HTTP 基础路径
-  //    authHeader  - 请求头 Authorization（Bearer token 会经常更换）
-  //    postData    - POST 请求的默认数据
-  let baseUrl: String = "http://127.0.0.1:10002";
-  let authHeader: String = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyaWQiOjcsInVzZXJuYW1lIjoiYWRtaW4zIiwicm9sZXMiOlsiYWRtaW4iXSwicm9sZUlkIjoyLCJpYXQiOjE3ODUyMDQ4OTMsImV4cCI6MTc4NTI5MTI5M30.nrJuonRyOBG7y4pGzsdfLHFW4GiV8NWaMm-MSaZ56vk";
-  let postData: String = "{\"page\":1,\"pageSize\":20}";
-
-  // ── 2. 输出文件的根目录 ──────────────────────────────────────────
-  let basePath: String = "D:/output";
-
+  // ── 1. 输出文件的根目录 ──────────────────────────────────────────
+  let basePath: String = "D:/work/github/news_admin/src/views";
+  //let basePath: String = "D:/output";
   // ── 3. 组装项目参数并调用通用生成逻辑 ────────────────────────────
   //     如需自定义模板，可在此传入 templates（见 main_admin.ac 文件头说明）
   let params: Object = {
@@ -32,5 +23,5 @@ main {
   };
   generateAdminMain(params);
 
-  printLog("--- erp_admin 生成结束 ---");
+  printLog("--- news_admin 生成结束 ---");
 }

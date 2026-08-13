@@ -607,14 +607,14 @@ export function buildAdminTplData(json: Object, file: String): Object {
   let dialogButtons: Object[] = btnResult["dialogButtons"];
   let linkButtons: Object[] = btnResult["linkButtons"];
 
-  // ── 操作列宽度（每个按钮约 40px，含间距）────────────────────────
+  // ── 操作列宽度（每个按钮约 60px，含间距）────────────────────────
   let baseActionCount = 0;
   if (!noDetail) { baseActionCount = baseActionCount + 1; }
   if (!noEdit) { baseActionCount = baseActionCount + 1; }
   if (!noDelete) { baseActionCount = baseActionCount + 1; }
-  let actionColumnWidth: Int = (baseActionCount + rowButtons.length) * 40;
-  if (actionColumnWidth < 80) {
-    actionColumnWidth = 80;  // 最小宽度兜底
+  let actionColumnWidth: Int = (baseActionCount + rowButtons.length) * 60;
+  if (actionColumnWidth < 120) {
+    actionColumnWidth = 120;  // 最小宽度兜底
   }
   let hasCustomButtons = (buttons.length > 0);
 
