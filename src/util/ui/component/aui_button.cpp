@@ -12,6 +12,7 @@
 
 #include "aui_icon.h"
 #include "aui_style.h"
+#include "src/util/common/code_constants.h"
 
 /// 调试单步按钮边长（唯一修改点：只需改这一处，图标和按钮尺寸会同步缩放）
 static constexpr int kDebugStepSize = 23;
@@ -407,7 +408,7 @@ DialogButtons AuiButton::createDialogButtons(QWidget *parent, bool showCancel) {
 
   result.layout->addStretch();
 
-  result.okBtn = new QPushButton(QStringLiteral("确定"), parent);
+  result.okBtn = new QPushButton(QString::fromUtf8(CodeConstants::UiText::kConfirm), parent);
   result.okBtn->setDefault(true);
   result.okBtn->setMinimumWidth(80);
   applyDialogButtonStyle(result.okBtn);
@@ -415,7 +416,7 @@ DialogButtons AuiButton::createDialogButtons(QWidget *parent, bool showCancel) {
 
   if (showCancel) {
     result.layout->addSpacing(12);
-    result.cancelBtn = new QPushButton(QStringLiteral("取消"), parent);
+    result.cancelBtn = new QPushButton(QString::fromUtf8(CodeConstants::UiText::kCancel), parent);
     result.cancelBtn->setMinimumWidth(80);
     applyDialogButtonStyle(result.cancelBtn);
     result.layout->addWidget(result.cancelBtn);

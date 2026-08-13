@@ -451,13 +451,15 @@ AcType AcTypeChecker::checkExprPropAccess(const Expr &expr, const TypeEnv &env) 
   // 数组类型的 length 属性 → Number（kArray 或 kClass "Array"）
   if (expr.prop == QStringLiteral("length") &&
       (objType.kind == AcType::kArray ||
-       (objType.kind == AcType::kClass && objType.className == QStringLiteral("Array")))) {
+       (objType.kind == AcType::kClass &&
+        objType.className == QString::fromLatin1(AcTypeName::kArray)))) {
     return AcType::number();
   }
   // 字符串类型的 length 属性 → Number（kString 或 kClass "String"）
   if (expr.prop == QStringLiteral("length") &&
       (objType.kind == AcType::kString ||
-       (objType.kind == AcType::kClass && objType.className == QStringLiteral("String")))) {
+       (objType.kind == AcType::kClass &&
+        objType.className == QString::fromLatin1(AcTypeName::kString)))) {
     return AcType::number();
   }
 
@@ -483,11 +485,13 @@ AcType AcTypeChecker::checkExprIndexAccess(const Expr &expr, const TypeEnv &env)
     return *objType.elementType;
   }
   // kClass "Array" 的索引访问 → 返回 Object（元素类型未知）
-  if (objType.kind == AcType::kClass && objType.className == QStringLiteral("Array")) {
-    return AcType::classType(QStringLiteral("Object"));
+  if (objType.kind == AcType::kClass &&
+      objType.className == QString::fromLatin1(AcTypeName::kArray)) {
+    return AcType::classType(QString::fromLatin1(AcTypeName::kObject));
   }
   // kClass "String" 的索引访问 → 返回 String（单字符）
-  if (objType.kind == AcType::kClass && objType.className == QStringLiteral("String")) {
+  if (objType.kind == AcType::kClass &&
+      objType.className == QString::fromLatin1(AcTypeName::kString)) {
     return AcType::string();
   }
   // kString 的索引访问 → 返回 String（单字符）
@@ -592,13 +596,13 @@ AcType AcTypeChecker::checkExprMethodCall(const Expr &expr, const TypeEnv &env) 
   }
   // 将字面量类型统一映射到类类型，便于查找内置类方法
   if (objType.kind == AcType::kString) {
-    objType = AcType::classType(QStringLiteral("String"));
+    objType = AcType::classType(QString::fromLatin1(AcTypeName::kString));
   } else if (objType.kind == AcType::kNumber) {
-    objType = AcType::classType(QStringLiteral("Number"));
+    objType = AcType::classType(QString::fromLatin1(AcTypeName::kNumber));
   } else if (objType.kind == AcType::kBool) {
-    objType = AcType::classType(QStringLiteral("Bool"));
+    objType = AcType::classType(QString::fromLatin1(AcTypeName::kBool));
   } else if (objType.kind == AcType::kArray) {
-    objType = AcType::classType(QStringLiteral("Array"));
+    objType = AcType::classType(QString::fromLatin1(AcTypeName::kArray));
   }
   if (objType.kind == AcType::kClass && m_classes->contains(objType.className)) {
     const ClassDef &cd = (*m_classes)[objType.className];
@@ -728,11 +732,11 @@ AcType AcTypeChecker::checkExprBinary(const Expr &expr, const TypeEnv &env) {
   // 将 kClass "String" 视为 kString，kClass "Number" 视为 kNumber（统一字面量与类类型）
   auto normalizeType = [](AcType &t) {
     if (t.kind == AcType::kClass) {
-      if (t.className == QStringLiteral("String"))
+      if (t.className == QString::fromLatin1(AcTypeName::kString))
         t = AcType::string();
-      else if (t.className == QStringLiteral("Number"))
+      else if (t.className == QString::fromLatin1(AcTypeName::kNumber))
         t = AcType::number();
-      else if (t.className == QStringLiteral("Bool"))
+      else if (t.className == QString::fromLatin1(AcTypeName::kBool))
         t = AcType::boolean();
     }
   };
@@ -812,26 +816,30 @@ bool AcTypeChecker::isCompatible(const AcType &from, const AcType &to) const {
 
   // Array 字面量 (kArray) 兼容 Array 类 (kClass "Array")
   if (from.kind == AcType::kArray && to.kind == AcType::kClass &&
-      to.className == QStringLiteral("Array")) {
+      to.className == QString::fromLatin1(AcTypeName::kArray)) {
     return true;
   }
   // Object 字面量 (kClass "Object") 兼容 Object 类
-  if (from.kind == AcType::kClass && from.className == QStringLiteral("Object") &&
-      to.kind == AcType::kClass && to.className == QStringLiteral("Object")) {
+  if (from.kind == AcType::kClass && from.className == QString::fromLatin1(AcTypeName::kObject) &&
+      to.kind == AcType::kClass && to.className == QString::fromLatin1(AcTypeName::kObject)) {
     return true;
   }
   // Object 类型兼容任何类类型（动态 JSON 对象可赋值给具体类型，类似 TypeScript 类型断言）
-  if (from.kind == AcType::kClass && from.className == QStringLiteral("Object") &&
+  if (from.kind == AcType::kClass && from.className == QString::fromLatin1(AcTypeName::kObject) &&
       to.kind == AcType::kClass) {
     return true;
   }
   // 数值/字符串字面量兼容 Number/String 类属性默认值
   if (to.kind == AcType::kClass) {
-    if (to.className == QStringLiteral("Number") && from.kind == AcType::kNumber) return true;
-    if (to.className == QStringLiteral("String") && from.kind == AcType::kString) return true;
-    if (to.className == QStringLiteral("Bool") && from.kind == AcType::kBool) return true;
-    if (to.className == QStringLiteral("Array") && from.kind == AcType::kArray) return true;
-    if (to.className == QStringLiteral("Object")) return true;
+    if (to.className == QString::fromLatin1(AcTypeName::kNumber) && from.kind == AcType::kNumber)
+      return true;
+    if (to.className == QString::fromLatin1(AcTypeName::kString) && from.kind == AcType::kString)
+      return true;
+    if (to.className == QString::fromLatin1(AcTypeName::kBool) && from.kind == AcType::kBool)
+      return true;
+    if (to.className == QString::fromLatin1(AcTypeName::kArray) && from.kind == AcType::kArray)
+      return true;
+    if (to.className == QString::fromLatin1(AcTypeName::kObject)) return true;
   }
 
   if (from.kind == to.kind) {
@@ -960,15 +968,15 @@ void AcTypeChecker::checkAccessInClass(const ClassDef &cd) {
 QString AcTypeChecker::typeToString(const AcType &type) const {
   switch (type.kind) {
     case AcType::kNumber:
-      return QStringLiteral("Number");
+      return QString::fromLatin1(AcTypeName::kNumber);
     case AcType::kString:
-      return QStringLiteral("String");
+      return QString::fromLatin1(AcTypeName::kString);
     case AcType::kBool:
-      return QStringLiteral("Bool");
+      return QString::fromLatin1(AcTypeName::kBool);
     case AcType::kAny:
-      return QStringLiteral("Any");
+      return QString::fromLatin1(AcTypeName::kAny);
     case AcType::kVoid:
-      return QStringLiteral("Void");
+      return QString::fromLatin1(AcTypeName::kVoid);
     case AcType::kArray:
       return typeToString(*type.elementType) + QStringLiteral("[]");
     case AcType::kClass:
@@ -976,7 +984,7 @@ QString AcTypeChecker::typeToString(const AcType &type) const {
     case AcType::kInterface:
       return type.interfaceName;
     default:
-      return QStringLiteral("Unknown");
+      return QString::fromLatin1(AcTypeName::kUnknown);
   }
 }
 

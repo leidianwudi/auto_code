@@ -16,6 +16,131 @@
 #include <QString>
 #include <QVector>
 
+// ════════════════════════════════════════════════════════════
+//  .jsonvue 序列化键名 / 枚举字符串值常量
+//  model（toJson/fromJson）与 UI 层共用，避免硬编码字符串，
+//  防止读写键名不一致导致数据丢失。改名只需改此一处。
+// ════════════════════════════════════════════════════════════
+
+/// .jsonvue 文件的 JSON 键名常量
+namespace JsonVueKey {
+// 顶层结构
+inline constexpr const char *kMeta = "meta";
+inline constexpr const char *kColumns = "columns";
+inline constexpr const char *kQueryFields = "queryFields";
+inline constexpr const char *kButtons = "buttons";
+
+// 接口配置（JsonVueMeta）
+inline constexpr const char *kDataMethod = "dataMethod";
+inline constexpr const char *kDataUrl = "dataUrl";
+inline constexpr const char *kQueryApi = "queryApi";
+inline constexpr const char *kDeleteApi = "deleteApi";
+inline constexpr const char *kNoDelete = "noDelete";
+inline constexpr const char *kUpdateApi = "updateApi";
+inline constexpr const char *kNoEdit = "noEdit";
+inline constexpr const char *kNoDetail = "noDetail";
+
+// 列 / 查询字段 / 对话框字段 通用键
+inline constexpr const char *kDataName = "dataName";
+inline constexpr const char *kDisplayName = "displayName";
+inline constexpr const char *kQueryVisible = "queryVisible";
+inline constexpr const char *kQueryName = "queryName";
+inline constexpr const char *kQueryStyle = "queryStyle";
+inline constexpr const char *kSwitchEditable = "switchEditable";
+inline constexpr const char *kEditVisible = "editVisible";
+inline constexpr const char *kEditName = "editName";
+inline constexpr const char *kEditStyle = "editStyle";
+inline constexpr const char *kEditEditable = "editEditable";
+inline constexpr const char *kInputStyle = "inputStyle";
+inline constexpr const char *kRelation = "relation";
+inline constexpr const char *kSelectUrl = "selectUrl";
+inline constexpr const char *kSelectValueField = "selectValueField";
+inline constexpr const char *kSelectLabelField = "selectLabelField";
+inline constexpr const char *kPlaceholder = "placeholder";
+inline constexpr const char *kMaxlength = "maxlength";
+inline constexpr const char *kMinValue = "minValue";
+inline constexpr const char *kMaxValue = "maxValue";
+inline constexpr const char *kPrecision = "precision";
+inline constexpr const char *kDateFormat = "dateFormat";
+inline constexpr const char *kTextareaRows = "textareaRows";
+inline constexpr const char *kRequired = "required";
+inline constexpr const char *kColumnWidth = "columnWidth";
+inline constexpr const char *kColumnFixed = "columnFixed";
+inline constexpr const char *kFormatter = "formatter";
+inline constexpr const char *kFormSpan = "formSpan";
+inline constexpr const char *kDisplayType = "displayType";
+inline constexpr const char *kTagItems = "tagItems";
+inline constexpr const char *kBoolTrueText = "boolTrueText";
+inline constexpr const char *kBoolFalseText = "boolFalseText";
+inline constexpr const char *kDefaultValue = "defaultValue";
+inline constexpr const char *kDefaultSort = "defaultSort";
+
+// TagItem
+inline constexpr const char *kTagValue = "value";
+inline constexpr const char *kTagText = "text";
+inline constexpr const char *kTagColor = "color";
+
+// 操作按钮（ButtonConfig / DialogFieldConfig）
+inline constexpr const char *kLabel = "label";
+inline constexpr const char *kFieldName = "fieldName";
+inline constexpr const char *kIcon = "icon";
+inline constexpr const char *kPosition = "position";
+inline constexpr const char *kButtonType = "buttonType";
+inline constexpr const char *kActionType = "actionType";
+inline constexpr const char *kActionKey = "actionKey";
+inline constexpr const char *kApiName = "apiName";
+inline constexpr const char *kConfirmText = "confirmText";
+inline constexpr const char *kDialogTitle = "dialogTitle";
+inline constexpr const char *kDialogApi = "dialogApi";
+inline constexpr const char *kDialogFields = "dialogFields";
+inline constexpr const char *kLinkPath = "linkPath";
+}  // namespace JsonVueKey
+
+/// 枚举序列化字符串值常量（写入 .jsonvue / 生成代码时使用）
+namespace JsonVueStyle {
+inline constexpr const char *kText = "text";
+inline constexpr const char *kSwitch = "switch";
+inline constexpr const char *kInt = "int";
+inline constexpr const char *kFloat = "float";
+inline constexpr const char *kMoney = "money";
+inline constexpr const char *kDate = "date";
+inline constexpr const char *kDatetime = "datetime";
+inline constexpr const char *kMonth = "month";
+inline constexpr const char *kYear = "year";
+inline constexpr const char *kDaterange = "daterange";
+inline constexpr const char *kRange = "range";
+inline constexpr const char *kTag = "tag";
+inline constexpr const char *kBoolean = "boolean";
+inline constexpr const char *kImage = "image";
+inline constexpr const char *kSelect = "select";
+inline constexpr const char *kTextarea = "textarea";
+inline constexpr const char *kToolbar = "toolbar";
+inline constexpr const char *kRow = "row";
+inline constexpr const char *kAjax = "ajax";
+inline constexpr const char *kConfirm = "confirm";
+inline constexpr const char *kDialog = "dialog";
+inline constexpr const char *kLink = "link";
+/// 兼容旧名称（"time" → Date 查询输入框）
+inline constexpr const char *kTime = "time";
+}  // namespace JsonVueStyle
+
+/// 标签 / 按钮配色名称常量（Element Plus 主题色）
+namespace JsonVueColor {
+inline constexpr const char *kPrimary = "primary";
+inline constexpr const char *kSuccess = "success";
+inline constexpr const char *kWarning = "warning";
+inline constexpr const char *kInfo = "info";
+inline constexpr const char *kDanger = "danger";
+}  // namespace JsonVueColor
+
+/// HTTP 方法常量（接口配置 dataMethod 使用）
+namespace JsonVueHttp {
+inline constexpr const char *kGet = "GET";
+inline constexpr const char *kPost = "POST";
+inline constexpr const char *kPut = "PUT";
+inline constexpr const char *kDelete = "DELETE";
+}  // namespace JsonVueHttp
+
 /**
  * @struct TagItem
  * @brief 标签映射项（displayType == "tag" 时使用）
@@ -39,7 +164,7 @@ struct TagItem {
  */
 struct JsonVueMeta {
   /// 生成数据 URL 的 HTTP 方法 ("GET" / "POST" 等)
-  QString dataMethod = QStringLiteral("GET");
+  QString dataMethod = QString::fromLatin1(JsonVueHttp::kGet);
   /// 生成数据 URL（相对路径，会拼接 baseUrl）
   QString dataUrl;
   /// 查询接口名称，例如 "getConfigGListApi"

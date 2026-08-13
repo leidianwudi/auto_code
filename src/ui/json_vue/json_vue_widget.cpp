@@ -96,6 +96,6 @@ void JsonVueWidget::loadHttpConfigFromAcFile(const QString &acFilePath) {
   m_visual->loadHttpConfigFromAcFile(acFilePath);
 }
 
-QString JsonVueWidget::findNearestHtmlUrlAc(const QString &jsonvueFilePath) {
-  return JsonVueEditor::findNearestHtmlUrlAc(jsonvueFilePath);
+QString JsonVueWidget::findNearestApiAuthDataAc(const QString &jsonvueFilePath) {
+  return JsonVueEditor::findNearestApiAuthDataAc(jsonvueFilePath);
 }

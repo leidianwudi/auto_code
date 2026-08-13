@@ -19,6 +19,7 @@
 #include <QToolTip>
 
 #include "code_editor.h"
+#include "src/engine/ac_language.h"
 #include "src/engine/script/ac_symbol_table.h"
 #include "src/util/ui/component/aui_style.h"
 
@@ -129,7 +130,7 @@ const AcSymbolEntry *CodeEditor::findPropertyDefinition(const QString &propName)
   const AcSymbolEntry *objEntry = m_symbolNavigator.findDefinition(chain[0]);
   if (objEntry) {
     currentType = objEntry->returnType;
-    if (currentType.isEmpty() || currentType == QStringLiteral("Any")) {
+    if (currentType.isEmpty() || currentType == QString::fromLatin1(AcTypeName::kAny)) {
       currentType = chain[0];
       if (!currentType.isEmpty()) currentType[0] = currentType[0].toUpper();
     }
@@ -147,7 +148,7 @@ const AcSymbolEntry *CodeEditor::findPropertyDefinition(const QString &propName)
     }
     if (i < chain.size() - 1) {
       currentType = result->returnType;
-      if (currentType.isEmpty() || currentType == QStringLiteral("Any")) break;
+      if (currentType.isEmpty() || currentType == QString::fromLatin1(AcTypeName::kAny)) break;
     }
   }
 
@@ -372,7 +373,7 @@ void CodeEditor::showSignatureHelp() {
 
   // 构建签名提示文本
   QString tip = entry->signature;
-  if (!entry->returnType.isEmpty() && entry->returnType != QStringLiteral("Void")) {
+  if (!entry->returnType.isEmpty() && entry->returnType != QString::fromLatin1(AcTypeName::kVoid)) {
     tip += QStringLiteral("\n→ ") + entry->returnType;
   }
 
@@ -412,22 +413,22 @@ static QString debugVarTooltip(const AcDebugVar &v) {
   QString type;
   QString value;
   if (val.isString()) {
-    type = QStringLiteral("String");
+    type = QString::fromLatin1(AcTypeName::kString);
     value = val.toString();
   } else if (val.isDouble()) {
-    type = QStringLiteral("Number");
+    type = QString::fromLatin1(AcTypeName::kNumber);
     value = QString::number(val.toDouble());
   } else if (val.isBool()) {
-    type = QStringLiteral("Boolean");
+    type = QString::fromLatin1(AcTypeName::kBoolean);
     value = val.toBool() ? QStringLiteral("true") : QStringLiteral("false");
   } else if (val.isNull()) {
-    type = QStringLiteral("Null");
+    type = QString::fromLatin1(AcTypeName::kNull);
     value = QStringLiteral("null");
   } else if (val.isUndefined()) {
     type = QStringLiteral("Undefined");
     value = QStringLiteral("undefined");
   } else if (val.isArray()) {
-    type = QStringLiteral("Array");
+    type = QString::fromLatin1(AcTypeName::kArray);
     const QJsonArray &a = val.toArray();
     value = QStringLiteral("Array(%1)").arg(a.size());
     QStringList preview;
@@ -441,9 +442,9 @@ static QString debugVarTooltip(const AcDebugVar &v) {
       else if (elem.isBool())
         preview << (elem.toBool() ? QStringLiteral("true") : QStringLiteral("false"));
       else if (elem.isArray())
-        preview << QStringLiteral("Array");
+        preview << QString::fromLatin1(AcTypeName::kArray);
       else if (elem.isObject())
-        preview << QStringLiteral("Object");
+        preview << QString::fromLatin1(AcTypeName::kObject);
       else if (elem.isNull())
         preview << QStringLiteral("null");
       else
@@ -452,10 +453,10 @@ static QString debugVarTooltip(const AcDebugVar &v) {
     if (!preview.isEmpty())
       value += QStringLiteral(" [") + preview.join(QStringLiteral(", ")) + QStringLiteral("]");
   } else if (val.isObject()) {
-    type = QStringLiteral("Object");
+    type = QString::fromLatin1(AcTypeName::kObject);
     value = QStringLiteral("Object(%1)").arg(val.toObject().size());
   } else {
-    type = QStringLiteral("Any");
+    type = QString::fromLatin1(AcTypeName::kAny);
   }
 
   QString text = QStringLiteral("%1").arg(v.name);
@@ -507,8 +508,9 @@ void CodeEditor::showSymbolHover(int pos, const QPoint &globalPos) {
     }
 
     // 显示返回类型
-    if (!entry->returnType.isEmpty() && entry->returnType != QStringLiteral("Any") &&
-        entry->returnType != QStringLiteral("Void")) {
+    if (!entry->returnType.isEmpty() &&
+        entry->returnType != QString::fromLatin1(AcTypeName::kAny) &&
+        entry->returnType != QString::fromLatin1(AcTypeName::kVoid)) {
       tipText += QStringLiteral("\n返回: ") + entry->returnType;
     }
 
@@ -518,7 +520,8 @@ void CodeEditor::showSymbolHover(int pos, const QPoint &globalPos) {
       tipText += QStringLiteral("\n参数:");
       for (const auto &param : entry->params) {
         tipText += QStringLiteral("\n  ") + param.name + QStringLiteral(": ") +
-                   (param.type.className.isEmpty() ? QStringLiteral("Any") : param.type.className);
+                   (param.type.className.isEmpty() ? QString::fromLatin1(AcTypeName::kAny)
+                                                   : param.type.className);
       }
     }
 

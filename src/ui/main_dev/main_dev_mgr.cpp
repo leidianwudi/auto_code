@@ -40,6 +40,7 @@
 #include "src/ui/json_vue/json_vue_editor.h"
 #include "src/ui/json_vue/json_vue_widget.h"
 #include "src/ui/setting/setting_mgr.h"
+#include "src/util/common/code_constants.h"
 #include "src/util/common/path_resolver.h"
 #include "src/util/ui/code/code_editor.h"
 #include "src/util/ui/component/aui_button.h"
@@ -676,9 +677,10 @@ void MainDevMgr::refreshBreakpointList() {
 /// @brief 断点存储文件路径（AppData 目录下，目录不存在则创建）
 static QString breakpointStorePath() {
   QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-  if (dir.isEmpty()) dir = QDir::homePath() + QStringLiteral("/.auto_code");
+  if (dir.isEmpty())
+    dir = QDir::homePath() + QString::fromUtf8(CodeConstants::Paths::kAppDataDirName);
   QDir().mkpath(dir);
-  return dir + QStringLiteral("/breakpoints.json");
+  return dir + QString::fromUtf8(CodeConstants::Paths::kBreakpointsStoreFile);
 }
 
 void MainDevMgr::saveBreakpointsToDisk() {
@@ -712,10 +714,10 @@ void MainDevMgr::saveBreakpointsToDisk() {
     }
     QJsonObject entry;
     entry[QStringLiteral("file")] = it.key();
-    entry[QStringLiteral("breakpoints")] = lines;
+    entry[QString::fromUtf8(CodeConstants::Paths::kBreakpointsJsonKey)] = lines;
     arr.append(entry);
   }
-  root[QStringLiteral("breakpoints")] = arr;
+  root[QString::fromUtf8(CodeConstants::Paths::kBreakpointsJsonKey)] = arr;
 
   QFile f(breakpointStorePath());
   if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
@@ -728,13 +730,15 @@ void MainDevMgr::loadBreakpointsFromDisk() {
   QFile f(breakpointStorePath());
   if (!f.open(QIODevice::ReadOnly)) return;
   const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
-  const QJsonArray arr = doc.object().value(QStringLiteral("breakpoints")).toArray();
+  const QJsonArray arr =
+      doc.object().value(QString::fromUtf8(CodeConstants::Paths::kBreakpointsJsonKey)).toArray();
   for (const QJsonValue &v : arr) {
     const QJsonObject entry = v.toObject();
     const QString file = entry.value(QStringLiteral("file")).toString();
     if (file.isEmpty()) continue;
     QMap<int, bool> lines;
-    const QJsonArray lineArr = entry.value(QStringLiteral("breakpoints")).toArray();
+    const QJsonArray lineArr =
+        entry.value(QString::fromUtf8(CodeConstants::Paths::kBreakpointsJsonKey)).toArray();
     if (lineArr.isEmpty()) {
       // 兼容旧格式：直接是行号数组
       const QJsonArray oldArr = entry.value(QStringLiteral("lines")).toArray();
@@ -753,7 +757,8 @@ void MainDevMgr::loadBreakpointsFromDisk() {
 /// @brief 会话状态存储文件（记录上次打开的文件列表）
 static QString sessionSettingsPath() {
   QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-  if (dir.isEmpty()) dir = QDir::homePath() + QStringLiteral("/.auto_code");
+  if (dir.isEmpty())
+    dir = QDir::homePath() + QString::fromUtf8(CodeConstants::Paths::kAppDataDirName);
   QDir().mkpath(dir);
   return dir + QStringLiteral("/session.ini");
 }

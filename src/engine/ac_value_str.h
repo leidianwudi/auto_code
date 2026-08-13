@@ -71,7 +71,8 @@ inline QString toString(const QJsonValue &v) {
     case QJsonValue::String:
       return QStringLiteral("\"%1\"").arg(v.toString().replace('"', "\\\""));
     case QJsonValue::Bool:
-      return v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
+      return v.toBool() ? QString::fromLatin1(AcKeyword::kTrue)
+                        : QString::fromLatin1(AcKeyword::kFalse);
     case QJsonValue::Double: {
       double d = v.toDouble();
       if (d == std::floor(d)) {
@@ -82,13 +83,13 @@ inline QString toString(const QJsonValue &v) {
     case QJsonValue::Null:
       return QStringLiteral("null");
     case QJsonValue::Undefined:
-      return QStringLiteral("undefined");
+      return QString::fromLatin1(AcKeyword::kUndefined);
     case QJsonValue::Array:
       return arrayToString(v.toArray());
     case QJsonValue::Object:
       return objectToString(v.toObject());
     default:
-      return QStringLiteral("undefined");
+      return QString::fromLatin1(AcKeyword::kUndefined);
   }
 }
 

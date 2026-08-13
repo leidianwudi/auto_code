@@ -7,6 +7,8 @@
 
 #include <QDebug>
 
+#include "../ac_language.h"
+
 // ──────────────────────────────────────────────────────────────
 //  buildFromAst / buildFromBlock / collectStmt
 // ──────────────────────────────────────────────────────────────
@@ -296,26 +298,26 @@ void AcSymbolTable::collectFromIfBranch(const IfStmt *ifStmt) {
 QString AcSymbolTable::acTypeToString(const AcType &type) const {
   switch (type.kind) {
     case AcType::kNumber:
-      return QStringLiteral("Number");
+      return QString::fromLatin1(AcTypeName::kNumber);
     case AcType::kString:
-      return QStringLiteral("String");
+      return QString::fromLatin1(AcTypeName::kString);
     case AcType::kBool:
-      return QStringLiteral("Boolean");
+      return QString::fromLatin1(AcTypeName::kBoolean);
     case AcType::kAny:
-      return QStringLiteral("Any");
+      return QString::fromLatin1(AcTypeName::kAny);
     case AcType::kVoid:
       return QStringLiteral("void");
     case AcType::kNull:
       return QStringLiteral("null");
     case AcType::kArray:
       if (type.elementType) return acTypeToString(*type.elementType) + QStringLiteral("[]");
-      return QStringLiteral("Array");
+      return QString::fromLatin1(AcTypeName::kArray);
     case AcType::kClass:
       return type.className;
     case AcType::kInterface:
       return type.interfaceName;
     default:
-      return QStringLiteral("Any");
+      return QString::fromLatin1(AcTypeName::kAny);
   }
 }
 
@@ -427,15 +429,15 @@ QString AcSymbolTable::inferTypeFromExpr(const Expr &expr) const {
   switch (expr.kind) {
     // 字面量类型
     case Expr::kString:
-      return QStringLiteral("String");
+      return QString::fromLatin1(AcTypeName::kString);
     case Expr::kNumber:
-      return QStringLiteral("Number");
+      return QString::fromLatin1(AcTypeName::kNumber);
     case Expr::kBool:
-      return QStringLiteral("Boolean");
+      return QString::fromLatin1(AcTypeName::kBoolean);
     case Expr::kArray:
-      return QStringLiteral("Array");
+      return QString::fromLatin1(AcTypeName::kArray);
     case Expr::kObject:
-      return QStringLiteral("Object");
+      return QString::fromLatin1(AcTypeName::kObject);
     case Expr::kNull:
     case Expr::kUndefined:
       return QString();
@@ -443,7 +445,8 @@ QString AcSymbolTable::inferTypeFromExpr(const Expr &expr) const {
     // 变量引用：查找符号表中的 returnType
     case Expr::kIdent: {
       const AcSymbolEntry *entry = findSymbol(expr.ident);
-      if (entry && !entry->returnType.isEmpty() && entry->returnType != QStringLiteral("Any")) {
+      if (entry && !entry->returnType.isEmpty() &&
+          entry->returnType != QString::fromLatin1(AcTypeName::kAny)) {
         return entry->returnType;
       }
       return QString();
@@ -460,7 +463,8 @@ QString AcSymbolTable::inferTypeFromExpr(const Expr &expr) const {
     // 函数调用：查找函数的返回类型
     case Expr::kFuncCall: {
       const AcSymbolEntry *entry = findSymbol(expr.funcCall.name);
-      if (entry && !entry->returnType.isEmpty() && entry->returnType != QStringLiteral("Any") &&
+      if (entry && !entry->returnType.isEmpty() &&
+          entry->returnType != QString::fromLatin1(AcTypeName::kAny) &&
           entry->returnType != QStringLiteral("void")) {
         return entry->returnType;
       }
@@ -483,7 +487,7 @@ QString AcSymbolTable::inferTypeFromExpr(const Expr &expr) const {
       QString qualifiedKey = objType + QStringLiteral(".") + expr.prop;
       const AcSymbolEntry *propEntry = findSymbol(qualifiedKey);
       if (propEntry && !propEntry->returnType.isEmpty() &&
-          propEntry->returnType != QStringLiteral("Any")) {
+          propEntry->returnType != QString::fromLatin1(AcTypeName::kAny)) {
         return propEntry->returnType;
       }
       return QString();
@@ -505,7 +509,7 @@ QString AcSymbolTable::inferTypeFromExpr(const Expr &expr) const {
       QString qualifiedKey = objType + QStringLiteral(".") + expr.methodCall.methodName;
       const AcSymbolEntry *methodEntry = findSymbol(qualifiedKey);
       if (methodEntry && !methodEntry->returnType.isEmpty() &&
-          methodEntry->returnType != QStringLiteral("Any") &&
+          methodEntry->returnType != QString::fromLatin1(AcTypeName::kAny) &&
           methodEntry->returnType != QStringLiteral("void")) {
         return methodEntry->returnType;
       }
@@ -517,24 +521,26 @@ QString AcSymbolTable::inferTypeFromExpr(const Expr &expr) const {
       if (expr.binOp == Expr::kAdd) {
         QString lType = expr.left ? inferTypeFromExpr(*expr.left) : QString();
         QString rType = expr.right ? inferTypeFromExpr(*expr.right) : QString();
-        if (lType == QStringLiteral("String") || rType == QStringLiteral("String")) {
-          return QStringLiteral("String");
+        if (lType == QString::fromLatin1(AcTypeName::kString) ||
+            rType == QString::fromLatin1(AcTypeName::kString)) {
+          return QString::fromLatin1(AcTypeName::kString);
         }
-        if (lType == QStringLiteral("Number") && rType == QStringLiteral("Number")) {
-          return QStringLiteral("Number");
+        if (lType == QString::fromLatin1(AcTypeName::kNumber) &&
+            rType == QString::fromLatin1(AcTypeName::kNumber)) {
+          return QString::fromLatin1(AcTypeName::kNumber);
         }
       }
       // 比较运算 → Boolean
       if (expr.binOp >= Expr::kEq && expr.binOp <= Expr::kGte) {
-        return QStringLiteral("Boolean");
+        return QString::fromLatin1(AcTypeName::kBoolean);
       }
       // 算术运算 → Number
       if (expr.binOp >= Expr::kAdd && expr.binOp <= Expr::kMod) {
-        return QStringLiteral("Number");
+        return QString::fromLatin1(AcTypeName::kNumber);
       }
       // 逻辑运算 → Boolean
       if (expr.binOp == Expr::kOr || expr.binOp == Expr::kAnd) {
-        return QStringLiteral("Boolean");
+        return QString::fromLatin1(AcTypeName::kBoolean);
       }
       return QString();
     }
@@ -554,22 +560,23 @@ QString AcSymbolTable::inferTypeFromExpr(const Expr &expr) const {
         return objType.left(objType.length() - 2);
       }
       // String[i] → String（单字符仍是 String）
-      if (objType == QStringLiteral("String")) {
-        return QStringLiteral("String");
+      if (objType == QString::fromLatin1(AcTypeName::kString)) {
+        return QString::fromLatin1(AcTypeName::kString);
       }
       return QString();
     }
 
     // 一元运算 !expr → Boolean
     case Expr::kUnary:
-      return QStringLiteral("Boolean");
+      return QString::fromLatin1(AcTypeName::kBoolean);
 
     // 静态访问 ClassName::member
     case Expr::kStaticAccess: {
       // ident 是类名，prop 是成员名
       QString qualifiedKey = expr.ident + QStringLiteral(".") + expr.prop;
       const AcSymbolEntry *entry = findSymbol(qualifiedKey);
-      if (entry && !entry->returnType.isEmpty() && entry->returnType != QStringLiteral("Any")) {
+      if (entry && !entry->returnType.isEmpty() &&
+          entry->returnType != QString::fromLatin1(AcTypeName::kAny)) {
         return entry->returnType;
       }
       return QString();

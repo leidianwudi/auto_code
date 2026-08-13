@@ -282,7 +282,8 @@ void CodeEditor::runSchemaValidation(const QJsonObject &doc, QVector<ValidationR
   //   - 相对路径   → 基于当前文件所在目录
   QString schemaPath = schemaRef;
   if (schemaRef.startsWith(QLatin1Char('/'))) {
-    schemaPath = QStringLiteral(PROJECT_SOURCE_DIR) + QStringLiteral("/file") + schemaRef;
+    schemaPath = QStringLiteral(PROJECT_SOURCE_DIR) +
+                 QString::fromUtf8(CodeConstants::Paths::kFileDirName) + schemaRef;
   } else if (QFileInfo(schemaRef).isRelative()) {
     QFileInfo fi(objectName());
     schemaPath = fi.absolutePath() + QLatin1Char('/') + schemaRef;
@@ -454,13 +455,15 @@ void LineNumberArea::contextMenuEvent(QContextMenuEvent *event) {
 
   QMenu menu(this);
   QAction *toggleAction =
-      menu.addAction(hasBp ? QStringLiteral("移除断点") : QStringLiteral("添加断点"));
+      menu.addAction(hasBp ? QString::fromUtf8(CodeConstants::UiText::kRemoveBreakpoint)
+                           : QStringLiteral("添加断点"));
   connect(toggleAction, &QAction::triggered, this,
           [this, line]() { m_codeEditor->toggleBreakpoint(line - 1); });
 
   if (hasBp) {
     QAction *enableAction =
-        menu.addAction(bpEnabled ? QStringLiteral("禁用断点") : QStringLiteral("启用断点"));
+        menu.addAction(bpEnabled ? QString::fromUtf8(CodeConstants::UiText::kDisableBreakpoint)
+                                 : QString::fromUtf8(CodeConstants::UiText::kEnableBreakpoint));
     connect(enableAction, &QAction::triggered, this,
             [this, line, bpEnabled]() { m_codeEditor->setBreakpointEnabled(line, !bpEnabled); });
   }
@@ -1016,7 +1019,8 @@ void CodeEditor::contextMenuEvent(QContextMenuEvent *event) {
 
     menu->addSeparator();
     QAction *toggleBpAction =
-        menu->addAction(hasBp ? QStringLiteral("移除断点") : QStringLiteral("添加断点"));
+        menu->addAction(hasBp ? QString::fromUtf8(CodeConstants::UiText::kRemoveBreakpoint)
+                              : QStringLiteral("添加断点"));
     toggleBpAction->setShortcut(QKeySequence(QStringLiteral("F9")));
     connect(toggleBpAction, &QAction::triggered, this,
             [this, line]() { toggleBreakpoint(line - 1); });
@@ -1024,7 +1028,8 @@ void CodeEditor::contextMenuEvent(QContextMenuEvent *event) {
     // 仅在已有断点时才提供启用/禁用
     if (hasBp) {
       QAction *enableBpAction =
-          menu->addAction(bpEnabled ? QStringLiteral("禁用断点") : QStringLiteral("启用断点"));
+          menu->addAction(bpEnabled ? QString::fromUtf8(CodeConstants::UiText::kDisableBreakpoint)
+                                    : QString::fromUtf8(CodeConstants::UiText::kEnableBreakpoint));
       enableBpAction->setEnabled(true);
       connect(enableBpAction, &QAction::triggered, this,
               [this, line, bpEnabled]() { setBreakpointEnabled(line, !bpEnabled); });

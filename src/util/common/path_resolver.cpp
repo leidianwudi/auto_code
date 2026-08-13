@@ -14,6 +14,8 @@
 #define PROJECT_SOURCE_DIR "."
 #endif
 
+#include "src/util/common/code_constants.h"
+
 QStringList PathResolver::fileSearchPaths(const QString &scriptPath) {
   QStringList paths;
   QSet<QString> seen;
@@ -32,10 +34,12 @@ QStringList PathResolver::fileSearchPaths(const QString &scriptPath) {
   }
 
   // 优先使用 PROJECT_SOURCE_DIR/file（开发期源码目录）
-  addPath(QStringLiteral(PROJECT_SOURCE_DIR) + QStringLiteral("/file"));
-  addPath(QCoreApplication::applicationDirPath() + QStringLiteral("/file"));
+  addPath(QStringLiteral(PROJECT_SOURCE_DIR) +
+          QString::fromUtf8(CodeConstants::Paths::kFileDirName));
+  addPath(QCoreApplication::applicationDirPath() +
+          QString::fromUtf8(CodeConstants::Paths::kFileDirName));
   addPath(QCoreApplication::applicationDirPath() + QStringLiteral("/../../file"));
-  addPath(QDir::currentPath() + QStringLiteral("/file"));
+  addPath(QDir::currentPath() + QString::fromUtf8(CodeConstants::Paths::kFileDirName));
 
   return paths;
 }

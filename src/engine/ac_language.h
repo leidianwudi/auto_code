@@ -104,6 +104,27 @@ inline const QStringList kAll = {
 }  // namespace AcKeyword
 
 // ═════════════════════════════════════════════════════════════════════════════
+// 零·补、内置类型名 — 解析器/解释器/类型检查/语法高亮共用
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// @brief AC 内置类型名常量（严格区分大小写：String/Number/...）
+namespace AcTypeName {
+inline constexpr const char *kString = "String";
+inline constexpr const char *kNumber = "Number";
+inline constexpr const char *kBoolean = "Boolean";
+inline constexpr const char *kBool = "Bool";
+inline constexpr const char *kInt = "Int";
+inline constexpr const char *kFloat = "Float";
+inline constexpr const char *kDouble = "Double";
+inline constexpr const char *kAny = "Any";
+inline constexpr const char *kArray = "Array";
+inline constexpr const char *kObject = "Object";
+inline constexpr const char *kNull = "Null";
+inline constexpr const char *kVoid = "Void";
+inline constexpr const char *kUnknown = "Unknown";
+}  // namespace AcTypeName
+
+// ═════════════════════════════════════════════════════════════════════════════
 // 一、一级函数 — .ac 脚本直接调用，C++ 引擎后端实现
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -144,11 +165,10 @@ inline constexpr const char *kAssert = "assert";
 
 /// @brief 一级函数名列表（供解析器校验、高亮、补全使用）
 inline const QStringList kAll = {
-    QString(kCall),       QString(kReadJson), QString(kReadFile),   QString(kRenderTpl),
-    QString(kWriteFile),  QString(kPrintLog), QString(kPrintError), QString(kGetCheckedFiles),
-    QString(kScriptDir),   QString(kMerge),       QString(kBasename),   QString(kFileName),
-    QString(kFileExists),
-    QString(kFormatPath), QString(kAssert),
+    QString(kCall),       QString(kReadJson),   QString(kReadFile),   QString(kRenderTpl),
+    QString(kWriteFile),  QString(kPrintLog),   QString(kPrintError), QString(kGetCheckedFiles),
+    QString(kScriptDir),  QString(kMerge),      QString(kBasename),   QString(kFileName),
+    QString(kFileExists), QString(kFormatPath), QString(kAssert),
 };
 }  // namespace AcBuiltin
 
@@ -326,7 +346,6 @@ inline constexpr const char *kCurrentItem = ".";
 namespace AcFileSuffix {
 inline constexpr const char *kAc = ".ac";
 inline constexpr const char *kTpl = ".tpl";
-inline constexpr const char *kTpljson = ".tpljson";
 inline constexpr const char *kJson = ".json";
 inline constexpr const char *kJsonvue = ".jsonvue";
 }  // namespace AcFileSuffix

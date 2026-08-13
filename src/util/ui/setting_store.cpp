@@ -15,6 +15,7 @@
 #include <QStandardPaths>
 #include <QStyle>
 
+#include "src/util/common/code_constants.h"
 #include "src/util/ui/component/aui_style.h"
 
 // ──────────────────────────────────────────────────────────────
@@ -252,13 +253,13 @@ SettingStore::SettingStore() : QObject(nullptr) {
 
   // ── 快捷键 ──
   registerShortcut(QString::fromLatin1(kSC_Open), QStringLiteral("打开文件"),
-                   QStringLiteral("文件"), QStringLiteral("Ctrl+O"));
+                   QString::fromUtf8(CodeConstants::UiText::kFile), QStringLiteral("Ctrl+O"));
   registerShortcut(QString::fromLatin1(kSC_OpenFolder), QStringLiteral("打开文件夹"),
-                   QStringLiteral("文件"), QStringLiteral(""));
-  registerShortcut(QString::fromLatin1(kSC_Save), QStringLiteral("保存"), QStringLiteral("文件"),
-                   QStringLiteral("Ctrl+S"));
+                   QString::fromUtf8(CodeConstants::UiText::kFile), QStringLiteral(""));
+  registerShortcut(QString::fromLatin1(kSC_Save), QStringLiteral("保存"),
+                   QString::fromUtf8(CodeConstants::UiText::kFile), QStringLiteral("Ctrl+S"));
   registerShortcut(QString::fromLatin1(kSC_SaveAll), QStringLiteral("保存全部"),
-                   QStringLiteral("文件"), QStringLiteral("Ctrl+Shift+S"));
+                   QString::fromUtf8(CodeConstants::UiText::kFile), QStringLiteral("Ctrl+Shift+S"));
   registerShortcut(QString::fromLatin1(kSC_Split), QStringLiteral("向右拆分编辑器"),
                    QStringLiteral("视图"), QStringLiteral("Ctrl+\\"));
   registerShortcut(QString::fromLatin1(kSC_Close), QStringLiteral("关闭标签页"),
@@ -303,7 +304,8 @@ void SettingStore::registerShortcut(const QString &key, const QString &label,
 
 QString SettingStore::storePath() const {
   QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-  if (dir.isEmpty()) dir = QDir::homePath() + QStringLiteral("/.auto_code");
+  if (dir.isEmpty())
+    dir = QDir::homePath() + QString::fromUtf8(CodeConstants::Paths::kAppDataDirName);
   QDir().mkpath(dir);
   return dir + QStringLiteral("/settings.json");
 }
@@ -391,13 +393,13 @@ void SettingStore::setTheme(Theme t) {
 QString SettingStore::themeName(Theme t) const {
   switch (t) {
     case ThemeLight:
-      return QStringLiteral("浅色");
+      return QString::fromUtf8(CodeConstants::UiText::kLight);
     case ThemeDark:
       return QStringLiteral("深色");
     case ThemeCustom:
       return QStringLiteral("自定义");
   }
-  return QStringLiteral("浅色");
+  return QString::fromUtf8(CodeConstants::UiText::kLight);
 }
 
 // ── 快捷键 ──

@@ -20,6 +20,7 @@
 #include "combobox_config_dialog.h"
 #include "icon_loader.h"
 #include "icon_picker_dialog.h"
+#include "src/util/common/code_constants.h"
 #include "src/util/ui/aui_window.h"
 #include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_style.h"
@@ -131,10 +132,10 @@ void ButtonConfigDialog::setupUI() {
   m_buttonTypeCombo = new QComboBox;
   m_buttonTypeCombo->setMinimumHeight(28);
   m_buttonTypeCombo->addItem(QStringLiteral("默认"), QString());
-  m_buttonTypeCombo->addItem(QStringLiteral("主要"), QStringLiteral("primary"));
-  m_buttonTypeCombo->addItem(QStringLiteral("成功"), QStringLiteral("success"));
-  m_buttonTypeCombo->addItem(QStringLiteral("警告"), QStringLiteral("warning"));
-  m_buttonTypeCombo->addItem(QStringLiteral("危险"), QStringLiteral("danger"));
+  m_buttonTypeCombo->addItem(QStringLiteral("主要"), QString::fromLatin1(JsonVueColor::kPrimary));
+  m_buttonTypeCombo->addItem(QStringLiteral("成功"), QString::fromLatin1(JsonVueColor::kSuccess));
+  m_buttonTypeCombo->addItem(QStringLiteral("警告"), QString::fromLatin1(JsonVueColor::kWarning));
+  m_buttonTypeCombo->addItem(QStringLiteral("危险"), QString::fromLatin1(JsonVueColor::kDanger));
   basicForm->addRow(QStringLiteral("按钮样式:"), m_buttonTypeCombo);
 
   m_actionTypeCombo = new QComboBox;
@@ -216,9 +217,10 @@ void ButtonConfigDialog::setupUI() {
   dialogLayout->addWidget(fieldsLabel);
 
   m_dialogFieldsTable = new QTableWidget(0, 6);
-  m_dialogFieldsTable->setHorizontalHeaderLabels({QStringLiteral("标签"), QStringLiteral("字段名"),
-                                                  QStringLiteral("样式"), QStringLiteral("必填"),
-                                                  QStringLiteral("配置"), QStringLiteral("删除")});
+  m_dialogFieldsTable->setHorizontalHeaderLabels(
+      {QStringLiteral("标签"), QStringLiteral("字段名"), QStringLiteral("样式"),
+       QString::fromUtf8(CodeConstants::UiText::kRequired), QStringLiteral("配置"),
+       QString::fromUtf8(CodeConstants::UiText::kDelete)});
   m_dialogFieldsTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
   m_dialogFieldsTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
   m_dialogFieldsTable->setColumnWidth(2, 90);  // 样式
@@ -258,8 +260,8 @@ void ButtonConfigDialog::setupUI() {
   // ── 底部按钮 ──
   auto *btnLayout = new QHBoxLayout();
   btnLayout->addStretch();
-  auto *okBtn = new QPushButton(QStringLiteral("确定"));
-  auto *cancelBtn = new QPushButton(QStringLiteral("取消"));
+  auto *okBtn = new QPushButton(QString::fromUtf8(CodeConstants::UiText::kConfirm));
+  auto *cancelBtn = new QPushButton(QString::fromUtf8(CodeConstants::UiText::kCancel));
   okBtn->setMinimumWidth(80);
   cancelBtn->setMinimumWidth(80);
   AuiButton::applyDialogButtonStyle(okBtn);
@@ -352,12 +354,12 @@ void ButtonConfigDialog::onAddDialogField() {
 
   // 样式
   auto *styleCombo = new QComboBox;
-  styleCombo->addItem(QStringLiteral("文本"), QStringLiteral("text"));
-  styleCombo->addItem(QStringLiteral("整数"), QStringLiteral("int"));
-  styleCombo->addItem(QStringLiteral("小数"), QStringLiteral("float"));
-  styleCombo->addItem(QStringLiteral("日期"), QStringLiteral("date"));
-  styleCombo->addItem(QStringLiteral("下拉"), QStringLiteral("select"));
-  styleCombo->addItem(QStringLiteral("文本域"), QStringLiteral("textarea"));
+  styleCombo->addItem(QStringLiteral("文本"), QString::fromLatin1(JsonVueStyle::kText));
+  styleCombo->addItem(QStringLiteral("整数"), QString::fromLatin1(JsonVueStyle::kInt));
+  styleCombo->addItem(QStringLiteral("小数"), QString::fromLatin1(JsonVueStyle::kFloat));
+  styleCombo->addItem(QStringLiteral("日期"), QString::fromLatin1(JsonVueStyle::kDate));
+  styleCombo->addItem(QStringLiteral("下拉"), QString::fromLatin1(JsonVueStyle::kSelect));
+  styleCombo->addItem(QStringLiteral("文本域"), QString::fromLatin1(JsonVueStyle::kTextarea));
   m_dialogFieldsTable->setCellWidget(row, 2, styleCombo);
 
   // 必填
@@ -393,7 +395,7 @@ void ButtonConfigDialog::onAddDialogField() {
   m_dialogFieldsTable->setCellWidget(row, 4, configBtn);
 
   // 删除按钮
-  auto *delBtn = new QPushButton(QStringLiteral("删除"));
+  auto *delBtn = new QPushButton(QString::fromUtf8(CodeConstants::UiText::kDelete));
   delBtn->setStyleSheet(
       QStringLiteral("QPushButton { background: %1; border: 1px solid %2; border-radius: 3px;"
                      "  padding: 2px 6px; font-size: 12px;"

@@ -22,6 +22,7 @@
 #include <QVBoxLayout>
 
 #include "icon_loader.h"
+#include "src/util/common/code_constants.h"
 #include "src/util/ui/aui_window.h"
 #include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_style.h"
@@ -1095,8 +1096,8 @@ void IconPickerDialog::setupUI() {
   auto *btnLayout = new QHBoxLayout;
   btnLayout->addStretch();
   auto *clearBtn = new QPushButton(QStringLiteral("清除"));
-  auto *okBtn = new QPushButton(QStringLiteral("确定"));
-  auto *cancelBtn = new QPushButton(QStringLiteral("取消"));
+  auto *okBtn = new QPushButton(QString::fromUtf8(CodeConstants::UiText::kConfirm));
+  auto *cancelBtn = new QPushButton(QString::fromUtf8(CodeConstants::UiText::kCancel));
   clearBtn->setMinimumWidth(80);
   okBtn->setMinimumWidth(80);
   cancelBtn->setMinimumWidth(80);

@@ -89,105 +89,107 @@ static QString jsonValueToJson5(const QJsonValue &v, int indent) {
 // ════════════════════════════════════════════════════════════
 
 QString listStyleToString(ListStyle style) {
-  return style == ListStyle::Switch ? QStringLiteral("switch") : QStringLiteral("text");
+  return style == ListStyle::Switch ? QString::fromLatin1(JsonVueStyle::kSwitch)
+                                    : QString::fromLatin1(JsonVueStyle::kText);
 }
 
 ListStyle stringToListStyle(const QString &s) {
-  return s == QStringLiteral("switch") ? ListStyle::Switch : ListStyle::Text;
+  return s == JsonVueStyle::kSwitch ? ListStyle::Switch : ListStyle::Text;
 }
 
 QString editStyleToString(EditStyle style) {
   switch (style) {
     case EditStyle::Int:
-      return QStringLiteral("int");
+      return QString::fromLatin1(JsonVueStyle::kInt);
     case EditStyle::Float:
-      return QStringLiteral("float");
+      return QString::fromLatin1(JsonVueStyle::kFloat);
     case EditStyle::Money:
-      return QStringLiteral("money");
+      return QString::fromLatin1(JsonVueStyle::kMoney);
     case EditStyle::Date:
-      return QStringLiteral("date");
+      return QString::fromLatin1(JsonVueStyle::kDate);
     case EditStyle::Tag:
-      return QStringLiteral("tag");
+      return QString::fromLatin1(JsonVueStyle::kTag);
     case EditStyle::Boolean:
-      return QStringLiteral("boolean");
+      return QString::fromLatin1(JsonVueStyle::kBoolean);
     case EditStyle::Image:
-      return QStringLiteral("image");
+      return QString::fromLatin1(JsonVueStyle::kImage);
     case EditStyle::Select:
-      return QStringLiteral("select");
+      return QString::fromLatin1(JsonVueStyle::kSelect);
     case EditStyle::TextArea:
-      return QStringLiteral("textarea");
+      return QString::fromLatin1(JsonVueStyle::kTextarea);
     default:
-      return QStringLiteral("text");
+      return QString::fromLatin1(JsonVueStyle::kText);
   }
 }
 
 EditStyle stringToEditStyle(const QString &s) {
-  if (s == QStringLiteral("int")) return EditStyle::Int;
-  if (s == QStringLiteral("float")) return EditStyle::Float;
-  if (s == QStringLiteral("money")) return EditStyle::Money;
-  if (s == QStringLiteral("date")) return EditStyle::Date;
-  if (s == QStringLiteral("tag")) return EditStyle::Tag;
-  if (s == QStringLiteral("boolean")) return EditStyle::Boolean;
-  if (s == QStringLiteral("image")) return EditStyle::Image;
+  if (s == JsonVueStyle::kInt) return EditStyle::Int;
+  if (s == JsonVueStyle::kFloat) return EditStyle::Float;
+  if (s == JsonVueStyle::kMoney) return EditStyle::Money;
+  if (s == JsonVueStyle::kDate) return EditStyle::Date;
+  if (s == JsonVueStyle::kTag) return EditStyle::Tag;
+  if (s == JsonVueStyle::kBoolean) return EditStyle::Boolean;
+  if (s == JsonVueStyle::kImage) return EditStyle::Image;
   // 兼容旧名称 "combobox"
-  if (s == QStringLiteral("select") || s == QStringLiteral("combobox")) return EditStyle::Select;
-  if (s == QStringLiteral("textarea")) return EditStyle::TextArea;
+  if (s == JsonVueStyle::kSelect || s == QStringLiteral("combobox")) return EditStyle::Select;
+  if (s == JsonVueStyle::kTextarea) return EditStyle::TextArea;
   return EditStyle::Text;
 }
 
 QString queryRelationToString(QueryRelation r) {
-  if (r == QueryRelation::Range) return QStringLiteral("range");
+  if (r == QueryRelation::Range) return QString::fromLatin1(JsonVueStyle::kRange);
   return QStringLiteral("=");
 }
 
 QueryRelation stringToQueryRelation(const QString &s) {
-  if (s == QStringLiteral("range")) return QueryRelation::Range;
+  if (s == JsonVueStyle::kRange) return QueryRelation::Range;
   return QueryRelation::Equal;
 }
 
 QString queryInputStyleToString(QueryInputStyle s) {
   switch (s) {
     case QueryInputStyle::Date:
-      return QStringLiteral("date");
+      return QString::fromLatin1(JsonVueStyle::kDate);
     case QueryInputStyle::Select:
-      return QStringLiteral("select");
+      return QString::fromLatin1(JsonVueStyle::kSelect);
     default:
-      return QStringLiteral("text");
+      return QString::fromLatin1(JsonVueStyle::kText);
   }
 }
 
 QueryInputStyle stringToQueryInputStyle(const QString &s) {
   // 兼容旧名称 "time"
-  if (s == QStringLiteral("date") || s == QStringLiteral("time")) return QueryInputStyle::Date;
-  if (s == QStringLiteral("select")) return QueryInputStyle::Select;
+  if (s == JsonVueStyle::kDate || s == JsonVueStyle::kTime) return QueryInputStyle::Date;
+  if (s == JsonVueStyle::kSelect) return QueryInputStyle::Select;
   return QueryInputStyle::Text;
 }
 
 QString buttonPositionToString(ButtonPosition p) {
-  return p == ButtonPosition::Toolbar ? QStringLiteral("toolbar") : QStringLiteral("row");
+  return p == ButtonPosition::Toolbar ? QString::fromLatin1(JsonVueStyle::kToolbar)
+                                      : QString::fromLatin1(JsonVueStyle::kRow);
 }
 
 ButtonPosition stringToButtonPosition(const QString &s) {
-  return s == QStringLiteral("toolbar") ? ButtonPosition::Toolbar : ButtonPosition::Row;
+  return s == JsonVueStyle::kToolbar ? ButtonPosition::Toolbar : ButtonPosition::Row;
 }
 
 QString buttonActionTypeToString(ButtonActionType t) {
   switch (t) {
     case ButtonActionType::Confirm:
-      return QStringLiteral("confirm");
+      return QString::fromLatin1(JsonVueStyle::kConfirm);
     case ButtonActionType::Dialog:
-      return QStringLiteral("dialog");
+      return QString::fromLatin1(JsonVueStyle::kDialog);
     case ButtonActionType::Link:
-      return QStringLiteral("link");
+      return QString::fromLatin1(JsonVueStyle::kLink);
     default:
-      return QStringLiteral("ajax");
+      return QString::fromLatin1(JsonVueStyle::kAjax);
   }
 }
 
 ButtonActionType stringToButtonActionType(const QString &s) {
-  if (s == QStringLiteral("confirm")) return ButtonActionType::Confirm;
-  if (s == QStringLiteral("dialog")) return ButtonActionType::Dialog;
-  if (s == QStringLiteral("link")) return ButtonActionType::Link;
+  if (s == JsonVueStyle::kConfirm) return ButtonActionType::Confirm;
+  if (s == JsonVueStyle::kDialog) return ButtonActionType::Dialog;
+  if (s == JsonVueStyle::kLink) return ButtonActionType::Link;
   return ButtonActionType::Ajax;
 }
 
@@ -197,17 +199,17 @@ ButtonActionType stringToButtonActionType(const QString &s) {
 
 QJsonObject TagItem::toJson() const {
   QJsonObject obj;
-  obj["value"] = value;
-  obj["text"] = text;
-  obj["color"] = color;
+  obj[JsonVueKey::kTagValue] = value;
+  obj[JsonVueKey::kTagText] = text;
+  obj[JsonVueKey::kTagColor] = color;
   return obj;
 }
 
 TagItem TagItem::fromJson(const QJsonObject &obj) {
   TagItem t;
-  t.value = obj.value("value").toString();
-  t.text = obj.value("text").toString();
-  t.color = obj.value("color").toString();
+  t.value = obj.value(JsonVueKey::kTagValue).toString();
+  t.text = obj.value(JsonVueKey::kTagText).toString();
+  t.color = obj.value(JsonVueKey::kTagColor).toString();
   return t;
 }
 
@@ -216,12 +218,12 @@ QList<TagItem> defaultTagItems() {
   TagItem off;
   off.value = QStringLiteral("0");
   off.text = QStringLiteral("关闭");
-  off.color = QStringLiteral("info");
+  off.color = QString::fromLatin1(JsonVueColor::kInfo);
   items.append(off);
   TagItem on;
   on.value = QStringLiteral("1");
   on.text = QStringLiteral("开启");
-  on.color = QStringLiteral("success");
+  on.color = QString::fromLatin1(JsonVueColor::kSuccess);
   items.append(on);
   return items;
 }
@@ -232,27 +234,27 @@ QList<TagItem> defaultTagItems() {
 
 QJsonObject JsonVueMeta::toJson() const {
   QJsonObject obj;
-  obj["dataMethod"] = dataMethod;
-  obj["dataUrl"] = dataUrl;
-  obj["queryApi"] = queryApi;
-  obj["deleteApi"] = deleteApi;
-  obj["noDelete"] = noDelete;
-  obj["updateApi"] = updateApi;
-  obj["noEdit"] = noEdit;
-  obj["noDetail"] = noDetail;
+  obj[JsonVueKey::kDataMethod] = dataMethod;
+  obj[JsonVueKey::kDataUrl] = dataUrl;
+  obj[JsonVueKey::kQueryApi] = queryApi;
+  obj[JsonVueKey::kDeleteApi] = deleteApi;
+  obj[JsonVueKey::kNoDelete] = noDelete;
+  obj[JsonVueKey::kUpdateApi] = updateApi;
+  obj[JsonVueKey::kNoEdit] = noEdit;
+  obj[JsonVueKey::kNoDetail] = noDetail;
   return obj;
 }
 
 JsonVueMeta JsonVueMeta::fromJson(const QJsonObject &obj) {
   JsonVueMeta m;
-  m.dataMethod = obj.value("dataMethod").toString(QStringLiteral("GET"));
-  m.dataUrl = obj.value("dataUrl").toString();
-  m.queryApi = obj.value("queryApi").toString();
-  m.deleteApi = obj.value("deleteApi").toString();
-  m.noDelete = obj.value("noDelete").toBool(false);
-  m.updateApi = obj.value("updateApi").toString();
-  m.noEdit = obj.value("noEdit").toBool(false);
-  m.noDetail = obj.value("noDetail").toBool(false);
+  m.dataMethod = obj.value(JsonVueKey::kDataMethod).toString(QStringLiteral("GET"));
+  m.dataUrl = obj.value(JsonVueKey::kDataUrl).toString();
+  m.queryApi = obj.value(JsonVueKey::kQueryApi).toString();
+  m.deleteApi = obj.value(JsonVueKey::kDeleteApi).toString();
+  m.noDelete = obj.value(JsonVueKey::kNoDelete).toBool(false);
+  m.updateApi = obj.value(JsonVueKey::kUpdateApi).toString();
+  m.noEdit = obj.value(JsonVueKey::kNoEdit).toBool(false);
+  m.noDetail = obj.value(JsonVueKey::kNoDetail).toBool(false);
   return m;
 }
 
@@ -262,136 +264,138 @@ JsonVueMeta JsonVueMeta::fromJson(const QJsonObject &obj) {
 
 QJsonObject ColumnConfig::toJson() const {
   QJsonObject obj;
-  obj["dataName"] = dataName;
-  obj["queryVisible"] = queryVisible;
-  obj["queryName"] = queryName;
-  obj["queryStyle"] = listStyleToString(queryStyle);
-  obj["switchEditable"] = switchEditable;
-  obj["editVisible"] = editVisible;
-  obj["editName"] = editName;
-  obj["editStyle"] = editStyleToString(editStyle);
-  obj["editEditable"] = editEditable;
+  obj[JsonVueKey::kDataName] = dataName;
+  obj[JsonVueKey::kQueryVisible] = queryVisible;
+  obj[JsonVueKey::kQueryName] = queryName;
+  obj[JsonVueKey::kQueryStyle] = listStyleToString(queryStyle);
+  obj[JsonVueKey::kSwitchEditable] = switchEditable;
+  obj[JsonVueKey::kEditVisible] = editVisible;
+  obj[JsonVueKey::kEditName] = editName;
+  obj[JsonVueKey::kEditStyle] = editStyleToString(editStyle);
+  obj[JsonVueKey::kEditEditable] = editEditable;
   // 下拉框配置（仅 Select 时序列化）
   if (editStyle == EditStyle::Select) {
-    obj["selectUrl"] = selectUrl;
-    obj["selectValueField"] = selectValueField;
-    obj["selectLabelField"] = selectLabelField;
+    obj[JsonVueKey::kSelectUrl] = selectUrl;
+    obj[JsonVueKey::kSelectValueField] = selectValueField;
+    obj[JsonVueKey::kSelectLabelField] = selectLabelField;
   }
   // 样式特定配置
   if (editStyle == EditStyle::Text) {
-    obj["placeholder"] = placeholder;
-    obj["maxlength"] = maxlength;
+    obj[JsonVueKey::kPlaceholder] = placeholder;
+    obj[JsonVueKey::kMaxlength] = maxlength;
   }
   if (editStyle == EditStyle::Int) {
-    obj["minValue"] = minValue;
-    obj["maxValue"] = maxValue;
+    obj[JsonVueKey::kMinValue] = minValue;
+    obj[JsonVueKey::kMaxValue] = maxValue;
   }
   if (editStyle == EditStyle::Float) {
-    obj["precision"] = precision;
-    obj["minValue"] = minValue;
-    obj["maxValue"] = maxValue;
+    obj[JsonVueKey::kPrecision] = precision;
+    obj[JsonVueKey::kMinValue] = minValue;
+    obj[JsonVueKey::kMaxValue] = maxValue;
   }
   if (editStyle == EditStyle::Money) {
-    obj["precision"] = precision;
+    obj[JsonVueKey::kPrecision] = precision;
   }
   if (editStyle == EditStyle::Date) {
-    obj["dateFormat"] = dateFormat;
+    obj[JsonVueKey::kDateFormat] = dateFormat;
   }
   if (editStyle == EditStyle::TextArea) {
-    obj["placeholder"] = placeholder;
-    obj["textareaRows"] = textareaRows;
+    obj[JsonVueKey::kPlaceholder] = placeholder;
+    obj[JsonVueKey::kTextareaRows] = textareaRows;
   }
   // 通用配置（所有样式都输出）
-  obj["required"] = required;
-  obj["columnWidth"] = columnWidth;
-  if (!columnFixed.isEmpty()) obj["columnFixed"] = columnFixed;
-  if (!formatter.isEmpty()) obj["formatter"] = formatter;
-  if (formSpan != 24) obj["formSpan"] = formSpan;
+  obj[JsonVueKey::kRequired] = required;
+  obj[JsonVueKey::kColumnWidth] = columnWidth;
+  if (!columnFixed.isEmpty()) obj[JsonVueKey::kColumnFixed] = columnFixed;
+  if (!formatter.isEmpty()) obj[JsonVueKey::kFormatter] = formatter;
+  if (formSpan != 24) obj[JsonVueKey::kFormSpan] = formSpan;
   if (!displayType.isEmpty()) {
-    obj["displayType"] = displayType;
-    if (displayType == QStringLiteral("tag")) {
+    obj[JsonVueKey::kDisplayType] = displayType;
+    if (displayType == JsonVueStyle::kTag) {
       QJsonArray arr;
       for (const auto &t : tagItems) arr.append(t.toJson());
-      obj["tagItems"] = arr;
+      obj[JsonVueKey::kTagItems] = arr;
     }
-    if (displayType == QStringLiteral("boolean")) {
-      obj["boolTrueText"] = boolTrueText;
-      obj["boolFalseText"] = boolFalseText;
+    if (displayType == JsonVueStyle::kBoolean) {
+      obj[JsonVueKey::kBoolTrueText] = boolTrueText;
+      obj[JsonVueKey::kBoolFalseText] = boolFalseText;
     }
   }
-  if (!defaultValue.isEmpty()) obj["defaultValue"] = defaultValue;
-  if (!defaultSort.isEmpty()) obj["defaultSort"] = defaultSort;
+  if (!defaultValue.isEmpty()) obj[JsonVueKey::kDefaultValue] = defaultValue;
+  if (!defaultSort.isEmpty()) obj[JsonVueKey::kDefaultSort] = defaultSort;
   return obj;
 }
 
 ColumnConfig ColumnConfig::fromJson(const QJsonObject &obj) {
   ColumnConfig c;
-  c.dataName = obj.value("dataName").toString();
-  c.queryVisible = obj.value("queryVisible").toBool(true);
-  c.queryName = obj.value("queryName").toString();
-  c.queryStyle = stringToListStyle(obj.value("queryStyle").toString(QStringLiteral("text")));
-  c.switchEditable = obj.value("switchEditable").toBool(false);
-  c.editVisible = obj.value("editVisible").toBool(true);
-  c.editName = obj.value("editName").toString();
-  c.editStyle = stringToEditStyle(obj.value("editStyle").toString(QStringLiteral("text")));
-  c.editEditable = obj.value("editEditable").toBool(true);
+  c.dataName = obj.value(JsonVueKey::kDataName).toString();
+  c.queryVisible = obj.value(JsonVueKey::kQueryVisible).toBool(true);
+  c.queryName = obj.value(JsonVueKey::kQueryName).toString();
+  c.queryStyle =
+      stringToListStyle(obj.value(JsonVueKey::kQueryStyle).toString(JsonVueStyle::kText));
+  c.switchEditable = obj.value(JsonVueKey::kSwitchEditable).toBool(false);
+  c.editVisible = obj.value(JsonVueKey::kEditVisible).toBool(true);
+  c.editName = obj.value(JsonVueKey::kEditName).toString();
+  c.editStyle = stringToEditStyle(obj.value(JsonVueKey::kEditStyle).toString(JsonVueStyle::kText));
+  c.editEditable = obj.value(JsonVueKey::kEditEditable).toBool(true);
   // 兼容旧字段名 comboboxUrl/comboboxValueField/comboboxLabelField
-  c.selectUrl = obj.value("selectUrl").toString(obj.value("comboboxUrl").toString());
-  c.selectValueField =
-      obj.value("selectValueField").toString(obj.value("comboboxValueField").toString());
-  c.selectLabelField =
-      obj.value("selectLabelField").toString(obj.value("comboboxLabelField").toString());
+  c.selectUrl = obj.value(JsonVueKey::kSelectUrl)
+                    .toString(obj.value(QStringLiteral("comboboxUrl")).toString());
+  c.selectValueField = obj.value(JsonVueKey::kSelectValueField)
+                           .toString(obj.value(QStringLiteral("comboboxValueField")).toString());
+  c.selectLabelField = obj.value(JsonVueKey::kSelectLabelField)
+                           .toString(obj.value(QStringLiteral("comboboxLabelField")).toString());
   // 样式特定配置
-  c.placeholder = obj.value("placeholder").toString();
-  c.maxlength = obj.value("maxlength").toInt(0);
-  c.minValue = obj.value("minValue").toDouble(0);
-  c.maxValue = obj.value("maxValue").toDouble(0);
-  c.precision = obj.value("precision").toInt(2);
-  c.dateFormat = obj.value("dateFormat").toString();
-  c.textareaRows = obj.value("textareaRows").toInt(3);
+  c.placeholder = obj.value(JsonVueKey::kPlaceholder).toString();
+  c.maxlength = obj.value(JsonVueKey::kMaxlength).toInt(0);
+  c.minValue = obj.value(JsonVueKey::kMinValue).toDouble(0);
+  c.maxValue = obj.value(JsonVueKey::kMaxValue).toDouble(0);
+  c.precision = obj.value(JsonVueKey::kPrecision).toInt(2);
+  c.dateFormat = obj.value(JsonVueKey::kDateFormat).toString();
+  c.textareaRows = obj.value(JsonVueKey::kTextareaRows).toInt(3);
   // 通用配置
-  c.required = obj.value("required").toBool(false);
-  c.columnWidth = obj.value("columnWidth").toInt(0);
-  c.columnFixed = obj.value("columnFixed").toString();
-  c.formatter = obj.value("formatter").toString();
-  c.formSpan = obj.value("formSpan").toInt(24);
-  c.displayType = obj.value("displayType").toString();
+  c.required = obj.value(JsonVueKey::kRequired).toBool(false);
+  c.columnWidth = obj.value(JsonVueKey::kColumnWidth).toInt(0);
+  c.columnFixed = obj.value(JsonVueKey::kColumnFixed).toString();
+  c.formatter = obj.value(JsonVueKey::kFormatter).toString();
+  c.formSpan = obj.value(JsonVueKey::kFormSpan).toInt(24);
+  c.displayType = obj.value(JsonVueKey::kDisplayType).toString();
   // tagItems 数组读取（displayType == "tag" 时使用）
   // 兼容旧格式：若 tagItems 为空但存在 tagTrueText/tagFalseText，则转换
-  const QJsonArray tagArr = obj.value("tagItems").toArray();
+  const QJsonArray tagArr = obj.value(JsonVueKey::kTagItems).toArray();
   for (const auto &v : tagArr) {
     c.tagItems.append(TagItem::fromJson(v.toObject()));
   }
-  if (c.displayType == QStringLiteral("tag") && c.tagItems.isEmpty()) {
+  if (c.displayType == JsonVueStyle::kTag && c.tagItems.isEmpty()) {
     // 旧格式兼容：tagTrueText/tagFalseText → tagItems
-    QString tt = obj.value("tagTrueText").toString();
-    QString tc = obj.value("tagTrueColor").toString();
-    QString ft = obj.value("tagFalseText").toString();
-    QString fc = obj.value("tagFalseColor").toString();
+    QString tt = obj.value(QStringLiteral("tagTrueText")).toString();
+    QString tc = obj.value(QStringLiteral("tagTrueColor")).toString();
+    QString ft = obj.value(QStringLiteral("tagFalseText")).toString();
+    QString fc = obj.value(QStringLiteral("tagFalseColor")).toString();
     if (!tt.isEmpty() || !ft.isEmpty()) {
       TagItem falseItem;
       falseItem.value = QStringLiteral("0");
       falseItem.text = ft.isEmpty() ? QStringLiteral("关闭") : ft;
-      falseItem.color = fc.isEmpty() ? QStringLiteral("info") : fc;
+      falseItem.color = fc.isEmpty() ? QString::fromLatin1(JsonVueColor::kInfo) : fc;
       c.tagItems.append(falseItem);
       TagItem trueItem;
       trueItem.value = QStringLiteral("1");
       trueItem.text = tt.isEmpty() ? QStringLiteral("开启") : tt;
-      trueItem.color = tc.isEmpty() ? QStringLiteral("success") : tc;
+      trueItem.color = tc.isEmpty() ? QString::fromLatin1(JsonVueColor::kSuccess) : tc;
       c.tagItems.append(trueItem);
     } else {
       c.tagItems = defaultTagItems();
     }
   }
-  c.boolTrueText = obj.value("boolTrueText").toString();
-  if (c.boolTrueText.isEmpty() && c.displayType == QStringLiteral("boolean"))
+  c.boolTrueText = obj.value(JsonVueKey::kBoolTrueText).toString();
+  if (c.boolTrueText.isEmpty() && c.displayType == JsonVueStyle::kBoolean)
     c.boolTrueText = QStringLiteral("是");
-  c.boolFalseText = obj.value("boolFalseText").toString();
-  if (c.boolFalseText.isEmpty() && c.displayType == QStringLiteral("boolean"))
+  c.boolFalseText = obj.value(JsonVueKey::kBoolFalseText).toString();
+  if (c.boolFalseText.isEmpty() && c.displayType == JsonVueStyle::kBoolean)
     c.boolFalseText = QStringLiteral("否");
   // 通用配置
-  c.defaultValue = obj.value("defaultValue").toString();
-  c.defaultSort = obj.value("defaultSort").toString();
+  c.defaultValue = obj.value(JsonVueKey::kDefaultValue).toString();
+  c.defaultSort = obj.value(JsonVueKey::kDefaultSort).toString();
   return c;
 }
 
@@ -401,36 +405,38 @@ ColumnConfig ColumnConfig::fromJson(const QJsonObject &obj) {
 
 QJsonObject QueryFieldConfig::toJson() const {
   QJsonObject obj;
-  obj["displayName"] = displayName;
-  obj["dataName"] = dataName;
-  obj["inputStyle"] = queryInputStyleToString(inputStyle);
-  obj["relation"] = queryRelationToString(relation);
+  obj[JsonVueKey::kDisplayName] = displayName;
+  obj[JsonVueKey::kDataName] = dataName;
+  obj[JsonVueKey::kInputStyle] = queryInputStyleToString(inputStyle);
+  obj[JsonVueKey::kRelation] = queryRelationToString(relation);
   // 下拉框配置（仅 Select 时序列化）
   if (inputStyle == QueryInputStyle::Select) {
-    obj["selectUrl"] = selectUrl;
-    obj["selectValueField"] = selectValueField;
-    obj["selectLabelField"] = selectLabelField;
+    obj[JsonVueKey::kSelectUrl] = selectUrl;
+    obj[JsonVueKey::kSelectValueField] = selectValueField;
+    obj[JsonVueKey::kSelectLabelField] = selectLabelField;
   }
   if (inputStyle == QueryInputStyle::Text) {
-    obj["placeholder"] = placeholder;
+    obj[JsonVueKey::kPlaceholder] = placeholder;
   }
   if (inputStyle == QueryInputStyle::Date) {
-    obj["dateFormat"] = dateFormat;
+    obj[JsonVueKey::kDateFormat] = dateFormat;
   }
   return obj;
 }
 
 QueryFieldConfig QueryFieldConfig::fromJson(const QJsonObject &obj) {
   QueryFieldConfig q;
-  q.displayName = obj.value("displayName").toString();
-  q.dataName = obj.value("dataName").toString();
-  q.inputStyle = stringToQueryInputStyle(obj.value("inputStyle").toString(QStringLiteral("text")));
-  q.relation = stringToQueryRelation(obj.value("relation").toString(QStringLiteral("=")));
-  q.selectUrl = obj.value("selectUrl").toString();
-  q.selectValueField = obj.value("selectValueField").toString();
-  q.selectLabelField = obj.value("selectLabelField").toString();
-  q.placeholder = obj.value("placeholder").toString();
-  q.dateFormat = obj.value("dateFormat").toString();
+  q.displayName = obj.value(JsonVueKey::kDisplayName).toString();
+  q.dataName = obj.value(JsonVueKey::kDataName).toString();
+  q.inputStyle =
+      stringToQueryInputStyle(obj.value(JsonVueKey::kInputStyle).toString(JsonVueStyle::kText));
+  q.relation =
+      stringToQueryRelation(obj.value(JsonVueKey::kRelation).toString(QStringLiteral("=")));
+  q.selectUrl = obj.value(JsonVueKey::kSelectUrl).toString();
+  q.selectValueField = obj.value(JsonVueKey::kSelectValueField).toString();
+  q.selectLabelField = obj.value(JsonVueKey::kSelectLabelField).toString();
+  q.placeholder = obj.value(JsonVueKey::kPlaceholder).toString();
+  q.dateFormat = obj.value(JsonVueKey::kDateFormat).toString();
   return q;
 }
 
@@ -440,53 +446,53 @@ QueryFieldConfig QueryFieldConfig::fromJson(const QJsonObject &obj) {
 
 QJsonObject DialogFieldConfig::toJson() const {
   QJsonObject obj;
-  obj["fieldName"] = fieldName;
-  obj["label"] = label;
-  obj["editStyle"] = editStyleToString(editStyle);
-  obj["required"] = required;
+  obj[JsonVueKey::kFieldName] = fieldName;
+  obj[JsonVueKey::kLabel] = label;
+  obj[JsonVueKey::kEditStyle] = editStyleToString(editStyle);
+  obj[JsonVueKey::kRequired] = required;
   // 样式特定配置（仅对应 editStyle 时输出）
   if (editStyle == EditStyle::Select) {
-    obj["selectUrl"] = selectUrl;
-    obj["selectValueField"] = selectValueField;
-    obj["selectLabelField"] = selectLabelField;
+    obj[JsonVueKey::kSelectUrl] = selectUrl;
+    obj[JsonVueKey::kSelectValueField] = selectValueField;
+    obj[JsonVueKey::kSelectLabelField] = selectLabelField;
   }
   if (editStyle == EditStyle::Text) {
-    obj["placeholder"] = placeholder;
-    obj["maxlength"] = maxlength;
+    obj[JsonVueKey::kPlaceholder] = placeholder;
+    obj[JsonVueKey::kMaxlength] = maxlength;
   }
   if (editStyle == EditStyle::TextArea) {
-    obj["placeholder"] = placeholder;
-    obj["textareaRows"] = textareaRows;
+    obj[JsonVueKey::kPlaceholder] = placeholder;
+    obj[JsonVueKey::kTextareaRows] = textareaRows;
   }
   if (editStyle == EditStyle::Int || editStyle == EditStyle::Float) {
-    obj["minValue"] = minValue;
-    obj["maxValue"] = maxValue;
+    obj[JsonVueKey::kMinValue] = minValue;
+    obj[JsonVueKey::kMaxValue] = maxValue;
   }
   if (editStyle == EditStyle::Float) {
-    obj["precision"] = precision;
+    obj[JsonVueKey::kPrecision] = precision;
   }
   if (editStyle == EditStyle::Date) {
-    obj["dateFormat"] = dateFormat;
+    obj[JsonVueKey::kDateFormat] = dateFormat;
   }
   return obj;
 }
 
 DialogFieldConfig DialogFieldConfig::fromJson(const QJsonObject &obj) {
   DialogFieldConfig f;
-  f.fieldName = obj.value("fieldName").toString();
-  f.label = obj.value("label").toString();
-  f.editStyle = stringToEditStyle(obj.value("editStyle").toString(QStringLiteral("text")));
-  f.required = obj.value("required").toBool(false);
-  f.placeholder = obj.value("placeholder").toString();
-  f.maxlength = obj.value("maxlength").toInt(0);
-  f.textareaRows = obj.value("textareaRows").toInt(3);
-  f.minValue = obj.value("minValue").toDouble(0);
-  f.maxValue = obj.value("maxValue").toDouble(0);
-  f.precision = obj.value("precision").toInt(2);
-  f.dateFormat = obj.value("dateFormat").toString();
-  f.selectUrl = obj.value("selectUrl").toString();
-  f.selectValueField = obj.value("selectValueField").toString();
-  f.selectLabelField = obj.value("selectLabelField").toString();
+  f.fieldName = obj.value(JsonVueKey::kFieldName).toString();
+  f.label = obj.value(JsonVueKey::kLabel).toString();
+  f.editStyle = stringToEditStyle(obj.value(JsonVueKey::kEditStyle).toString(JsonVueStyle::kText));
+  f.required = obj.value(JsonVueKey::kRequired).toBool(false);
+  f.placeholder = obj.value(JsonVueKey::kPlaceholder).toString();
+  f.maxlength = obj.value(JsonVueKey::kMaxlength).toInt(0);
+  f.textareaRows = obj.value(JsonVueKey::kTextareaRows).toInt(3);
+  f.minValue = obj.value(JsonVueKey::kMinValue).toDouble(0);
+  f.maxValue = obj.value(JsonVueKey::kMaxValue).toDouble(0);
+  f.precision = obj.value(JsonVueKey::kPrecision).toInt(2);
+  f.dateFormat = obj.value(JsonVueKey::kDateFormat).toString();
+  f.selectUrl = obj.value(JsonVueKey::kSelectUrl).toString();
+  f.selectValueField = obj.value(JsonVueKey::kSelectValueField).toString();
+  f.selectLabelField = obj.value(JsonVueKey::kSelectLabelField).toString();
   return f;
 }
 
@@ -496,45 +502,47 @@ DialogFieldConfig DialogFieldConfig::fromJson(const QJsonObject &obj) {
 
 QJsonObject ButtonConfig::toJson() const {
   QJsonObject obj;
-  obj["label"] = label;
-  obj["icon"] = icon;
-  obj["position"] = buttonPositionToString(position);
-  obj["buttonType"] = buttonType;
-  obj["actionType"] = buttonActionTypeToString(actionType);
-  obj["actionKey"] = actionKey;
+  obj[JsonVueKey::kLabel] = label;
+  obj[JsonVueKey::kIcon] = icon;
+  obj[JsonVueKey::kPosition] = buttonPositionToString(position);
+  obj[JsonVueKey::kButtonType] = buttonType;
+  obj[JsonVueKey::kActionType] = buttonActionTypeToString(actionType);
+  obj[JsonVueKey::kActionKey] = actionKey;
   // Ajax / Confirm 行为专用
-  if (!apiName.isEmpty()) obj["apiName"] = apiName;
-  if (!confirmText.isEmpty()) obj["confirmText"] = confirmText;
+  if (!apiName.isEmpty()) obj[JsonVueKey::kApiName] = apiName;
+  if (!confirmText.isEmpty()) obj[JsonVueKey::kConfirmText] = confirmText;
   // Dialog 行为专用
-  if (!dialogTitle.isEmpty()) obj["dialogTitle"] = dialogTitle;
-  if (!dialogApi.isEmpty()) obj["dialogApi"] = dialogApi;
+  if (!dialogTitle.isEmpty()) obj[JsonVueKey::kDialogTitle] = dialogTitle;
+  if (!dialogApi.isEmpty()) obj[JsonVueKey::kDialogApi] = dialogApi;
   if (!dialogFields.isEmpty()) {
     QJsonArray arr;
     for (const auto &f : dialogFields) arr.append(f.toJson());
-    obj["dialogFields"] = arr;
+    obj[JsonVueKey::kDialogFields] = arr;
   }
   // Link 行为专用
-  if (!linkPath.isEmpty()) obj["linkPath"] = linkPath;
+  if (!linkPath.isEmpty()) obj[JsonVueKey::kLinkPath] = linkPath;
   return obj;
 }
 
 ButtonConfig ButtonConfig::fromJson(const QJsonObject &obj) {
   ButtonConfig b;
-  b.label = obj.value("label").toString();
-  b.icon = obj.value("icon").toString();
-  b.position = stringToButtonPosition(obj.value("position").toString(QStringLiteral("row")));
-  b.buttonType = obj.value("buttonType").toString();
-  b.actionType = stringToButtonActionType(obj.value("actionType").toString(QStringLiteral("ajax")));
-  b.actionKey = obj.value("actionKey").toString();
-  b.apiName = obj.value("apiName").toString();
-  b.confirmText = obj.value("confirmText").toString();
-  b.dialogTitle = obj.value("dialogTitle").toString();
-  b.dialogApi = obj.value("dialogApi").toString();
-  const QJsonArray dArr = obj.value("dialogFields").toArray();
+  b.label = obj.value(JsonVueKey::kLabel).toString();
+  b.icon = obj.value(JsonVueKey::kIcon).toString();
+  b.position =
+      stringToButtonPosition(obj.value(JsonVueKey::kPosition).toString(JsonVueStyle::kRow));
+  b.buttonType = obj.value(JsonVueKey::kButtonType).toString();
+  b.actionType =
+      stringToButtonActionType(obj.value(JsonVueKey::kActionType).toString(JsonVueStyle::kAjax));
+  b.actionKey = obj.value(JsonVueKey::kActionKey).toString();
+  b.apiName = obj.value(JsonVueKey::kApiName).toString();
+  b.confirmText = obj.value(JsonVueKey::kConfirmText).toString();
+  b.dialogTitle = obj.value(JsonVueKey::kDialogTitle).toString();
+  b.dialogApi = obj.value(JsonVueKey::kDialogApi).toString();
+  const QJsonArray dArr = obj.value(JsonVueKey::kDialogFields).toArray();
   for (const auto &v : dArr) {
     b.dialogFields.append(DialogFieldConfig::fromJson(v.toObject()));
   }
-  b.linkPath = obj.value("linkPath").toString();
+  b.linkPath = obj.value(JsonVueKey::kLinkPath).toString();
   return b;
 }
 
@@ -544,19 +552,19 @@ ButtonConfig ButtonConfig::fromJson(const QJsonObject &obj) {
 
 QJsonObject JsonVueConfig::toJsonObject() const {
   QJsonObject root;
-  root["meta"] = meta.toJson();
+  root[JsonVueKey::kMeta] = meta.toJson();
 
   QJsonArray colArr;
   for (const auto &c : columns) colArr.append(c.toJson());
-  root["columns"] = colArr;
+  root[JsonVueKey::kColumns] = colArr;
 
   QJsonArray qArr;
   for (const auto &q : queryFields) qArr.append(q.toJson());
-  root["queryFields"] = qArr;
+  root[JsonVueKey::kQueryFields] = qArr;
 
   QJsonArray btnArr;
   for (const auto &b : buttons) btnArr.append(b.toJson());
-  root["buttons"] = btnArr;
+  root[JsonVueKey::kButtons] = btnArr;
 
   return root;
 }
@@ -569,19 +577,19 @@ QString JsonVueConfig::toJsonString() const {
 
 JsonVueConfig JsonVueConfig::fromJson(const QJsonObject &obj) {
   JsonVueConfig cfg;
-  cfg.meta = JsonVueMeta::fromJson(obj.value("meta").toObject());
+  cfg.meta = JsonVueMeta::fromJson(obj.value(JsonVueKey::kMeta).toObject());
 
-  const QJsonArray colArr = obj.value("columns").toArray();
+  const QJsonArray colArr = obj.value(JsonVueKey::kColumns).toArray();
   for (const auto &v : colArr) {
     cfg.columns.append(ColumnConfig::fromJson(v.toObject()));
   }
 
-  const QJsonArray qArr = obj.value("queryFields").toArray();
+  const QJsonArray qArr = obj.value(JsonVueKey::kQueryFields).toArray();
   for (const auto &v : qArr) {
     cfg.queryFields.append(QueryFieldConfig::fromJson(v.toObject()));
   }
 
-  const QJsonArray btnArr = obj.value("buttons").toArray();
+  const QJsonArray btnArr = obj.value(JsonVueKey::kButtons).toArray();
   for (const auto &v : btnArr) {
     cfg.buttons.append(ButtonConfig::fromJson(v.toObject()));
   }

@@ -21,6 +21,7 @@
 
 #include "src/engine/ac_language.h"
 #include "src/ui/create/create_mgr.h"
+#include "src/util/common/code_constants.h"
 #include "src/util/common/util_file.h"
 #include "src/util/ui/component/aui_icon.h"
 #include "src/util/ui/component/aui_style.h"
@@ -118,7 +119,7 @@ void ModifiedFileDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
 // ============================================================================
 
 TreeDir::TreeDir(QWidget *parent) : QTreeWidget(parent) {
-  setHeaderLabel(QStringLiteral("文件"));
+  setHeaderLabel(QString::fromUtf8(CodeConstants::UiText::kFile));
   setMinimumWidth(kMinWidth);
   // 不设最大宽度，允许用户拖动分隔条自由加宽目录树
   setAnimated(true);
@@ -168,7 +169,7 @@ void TreeDir::buildTree(const QString &dirPath) {
   clear();
   // 统一使用正斜杠，确保与 QFileInfo::absoluteFilePath() 格式一致
   m_rootPath = QDir::cleanPath(dirPath);
-  m_configPath = m_rootPath + QStringLiteral("/tree.config");
+  m_configPath = m_rootPath + QString::fromUtf8(CodeConstants::Paths::kTreeConfigFile);
 
   // 树构建期间 setCheckState 会触发 itemChanged → onItemChanged → saveState，
   // 在 loadState 完成前禁止保存，避免将空的未选中状态写入 tree.config
@@ -747,7 +748,7 @@ void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
     QMenu menu(this);
     QAction *showInExplorerAct = menu.addAction(QStringLiteral("在文件资源管理器中显示"));
     menu.addSeparator();
-    QAction *newAct = menu.addAction(QStringLiteral("新建"));
+    QAction *newAct = menu.addAction(QString::fromUtf8(CodeConstants::UiText::kNew));
     QAction *renameAct = menu.addAction(QStringLiteral("重命名"));
     QAction *deleteAct = menu.addAction(QStringLiteral("删除"));
     menu.addSeparator();

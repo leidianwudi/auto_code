@@ -21,6 +21,8 @@
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
+#include "src/engine/ac_language.h"
+#include "src/util/common/code_constants.h"
 #include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_style.h"
 #include "src/util/ui/component/aui_tree.h"
@@ -28,7 +30,7 @@
 /// @brief 调试面板 UI 状态存储文件（记录各列表列宽）
 static QString debugUiSettingsPath() {
   QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-  if (dir.isEmpty()) dir = QDir::homePath() + QStringLiteral("/.auto_code");
+  if (dir.isEmpty()) dir = QDir::homePath() + QString::fromUtf8(CodeConstants::Paths::kAppDataDirName);
   QDir().mkpath(dir);
   return dir + QStringLiteral("/debug_ui.ini");
 }
@@ -128,7 +130,7 @@ DebugPanel::DebugPanel(QWidget *parent) : QWidget(parent) {
   m_breakTree = AuiTree::createListTree();
   m_breakTree->setColumnCount(3);
   m_breakTree->setHeaderLabels(
-      {QStringLiteral("生效"), QStringLiteral("文件"), QStringLiteral("行")});
+      {QStringLiteral("生效"), QString::fromUtf8(CodeConstants::UiText::kFile), QStringLiteral("行")});
   m_breakTree->setRootIsDecorated(false);
   m_breakTree->setColumnWidth(0, 34);
   m_breakTree->setColumnWidth(1, 130);
@@ -173,11 +175,12 @@ DebugPanel::DebugPanel(QWidget *parent) : QWidget(parent) {
 
     QMenu menu(m_breakTree);
     QAction *toggleAction =
-        menu.addAction(enabled ? QStringLiteral("禁用断点") : QStringLiteral("启用断点"));
+        menu.addAction(enabled ? QStringLiteral("禁用断点")
+                               : QString::fromUtf8(CodeConstants::UiText::kEnableBreakpoint));
     connect(toggleAction, &QAction::triggered, this, [this, filePath, line, enabled]() {
       emit breakpointToggleEnabledRequested(filePath, line, !enabled);
     });
-    QAction *delAction = menu.addAction(QStringLiteral("移除断点"));
+    QAction *delAction = menu.addAction(QString::fromUtf8(CodeConstants::UiText::kRemoveBreakpoint));
     connect(delAction, &QAction::triggered, this,
             [this, filePath, line]() { emit breakpointDeleteRequested(filePath, line); });
     menu.exec(m_breakTree->viewport()->mapToGlobal(pos));
@@ -397,11 +400,15 @@ void DebugPanel::refreshStyle() {
 QString DebugPanel::formatValue(const QJsonValue &v) {
   if (v.isString()) return v.toString();
   if (v.isDouble()) return QString::number(v.toDouble());
-  if (v.isBool()) return v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
-  if (v.isNull()) return QStringLiteral("null");
-  if (v.isUndefined()) return QStringLiteral("undefined");
-  if (v.isArray()) return QStringLiteral("Array(%1)").arg(v.toArray().size());
-  if (v.isObject()) return QStringLiteral("Object");
+  if (v.isBool())
+    return v.toBool() ? QString::fromLatin1(AcKeyword::kTrue)
+                      : QString::fromLatin1(AcKeyword::kFalse);
+  if (v.isNull()) return QString::fromLatin1(AcKeyword::kNull);
+  if (v.isUndefined()) return QString::fromLatin1(AcKeyword::kUndefined);
+  if (v.isArray())
+    return QStringLiteral("%1(%2)").arg(QString::fromLatin1(AcTypeName::kArray),
+                                        QString::number(v.toArray().size()));
+  if (v.isObject()) return QString::fromLatin1(AcTypeName::kObject);
   return QString();
 }
 

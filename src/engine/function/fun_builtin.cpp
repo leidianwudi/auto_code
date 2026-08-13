@@ -14,6 +14,7 @@
 #include "../ac_value_str.h"
 #include "../tpl/tpl_engine.h"
 #include "fun_mgr.h"
+#include "src/util/common/code_constants.h"
 #include "src/util/common/util_json.h"
 
 // ============================================================================
@@ -179,8 +180,10 @@ QJsonValue FunBuiltin::printError(const QJsonArray &args) {
 // ============================================================================
 
 QJsonValue FunBuiltin::getCheckedFiles(const QJsonArray &args) {
-  QString treePath = s_ctx.rootDir.isEmpty() ? s_ctx.scriptDir + QStringLiteral("/tree.config")
-                                             : s_ctx.rootDir + QStringLiteral("/tree.config");
+  QString treePath =
+      s_ctx.rootDir.isEmpty()
+          ? s_ctx.scriptDir + QString::fromUtf8(CodeConstants::Paths::kTreeConfigFile)
+          : s_ctx.rootDir + QString::fromUtf8(CodeConstants::Paths::kTreeConfigFile);
   // 可选参数：基准路径，传入后只返回该路径下的文件
   QString basePath;
   if (!args.isEmpty() && args[0].isString()) {
@@ -338,7 +341,8 @@ QJsonValue FunBuiltin::formatPath(const QJsonArray &args) {
       } else if (v.isDouble()) {
         vs = QString::number(v.toDouble());
       } else if (v.isBool()) {
-        vs = v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
+        vs = v.toBool() ? QString::fromLatin1(AcKeyword::kTrue)
+                        : QString::fromLatin1(AcKeyword::kFalse);
       } else {
         FunMgr::setError(
             QStringLiteral("formatPath() placeholder '%1' value must be string/number/bool")

@@ -225,46 +225,47 @@ AcType AcParser::parseType() {
 
   // 简单类型名映射
   AcType baseType;
-  if (typeName == "Number" || typeName == "Int" || typeName == "Float" || typeName == "Double") {
+  if (typeName == AcTypeName::kNumber || typeName == AcTypeName::kInt ||
+      typeName == AcTypeName::kFloat || typeName == AcTypeName::kDouble) {
     baseType = AcType::number();
-  } else if (typeName == "String") {
+  } else if (typeName == AcTypeName::kString) {
     baseType = AcType::string();
-  } else if (typeName == "Bool" || typeName == "Boolean") {
+  } else if (typeName == AcTypeName::kBool || typeName == AcTypeName::kBoolean) {
     baseType = AcType::boolean();
-  } else if (typeName == "Any") {
+  } else if (typeName == AcTypeName::kAny) {
     baseType = AcType::any();
-  } else if (typeName == "Void") {
+  } else if (typeName == AcTypeName::kVoid) {
     baseType = AcType::voidType();
-  } else if (typeName == "Array") {
+  } else if (typeName == AcTypeName::kArray) {
     // P1b: 禁止弱类型 Array，必须使用 Array<Type> 或 Type[]
     m_error = QStringLiteral(
                   "bare 'Array' type requires element type: use Array<Type> or Type[] at line %1")
                   .arg(peek().line);
     return AcType::any();
-  } else if (typeName == "Object") {
-    baseType = AcType::classType(QStringLiteral("Object"));
+  } else if (typeName == AcTypeName::kObject) {
+    baseType = AcType::classType(QString::fromLatin1(AcTypeName::kObject));
   } else {
     // 内建类型名必须严格区分大小写：若匹配到内建类型但大小写不同（如 string、number），
     // 报错并提示正确写法，避免被静默当作自定义类名
     QString suggestion;
-    if (typeName.compare("Number", Qt::CaseInsensitive) == 0 ||
-        typeName.compare("Int", Qt::CaseInsensitive) == 0 ||
-        typeName.compare("Float", Qt::CaseInsensitive) == 0 ||
-        typeName.compare("Double", Qt::CaseInsensitive) == 0) {
-      suggestion = QStringLiteral("Number");
-    } else if (typeName.compare("String", Qt::CaseInsensitive) == 0) {
-      suggestion = QStringLiteral("String");
-    } else if (typeName.compare("Bool", Qt::CaseInsensitive) == 0 ||
-               typeName.compare("Boolean", Qt::CaseInsensitive) == 0) {
-      suggestion = QStringLiteral("Bool");
-    } else if (typeName.compare("Any", Qt::CaseInsensitive) == 0) {
-      suggestion = QStringLiteral("Any");
-    } else if (typeName.compare("Void", Qt::CaseInsensitive) == 0) {
-      suggestion = QStringLiteral("Void");
-    } else if (typeName.compare("Array", Qt::CaseInsensitive) == 0) {
-      suggestion = QStringLiteral("Array");
-    } else if (typeName.compare("Object", Qt::CaseInsensitive) == 0) {
-      suggestion = QStringLiteral("Object");
+    if (typeName.compare(AcTypeName::kNumber, Qt::CaseInsensitive) == 0 ||
+        typeName.compare(AcTypeName::kInt, Qt::CaseInsensitive) == 0 ||
+        typeName.compare(AcTypeName::kFloat, Qt::CaseInsensitive) == 0 ||
+        typeName.compare(AcTypeName::kDouble, Qt::CaseInsensitive) == 0) {
+      suggestion = QString::fromLatin1(AcTypeName::kNumber);
+    } else if (typeName.compare(AcTypeName::kString, Qt::CaseInsensitive) == 0) {
+      suggestion = QString::fromLatin1(AcTypeName::kString);
+    } else if (typeName.compare(AcTypeName::kBool, Qt::CaseInsensitive) == 0 ||
+               typeName.compare(AcTypeName::kBoolean, Qt::CaseInsensitive) == 0) {
+      suggestion = QString::fromLatin1(AcTypeName::kBool);
+    } else if (typeName.compare(AcTypeName::kAny, Qt::CaseInsensitive) == 0) {
+      suggestion = QString::fromLatin1(AcTypeName::kAny);
+    } else if (typeName.compare(AcTypeName::kVoid, Qt::CaseInsensitive) == 0) {
+      suggestion = QString::fromLatin1(AcTypeName::kVoid);
+    } else if (typeName.compare(AcTypeName::kArray, Qt::CaseInsensitive) == 0) {
+      suggestion = QString::fromLatin1(AcTypeName::kArray);
+    } else if (typeName.compare(AcTypeName::kObject, Qt::CaseInsensitive) == 0) {
+      suggestion = QString::fromLatin1(AcTypeName::kObject);
     }
     if (!suggestion.isEmpty()) {
       m_error = QStringLiteral(

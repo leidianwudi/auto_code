@@ -24,6 +24,7 @@
 #include <QVBoxLayout>
 
 #include "combobox_config_dialog.h"
+#include "src/util/common/code_constants.h"
 #include "src/util/ui/aui_window.h"
 #include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_style.h"
@@ -123,10 +124,13 @@ void ColumnStyleDialog::setupUI() {
   // 显示样式（列表页渲染方式）—— 置于列表页配置最顶部，便于标签映射表获得更大空间
   m_displayTypeCombo = new QComboBox(this);
   m_displayTypeCombo->addItem(QStringLiteral("纯文本(text)"), QStringLiteral(""));
-  m_displayTypeCombo->addItem(QStringLiteral("金额(money)"), QStringLiteral("money"));
-  m_displayTypeCombo->addItem(QStringLiteral("标签(tag)"), QStringLiteral("tag"));
-  m_displayTypeCombo->addItem(QStringLiteral("布尔文字(boolean)"), QStringLiteral("boolean"));
-  m_displayTypeCombo->addItem(QStringLiteral("图片(image)"), QStringLiteral("image"));
+  m_displayTypeCombo->addItem(QStringLiteral("金额(money)"),
+                              QString::fromLatin1(JsonVueStyle::kMoney));
+  m_displayTypeCombo->addItem(QStringLiteral("标签(tag)"), QString::fromLatin1(JsonVueStyle::kTag));
+  m_displayTypeCombo->addItem(QStringLiteral("布尔文字(boolean)"),
+                              QString::fromLatin1(JsonVueStyle::kBoolean));
+  m_displayTypeCombo->addItem(QStringLiteral("图片(image)"),
+                              QString::fromLatin1(JsonVueStyle::kImage));
   addRow(QStringLiteral("显示样式:"), m_displayTypeCombo);
 
   // 显示样式子控件容器（全宽区域，用于显示标签映射表等）
@@ -173,7 +177,7 @@ void ColumnStyleDialog::setupUI() {
   // 格式化类型
   m_formatterCombo = new QComboBox(this);
   m_formatterCombo->addItem(QStringLiteral("无"), QString());
-  m_formatterCombo->addItem(QStringLiteral("日期"), QStringLiteral("date"));
+  m_formatterCombo->addItem(QStringLiteral("日期"), QString::fromLatin1(JsonVueStyle::kDate));
   m_formatterCombo->addItem(QStringLiteral("状态"), QStringLiteral("status"));
   m_formatterCombo->addItem(QStringLiteral("金额"), QStringLiteral("currency"));
   addRow(QStringLiteral("格式化:"), m_formatterCombo);
@@ -187,16 +191,23 @@ void ColumnStyleDialog::setupUI() {
 
   // 编辑样式
   m_editStyleCombo = new QComboBox(this);
-  m_editStyleCombo->addItem(QStringLiteral("纯文本(text)"), QStringLiteral("text"));
-  m_editStyleCombo->addItem(QStringLiteral("整数(int)"), QStringLiteral("int"));
-  m_editStyleCombo->addItem(QStringLiteral("小数(float)"), QStringLiteral("float"));
-  m_editStyleCombo->addItem(QStringLiteral("金额(money)"), QStringLiteral("money"));
-  m_editStyleCombo->addItem(QStringLiteral("日期(date)"), QStringLiteral("date"));
-  m_editStyleCombo->addItem(QStringLiteral("标签(tag)"), QStringLiteral("tag"));
-  m_editStyleCombo->addItem(QStringLiteral("布尔文字(boolean)"), QStringLiteral("boolean"));
-  m_editStyleCombo->addItem(QStringLiteral("图片(image)"), QStringLiteral("image"));
-  m_editStyleCombo->addItem(QStringLiteral("下拉框(select)"), QStringLiteral("select"));
-  m_editStyleCombo->addItem(QStringLiteral("多行文本(textarea)"), QStringLiteral("textarea"));
+  m_editStyleCombo->addItem(QStringLiteral("纯文本(text)"),
+                            QString::fromLatin1(JsonVueStyle::kText));
+  m_editStyleCombo->addItem(QStringLiteral("整数(int)"), QString::fromLatin1(JsonVueStyle::kInt));
+  m_editStyleCombo->addItem(QStringLiteral("小数(float)"),
+                            QString::fromLatin1(JsonVueStyle::kFloat));
+  m_editStyleCombo->addItem(QStringLiteral("金额(money)"),
+                            QString::fromLatin1(JsonVueStyle::kMoney));
+  m_editStyleCombo->addItem(QStringLiteral("日期(date)"), QString::fromLatin1(JsonVueStyle::kDate));
+  m_editStyleCombo->addItem(QStringLiteral("标签(tag)"), QString::fromLatin1(JsonVueStyle::kTag));
+  m_editStyleCombo->addItem(QStringLiteral("布尔文字(boolean)"),
+                            QString::fromLatin1(JsonVueStyle::kBoolean));
+  m_editStyleCombo->addItem(QStringLiteral("图片(image)"),
+                            QString::fromLatin1(JsonVueStyle::kImage));
+  m_editStyleCombo->addItem(QStringLiteral("下拉框(select)"),
+                            QString::fromLatin1(JsonVueStyle::kSelect));
+  m_editStyleCombo->addItem(QStringLiteral("多行文本(textarea)"),
+                            QString::fromLatin1(JsonVueStyle::kTextarea));
   // 设置当前编辑样式
   int editIdx = m_editStyleCombo->findData(editStyleToString(m_editStyle));
   if (editIdx >= 0) m_editStyleCombo->setCurrentIndex(editIdx);
@@ -336,13 +347,14 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
 
   QString dtype = m_displayTypeCombo ? m_displayTypeCombo->currentData().toString() : QString();
 
-  if (dtype == QStringLiteral("tag")) {
+  if (dtype == JsonVueStyle::kTag) {
     m_displayTypeWidget->setMaximumHeight(QWIDGETSIZE_MAX);  // 恢复高度限制
     m_displayTypeWidget->setVisible(true);
     // 标签映射表（动态增删行）—— 占据全宽
     m_tagItemsTable = new QTableWidget(0, 4, m_displayTypeWidget);
     m_tagItemsTable->setHorizontalHeaderLabels({QStringLiteral("值"), QStringLiteral("文字"),
-                                                QStringLiteral("颜色"), QStringLiteral("操作")});
+                                                QString::fromUtf8(CodeConstants::UiText::kColor),
+                                                QStringLiteral("操作")});
     m_tagItemsTable->verticalHeader()->setVisible(false);
     m_tagItemsTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     m_tagItemsTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
@@ -357,7 +369,7 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
     m_switchEditableCheck = new QCheckBox(QStringLiteral("列表页可直接切换"), m_displayTypeWidget);
     m_switchEditableCheck->setChecked(m_cachedSwitchEditable);
     form->addRow(QStringLiteral("  开关可编辑:"), m_switchEditableCheck);
-  } else if (dtype == QStringLiteral("boolean")) {
+  } else if (dtype == JsonVueStyle::kBoolean) {
     m_displayTypeWidget->setMaximumHeight(QWIDGETSIZE_MAX);  // 恢复高度限制
     m_displayTypeWidget->setVisible(true);
     m_boolTrueTextEdit = new QLineEdit(m_displayTypeWidget);
@@ -384,9 +396,10 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
 }
 
 /// 颜色选项列表（success/primary/warning/info/danger）
-static const QStringList kTagColorOptions = {QStringLiteral("success"), QStringLiteral("primary"),
-                                             QStringLiteral("warning"), QStringLiteral("info"),
-                                             QStringLiteral("danger")};
+static const QStringList kTagColorOptions = {
+    QString::fromLatin1(JsonVueColor::kSuccess), QString::fromLatin1(JsonVueColor::kPrimary),
+    QString::fromLatin1(JsonVueColor::kWarning), QString::fromLatin1(JsonVueColor::kInfo),
+    QString::fromLatin1(JsonVueColor::kDanger)};
 
 /// 创建颜色选择下拉框（含"自定义..."选项，支持任意十六进制颜色）
 static QComboBox *createColorCombo(QWidget *parent, const QString &currentColor) {
@@ -431,7 +444,8 @@ void ColumnStyleDialog::populateTagItems(const QList<TagItem> &items) {
     m_tagItemsTable->setItem(row, 1, new QTableWidgetItem(item.text));
     auto *colorCombo = createColorCombo(m_tagItemsTable, item.color);
     m_tagItemsTable->setCellWidget(row, 2, colorCombo);
-    auto *delBtn = new QPushButton(QStringLiteral("删除"), m_tagItemsTable);
+    auto *delBtn =
+        new QPushButton(QString::fromUtf8(CodeConstants::UiText::kDelete), m_tagItemsTable);
     m_tagItemsTable->setCellWidget(row, 3, delBtn);
     // 删除按钮：删除当前行
     connect(delBtn, &QPushButton::clicked, this, [this, delBtn]() {
@@ -456,13 +470,14 @@ void ColumnStyleDialog::populateTagItems(const QList<TagItem> &items) {
         TagItem empty;
         empty.value = QStringLiteral("0");
         empty.text = QString();
-        empty.color = QStringLiteral("info");
+        empty.color = QString::fromLatin1(JsonVueColor::kInfo);
         m_tagItemsTable->insertRow(r);
         m_tagItemsTable->setItem(r, 0, new QTableWidgetItem(empty.value));
         m_tagItemsTable->setItem(r, 1, new QTableWidgetItem(empty.text));
         auto *colorCombo = createColorCombo(m_tagItemsTable, empty.color);
         m_tagItemsTable->setCellWidget(r, 2, colorCombo);
-        auto *delBtn = new QPushButton(QStringLiteral("删除"), m_tagItemsTable);
+        auto *delBtn =
+            new QPushButton(QString::fromUtf8(CodeConstants::UiText::kDelete), m_tagItemsTable);
         m_tagItemsTable->setCellWidget(r, 3, delBtn);
         connect(delBtn, &QPushButton::clicked, this, [this, delBtn]() {
           for (int rr = 0; rr < m_tagItemsTable->rowCount(); ++rr) {
@@ -611,12 +626,17 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
     }
     case EditStyle::Date: {
       m_dateFormatCombo = new QComboBox(m_editStyleWidget);
-      m_dateFormatCombo->addItem(QStringLiteral("年月日时分秒"), QStringLiteral("datetime"));
-      m_dateFormatCombo->addItem(QStringLiteral("时分秒"), QStringLiteral("time"));
-      m_dateFormatCombo->addItem(QStringLiteral("年月日"), QStringLiteral("date"));
-      m_dateFormatCombo->addItem(QStringLiteral("年月"), QStringLiteral("month"));
-      m_dateFormatCombo->addItem(QStringLiteral("年"), QStringLiteral("year"));
-      m_dateFormatCombo->addItem(QStringLiteral("日期范围"), QStringLiteral("daterange"));
+      m_dateFormatCombo->addItem(QString::fromUtf8(CodeConstants::UiText::kDatetimeFull),
+                                 QString::fromLatin1(JsonVueStyle::kDatetime));
+      m_dateFormatCombo->addItem(QStringLiteral("时分秒"),
+                                 QString::fromLatin1(JsonVueStyle::kTime));
+      m_dateFormatCombo->addItem(QStringLiteral("年月日"),
+                                 QString::fromLatin1(JsonVueStyle::kDate));
+      m_dateFormatCombo->addItem(QString::fromUtf8(CodeConstants::UiText::kYearMonth),
+                                 QString::fromLatin1(JsonVueStyle::kMonth));
+      m_dateFormatCombo->addItem(QStringLiteral("年"), QString::fromLatin1(JsonVueStyle::kYear));
+      m_dateFormatCombo->addItem(QString::fromUtf8(CodeConstants::UiText::kDateRange),
+                                 QString::fromLatin1(JsonVueStyle::kDaterange));
       int idx = m_dateFormatCombo->findData(m_cachedDateFormat);
       m_dateFormatCombo->setCurrentIndex(idx >= 0 ? idx : 1);
       form->addRow(QStringLiteral("  日期格式:"), m_dateFormatCombo);
@@ -973,7 +993,7 @@ bool ColumnStyleDialog::validateTagItems(QString *error) const {
 void ColumnStyleDialog::accept() {
   // 验证 tagItems 数据
   QString dtype = m_displayTypeCombo ? m_displayTypeCombo->currentData().toString() : QString();
-  if (dtype == QStringLiteral("tag") && m_tagItemsTable) {
+  if (dtype == JsonVueStyle::kTag && m_tagItemsTable) {
     QString error;
     if (!validateTagItems(&error)) {
       QMessageBox::warning(this, QStringLiteral("数据验证失败"), error);
@@ -1030,10 +1050,12 @@ void QueryStyleDialog::setupUI() {
     }
     case QueryInputStyle::Date: {
       m_dateFormatCombo = new QComboBox(this);
-      m_dateFormatCombo->addItem(QStringLiteral("年月日时分秒"), QStringLiteral("datetime"));
+      m_dateFormatCombo->addItem(QString::fromUtf8(CodeConstants::UiText::kDatetimeFull),
+                                 QStringLiteral("datetime"));
       m_dateFormatCombo->addItem(QStringLiteral("时分秒"), QStringLiteral("time"));
       m_dateFormatCombo->addItem(QStringLiteral("年月日"), QStringLiteral("date"));
-      m_dateFormatCombo->addItem(QStringLiteral("年月"), QStringLiteral("month"));
+      m_dateFormatCombo->addItem(QString::fromUtf8(CodeConstants::UiText::kYearMonth),
+                                 QStringLiteral("month"));
       m_dateFormatCombo->addItem(QStringLiteral("年"), QStringLiteral("year"));
       // 注：日期范围不属于格式，应通过查询关系（QColRelation）配置
       int idx = m_dateFormatCombo->findData(m_cachedDateFormat);
@@ -1077,7 +1099,7 @@ void QueryStyleDialog::setDateFormat(const QString &v) {
   if (m_dateFormatCombo) {
     int idx = m_dateFormatCombo->findData(v);
     // 若旧值为 "daterange"（已废弃），回退到默认 "date"
-    if (idx < 0) idx = m_dateFormatCombo->findData(QStringLiteral("date"));
+    if (idx < 0) idx = m_dateFormatCombo->findData(QString::fromLatin1(JsonVueStyle::kDate));
     if (idx >= 0) m_dateFormatCombo->setCurrentIndex(idx);
   }
 }

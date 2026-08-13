@@ -33,6 +33,7 @@
 
 #include "button_config_dialog.h"
 #include "combobox_config_dialog.h"
+#include "src/util/common/code_constants.h"
 #include "src/util/common/http_client.h"
 #include "src/util/common/util_json.h"
 #include "src/util/ui/component/aui_button.h"
@@ -139,8 +140,9 @@ QWidget *JsonVueEditor::buildMetaSection() {
   row1->addWidget(new QLabel(QStringLiteral("生成数据URL:")));
 
   m_methodCombo = new QComboBox(this);
-  m_methodCombo->addItems({QStringLiteral("GET"), QStringLiteral("POST"), QStringLiteral("PUT"),
-                           QStringLiteral("DELETE")});
+  m_methodCombo->addItems(
+      {QString::fromLatin1(JsonVueHttp::kGet), QString::fromLatin1(JsonVueHttp::kPost),
+       QString::fromLatin1(JsonVueHttp::kPut), QString::fromLatin1(JsonVueHttp::kDelete)});
   m_methodCombo->setFixedWidth(80);
   row1->addWidget(m_methodCombo);
 
@@ -215,9 +217,9 @@ QWidget *JsonVueEditor::buildColumnsSection() {
 
   // 列配置表格
   m_columnTable = new QTableWidget(0, ColCount, this);
-  m_columnTable->setHorizontalHeaderLabels({QStringLiteral("字段名"), QStringLiteral("标题"),
-                                            QStringLiteral("列表页显示"),
-                                            QStringLiteral("编辑页显示"), QStringLiteral("配置")});
+  m_columnTable->setHorizontalHeaderLabels(
+      {QStringLiteral("字段名"), QStringLiteral("标题"), QStringLiteral("列表页显示"),
+       QStringLiteral("编辑页显示"), QString::fromUtf8(CodeConstants::UiText::kConfig)});
   m_columnTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
   m_columnTable->horizontalHeader()->setSectionResizeMode(ColConfig, QHeaderView::Stretch);
   m_columnTable->setColumnWidth(ColDataName, 120);
@@ -254,7 +256,7 @@ QWidget *JsonVueEditor::buildQueryFieldsSection() {
   m_queryTable = new QTableWidget(0, QColCount, this);
   m_queryTable->setHorizontalHeaderLabels({QStringLiteral("字段名"), QStringLiteral("标签名"),
                                            QStringLiteral("输入框样式"), QStringLiteral("查询关系"),
-                                           QStringLiteral("配置")});
+                                           QString::fromUtf8(CodeConstants::UiText::kConfig)});
   m_queryTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
   m_queryTable->horizontalHeader()->setSectionResizeMode(QColConfig, QHeaderView::Stretch);
   m_queryTable->setColumnWidth(QColDataName, 120);
@@ -288,7 +290,7 @@ QWidget *JsonVueEditor::buildButtonsSection() {
   m_buttonTable = new QTableWidget(0, BColCount, this);
   m_buttonTable->setHorizontalHeaderLabels({QStringLiteral("按钮文字"), QStringLiteral("动作标识"),
                                             QStringLiteral("位置"), QStringLiteral("行为类型"),
-                                            QStringLiteral("配置")});
+                                            QString::fromUtf8(CodeConstants::UiText::kConfig)});
   m_buttonTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
   m_buttonTable->horizontalHeader()->setSectionResizeMode(BColConfig, QHeaderView::Stretch);
   m_buttonTable->setColumnWidth(BColLabel, 120);
@@ -404,6 +406,9 @@ void JsonVueEditor::reloadStyle() { applyStyle(); }
 
 namespace {
 
+/// 接口鉴权/连接配置文件（baseUrl、authHeader、postData），从 .jsonvue 所在目录向上查找
+const QString kApiAuthDataAcFile = QStringLiteral("api_auth_data.ac");
+
 /// 自绘 QComboBox：无边框，只有文字 + 箭头，文字区域不受原生样式限制
 class NoBorderCombo : public QComboBox {
 public:
@@ -449,81 +454,87 @@ QComboBox *newTableCombo() { return new NoBorderCombo; }
 
 /// 将 ColumnConfig 的所有配置存储到 QPushButton 的动态属性中
 void storeColumnConfig(QPushButton *btn, const ColumnConfig &col) {
-  btn->setProperty("selectUrl", col.selectUrl);
-  btn->setProperty("selectValueField", col.selectValueField);
-  btn->setProperty("selectLabelField", col.selectLabelField);
-  btn->setProperty("placeholder", col.placeholder);
-  btn->setProperty("maxlength", col.maxlength);
-  btn->setProperty("minValue", col.minValue);
-  btn->setProperty("maxValue", col.maxValue);
-  btn->setProperty("precision", col.precision);
-  btn->setProperty("dateFormat", col.dateFormat);
-  btn->setProperty("textareaRows", col.textareaRows);
-  btn->setProperty("required", col.required);
-  btn->setProperty("columnWidth", col.columnWidth);
-  btn->setProperty("columnFixed", col.columnFixed);
-  btn->setProperty("formatter", col.formatter);
-  btn->setProperty("formSpan", col.formSpan);
-  btn->setProperty("displayType", col.displayType);
+  btn->setProperty(JsonVueKey::kSelectUrl, col.selectUrl);
+  btn->setProperty(JsonVueKey::kSelectValueField, col.selectValueField);
+  btn->setProperty(JsonVueKey::kSelectLabelField, col.selectLabelField);
+  btn->setProperty(JsonVueKey::kPlaceholder, col.placeholder);
+  btn->setProperty(JsonVueKey::kMaxlength, col.maxlength);
+  btn->setProperty(JsonVueKey::kMinValue, col.minValue);
+  btn->setProperty(JsonVueKey::kMaxValue, col.maxValue);
+  btn->setProperty(JsonVueKey::kPrecision, col.precision);
+  btn->setProperty(JsonVueKey::kDateFormat, col.dateFormat);
+  btn->setProperty(JsonVueKey::kTextareaRows, col.textareaRows);
+  btn->setProperty(JsonVueKey::kRequired, col.required);
+  btn->setProperty(JsonVueKey::kColumnWidth, col.columnWidth);
+  btn->setProperty(JsonVueKey::kColumnFixed, col.columnFixed);
+  btn->setProperty(JsonVueKey::kFormatter, col.formatter);
+  btn->setProperty(JsonVueKey::kFormSpan, col.formSpan);
+  btn->setProperty(JsonVueKey::kDisplayType, col.displayType);
   // tagItems 存为 QVariantList（每个元素为 QVariantMap）
   QVariantList tagItemsVar;
   for (const auto &t : col.tagItems) {
     QVariantMap m;
-    m["value"] = t.value;
-    m["text"] = t.text;
-    m["color"] = t.color;
+    m[JsonVueKey::kTagValue] = t.value;
+    m[JsonVueKey::kTagText] = t.text;
+    m[JsonVueKey::kTagColor] = t.color;
     tagItemsVar.append(m);
   }
-  btn->setProperty("tagItems", tagItemsVar);
-  btn->setProperty("boolTrueText", col.boolTrueText);
-  btn->setProperty("boolFalseText", col.boolFalseText);
-  btn->setProperty("defaultValue", col.defaultValue);
-  btn->setProperty("defaultSort", col.defaultSort);
+  btn->setProperty(JsonVueKey::kTagItems, tagItemsVar);
+  btn->setProperty(JsonVueKey::kBoolTrueText, col.boolTrueText);
+  btn->setProperty(JsonVueKey::kBoolFalseText, col.boolFalseText);
+  btn->setProperty(JsonVueKey::kDefaultValue, col.defaultValue);
+  btn->setProperty(JsonVueKey::kDefaultSort, col.defaultSort);
   // 编辑样式/编辑可编辑/开关可编辑（从表格列移入对话框后，存到 property 供读取）
-  btn->setProperty("editStyle", editStyleToString(col.editStyle));
-  btn->setProperty("editEditable", col.editEditable);
-  btn->setProperty("switchEditable", col.switchEditable);
+  btn->setProperty(JsonVueKey::kEditStyle, editStyleToString(col.editStyle));
+  btn->setProperty(JsonVueKey::kEditEditable, col.editEditable);
+  btn->setProperty(JsonVueKey::kSwitchEditable, col.switchEditable);
 }
 
 /// 从 QPushButton 的动态属性读取 ColumnConfig 的所有配置
 void readColumnConfig(QPushButton *btn, ColumnConfig &col) {
-  col.selectUrl = btn->property("selectUrl").toString();
-  col.selectValueField = btn->property("selectValueField").toString();
-  col.selectLabelField = btn->property("selectLabelField").toString();
-  col.placeholder = btn->property("placeholder").toString();
-  col.maxlength = btn->property("maxlength").toInt();
-  col.minValue = btn->property("minValue").toDouble();
-  col.maxValue = btn->property("maxValue").toDouble();
-  col.precision = btn->property("precision").isValid() ? btn->property("precision").toInt() : 2;
-  col.dateFormat = btn->property("dateFormat").toString();
-  col.textareaRows =
-      btn->property("textareaRows").isValid() ? btn->property("textareaRows").toInt() : 3;
-  col.required = btn->property("required").toBool();
-  col.columnWidth = btn->property("columnWidth").toInt();
-  col.columnFixed = btn->property("columnFixed").toString();
-  col.formatter = btn->property("formatter").toString();
-  col.formSpan = btn->property("formSpan").isValid() ? btn->property("formSpan").toInt() : 24;
-  col.displayType = btn->property("displayType").toString();
+  col.selectUrl = btn->property(JsonVueKey::kSelectUrl).toString();
+  col.selectValueField = btn->property(JsonVueKey::kSelectValueField).toString();
+  col.selectLabelField = btn->property(JsonVueKey::kSelectLabelField).toString();
+  col.placeholder = btn->property(JsonVueKey::kPlaceholder).toString();
+  col.maxlength = btn->property(JsonVueKey::kMaxlength).toInt();
+  col.minValue = btn->property(JsonVueKey::kMinValue).toDouble();
+  col.maxValue = btn->property(JsonVueKey::kMaxValue).toDouble();
+  col.precision = btn->property(JsonVueKey::kPrecision).isValid()
+                      ? btn->property(JsonVueKey::kPrecision).toInt()
+                      : 2;
+  col.dateFormat = btn->property(JsonVueKey::kDateFormat).toString();
+  col.textareaRows = btn->property(JsonVueKey::kTextareaRows).isValid()
+                         ? btn->property(JsonVueKey::kTextareaRows).toInt()
+                         : 3;
+  col.required = btn->property(JsonVueKey::kRequired).toBool();
+  col.columnWidth = btn->property(JsonVueKey::kColumnWidth).toInt();
+  col.columnFixed = btn->property(JsonVueKey::kColumnFixed).toString();
+  col.formatter = btn->property(JsonVueKey::kFormatter).toString();
+  col.formSpan = btn->property(JsonVueKey::kFormSpan).isValid()
+                     ? btn->property(JsonVueKey::kFormSpan).toInt()
+                     : 24;
+  col.displayType = btn->property(JsonVueKey::kDisplayType).toString();
   // tagItems 从 QVariantList 读取
   col.tagItems.clear();
-  const QVariantList tagItemsVar = btn->property("tagItems").toList();
+  const QVariantList tagItemsVar = btn->property(JsonVueKey::kTagItems).toList();
   for (const auto &v : tagItemsVar) {
     QVariantMap m = v.toMap();
     TagItem t;
-    t.value = m.value("value").toString();
-    t.text = m.value("text").toString();
-    t.color = m.value("color").toString();
+    t.value = m.value(JsonVueKey::kTagValue).toString();
+    t.text = m.value(JsonVueKey::kTagText).toString();
+    t.color = m.value(JsonVueKey::kTagColor).toString();
     col.tagItems.append(t);
   }
-  col.boolTrueText = btn->property("boolTrueText").toString();
-  col.boolFalseText = btn->property("boolFalseText").toString();
-  col.defaultValue = btn->property("defaultValue").toString();
-  col.defaultSort = btn->property("defaultSort").toString();
+  col.boolTrueText = btn->property(JsonVueKey::kBoolTrueText).toString();
+  col.boolFalseText = btn->property(JsonVueKey::kBoolFalseText).toString();
+  col.defaultValue = btn->property(JsonVueKey::kDefaultValue).toString();
+  col.defaultSort = btn->property(JsonVueKey::kDefaultSort).toString();
   // 编辑样式/编辑可编辑/开关可编辑
-  col.editStyle = stringToEditStyle(btn->property("editStyle").toString());
-  col.editEditable =
-      btn->property("editEditable").isValid() ? btn->property("editEditable").toBool() : true;
-  col.switchEditable = btn->property("switchEditable").toBool();
+  col.editStyle = stringToEditStyle(btn->property(JsonVueKey::kEditStyle).toString());
+  col.editEditable = btn->property(JsonVueKey::kEditEditable).isValid()
+                         ? btn->property(JsonVueKey::kEditEditable).toBool()
+                         : true;
+  col.switchEditable = btn->property(JsonVueKey::kSwitchEditable).toBool();
 }
 
 /// 生成列配置摘要文本
@@ -531,49 +542,49 @@ QString columnConfigSummary(const ColumnConfig &col) {
   QStringList parts;
   // 关键配置：显示样式、编辑样式始终显示，便于一眼看出列的渲染/编辑方式
   // displayType 为空字符串时表示"纯文本(text)"
-  parts << QStringLiteral("显示:%1").arg(col.displayType.isEmpty() ? QStringLiteral("text")
-                                                                   : col.displayType);
+  parts << QStringLiteral("显示:%1").arg(
+      col.displayType.isEmpty() ? QString::fromLatin1(JsonVueStyle::kText) : col.displayType);
   parts << QStringLiteral("编辑:%1").arg(editStyleToString(col.editStyle));
   // 判断是否为开关样式：(displayType == boolean || tag) && switchEditable
   bool isSwitch =
-      (col.displayType == QStringLiteral("boolean") || col.displayType == QStringLiteral("tag")) &&
+      (col.displayType == JsonVueStyle::kBoolean || col.displayType == JsonVueStyle::kTag) &&
       col.switchEditable;
   if (isSwitch) {
     parts << QStringLiteral("开关");
     // 编辑样式摘要（开关列也显示编辑样式信息）
     switch (col.editStyle) {
       case EditStyle::Text:
-        if (col.required) parts << QStringLiteral("必填");
+        if (col.required) parts << QString::fromUtf8(CodeConstants::UiText::kRequired);
         if (col.maxlength > 0) parts << QStringLiteral("max:%1").arg(col.maxlength);
         if (!col.placeholder.isEmpty()) parts << col.placeholder;
         break;
       case EditStyle::Int:
-        if (col.required) parts << QStringLiteral("必填");
+        if (col.required) parts << QString::fromUtf8(CodeConstants::UiText::kRequired);
         if (col.minValue != 0 || col.maxValue != 0) {
           parts << QStringLiteral("%1~%2").arg(col.minValue).arg(col.maxValue);
         }
         break;
       case EditStyle::Float:
       case EditStyle::Money:
-        if (col.required) parts << QStringLiteral("必填");
+        if (col.required) parts << QString::fromUtf8(CodeConstants::UiText::kRequired);
         parts << QStringLiteral("%1位小数").arg(col.precision);
         if (col.minValue != 0 || col.maxValue != 0) {
           parts << QStringLiteral("%1~%2").arg(col.minValue).arg(col.maxValue);
         }
         break;
       case EditStyle::Date: {
-        if (col.required) parts << QStringLiteral("必填");
+        if (col.required) parts << QString::fromUtf8(CodeConstants::UiText::kRequired);
         QString fmt = col.dateFormat;
-        if (fmt == QStringLiteral("datetime"))
-          parts << QStringLiteral("年月日时分秒");
-        else if (fmt == QStringLiteral("date"))
+        if (fmt == JsonVueStyle::kDatetime)
+          parts << QString::fromUtf8(CodeConstants::UiText::kDatetimeFull);
+        else if (fmt == JsonVueStyle::kDate)
           parts << QStringLiteral("年月日");
-        else if (fmt == QStringLiteral("month"))
-          parts << QStringLiteral("年月");
-        else if (fmt == QStringLiteral("year"))
+        else if (fmt == JsonVueStyle::kMonth)
+          parts << QString::fromUtf8(CodeConstants::UiText::kYearMonth);
+        else if (fmt == JsonVueStyle::kYear)
           parts << QStringLiteral("年");
-        else if (fmt == QStringLiteral("daterange"))
-          parts << QStringLiteral("日期范围");
+        else if (fmt == JsonVueStyle::kDaterange)
+          parts << QString::fromUtf8(CodeConstants::UiText::kDateRange);
         break;
       }
       case EditStyle::Select:
@@ -586,7 +597,7 @@ QString columnConfigSummary(const ColumnConfig &col) {
         }
         break;
       case EditStyle::TextArea:
-        if (col.required) parts << QStringLiteral("必填");
+        if (col.required) parts << QString::fromUtf8(CodeConstants::UiText::kRequired);
         parts << QStringLiteral("%1行").arg(col.textareaRows);
         if (!col.placeholder.isEmpty()) parts << col.placeholder;
         break;
@@ -597,37 +608,37 @@ QString columnConfigSummary(const ColumnConfig &col) {
     // 编辑样式摘要
     switch (col.editStyle) {
       case EditStyle::Text:
-        if (col.required) parts << QStringLiteral("必填");
+        if (col.required) parts << QString::fromUtf8(CodeConstants::UiText::kRequired);
         if (col.maxlength > 0) parts << QStringLiteral("max:%1").arg(col.maxlength);
         if (!col.placeholder.isEmpty()) parts << col.placeholder;
         break;
       case EditStyle::Int:
-        if (col.required) parts << QStringLiteral("必填");
+        if (col.required) parts << QString::fromUtf8(CodeConstants::UiText::kRequired);
         if (col.minValue != 0 || col.maxValue != 0) {
           parts << QStringLiteral("%1~%2").arg(col.minValue).arg(col.maxValue);
         }
         break;
       case EditStyle::Float:
       case EditStyle::Money:
-        if (col.required) parts << QStringLiteral("必填");
+        if (col.required) parts << QString::fromUtf8(CodeConstants::UiText::kRequired);
         parts << QStringLiteral("%1位小数").arg(col.precision);
         if (col.minValue != 0 || col.maxValue != 0) {
           parts << QStringLiteral("%1~%2").arg(col.minValue).arg(col.maxValue);
         }
         break;
       case EditStyle::Date: {
-        if (col.required) parts << QStringLiteral("必填");
+        if (col.required) parts << QString::fromUtf8(CodeConstants::UiText::kRequired);
         QString fmt = col.dateFormat;
-        if (fmt == QStringLiteral("datetime"))
-          parts << QStringLiteral("年月日时分秒");
-        else if (fmt == QStringLiteral("date"))
+        if (fmt == JsonVueStyle::kDatetime)
+          parts << QString::fromUtf8(CodeConstants::UiText::kDatetimeFull);
+        else if (fmt == JsonVueStyle::kDate)
           parts << QStringLiteral("年月日");
-        else if (fmt == QStringLiteral("month"))
-          parts << QStringLiteral("年月");
-        else if (fmt == QStringLiteral("year"))
+        else if (fmt == JsonVueStyle::kMonth)
+          parts << QString::fromUtf8(CodeConstants::UiText::kYearMonth);
+        else if (fmt == JsonVueStyle::kYear)
           parts << QStringLiteral("年");
-        else if (fmt == QStringLiteral("daterange"))
-          parts << QStringLiteral("日期范围");
+        else if (fmt == JsonVueStyle::kDaterange)
+          parts << QString::fromUtf8(CodeConstants::UiText::kDateRange);
         break;
       }
       case EditStyle::Select:
@@ -640,7 +651,7 @@ QString columnConfigSummary(const ColumnConfig &col) {
         }
         break;
       case EditStyle::TextArea:
-        if (col.required) parts << QStringLiteral("必填");
+        if (col.required) parts << QString::fromUtf8(CodeConstants::UiText::kRequired);
         parts << QStringLiteral("%1行").arg(col.textareaRows);
         if (!col.placeholder.isEmpty()) parts << col.placeholder;
         break;
@@ -662,20 +673,20 @@ QString columnConfigSummary(const ColumnConfig &col) {
 
 /// 将 QueryFieldConfig 的所有配置存储到 QPushButton 的动态属性中
 void storeQueryConfig(QPushButton *btn, const QueryFieldConfig &q) {
-  btn->setProperty("selectUrl", q.selectUrl);
-  btn->setProperty("selectValueField", q.selectValueField);
-  btn->setProperty("selectLabelField", q.selectLabelField);
-  btn->setProperty("placeholder", q.placeholder);
-  btn->setProperty("dateFormat", q.dateFormat);
+  btn->setProperty(JsonVueKey::kSelectUrl, q.selectUrl);
+  btn->setProperty(JsonVueKey::kSelectValueField, q.selectValueField);
+  btn->setProperty(JsonVueKey::kSelectLabelField, q.selectLabelField);
+  btn->setProperty(JsonVueKey::kPlaceholder, q.placeholder);
+  btn->setProperty(JsonVueKey::kDateFormat, q.dateFormat);
 }
 
 /// 从 QPushButton 的动态属性读取 QueryFieldConfig 的所有配置
 void readQueryConfig(QPushButton *btn, QueryFieldConfig &q) {
-  q.selectUrl = btn->property("selectUrl").toString();
-  q.selectValueField = btn->property("selectValueField").toString();
-  q.selectLabelField = btn->property("selectLabelField").toString();
-  q.placeholder = btn->property("placeholder").toString();
-  q.dateFormat = btn->property("dateFormat").toString();
+  q.selectUrl = btn->property(JsonVueKey::kSelectUrl).toString();
+  q.selectValueField = btn->property(JsonVueKey::kSelectValueField).toString();
+  q.selectLabelField = btn->property(JsonVueKey::kSelectLabelField).toString();
+  q.placeholder = btn->property(JsonVueKey::kPlaceholder).toString();
+  q.dateFormat = btn->property(JsonVueKey::kDateFormat).toString();
 }
 
 /// 生成查询字段配置摘要文本
@@ -687,16 +698,16 @@ QString queryConfigSummary(const QueryFieldConfig &q) {
       break;
     case QueryInputStyle::Date: {
       QString fmt = q.dateFormat;
-      if (fmt == QStringLiteral("datetime"))
-        parts << QStringLiteral("年月日时分秒");
-      else if (fmt == QStringLiteral("date"))
+      if (fmt == JsonVueStyle::kDatetime)
+        parts << QString::fromUtf8(CodeConstants::UiText::kDatetimeFull);
+      else if (fmt == JsonVueStyle::kDate)
         parts << QStringLiteral("年月日");
-      else if (fmt == QStringLiteral("month"))
-        parts << QStringLiteral("年月");
-      else if (fmt == QStringLiteral("year"))
+      else if (fmt == JsonVueStyle::kMonth)
+        parts << QString::fromUtf8(CodeConstants::UiText::kYearMonth);
+      else if (fmt == JsonVueStyle::kYear)
         parts << QStringLiteral("年");
-      else if (fmt == QStringLiteral("daterange"))
-        parts << QStringLiteral("日期范围");
+      else if (fmt == JsonVueStyle::kDaterange)
+        parts << QString::fromUtf8(CodeConstants::UiText::kDateRange);
       break;
     }
     case QueryInputStyle::Select:
@@ -812,15 +823,16 @@ void JsonVueEditor::loadConfig(const JsonVueConfig &config) {
     connectCellWidgetSignals(dataCombo);
 
     auto *inputStyle = newTableCombo();
-    inputStyle->addItems(
-        {QStringLiteral("text"), QStringLiteral("date"), QStringLiteral("select")});
+    inputStyle->addItems({QString::fromLatin1(JsonVueStyle::kText),
+                          QString::fromLatin1(JsonVueStyle::kDate),
+                          QString::fromLatin1(JsonVueStyle::kSelect)});
     inputStyle->setCurrentText(queryInputStyleToString(q.inputStyle));
     m_queryTable->setCellWidget(row, QColInputStyle, inputStyle);
     connectCellWidgetSignals(inputStyle);
 
     auto *relCombo = newTableCombo();
     relCombo->addItem(QStringLiteral("普通"), QStringLiteral("="));
-    relCombo->addItem(QStringLiteral("范围"), QStringLiteral("range"));
+    relCombo->addItem(QStringLiteral("范围"), QString::fromLatin1(JsonVueStyle::kRange));
     int relIdx = relCombo->findData(queryRelationToString(q.relation));
     if (relIdx >= 0) relCombo->setCurrentIndex(relIdx);
     m_queryTable->setCellWidget(row, QColRelation, relCombo);
@@ -926,12 +938,12 @@ JsonVueConfig JsonVueEditor::collectConfig() const {
 //  HTTP 生成
 // ════════════════════════════════════════════════════════════
 
-QString JsonVueEditor::findNearestHtmlUrlAc(const QString &jsonvueFilePath) {
+QString JsonVueEditor::findNearestApiAuthDataAc(const QString &jsonvueFilePath) {
   if (jsonvueFilePath.isEmpty()) return {};
-  // 从 .jsonvue 文件所在目录开始，逐级向上查找 html_url.ac
+  // 从 .jsonvue 文件所在目录开始，逐级向上查找 api_auth_data.ac
   QDir dir = QFileInfo(jsonvueFilePath).absoluteDir();
   while (true) {
-    QFileInfo candidate(dir.absoluteFilePath(QStringLiteral("html_url.ac")));
+    QFileInfo candidate(dir.absoluteFilePath(kApiAuthDataAcFile));
     if (candidate.isFile()) {
       return candidate.absoluteFilePath();
     }
@@ -972,7 +984,7 @@ void JsonVueEditor::loadHttpConfigFromAcFile(const QString &acFilePath) {
 }
 
 void JsonVueEditor::onGenerate() {
-  // 每次点击"生成"时重新读取 html_url.ac 的 HTTP 配置（baseUrl/authHeader/postData），
+  // 每次点击"生成"时重新读取 api_auth_data.ac 的 HTTP 配置（baseUrl/authHeader/postData），
   // 保证 ac 文件被修改后无需重启程序即可生效
   if (!m_acConfigFilePath.isEmpty()) {
     loadHttpConfigFromAcFile(m_acConfigFilePath);
@@ -1010,11 +1022,11 @@ void JsonVueEditor::onGenerate() {
 
   HttpClient::Method method = HttpClient::Get;
   QString methodStr = m_methodCombo->currentText();
-  if (methodStr == QStringLiteral("POST"))
+  if (methodStr == JsonVueHttp::kPost)
     method = HttpClient::Post;
-  else if (methodStr == QStringLiteral("PUT"))
+  else if (methodStr == JsonVueHttp::kPut)
     method = HttpClient::Put;
-  else if (methodStr == QStringLiteral("DELETE"))
+  else if (methodStr == JsonVueHttp::kDelete)
     method = HttpClient::Delete;
 
   // 解析 POST 数据
@@ -1066,7 +1078,8 @@ void JsonVueEditor::onHttpError(const QString &url, const QString &errorMsg) {
       QStringLiteral("请求地址：%1\n请求方法：%2\n错误详情：%3\n\n").arg(url, method, errorMsg);
   msg += QStringLiteral("排查建议：\n");
   msg += QStringLiteral("1. 确认后端服务已启动，且端口未被占用；\n");
-  msg += QStringLiteral("2. 检查 baseUrl 配置是否正确（可在 html_url.ac 中修改）；\n");
+  msg +=
+      QStringLiteral("2. 检查 baseUrl 配置是否正确（可在 %1 中修改）；\n").arg(kApiAuthDataAcFile);
   msg += QStringLiteral("3. 检查 Authorization 令牌是否过期或无效；\n");
   msg += QStringLiteral("4. 可在浏览器中直接访问上述地址，验证接口是否可用。");
   AuiMessageBox::show(this, QStringLiteral("请求失败"), msg);
@@ -1342,13 +1355,15 @@ void JsonVueEditor::onAddQueryField() {
   connectCellWidgetSignals(dataCombo);
 
   auto *inputStyle = newTableCombo();
-  inputStyle->addItems({QStringLiteral("text"), QStringLiteral("date"), QStringLiteral("select")});
+  inputStyle->addItems({QString::fromLatin1(JsonVueStyle::kText),
+                        QString::fromLatin1(JsonVueStyle::kDate),
+                        QString::fromLatin1(JsonVueStyle::kSelect)});
   m_queryTable->setCellWidget(row, QColInputStyle, inputStyle);
   connectCellWidgetSignals(inputStyle);
 
   auto *relCombo = newTableCombo();
   relCombo->addItem(QStringLiteral("普通"), QStringLiteral("="));
-  relCombo->addItem(QStringLiteral("范围"), QStringLiteral("range"));
+  relCombo->addItem(QStringLiteral("范围"), QString::fromLatin1(JsonVueStyle::kRange));
   m_queryTable->setCellWidget(row, QColRelation, relCombo);
   connectCellWidgetSignals(relCombo);
 

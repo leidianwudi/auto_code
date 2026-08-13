@@ -287,13 +287,14 @@ bool evalCondition(QString expr, const QJsonObject &context, const TplEngine &en
   if (auto cb = engine.logCallback()) {
     QString valStr;
     if (condVal.isBool())
-      valStr = condVal.toBool() ? QStringLiteral("true") : QStringLiteral("false");
+      valStr = condVal.toBool() ? QString::fromLatin1(AcKeyword::kTrue)
+                                : QString::fromLatin1(AcKeyword::kFalse);
     else if (condVal.isString())
       valStr = QStringLiteral("\"") + condVal.toString() + QStringLiteral("\"");
     else if (condVal.isDouble())
       valStr = QString::number(condVal.toDouble());
     else if (condVal.isNull())
-      valStr = QStringLiteral("null");
+      valStr = QString::fromLatin1(AcKeyword::kNull);
     else
       valStr = QStringLiteral("other");
     cb(QStringLiteral("DEBUG: condition='%1' value=%2 truthy=%3 negate=%4 result=%5")

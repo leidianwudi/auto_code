@@ -63,8 +63,8 @@ public:
   /// 从 AC 脚本文件加载 HTTP 配置（透传给可视化编辑器）
   void loadHttpConfigFromAcFile(const QString &acFilePath);
 
-  /// 从 jsonvue 文件向上查找最近的 html_url.ac（透传给可视化编辑器）
-  static QString findNearestHtmlUrlAc(const QString &jsonvueFilePath);
+  /// 从 jsonvue 文件向上查找最近的 api_auth_data.ac（透传给可视化编辑器）
+  static QString findNearestApiAuthDataAc(const QString &jsonvueFilePath);
 
 signals:
   /// 模式切换时发射

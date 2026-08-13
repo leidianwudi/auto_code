@@ -46,7 +46,44 @@ constexpr int kAnimationDurationMs = 200;     ///< 动画过渡时长（毫秒�
 
 namespace Paths {
 constexpr const char *kProjectSourceDir = PROJECT_SOURCE_DIR;
+constexpr const char *kAppDataDirName = "/.auto_code";              ///< 无 AppData 时的回退数据目录
+constexpr const char *kFileDirName = "/file";                       ///< 项目源码下的 file 资源目录
+constexpr const char *kTreeConfigFile = "/tree.config";             ///< 目录树勾选状态配置文件
+constexpr const char *kBreakpointsStoreFile = "/breakpoints.json";  ///< 断点持久化文件
+constexpr const char *kBreakpointsJsonKey = "breakpoints";          ///< 断点存储 JSON 键名
 }  // namespace Paths
+
+// ──────────────────────────────────────────────────────────────
+//  MIME 类型（拖拽等内部协议）
+// ──────────────────────────────────────────────────────────────
+
+namespace Mime {
+constexpr const char *kAutoCodeTab = "application/x-auto-code-tab";  ///< 编辑器标签拖拽协议
+}  // namespace Mime
+
+// ──────────────────────────────────────────────────────────────
+//  通用 UI 文案（跨文件重复、语义一致）
+// ──────────────────────────────────────────────────────────────
+
+namespace UiText {
+constexpr const char *kConfirm = "确定";                    ///< 确认按钮
+constexpr const char *kCancel = "取消";                     ///< 取消按钮
+constexpr const char *kDelete = "删除";                     ///< 删除按钮
+constexpr const char *kConfig = "配置";                     ///< 配置列/按钮
+constexpr const char *kRequired = "必填";                   ///< 必填标记
+constexpr const char *kConfirmDelete = "确认删除";          ///< 删除确认对话框标题
+constexpr const char *kNameCannotBeEmpty = "名称不能为空";  ///< 名称校验提示
+constexpr const char *kFile = "文件";                       ///< 文件列标题
+constexpr const char *kNew = "新建";                        ///< 新建按钮
+constexpr const char *kColor = "颜色";                      ///< 颜色标签
+constexpr const char *kLight = "浅色";                      ///< 浅色主题名
+constexpr const char *kDatetimeFull = "年月日时分秒";       ///< 日期格式：年月日时分秒
+constexpr const char *kYearMonth = "年月";                  ///< 日期格式：年月
+constexpr const char *kDateRange = "日期范围";              ///< 查询类型：日期范围
+constexpr const char *kEnableBreakpoint = "启用断点";       ///< 断点右键菜单
+constexpr const char *kDisableBreakpoint = "禁用断点";      ///< 断点右键菜单
+constexpr const char *kRemoveBreakpoint = "移除断点";       ///< 断点右键菜单
+}  // namespace UiText
 
 // ──────────────────────────────────────────────────────────────
 //  快捷键定义

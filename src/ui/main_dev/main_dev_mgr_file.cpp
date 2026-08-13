@@ -15,6 +15,7 @@
 #include "main_dev_ui.h"
 #include "src/engine/ac_language.h"
 #include "src/ui/json_vue/json_vue_widget.h"
+#include "src/util/common/code_constants.h"
 #include "src/util/ui/code/code_editor.h"
 #include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/highlighter/light_ac.h"
@@ -95,9 +96,9 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
     editor = jvw->codeEditor();
     editor->setPlainText(content);
     tabWidget = jvw;
-    // 优先从 .jsonvue 文件向上查找最近的 html_url.ac 加载 HTTP 配置；
+    // 优先从 .jsonvue 文件向上查找最近的 api_auth_data.ac 加载 HTTP 配置；
     // 找不到时回落到启动项 AC 脚本（向后兼容）
-    QString acPath = JsonVueWidget::findNearestHtmlUrlAc(filePath);
+    QString acPath = JsonVueWidget::findNearestApiAuthDataAc(filePath);
     if (acPath.isEmpty()) {
       acPath = m_ui->startupCombo()->currentData().toString();
     }
@@ -371,7 +372,7 @@ void MainDevMgr::onDeleteFile(const QString &path) {
 
   // 确认对话框
   if (!AuiMessageBox::confirm(
-          m_ui, QStringLiteral("确认删除"),
+          m_ui, QString::fromUtf8(CodeConstants::UiText::kConfirmDelete),
           isDir ? QStringLiteral("确定要删除文件夹 \"%1\" 及其所有内容吗？").arg(name)
                 : QStringLiteral("确定要删除文件 \"%1\" 吗？").arg(name))) {
     return;

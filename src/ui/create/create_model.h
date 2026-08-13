@@ -24,7 +24,6 @@ public:
     Ac,       ///< .ac 文件
     Tpl,      ///< .tpl 文件
     Json,     ///< .json 文件
-    Tpljson,  ///< .tpljson 文件
     Jsonvue,  ///< .jsonvue 文件（Vue3 后台管理界面配置）
     FileTypeCount
   };

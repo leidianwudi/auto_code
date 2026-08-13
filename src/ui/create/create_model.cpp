@@ -8,6 +8,8 @@
 #include <QDir>
 #include <QFileInfo>
 
+#include "src/util/common/code_constants.h"
+
 // ════════════════════════════════════════════════════════════
 //  静态方法：文件类型标签 / 后缀
 // ════════════════════════════════════════════════════════════
@@ -22,8 +24,6 @@ QString CreateModel::fileTypeLabel(FileType type) {
       return QStringLiteral(".tpl 文件");
     case Json:
       return QStringLiteral(".json 文件");
-    case Tpljson:
-      return QStringLiteral(".tpljson 文件");
     case Jsonvue:
       return QStringLiteral(".jsonvue 文件");
     default:
@@ -39,8 +39,6 @@ QString CreateModel::suffix(FileType type) {
       return QString::fromLatin1(AcFileSuffix::kTpl);
     case Json:
       return QString::fromLatin1(AcFileSuffix::kJson);
-    case Tpljson:
-      return QString::fromLatin1(AcFileSuffix::kTpljson);
     case Jsonvue:
       return QString::fromLatin1(AcFileSuffix::kJsonvue);
     default:
@@ -73,7 +71,7 @@ QString CreateModel::fullPath() const {
 bool CreateModel::validate(QString &error) const {
   // 名称不能为空
   if (m_fileName.isEmpty()) {
-    error = QStringLiteral("名称不能为空");
+    error = QString::fromUtf8(CodeConstants::UiText::kNameCannotBeEmpty);
     return false;
   }
 

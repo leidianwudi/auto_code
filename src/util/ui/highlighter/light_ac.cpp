@@ -112,10 +112,12 @@ void LightAc::buildRules() {
   // String / Number / Int / Float / Double / Bool / Boolean / Any / Void / Array / Object
   // 严格区分大小写；(?<![\.\w]) 排除属性访问（如 obj.String）
   static const QStringList kTypeNames = {
-      QStringLiteral("Number"),  QStringLiteral("Int"),    QStringLiteral("Float"),
-      QStringLiteral("Double"),  QStringLiteral("String"), QStringLiteral("Bool"),
-      QStringLiteral("Boolean"), QStringLiteral("Any"),    QStringLiteral("Void"),
-      QStringLiteral("Array"),   QStringLiteral("Object")};
+      QString::fromLatin1(AcTypeName::kNumber),  QString::fromLatin1(AcTypeName::kInt),
+      QString::fromLatin1(AcTypeName::kFloat),   QString::fromLatin1(AcTypeName::kDouble),
+      QString::fromLatin1(AcTypeName::kString),  QString::fromLatin1(AcTypeName::kBool),
+      QString::fromLatin1(AcTypeName::kBoolean), QString::fromLatin1(AcTypeName::kAny),
+      QString::fromLatin1(AcTypeName::kVoid),    QString::fromLatin1(AcTypeName::kArray),
+      QString::fromLatin1(AcTypeName::kObject)};
   QTextCharFormat typeFormat;
   typeFormat.setForeground(type());
   m_rules.append({QRegularExpression(QStringLiteral("(?<![\\.\\w])(?:") +

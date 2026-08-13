@@ -284,9 +284,9 @@ void MainDevMgr::onSplitRight() {
       auto *editor = jvw->codeEditor();
       editor->setPlainText(current->toPlainText());
 
-      // 优先从 .jsonvue 文件向上查找最近的 html_url.ac 加载 HTTP 配置；
+      // 优先从 .jsonvue 文件向上查找最近的 api_auth_data.ac 加载 HTTP 配置；
       // 找不到时回落到启动项 AC 脚本
-      QString acPath = JsonVueWidget::findNearestHtmlUrlAc(filePath);
+      QString acPath = JsonVueWidget::findNearestApiAuthDataAc(filePath);
       if (acPath.isEmpty()) {
         acPath = m_ui->startupCombo()->currentData().toString();
       }

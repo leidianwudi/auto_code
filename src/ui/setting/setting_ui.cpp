@@ -21,6 +21,7 @@
 #include <QVBoxLayout>
 
 #include "setting_model.h"
+#include "src/util/common/code_constants.h"
 #include "src/util/ui/aui_window.h"
 #include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_style.h"
@@ -70,7 +71,7 @@ void SettingUi::setupUI() {
   // ── 左侧分区导航 ──
   m_sections = new QListWidget(this);
   m_sections->setObjectName(QStringLiteral("settingSectionList"));
-  m_sections->addItem(QStringLiteral("颜色"));
+  m_sections->addItem(QString::fromUtf8(CodeConstants::UiText::kColor));
   m_sections->addItem(QStringLiteral("快捷键"));
   m_sections->setFixedWidth(140);
   m_sections->setCurrentRow(0);
@@ -138,7 +139,7 @@ void SettingUi::buildColorPage() {
   desc->setStyleSheet(QStringLiteral("color: %1;").arg(AuiStyle::inactiveTabColor().name()));
   layout->addWidget(desc);
 
-  m_lightRadio = new QRadioButton(QStringLiteral("浅色"), page);
+  m_lightRadio = new QRadioButton(QString::fromUtf8(CodeConstants::UiText::kLight), page);
   m_darkRadio = new QRadioButton(QStringLiteral("深色"), page);
   m_customRadio = new QRadioButton(QStringLiteral("自定义"), page);
 
@@ -167,7 +168,8 @@ void SettingUi::buildColorPage() {
   m_colorTable = new QTableWidget(page);
   m_colorTable->setColumnCount(4);
   m_colorTable->setHorizontalHeaderLabels({QStringLiteral("分类"), QStringLiteral("名称"),
-                                           QStringLiteral("颜色"), QStringLiteral("操作")});
+                                           QString::fromUtf8(CodeConstants::UiText::kColor),
+                                           QStringLiteral("操作")});
   m_colorTable->setFont(AuiStyle::createEditorFont());
   m_colorTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
   m_colorTable->setSelectionBehavior(QAbstractItemView::SelectRows);

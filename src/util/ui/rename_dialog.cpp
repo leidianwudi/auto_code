@@ -11,6 +11,7 @@
 #include "aui_window.h"
 #include "component/aui_button.h"
 #include "component/aui_style.h"
+#include "src/util/common/code_constants.h"
 
 // ════════════════════════════════════════════════════════════
 //  构造
@@ -87,7 +88,7 @@ void RenameDialog::setupUI() {
 void RenameDialog::onAccept() {
   QString name = m_nameEdit->text().trimmed();
   if (name.isEmpty()) {
-    m_errorLabel->setText(QStringLiteral("名称不能为空"));
+    m_errorLabel->setText(QString::fromUtf8(CodeConstants::UiText::kNameCannotBeEmpty));
     m_errorLabel->show();
     m_nameEdit->setFocus();
     return;

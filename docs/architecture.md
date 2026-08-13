@@ -401,7 +401,6 @@ CodeEditor（QPlainTextEdit 扩展）
 | `.tpl` | 模板 | 字符串模板文件 |
 | `.json` | 数据 | JSON 数据文件 |
 | `.jsonvue` | 配置 | JSON Vue 可视化配置 |
-| `.tpljson` | 模板 | JSON 模板文件 |
 
 ## 10. 关键设计决策
 

@@ -10,6 +10,7 @@
 #include <QVBoxLayout>
 
 #include "create_model.h"
+#include "src/util/common/code_constants.h"
 #include "src/util/ui/aui_window.h"
 #include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_combo_box.h"
@@ -26,7 +27,7 @@ CreateUi::CreateUi(QWidget *parent) : QDialog(parent) { setupUI(); }
 // ════════════════════════════════════════════════════════════
 
 void CreateUi::setupUI() {
-  setWindowTitle(QStringLiteral("新建"));
+  setWindowTitle(QString::fromUtf8(CodeConstants::UiText::kNew));
   setFixedSize(400, 180);
 
   // ── 无边框对话框（保留 Qt::Dialog 标志，复用 AuiWindow 统一样式） ──
@@ -36,7 +37,7 @@ void CreateUi::setupUI() {
   //  自定义标题栏（AC 图标 + 标题文字 + 关闭按钮）
   // ════════════════════════════════════════════════════════════
   TitleBarOptions opts;
-  opts.title = QStringLiteral("新建");
+  opts.title = QString::fromUtf8(CodeConstants::UiText::kNew);
   opts.showMinButton = false;
   opts.showMaxButton = false;
   opts.closeRejectsDialog = true;
@@ -59,7 +60,6 @@ void CreateUi::setupUI() {
   m_typeCombo->addItem(CreateModel::fileTypeLabel(CreateModel::Ac));
   m_typeCombo->addItem(CreateModel::fileTypeLabel(CreateModel::Tpl));
   m_typeCombo->addItem(CreateModel::fileTypeLabel(CreateModel::Json));
-  m_typeCombo->addItem(CreateModel::fileTypeLabel(CreateModel::Tpljson));
   m_typeCombo->addItem(CreateModel::fileTypeLabel(CreateModel::Jsonvue));
   typeLayout->addWidget(typeLabel);
   typeLayout->addWidget(m_typeCombo, 1);
@@ -124,7 +124,7 @@ void CreateUi::onFileTypeChanged(int index) {
 void CreateUi::onAccept() {
   QString name = m_nameEdit->text().trimmed();
   if (name.isEmpty()) {
-    setError(QStringLiteral("名称不能为空"));
+    setError(QString::fromUtf8(CodeConstants::UiText::kNameCannotBeEmpty));
     return;
   }
   accept();

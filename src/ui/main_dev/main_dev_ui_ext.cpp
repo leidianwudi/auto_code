@@ -17,6 +17,7 @@
 #include <QSplitter>
 #include <QStyleOptionTab>
 
+#include "src/util/common/code_constants.h"
 #include "src/util/common/util_file.h"
 #include "src/util/ui/component/aui_style.h"
 
@@ -150,7 +151,7 @@ void DraggableTabBar::mouseMoveEvent(QMouseEvent *event) {
   s_sourceIndex = m_pressedIndex;
 
   auto *mime = new QMimeData;
-  mime->setData(QStringLiteral("application/x-auto-code-tab"),
+  mime->setData(QString::fromUtf8(CodeConstants::Mime::kAutoCodeTab),
                 QByteArray::number(reinterpret_cast<quintptr>(this)));
 
   auto *drag = new QDrag(this);
@@ -170,17 +171,17 @@ void DraggableTabBar::mouseMoveEvent(QMouseEvent *event) {
 }
 
 void DraggableTabBar::dragEnterEvent(QDragEnterEvent *event) {
-  if (event->mimeData()->hasFormat(QStringLiteral("application/x-auto-code-tab")))
+  if (event->mimeData()->hasFormat(QString::fromUtf8(CodeConstants::Mime::kAutoCodeTab)))
     event->acceptProposedAction();
 }
 
 void DraggableTabBar::dragMoveEvent(QDragMoveEvent *event) {
-  if (event->mimeData()->hasFormat(QStringLiteral("application/x-auto-code-tab")))
+  if (event->mimeData()->hasFormat(QString::fromUtf8(CodeConstants::Mime::kAutoCodeTab)))
     event->acceptProposedAction();
 }
 
 void DraggableTabBar::dropEvent(QDropEvent *event) {
-  if (!event->mimeData()->hasFormat(QStringLiteral("application/x-auto-code-tab")) ||
+  if (!event->mimeData()->hasFormat(QString::fromUtf8(CodeConstants::Mime::kAutoCodeTab)) ||
       !s_sourceBar) {
     QTabBar::dropEvent(event);
     return;
@@ -257,21 +258,21 @@ DimmableTabWidget::DimmableTabWidget(QWidget *parent) : QTabWidget(parent) {
 // 内容区拖放
 
 void DimmableTabWidget::dragEnterEvent(QDragEnterEvent *event) {
-  if (event->mimeData()->hasFormat(QStringLiteral("application/x-auto-code-tab")))
+  if (event->mimeData()->hasFormat(QString::fromUtf8(CodeConstants::Mime::kAutoCodeTab)))
     event->acceptProposedAction();
   else
     QTabWidget::dragEnterEvent(event);
 }
 
 void DimmableTabWidget::dragMoveEvent(QDragMoveEvent *event) {
-  if (event->mimeData()->hasFormat(QStringLiteral("application/x-auto-code-tab")))
+  if (event->mimeData()->hasFormat(QString::fromUtf8(CodeConstants::Mime::kAutoCodeTab)))
     event->acceptProposedAction();
   else
     QTabWidget::dragMoveEvent(event);
 }
 
 void DimmableTabWidget::dropEvent(QDropEvent *event) {
-  if (!event->mimeData()->hasFormat(QStringLiteral("application/x-auto-code-tab"))) {
+  if (!event->mimeData()->hasFormat(QString::fromUtf8(CodeConstants::Mime::kAutoCodeTab))) {
     QTabWidget::dropEvent(event);
     return;
   }

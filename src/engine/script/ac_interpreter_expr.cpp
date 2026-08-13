@@ -466,18 +466,18 @@ int AcInterpreter::compareValues(const QJsonValue &l, const QJsonValue &r) {
 }
 
 QString AcInterpreter::inferTypeName(const QJsonValue &val) {
-  if (val.isBool()) return QStringLiteral("Boolean");
-  if (val.isDouble()) return QStringLiteral("Number");
-  if (val.isString()) return QStringLiteral("String");
-  if (val.isArray()) return QStringLiteral("Array");
+  if (val.isBool()) return QString::fromLatin1(AcTypeName::kBoolean);
+  if (val.isDouble()) return QString::fromLatin1(AcTypeName::kNumber);
+  if (val.isString()) return QString::fromLatin1(AcTypeName::kString);
+  if (val.isArray()) return QString::fromLatin1(AcTypeName::kArray);
   if (val.isObject()) {
-    if (val.toObject().contains(QStringLiteral("__class__"))) {
-      return val.toObject().value(QStringLiteral("__class__")).toString();
+    if (val.toObject().contains(QString::fromLatin1(AcRuntime::kClassKey))) {
+      return val.toObject().value(QString::fromLatin1(AcRuntime::kClassKey)).toString();
     }
-    return QStringLiteral("Object");
+    return QString::fromLatin1(AcTypeName::kObject);
   }
-  if (val.isNull()) return QStringLiteral("Null");
-  return QStringLiteral("Any");
+  if (val.isNull()) return QString::fromLatin1(AcTypeName::kNull);
+  return QString::fromLatin1(AcTypeName::kAny);
 }
 
 void AcInterpreter::recordInferredType(const QString &name, const QJsonValue &val) {
@@ -684,12 +684,12 @@ QJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
 
   if (!objVal.isObject()) {
     QString name = isChained ? QStringLiteral("chain expression") : expr.methodCall.objName;
-    QString type = objVal.isDouble()   ? QStringLiteral("Number")
-                   : objVal.isBool()   ? QStringLiteral("Bool")
-                   : objVal.isNull()   ? QStringLiteral("Null")
-                   : objVal.isArray()  ? QStringLiteral("Array")
-                   : objVal.isString() ? QStringLiteral("String")
-                                       : QStringLiteral("Unknown");
+    QString type = objVal.isDouble()   ? QString::fromLatin1(AcTypeName::kNumber)
+                   : objVal.isBool()   ? QString::fromLatin1(AcTypeName::kBool)
+                   : objVal.isNull()   ? QString::fromLatin1(AcTypeName::kNull)
+                   : objVal.isArray()  ? QString::fromLatin1(AcTypeName::kArray)
+                   : objVal.isString() ? QString::fromLatin1(AcTypeName::kString)
+                                       : QString::fromLatin1(AcTypeName::kUnknown);
     setError(QStringLiteral("cannot call method on non-object '%1' (type=%2)").arg(name, type),
              expr.line);
     return QJsonValue();
