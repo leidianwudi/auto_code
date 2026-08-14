@@ -155,6 +155,7 @@ private:
   QString m_authHeader;        ///< Authorization 请求头值（如 "Bearer xxx"）
   QString m_postData;          ///< POST 请求的默认数据（JSON 字符串）
   QString m_acConfigFilePath;  ///< 最近一次加载 HTTP 配置的 AC 文件路径（用于点击"生成"时重读）
+  QString m_pendingUrl;        ///< 当前等待响应的请求 URL（用于区分多编辑器共享 HttpClient）
   bool m_loading = false;      ///< 加载配置时抑制 configChanged 信号
 
   /// 已复制的列配置（用于"粘贴配置"到其它行）

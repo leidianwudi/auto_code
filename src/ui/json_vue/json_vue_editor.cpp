@@ -1047,11 +1047,13 @@ void JsonVueEditor::onGenerate() {
     headers[QStringLiteral("Authorization")] = m_authHeader;
   }
 
+  m_pendingUrl = fullUrl;
   HttpClient::instance().request(method, fullUrl, bodyObj, headers, this);
 }
 
 void JsonVueEditor::onHttpFinished(const QString &url, const QJsonDocument &doc) {
-  Q_UNUSED(url);
+  if (url != m_pendingUrl) return;  // 不是本编辑器发起的请求，忽略
+  m_pendingUrl.clear();
   m_generateBtn->setEnabled(true);
   m_generateBtn->setText(QStringLiteral("生成"));
 
@@ -1069,6 +1071,8 @@ void JsonVueEditor::onHttpFinished(const QString &url, const QJsonDocument &doc)
 }
 
 void JsonVueEditor::onHttpError(const QString &url, const QString &errorMsg) {
+  if (url != m_pendingUrl) return;  // 不是本编辑器发起的请求，忽略
+  m_pendingUrl.clear();
   m_generateBtn->setEnabled(true);
   m_generateBtn->setText(QStringLiteral("生成"));
 
