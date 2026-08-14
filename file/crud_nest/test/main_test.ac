@@ -14,6 +14,10 @@
 // 10. 异常处理
 // 11. 闭包与高阶函数
 // 12. 类型系统（可选参数、默认值、类型推断）
+// 13. call() 系统函数调用（str 字符串类）
+// 14. 类型系统：Int / Float / Double / Boolean
+// 15. 内置函数：路径与工具（basename/fileName/formatPath/merge/scriptDir）
+// 16. File 文件类实例化（new File()）
 
 // ═══════════════════════════════════════════════════════════════
 // 第一部分：接口定义（Interface）
@@ -886,6 +890,106 @@ main {
   let fibResult = fibonacci(30);  // 注意：不要超过 35，否则会很慢
 
   printLog(`斐波那契数列第 30 项: ${fibResult}`);
+
+  // ── 16. call() 系统函数调用测试 ──
+  printLog("\n--- 16. call() 系统函数调用测试 ---");
+
+  // str 字符串类：call("str", "方法名", 参数...)
+  let lower: String = call("str", "toLowerCase", "ABC");
+  printLog(`call toLowerCase("ABC"): ${lower}`);
+  assert(lower == "abc", "toLowerCase 测试失败");
+
+  let upper: String = call("str", "toUpperCase", "abc");
+  printLog(`call toUpperCase("abc"): ${upper}`);
+  assert(upper == "ABC", "toUpperCase 测试失败");
+
+  let trimmed: String = call("str", "trim", "  hi  ");
+  printLog(`call trim("  hi  "): "${trimmed}"`);
+  assert(trimmed == "hi", "trim 测试失败");
+
+  let capResult: String = call("str", "capitalize", "hello");
+  printLog(`call capitalize("hello"): ${capResult}`);
+  assert(capResult == "Hello", "capitalize 测试失败");
+
+  // substring(字符串, 起始, 长度)
+  let subStr: String = call("str", "substring", "hello", 1, 3);
+  printLog(`call substring("hello", 1, 3): ${subStr}`);
+  assert(subStr == "ell", "substring 测试失败");
+
+  // replace(字符串, 查找, 替换)
+  let replaced: String = call("str", "replace", "abc", "b", "x");
+  printLog(`call replace("abc", "b", "x"): ${replaced}`);
+  assert(replaced == "axc", "replace 测试失败");
+
+  // ── 17. 类型系统测试：Int / Float / Double / Boolean ──
+  printLog("\n--- 17. 类型系统测试 ---");
+
+  let intVal: Int = 10;
+  let floatVal: Float = 1.5;
+  let doubleVal: Double = 2.718;
+  let boolVal: Boolean = false;
+
+  printLog(`Int=${intVal}, Float=${floatVal}, Double=${doubleVal}, Boolean=${boolVal}`);
+  assert(intVal == 10, "Int 类型测试失败");
+  assert(doubleVal > 2.7 && doubleVal < 2.8, "Double 类型测试失败");
+  assert(boolVal == false, "Boolean 类型测试失败");
+
+  // 数组类型
+  let intArr2: Int[] = [1, 2, 3];
+  let strArr2: String[] = ["a", "b", "c"];
+  printLog(`Int 数组: [${intArr2.join(", ")}], String 数组长度: ${strArr2.length}`);
+  assert(intArr2.length == 3, "Int 数组测试失败");
+
+  // 对象类型
+  let obj2: Object = { key: "value", num: 42 };
+  printLog(`对象访问: ${obj2["key"]} / ${obj2["num"]}`);
+  assert(obj2["num"] == 42, "Object 类型测试失败");
+
+  // Any 类型：可存放任意值
+  let anyVal2: Any = 1;
+  printLog(`Any 存放数字: ${anyVal2}`);
+  anyVal2 = "转为字符串";
+  printLog(`Any 存放字符串: ${anyVal2}`);
+
+  // ── 18. 内置函数：路径与工具测试 ──
+  printLog("\n--- 18. 内置函数（路径与工具）测试 ---");
+
+  // scriptDir 当前脚本目录
+  let scriptDirPath: String = scriptDir();
+  printLog(`scriptDir: ${scriptDirPath}`);
+
+  // basename / fileName
+  let baseName: String = basename("D:/out/user.ts");
+  let fullName: String = fileName("D:/out/user.ts");
+  printLog(`basename("D:/out/user.ts"): ${baseName}`);
+  printLog(`fileName("D:/out/user.ts"): ${fullName}`);
+  assert(baseName == "user", "basename 测试失败");
+  assert(fullName == "user.ts", "fileName 测试失败");
+
+  // formatPath 按模板格式化路径
+  let outPath: String = formatPath("{base}/{name}.ts", { base: "D:/out", name: "user" });
+  printLog(`formatPath: ${outPath}`);
+  assert(outPath == "D:/out/user.ts", "formatPath 测试失败");
+
+  // merge 合并两个对象（后者覆盖同名键）
+  let m1: Object = { x: 1, y: 2 };
+  let m2: Object = { y: 3, z: 4 };
+  let merged: Object = merge(m1, m2);
+  printLog(`merge: x=${merged["x"]}, y=${merged["y"]}, z=${merged["z"]}`);
+  assert(merged["x"] == 1 && merged["y"] == 3 && merged["z"] == 4, "merge 测试失败");
+
+  // printError 打印错误（日志面板红色显示）
+  printError("这是一条测试错误信息（printError 应红色显示）");
+
+  // ── 19. File 文件类实例化测试 ──
+  printLog("\n--- 19. File 文件类实例化测试 ---");
+
+  let file: File = new File();
+  file.write("test_output.txt", "Hello, File Class!");
+  printLog("File.write 已执行");
+  let fileContent: String = file.read("test_output.txt");
+  printLog(`File.read 返回: ${fileContent}`);
+  assert(fileContent == "Hello, File Class!", "File 类读写测试失败");
 
   // ── 测试总结 ──
   printLog("\n========================================");

@@ -188,8 +188,8 @@ private:
 
 class TitleBarDragFilter : public QObject {
 public:
-  explicit TitleBarDragFilter(QWidget *window, QObject *parent = nullptr)
-      : QObject(parent), m_window(window) {}
+  TitleBarDragFilter(QWidget *window, bool allowMaximize, QObject *parent = nullptr)
+      : QObject(parent), m_window(window), m_allowMaximize(allowMaximize) {}
 
 protected:
   bool eventFilter(QObject *watched, QEvent *event) override {
@@ -205,7 +205,8 @@ protected:
     }
     if (event->type() == QEvent::MouseButtonDblClick) {
       auto *me = static_cast<QMouseEvent *>(event);
-      if (me->button() == Qt::LeftButton) {
+      // 仅当窗口显示最大化按钮（允许最大化）时，双击标题栏才切换最大化
+      if (me->button() == Qt::LeftButton && m_allowMaximize) {
         AuiWindow::toggleMaximize(m_window);
         return true;
       }
@@ -215,6 +216,7 @@ protected:
 
 private:
   QWidget *m_window;
+  bool m_allowMaximize;
 };
 }  // namespace
 
@@ -227,6 +229,8 @@ TitleBarResult AuiWindow::createTitleBar(QWidget *window, const TitleBarOptions 
 
   auto *titleBar = new QWidget;
   AuiStyle::applyTitleBarStyle(titleBar);
+  // 记录是否允许最大化（由是否显示最大化按钮决定），供 enableTitleBarDrag 双击标题栏时判断
+  titleBar->setProperty("auiAllowMaximize", options.showMaxButton);
   auto *titleLayout = new QHBoxLayout(titleBar);
   titleLayout->setContentsMargins(AuiStyle::titleBarMargins());
   titleLayout->setSpacing(AuiStyle::titleBarSpacing());
@@ -366,7 +370,9 @@ void AuiWindow::applyWindowFrame(QWidget *window, QWidget *titleBar, QWidget *co
 
 void AuiWindow::enableTitleBarDrag(QWidget *window, QWidget *titleBar) {
   if (window && titleBar) {
-    auto *filter = new TitleBarDragFilter(window, titleBar);
+    // 仅当标题栏允许最大化（显示最大化按钮）时，双击标题栏才切换最大化
+    const bool allowMaximize = titleBar->property("auiAllowMaximize").toBool();
+    auto *filter = new TitleBarDragFilter(window, allowMaximize);
     titleBar->installEventFilter(filter);
   }
 }

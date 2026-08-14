@@ -40,6 +40,8 @@
 
 #include "main_dev_ui_ext.h"
 #include "src/ui/demo/demo_mgr.h"
+#include "src/ui/help/about_dialog.h"
+#include "src/ui/help/help_doc_mgr.h"
 #include "src/util/common/code_constants.h"
 #include "src/util/ui/aui_window.h"
 #include "src/util/ui/code/code_editor.h"
@@ -130,6 +132,8 @@ void MainDevUi::setupTitleBar() {
   // ── 帮助菜单 ──
   auto *helpMenu = new QMenu(m_titleBar);
   m_helpExampleAction = helpMenu->addAction(QStringLiteral("例子(&E)..."));
+  m_helpDocAction = helpMenu->addAction(QStringLiteral("帮助文档(&D)..."));
+  m_aboutAction = helpMenu->addAction(QStringLiteral("关于(&A)..."));
 
   auto *helpBtn = new QToolButton;
   helpBtn->setText(QStringLiteral("帮助(&H)"));
@@ -188,6 +192,15 @@ void MainDevUi::setupTitleBar() {
 
   // ── 帮助 → 例子 ──
   connect(m_helpExampleAction, &QAction::triggered, this, []() { DemoMgr::ins().open(); });
+
+  // ── 帮助 → 帮助文档 ──
+  connect(m_helpDocAction, &QAction::triggered, this, []() { HelpDocMgr::ins().open(); });
+
+  // ── 帮助 → 关于 ──
+  connect(m_aboutAction, &QAction::triggered, this, [this]() {
+    AboutDialog dlg(this);
+    dlg.exec();
+  });
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -323,7 +336,8 @@ void MainDevUi::showEvent(QShowEvent *event) {
 /// @brief 窗口布局状态存储路径（AppData 目录下）
 static QString uiLayoutSettingsPath() {
   QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-  if (dir.isEmpty()) dir = QDir::homePath() + QString::fromUtf8(CodeConstants::Paths::kAppDataDirName);
+  if (dir.isEmpty())
+    dir = QDir::homePath() + QString::fromUtf8(CodeConstants::Paths::kAppDataDirName);
   QDir().mkpath(dir);
   return dir + QStringLiteral("/window.ini");
 }

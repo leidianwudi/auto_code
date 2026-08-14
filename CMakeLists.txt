@@ -163,6 +163,14 @@ qt_add_executable(auto_code
     src/ui/demo/demo_mgr.cpp
     src/ui/demo/demo_model.h
     src/ui/demo/demo_model.cpp
+    src/ui/help/help_doc_data.h
+    src/ui/help/help_doc_model.h
+    src/ui/help/help_doc_ui.h
+    src/ui/help/help_doc_ui.cpp
+    src/ui/help/help_doc_mgr.h
+    src/ui/help/help_doc_mgr.cpp
+    src/ui/help/about_dialog.h
+    src/ui/help/about_dialog.cpp
     src/ui/create/create_ui.h
     src/ui/create/create_ui.cpp
     src/ui/create/create_mgr.h

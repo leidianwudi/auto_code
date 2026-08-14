@@ -737,6 +737,20 @@ static QString buildFolderPath(QTreeWidgetItem *item, const QString &rootPath) {
 void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
   QTreeWidgetItem *item = itemAt(event->pos());
   if (!item) {
+    // 空白区域：[新建] [刷新] — 在根目录下新建文件/文件夹
+    if (!m_rootPath.isEmpty()) {
+      QMenu menu(this);
+      QAction *newAct = menu.addAction(QString::fromUtf8(CodeConstants::UiText::kNew));
+      QAction *refreshAct = menu.addAction(QStringLiteral("刷新"));
+      QAction *chosen = menu.exec(event->globalPos());
+      if (chosen == newAct) {
+        CreateMgr::createNew(m_rootPath, this);
+        refreshTree();
+      } else if (chosen == refreshAct) {
+        refreshTree();
+      }
+      return;
+    }
     QTreeWidget::contextMenuEvent(event);
     return;
   }

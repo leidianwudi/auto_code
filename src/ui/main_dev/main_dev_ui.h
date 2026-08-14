@@ -119,6 +119,8 @@ public:
   QAction *openAction() const { return m_openAction; }
   QAction *openFolderAction() const { return m_openFolderAction; }
   QAction *helpExampleAction() const { return m_helpExampleAction; }
+  QAction *helpDocAction() const { return m_helpDocAction; }
+  QAction *aboutAction() const { return m_aboutAction; }
   QAction *settingsAction() const { return m_settingsAction; }
   QPushButton *buildBtn() const { return m_buildBtn; }
   QPushButton *stopBtn() const { return m_stopBtn; }
@@ -169,6 +171,8 @@ private:
   QAction *m_openAction = nullptr;
   QAction *m_openFolderAction = nullptr;
   QAction *m_helpExampleAction = nullptr;
+  QAction *m_helpDocAction = nullptr;
+  QAction *m_aboutAction = nullptr;
   QAction *m_settingsAction = nullptr;
 
   // ── 自定义标题栏 ──
