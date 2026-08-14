@@ -29,14 +29,7 @@
 //  构造
 // ════════════════════════════════════════════════════════════
 
-ComboboxConfigDialog::ComboboxConfigDialog(QWidget *parent) : QDialog(parent) {
-  setupUI();
-
-  // 连接 HTTP 信号
-  connect(&HttpClient::instance(), &HttpClient::finished, this,
-          &ComboboxConfigDialog::onHttpFinished);
-  connect(&HttpClient::instance(), &HttpClient::error, this, &ComboboxConfigDialog::onHttpError);
-}
+ComboboxConfigDialog::ComboboxConfigDialog(QWidget *parent) : QDialog(parent) { setupUI(); }
 
 // ════════════════════════════════════════════════════════════
 //  界面构建
@@ -172,14 +165,14 @@ void ComboboxConfigDialog::onTest() {
     }
   }
 
-  // 使用 POST 或 GET 发送请求
+  // 使用 POST 或 GET 发送请求，只回调给本对话框绑定的回调（HttpClient 区分发起方，不广播）
   HttpClient::Method method = bodyObj.isEmpty() ? HttpClient::Get : HttpClient::Post;
-  HttpClient::instance().request(method, fullUrl, bodyObj, headers, this);
+  HttpClient::instance().request(
+      method, fullUrl, bodyObj, headers, [this](const QJsonDocument &doc) { onHttpFinished(doc); },
+      [this](const QString &errorMsg) { onHttpError(errorMsg); }, this);
 }
 
-void ComboboxConfigDialog::onHttpFinished(const QString &url, const QJsonDocument &doc) {
-  Q_UNUSED(url);
-
+void ComboboxConfigDialog::onHttpFinished(const QJsonDocument &doc) {
   // 解析返回数据，提取 data.list 数组
   QJsonObject root = doc.object();
   QJsonObject dataObj = root.value("data").toObject();
@@ -250,8 +243,7 @@ void ComboboxConfigDialog::onHttpFinished(const QString &url, const QJsonDocumen
       QStringLiteral("color: %1;").arg(AuiStyle::successTextColor().name()));
 }
 
-void ComboboxConfigDialog::onHttpError(const QString &url, const QString &errorMsg) {
-  Q_UNUSED(url);
+void ComboboxConfigDialog::onHttpError(const QString &errorMsg) {
   m_statusLabel->setText(QStringLiteral("请求失败: %1").arg(errorMsg));
   m_statusLabel->setStyleSheet(QStringLiteral("color: %1;").arg(AuiStyle::errorTextColor().name()));
 }

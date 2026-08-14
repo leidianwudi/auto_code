@@ -71,10 +71,6 @@ void JsonVueEditor::setupUI() {
 
   applyStyle();
 
-  // 连接 HTTP 信号
-  connect(&HttpClient::instance(), &HttpClient::finished, this, &JsonVueEditor::onHttpFinished);
-  connect(&HttpClient::instance(), &HttpClient::error, this, &JsonVueEditor::onHttpError);
-
   // 连接静态输入控件的编辑信号
   connectStaticControlSignals();
 
@@ -1047,13 +1043,13 @@ void JsonVueEditor::onGenerate() {
     headers[QStringLiteral("Authorization")] = m_authHeader;
   }
 
-  m_pendingUrl = fullUrl;
-  HttpClient::instance().request(method, fullUrl, bodyObj, headers, this);
+  // 只回调给本编辑器绑定的回调（HttpClient 区分发起方，不广播）
+  HttpClient::instance().request(
+      method, fullUrl, bodyObj, headers, [this](const QJsonDocument &doc) { onHttpFinished(doc); },
+      [this, fullUrl](const QString &errorMsg) { onHttpError(fullUrl, errorMsg); }, this);
 }
 
-void JsonVueEditor::onHttpFinished(const QString &url, const QJsonDocument &doc) {
-  if (url != m_pendingUrl) return;  // 不是本编辑器发起的请求，忽略
-  m_pendingUrl.clear();
+void JsonVueEditor::onHttpFinished(const QJsonDocument &doc) {
   m_generateBtn->setEnabled(true);
   m_generateBtn->setText(QStringLiteral("生成"));
 
@@ -1071,8 +1067,6 @@ void JsonVueEditor::onHttpFinished(const QString &url, const QJsonDocument &doc)
 }
 
 void JsonVueEditor::onHttpError(const QString &url, const QString &errorMsg) {
-  if (url != m_pendingUrl) return;  // 不是本编辑器发起的请求，忽略
-  m_pendingUrl.clear();
   m_generateBtn->setEnabled(true);
   m_generateBtn->setText(QStringLiteral("生成"));
 

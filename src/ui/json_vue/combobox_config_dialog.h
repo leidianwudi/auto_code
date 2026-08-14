@@ -53,10 +53,10 @@ public:
 private slots:
   /// 点击"测试"按钮，发起 HTTP 请求
   void onTest();
-  /// HTTP 请求完成
-  void onHttpFinished(const QString &url, const class QJsonDocument &doc);
-  /// HTTP 请求失败
-  void onHttpError(const QString &url, const QString &errorMsg);
+  /// HTTP 请求完成（仅本对话框发起的请求触发）
+  void onHttpFinished(const class QJsonDocument &doc);
+  /// HTTP 请求失败（仅本对话框发起的请求触发）
+  void onHttpError(const QString &errorMsg);
 
 private:
   /// 构建界面

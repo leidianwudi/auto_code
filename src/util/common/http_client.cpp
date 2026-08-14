@@ -7,6 +7,7 @@
 
 #include <QJsonArray>
 #include <QNetworkRequest>
+#include <QPointer>
 
 #include "util_json.h"
 
@@ -26,22 +27,12 @@ HttpClient::HttpClient(QObject *parent)
 //  公开接口
 // ════════════════════════════════════════════════════════════
 
-void HttpClient::get(const QString &url, QObject *parent) { request(Get, url, {}, parent); }
-
-void HttpClient::post(const QString &url, const QJsonObject &body, QObject *parent) {
-  request(Post, url, body, parent);
-}
-
-void HttpClient::request(Method method, const QString &url, const QJsonObject &body,
-                         QObject *parent) {
-  request(method, url, body, {}, parent);
-}
-
 /// HTTP 请求默认超时时间（30 秒）
 static constexpr int kHttpTimeoutMs = 30000;
 
 void HttpClient::request(Method method, const QString &url, const QJsonObject &body,
-                         const Headers &headers, QObject *parent) {
+                         const Headers &headers, SuccessCallback onSuccess, ErrorCallback onError,
+                         QObject *context) {
   QNetworkRequest req((QUrl(url)));
   req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
   req.setTransferTimeout(kHttpTimeoutMs);
@@ -71,17 +62,25 @@ void HttpClient::request(Method method, const QString &url, const QJsonObject &b
       break;
   }
 
+  // 发起方对象（用于销毁时取消请求）；QPointer 防止发起方析构后悬垂
+  QPointer<QObject> ctx(context);
+
   if (!reply) {
-    emit error(url, QStringLiteral("无法创建网络请求"));
+    if (onError) onError(QStringLiteral("无法创建网络请求"));
     return;
   }
 
-  // 处理响应
-  connect(reply, &QNetworkReply::finished, this, [this, reply, url]() {
+  // 响应只回调给本请求绑定的回调，不广播给其他发起方。
+  // 若发起方已销毁（ctx 为空），则丢弃该响应。
+  connect(reply, &QNetworkReply::finished, this, [reply, url, ctx, onSuccess, onError]() {
     reply->deleteLater();
 
+    if (ctx.isNull()) {
+      return;  // 发起方已销毁，不再回调
+    }
+
     if (reply->error() != QNetworkReply::NoError) {
-      emit error(url, reply->errorString());
+      if (onError) onError(reply->errorString());
       return;
     }
 
@@ -89,14 +88,14 @@ void HttpClient::request(Method method, const QString &url, const QJsonObject &b
     QJsonParseError parseErr;
     QJsonDocument doc = UtilJson::fromJson(data, &parseErr);
     if (parseErr.error != QJsonParseError::NoError) {
-      emit error(url, QStringLiteral("JSON 解析失败: %1").arg(parseErr.errorString()));
+      if (onError) onError(QStringLiteral("JSON 解析失败: %1").arg(parseErr.errorString()));
       return;
     }
-    emit finished(url, doc);
+    if (onSuccess) onSuccess(doc);
   });
 
-  // 父对象销毁时自动取消请求
-  if (parent) {
-    connect(parent, &QObject::destroyed, reply, [reply]() { reply->abort(); });
+  // 发起方销毁时自动取消本请求
+  if (context) {
+    connect(context, &QObject::destroyed, reply, [reply]() { reply->abort(); });
   }
 }

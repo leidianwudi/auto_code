@@ -63,9 +63,9 @@ signals:
 private slots:
   /// 点击"生成"按钮，发起 HTTP 请求获取列名
   void onGenerate();
-  /// HTTP 请求完成
-  void onHttpFinished(const QString &url, const class QJsonDocument &doc);
-  /// HTTP 请求失败
+  /// HTTP 请求完成（仅本编辑器发起的请求触发）
+  void onHttpFinished(const class QJsonDocument &doc);
+  /// HTTP 请求失败（仅本编辑器发起的请求触发）
   void onHttpError(const QString &url, const QString &errorMsg);
 
   /// 列表：上移选中行
@@ -155,7 +155,6 @@ private:
   QString m_authHeader;        ///< Authorization 请求头值（如 "Bearer xxx"）
   QString m_postData;          ///< POST 请求的默认数据（JSON 字符串）
   QString m_acConfigFilePath;  ///< 最近一次加载 HTTP 配置的 AC 文件路径（用于点击"生成"时重读）
-  QString m_pendingUrl;        ///< 当前等待响应的请求 URL（用于区分多编辑器共享 HttpClient）
   bool m_loading = false;      ///< 加载配置时抑制 configChanged 信号
 
   /// 已复制的列配置（用于"粘贴配置"到其它行）
