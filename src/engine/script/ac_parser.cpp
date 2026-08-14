@@ -63,12 +63,25 @@ bool AcParser::parse(const QVector<Token> &tokens, Block &program, QSet<QString>
   m_pos = 0;
   m_error.clear();
   m_declaredVars = &declaredVars;
+  m_scopes.clear();
+  m_scopes.append(QSet<QString>());  // 全局作用域
   program = Block();
   bool ok = parseProgram(program);
   // parseType() 的类型名错误（如大小写错误 string/number）会设置 m_error 但返回 any() 继续解析，
   // 此处兜底：解析过程中只要设置了错误消息，即使 parseProgram 返回 true 也视为解析失败
   if (ok && !m_error.isEmpty()) return false;
   return ok;
+}
+
+bool AcParser::declareVar(const QString &name, int line) {
+  Q_ASSERT(!m_scopes.isEmpty());
+  if (m_scopes.last().contains(name)) {
+    m_error = QStringLiteral("变量 '%1' 重复声明 at line %2").arg(name).arg(line);
+    return false;
+  }
+  m_scopes.last().insert(name);
+  m_declaredVars->insert(name);
+  return true;
 }
 
 bool AcParser::parseProgram(Block &block) {
@@ -138,7 +151,7 @@ bool AcParser::parseProgram(Block &block) {
         m_error = QStringLiteral("expected variable name after 'let' at line %1").arg(peek().line);
         return false;
       }
-      m_declaredVars->insert(peek().text);
+      if (!declareVar(peek().text, peek().line)) return false;
       Block::Stmt stmt;
       stmt.line = t.line;
       stmt.filePath = m_filePath;
@@ -167,6 +180,7 @@ bool AcParser::parseProgram(Block &block) {
 
 bool AcParser::parseBlock(Block &block) {
   if (!expect(TOK_LBRACE, QStringLiteral("expected '{'"))) return false;
+  ScopeGuard _sg(m_scopes);
   while (peek().type != TOK_RBRACE && peek().type != TOK_EOF) {
     Block::Stmt stmt;
     if (!parseStmt(stmt)) return false;

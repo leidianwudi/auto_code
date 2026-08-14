@@ -32,7 +32,7 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
             QStringLiteral("expected variable name after 'export let' at line %1").arg(peek().line);
         return false;
       }
-      m_declaredVars->insert(peek().text);
+      if (!declareVar(peek().text, peek().line)) return false;
       stmt.kind = Block::Stmt::kAssign;
       if (!parseAssignStmt(stmt.assign)) return false;
       stmt.assign.isExported = true;
@@ -159,7 +159,7 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
       return false;
     }
     stmt.usingStmt.varName = advance().text;
-    m_declaredVars->insert(stmt.usingStmt.varName);
+    if (!declareVar(stmt.usingStmt.varName, t.line)) return false;
     if (!expect(TOK_EQUALS, QStringLiteral("expected '=' after 'using varName'"))) return false;
     stmt.kind = Block::Stmt::kUsing;
     stmt.usingStmt.value = std::make_unique<Expr>();
@@ -177,7 +177,7 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
           QStringLiteral("variable name cannot start with a digit at line %1").arg(peek().line);
       return false;
     }
-    m_declaredVars->insert(peek().text);
+    if (!declareVar(peek().text, t.line)) return false;
     stmt.kind = Block::Stmt::kAssign;
     if (!parseAssignStmt(stmt.assign)) return false;
     stmt.assign.line = t.line;
@@ -486,6 +486,10 @@ bool AcParser::parseIndexAssignStmt(IndexAssignStmt &ias) {
 bool AcParser::parseForStmt(ForStmt &fs) {
   if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after 'for'"))) return false;
 
+  // for 循环变量拥有独立作用域：for (let i = 0; ...) 的 i 仅属于本循环，
+  // 多个 for 循环可各自声明同名循环变量，互不干扰。
+  ScopeGuard _sg(m_scopes);
+
   // for (let i = 0; i < 10; i++)
   if (peek().type == TOK_LET) {
     advance();
@@ -495,7 +499,7 @@ bool AcParser::parseForStmt(ForStmt &fs) {
     }
 
     fs.varName = advance().text;
-    m_declaredVars->insert(fs.varName);
+    if (!declareVar(fs.varName, fs.line)) return false;
     // 处理类型注解：let i: Number = 0 或 let ch: String in str
     if (peek().type == TOK_COLON) {
       advance();

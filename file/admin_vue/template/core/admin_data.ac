@@ -594,6 +594,9 @@ export function buildAdminTplData(json: Object, file: String): Object {
   let meta: Object = json.meta;
   let rawColumns: Object[] = json.columns;
   let rawQueryFields: Object[] = json.queryFields;
+  if (rawQueryFields == null) {
+    rawQueryFields = [];
+  }
   // buttons 可能为空（旧 .jsonvue 文件没有此字段），需防御性处理
   let rawButtons: Object[] = [];
   if (json.buttons != null) {

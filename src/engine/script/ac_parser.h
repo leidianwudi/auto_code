@@ -96,10 +96,22 @@ private:
   /// @return true 表示有类型注解并已解析，false 表示无注解
   bool parseTypeAnnotation(AcType &outType);
 
+  // ── 作用域与声明 ──
+  /// @brief 作用域守卫：构造时压栈，析构时弹栈（配合 RAII 保证异常/提前返回也能恢复）
+  struct ScopeGuard {
+    QVector<QSet<QString>> &scopes;
+    explicit ScopeGuard(QVector<QSet<QString>> &s) : scopes(s) { scopes.append(QSet<QString>()); }
+    ~ScopeGuard() { scopes.pop_back(); }
+  };
+  /// @brief 在当前作用域声明变量；重复声明时设置错误并返回 false
+  bool declareVar(const QString &name, int line);
+
   // ── 内部状态 ──
   int m_pos = 0;
   QVector<Token> m_tokens;
   QString m_error;
   QString m_filePath;  ///< 当前解析的源文件路径
   QSet<QString> *m_declaredVars = nullptr;
+  /// 作用域栈：栈顶为当前作用域，用于检测同一作用域内的重复声明
+  QVector<QSet<QString>> m_scopes;
 };

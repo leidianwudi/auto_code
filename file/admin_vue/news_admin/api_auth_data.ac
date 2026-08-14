@@ -4,7 +4,7 @@ export class HtmlUrl {
   //    authHeader  - 请求头 Authorization（Bearer token 会经常更换）
   //    postData    - POST 请求的默认数据
   public baseUrl: String = "http://127.0.0.1:10002";
-  public authHeader: String = "AdminBearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyaWQiOjEsInVzZXJuYW1lIjoiYWRtaW4iLCJyb2xlcyI6WyJhZG1pbiJdLCJyb2xlSWQiOjEsImlhdCI6MTc4NjYyMTA3MSwiZXhwIjoxNzg5MjEzMDcxfQ.NEFDGYCREgxZ2GGGnmMnYen50VAoJ-RXZSVJl0GLm2E";
+  public authHeader: String = "AdminBearer auto_code";
   public postData: String = "{\"page\":1,\"pageSize\":20}";
   
 }
