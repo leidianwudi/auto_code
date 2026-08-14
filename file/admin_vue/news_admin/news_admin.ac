@@ -16,6 +16,7 @@ main {
   // ── 1. 输出文件的根目录 ──────────────────────────────────────────
   let basePath: String = "D:/work/github/news_admin/src/views";
   //测试目录：d:/work/github/auto_code/build/outtest
+  // let basePath: String = "d:/work/github/auto_code/build/outtest";
   // ── 2. 组装项目参数并调用通用生成逻辑 ────────────────────────────
   let params: Object = {
     basePath: basePath
