@@ -6,9 +6,11 @@
 #include "main_dev_ui_ext.h"
 
 #include <QApplication>
+#include <QCursor>
 #include <QDrag>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QHelpEvent>
 #include <QMenu>
 #include <QMimeData>
 #include <QMouseEvent>
@@ -16,10 +18,12 @@
 #include <QPixmap>
 #include <QSplitter>
 #include <QStyleOptionTab>
+#include <QToolTip>
 
 #include "src/util/common/code_constants.h"
 #include "src/util/common/util_file.h"
 #include "src/util/ui/component/aui_style.h"
+#include "src/util/ui/component/aui_tab_bar.h"
 
 // ════════════════════════════════════════════════════════════
 //  DraggableTabBar 实现
@@ -59,36 +63,53 @@ void DraggableTabBar::tabRemoved(int index) {
   QTabBar::tabRemoved(index);
 }
 
+void DraggableTabBar::tabInserted(int index) {
+  QTabBar::tabInserted(index);
+  // Qt 6.12 在部分场景用真实子控件作关闭按钮（自带英文 "Close Tab" 提示），
+  // 这里统一把该子控件的提示改为中文「关闭标签」
+  AuiTabBar::localizeCloseButton(this, index);
+}
+
 void DraggableTabBar::paintEvent(QPaintEvent *event) {
-  // 直接自绘所有标签，完全绕过 QTabBar/style 的文字渲染
+  // 直接自绘所有标签，完全绕过 QTabBar/style 的文字与背景渲染
   // （Windows 原生风格用 DrawThemeText 画 tab 文字，忽略 setTabTextColor；
-  //   代理样式也无法拦截 Fusion 内部的子元素绘制）
+  //   Fusion 的 CE_TabBarTab 背景取自调色板，深色模式下易与文字对比不足）
+  // VSCode 风格（与调试面板 调用栈/变量/断点 页签一致）：
+  //   选中 tab：顶部蓝色指示条 + 亮色文字，背景与编辑器内容同色（融入正文区）；
+  //   未选中 tab：灰色文字 + 透明背景，hover 时文字微亮、背景加深。
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing);
 
   const bool active = property("aui_focus_tab").toBool();
   const int cur = currentIndex();
-  const QColor activeColor = AuiStyle::activeTabTextColor();
-  const QColor dimColor = AuiStyle::inactiveTabColor();
+  const AuiTabBar::Style st = AuiTabBar::currentStyle();
+  const QPoint mousePos = mapFromGlobal(QCursor::pos());
+
+  // 整条 tab 栏背景 + 底部分隔线
+  AuiTabBar::paintBarBackground(painter, rect(), st);
 
   for (int i = 0; i < count(); ++i) {
     QStyleOptionTab opt;
     initStyleOption(&opt, i);
+    const QRect r = tabRect(i);
+    const bool isSelected = (i == cur);
+    const bool hovered = r.contains(mousePos);
 
-    // 用 style 画 tab 的背景和边框（CE_TabBarTab），但不画文字
-    // 先保存文字，清空后画背景，再恢复
-    QString text = opt.text;
-    opt.text.clear();
-    style()->drawControl(QStyle::CE_TabBarTab, &opt, &painter, this);
+    // 标签背景与顶部指示条
+    AuiTabBar::paintTabBackground(painter, r, isSelected, active, hovered, st);
 
-    // 自己画文字：聚焦面板的当前标签用正文色，其余灰色
-    bool isSelected = (i == cur);
-    QColor c = (active && isSelected) ? activeColor : dimColor;
-    opt.text = text;
+    // 文字颜色：聚焦面板的当前标签用亮色，其余灰；hover 微亮
+    QColor c = st.dimText;
+    if (isSelected && active) {
+      c = st.activeText;
+    } else if (hovered) {
+      c = st.hoverText;
+    }
+
     QRect textRect = style()->subElementRect(QStyle::SE_TabBarTabText, &opt, this);
     painter.setPen(c);
     painter.setFont(font());
-    painter.drawText(textRect, Qt::AlignCenter, text);
+    painter.drawText(textRect, Qt::AlignCenter, opt.text);
 
     // 已修改标签右侧叠加红色 "*"
     if (m_modifiedTabs.contains(i)) {
@@ -101,7 +122,34 @@ void DraggableTabBar::paintEvent(QPaintEvent *event) {
       int starY = textRect.top() + starFont.pixelSize() - 2;
       painter.drawText(starX, starY, QStringLiteral("*"));
     }
+
+    // 关闭按钮：自绘 X 字形，鼠标悬停时变色并加正方形高亮背景
+    if (tabsClosable()) {
+      const QRect closeRect = AuiTabBar::closeButtonRect(this, opt);
+      if (!closeRect.isNull()) {
+        const bool closeHovered = closeRect.contains(mousePos);
+        AuiTabBar::paintCloseButton(painter, closeRect, closeHovered, isSelected, st);
+      }
+    }
   }
+}
+
+bool DraggableTabBar::event(QEvent *event) {
+  // 悬停在关闭按钮上时显示中文提示"关闭标签"
+  if (event->type() == QEvent::ToolTip) {
+    auto *he = static_cast<QHelpEvent *>(event);
+    const int index = tabAt(he->pos());
+    if (index >= 0 && tabsClosable()) {
+      QStyleOptionTab opt;
+      initStyleOption(&opt, index);
+      const QRect closeRect = AuiTabBar::closeButtonRect(this, opt);
+      if (closeRect.contains(he->pos())) {
+        QToolTip::showText(he->globalPos(), AuiTabBar::closeButtonTip(), this);
+        return true;
+      }
+    }
+  }
+  return QTabBar::event(event);
 }
 
 void DraggableTabBar::mousePressEvent(QMouseEvent *event) {
@@ -129,7 +177,18 @@ void DraggableTabBar::mousePressEvent(QMouseEvent *event) {
     return;
   }
   if (event->button() == Qt::LeftButton) {
-    m_pressedIndex = tabAt(event->pos());
+    const int index = tabAt(event->pos());
+    if (index >= 0) {
+      // 关闭按钮点击：自绘后 QTabBar 内部缓存的关闭区 rect 不可用，这里自行判断
+      QStyleOptionTab opt;
+      initStyleOption(&opt, index);
+      QRect closeRect = style()->subElementRect(QStyle::SE_TabBarTabRightButton, &opt, this);
+      if (closeRect.contains(event->pos())) {
+        emit tabCloseRequested(index);
+        return;
+      }
+    }
+    m_pressedIndex = index;
     m_dragStartPos = event->pos();
   }
   QTabBar::mousePressEvent(event);

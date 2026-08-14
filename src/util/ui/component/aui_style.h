@@ -107,6 +107,11 @@ public:
     return SettingStore::ins().color(QStringLiteral("ui.panelBackground"));
   }
 
+  /// 编辑器背景色（与代码编辑框内容区一致），对应 #ffffff / #1e1e1e
+  static QColor editorBackground() {
+    return SettingStore::ins().color(QStringLiteral("editor.background"));
+  }
+
   /// 列表交替行背景色（浅灰）
   static QColor listAlternateBackground() {
     return SettingStore::ins().color(QStringLiteral("ui.listAlternateBackground"));

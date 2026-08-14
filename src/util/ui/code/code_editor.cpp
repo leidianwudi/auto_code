@@ -970,9 +970,43 @@ int CodeEditor::calculateNewLineIndent(const QString &linePrefix) const {
 //  右键菜单 — 增加「格式化代码」「转到定义」「查找引用」等
 // ──────────────────────────────────────────────────────────────
 
+/// 将 Qt 标准右键菜单的英文项本地化为中文（撤销/剪切/复制/粘贴等）
+static void localizeStandardMenu(QMenu *menu) {
+  struct EnZh {
+    const char *en;
+    const char *zh;
+  };
+  static const EnZh kMap[] = {
+      {"Undo", "撤销"},
+      {"Redo", "重做"},
+      {"Cut", "剪切"},
+      {"Copy", "复制"},
+      {"Paste", "粘贴"},
+      {"Delete", "删除"},
+      {"Select All", "全选"},
+  };
+  auto stripAmp = [](const QString &s) {
+    QString r = s;
+    r.remove(QLatin1Char('&'));
+    r.replace(QLatin1String("..."), QString());
+    return r;
+  };
+  for (QAction *act : menu->actions()) {
+    if (act->isSeparator()) continue;
+    const QString key = stripAmp(act->text());
+    for (const auto &m : kMap) {
+      if (key == QLatin1String(m.en)) {
+        act->setText(QString::fromUtf8(m.zh));
+        break;
+      }
+    }
+  }
+}
+
 void CodeEditor::contextMenuEvent(QContextMenuEvent *event) {
   // 创建标准右键菜单
   QMenu *menu = createStandardContextMenu();
+  localizeStandardMenu(menu);
 
   // 只在支持的验证模式下添加格式化等功能（JSON / AC / TPL）
   if (m_validationMode != NoValidation) {

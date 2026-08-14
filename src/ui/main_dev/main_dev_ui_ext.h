@@ -42,6 +42,7 @@ signals:
   void closeAllRequested();
 
 protected:
+  bool event(QEvent *event) override;
   void mousePressEvent(QMouseEvent *event) override;
   void mouseMoveEvent(QMouseEvent *event) override;
   void dragEnterEvent(QDragEnterEvent *event) override;
@@ -50,6 +51,8 @@ protected:
   void paintEvent(QPaintEvent *event) override;
   /// 标签页被移除时同步修正 m_modifiedTabs 的索引
   void tabRemoved(int index) override;
+  /// 标签页被插入后本地化关闭按钮提示（真实子控件场景）
+  void tabInserted(int index) override;
 
 public:
   static DraggableTabBar *dragSourceBar() { return s_sourceBar; }

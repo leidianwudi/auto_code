@@ -387,21 +387,101 @@ void CodeEditor::showSignatureHelp() {
 //  引用查找与符号高亮
 // ──────────────────────────────────────────────────────────────
 
+/// 收集文本中所有注释区域 [起始偏移, 长度)，含 // 单行注释与 /* */ 块注释。
+/// 会跳过字符串（"..." 与模板字符串 `...`）内的内容，避免把字符串里的 // 误判为注释。
+/// VSCode 规则：被注释的标识符不算引用。
+static QVector<QPair<int, int>> collectCommentRanges(const QString &text) {
+  QVector<QPair<int, int>> ranges;
+  const int n = text.size();
+  int i = 0;
+  bool inBlock = false;
+  int blockStart = 0;
+  while (i < n) {
+    if (!inBlock) {
+      const QChar c = text.at(i);
+      if (c == QLatin1Char('"')) {
+        int j = i + 1;
+        while (j < n) {
+          if (text.at(j) == QLatin1Char('\\')) {
+            j += 2;
+            continue;
+          }
+          if (text.at(j) == QLatin1Char('"')) {
+            ++j;
+            break;
+          }
+          ++j;
+        }
+        i = j;
+      } else if (c == QLatin1Char('`')) {
+        int j = i + 1;
+        while (j < n) {
+          if (text.at(j) == QLatin1Char('\\')) {
+            j += 2;
+            continue;
+          }
+          if (text.at(j) == QLatin1Char('`')) {
+            ++j;
+            break;
+          }
+          ++j;
+        }
+        i = j;
+      } else if (text.mid(i, 2) == QStringLiteral("/*")) {
+        inBlock = true;
+        blockStart = i;
+        i += 2;
+      } else if (text.mid(i, 2) == QStringLiteral("//")) {
+        int end = text.indexOf(QLatin1Char('\n'), i);
+        if (end < 0) end = n;
+        ranges.append(qMakePair(i, end - i));
+        i = end;
+      } else {
+        ++i;
+      }
+    } else {
+      const int close = text.indexOf(QStringLiteral("*/"), i);
+      if (close < 0) {
+        ranges.append(qMakePair(blockStart, n - blockStart));
+        break;
+      }
+      ranges.append(qMakePair(blockStart, close + 2 - blockStart));
+      i = close + 2;
+      inBlock = false;
+    }
+  }
+  return ranges;
+}
+
+/// 判断字符偏移位置是否位于任一注释区域内
+static bool posInComments(const QVector<QPair<int, int>> &ranges, int pos) {
+  for (const auto &r : ranges) {
+    if (pos >= r.first && pos < r.first + r.second) return true;
+  }
+  return false;
+}
+
 QVector<QPair<int, QString>> CodeEditor::findSymbolReferences(const QString &name) const {
   QVector<QPair<int, QString>> refs;
   if (name.isEmpty()) return refs;
 
-  // 扫描全文查找标识符出现位置
+  // 扫描全文查找标识符出现位置（跳过注释中的出现，与 VSCode 规则一致）
   const QString &text = cachedText();
+  const QVector<QPair<int, int>> comments = collectCommentRanges(text);
   QStringList lines = text.split(QLatin1Char('\n'));
   QRegularExpression re(QStringLiteral("\\b") + QRegularExpression::escape(name) +
                         QStringLiteral("\\b"));
 
+  int lineStart = 0;
   for (int i = 0; i < lines.size(); ++i) {
     auto match = re.match(lines[i]);
     if (match.hasMatch()) {
-      refs.append(qMakePair(i + 1, lines[i].trimmed()));
+      const int absPos = lineStart + match.capturedStart();
+      if (!posInComments(comments, absPos)) {
+        refs.append(qMakePair(i + 1, lines[i].trimmed()));
+      }
     }
+    lineStart += lines[i].size() + 1;  // +1 为行尾换行符
   }
 
   return refs;
@@ -588,6 +668,8 @@ void CodeEditor::highlightSymbolReferences(const QString &name) {
   QRegularExpression re(QStringLiteral("\\b") + QRegularExpression::escape(name) +
                         QStringLiteral("\\b"));
   const QString &text = cachedText();
+  // 与 findSymbolReferences 一致：注释中的出现不高亮
+  const QVector<QPair<int, int>> comments = collectCommentRanges(text);
   int offset = 0;
 
   while (offset < text.size()) {
@@ -596,6 +678,9 @@ void CodeEditor::highlightSymbolReferences(const QString &name) {
 
     int start = match.capturedStart();
     int length = match.capturedLength();
+    offset = start + length;
+
+    if (posInComments(comments, start)) continue;
 
     cursor.setPosition(start);
     cursor.setPosition(start + length, QTextCursor::KeepAnchor);
@@ -605,8 +690,6 @@ void CodeEditor::highlightSymbolReferences(const QString &name) {
     sel.format.setBackground(AuiStyle::modifiedColor().lighter(180));
     sel.format.setForeground(AuiStyle::modifiedColor());
     m_referenceSelections.append(sel);
-
-    offset = start + length;
   }
 
   refreshExtraSelections();
