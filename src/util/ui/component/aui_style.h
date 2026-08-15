@@ -77,6 +77,13 @@ public:
     return SettingStore::ins().color(QStringLiteral("ui.inactiveTabColor"));
   }
 
+  /// 修改实心圆点颜色（标签栏 / 目录树共用）：
+  /// 深色主题下用白色保证可见性，浅色 / 自定义主题沿用未选中灰
+  static QColor modifiedDotColor() {
+    const bool dark = (SettingStore::ins().theme() == SettingStore::ThemeDark);
+    return dark ? QColor(Qt::white) : inactiveTabColor();
+  }
+
   /// 编译按钮颜色，绿色
   static QColor compileButtonColor() {
     return SettingStore::ins().color(QStringLiteral("ui.compileButtonColor"));
@@ -301,11 +308,14 @@ public:
   /// 标题栏布局间距
   static int titleBarSpacing() { return 4; }
 
-  /// 对话框字体大小（px）
-  static int dialogFontSize() { return 13; }
+  /// 窗口/界面字体大小（磅值）— 全局唯一来源，跟随设置（未自定义时默认 10）
+  static int windowFontSize() { return SettingStore::ins().fontSize(QStringLiteral("font.ui")); }
 
-  /// 标题栏标题字体大小（px）
-  static int titleFontSize() { return 12; }
+  /// 对话框字体大小（px）：按窗口字号换算（pt→px ≈ ×4/3，+1，默认 10pt→14px）
+  static int dialogFontSize() { return qMax(9, qRound(windowFontSize() * 4.0 / 3.0) + 1); }
+
+  /// 标题栏标题字体大小（px）：按窗口字号换算（pt→px ≈ ×4/3，默认 10pt→13px）
+  static int titleFontSize() { return qMax(9, qRound(windowFontSize() * 4.0 / 3.0)); }
 
   /// QSizeGrip 固定尺寸
   static QSize sizeGripSize() { return QSize(16, 16); }
@@ -324,6 +334,11 @@ public:
 
   /// @brief 弹出菜单（QMenu）专用样式表，直接设到菜单上
   static QString menuStyleSheet();
+
+  /// @brief 应用「窗口字体」到 qApp 及所有已创建顶层窗口 — 窗口字体修改的统一切口。
+  /// 递归对每个顶层窗口「未显式设置字体」的控件重设字体并重绘，使修改立即生效；
+  /// 代码编辑器/目录树/表格等有意自定义字体的控件（WA_SetFont）不受影响。
+  static void applyAppFont();
 
   /// 应用「标题栏菜单按钮」的样式表 + 调色板（双保险，Fusion 风格文字走 ButtonText 角色）
   static void applyMenuButtonStyle(QToolButton *btn);

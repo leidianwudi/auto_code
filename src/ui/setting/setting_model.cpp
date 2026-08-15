@@ -82,4 +82,24 @@ void SettingModel::setShortcut(const QString &key, const QString &sequence) {
   m_store.setShortcut(key, QKeySequence(sequence));
 }
 
+QList<FontEntry> SettingModel::fonts() const {
+  QList<FontEntry> list;
+  const QStringList keys = m_store.fontKeys();
+  for (const QString &key : keys) {
+    FontEntry e;
+    e.key = key;
+    e.label = m_store.fontLabel(key);
+    e.size = m_store.fontSize(key);
+    e.custom = m_store.hasCustomFont(key);
+    list.append(e);
+  }
+  return list;
+}
+
+void SettingModel::setFontSize(const QString &key, int size) { m_store.setFontSize(key, size); }
+
+void SettingModel::resetFontSize(const QString &key) { m_store.resetFontSize(key); }
+
+void SettingModel::resetAllFonts() { m_store.resetAllFonts(); }
+
 void SettingModel::save() { m_store.save(); }

@@ -161,6 +161,9 @@ void MainDevMgr::initUi() {
   connect(m_themeTimer, &QTimer::timeout, this, &MainDevMgr::refreshTheme);
   connect(&store, &SettingStore::themeChanged, m_themeTimer, qOverload<>(&QTimer::start));
   connect(&store, &SettingStore::colorsChanged, m_themeTimer, qOverload<>(&QTimer::start));
+  // 窗口字体变化：走轻量刷新（只重建标题栏样式），不触发 refreshTheme 的重活
+  // （调色板重建、重新高亮所有编辑器、重建调试面板等对字体变化毫无必要）
+  connect(&store, &SettingStore::windowFontChanged, this, &MainDevMgr::refreshWindowFont);
 }
 
 /// 文件打开、帮助、重命名、删除信号
@@ -949,4 +952,14 @@ void MainDevMgr::refreshTheme() {
     };
     repolish(w);
   }
+}
+
+/// 窗口字体变化后的轻量刷新（区别于 refreshTheme 的重活）
+void MainDevMgr::refreshWindowFont() {
+  if (!m_ui) return;
+  // 窗口字体已由 SettingStore::applyWindowFont 应用到 qApp 与所有窗口，
+  // 并已触发全部子控件重排 + 重绘（见 AuiStyle::applyAppFont）。
+  // 这里只需重建标题栏文字样式：标题字号随窗口字号缩放，
+  // 且标题字号是固化在样式表里的，必须重建才能生效。
+  m_ui->refreshTitleBarStyle();
 }

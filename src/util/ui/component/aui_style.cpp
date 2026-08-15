@@ -17,6 +17,7 @@
 #include <QStyleOption>
 #include <QTabBar>
 #include <QToolButton>
+#include <QWidget>
 
 /// 标记 tab bar 已基于 Fusion（含自定义空白），供 ensureFusionTabBar 跳过覆盖
 static const char *kFusionTabProperty = "aui_fusion_tab";
@@ -155,6 +156,33 @@ void AuiStyle::applyMenuButtonStyle(QToolButton *btn) {
   p.setColor(QPalette::Text, tc);
   p.setColor(QPalette::HighlightedText, tc);
   btn->setPalette(p);
+}
+
+// ════════════════════════════════════════════════════════════
+//  applyAppFont — 应用窗口字体到 qApp 及所有已创建窗口
+// ════════════════════════════════════════════════════════════
+
+void AuiStyle::applyAppFont() {
+  if (!qApp) return;
+  QFont f = qApp->font();
+  f.setPointSize(windowFontSize());
+  qApp->setFont(f);
+
+  // qApp->setFont 只影响之后创建的控件，不会即时传播到已创建的窗口。
+  // 因此：给每个顶层窗口显式设字体（未显式设置字体的子控件在绘制时会动态继承它），
+  // 再强制所有子控件重新布局 + 重绘，使工具栏等既有控件立即用新字号渲染，无需重启。
+  // 注意这里不给子控件显式 setFont（否则会打上 WA_SetFont 标记，导致下次修改失效），
+  // 代码编辑器/目录树/表格等显式设置字体的控件也会因各自字号设置保持不变。
+  const QList<QWidget *> tops = QApplication::topLevelWidgets();
+  for (QWidget *w : tops) {
+    if (!w->isWindow()) continue;
+    w->setFont(f);
+    const QList<QWidget *> children = w->findChildren<QWidget *>();
+    for (QWidget *c : children) {
+      c->updateGeometry();
+      c->update();
+    }
+  }
 }
 
 void AuiStyle::applyMenuStyle(QMenu *menu) {

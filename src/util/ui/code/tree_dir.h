@@ -24,8 +24,13 @@
 class QTreeWidgetItem;
 class QContextMenuEvent;
 
-/// 文件树绘制代理 — 自绘复选框、图标与文本；已修改文件在图标右上角绘制实心圆点，
-/// 有错误的文件以红色加粗显示并附加错误数量
+/// 修改实心圆点半径（px）：直径 8，绘制在文件图标右上角，
+/// 比默认略大便于识别，又不遮挡文件名
+constexpr int kTreeModifiedDotRadius = 4;
+
+/// 文件树绘制代理 — 自绘复选框、图标与文本；已修改文件在图标右上角绘制实心圆点
+/// （颜色与 AuiCodeTabBar 修改圆点一致，深色主题下为白色），有错误的节点以红色
+/// 显示并在行最右侧绘制错误数量徽章（父文件夹显示子文件错误次数总和）
 class ModifiedFileDelegate : public QStyledItemDelegate {
   Q_OBJECT
 public:
@@ -89,7 +94,8 @@ public:
   /// 设置文件的修改状态（树节点文本追加/移除 " *"）
   void setFileModified(const QString &filePath, bool modified);
 
-  /// 设置文件的错误状态（树节点文本显示红色，并在右侧显示错误数量）
+  /// 设置文件的错误状态（文件名显示红色，错误数量徽章右对齐到行最右缘，
+  /// 父文件夹同步显示子文件错误次数总和）
   void setFileError(const QString &filePath, int errorCount);
 
   /// 清除文件的错误状态
@@ -163,6 +169,9 @@ private:
 
   /// 右键菜单：文件设为/取消启动项，文件夹新建/刷新/重命名，文件重命名
   void contextMenuEvent(QContextMenuEvent *event) override;
+
+  /// 从设置读取目录树字体大小并应用（构造与字体设置变化时调用）
+  void applyFontFromSetting();
 
   bool m_lastClickOnCheckbox = false;  ///< 最近一次鼠标释放是否落在复选框区域
   bool m_bulkUpdating = false;         ///< 批量更新中，抑制 itemChanged 级联

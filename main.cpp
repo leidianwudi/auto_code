@@ -91,10 +91,12 @@ int main(int argc, char *argv[]) {
     return runErr.isEmpty() ? 0 : 1;
   }
 
-  // 初始化全局设置存储（加载主题/颜色/快捷键配置，在窗口样式应用前）
+  // 初始化全局设置存储（加载主题/颜色/快捷键/字体配置，在窗口样式应用前）
   SettingStore::ins().init();
   // 应用全局 Fusion 风格 + 调色板，隔离系统主题色（程序不随 Windows 主题变色）
   SettingStore::ins().applyGlobalStyle();
+  // 应用「窗口字体」大小到 qApp（保留系统字体族，仅改字号）
+  SettingStore::ins().applyWindowFont();
 
   // 单例创建并打开开发模式主窗口（可重复调用）
   MainDevMgr::ins().open();

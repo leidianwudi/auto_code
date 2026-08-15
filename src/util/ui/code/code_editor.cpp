@@ -39,6 +39,7 @@
 #include "src/util/ui/highlighter/light_json.h"
 #include "src/util/ui/highlighter/light_tpl.h"
 #include "src/util/ui/highlighter/light_ts.h"
+#include "src/util/ui/setting_store.h"
 
 // ──────────────────────────────────────────────────────────────
 //  构造与初始化（精简后）
@@ -57,12 +58,11 @@ CodeEditor::CodeEditor(QWidget *parent) : QPlainTextEdit(parent) {
   highlightCurrentLine();
 
   // 使用常量配置
-  QFont font = QFontDatabase::systemFont(QFontDatabase::FixedFont);
-  font.setPointSize(CodeConstants::Editor::kDefaultFontSize);
-  setFont(font);
+  applyFontFromSetting();
 
-  setTabStopDistance(fontMetrics().horizontalAdvance(QLatin1Char(' ')) *
-                     CodeConstants::Editor::kTabWidthSpaces);
+  // 字体大小变化时（设置界面修改 / 重置）即时刷新
+  connect(&SettingStore::ins(), &SettingStore::fontsChanged, this,
+          &CodeEditor::applyFontFromSetting);
 
   // 禁用自动换行，启用水平滚动条
   setLineWrapMode(QPlainTextEdit::NoWrap);
@@ -92,6 +92,19 @@ CodeEditor::CodeEditor(QWidget *parent) : QPlainTextEdit(parent) {
 
 CodeEditor::~CodeEditor() {
   // 析构时清理资源（如果有动态分配的对象）
+}
+
+// ──────────────────────────────────────────────────────────────
+//  applyFontFromSetting — 从设置读取代码字体大小并应用
+// ──────────────────────────────────────────────────────────────
+
+void CodeEditor::applyFontFromSetting() {
+  QFont font = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+  font.setPointSize(SettingStore::ins().fontSize(QStringLiteral("font.code")));
+  setFont(font);
+  // 等宽字体变化后 Tab 宽度按新字体的空格宽度重新计算
+  setTabStopDistance(fontMetrics().horizontalAdvance(QLatin1Char(' ')) *
+                     CodeConstants::Editor::kTabWidthSpaces);
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -977,13 +990,8 @@ static void localizeStandardMenu(QMenu *menu) {
     const char *zh;
   };
   static const EnZh kMap[] = {
-      {"Undo", "撤销"},
-      {"Redo", "重做"},
-      {"Cut", "剪切"},
-      {"Copy", "复制"},
-      {"Paste", "粘贴"},
-      {"Delete", "删除"},
-      {"Select All", "全选"},
+      {"Undo", "撤销"},  {"Redo", "重做"},   {"Cut", "剪切"},        {"Copy", "复制"},
+      {"Paste", "粘贴"}, {"Delete", "删除"}, {"Select All", "全选"},
   };
   auto stripAmp = [](const QString &s) {
     QString r = s;

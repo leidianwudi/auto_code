@@ -18,6 +18,8 @@
 #include <QPalette>
 #include <QString>
 
+class QTimer;
+
 /**
  * @class SettingStore
  * @brief 全局设置存储（单例）
@@ -93,6 +95,32 @@ public:
   /// 快捷键分类（"文件" / "视图" / "调试" / "编辑"）
   QString shortcutCategory(const QString &key) const;
 
+  // ── 字体大小 ──
+
+  /// 获取字体大小（磅值，6~40）；未自定义时返回默认值
+  int fontSize(const QString &key) const;
+
+  /// 设置字体大小（等于默认值时按恢复处理；修改「窗口字体」会立即应用到 qApp）
+  void setFontSize(const QString &key, int size);
+
+  /// 所有已注册的字体 key（用于设置界面展示）
+  QStringList fontKeys() const;
+
+  /// 字体中文名（用于设置界面）
+  QString fontLabel(const QString &key) const;
+
+  /// 该字体大小是否为用户自定义
+  bool hasCustomFont(const QString &key) const;
+
+  /// 恢复该 key 为默认字号
+  void resetFontSize(const QString &key);
+
+  /// 恢复所有字体为默认字号
+  void resetAllFonts();
+
+  /// 将「窗口字体」大小应用到 qApp（保留系统字体族，仅改字号）
+  void applyWindowFont();
+
   // ── 持久化 ──
 
   /// 保存到 AppData/settings.json
@@ -109,6 +137,10 @@ public:
   /// 应用全局风格到 qApp（Fusion 风格 + 调色板），使程序不随系统主题变色
   void applyGlobalStyle();
 
+private slots:
+  /// 窗口字体防抖定时器到点：合并连续修改后统一应用窗口字体并广播信号
+  void onFontsDebounced();
+
 signals:
   /// 主题变化
   void themeChanged();
@@ -116,6 +148,10 @@ signals:
   void colorsChanged();
   /// 快捷键变化
   void shortcutsChanged();
+  /// 任意字体大小变化（目录树/代码等组件字体，需按各自设置即时刷新）
+  void fontsChanged();
+  /// 仅「窗口字体」变化（需做全窗口级刷新，代价较大，已内部防抖）
+  void windowFontChanged();
 
 private:
   SettingStore();
@@ -133,6 +169,9 @@ private:
   /// 注册一个快捷键 key（含标签、分类、默认序列）
   void registerShortcut(const QString &key, const QString &label, const QString &category,
                         const QString &defaultSeq);
+
+  /// 注册一个字体 key（含标签、默认磅值）
+  void registerFont(const QString &key, const QString &label, int defaultSize);
 
   /// 从文件加载
   void loadFromFile();
@@ -154,7 +193,14 @@ private:
   QHash<QString, QString> m_shortcutCategories;
   QStringList m_shortcutOrder;
 
+  /// 字体默认值与自定义值
+  QHash<QString, int> m_fontDefaults;
+  QHash<QString, int> m_fontCustom;
+  QHash<QString, QString> m_fontLabels;
+  QStringList m_fontOrder;
+
   Theme m_theme = ThemeLight;
   bool m_initialized = false;
   bool m_globalStyleApplied = false;  ///< 全局 Fusion 风格是否已应用（仅应用一次）
+  QTimer *m_fontTimer = nullptr;      ///< 字体修改防抖定时器（合并连续修改，避免拖动卡顿）
 };

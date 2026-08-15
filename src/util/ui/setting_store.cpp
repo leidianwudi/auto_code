@@ -14,6 +14,7 @@
 #include <QJsonValue>
 #include <QStandardPaths>
 #include <QStyle>
+#include <QTimer>
 
 #include "src/util/common/code_constants.h"
 #include "src/util/ui/component/aui_style.h"
@@ -103,6 +104,18 @@ inline const char *kSC_DebugStepOver = "sc.debugStepOver";
 inline const char *kSC_DebugStepInto = "sc.debugStepInto";
 inline const char *kSC_DebugStepOut = "sc.debugStepOut";
 inline const char *kSC_Settings = "sc.settings";
+
+// ──────────────────────────────────────────────────────────────
+//  字体 key 常量
+// ──────────────────────────────────────────────────────────────
+
+inline const char *kFontUI = "font.ui";      ///< 窗口字体
+inline const char *kFontTree = "font.tree";  ///< 目录树字体
+inline const char *kFontCode = "font.code";  ///< 代码字体
+
+/// 字体大小允许范围（磅值）
+constexpr int kFontSizeMin = 6;
+constexpr int kFontSizeMax = 40;
 
 }  // namespace
 
@@ -276,6 +289,18 @@ SettingStore::SettingStore() : QObject(nullptr) {
                    QStringLiteral("调试"), QStringLiteral("Shift+F11"));
   registerShortcut(QString::fromLatin1(kSC_Settings), QStringLiteral("打开设置"),
                    QStringLiteral("视图"), QStringLiteral(""));
+
+  // ── 字体大小 ──
+  registerFont(QString::fromLatin1(kFontUI), QStringLiteral("窗口字体"), 10);
+  registerFont(QString::fromLatin1(kFontTree), QStringLiteral("目录树字体"), 10);
+  registerFont(QString::fromLatin1(kFontCode), QStringLiteral("代码字体"),
+               CodeConstants::Editor::kDefaultFontSize);
+
+  // 字体修改防抖：拖动字号 SpinBox 会连续触发，合并为一次应用，避免全窗口刷新卡顿
+  m_fontTimer = new QTimer(this);
+  m_fontTimer->setSingleShot(true);
+  m_fontTimer->setInterval(80);
+  connect(m_fontTimer, &QTimer::timeout, this, &SettingStore::onFontsDebounced);
 }
 
 // init — 加载配置文件
@@ -300,6 +325,12 @@ void SettingStore::registerShortcut(const QString &key, const QString &label,
   m_shortcutLabels[key] = label;
   m_shortcutCategories[key] = category;
   if (!m_shortcutOrder.contains(key)) m_shortcutOrder.append(key);
+}
+
+void SettingStore::registerFont(const QString &key, const QString &label, int defaultSize) {
+  m_fontDefaults[key] = defaultSize;
+  m_fontLabels[key] = label;
+  if (!m_fontOrder.contains(key)) m_fontOrder.append(key);
 }
 
 QString SettingStore::storePath() const {
@@ -340,6 +371,12 @@ void SettingStore::loadFromFile() {
   for (auto it = scs.begin(); it != scs.end(); ++it) {
     QKeySequence seq(it.value().toString());
     if (!seq.isEmpty() && m_shortcuts.contains(it.key())) m_shortcuts[it.key()] = seq;
+  }
+
+  // 自定义字体大小
+  QJsonObject fonts = root.value(QStringLiteral("fonts")).toObject();
+  for (auto it = fonts.begin(); it != fonts.end(); ++it) {
+    if (m_fontDefaults.contains(it.key())) m_fontCustom[it.key()] = it.value().toInt();
   }
 }
 
@@ -422,6 +459,68 @@ QString SettingStore::shortcutCategory(const QString &key) const {
   return m_shortcutCategories.value(key, QStringLiteral("其他"));
 }
 
+// ── 字体大小 ──
+
+int SettingStore::fontSize(const QString &key) const {
+  const int v = m_fontCustom.value(key, m_fontDefaults.value(key, 10));
+  return qBound(kFontSizeMin, v, kFontSizeMax);
+}
+
+void SettingStore::setFontSize(const QString &key, int size) {
+  if (!m_fontOrder.contains(key)) return;
+  size = qBound(kFontSizeMin, size, kFontSizeMax);
+  const int def = m_fontDefaults.value(key, 10);
+  if (size == def) {
+    m_fontCustom.remove(key);  // 与默认一致时视为恢复默认
+  } else {
+    m_fontCustom[key] = size;
+  }
+  if (key == QString::fromLatin1(kFontUI)) {
+    // 窗口字体：全窗口级刷新代价大，防抖合并后统一应用（见 onFontsDebounced）
+    m_fontTimer->start();
+  } else {
+    // 目录树/代码等组件字体：立即广播，由对应组件即时重设，无需全窗口刷新
+    emit fontsChanged();
+  }
+}
+
+QStringList SettingStore::fontKeys() const { return m_fontOrder; }
+
+QString SettingStore::fontLabel(const QString &key) const { return m_fontLabels.value(key, key); }
+
+bool SettingStore::hasCustomFont(const QString &key) const { return m_fontCustom.contains(key); }
+
+void SettingStore::resetFontSize(const QString &key) {
+  if (!m_fontCustom.remove(key) || !m_fontOrder.contains(key)) return;
+  if (key == QString::fromLatin1(kFontUI)) {
+    m_fontTimer->start();
+  } else {
+    emit fontsChanged();
+  }
+}
+
+void SettingStore::resetAllFonts() {
+  if (m_fontCustom.isEmpty()) return;
+  m_fontCustom.clear();
+  // 可能包含窗口字体，统一走防抖（其内也会广播 fontsChanged 供组件重置）
+  m_fontTimer->start();
+}
+
+void SettingStore::onFontsDebounced() {
+  // 一次性应用窗口字体到 qApp 与所有已创建窗口
+  applyWindowFont();
+  // 窗口级消费者（主窗口 / 设置界面）刷新
+  emit windowFontChanged();
+  // 组件级消费者（目录树 / 代码编辑器）按各自设置重置
+  emit fontsChanged();
+}
+
+void SettingStore::applyWindowFont() {
+  // 统一走框架入口：设置 qApp 字体并即时刷新所有已创建窗口，
+  // 避免遗漏工具栏等已存在控件的字体更新（见 AuiStyle::applyAppFont）
+  AuiStyle::applyAppFont();
+}
+
 // ── 持久化 ──
 
 void SettingStore::save() {
@@ -450,6 +549,12 @@ void SettingStore::save() {
   }
   root[QStringLiteral("shortcuts")] = scs;
 
+  QJsonObject fonts;
+  for (auto it = m_fontCustom.begin(); it != m_fontCustom.end(); ++it) {
+    fonts[it.key()] = it.value();
+  }
+  root[QStringLiteral("fonts")] = fonts;
+
   QFile f(storePath());
   if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) return;
   f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
@@ -460,6 +565,7 @@ void SettingStore::apply() {
   emit themeChanged();
   emit colorsChanged();
   emit shortcutsChanged();
+  emit fontsChanged();
 }
 
 // ── 全局风格 ──

@@ -22,11 +22,11 @@ class SettingStore;
  * @brief 单个可配置颜色条目
  */
 struct ColorEntry {
-  QString key;        ///< 颜色 key（对应 SettingStore 中的存储键）
-  QString label;      ///< 显示名
-  QString category;   ///< 分类（界面 / 编辑器 / 代码高亮）
-  QString hex;        ///< 当前颜色值（#RRGGBB）
-  bool custom;        ///< 是否为用户自定义
+  QString key;       ///< 颜色 key（对应 SettingStore 中的存储键）
+  QString label;     ///< 显示名
+  QString category;  ///< 分类（界面 / 编辑器 / 代码高亮）
+  QString hex;       ///< 当前颜色值（#RRGGBB）
+  bool custom;       ///< 是否为用户自定义
 };
 
 /**
@@ -34,10 +34,21 @@ struct ColorEntry {
  * @brief 单个可配置快捷键条目
  */
 struct ShortcutSettingEntry {
-  QString key;      ///< 快捷键 key
-  QString label;    ///< 显示名
-  QString category; ///< 分类（文件 / 视图 / 编辑 / 调试）
-  QString sequence; ///< 快捷键序列文本
+  QString key;       ///< 快捷键 key
+  QString label;     ///< 显示名
+  QString category;  ///< 分类（文件 / 视图 / 编辑 / 调试）
+  QString sequence;  ///< 快捷键序列文本
+};
+
+/**
+ * @struct FontEntry
+ * @brief 单个可配置字体大小条目
+ */
+struct FontEntry {
+  QString key;          ///< 字体 key（对应 SettingStore 中的存储键）
+  QString label;        ///< 显示名
+  int size = 0;         ///< 当前字体大小（磅值）
+  bool custom = false;  ///< 是否为用户自定义
 };
 
 /**
@@ -70,6 +81,15 @@ public:
   QList<ShortcutSettingEntry> shortcuts() const;
   /// 设置单个快捷键
   void setShortcut(const QString &key, const QString &sequence);
+
+  /// 所有字体条目
+  QList<FontEntry> fonts() const;
+  /// 设置单个字体大小（磅值）
+  void setFontSize(const QString &key, int size);
+  /// 重置单个字体大小为默认
+  void resetFontSize(const QString &key);
+  /// 重置所有字体大小
+  void resetAllFonts();
 
   /// 保存到磁盘
   void save();

@@ -27,6 +27,7 @@
 #include "src/util/ui/component/aui_icon.h"
 #include "src/util/ui/component/aui_style.h"
 #include "src/util/ui/rename_dialog.h"
+#include "src/util/ui/setting_store.h"
 
 /// 检查文件路径是否为 JSON 类型（.json 或 .jsonvue）
 static inline bool isJsonLike(const QString &path) {
@@ -62,9 +63,8 @@ void ModifiedFileDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
   QStyle *st = option.widget ? option.widget->style() : QApplication::style();
   st->drawControl(QStyle::CE_ItemViewItem, &baseOpt, painter, option.widget);
 
-  // 2) 字体
+  // 2) 字体（与普通节点一致，不加粗、字号不变）
   QFont textFont = tree ? tree->font() : option.font;
-  if (errorCount > 0) textFont.setBold(true);
   QFontMetrics fm(textFont);
 
   // 3) 布局：复选框 → 图标 → 文本
@@ -96,27 +96,44 @@ void ModifiedFileDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
   QString text = index.data(Qt::DisplayRole).toString();
 
   if (errorCount > 0) {
-    // 错误态：红色加粗文件名 + 错误数量
+    // 错误态：文件名红色（字号与普通一致），错误数量绘制在行最右侧，
+    // 锚定 option.rect 右缘，随目录宽度拖动始终贴右显示
+    painter->save();
+    painter->setFont(textFont);
     painter->setPen(AuiStyle::errorTextColor());
-    painter->drawText(textX, textBaseline, text + QStringLiteral("  (%1)").arg(errorCount));
+    // 文件名右边界为错误数量徽章预留位置，过长时省略号裁剪避免与徽章重叠
+    const QString countText = QStringLiteral("%1").arg(errorCount);
+    const int countWidth = fm.horizontalAdvance(countText);
+    const int textMaxX = option.rect.right() - countWidth - 14;  // 8px 右边距 + 6px 文字留白
+    painter->drawText(textX, textBaseline,
+                      fm.elidedText(text, Qt::ElideRight, qMax(0, textMaxX - textX)));
     painter->restore();
-    return;
+
+    // 错误数量徽章（红色，右对齐到行最右缘）
+    painter->save();
+    painter->setFont(textFont);
+    painter->setPen(AuiStyle::errorTextColor());
+    painter->drawText(option.rect.adjusted(-8, 0, -8, 0), Qt::AlignVCenter | Qt::AlignRight,
+                      countText);
+    painter->restore();
+  } else {
+    // 正常 / 修改态文字颜色（跟随选中态）
+    QPalette::ColorRole role =
+        (option.state & QStyle::State_Selected) ? QPalette::HighlightedText : QPalette::Text;
+    painter->setPen(option.palette.color(role));
+    painter->drawText(textX, textBaseline, text);
+    painter->restore();
   }
 
-  // 正常 / 修改态文字颜色（跟随选中态）
-  QPalette::ColorRole role =
-      (option.state & QStyle::State_Selected) ? QPalette::HighlightedText : QPalette::Text;
-  painter->setPen(option.palette.color(role));
-  painter->drawText(textX, textBaseline, text);
-  painter->restore();
-
   // 修改态：实心圆点绘制在文件名左侧小图标的右上角（VSCode 风格，不遮挡文件名）
+  // 颜色与 AuiCodeTabBar 的修改实心圆点保持一致（深色主题下为白色）；
+  // 大小由常量 kTreeModifiedDotRadius 控制。错误与修改可同时存在，圆点不因有错误而省略。
   if (modified) {
-    const int dotR = qMax(3, qMin(decoSize, 14) / 4);  // 圆点半径，随图标尺寸自适应
+    const int dotR = kTreeModifiedDotRadius;  // 圆点半径（px），见 tree_dir.h 常量
     QPoint dotCenter(iconRect.right() - dotR + 1, iconRect.top() + dotR + 1);
     painter->save();
     painter->setPen(Qt::NoPen);
-    painter->setBrush(AuiStyle::modifiedColor());
+    painter->setBrush(AuiStyle::modifiedDotColor());
     painter->setRenderHint(QPainter::Antialiasing, true);
     painter->drawEllipse(dotCenter, dotR, dotR);
     painter->restore();
@@ -146,6 +163,20 @@ TreeDir::TreeDir(QWidget *parent) : QTreeWidget(parent) {
   connect(this, &QTreeWidget::itemClicked, this, &TreeDir::onItemClicked);
   connect(this, &QTreeWidget::itemDoubleClicked, this, &TreeDir::onItemDoubleClicked);
   connect(this, &QTreeWidget::itemChanged, this, &TreeDir::onItemChanged);
+
+  // 从设置应用目录树字体大小，并在字体设置变化时即时刷新
+  applyFontFromSetting();
+  connect(&SettingStore::ins(), &SettingStore::fontsChanged, this, &TreeDir::applyFontFromSetting);
+}
+
+// ============================================================================
+// applyFontFromSetting — 从设置读取目录树字体大小并应用
+// ============================================================================
+
+void TreeDir::applyFontFromSetting() {
+  QFont f = font();
+  f.setPointSize(SettingStore::ins().fontSize(QStringLiteral("font.tree")));
+  setFont(f);
 }
 
 // ============================================================================
@@ -867,20 +898,36 @@ void TreeDir::setFileModified(const QString &filePath, bool modified) {
 //  setFileError / clearFileError — 设置/清除文件错误状态
 // ════════════════════════════════════════════════════════════
 
+/// 计算节点子树（含自身）内所有真实文件节点（UserRole+1 非空）的错误数量总和。
+/// 文件夹自身的传播值不参与计算，只信任文件节点携带的错误数量，避免旧值污染父节点。
+static int subtreeErrorCount(QTreeWidgetItem *item) {
+  int sum = 0;
+  if (!item->data(0, Qt::UserRole + 1).toString().isEmpty())
+    sum += item->data(0, Qt::UserRole + 3).toInt();  // 文件节点自身错误数
+  for (int i = 0; i < item->childCount(); ++i) sum += subtreeErrorCount(item->child(i));
+  return sum;
+}
+
 void TreeDir::setFileError(const QString &filePath, int errorCount) {
   QTreeWidgetItem *item = findItemByPath(filePath);
-  if (item) {
-    // 存储错误数量，由 ModifiedFileDelegate 绘制红色文件名和错误数量徽章
-    item->setData(0, Qt::UserRole + 3, errorCount);
-  }
+  if (!item) return;
+  // 存储错误数量，由 ModifiedFileDelegate 绘制红色文件名和最右侧错误数量徽章
+  item->setData(0, Qt::UserRole + 3, errorCount);
+  // 父文件夹同步显示子文件错误次数总和
+  for (QTreeWidgetItem *p = item->parent(); p; p = p->parent())
+    p->setData(0, Qt::UserRole + 3, subtreeErrorCount(p));
+  update();  // 触发重绘
 }
 
 void TreeDir::clearFileError(const QString &filePath) {
   QTreeWidgetItem *item = findItemByPath(filePath);
-  if (item) {
-    // 清除错误数量
-    item->setData(0, Qt::UserRole + 3, 0);
-  }
+  if (!item) return;
+  // 清除错误数量
+  item->setData(0, Qt::UserRole + 3, 0);
+  // 父文件夹同步重算错误次数总和
+  for (QTreeWidgetItem *p = item->parent(); p; p = p->parent())
+    p->setData(0, Qt::UserRole + 3, subtreeErrorCount(p));
+  update();  // 触发重绘
 }
 
 // ════════════════════════════════════════════════════════════

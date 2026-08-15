@@ -183,6 +183,9 @@ private:
   void syncJsonVueBeforeSave();
   /// 应用设置后刷新全局样式与编辑器高亮（主题/颜色变化时调用）
   void refreshTheme();
+  /// 窗口字体变化后的轻量刷新：字体已由 SettingStore 应用到所有窗口，
+  /// 这里只需重建标题栏文字样式（标题字号随窗口字号缩放），避免走 refreshTheme 重活
+  void refreshWindowFont();
   /// 推入导航历史记录
   void pushNavigationHistory(const QString &filePath, int line, int column = 0);
   /// 跳转到指定位置（内部使用，不推入历史）

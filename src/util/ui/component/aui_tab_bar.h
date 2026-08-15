@@ -39,6 +39,7 @@ public:
     QColor activeText;      ///< 选中 tab 亮色文字
     QColor hoverText;       ///< hover 文字
     QColor dimText;         ///< 未选中灰色文字
+    QColor modifiedDot;     ///< 修改实心圆点颜色（深色主题白色，浅色主题灰色）
     QColor border;          ///< 底部分隔线
     QColor accent;          ///< 顶部蓝色指示条 #0e7afe
     QColor errorText;       ///< 错误标签文字红色

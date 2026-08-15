@@ -150,6 +150,9 @@ public:
   /// 从 SettingStore 重新读取颜色并刷新高亮（主题切换时调用）
   void reloadColors();
 
+  /// 从设置读取代码字体大小并应用（构造与字体设置变化时调用）
+  void applyFontFromSetting();
+
 signals:
   void validationMessage(const QString &message, int errorCount = 0);
   void requestGoToLine(const QString &filePath, int line);

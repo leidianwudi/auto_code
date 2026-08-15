@@ -22,6 +22,7 @@ AuiTabBar::Style AuiTabBar::currentStyle() {
   st.activeText = AuiStyle::activeTabTextColor();       // 选中亮色文字
   st.hoverText = AuiStyle::secondaryTextColor();        // hover 文字
   st.dimText = AuiStyle::inactiveTabColor();            // 未选中灰
+  st.modifiedDot = AuiStyle::modifiedDotColor();        // 修改实心圆点（深色主题白色）
   st.border = AuiStyle::borderColor();                  // 底部分隔线
   st.accent = QColor(0x0e, 0x7a, 0xfe);                 // 顶部蓝色指示条
   st.errorText = AuiStyle::errorTextColor();            // 错误标签文字
@@ -58,10 +59,10 @@ void AuiTabBar::paintCloseButton(QPainter &p, const QRect &rect, bool hovered, b
   if (rect.isNull()) return;
 
   if (modified && !hovered) {
-    // 已修改且未悬停 → 灰色实心圆点（VSCode 风格，非红色），位于 X 号中心；
-    // 鼠标移入后隐藏圆点、显示 X 号与悬停背景
+    // 已修改且未悬停 → 实心圆点（深色主题白色，浅色主题灰色；VSCode 风格，非红色），
+    // 位于 X 号中心；鼠标移入后隐藏圆点、显示 X 号与悬停背景
     p.setPen(Qt::NoPen);
-    p.setBrush(st.dimText);
+    p.setBrush(st.modifiedDot);
     const int r = qMax(3, qMin(rect.width(), rect.height()) / 3);
     // 垂直偏移由 kTabModifiedDotDy 控制（相对按钮中心，正值向下）
     p.drawEllipse(QPoint(rect.center().x(), rect.center().y() + kTabModifiedDotDy), r, r);

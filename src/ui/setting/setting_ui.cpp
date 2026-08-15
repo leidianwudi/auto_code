@@ -7,6 +7,7 @@
 
 #include <QColorDialog>
 #include <QDialogButtonBox>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QKeySequenceEdit>
@@ -14,6 +15,8 @@
 #include <QListWidget>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QSignalBlocker>
+#include <QSpinBox>
 #include <QStackedWidget>
 #include <QTableWidget>
 #include <QTableWidgetItem>
@@ -72,6 +75,7 @@ void SettingUi::setupUI() {
   m_sections = new QListWidget(this);
   m_sections->setObjectName(QStringLiteral("settingSectionList"));
   m_sections->addItem(QString::fromUtf8(CodeConstants::UiText::kColor));
+  m_sections->addItem(QStringLiteral("字体"));
   m_sections->addItem(QStringLiteral("快捷键"));
   m_sections->setFixedWidth(140);
   m_sections->setCurrentRow(0);
@@ -87,6 +91,7 @@ void SettingUi::setupUI() {
   // ── 右侧设置页堆栈 ──
   m_stack = new QStackedWidget(this);
   buildColorPage();
+  buildFontPage();
   buildShortcutPage();
   bodyLayout->addWidget(m_stack, 1);
 
@@ -108,6 +113,12 @@ void SettingUi::setupUI() {
   // 主题 / 颜色变化时即时刷新本对话框固化的样式表（无需重启）
   connect(&SettingStore::ins(), &SettingStore::themeChanged, this, &SettingUi::refreshStyle);
   connect(&SettingStore::ins(), &SettingStore::colorsChanged, this, &SettingUi::refreshStyle);
+
+  // 窗口字体变化时重建对话框样式表（对话框文字字号随窗口字号缩放）+ 刷新
+  connect(&SettingStore::ins(), &SettingStore::windowFontChanged, this, [this]() {
+    setStyleSheet(AuiStyle::mainStyleSheet() + AuiStyle::dialogStyleSheet());
+    refreshStyle();
+  });
 
   // ── 应用窗口框架（标题栏 + 内容 + 1px 边框） ──
   AuiWindow::applyWindowFrame(this, tb.titleBar, contentWidget);
@@ -206,6 +217,81 @@ void SettingUi::buildColorPage() {
   m_stack->addWidget(page);
 }
 
+void SettingUi::buildFontPage() {
+  auto *page = new QWidget;
+  auto *layout = new QVBoxLayout(page);
+  layout->setContentsMargins(0, 0, 0, 0);
+  layout->setSpacing(8);
+
+  // ── 顶部：标题与说明 ──
+  auto *title = new QLabel(QStringLiteral("字体"), page);
+  QFont tf = AuiStyle::createEditorFont();
+  tf.setBold(true);
+  title->setFont(tf);
+  layout->addWidget(title);
+
+  auto *desc = new QLabel(QStringLiteral("调整各部分文字大小（磅值），修改后立即生效。"), page);
+  desc->setWordWrap(true);
+  desc->setStyleSheet(QStringLiteral("color: %1;").arg(AuiStyle::inactiveTabColor().name()));
+  layout->addWidget(desc);
+
+  // 分隔线
+  auto *sep = new QFrame(page);
+  sep->setFrameShape(QFrame::HLine);
+  sep->setStyleSheet(QStringLiteral("color: %1;").arg(AuiStyle::borderColor().name()));
+  layout->addWidget(sep);
+
+  // ── 字体大小行（名称 + SpinBox + 单行重置） ──
+  auto *grid = new QGridLayout;
+  grid->setHorizontalSpacing(16);
+  grid->setVerticalSpacing(12);
+  if (m_model) {
+    const QList<FontEntry> entries = m_model->fonts();
+    int row = 0;
+    for (const auto &e : entries) {
+      auto *label = new QLabel(e.label, page);
+      grid->addWidget(label, row, 0);
+
+      auto *spin = new QSpinBox(page);
+      spin->setRange(6, 40);
+      spin->setSuffix(QStringLiteral(" pt"));
+      spin->setProperty("fontKey", e.key);
+      spin->setValue(e.size);
+      spin->setMinimumWidth(120);
+      grid->addWidget(spin, row, 1);
+      m_fontSpins.insert(e.key, spin);
+      connect(spin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+              &SettingUi::onFontValueChanged);
+
+      auto *resetBtn = new QPushButton(QStringLiteral("重置"), page);
+      AuiButton::applyDialogButtonStyle(resetBtn);
+      resetBtn->setEnabled(e.custom);
+      resetBtn->setProperty("fontKey", e.key);
+      grid->addWidget(resetBtn, row, 2);
+      m_fontResetBtns.insert(e.key, resetBtn);
+      connect(resetBtn, &QPushButton::clicked, this, &SettingUi::onResetFont);
+      ++row;
+    }
+  }
+  grid->setColumnStretch(1, 1);
+  layout->addLayout(grid);
+
+  layout->addStretch(1);
+
+  // ── 底部：重置所有字体（与颜色页一致） ──
+  auto *resetRow = new QHBoxLayout;
+  resetRow->addStretch();
+  m_resetAllFontBtn = new QPushButton(QStringLiteral("重置所有字体"), page);
+  AuiButton::applyDialogButtonStyle(m_resetAllFontBtn);
+  m_resetAllFontBtn->setMinimumWidth(120);
+  resetRow->addWidget(m_resetAllFontBtn);
+  layout->addLayout(resetRow);
+
+  connect(m_resetAllFontBtn, &QPushButton::clicked, this, &SettingUi::onResetAllFonts);
+
+  m_stack->addWidget(page);
+}
+
 void SettingUi::buildShortcutPage() {
   auto *page = new QWidget;
   auto *layout = new QVBoxLayout(page);
@@ -254,6 +340,7 @@ void SettingUi::buildShortcutPage() {
 void SettingUi::reloadAll() {
   reloadTheme();
   reloadColors();
+  reloadFonts();
   reloadShortcuts();
 }
 
@@ -298,6 +385,8 @@ void SettingUi::refreshStyle() {
   // 重新填充色块与快捷键徽章（用当前主题色重建）
   reloadColors();
   reloadShortcuts();
+  // 重新同步字号 SpinBox 与重置按钮状态（字体变化时刷新，其他场景无害）
+  reloadFonts();
 }
 
 void SettingUi::reloadTheme() {
@@ -364,6 +453,18 @@ void SettingUi::populateColorTable() {
 void SettingUi::reloadColors() {
   if (!m_model) return;
   populateColorTable();
+}
+
+void SettingUi::reloadFonts() {
+  if (!m_model) return;
+  const QList<FontEntry> entries = m_model->fonts();
+  for (const auto &e : entries) {
+    if (auto *spin = m_fontSpins.value(e.key)) {
+      const QSignalBlocker blocker(spin);
+      spin->setValue(e.size);
+    }
+    if (auto *btn = m_fontResetBtns.value(e.key)) btn->setEnabled(e.custom);
+  }
 }
 
 void SettingUi::reloadShortcuts() {
@@ -462,6 +563,35 @@ void SettingUi::onShortcutDoubleClicked(int row, int column) {
   m_model->setShortcut(e.key, newSeq);
   m_model->save();
   reloadShortcuts();
+}
+
+void SettingUi::onFontValueChanged() {
+  auto *spin = qobject_cast<QSpinBox *>(sender());
+  if (!spin || !m_model) return;
+  const QString key = spin->property("fontKey").toString();
+  if (key.isEmpty()) return;
+  m_model->setFontSize(key, spin->value());
+  m_model->save();
+  // 修改「窗口字体」时 qApp 字体已由 SettingStore 应用，此处的 SpinBox 会被
+  // QApplication 字体传播影响，需重新同步当前值避免 UI 显示跳动
+  reloadFonts();
+}
+
+void SettingUi::onResetFont() {
+  auto *btn = qobject_cast<QPushButton *>(sender());
+  if (!btn || !m_model) return;
+  const QString key = btn->property("fontKey").toString();
+  if (key.isEmpty()) return;
+  m_model->resetFontSize(key);
+  m_model->save();
+  reloadFonts();
+}
+
+void SettingUi::onResetAllFonts() {
+  if (!m_model) return;
+  m_model->resetAllFonts();
+  m_model->save();
+  reloadFonts();
 }
 
 // ════════════════════════════════════════════════════════════

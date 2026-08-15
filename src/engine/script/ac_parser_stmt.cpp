@@ -968,13 +968,25 @@ bool AcParser::parseClassProperty(ClassDef &cd, AccessLevel access, bool isStati
   prop.access = access;
   // 解析类型注解：let prop: Type = ...
   AcType propType;
-  if (parseTypeAnnotation(propType)) {
+  const bool hasTypeAnnotation = parseTypeAnnotation(propType);
+  if (hasTypeAnnotation) {
     prop.type = propType;
   }
-  if (peek().type == TOK_EQUALS) {
+  const bool hasValue = (peek().type == TOK_EQUALS);
+  if (hasValue) {
     advance();
     prop.value = std::make_unique<Expr>();
     if (!parseExpr(*prop.value)) return false;
+  }
+  // 既无类型注解也无初始值：非法属性声明（例如类体内误写的裸标识符 aaaaa），
+  // 必须报错，避免被静默当作无类型属性接受
+  if (!hasTypeAnnotation && !hasValue) {
+    m_error = QStringLiteral(
+                  "invalid class member '%1' — property requires a type annotation "
+                  "or an initial value (e.g. %2: Type) at line %3")
+                  .arg(nameToken.text, nameToken.text)
+                  .arg(nameToken.line);
+    return false;
   }
   cd.properties.append(prop);
   return true;
