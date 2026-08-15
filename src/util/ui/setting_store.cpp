@@ -603,6 +603,11 @@ QPalette SettingStore::buildPalette() const {
   p.setColor(QPalette::HighlightedText, text);
   p.setColor(QPalette::ToolTipBase, tipBg);
   p.setColor(QPalette::ToolTipText, text);
+  // 深色主题下 QToolTip 改为白底 + 深色文字，避免与深色提示背景颜色过近、影响可读性
+  if (theme() == ThemeDark) {
+    p.setColor(QPalette::ToolTipBase, QColor(Qt::white));
+    p.setColor(QPalette::ToolTipText, QColor(0x33, 0x33, 0x33));
+  }
   p.setColor(QPalette::Link, sel);
 
   // 禁用态统一降为边框色，避免原生控件回落到系统主题色

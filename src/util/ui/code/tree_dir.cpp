@@ -73,14 +73,33 @@ void ModifiedFileDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
     checkWidth = tree ? tree->style()->pixelMetric(QStyle::PM_IndicatorWidth) + 4 : 20;
 
   QIcon icon = index.data(Qt::DecorationRole).value<QIcon>();
-  int decoSize = option.decorationSize.width();
-  if (decoSize <= 0) {
-    decoSize = icon.isNull() ? 0 : icon.actualSize(QSize(16, 16)).width();
-    if (decoSize <= 0) decoSize = 16;
-  }
+  int maxIconH = option.decorationSize.height();
+  if (maxIconH <= 0) maxIconH = 16;
+  // 按图标实际尺寸绘制（默认 16x16），高度不超过行图标高度
+  QSize actual = icon.isNull() ? QSize(0, 0) : icon.actualSize(QSize(64, maxIconH));
+  int decoW = actual.width() > 0 ? actual.width() : option.decorationSize.width();
+  int decoH = actual.height() > 0 ? qMin(actual.height(), maxIconH) : maxIconH;
   int iconX = option.rect.left() + checkWidth;
-  int iconY = option.rect.top() + (option.rect.height() - decoSize) / 2;
-  QRect iconRect(iconX, iconY, decoSize, decoSize);
+  int iconY = option.rect.top() + (option.rect.height() - decoH) / 2;
+  QRect iconRect(iconX, iconY, decoW, decoH);
+
+  // 启动项标记：在图标左侧空隙绘制绿色右向三角（仅移动三角，不移动图标文字位置）
+  const bool isStartup = index.data(kTreeStartupRole).toBool();
+  if (isStartup) {
+    const int triW = kTreeStartupTriWidth;
+    const int cy = iconRect.center().y();
+    const int triHalfH = qRound(maxIconH * 0.45);    // 高度约为图标高度的 90%
+    const int x0 = qMax(1, iconRect.left() - triW);  // 防止贴住视口左缘时被裁剪
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing, true);
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(AuiStyle::compileButtonColor());  // 绿色填充
+    QPolygon tri;
+    tri << QPoint(x0, cy - triHalfH) << QPoint(x0, cy + triHalfH) << QPoint(iconRect.left(), cy);
+    painter->drawPolygon(tri);
+    painter->restore();
+  }
+
   if (!icon.isNull()) {
     QIcon::Mode mode = (option.state & QStyle::State_Selected) ? QIcon::Selected : QIcon::Normal;
     icon.paint(painter, iconRect, Qt::AlignCenter, mode);
@@ -117,25 +136,14 @@ void ModifiedFileDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
                       countText);
     painter->restore();
   } else {
-    // 正常 / 修改态文字颜色（跟随选中态）
+    // 正常 / 修改态文字颜色：修改的节点以琥珀色显示（VSCode 风格，替代原来的实心圆点），
+    // 未修改跟随选中态；错误态优先（红色），两者并存时显示错误色
     QPalette::ColorRole role =
         (option.state & QStyle::State_Selected) ? QPalette::HighlightedText : QPalette::Text;
-    painter->setPen(option.palette.color(role));
+    QColor textColor = option.palette.color(role);
+    if (modified) textColor = AuiStyle::modifiedTextColor();
+    painter->setPen(textColor);
     painter->drawText(textX, textBaseline, text);
-    painter->restore();
-  }
-
-  // 修改态：实心圆点绘制在文件名左侧小图标的右上角（VSCode 风格，不遮挡文件名）
-  // 颜色与 AuiCodeTabBar 的修改实心圆点保持一致（深色主题下为白色）；
-  // 大小由常量 kTreeModifiedDotRadius 控制。错误与修改可同时存在，圆点不因有错误而省略。
-  if (modified) {
-    const int dotR = kTreeModifiedDotRadius;  // 圆点半径（px），见 tree_dir.h 常量
-    QPoint dotCenter(iconRect.right() - dotR + 1, iconRect.top() + dotR + 1);
-    painter->save();
-    painter->setPen(Qt::NoPen);
-    painter->setBrush(AuiStyle::modifiedDotColor());
-    painter->setRenderHint(QPainter::Antialiasing, true);
-    painter->drawEllipse(dotCenter, dotR, dotR);
     painter->restore();
   }
 }
@@ -167,6 +175,19 @@ TreeDir::TreeDir(QWidget *parent) : QTreeWidget(parent) {
   // 从设置应用目录树字体大小，并在字体设置变化时即时刷新
   applyFontFromSetting();
   connect(&SettingStore::ins(), &SettingStore::fontsChanged, this, &TreeDir::applyFontFromSetting);
+
+  // 文件夹展开/收起时切换展开/收起样式图标（仅目录节点）
+  connect(this, &QTreeWidget::itemExpanded, this, [this](QTreeWidgetItem *item) {
+    if (item->data(0, Qt::UserRole + 1).toString().isEmpty()) item->setIcon(0, m_folderOpenIcon);
+  });
+  connect(this, &QTreeWidget::itemCollapsed, this, [this](QTreeWidgetItem *item) {
+    if (item->data(0, Qt::UserRole + 1).toString().isEmpty()) item->setIcon(0, m_folderIcon);
+  });
+
+  // 初始化文件与文件夹图标；主题/颜色变化时重新生成（图标颜色随主题）
+  refreshIcons();
+  connect(&SettingStore::ins(), &SettingStore::themeChanged, this, &TreeDir::refreshIcons);
+  connect(&SettingStore::ins(), &SettingStore::colorsChanged, this, &TreeDir::refreshIcons);
 }
 
 // ============================================================================
@@ -325,7 +346,7 @@ void TreeDir::addDirectoryToTree(QTreeWidgetItem *parentItem, const QString &dir
   for (const QFileInfo &info : dirs) {
     auto *dirItem = parentItem ? new QTreeWidgetItem(parentItem) : new QTreeWidgetItem(this);
     dirItem->setText(0, info.fileName());
-    dirItem->setIcon(0, style()->standardIcon(QStyle::SP_DirIcon));
+    dirItem->setIcon(0, m_folderIcon);  // 收起样式，展开时由 itemExpanded 切到展开样式
     dirItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
     subDirs.append({dirItem, info.absoluteFilePath()});
   }
@@ -339,8 +360,13 @@ void TreeDir::addDirectoryToTree(QTreeWidgetItem *parentItem, const QString &dir
   for (const QFileInfo &info : files) {
     auto *fileItem = parentItem ? new QTreeWidgetItem(parentItem) : new QTreeWidgetItem(this);
     fileItem->setText(0, info.fileName());
-    fileItem->setIcon(0, style()->standardIcon(QStyle::SP_FileIcon));
+    // 按后缀区分三种文件图标（ac 蓝 / json 琥珀 / tpl 绿）
+    fileItem->setIcon(0, iconForSuffix(info.suffix()));
     fileItem->setData(0, Qt::UserRole + 1, info.absoluteFilePath());
+
+    // 启动项标记：.ac 文件按 m_startupFiles 设置（三角由 ModifiedFileDelegate 绘制）
+    if (info.suffix().compare(QStringLiteral("ac"), Qt::CaseInsensitive) == 0)
+      fileItem->setData(0, kTreeStartupRole, m_startupFiles.contains(info.absoluteFilePath()));
 
     if (isJsonLike(info.absoluteFilePath())) {
       fileItem->setFlags(fileItem->flags() | Qt::ItemIsUserCheckable);
@@ -668,16 +694,46 @@ void TreeDir::applyStateToTree(QTreeWidgetItem *item, const QStringList &checked
 // 启动项管理
 // ============================================================================
 
-/// @brief 创建带三角标记的启动项图标 — 委托 AuiButton 叠加绿色三角
-QIcon TreeDir::makeStartupIcon() const {
-  return AuiIcon::createStartupOverlayIcon(style()->standardIcon(QStyle::SP_FileIcon));
+/// @brief 按文件后缀返回对应的类型图标
+QIcon TreeDir::iconForSuffix(const QString &suffix) const {
+  const QString suf = suffix.toLower();
+  if (suf == QStringLiteral("ac")) return m_acIcon;
+  if (suf == QStringLiteral("json")) return m_jsonIcon;
+  if (suf == QStringLiteral("jsonvue")) return m_jsonVueIcon;
+  return m_tplIcon;  // tpl 及未知后缀
 }
 
-/// @brief 根据 m_startupFiles 集合更新所有 .ac 文件节点的图标
-void TreeDir::refreshStartupIcons() {
-  QIcon startupIcon = makeStartupIcon();
-  QIcon normalIcon = style()->standardIcon(QStyle::SP_FileIcon);
+/// @brief 重新生成文件与文件夹图标，并应用到所有节点与启动项图标
+void TreeDir::refreshIcons() {
+  m_acIcon = AuiIcon::createFileTypeIcon(QStringLiteral("ac"));
+  m_jsonIcon = AuiIcon::createFileTypeIcon(QStringLiteral("json"));
+  m_jsonVueIcon = AuiIcon::createFileTypeIcon(QStringLiteral("jsonvue"));
+  m_tplIcon = AuiIcon::createFileTypeIcon(QStringLiteral("tpl"));
+  m_folderIcon = AuiIcon::createFolderIcon(false);
+  m_folderOpenIcon = AuiIcon::createFolderIcon(true);
 
+  // 遍历所有节点，按后缀设置文件图标、按展开状态设置文件夹图标
+  QList<QTreeWidgetItem *> stack;
+  for (int i = 0; i < topLevelItemCount(); ++i) stack.append(topLevelItem(i));
+  while (!stack.isEmpty()) {
+    QTreeWidgetItem *item = stack.takeLast();
+    for (int i = 0; i < item->childCount(); ++i) stack.append(item->child(i));
+
+    QString filePath = item->data(0, Qt::UserRole + 1).toString();
+    if (filePath.isEmpty()) {
+      // 目录节点：按当前展开状态用对应样式
+      item->setIcon(0, item->isExpanded() ? m_folderOpenIcon : m_folderIcon);
+    } else {
+      item->setIcon(0, iconForSuffix(QFileInfo(filePath).suffix()));
+    }
+  }
+  refreshStartupIcons();
+}
+
+/// @brief 根据 m_startupFiles 集合更新所有 .ac 文件节点的启动标记（kTreeStartupRole）。
+///        图标始终用普通 m_acIcon（位置不变），启动标记由 ModifiedFileDelegate 在图标
+///        左侧绘制绿色三角，因此不再需要替换节点图标。
+void TreeDir::refreshStartupIcons() {
   // 遍历所有顶层节点
   QList<QTreeWidgetItem *> stack;
   for (int i = 0; i < topLevelItemCount(); ++i) stack.append(topLevelItem(i));
@@ -688,12 +744,11 @@ void TreeDir::refreshStartupIcons() {
 
     QString filePath = item->data(0, Qt::UserRole + 1).toString();
     if (!filePath.isEmpty() && filePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive)) {
-      if (m_startupFiles.contains(filePath))
-        item->setIcon(0, startupIcon);
-      else
-        item->setIcon(0, normalIcon);
+      item->setIcon(0, m_acIcon);
+      item->setData(0, kTreeStartupRole, m_startupFiles.contains(filePath));
     }
   }
+  update();  // 触发重绘显示三角标记
 }
 
 /// @brief 获取所有启动项文件绝对路径

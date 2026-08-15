@@ -24,13 +24,15 @@
 class QTreeWidgetItem;
 class QContextMenuEvent;
 
-/// 修改实心圆点半径（px）：直径 8，绘制在文件图标右上角，
-/// 比默认略大便于识别，又不遮挡文件名
-constexpr int kTreeModifiedDotRadius = 4;
+/// 启动项标记（绿色三角）宽度（px），绘制在文件图标左侧空隙处
+constexpr int kTreeStartupTriWidth = 7;
+/// 启动项标记数据角色：节点是否为启动项（.ac 文件）→ bool
+constexpr int kTreeStartupRole = Qt::UserRole + 4;
 
-/// 文件树绘制代理 — 自绘复选框、图标与文本；已修改文件在图标右上角绘制实心圆点
-/// （颜色与 AuiCodeTabBar 修改圆点一致，深色主题下为白色），有错误的节点以红色
-/// 显示并在行最右侧绘制错误数量徽章（父文件夹显示子文件错误次数总和）
+/// 文件树绘制代理 — 自绘复选框、图标与文本；
+/// - 已修改文件/文件夹名称以琥珀色显示（VSCode 风格，替代原来的实心圆点）
+/// - 启动项 .ac 文件在图标左侧绘制绿色右向三角标记（不移动图标文字位置）
+/// - 有错误的节点以红色显示并在行最右侧绘制错误数量徽章（父文件夹显示子文件错误次数总和）
 class ModifiedFileDelegate : public QStyledItemDelegate {
   Q_OBJECT
 public:
@@ -138,10 +140,13 @@ private:
   /// 递归设置节点的勾选状态
   void applyStateToTree(QTreeWidgetItem *item, const QStringList &checkedAbsPaths);
 
-  /// 为启动项创建带三角标记的图标
-  QIcon makeStartupIcon() const;
+  /// 按文件后缀返回对应的类型图标（ac / json(jsonvue) / tpl）
+  QIcon iconForSuffix(const QString &suffix) const;
 
-  /// 根据启动项集合更新树中所有 .ac 文件的图标
+  /// 重新生成文件与文件夹图标并应用到所有节点（主题/颜色变化时调用）
+  void refreshIcons();
+
+  /// 根据启动项集合更新树中所有 .ac 文件的启动标记（kTreeStartupRole）
   void refreshStartupIcons();
 
   /// 按绝对路径查找树节点（找不到返回 nullptr）
@@ -183,6 +188,13 @@ private:
   QString m_selectedStartup;     ///< 当前下拉框选中的启动项路径
 
   bool m_visualToggle = false;  ///< 可视化编辑按钮状态
+
+  QIcon m_acIcon;          ///< .ac 文件图标（蓝色「A」）
+  QIcon m_jsonIcon;        ///< .json 文件图标（琥珀「J」）
+  QIcon m_jsonVueIcon;     ///< .jsonvue 文件图标（琥珀「V」）
+  QIcon m_tplIcon;         ///< .tpl 文件图标（绿色「T」）
+  QIcon m_folderIcon;      ///< 文件夹收起图标
+  QIcon m_folderOpenIcon;  ///< 文件夹展开图标
 
   TreeStateStore m_store;         ///< 状态持久化数据层（相对路径）
   QTimer *m_saveTimer = nullptr;  ///< 保存防抖定时器

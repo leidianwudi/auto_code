@@ -134,6 +134,7 @@ void MainDevMgr::onFocusChanged(QWidget * /*oldFocus*/, QWidget *newFocus) {
 
   QWidget *w = newFocus;
   CodeEditor *foundEditor = nullptr;
+  QString jsonVuePath;  // 焦点位于 .jsonvue 可视化编辑器内部控件时对应的文件路径
 
   while (w) {
     if (auto *tabs = qobject_cast<QTabWidget *>(w)) {
@@ -143,17 +144,27 @@ void MainDevMgr::onFocusChanged(QWidget * /*oldFocus*/, QWidget *newFocus) {
     if (!foundEditor) {
       if (auto *editor = qobject_cast<CodeEditor *>(w)) foundEditor = editor;
     }
+    // 可视化编辑器（JsonVueEditor）内的控件获得焦点时，向上找到所属 JsonVueWidget
+    if (jsonVuePath.isEmpty()) {
+      if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) {
+        jsonVuePath = jvw->codeEditor()->objectName();
+      }
+    }
     w = w->parentWidget();
   }
 
+  QString filePath;
   if (foundEditor) {
     connectEditor(foundEditor);
-    // 焦点切换到编辑器时，同步定位树形目录到当前文件（处理拆分面板间切换的场景）
-    // 会话恢复阶段抑制定位，避免启动还原文件时自动展开/滚动目录树
-    QString filePath = foundEditor->objectName();
-    if (!filePath.isEmpty() && !m_restoringSession) {
-      m_ui->fileTree()->locateFile(filePath);
-    }
+    filePath = foundEditor->objectName();
+  } else if (!jsonVuePath.isEmpty()) {
+    filePath = jsonVuePath;
+  }
+
+  if (!filePath.isEmpty() && !m_restoringSession) {
+    // 焦点切换到编辑器/可视化编辑器时，同步定位树形目录到当前文件
+    // （处理拆分面板间切换、以及可视化编辑控件获得焦点的场景）
+    m_ui->fileTree()->locateFile(filePath);
   }
 
   // 找出焦点所在的面板组 → 应用 dimming

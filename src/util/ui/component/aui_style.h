@@ -94,6 +94,12 @@ public:
     return SettingStore::ins().color(QStringLiteral("ui.modifiedColor"));
   }
 
+  /// 修改文件名颜色（VSCode 风格琥珀色），与错误红、普通文字色区分
+  static QColor modifiedTextColor() {
+    const bool dark = (SettingStore::ins().theme() == SettingStore::ThemeDark);
+    return dark ? QColor(0xe6, 0xb2, 0x2e) : QColor(0x9a, 0x6a, 0x00);
+  }
+
   /// 错误文本颜色（输出面板用），红色
   static QColor errorTextColor() {
     return SettingStore::ins().color(QStringLiteral("ui.errorTextColor"));

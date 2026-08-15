@@ -78,7 +78,8 @@ QString AuiStyle::mainStyleSheet() {
              "QHeaderView::section { color: %2; }"
              "QMenuBar { color: %2; }"
              "QMenuBar::item { color: %2; }"
-             "QToolTip { color: %2; }"
+             // QToolTip 文字色交由调色板 ToolTipText 控制（深色主题为白底深字），
+             // 不在全局样式表里固定成文字色，避免覆盖调色板的高对比配色
              "QStatusBar { background: %1; color: %2; }"
              "QStatusBar::item { border: none; }"
              "QMenu { background: %1; border: 1px solid %5; padding: 4px 0px; }"
