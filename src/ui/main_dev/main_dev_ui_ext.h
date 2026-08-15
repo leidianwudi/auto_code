@@ -2,16 +2,16 @@
  * @file main_dev_ui_ext.h
  * @brief 编辑器面板扩展控件 — 可拖拽标签栏与接收拖放的面板
  *
- * DraggableTabBar  ：支持跨面板拖拽的标签栏
+ * DraggableTabBar  ：支持跨面板拖拽的标签栏（自绘样式继承自通用控件 AuiCodeTabBar）
  * DimmableTabWidget：内置 DraggableTabBar
  * 的标签页容器，标签页拖入时自动创建/销毁面板
  */
 
 #pragma once
 
-#include <QSet>
-#include <QTabBar>
 #include <QTabWidget>
+
+#include "src/util/ui/component/aui_code_tab_bar.h"
 
 class QDragEnterEvent;
 class QDragMoveEvent;
@@ -22,15 +22,11 @@ class QMouseEvent;
 //  DraggableTabBar  — 支持跨面板拖拽的标签栏
 // ════════════════════════════════════════════════════════════
 
-class DraggableTabBar : public QTabBar {
+class DraggableTabBar : public AuiCodeTabBar {
   Q_OBJECT
 
 public:
   explicit DraggableTabBar(QWidget *parent = nullptr);
-
-  /// 设置标签页的修改状态（已修改则在标签右侧绘制红色 "*"）
-  void setTabModified(int index, bool modified);
-  bool isTabModified(int index) const;
 
 signals:
   /// 标签从 fromBar(fromIndex) 拖拽到此 bar 的 toIndex 位置
@@ -42,17 +38,11 @@ signals:
   void closeAllRequested();
 
 protected:
-  bool event(QEvent *event) override;
   void mousePressEvent(QMouseEvent *event) override;
   void mouseMoveEvent(QMouseEvent *event) override;
   void dragEnterEvent(QDragEnterEvent *event) override;
   void dragMoveEvent(QDragMoveEvent *event) override;
   void dropEvent(QDropEvent *event) override;
-  void paintEvent(QPaintEvent *event) override;
-  /// 标签页被移除时同步修正 m_modifiedTabs 的索引
-  void tabRemoved(int index) override;
-  /// 标签页被插入后本地化关闭按钮提示（真实子控件场景）
-  void tabInserted(int index) override;
 
 public:
   static DraggableTabBar *dragSourceBar() { return s_sourceBar; }
@@ -65,7 +55,6 @@ public:
 private:
   int m_pressedIndex = -1;
   QPoint m_dragStartPos;
-  QSet<int> m_modifiedTabs;  ///< 已修改标签页索引集合
 
   static DraggableTabBar *s_sourceBar;
   static int s_sourceIndex;

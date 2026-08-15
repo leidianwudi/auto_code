@@ -6,24 +6,18 @@
 #include "main_dev_ui_ext.h"
 
 #include <QApplication>
-#include <QCursor>
 #include <QDrag>
 #include <QDragEnterEvent>
 #include <QDropEvent>
-#include <QHelpEvent>
 #include <QMenu>
 #include <QMimeData>
 #include <QMouseEvent>
-#include <QPainter>
 #include <QPixmap>
 #include <QSplitter>
-#include <QStyleOptionTab>
-#include <QToolTip>
 
 #include "src/util/common/code_constants.h"
 #include "src/util/common/util_file.h"
 #include "src/util/ui/component/aui_style.h"
-#include "src/util/ui/component/aui_tab_bar.h"
 
 // ════════════════════════════════════════════════════════════
 //  DraggableTabBar 实现
@@ -32,124 +26,9 @@
 DraggableTabBar *DraggableTabBar::s_sourceBar = nullptr;
 int DraggableTabBar::s_sourceIndex = -1;
 
-DraggableTabBar::DraggableTabBar(QWidget *parent) : QTabBar(parent) {
+DraggableTabBar::DraggableTabBar(QWidget *parent) : AuiCodeTabBar(parent) {
   setAcceptDrops(true);
   setMovable(false);  // 自行处理跨面板拖拽
-}
-
-void DraggableTabBar::setTabModified(int index, bool modified) {
-  if (modified)
-    m_modifiedTabs.insert(index);
-  else
-    m_modifiedTabs.remove(index);
-  update();  // 触发重绘
-}
-
-bool DraggableTabBar::isTabModified(int index) const { return m_modifiedTabs.contains(index); }
-
-void DraggableTabBar::tabRemoved(int index) {
-  // QTabBar::removeTab 会自动下移后续标签索引，需要同步修正 m_modifiedTabs
-  m_modifiedTabs.remove(index);
-  // 所有大于 index 的索引下移 1
-  QSet<int> newSet;
-  for (int idx : m_modifiedTabs) {
-    if (idx > index)
-      newSet.insert(idx - 1);
-    else
-      newSet.insert(idx);
-  }
-  m_modifiedTabs = newSet;
-  update();
-  QTabBar::tabRemoved(index);
-}
-
-void DraggableTabBar::tabInserted(int index) {
-  QTabBar::tabInserted(index);
-  // Qt 6.12 在部分场景用真实子控件作关闭按钮（自带英文 "Close Tab" 提示），
-  // 这里统一把该子控件的提示改为中文「关闭标签」
-  AuiTabBar::localizeCloseButton(this, index);
-}
-
-void DraggableTabBar::paintEvent(QPaintEvent *event) {
-  // 直接自绘所有标签，完全绕过 QTabBar/style 的文字与背景渲染
-  // （Windows 原生风格用 DrawThemeText 画 tab 文字，忽略 setTabTextColor；
-  //   Fusion 的 CE_TabBarTab 背景取自调色板，深色模式下易与文字对比不足）
-  // VSCode 风格（与调试面板 调用栈/变量/断点 页签一致）：
-  //   选中 tab：顶部蓝色指示条 + 亮色文字，背景与编辑器内容同色（融入正文区）；
-  //   未选中 tab：灰色文字 + 透明背景，hover 时文字微亮、背景加深。
-  QPainter painter(this);
-  painter.setRenderHint(QPainter::Antialiasing);
-
-  const bool active = property("aui_focus_tab").toBool();
-  const int cur = currentIndex();
-  const AuiTabBar::Style st = AuiTabBar::currentStyle();
-  const QPoint mousePos = mapFromGlobal(QCursor::pos());
-
-  // 整条 tab 栏背景 + 底部分隔线
-  AuiTabBar::paintBarBackground(painter, rect(), st);
-
-  for (int i = 0; i < count(); ++i) {
-    QStyleOptionTab opt;
-    initStyleOption(&opt, i);
-    const QRect r = tabRect(i);
-    const bool isSelected = (i == cur);
-    const bool hovered = r.contains(mousePos);
-
-    // 标签背景与顶部指示条
-    AuiTabBar::paintTabBackground(painter, r, isSelected, active, hovered, st);
-
-    // 文字颜色：聚焦面板的当前标签用亮色，其余灰；hover 微亮
-    QColor c = st.dimText;
-    if (isSelected && active) {
-      c = st.activeText;
-    } else if (hovered) {
-      c = st.hoverText;
-    }
-
-    QRect textRect = style()->subElementRect(QStyle::SE_TabBarTabText, &opt, this);
-    painter.setPen(c);
-    painter.setFont(font());
-    painter.drawText(textRect, Qt::AlignCenter, opt.text);
-
-    // 已修改标签右侧叠加红色 "*"
-    if (m_modifiedTabs.contains(i)) {
-      QFont starFont = painter.font();
-      starFont.setBold(true);
-      starFont.setPixelSize(14);
-      painter.setFont(starFont);
-      painter.setPen(AuiStyle::modifiedColor());
-      int starX = textRect.right() + 2;
-      int starY = textRect.top() + starFont.pixelSize() - 2;
-      painter.drawText(starX, starY, QStringLiteral("*"));
-    }
-
-    // 关闭按钮：自绘 X 字形，鼠标悬停时变色并加正方形高亮背景
-    if (tabsClosable()) {
-      const QRect closeRect = AuiTabBar::closeButtonRect(this, opt);
-      if (!closeRect.isNull()) {
-        const bool closeHovered = closeRect.contains(mousePos);
-        AuiTabBar::paintCloseButton(painter, closeRect, closeHovered, isSelected, st);
-      }
-    }
-  }
-}
-
-bool DraggableTabBar::event(QEvent *event) {
-  // 悬停在关闭按钮上时显示中文提示"关闭标签"
-  if (event->type() == QEvent::ToolTip) {
-    auto *he = static_cast<QHelpEvent *>(event);
-    const int index = tabAt(he->pos());
-    if (index >= 0 && tabsClosable()) {
-      QStyleOptionTab opt;
-      initStyleOption(&opt, index);
-      const QRect closeRect = AuiTabBar::closeButtonRect(this, opt);
-      if (closeRect.contains(he->pos())) {
-        QToolTip::showText(he->globalPos(), AuiTabBar::closeButtonTip(), this);
-        return true;
-      }
-    }
-  }
-  return QTabBar::event(event);
 }
 
 void DraggableTabBar::mousePressEvent(QMouseEvent *event) {
@@ -177,17 +56,9 @@ void DraggableTabBar::mousePressEvent(QMouseEvent *event) {
     return;
   }
   if (event->button() == Qt::LeftButton) {
+    // 关闭按钮点击由基类（自绘关闭区）处理
+    if (handleClosePress(event->pos())) return;
     const int index = tabAt(event->pos());
-    if (index >= 0) {
-      // 关闭按钮点击：自绘后 QTabBar 内部缓存的关闭区 rect 不可用，这里自行判断
-      QStyleOptionTab opt;
-      initStyleOption(&opt, index);
-      QRect closeRect = style()->subElementRect(QStyle::SE_TabBarTabRightButton, &opt, this);
-      if (closeRect.contains(event->pos())) {
-        emit tabCloseRequested(index);
-        return;
-      }
-    }
     m_pressedIndex = index;
     m_dragStartPos = event->pos();
   }
@@ -196,12 +67,12 @@ void DraggableTabBar::mousePressEvent(QMouseEvent *event) {
 
 void DraggableTabBar::mouseMoveEvent(QMouseEvent *event) {
   if (!(event->buttons() & Qt::LeftButton) || m_pressedIndex < 0) {
-    QTabBar::mouseMoveEvent(event);
+    AuiCodeTabBar::mouseMoveEvent(event);  // 悬停刷新 + 基类
     return;
   }
 
   if ((event->pos() - m_dragStartPos).manhattanLength() < QApplication::startDragDistance()) {
-    QTabBar::mouseMoveEvent(event);
+    AuiCodeTabBar::mouseMoveEvent(event);
     return;
   }
 
@@ -267,8 +138,14 @@ DimmableTabWidget::DimmableTabWidget(QWidget *parent) : QTabWidget(parent) {
   auto *bar = new DraggableTabBar;
   setTabBar(bar);
 
-  // setTabBar 之后设置，确保作用到 DraggableTabBar
-  setTabsClosable(true);
+  // 关闭按钮不启用 Qt 原生按钮（AuiCodeTabBar 自绘接管，构造时已 setTabsClosable(false)），
+  // 这里显式保持关闭，避免误开原生 X 覆盖自绘内容。
+  setTabsClosable(false);
+
+  // 自绘关闭按钮点击由 AuiCodeTabBar 直接发出 QTabBar::tabCloseRequested，
+  // 原生模式下 QTabWidget 会自动转发该信号，自绘模式下需手动转发，
+  // 否则 MainDevMgr 连接的 QTabWidget::tabCloseRequested 收不到关闭请求。
+  connect(bar, &QTabBar::tabCloseRequested, this, &QTabWidget::tabCloseRequested);
 
   // tab 样式：指定编辑框 tab 头四边空白
   // 文字颜色由 paintEvent 直接自绘，不依赖 setTabTextColor 或代理样式

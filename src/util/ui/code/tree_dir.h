@@ -24,7 +24,8 @@
 class QTreeWidgetItem;
 class QContextMenuEvent;
 
-/// 文件树绘制代理 — 对已修改文件在其名称后绘制红色 "*"
+/// 文件树绘制代理 — 自绘复选框、图标与文本；已修改文件在图标右上角绘制实心圆点，
+/// 有错误的文件以红色加粗显示并附加错误数量
 class ModifiedFileDelegate : public QStyledItemDelegate {
   Q_OBJECT
 public:

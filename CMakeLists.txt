@@ -125,6 +125,8 @@ qt_add_executable(auto_code
     src/util/ui/component/aui_style.cpp
     src/util/ui/component/aui_tab_bar.h
     src/util/ui/component/aui_tab_bar.cpp
+    src/util/ui/component/aui_code_tab_bar.h
+    src/util/ui/component/aui_code_tab_bar.cpp
     src/util/ui/component/aui_button.h
     src/util/ui/component/aui_button.cpp
     src/util/ui/component/aui_icon.h

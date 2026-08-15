@@ -14,6 +14,7 @@
 #include "main_dev_mgr.h"
 #include "main_dev_model.h"
 #include "main_dev_ui.h"
+#include "main_dev_ui_ext.h"
 #include "src/ui/json_vue/json_vue_widget.h"
 #include "src/util/ui/code/code_editor.h"
 
@@ -198,6 +199,23 @@ void MainDevMgr::onValidationMessage(const QString &msg, int errorCount) {
       } else {
         // 有错误，传递实际错误数量
         m_ui->fileTree()->setFileError(filePath, errorCount);
+      }
+    }
+  }
+
+  // 通知标签栏：当前编辑器所在标签的错误状态（有错误则文字红色 + 波浪线，VSCode 风格）
+  if (m_model->connectedEditor) {
+    CodeEditor *editor = m_model->connectedEditor;
+    for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
+      auto *tabs = m_ui->editorPanelAt(pi);
+      if (!tabs) continue;
+      auto *bar = qobject_cast<DraggableTabBar *>(tabs->tabBar());
+      if (!bar) continue;
+      for (int ti = 0; ti < tabs->count(); ++ti) {
+        if (tabs->widget(ti) == editor || tabs->widget(ti) == editor->parentWidget()) {
+          bar->setTabError(ti, errorCount > 0);
+          break;
+        }
       }
     }
   }

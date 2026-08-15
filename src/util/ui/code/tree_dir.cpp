@@ -5,6 +5,7 @@
 
 #include "tree_dir.h"
 
+#include <QApplication>
 #include <QContextMenuEvent>
 #include <QDir>
 #include <QFileInfo>
@@ -44,73 +45,81 @@ static void buildPathMap(QTreeWidgetItem *item, const QString &parentRel,
 //  ModifiedFileDelegate 实现
 // ──────────────────────────────────────────────────────────────
 
-/// 绘制错误态：文件名 + 错误数量，红色加粗
-static void paintErrorState(QPainter *painter, const QStyleOptionViewItem &option,
-                            const QModelIndex &index, int errorCount) {
-  QStyleOptionViewItem opt = option;
-  // 合并显示文本：文件名 + 错误数量
-  QString originalText = index.data(Qt::DisplayRole).toString();
-  opt.text = originalText + QStringLiteral("  (%1)").arg(errorCount);
-
-  // 修改 palette 文字颜色为红色
-  QPalette redPalette = opt.palette;
-  redPalette.setColor(QPalette::Text, AuiStyle::errorTextColor());
-  redPalette.setColor(QPalette::WindowText, AuiStyle::errorTextColor());
-  redPalette.setColor(QPalette::HighlightedText, AuiStyle::errorTextColor());
-  opt.palette = redPalette;
-
-  QFont boldFont = opt.font;
-  boldFont.setBold(true);
-  opt.font = boldFont;
-
-  QStyledItemDelegate delegate;
-  delegate.paint(painter, opt, index);
-}
-
-/// 绘制修改态：默认内容 + 文件名右上角红色 "*"
-static void paintModifiedState(QPainter *painter, const QStyleOptionViewItem &option,
-                               const QModelIndex &index, const QTreeWidget *tree) {
-  // 先绘制默认内容
-  QStyledItemDelegate delegate;
-  delegate.paint(painter, option, index);
-
-  painter->save();
-  painter->setPen(AuiStyle::modifiedColor());
-
-  QFont treeFont = tree ? tree->font() : option.font;
-  QFontMetrics fm(treeFont);
-  QString text = index.data(Qt::DisplayRole).toString();
-
-  int decoWidth = option.decorationSize.width();
-  if (decoWidth == 0) decoWidth = option.icon.actualSize(QSize(16, 16)).width();
-
-  int checkWidth = 0;
-  if (index.data(Qt::CheckStateRole).isValid())
-    checkWidth = tree ? tree->style()->pixelMetric(QStyle::PM_IndicatorWidth) + 4 : 20;
-
-  int textStartX = option.rect.left() + checkWidth + decoWidth + 4;
-  int starX = textStartX + fm.horizontalAdvance(text) + 6;
-  int starY = option.rect.top() + fm.ascent();
-
-  QFont boldFont = treeFont;
-  boldFont.setBold(true);
-  painter->setFont(boldFont);
-  painter->drawText(starX, starY, QStringLiteral("*"));
-  painter->restore();
-}
-
 void ModifiedFileDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
                                  const QModelIndex &index) const {
   int errorCount = index.data(Qt::UserRole + 3).toInt();
   bool modified = index.data(Qt::UserRole + 2).toBool();
+  const QTreeWidget *tree = qobject_cast<const QTreeWidget *>(parent());
+
+  // 1) 背景 / 选中高亮 / 复选框：直接用样式绘制。
+  //    先 initStyleOption 补全复选框状态（HasCheckIndicator / checkState），
+  //    否则视图传入的 option 未携带勾选信息，复选框不会绘制；
+  //    再清除文本与图标，避免与下方手动绘制重复（重影）。
+  QStyleOptionViewItem baseOpt = option;
+  initStyleOption(&baseOpt, index);
+  baseOpt.text.clear();
+  baseOpt.icon = QIcon();
+  QStyle *st = option.widget ? option.widget->style() : QApplication::style();
+  st->drawControl(QStyle::CE_ItemViewItem, &baseOpt, painter, option.widget);
+
+  // 2) 字体
+  QFont textFont = tree ? tree->font() : option.font;
+  if (errorCount > 0) textFont.setBold(true);
+  QFontMetrics fm(textFont);
+
+  // 3) 布局：复选框 → 图标 → 文本
+  int checkWidth = 0;
+  if (index.data(Qt::CheckStateRole).isValid())
+    checkWidth = tree ? tree->style()->pixelMetric(QStyle::PM_IndicatorWidth) + 4 : 20;
+
+  QIcon icon = index.data(Qt::DecorationRole).value<QIcon>();
+  int decoSize = option.decorationSize.width();
+  if (decoSize <= 0) {
+    decoSize = icon.isNull() ? 0 : icon.actualSize(QSize(16, 16)).width();
+    if (decoSize <= 0) decoSize = 16;
+  }
+  int iconX = option.rect.left() + checkWidth;
+  int iconY = option.rect.top() + (option.rect.height() - decoSize) / 2;
+  QRect iconRect(iconX, iconY, decoSize, decoSize);
+  if (!icon.isNull()) {
+    QIcon::Mode mode = (option.state & QStyle::State_Selected) ? QIcon::Selected : QIcon::Normal;
+    icon.paint(painter, iconRect, Qt::AlignCenter, mode);
+  }
+
+  // 文本起始：图标右侧 1px（原默认约 4px，缩小 3px）
+  int textX = iconRect.right() + 1;
+  int textBaseline = option.rect.top() + (option.rect.height() - fm.height()) / 2 + fm.ascent();
+
+  painter->save();
+  painter->setFont(textFont);
+
+  QString text = index.data(Qt::DisplayRole).toString();
 
   if (errorCount > 0) {
-    paintErrorState(painter, option, index, errorCount);
-  } else if (modified) {
-    paintModifiedState(painter, option, index, qobject_cast<const QTreeWidget *>(parent()));
-  } else {
-    // 无特殊状态，正常绘制
-    QStyledItemDelegate::paint(painter, option, index);
+    // 错误态：红色加粗文件名 + 错误数量
+    painter->setPen(AuiStyle::errorTextColor());
+    painter->drawText(textX, textBaseline, text + QStringLiteral("  (%1)").arg(errorCount));
+    painter->restore();
+    return;
+  }
+
+  // 正常 / 修改态文字颜色（跟随选中态）
+  QPalette::ColorRole role =
+      (option.state & QStyle::State_Selected) ? QPalette::HighlightedText : QPalette::Text;
+  painter->setPen(option.palette.color(role));
+  painter->drawText(textX, textBaseline, text);
+  painter->restore();
+
+  // 修改态：实心圆点绘制在文件名左侧小图标的右上角（VSCode 风格，不遮挡文件名）
+  if (modified) {
+    const int dotR = qMax(3, qMin(decoSize, 14) / 4);  // 圆点半径，随图标尺寸自适应
+    QPoint dotCenter(iconRect.right() - dotR + 1, iconRect.top() + dotR + 1);
+    painter->save();
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(AuiStyle::modifiedColor());
+    painter->setRenderHint(QPainter::Antialiasing, true);
+    painter->drawEllipse(dotCenter, dotR, dotR);
+    painter->restore();
   }
 }
 
@@ -831,12 +840,27 @@ void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
 //  setFileModified — 设置文件修改状态
 // ════════════════════════════════════════════════════════════
 
+/// 判断某节点子树（含自身）内是否存在已修改的文件节点。
+/// 只信任真实文件节点（UserRole+1 非空）自身携带的修改标记，
+/// 文件夹的传播标记不参与计算，避免旧的传播值导致父节点误判。
+static bool hasModifiedFileInSubtree(QTreeWidgetItem *item) {
+  if (!item->data(0, Qt::UserRole + 1).toString().isEmpty() &&
+      item->data(0, Qt::UserRole + 2).toBool())
+    return true;  // 文件节点自身已修改
+  for (int i = 0; i < item->childCount(); ++i)
+    if (hasModifiedFileInSubtree(item->child(i))) return true;
+  return false;
+}
+
 void TreeDir::setFileModified(const QString &filePath, bool modified) {
   QTreeWidgetItem *item = findItemByPath(filePath);
-  if (item) {
-    // 通过自定义数据角色存储修改状态，由 ModifiedFileDelegate 绘制红色 "*"
-    item->setData(0, Qt::UserRole + 2, modified);
-  }
+  if (!item) return;
+  // 通过自定义数据角色存储修改状态，由 ModifiedFileDelegate 绘制实心圆点
+  item->setData(0, Qt::UserRole + 2, modified);
+  // 子文件被修改时，父文件夹也要显示修改圆点；全部清除后父文件夹同步消失
+  for (QTreeWidgetItem *p = item->parent(); p; p = p->parent())
+    p->setData(0, Qt::UserRole + 2, hasModifiedFileInSubtree(p));
+  update();  // 触发重绘
 }
 
 // ════════════════════════════════════════════════════════════
