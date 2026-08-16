@@ -19,16 +19,16 @@
   ],
   "buildPresets": [
     {
-      "name": "release",
-      "configurePreset": "vs2022",
-      "configuration": "Release",
-      "description": "构建 Release 版（产物 build/Release）"
-    },
-    {
       "name": "debug",
       "configurePreset": "vs2022",
       "configuration": "Debug",
       "description": "构建 Debug 版（产物 build/Debug）"
+    },
+    {
+      "name": "release",
+      "configurePreset": "vs2022",
+      "configuration": "Release",
+      "description": "构建 Release 版（产物 build/Release）"
     }
   ]
 }
