@@ -156,7 +156,7 @@ TreeDir::TreeDir(QWidget *parent) : QTreeWidget(parent) {
   setHeaderLabel(QString::fromUtf8(CodeConstants::UiText::kFile));
   setMinimumWidth(kMinWidth);
   // 不设最大宽度，允许用户拖动分隔条自由加宽目录树
-  setAnimated(true);
+  setAnimated(false);
   setIndentation(16);
   setSortingEnabled(false);
 
@@ -208,7 +208,10 @@ void TreeDir::mouseReleaseEvent(QMouseEvent *event) {
   QTreeWidgetItem *item = itemAt(event->pos());
   m_lastClickOnCheckbox = false;
 
-  if (item && (item->flags() & Qt::ItemIsUserCheckable)) {
+  // 仅当节点真正可勾选（调用过 setCheckState，即 CheckStateRole 有效）时，
+  // 才需要判断点击是否落在复选框区域。不能用 flags() & ItemIsUserCheckable，
+  // 因为 QTreeWidgetItem 默认 flags 就含该项，所有节点都满足。
+  if (item && item->data(0, Qt::CheckStateRole).isValid()) {
     // 估算复选框区域的宽度
     int cbWidth = style()->pixelMetric(QStyle::PM_IndicatorWidth, nullptr, this);
     if (cbWidth < 10) cbWidth = 16;  // 默认值
@@ -378,13 +381,14 @@ void TreeDir::addDirectoryToTree(QTreeWidgetItem *parentItem, const QString &dir
   for (const auto &sd : subDirs) {
     bool hasJson = false;
     for (int i = 0; i < sd.item->childCount(); ++i) {
-      if (sd.item->child(i)->flags() & Qt::ItemIsUserCheckable) {
+      // 只有真正可勾选（CheckStateRole 有效）的子项才说明该目录下有 json 文件。
+      // 不能用 flags() & ItemIsUserCheckable，因为默认 flags 就含该项。
+      if (sd.item->child(i)->data(0, Qt::CheckStateRole).isValid()) {
         hasJson = true;
         break;
       }
     }
     if (hasJson) {
-      sd.item->setFlags(sd.item->flags() | Qt::ItemIsUserCheckable);
       sd.item->setCheckState(0, Qt::Unchecked);
     }
   }
@@ -399,7 +403,16 @@ void TreeDir::setJsonChildrenCheckState(QTreeWidgetItem *item, Qt::CheckState st
     QTreeWidgetItem *child = item->child(i);
     QString filePath = child->data(0, Qt::UserRole + 1).toString();
 
-    if (!filePath.isEmpty() && isJsonLike(filePath)) child->setCheckState(0, state);
+    if (!filePath.isEmpty() && isJsonLike(filePath)) {
+      child->setCheckState(0, state);
+    } else if (child->data(0, Qt::CheckStateRole).isValid()) {
+      // 中间层文件夹：其下所有 json 文件都会被设置为同一状态，
+      // 因此文件夹自身的复选框也应同步为相同状态（避免漏勾中间层）。
+      // 注意：不能用 flags() & ItemIsUserCheckable 判断，因为 QTreeWidgetItem
+      // 的默认 flags 就含该位（所有节点都满足），必须用 CheckStateRole 是否有效
+      // （即是否调用过 setCheckState）来判断节点是否真正可勾选。
+      child->setCheckState(0, state);
+    }
 
     setJsonChildrenCheckState(child, state);
   }
@@ -413,7 +426,11 @@ void TreeDir::updateParentCheckState(QTreeWidgetItem *item) {
   int totalCheckable = 0;
   for (int i = 0; i < parent->childCount(); ++i) {
     QTreeWidgetItem *child = parent->child(i);
-    if (child->flags() & Qt::ItemIsUserCheckable) {
+    // 只统计真正可勾选的子节点（CheckStateRole 有效，即调用过 setCheckState）。
+    // 不能用 flags() & ItemIsUserCheckable，因为 QTreeWidgetItem 默认 flags 就含
+    // 该项，会把 .ac/.tpl 等不可勾选文件也计入 totalCheckable，导致父文件夹
+    // 永远无法达到全选状态。
+    if (child->data(0, Qt::CheckStateRole).isValid()) {
       ++totalCheckable;
       Qt::CheckState cs = child->checkState(0);
       if (cs == Qt::Checked)
@@ -571,15 +588,12 @@ void TreeDir::applyCheckedToTree(const QStringList &checkedRelPaths) {
 }
 
 void TreeDir::applyExpandedToTree(const QStringList &expandedRelPaths) {
-  // 动画开启时，对尚未显示（程序启动阶段）或不可见节点的 setExpanded 会被打断/
-  // 延迟，导致恢复的展开状态失效。这里先临时关闭动画，确保展开状态被正确写入。
-  const bool wasAnimated = isAnimated();
-  setAnimated(false);
+  // 构造时已关闭动画（setAnimated(false)），setExpanded 始终即时生效，
+  // 无需再临时关闭动画。
 
   if (expandedRelPaths.isEmpty()) {
     // 无展开记录 → 默认全部展开
     expandAll();
-    setAnimated(wasAnimated);
     return;
   }
 
@@ -594,8 +608,6 @@ void TreeDir::applyExpandedToTree(const QStringList &expandedRelPaths) {
     QTreeWidgetItem *item = pathMap.value(rel);
     if (item) item->setExpanded(true);
   }
-
-  setAnimated(wasAnimated);
 }
 
 void TreeDir::scheduleSave() {

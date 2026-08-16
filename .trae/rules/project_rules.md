@@ -1,6 +1,5 @@
 ---
-alwaysApply: false
-description: 
+alwaysApply: true
 ---
 # Project Rules
 
@@ -53,36 +52,6 @@ return QJsonValue(ls + rs);
 - Qt 版本：6.12.0
 - 代码缩进：2 空格（`.editorconfig`）
 - 注释规范：使用 Doxygen 风格，**注释内容用中文**
-
-### 构建方法
-
-如果 Trae IDE 直接运行 cmake 时报 `SAFE_RM_*` 环境变量格式错误，请改用项目自带的构建脚本：
-
-```powershell
-# PowerShell 中运行
-cmd.exe /c .trae\build.bat
-```
-
-该脚本会自动清理 `SAFE_RM_*` 环境变量并加载 VS 开发环境。
-
-**⚠️ 当 `cmd /c` 被 Trae 安全策略阻止时**，使用以下 PowerShell 命令手动加载 VS 环境并构建：
-
-```powershell
-; $msvcRoot = 'D:\tool\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.43.34808'; $sdkRoot = 'C:\Program Files (x86)\Windows Kits\10'; $sdkVer = '10.0.26100.0'; $env:INCLUDE = "$msvcRoot\include;$sdkRoot\Include\$sdkVer\ucrt;$sdkRoot\Include\$sdkVer\um;$sdkRoot\Include\$sdkVer\shared"; $env:LIB = "$msvcRoot\lib\x64;$sdkRoot\Lib\$sdkVer\ucrt\x64;$sdkRoot\Lib\$sdkVer\um\x64"; $cleanPath = ($env:PATH -split ';' | Where-Object { $_ -notmatch 'SAFE_RM' -and $_ -notmatch '^\s*$' -and (Test-Path $_ -ErrorAction SilentlyContinue) }) -join ';'; $env:PATH = $cleanPath; $env:CMAKE_PREFIX_PATH = 'D:/tool/Qt/6.12.0/msvc2022_64'; & 'D:/tool/Qt/Tools/CMake_64/bin/cmake.exe' --build d:\work\github\auto_code\build --config Debug --target auto_code
-```
-
-### 🔒 SAFE_RM_* 环境变量问题
-
-Trae IDE 默认启用了安全删除保护（safe-rm），会在终端注入 `SAFE_RM_*` 环境变量。但这些变量使用 bash 语法格式（`KEY=VALUE`），与 PowerShell 不兼容，导致**所有终端命令都无法执行**。
-
-**✅ 有效解决方案**：在每条命令前加 `; ` 前缀（分号+空格），即可绕过注入。分号在 PowerShell 中作为语句分隔符，将命令与注入文本隔离开：
-
-```powershell
-; <你的命令>
-; cmake --version
-; .trae\build.bat
-; echo "Hello"
-```
 
 
 ### 🚫 AI 不运行 .exe 进行 GUI/交互测试

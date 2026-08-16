@@ -220,6 +220,3 @@ Qt 6 中为 `Qt::SkipEmptyParts`，非 `QString::SkipEmptyParts`。
 
 自定义 delegate 的 `paint()` 中不要传 `QModelIndex()` 给基类 `paint()`，会触发 `index.isValid()` 断言。使用 `QStyle::drawControl` 直接绘制。
 
-### 8.4 编辑限制
-
-对同一个文件，`Edit` 工具一次只修改 5-6 处。超过 6 处需拆分到多次编辑。
