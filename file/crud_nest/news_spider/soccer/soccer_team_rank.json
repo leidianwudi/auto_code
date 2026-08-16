@@ -1,0 +1,48 @@
+﻿{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 球队榜单查询配置。
+  tables: [
+    {
+      "modelName": "soccer\\soccer_team_rank",
+      "tableName": "soccer_team_rank",
+      "selCols": [
+        "league_cid",
+        "team_tid",
+        "type"
+      ],
+      "selColsLike": [
+        "name"
+      ],
+      "selColsSort": {
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSoccerLeague",
+          "joinEnClass_Url": "src/soccer/soccer_league/entities/en_soccer_league",
+          "joinEnClassPro": "league",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "teamRanks",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "league_cid",
+            "referencedColumnName": "cid"
+          }
+        },
+        {
+          "joinEnClass": "EnSoccerTeam",
+          "joinEnClass_Url": "src/soccer/soccer_team/entities/en_soccer_team",
+          "joinEnClassPro": "team",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "teamRanks",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "team_tid",
+            "referencedColumnName": "tid"
+          }
+        }
+      ]
+    }
+  ],
+}

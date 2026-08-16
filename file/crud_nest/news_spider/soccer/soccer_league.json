@@ -1,0 +1,54 @@
+﻿{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 联赛基础信息及其榜单、赛程反向关系。
+  tables: [
+    {
+      "modelName": "soccer\\soccer_league",
+      "tableName": "soccer_league",
+      "selCols": [
+        "cid"
+      ],
+      "selColsLike": [
+        "name"
+      ],
+      "selColsSort": {
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSoccerScoreRank",
+          "joinEnClass_Url": "src/soccer/soccer_score_rank/entities/en_soccer_score_rank",
+          "joinEnClassPro": "scoreRanks",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "league",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSoccerPlayerRank",
+          "joinEnClass_Url": "src/soccer/soccer_player_rank/entities/en_soccer_player_rank",
+          "joinEnClassPro": "playerRanks",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "league",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSoccerTeamRank",
+          "joinEnClass_Url": "src/soccer/soccer_team_rank/entities/en_soccer_team_rank",
+          "joinEnClassPro": "teamRanks",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "league",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSoccerSchedule",
+          "joinEnClass_Url": "src/soccer/soccer_schedule/entities/en_soccer_schedule",
+          "joinEnClassPro": "schedules",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "league",
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ],
+}

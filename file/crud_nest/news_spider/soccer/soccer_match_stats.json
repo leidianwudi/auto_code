@@ -1,0 +1,23 @@
+﻿{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 比赛统计数据查询配置。
+  tables: [
+    {
+      "modelName": "soccer\\soccer_match_stats",
+      "tableName": "soccer_match_stats",
+      "selCols": [
+        "schedule_mid",
+        "type"
+      ],
+      "selColsLike": [
+        "name"
+      ],
+      "selColsSort": {
+        "schedule_mid": "ASC",
+        "id": "ASC"
+      },
+      "joinTable": []
+    }
+  ],
+}

@@ -48,12 +48,12 @@ export function generateApiMain(params: Object): Void {
   let templates: TemplateConfig[] = params["templates"];
   if (templates == null) {
     templates = [
-      { tpl: "../template/entities/en.tpl",      out: "{basePath}/{modelName}/entities/en_{name}.ts" },
-      { tpl: "../template/entities/enum.tpl",    out: "{basePath}/{modelName}/entities/enum_{name}.ts" },
-      { tpl: "../template/out/out_enum.tpl",     out: "{basePath}/{modelName}/out/out_enum_{name}.ts" },
-      { tpl: "../template/in/in_ins.tpl",        out: "{basePath}/{modelName}/in/in_ins_{name}.ts" },
-      { tpl: "../template/in/in_sel.tpl",        out: "{basePath}/{modelName}/in/in_sel_{name}.ts" },
-      { tpl: "../template/out/out_page.tpl",     out: "{basePath}/{modelName}/out/out_page_{name}.ts" },
+      { tpl: "../template/entities/en.tpl",      out: "{basePath}/{modelName}/entities/en_{tableName}.ts" },
+      { tpl: "../template/entities/enum.tpl",    out: "{basePath}/{modelName}/entities/enum_{tableName}.ts" },
+      { tpl: "../template/out/out_enum.tpl",     out: "{basePath}/{modelName}/out/out_enum_{tableName}.ts" },
+      { tpl: "../template/in/in_ins.tpl",        out: "{basePath}/{modelName}/in/in_ins_{tableName}.ts" },
+      { tpl: "../template/in/in_sel.tpl",        out: "{basePath}/{modelName}/in/in_sel_{tableName}.ts" },
+      { tpl: "../template/out/out_page.tpl",     out: "{basePath}/{modelName}/out/out_page_{tableName}.ts" },
       { tpl: "../template/model/db_.tpl",        out: "{basePath}/{modelName}/model/{dbBaseClassFile}.ts" },
       { tpl: "../template/model/db.tpl",         out: "{basePath}/{modelName}/model/{dbClassFile}.ts" },
       { tpl: "../template/service_.tpl",         out: "{basePath}/{modelName}/{serviceBaseClassFile}.ts" },

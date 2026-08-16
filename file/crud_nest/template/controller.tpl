@@ -8,15 +8,10 @@ ${# ============================================================================
 ${# 安全保护：只有当输出文件不存在时才生成，防止开发者已修改的代码被覆盖           }
 ${if !fileExists(outputPath)}
 // 此代码为AutoCode框架生成，需要扩展时，可以手动修改
-import { Controller, Post, Req } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { EnumLang } from '@/common/core/enum_common';
-import { OutBasePage } from '@/common/interface/out_base_page';
-import { ToolLang } from '@/common/tool/tool_lang';
-import { OutTypeName } from './out/out_type_name';
+import { Controller } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { ${controllerBaseClass} } from './${controllerBaseClassFile}';
 import { ${serviceClass} } from './${serviceClassFile}';
-import { Public } from '@/auth/public.decorator';
 
 /**
  * ${entityClass}实体(${tableDesc})，控制器类。

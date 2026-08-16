@@ -1,0 +1,24 @@
+﻿{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 文章与球队、球员等实体的多态关联。
+  tables: [
+    {
+      "modelName": "soccer\\soccer_articles_relation",
+      "tableName": "soccer_articles_relation",
+      "selCols": [
+        "aid",
+        "rid",
+        "type"
+      ],
+      "selColsLike": [
+        "type"
+      ],
+      "selColsSort": {
+        "aid": "DESC",
+        "id": "ASC"
+      },
+      "joinTable": []
+    }
+  ],
+}

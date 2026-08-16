@@ -1,0 +1,55 @@
+﻿{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 比赛阵型与球员位置查询配置。
+  tables: [
+    {
+      "modelName": "soccer\\soccer_match_position",
+      "tableName": "soccer_match_position",
+      "selCols": [
+        "schedule_mid",
+        "team_side",
+        "team_tid",
+        "player_pid",
+        "formation_place"
+      ],
+      "selColsLike": [
+        "player_name",
+        "position_name",
+        "formation"
+      ],
+      "selColsSort": {
+        "schedule_mid": "ASC",
+        "team_side": "ASC",
+        "formation_place": "ASC",
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSoccerTeam",
+          "joinEnClass_Url": "src/soccer/soccer_team/entities/en_soccer_team",
+          "joinEnClassPro": "team",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "matchPositions",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "team_tid",
+            "referencedColumnName": "tid"
+          }
+        },
+        {
+          "joinEnClass": "EnSoccerPlayer",
+          "joinEnClass_Url": "src/soccer/soccer_player/entities/en_soccer_player",
+          "joinEnClassPro": "player",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "matchPositions",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "player_pid",
+            "referencedColumnName": "pid"
+          }
+        }
+      ]
+    }
+  ],
+}

@@ -36,7 +36,7 @@
       joinTable: [
       {
             joinEnClass: 'EnTaskUrl',
-            joinEnClass_Url: 'src/task/task_url/entities/en_task_url.ts',
+            joinEnClass_Url: 'src/task/task_url/entities/en_task_url',
             joinEnClassPro: 'taskUrls',
             joinType: 'OneToMany',
             inverseJoinEnClassPro: 'task',

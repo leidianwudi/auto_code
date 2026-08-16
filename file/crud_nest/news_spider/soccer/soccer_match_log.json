@@ -1,0 +1,59 @@
+﻿{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 比赛文字直播事件查询配置。
+  tables: [
+    {
+      "modelName": "soccer\\soccer_match_log",
+      "tableName": "soccer_match_log",
+      "selCols": [
+        "schedule_mid",
+        "minute",
+        "minute_extra",
+        "team_side",
+        "team_tid",
+        "player_pid",
+        "event_index"
+      ],
+      "selColsLike": [
+        "player_name",
+        "event_code",
+        "reason",
+        "score"
+      ],
+      "selColsSort": {
+        "schedule_mid": "ASC",
+        "minute": "ASC",
+        "minute_extra": "ASC",
+        "event_index": "ASC",
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSoccerTeam",
+          "joinEnClass_Url": "src/soccer/soccer_team/entities/en_soccer_team",
+          "joinEnClassPro": "team",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "matchLogs",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "team_tid",
+            "referencedColumnName": "tid"
+          }
+        },
+        {
+          "joinEnClass": "EnSoccerPlayer",
+          "joinEnClass_Url": "src/soccer/soccer_player/entities/en_soccer_player",
+          "joinEnClassPro": "player",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "matchLogs",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "player_pid",
+            "referencedColumnName": "pid"
+          }
+        }
+      ]
+    }
+  ],
+}

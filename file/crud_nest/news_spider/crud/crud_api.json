@@ -1,4 +1,5 @@
 {
+  $schema: '/crud_nest/template/tool/param.schema.json',
   tables: [
     {
       // CRUD API 枚举值表

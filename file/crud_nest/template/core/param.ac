@@ -22,6 +22,7 @@ export class JoinTableInfo {
   let joinType: String = "";              // 关系类型：OneToMany / ManyToOne / OneToOne / ManyToMany
   let joinEnClassPro: String = "";        // 本端属性名，如 category
   let inverseJoinEnClassPro: String = ""; // 对方属性名，如 newsList
+  let joinColumn: Object = null;           // ManyToOne 所在表的外键列配置
   let isJoinRelations: Bool = false;      // 是否启用联表查询
 }
 
@@ -46,6 +47,10 @@ export class RelationDef {
   let targetEntity: String = "";     // 目标实体类名，如 EnNewsCategory
   let propertyName: String = "";     // 本端属性名，如 category
   let inverseProperty: String = "";  // 对方属性名，如 newsList
+  let isArray: Bool = false;          // OneToMany、ManyToMany 在本端表示实体数组
+  let hasJoinColumn: Bool = false;    // ManyToOne 的外键列是否由配置显式指定
+  let joinColumnName: String = "";   // 当前表外键列名
+  let referencedColumnName: String = ""; // 目标实体的被引用列名
   let isJoinRelations: Bool = false; // 是否启用联表查询
 }
 
@@ -186,6 +191,12 @@ export class Param {
         rel.targetEntity = jt.joinEnClass;             // 目标实体类名，如 EnNewsCategory
         rel.propertyName = jt.joinEnClassPro;          // 本端属性名，如 category
         rel.inverseProperty = jt.inverseJoinEnClassPro; // 对方属性名，如 newsList
+        rel.isArray = jt.joinType == "OneToMany" || jt.joinType == "ManyToMany";
+        if (jt.joinType == "ManyToOne" && jt.joinColumn != null) {
+          rel.hasJoinColumn = true;
+          rel.joinColumnName = jt.joinColumn.name;
+          rel.referencedColumnName = jt.joinColumn.referencedColumnName;
+        }
         rel.isJoinRelations = jt.isJoinRelations;      // 是否启用联表查询
         this.relations.append(rel);
       }

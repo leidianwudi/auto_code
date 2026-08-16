@@ -1,0 +1,65 @@
+﻿{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 球员详情查询配置。
+  tables: [
+    {
+      "modelName": "soccer\\soccer_player",
+      "tableName": "soccer_player",
+      "selCols": [
+        "pid",
+        "team_tid",
+        "number",
+        "age",
+        "market_value",
+        "birthday"
+      ],
+      "selColsLike": [
+        "name_zh",
+        "name_en",
+        "team_name",
+        "position",
+        "foot",
+        "market_value_unit",
+        "nation"
+      ],
+      "selColsSort": {
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSoccerPlayerRank",
+          "joinEnClass_Url": "src/soccer/soccer_player_rank/entities/en_soccer_player_rank",
+          "joinEnClassPro": "playerRanks",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "playerInfo",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSoccerPlayerHonor",
+          "joinEnClass_Url": "src/soccer/soccer_player_honor/entities/en_soccer_player_honor",
+          "joinEnClassPro": "honors",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "player",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSoccerMatchPosition",
+          "joinEnClass_Url": "src/soccer/soccer_match_position/entities/en_soccer_match_position",
+          "joinEnClassPro": "matchPositions",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "player",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSoccerMatchLog",
+          "joinEnClass_Url": "src/soccer/soccer_match_log/entities/en_soccer_match_log",
+          "joinEnClassPro": "matchLogs",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "player",
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ],
+}

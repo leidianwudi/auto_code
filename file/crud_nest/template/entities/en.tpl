@@ -82,7 +82,14 @@ export class ${entityClass} {
   ${#   .inverseProperty   对方属性名（用于双向关系）                               }
   ${each rel in relations}
   @${rel.decoratorType}(() => ${rel.targetEntity}, (${rel.propertyName}) => ${rel.propertyName}.${rel.inverseProperty})
+  ${if rel.hasJoinColumn}
+  @JoinColumn({ name: '${rel.joinColumnName}', referencedColumnName: '${rel.referencedColumnName}' })
+  ${/if}
+  ${if rel.isArray}
   ${rel.propertyName}: ${rel.targetEntity}[];
+  ${else}
+  ${rel.propertyName}: ${rel.targetEntity};
+  ${/if}
   
   ${/each}
   ${# ── 辅助方法：返回数据库表名，用于查询/联表时拼接 SQL ──────────   }

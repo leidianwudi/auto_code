@@ -1,0 +1,68 @@
+﻿{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 球队详情查询配置。
+  tables: [
+    {
+      "modelName": "soccer\\soccer_team",
+      "tableName": "soccer_team",
+      "selCols": [
+        "tid",
+        "year"
+      ],
+      "selColsLike": [
+        "name_zh",
+        "name_en",
+        "location",
+        "stadium",
+        "capacity",
+        "market_value"
+      ],
+      "selColsSort": {
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSoccerScoreRank",
+          "joinEnClass_Url": "src/soccer/soccer_score_rank/entities/en_soccer_score_rank",
+          "joinEnClassPro": "scoreRanks",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "teamInfo",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSoccerPlayerRank",
+          "joinEnClass_Url": "src/soccer/soccer_player_rank/entities/en_soccer_player_rank",
+          "joinEnClassPro": "playerRanks",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "teamInfo",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSoccerTeamRank",
+          "joinEnClass_Url": "src/soccer/soccer_team_rank/entities/en_soccer_team_rank",
+          "joinEnClassPro": "teamRanks",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "team",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSoccerMatchPosition",
+          "joinEnClass_Url": "src/soccer/soccer_match_position/entities/en_soccer_match_position",
+          "joinEnClassPro": "matchPositions",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "team",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSoccerMatchLog",
+          "joinEnClass_Url": "src/soccer/soccer_match_log/entities/en_soccer_match_log",
+          "joinEnClassPro": "matchLogs",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "team",
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ],
+}

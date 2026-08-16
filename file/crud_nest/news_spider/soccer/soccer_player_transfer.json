@@ -1,0 +1,23 @@
+﻿{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 球员转会记录查询配置。
+  tables: [
+    {
+      "modelName": "soccer\\soccer_player_transfer",
+      "tableName": "soccer_player_transfer",
+      "selCols": [
+        "date"
+      ],
+      "selColsLike": [
+        "from_team_name",
+        "to_team_name"
+      ],
+      "selColsSort": {
+        "date": "DESC",
+        "id": "ASC"
+      },
+      "joinTable": []
+    }
+  ],
+}

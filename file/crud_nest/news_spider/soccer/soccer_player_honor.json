@@ -1,0 +1,36 @@
+﻿{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 球员荣誉查询配置。
+  tables: [
+    {
+      "modelName": "soccer\\soccer_player_honor",
+      "tableName": "soccer_player_honor",
+      "selCols": [
+        "player_pid",
+        "year"
+      ],
+      "selColsLike": [
+        "name"
+      ],
+      "selColsSort": {
+        "year": "DESC",
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSoccerPlayer",
+          "joinEnClass_Url": "src/soccer/soccer_player/entities/en_soccer_player",
+          "joinEnClassPro": "player",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "honors",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "player_pid",
+            "referencedColumnName": "pid"
+          }
+        }
+      ]
+    }
+  ],
+}
