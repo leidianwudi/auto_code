@@ -11,6 +11,11 @@ if not defined VSCMD_VER (
     )
 )
 
-:: 执行构建
-cmake --build d:\work\github\auto_code\build --config Debug --target all --
+:: 构建配置（默认 Debug；切 Release 用: build.bat Release）
+set "CFG=Debug"
+if not "%1"=="" set "CFG=%1"
+
+:: 执行构建（%~dp0 为本脚本所在目录，..\build 即工程根下的 build，跨机器路径无关）
+:: 注意：VS 生成器不指定 --target 时默认构建全部目标（ALL_BUILD），不能用 --target all（VS 里不存在 all.vcxproj）
+cmake --build "%~dp0..\build" --config %CFG%
 exit /b %ERRORLEVEL%

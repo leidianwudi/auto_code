@@ -1,4 +1,30 @@
 CompileFlags:
+  Compiler: cl
   Add:
+    # ---------- sql ----------
     - "-ID:/tool/Qt/6.12.0/msvc2022_64/include/QtSql"
     - "-ID:/tool/Qt/6.12.0/msvc2022_64/include"
+    # ---------- 其余新增Qt模块头文件路径 ----------
+    - "-ID:/tool/Qt/6.12.0/msvc2022_64/include/QtCore"
+    - "-ID:/tool/Qt/6.12.0/msvc2022_64/include/QtGui"
+    - "-ID:/tool/Qt/6.12.0/msvc2022_64/include/QtWidgets"
+    - "-ID:/tool/Qt/6.12.0/msvc2022_64/include/QtNetwork"
+    - "-ID:/tool/Qt/6.12.0/msvc2022_64/include/QtSvg"
+
+    # Qt模块宏，解决 QT_DEPRECATED_SINCE 未定义报错
+    - "-DQT_CORE_LIB"
+    - "-DQT_GUI_LIB"
+    - "-DQT_WIDGETS_LIB"
+    - "-DQT_SQL_LIB"
+    - "-DQT_NETWORK_LIB"
+    - "-DQT_SVG_LIB"
+
+    # MSVC Windows平台宏
+    - "-DWIN32"
+    - "-D_WINDOWS"
+    - "-D_MSC_VER=1934"
+
+Index:
+  Background: Build
+Diagnostics:
+  UnusedIncludes: Strict
