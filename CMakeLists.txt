@@ -257,6 +257,14 @@ add_custom_command(TARGET auto_code POST_BUILD
         "$<TARGET_FILE_DIR:auto_code>"
 )
 
+# ── Qt 运行时自动部署：windeployqt 将 Qt DLL/插件复制到 exe 所在目录 ──
+# 使 exe 目录自包含，脱离 IDE 注入的 PATH 也能直接启动（CMake Tools 三角按钮/资源管理器双击均可）
+find_program(WINDEPLOYQT_EXE windeployqt HINTS "${Qt6_DIR}/../../../bin" REQUIRED)
+add_custom_command(TARGET auto_code POST_BUILD
+    COMMAND ${WINDEPLOYQT_EXE} $<TARGET_FILE:auto_code>
+    COMMENT "Deploying Qt runtime to $<TARGET_FILE_DIR:auto_code>"
+)
+
 install(TARGETS auto_code
     BUNDLE  DESTINATION .
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
