@@ -20,7 +20,9 @@
 #include <QStack>
 
 #include "src/engine/script/ac_debugger.h"
+#include "src/ui/main_dev/main_dev_ui_ext.h"
 #include "src/util/ui/aui_mgr.h"
+
 
 class QTabWidget;
 class QTimer;
@@ -73,6 +75,8 @@ protected:
 private slots:
   /// 向右拆分编辑器
   void onSplitRight();
+  /// 标签拖拽到面板左/右边缘后松开 → 拆分（移动标签到新面板）
+  void onTabSplitDropped(int fromIndex, DraggableTabBar *fromBar, SplitSide side);
   /// 关闭当前标签页
   void onCloseEditor();
   /// 标签页关闭按钮被点击

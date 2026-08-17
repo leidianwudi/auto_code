@@ -570,6 +570,10 @@ void MainDevMgr::connectEditorPanel(QTabWidget *tabs) {
   if (!tabs) return;
   connect(tabs, &QTabWidget::tabCloseRequested, this, &MainDevMgr::onTabCloseRequested);
   connect(tabs, &QTabWidget::currentChanged, this, &MainDevMgr::onCurrentTabChanged);
+  // 标签拖拽到面板左/右边缘 → 拆分（sender 需先转为具体类型，信号属于 DimmableTabWidget）
+  if (auto *dimTabs = qobject_cast<DimmableTabWidget *>(tabs)) {
+    connect(dimTabs, &DimmableTabWidget::splitDropped, this, &MainDevMgr::onTabSplitDropped);
+  }
   auto *bar = qobject_cast<DraggableTabBar *>(tabs->tabBar());
   if (bar) {
     connect(bar, &DraggableTabBar::closeOthersRequested, this, &MainDevMgr::onCloseOthers);

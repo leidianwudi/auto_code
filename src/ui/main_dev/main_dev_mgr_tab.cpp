@@ -258,17 +258,8 @@ void MainDevMgr::onSplitRight() {
 
   QTabWidget *newPanel = m_ui->createEditorPanel();
 
-  connect(newPanel, &QTabWidget::tabCloseRequested, this, &MainDevMgr::onTabCloseRequested);
-  connect(newPanel, &QTabWidget::currentChanged, this, &MainDevMgr::onCurrentTabChanged);
-
-  {
-    auto *bar = qobject_cast<DraggableTabBar *>(newPanel->tabBar());
-    if (bar) {
-      connect(bar, &DraggableTabBar::closeOthersRequested, this, &MainDevMgr::onCloseOthers);
-      connect(bar, &DraggableTabBar::closeAllRequested, this, &MainDevMgr::onCloseAll);
-      connect(bar, &QTabBar::tabBarClicked, this, &MainDevMgr::onTabBarClicked);
-    }
-  }
+  // 统一连接信号（关闭/切换/右键/拖拽拆分），保证新面板与其它面板行为一致
+  connectEditorPanel(newPanel);
 
   {
     // 复用 createEditorForFile 创建高亮器 + 验证模式一致的编辑器
@@ -407,5 +398,78 @@ void MainDevMgr::onCloseAll() {
   if (!tabs) return;
   while (tabs->count() > 0) {
     closeTab(tabs, 0);
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+//  拖拽拆分：标签拖到面板左/右边缘后松开
+// ──────────────────────────────────────────────────────────────
+
+void MainDevMgr::onTabSplitDropped(int fromIndex, DraggableTabBar *fromBar, SplitSide side) {
+  if (side == SplitSide::None || !fromBar) return;
+
+  // 源面板（拖出标签的面板）
+  auto *fromWidget = qobject_cast<DimmableTabWidget *>(fromBar->parentWidget());
+  if (!fromWidget || fromIndex < 0 || fromIndex >= fromWidget->count()) return;
+
+  // 目标面板（拆分高亮所在的面板，即信号发送者）
+  auto *target = qobject_cast<DimmableTabWidget *>(sender());
+  if (!target) return;
+
+  QSplitter *splitter = m_ui->editorSplitter();
+  const int targetIdx = splitter->indexOf(target);
+  if (targetIdx < 0) return;
+
+  // 取出被拖拽的标签页
+  QWidget *page = fromWidget->widget(fromIndex);
+  if (!page) return;
+  QString text = fromWidget->tabText(fromIndex);
+  QString tip = fromWidget->tabToolTip(fromIndex);
+  QIcon icon = fromWidget->tabIcon(fromIndex);
+
+  // 在插入前记录各面板宽度，保证新面板与目标面板严格平分目标宽度
+  QList<int> oldSizes = splitter->sizes();
+  if (targetIdx < 0 || targetIdx >= oldSizes.size()) return;
+  const int half = oldSizes[targetIdx] / 2;
+
+  // 创建新面板并插入到目标面板的左侧/右侧
+  auto *newPanel = qobject_cast<DimmableTabWidget *>(m_ui->createEditorPanel());
+  if (!newPanel) return;
+  connectEditorPanel(newPanel);  // 连接关闭/切换等信号，否则标签关闭按钮无效
+  const int insertIdx = (side == SplitSide::Left) ? targetIdx : targetIdx + 1;
+  splitter->insertWidget(insertIdx, newPanel);
+
+  // 精确平分：新面板与目标面板各占目标宽度的一半，其余面板保持原宽
+  {
+    QList<int> newSizes;
+    for (int i = 0; i < oldSizes.size(); ++i) {
+      if (i == targetIdx) {
+        newSizes.append(half);  // 左拆分：新面板；右拆分：目标面板
+        newSizes.append(half);  // 左拆分：目标面板；右拆分：新面板
+      } else {
+        newSizes.append(oldSizes[i]);
+      }
+    }
+    splitter->setSizes(newSizes);
+  }
+
+  // 移动标签页到新面板
+  fromWidget->removeTab(fromIndex);
+  int newIdx = newPanel->addTab(page, icon, text);
+  newPanel->setTabToolTip(newIdx, tip);
+  newPanel->setCurrentIndex(newIdx);
+
+  // 源面板没有标签页且还有其它面板 → 自动销毁
+  if (fromWidget->count() == 0 && splitter->count() > 1) fromWidget->deleteLater();
+
+  m_model->lastActivePanel = newPanel;
+  m_ui->applyTabDimming(newPanel);
+
+  CodeEditor *editor = qobject_cast<CodeEditor *>(newPanel->currentWidget());
+  if (editor) {
+    editor->setFocus();
+  } else {
+    auto *jvw = qobject_cast<JsonVueWidget *>(newPanel->currentWidget());
+    if (jvw) jvw->codeEditor()->setFocus();
   }
 }

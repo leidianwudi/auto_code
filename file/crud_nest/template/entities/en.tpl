@@ -50,6 +50,7 @@ export class ${entityClass} {
   ${#   .name          字段名                                                }
   ${#   .comment       字段注释（@ApiProperty 的 description）               }
   ${#   .tsType        TypeScript 类型（number/string/Date/Coin/boolean）    }
+  ${#   .tsTypeNull    可空场景类型（如 "Date | null"，字段声明用它）          }
   ${#   .isPrimary     是否主键 → @PrimaryGeneratedColumn                    }
   ${#   .isCoin        是否 decimal → @Column + @Transform + CoinTransformer }
   ${#   .columnOptions @Column 的完整参数字符串（由 param.getColumnOptions 生成）}
@@ -57,18 +58,30 @@ export class ${entityClass} {
     ${if field.isPrimary}
   @ApiProperty({ description: '${field.comment}' })
   @PrimaryGeneratedColumn()
-  ${field.name}: ${field.tsType};
+  ${field.name}: ${field.tsTypeNull};
 
     ${else if field.isCoin}
   @ApiProperty({ description: '${field.comment}' })
   @Column(${field.columnOptions})
   @Transform(({ value }) => value.toJSON())
-  ${field.name}: ${field.tsType};
+  ${field.name}: ${field.tsTypeNull};
+
+    ${else if field.isCreateDate}
+  @ApiProperty({ description: '${field.comment}' })
+  @Column(${field.columnOptions})
+  @CreateDateColumn({ type: 'datetime', transformer: ToolStr.dateTransformer })
+  ${field.name}: ${field.tsTypeNull};
+
+    ${else if field.isUpdateDate}
+  @ApiProperty({ description: '${field.comment}' })
+  @Column(${field.columnOptions})
+  @UpdateDateColumn({ type: 'datetime', transformer: ToolStr.dateTransformer })
+  ${field.name}: ${field.tsTypeNull};
 
     ${else}
   @ApiProperty({ description: '${field.comment}' })
   @Column(${field.columnOptions})
-  ${field.name}: ${field.tsType};
+  ${field.name}: ${field.tsTypeNull};
 
     ${/if}
   ${/each}

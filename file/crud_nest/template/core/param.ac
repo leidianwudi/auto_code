@@ -38,6 +38,11 @@ export class FieldDef {
   let isPrimary: Bool = false;     // 是否主键
   let isAutoInc: Bool = false;     // 是否自增
   let isCoin: Bool = false;        // 是否金额类型
+  let isCreateDate: Bool = false;  // 是否创建时间列（create_time，en.tpl 额外生成 @CreateDateColumn）
+  let isUpdateDate: Bool = false;  // 是否更新时间列（update_time 且未配置 manualUpdateTime，en.tpl 额外生成 @UpdateDateColumn）
+  let isAutoTime: Bool = false;    // 是否由数据库/TypeORM 自动维护的时间列（in_ins.tpl 不生成该入参）
+  let isNullable: Bool = false;    // 是否允许为空（DB 列 nullable，@Column 生成 nullable: true）
+  let tsTypeNull: String = "";     // 可空场景的 TS 类型（如 "Date | null"，供 en.tpl 实体字段使用）
   let columnOptions: String = "";  // @Column 的完整参数字符串
 }
 
@@ -61,6 +66,7 @@ export class TableSchemaData {
   let modelName: String = "";               // 模型路径，如 "news\news"
   let columns: ColumnSchema[] = [];         // 字段数组（来自 db.tableSchema()）
   let joinTable: JoinTableInfo[] = [];      // 关联表信息（可选）
+  let manualUpdateTime: Bool = false;       // update_time 是否由业务代码手动维护（true 时不生成 @UpdateDateColumn）
 }
 
 // ============================================================================
@@ -83,6 +89,7 @@ export class Param {
   let tableName: String = "";          // 数据库表名，如 user
   let tableDesc: String = "";          // 表说明文字，用于 TS 文件中的注释
   let fields: FieldDef[] = [];         // 加工后的字段数组
+  let insFields: FieldDef[] = [];      // 加工后的字段数组（排除自动维护的时间列，供 in_ins 模板使用）
   let imports: String[] = [];          // 额外的 import 语句字符串（用于关联表）
   let relations: RelationDef[] = [];   // 关联关系配置 (OneToMany / ManyToOne 等)
 
@@ -98,9 +105,14 @@ export class Param {
     let colType = field.colType;
     let colDefault = field.colDefault;
 
-    // 先映射到 TypeORM 的 type 值（varchar / int / decimal / datetime / boolean）
+    // 先映射到 TypeORM 的 type 值（varchar / int / decimal / datetime / tinyint ...）
     let ormType = mapTypeToOrm(colType);
     let options = "{ type: '" + ormType + "'";
+
+      // 可空字段（或 json 类型）在类型后紧跟 nullable: true
+      if (field.isNullable || ormType == "json") {
+        options += ", nullable: true";
+      }
 
       // 非主键字段需要设置默认值（主键一般是自增，不需要 default）
       if (!isPrimaryKey(field.colKey)) {
@@ -121,7 +133,16 @@ export class Param {
           } else {
             options += ", default: 0";
           }
+        } else if (colType.includes("datetime") || colType.includes("timestamp")) {
+          // 日期时间字段：DB 列带默认值（如 CURRENT_TIMESTAMP）或创建时间列时，
+          // 用 Date.now() 作为默认（配合 en.tpl 的 @CreateDateColumn）
+          if (field.isCreateDate || (colDefault != null && colDefault != "")) {
+            options += ", default: Date.now()";
+          }
+          // 日期时间字段：使用 ToolStr.dateTransformer 做日期序列化/反序列化
+          options += ", transformer: ToolStr.dateTransformer";
         }
+        // json 分支已合并到上面的统一可空处理（json 类型始终 nullable: true）
       }
 
       options += " }";
@@ -165,6 +186,7 @@ export class Param {
 
     // ── 处理字段：把原始 schema 列转换成模板需要的结构 ────────────────
     this.fields = [];
+    this.insFields = [];
     for (col in data.columns) {
       let field = new FieldDef();
       field.name = col.name;                                     // 字段名（原样）
@@ -174,11 +196,30 @@ export class Param {
       field.colDefault = col["default"];                        // 列默认值（"default" 是 AC 关键字，用方括号访问）
       field.extra = col.extra;                                   // 列附加信息 ("auto_increment" = 自增)
       field.tsType = mapTypeToTs(col.type);                      // → TypeScript 类型
+      field.isNullable = col["nullable"];                        // → 是否允许为空
+      // 可空字段（主键除外）：TS 类型追加 " | null"（json 类型已自带 " | null"，避免重复）
+      field.tsTypeNull = field.tsType;
+      if (field.isNullable && !isPrimaryKey(col.key) && !field.tsTypeNull.includes("| null")) {
+        field.tsTypeNull = field.tsTypeNull + " | null";
+      }
       field.isPrimary = isPrimaryKey(col.key);                   // → 是否主键
       field.isAutoInc = isAutoIncrement(col.extra);              // → 是否自增
       field.isCoin = isCoinType(col.type);                       // → 是否金额类型
+      // create_time 且为日期时间类型 → 标记为创建时间列（en.tpl 额外生成 @CreateDateColumn）
+      field.isCreateDate = (field.name == "create_time")
+        && (col.type.toLowerCase().includes("datetime") || col.type.toLowerCase().includes("timestamp"));
+      // update_time 且为日期时间类型，且未配置业务手动维护 → 标记为更新时间列（en.tpl 额外生成 @UpdateDateColumn）
+      field.isUpdateDate = (field.name == "update_time")
+        && (col.type.toLowerCase().includes("datetime") || col.type.toLowerCase().includes("timestamp"))
+        && (data.manualUpdateTime != true);
+      // create_time / update_time 由 TypeORM 自动维护 → in_ins.tpl 不生成这些入参
+      field.isAutoTime = field.isCreateDate || field.isUpdateDate;
       field.columnOptions = this.getColumnOptions(field);        // → @Column 的完整参数字符串
       this.fields.append(field);
+      // 由 TypeORM 自动维护的时间列不入 in_ins 入参
+      if (!field.isAutoTime) {
+        this.insFields.append(field);
+      }
     }
 
     // ── 处理关联表 ────────────────────────────────────────────────────
@@ -190,8 +231,18 @@ export class Param {
     if (data.joinTable) {
       for (jt in data.joinTable) {
         // 生成：import { EnNewsCategory } from './en_news_category'
+        // 同一实体类在多个关联中重复使用时（如 homeSchedules/awaySchedules 都关联
+        // EnSportLeagueSchedule），import 语句只生成一次，避免重复引用
         let imp = "import { " + jt.joinEnClass + " } from '" + jt.joinEnClass_Url + "'";
-        this.imports.append(imp);
+        let impExists = false;
+        for (existing in this.imports) {
+          if (existing == imp) {
+            impExists = true;
+          }
+        }
+        if (!impExists) {
+          this.imports.append(imp);
+        }
 
         // 生成关系配置，对应 TypeORM 的关系装饰器
         let rel = new RelationDef();

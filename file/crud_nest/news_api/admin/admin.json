@@ -6,6 +6,23 @@
       "tableName": "admin",
       "selColsLike": [
         "account"
+      ],
+      "selColsSort": {
+        "id": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnRole",
+          "joinEnClass_Url": "src/role/role/entities/en_role",
+          "joinEnClassPro": "role",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "admin",
+          "joinColumn": {
+            "name": "role_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
       ]
     }
   ]

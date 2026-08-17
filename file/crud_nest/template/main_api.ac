@@ -22,7 +22,7 @@
 
 import { Param } from "./core/param.ac";
 import { QueryData } from "./core/query_data.ac";
-import { escapeJsStr, capitalizeFirst, snakeToCamel, snakeToPascal, isNumericStr } from "../../tool/tool_str.ac";
+import { escapeJsStr, snakeToCamel, snakeToPascal, isNumericStr } from "../../tool/tool_str.ac";
 
 /// @brief 模板配置（一个模板对应一个生成的代码文件）
 class TemplateConfig {
@@ -197,9 +197,9 @@ export function generateApiMain(params: Object): Void {
                 colComment = col.comment;
               }
             }
-            // 构建枚举名：Enum + 实体类名(去En前缀) + 列名首字母大写
+            // 构建枚举名：Enum + 实体类名(去En前缀) + 列名转帕斯卡（如 in_out_type → InOutType）
             let modelBaseName = param.entityClass.substring(2);
-            let colNameCap = capitalizeFirst(colName);
+            let colNameCap = snakeToPascal(colName);
             let enumName = "Enum" + modelBaseName + colNameCap;
             // recordsName: 从 enumName 去掉 "Enum" + modelBaseName 前缀，加 "Records"
             let recordsName = enumName.substring(4 + modelBaseName.length) + "Records";
@@ -277,9 +277,9 @@ export function generateApiMain(params: Object): Void {
             keyColComment = col.comment;
           }
         }
-        // 构建枚举名
+        // 构建枚举名：列名转帕斯卡（如 in_out_type → InOutType）
         let modelBase = param.entityClass.substring(2);
-        let keyColCap: String = capitalizeFirst(keyCol);
+        let keyColCap: String = snakeToPascal(keyCol);
         let enumName = "Enum" + modelBase + keyColCap;
         let recordsName = keyColCap + "Records";
         let methodName = "get" + recordsName;
@@ -346,6 +346,7 @@ export function generateApiMain(params: Object): Void {
     tplData["tableName"]        = param.tableName;     // ${tableName}
     tplData["tableDesc"]        = combined["tableDesc"]; // ${tableDesc}
     tplData["fields"]           = param.fields;         // ${each field in fields} 循环
+    tplData["insFields"]        = param.insFields;      // ${each field in insFields} 循环（in_ins 用，排除自动维护的时间列）
     tplData["imports"]          = param.imports;        // ${each imp in imports} 循环
     tplData["relations"]        = param.relations;      // ${each rel in relations} 循环
     // 联表查询属性名列表（isJoinRelations=true 的关联），如 "'sportType'"，用于 db_.tpl 的 relations

@@ -51,9 +51,8 @@
           description: "汇总查询的字段"
         },
         selColsSort: {
-          type: "object",
-          class: "SortConfig",
-          description: "排序字段，键为字段名，值为'ASC'或'DESC'"
+          type: "any",
+          description: "排序字段，推荐数组格式 [[\"字段名\",\"ASC|DESC\"],...]（保证与书写顺序一致）；兼容旧对象格式 {\"字段名\":\"ASC|DESC\"}"
         },
         joinTable: {
           type: "array",

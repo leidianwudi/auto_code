@@ -26,23 +26,30 @@ ${# 类名格式：InIns + 表名首字母大写，如 InInsUser                
 //${tableDesc}(${entityClass})实体对应in类，客户端插入或修改表时，传输的数据格式
 export class ${insClass} {
   ${# ── 字段循环展开 ────────────────────────────────────────────────────   }
-  ${# param.ac 生成的 fields 数组，每个字段（field）包含：                 }
+  ${# param.ac 生成的 insFields 数组（排除自动维护的时间列），每个字段（field）包含：    }
   ${#   .name          字段名                                                }
   ${#   .comment       字段注释（@ApiProperty 的 description）               }
   ${#   .tsType        TypeScript 类型（number/string/Date/Coin/boolean）    }
   ${#   .isPrimary     是否主键                                              }
   ${#   .isCoin        是否 decimal 金额类型                                 }
-  ${each field in fields}
+  ${#   .isNullable    是否可空（可空字段 required: false + @IsOptional + ?） }
+  ${each field in insFields}
+  ${if field.isNullable}
+  @ApiProperty({ description: '${field.comment}', required: false })
+  @IsOptional()
+  ${field.name}?: ${if field.isCoin}string${else}${field.tsType}${/if};
+  ${else}
   @ApiProperty({ description: '${field.comment}' })
   ${if field.isCoin}@IsString()${else if field.tsType == "number"}@IsNumber()${else if field.tsType == "string"}@IsString()${else if field.tsType == "Date"}@IsDateString()${else if field.tsType == "boolean"}@IsNotEmpty()${/if}
   ${field.name}: ${if field.isCoin}string${else}${field.tsType}${/if};
+  ${/if}
 
   ${/each}
   ${# ── constructor：从实体构造 InIns ────────────────────────────────   }
   ${# Coin 字段需要 .toString() 转为字符串，其余直接赋值                    }
   constructor(data?: ${entityClass}) {
     if (!data) return;
-${each field in fields}
+${each field in insFields}
 ${if field.isCoin}       this.${field.name} = data.${field.name}.toString();${else}       this.${field.name} = data.${field.name};${/if}
 ${/each}
   }
@@ -51,7 +58,7 @@ ${/each}
   ${# Coin 字段需要 new Coin() 包装，其余直接赋值                           }
   toEntity(): ${entityClass} {
        const entity = new ${entityClass}();
-${each field in fields}
+${each field in insFields}
 ${if field.isCoin}       entity.${field.name} = new Coin(this.${field.name});${else}       entity.${field.name} = this.${field.name};${/if}
 ${/each}
        return entity;

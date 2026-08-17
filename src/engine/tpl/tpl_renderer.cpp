@@ -253,22 +253,36 @@ bool isTruthy(const QJsonValue &val) {
   }
 }
 
-/// @brief 将表达式求值为 QJsonValue（支持内置函数和变量路径）
+/// @brief 将表达式求值为 QJsonValue（支持字面量、内置函数和变量路径）
 QJsonValue evalExprToJson(const QString &expr, const QJsonObject &context,
                           const TplEngine &engine) {
-  // 1. 内置函数 fileExists(path)
+  // 1. 字符串字面量：'abc' / "abc"
+  //    否则 == 比较右侧 "number" 会被当变量路径解析返回 null，比较永远失败
+  QString trimmed = expr.trimmed();
+  if (trimmed.length() >= 2 &&
+      ((trimmed.startsWith(QChar('"')) && trimmed.endsWith(QChar('"'))) ||
+       (trimmed.startsWith(QChar('\'')) && trimmed.endsWith(QChar('\''))))) {
+    return QJsonValue(trimmed.mid(1, trimmed.length() - 2));
+  }
+  // 2. 数字字面量：123 / 3.14
+  {
+    bool ok = false;
+    double num = trimmed.toDouble(&ok);
+    if (ok) return QJsonValue(num);
+  }
+  // 3. 内置函数 fileExists(path)
   if (auto arg = parseFuncArg(expr, QString::fromLatin1(AcBuiltin::kFileExists))) {
     QString resolved = resolveStringArg(*arg, context, engine);
     return QJsonValue(QFileInfo::exists(resolved));
   }
-  // 2. 内置函数 printLog(text)
+  // 4. 内置函数 printLog(text)
   if (auto arg = parseFuncArg(expr, QString::fromLatin1(AcBuiltin::kPrintLog))) {
     QString resolved = resolveStringArg(*arg, context, engine);
     auto cb = engine.logCallback();
     if (cb) cb(resolved, false);
     return QJsonValue(QJsonValue::Null);
   }
-  // 3. 变量路径
+  // 5. 变量路径
   return engine.resolvePath(expr, context);
 }
 

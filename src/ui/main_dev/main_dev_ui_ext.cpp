@@ -8,16 +8,47 @@
 #include <QApplication>
 #include <QDrag>
 #include <QDragEnterEvent>
+#include <QDragLeaveEvent>
 #include <QDropEvent>
 #include <QMenu>
 #include <QMimeData>
 #include <QMouseEvent>
+#include <QPainter>
 #include <QPixmap>
 #include <QSplitter>
 
 #include "src/util/common/code_constants.h"
 #include "src/util/common/util_file.h"
 #include "src/util/ui/component/aui_style.h"
+
+// ════════════════════════════════════════════════════════════
+//  SplitOverlay 实现 — 拆分高亮覆盖层
+// ════════════════════════════════════════════════════════════
+
+SplitOverlay::SplitOverlay(QWidget *parent) : QWidget(parent) {
+  // 覆盖层不拦截鼠标事件（拖拽期间由 QDrag 管理，这里兜底避免误拦截）
+  setAttribute(Qt::WA_TransparentForMouseEvents);
+  hide();
+}
+
+void SplitOverlay::showForSide(SplitSide side, const QRect &area) {
+  m_side = side;
+  setGeometry(area);
+  show();
+  raise();
+  update();
+}
+
+void SplitOverlay::paintEvent(QPaintEvent * /*event*/) {
+  QPainter p(this);
+  p.setRenderHint(QPainter::Antialiasing);
+  // 高亮色与选中标签顶部指示条一致（VSCode 风格的蓝色）
+  const QColor fill(14, 122, 254, 70);
+  const QColor border(14, 122, 254, 220);
+  p.setPen(QPen(border, 2));
+  p.setBrush(fill);
+  p.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 4, 4);
+}
 
 // ════════════════════════════════════════════════════════════
 //  DraggableTabBar 实现
@@ -105,15 +136,57 @@ void DraggableTabBar::dragEnterEvent(QDragEnterEvent *event) {
     event->acceptProposedAction();
 }
 
+/// 根据横向位置判断是否命中左/右拆分区域（靠近左右边界 25% 内）
+static SplitSide splitSideAt(const QPoint &pos, const QWidget *w) {
+  const int width = w->width();
+  if (width <= 0) return SplitSide::None;
+  const int x = pos.x();
+  if (x < width * 0.25) return SplitSide::Left;
+  if (x > width * 0.75) return SplitSide::Right;
+  return SplitSide::None;
+}
+
 void DraggableTabBar::dragMoveEvent(QDragMoveEvent *event) {
-  if (event->mimeData()->hasFormat(QString::fromUtf8(CodeConstants::Mime::kAutoCodeTab)))
-    event->acceptProposedAction();
+  if (!event->mimeData()->hasFormat(QString::fromUtf8(CodeConstants::Mime::kAutoCodeTab))) {
+    QTabBar::dragMoveEvent(event);
+    return;
+  }
+  event->acceptProposedAction();
+
+  // 拖到 tab 头左/右边缘 → 显示拆分高亮（覆盖整个所属面板）
+  m_splitSide = splitSideAt(event->position().toPoint(), this);
+  if (auto *panel = qobject_cast<DimmableTabWidget *>(parentWidget())) {
+    if (m_splitSide != SplitSide::None) {
+      panel->showSplitOverlay(m_splitSide);
+    } else {
+      panel->hideSplitOverlay();
+    }
+  }
+}
+
+void DraggableTabBar::dragLeaveEvent(QDragLeaveEvent *event) {
+  m_splitSide = SplitSide::None;
+  if (auto *panel = qobject_cast<DimmableTabWidget *>(parentWidget())) panel->hideSplitOverlay();
+  QTabBar::dragLeaveEvent(event);
 }
 
 void DraggableTabBar::dropEvent(QDropEvent *event) {
   if (!event->mimeData()->hasFormat(QString::fromUtf8(CodeConstants::Mime::kAutoCodeTab)) ||
       !s_sourceBar) {
+    m_splitSide = SplitSide::None;
     QTabBar::dropEvent(event);
+    return;
+  }
+
+  // 命中拆分区域 → 触发拆分（由 MainDevMgr 创建新面板并移动标签）
+  if (m_splitSide != SplitSide::None) {
+    SplitSide side = m_splitSide;
+    m_splitSide = SplitSide::None;
+    if (auto *panel = qobject_cast<DimmableTabWidget *>(parentWidget())) panel->hideSplitOverlay();
+    emit tabSplitDropped(s_sourceIndex, s_sourceBar, side);
+    s_sourceBar = nullptr;
+    s_sourceIndex = -1;
+    event->acceptProposedAction();
     return;
   }
 
@@ -138,6 +211,9 @@ DimmableTabWidget::DimmableTabWidget(QWidget *parent) : QTabWidget(parent) {
   auto *bar = new DraggableTabBar;
   setTabBar(bar);
 
+  // 拆分高亮覆盖层（子控件，覆盖在标签栏 + 内容区之上）
+  m_splitOverlay = new SplitOverlay(this);
+
   // 关闭按钮不启用 Qt 原生按钮（AuiCodeTabBar 自绘接管，构造时已 setTabsClosable(false)），
   // 这里显式保持关闭，避免误开原生 X 覆盖自绘内容。
   setTabsClosable(false);
@@ -150,6 +226,9 @@ DimmableTabWidget::DimmableTabWidget(QWidget *parent) : QTabWidget(parent) {
   // tab 样式：指定编辑框 tab 头四边空白
   // 文字颜色由 paintEvent 直接自绘，不依赖 setTabTextColor 或代理样式
   AuiStyle::applyTabBarPadding(bar, 4, 4, 0, 4);
+
+  // 标签拖到 tab 头左/右边缘 → 转发为面板的拆分请求信号
+  connect(bar, &DraggableTabBar::tabSplitDropped, this, &DimmableTabWidget::splitDropped);
 
   // 跨面板拖拽：标签移动
   connect(bar, &DraggableTabBar::tabDropped, this,
@@ -191,6 +270,30 @@ DimmableTabWidget::DimmableTabWidget(QWidget *parent) : QTabWidget(parent) {
           });
 }
 
+// ──────────────────────────────────────────────────────────────
+//  拆分高亮覆盖层管理
+// ──────────────────────────────────────────────────────────────
+
+void DimmableTabWidget::showSplitOverlay(SplitSide side) {
+  if (!m_splitOverlay) return;
+  m_splitSide = side;
+  // 覆盖层只覆盖左半区（拆分到左）或右半区（拆分到右），VSCode 风格
+  QRect area = rect();
+  if (side == SplitSide::Left) {
+    area.setWidth(area.width() / 2);
+  } else if (side == SplitSide::Right) {
+    const int half = area.width() / 2;
+    area.setLeft(area.width() - half);
+    area.setWidth(half);
+  }
+  m_splitOverlay->showForSide(side, area);
+}
+
+void DimmableTabWidget::hideSplitOverlay() {
+  m_splitSide = SplitSide::None;
+  if (m_splitOverlay) m_splitOverlay->hide();
+}
+
 // 内容区拖放
 
 void DimmableTabWidget::dragEnterEvent(QDragEnterEvent *event) {
@@ -201,10 +304,26 @@ void DimmableTabWidget::dragEnterEvent(QDragEnterEvent *event) {
 }
 
 void DimmableTabWidget::dragMoveEvent(QDragMoveEvent *event) {
-  if (event->mimeData()->hasFormat(QString::fromUtf8(CodeConstants::Mime::kAutoCodeTab)))
-    event->acceptProposedAction();
-  else
+  if (!event->mimeData()->hasFormat(QString::fromUtf8(CodeConstants::Mime::kAutoCodeTab))) {
     QTabWidget::dragMoveEvent(event);
+    return;
+  }
+  event->acceptProposedAction();
+
+  // 拖到内容区左/右边缘 → 显示拆分高亮
+  SplitSide side = splitSideAt(event->position().toPoint(), this);
+  if (side != m_splitSide) {
+    if (side != SplitSide::None) {
+      showSplitOverlay(side);
+    } else {
+      hideSplitOverlay();
+    }
+  }
+}
+
+void DimmableTabWidget::dragLeaveEvent(QDragLeaveEvent *event) {
+  hideSplitOverlay();
+  QTabWidget::dragLeaveEvent(event);
 }
 
 void DimmableTabWidget::dropEvent(QDropEvent *event) {
@@ -212,6 +331,20 @@ void DimmableTabWidget::dropEvent(QDropEvent *event) {
     QTabWidget::dropEvent(event);
     return;
   }
+
+  // 命中拆分区域 → 触发拆分（先取出方向，再隐藏覆盖层重置状态）
+  if (m_splitSide != SplitSide::None) {
+    SplitSide side = m_splitSide;
+    hideSplitOverlay();
+    auto *fromBar = DraggableTabBar::dragSourceBar();
+    int fromIndex = DraggableTabBar::dragSourceIndex();
+    DraggableTabBar::clearDragSource();
+    if (fromBar) emit splitDropped(fromIndex, fromBar, side);
+    event->acceptProposedAction();
+    return;
+  }
+
+  hideSplitOverlay();
 
   auto *fromBar = DraggableTabBar::dragSourceBar();
   int fromIndex = DraggableTabBar::dragSourceIndex();

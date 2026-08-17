@@ -22,6 +22,14 @@
           "joinType": "OneToMany",
           "inverseJoinEnClassPro": "role",
           "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnAdmin",
+          "joinEnClass_Url": "src/admin/admin/entities/en_admin",
+          "joinEnClassPro": "admin",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "role",
+          "isJoinRelations": false
         }
       ]
     }

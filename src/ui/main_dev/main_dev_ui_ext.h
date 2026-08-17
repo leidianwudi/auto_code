@@ -14,9 +14,36 @@
 #include "src/util/ui/component/aui_code_tab_bar.h"
 
 class QDragEnterEvent;
+class QDragLeaveEvent;
 class QDragMoveEvent;
 class QDropEvent;
 class QMouseEvent;
+class QPaintEvent;
+
+// ════════════════════════════════════════════════════════════
+//  SplitSide — 拖拽拆分方向（VSCode 风格：拖到左/右边缘拆分）
+// ════════════════════════════════════════════════════════════
+
+enum class SplitSide { None = 0, Left, Right };
+
+// ════════════════════════════════════════════════════════════
+//  SplitOverlay — 拆分高亮覆盖层（半透明蓝色，覆盖左/右半区）
+// ════════════════════════════════════════════════════════════
+
+class SplitOverlay : public QWidget {
+  Q_OBJECT
+
+public:
+  explicit SplitOverlay(QWidget *parent = nullptr);
+  /// 在指定半区显示高亮（area 为覆盖层显示区域，由面板计算传入）
+  void showForSide(SplitSide side, const QRect &area);
+
+protected:
+  void paintEvent(QPaintEvent *event) override;
+
+private:
+  SplitSide m_side = SplitSide::None;
+};
 
 // ════════════════════════════════════════════════════════════
 //  DraggableTabBar  — 支持跨面板拖拽的标签栏
@@ -31,6 +58,8 @@ public:
 signals:
   /// 标签从 fromBar(fromIndex) 拖拽到此 bar 的 toIndex 位置
   void tabDropped(int fromIndex, DraggableTabBar *fromBar, int toIndex);
+  /// 标签被拖拽到 tab 头左/右边缘后松开 → 触发拆分
+  void tabSplitDropped(int fromIndex, DraggableTabBar *fromBar, SplitSide side);
 
   /// 右键菜单：关闭其它标签页
   void closeOthersRequested(int index);
@@ -42,6 +71,7 @@ protected:
   void mouseMoveEvent(QMouseEvent *event) override;
   void dragEnterEvent(QDragEnterEvent *event) override;
   void dragMoveEvent(QDragMoveEvent *event) override;
+  void dragLeaveEvent(QDragLeaveEvent *event) override;
   void dropEvent(QDropEvent *event) override;
 
 public:
@@ -55,6 +85,7 @@ public:
 private:
   int m_pressedIndex = -1;
   QPoint m_dragStartPos;
+  SplitSide m_splitSide = SplitSide::None;  ///< 拖拽过程中命中的拆分方向
 
   static DraggableTabBar *s_sourceBar;
   static int s_sourceIndex;
@@ -70,8 +101,21 @@ class DimmableTabWidget : public QTabWidget {
 public:
   explicit DimmableTabWidget(QWidget *parent = nullptr);
 
+  /// 显示/隐藏拆分高亮覆盖层（拖到内容区或 tab 头边缘时调用）
+  void showSplitOverlay(SplitSide side);
+  void hideSplitOverlay();
+
+signals:
+  /// 标签被拖到面板左/右边缘后松开 → 请求拆分
+  void splitDropped(int fromIndex, DraggableTabBar *fromBar, SplitSide side);
+
 protected:
   void dragEnterEvent(QDragEnterEvent *event) override;
   void dragMoveEvent(QDragMoveEvent *event) override;
+  void dragLeaveEvent(QDragLeaveEvent *event) override;
   void dropEvent(QDropEvent *event) override;
+
+private:
+  SplitOverlay *m_splitOverlay = nullptr;
+  SplitSide m_splitSide = SplitSide::None;  ///< 拖拽过程中命中的拆分方向
 };

@@ -106,7 +106,9 @@ export class QueryData {
       }
     }
 
-    // 加 selColsGap（范围查询字段）：每列展开为 base / _min / _max 三个字段
+    // 加 selColsGap（范围查询字段）：每列展开为 _min / _max 两个字段
+    // 说明：不生成 base 字段 —— db_.tpl 的范围查询（addBetween）只消费 _min/_max，
+    //       base 不会生成任何查询条件，属于冗余字段。若还需精确查询，请把该字段同时配置到 selCols。
     if (json.selColsGap) {
       for (colName in json.selColsGap) {
         let alreadyAdded = false;
@@ -119,17 +121,6 @@ export class QueryData {
 
         for (field in param.fields) {
           if (field.name == colName) {
-            // 基础字段：create_time
-            let sfBase = new SelFieldDef();
-            sfBase.name = field.name;
-            sfBase.comment = field.comment;
-            sfBase.tsType = field.tsType;
-            sfBase.isPrimary = field.isPrimary;
-            sfBase.isCoin = field.isCoin;
-            sfBase.isGap = true;
-            selFields.append(sfBase);
-            selFieldNames.append(field.name);
-
             // 起始字段：create_time_min
             let sfMin = new SelFieldDef();
             sfMin.name = field.name + "_min";
@@ -162,7 +153,10 @@ export class QueryData {
   // --------------------------------------------------------------------------
   // 构建 sortInfo 对象（排序信息）
   //
-  // 输入：json.selColsSort = { id: "DESC", fans_count: "DESC" }
+  // 输入：json.selColsSort
+  //   - 推荐数组格式：[["role_id","DESC"],["menu_id","ASC"]]
+  //     数组保证与 JSON 书写顺序一致（for...in 迭代 QJsonObject 顺序不保证）
+  //   - 兼容旧对象格式：{"role_id":"DESC","menu_id":"ASC"}
   // 输出：
   //   .sortDesc       → "排序字段:id, fans_count"（用于 @ApiProperty description）
   //   .orderByDef     → "'id': 'DESC', 'fans_count': 'DESC'"（用于 getOrderByKey 的对象字面量）
@@ -173,9 +167,19 @@ export class QueryData {
     let sortKeys: String[] = [];
     let sortVals: String[] = [];
     if (json.selColsSort) {
-      for (sortKey in json.selColsSort) {
-        sortKeys.append(sortKey);
-        sortVals.append(json.selColsSort[sortKey]);
+      let sortArr: Object = json.selColsSort;
+      if (sortArr.length) {
+        // 数组格式：[["role_id","DESC"],["menu_id","ASC"]]
+        for (pair in sortArr) {
+          sortKeys.append(pair[0]);
+          sortVals.append(pair[1]);
+        }
+      } else {
+        // 对象格式（兼容旧配置）：{"role_id":"DESC","menu_id":"ASC"}
+        for (sortKey in sortArr) {
+          sortKeys.append(sortKey);
+          sortVals.append(sortArr[sortKey]);
+        }
       }
     }
 
@@ -213,14 +217,21 @@ export class QueryData {
   function buildWhereConditions(selFields: SelFieldDef[]): String[] {
     let conditions: String[] = [];
     for (sf in selFields) {
-      // 范围查询字段：只由 _min 字段生成一条 addBetween（按天取整）；
+      // 范围查询字段：只由 _min 字段生成一条 addBetween；
       // base / _max 字段不生成独立条件
       if (sf.isGap) {
         if (sf.name.endsWith("_min")) {
           let baseName = sf.name.substring(0, sf.name.length - 4);
-          let line = "if (!ToolDb.isNull(sel." + sf.name + ")) where.addBetween('" + baseName
-            + "', ToolTime.getDayStartTime(sel." + baseName + "_min), ToolTime.getDayEndTime(sel." + baseName + "_max));";
-          conditions.append(line);
+          // 日期范围按天取整（create_time_min/max）；数值等其它范围直接用原值
+          if (sf.tsType == "Date") {
+            let line = "if (!ToolDb.isNull(sel." + sf.name + ")) where.addBetween('" + baseName
+              + "', ToolTime.getDayStartTime(sel." + baseName + "_min), ToolTime.getDayEndTime(sel." + baseName + "_max));";
+            conditions.append(line);
+          } else {
+            let line = "if (!ToolDb.isNull(sel." + sf.name + ")) where.addBetween('" + baseName
+              + "', sel." + baseName + "_min, sel." + baseName + "_max);";
+            conditions.append(line);
+          }
         }
         continue;
       }

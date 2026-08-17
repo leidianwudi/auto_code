@@ -10,7 +10,21 @@
       ],
       "selColsSort": {
         "create_time": "DESC"
-      }
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnInfoNews",
+          "joinEnClass_Url": "src/info/info_news/entities/en_info_news",
+          "joinEnClassPro": "infoNews",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "infoImgs",
+          "joinColumn": {
+            "name": "belong_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
     }
   ]
 }

@@ -8,10 +8,10 @@
         "role_id",
         "menu_id"
       ],
-      "selColsSort": {
-        "role_id": "DESC",
-        "menu_id": "ASC"
-      },
+      "selColsSort": [
+        ["role_id", "DESC"],
+        ["menu_id", "ASC"]
+      ],
       "joinTable": [
         {
           "joinEnClass": "EnRole",

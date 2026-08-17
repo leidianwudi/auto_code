@@ -28,6 +28,30 @@
             "referencedColumnName": "new_id"
           },
           "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnInfoImg",
+          "joinEnClass_Url": "src/info/info_img/entities/en_info_img",
+          "joinEnClassPro": "infoImgs",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "infoNews",
+          "joinColumn": {
+            "name": "id",
+            "referencedColumnName": "belong_id"
+          },
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnSportBind",
+          "joinEnClass_Url": "src/sport/sport_bind/entities/en_sport_bind",
+          "joinEnClassPro": "sportBinds",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "infoNews",
+          "joinColumn": {
+            "name": "id",
+            "referencedColumnName": "belong_id"
+          },
+          "isJoinRelations": false
         }
       ]
     }
