@@ -45,6 +45,8 @@ export class ${selClass} extends In_BasePage {
   @IsString()
   ${else if field.tsType == "boolean"}
   @IsBoolean()
+  ${else if field.tsType == "Date"}
+  @Type(() => Date)
   ${/if}
   ${field.name}?: ${if field.tsType == "Coin"}string${else}${field.tsType}${/if};
 

@@ -22,6 +22,7 @@ export class SelFieldDef {
   let isPrimary: Bool = false;  // 是否主键
   let isCoin: Bool = false;     // 是否金额类型
   let isLike: Bool = false;     // 是否模糊查询
+  let isGap: Bool = false;      // 是否范围查询（selColsGap 生成 base/_min/_max 三个字段）
 }
 
 /// @brief 排序信息结果（buildSortInfo 的返回值）
@@ -38,8 +39,11 @@ export class QueryData {
   // 构建 selFields 数组（InSel 查询字段列表）
   //
   // 逻辑：
-  //   1. json.selCols 精确查询字段 → isLike = false
-  //   2. json.selColsLike 模糊查询字段 → isLike = true
+  //   1. json.selCols      精确查询字段 → isLike = false
+  //   2. json.selColsLike  模糊查询字段 → isLike = true
+  //   3. json.selColsGap   范围查询字段 → isGap = true，
+  //      每列展开为 base / base_min / base_max 三个字段（如 create_time /
+  //      create_time_min / create_time_max，均 @Type(() => Date)）
   //   注意：主键不自动加入（需查询时在 JSON 的 selCols 里显式配置）
   // --------------------------------------------------------------------------
   function buildSelFields(json: Object, param: Param): SelFieldDef[] {
@@ -102,6 +106,56 @@ export class QueryData {
       }
     }
 
+    // 加 selColsGap（范围查询字段）：每列展开为 base / _min / _max 三个字段
+    if (json.selColsGap) {
+      for (colName in json.selColsGap) {
+        let alreadyAdded = false;
+        for (n in selFieldNames) {
+          if (n == colName) {
+            alreadyAdded = true;
+          }
+        }
+        if (alreadyAdded) { continue; }
+
+        for (field in param.fields) {
+          if (field.name == colName) {
+            // 基础字段：create_time
+            let sfBase = new SelFieldDef();
+            sfBase.name = field.name;
+            sfBase.comment = field.comment;
+            sfBase.tsType = field.tsType;
+            sfBase.isPrimary = field.isPrimary;
+            sfBase.isCoin = field.isCoin;
+            sfBase.isGap = true;
+            selFields.append(sfBase);
+            selFieldNames.append(field.name);
+
+            // 起始字段：create_time_min
+            let sfMin = new SelFieldDef();
+            sfMin.name = field.name + "_min";
+            sfMin.comment = field.comment + "（起始）";
+            sfMin.tsType = field.tsType;
+            sfMin.isPrimary = field.isPrimary;
+            sfMin.isCoin = field.isCoin;
+            sfMin.isGap = true;
+            selFields.append(sfMin);
+            selFieldNames.append(field.name + "_min");
+
+            // 结束字段：create_time_max
+            let sfMax = new SelFieldDef();
+            sfMax.name = field.name + "_max";
+            sfMax.comment = field.comment + "（结束）";
+            sfMax.tsType = field.tsType;
+            sfMax.isPrimary = field.isPrimary;
+            sfMax.isCoin = field.isCoin;
+            sfMax.isGap = true;
+            selFields.append(sfMax);
+            selFieldNames.append(field.name + "_max");
+          }
+        }
+      }
+    }
+
     return selFields;
   }
 
@@ -159,6 +213,17 @@ export class QueryData {
   function buildWhereConditions(selFields: SelFieldDef[]): String[] {
     let conditions: String[] = [];
     for (sf in selFields) {
+      // 范围查询字段：只由 _min 字段生成一条 addBetween（按天取整）；
+      // base / _max 字段不生成独立条件
+      if (sf.isGap) {
+        if (sf.name.endsWith("_min")) {
+          let baseName = sf.name.substring(0, sf.name.length - 4);
+          let line = "if (!ToolDb.isNull(sel." + sf.name + ")) where.addBetween('" + baseName
+            + "', ToolTime.getDayStartTime(sel." + baseName + "_min), ToolTime.getDayEndTime(sel." + baseName + "_max));";
+          conditions.append(line);
+        }
+        continue;
+      }
       let line = "";
       if (sf.isLike) {
         line = "if (!ToolDb.isNull(sel." + sf.name + ")) where.addLike('" + sf.name + "', `%${sel." + sf.name + "}%`);";

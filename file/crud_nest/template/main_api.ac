@@ -296,10 +296,17 @@ export function generateApiMain(params: Object): Void {
           items: []
         };
         for (row in tableRows) {
+          // value 为数值型时去引号（如 "1" → 1），字符串型保留引号（如 "day" → 'day'）
+          // 用 isNumericStr 判断，不能用固定拼接：value 列可能是 varchar（字符串）也可能是 int
+          let tv: Object = row[valueCol];
+          let tvStr = "'" + tv + "'";
+          if (isNumericStr("" + tv)) {
+            tvStr = "" + tv;
+          }
           tableEnumObj.items.append({
             key: snakeToPascal(row[keyCol]),
-            value: row[valueCol],
-            valueStr: "" + row[valueCol],
+            value: tv,
+            valueStr: tvStr,
             label: row[commentCol]
           });
         }
