@@ -1,0 +1,16 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "vip\\vip_log",
+      "tableName": "vip_log",
+      "selCols": [
+        "uid",
+        "sn"
+      ],
+      "selColsSort": {
+        "create_time": "DESC"
+      }
+    }
+  ]
+}

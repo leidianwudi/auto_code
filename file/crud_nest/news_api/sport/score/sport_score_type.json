@@ -1,0 +1,56 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\sport_score_type",
+      "tableName": "sport_score_type",
+      "selCols": [
+        "sport_id",
+        "type",
+        "enable"
+      ],
+      "selColsLike": [
+        "name_zh",
+        "name_en"
+      ],
+      "selColsSort": {
+        "id": "ASC"
+      },
+      "tableEnum": {
+        "key": "code",
+        "value": "id",
+        "comment": "name_zh"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportType",
+          "joinEnClass_Url": "src/sport/sport_type/entities/en_sport_type",
+          "joinEnClassPro": "sportType",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportScoreTypes",
+          "joinColumn": {
+            "name": "sport_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportScorePlayer",
+          "joinEnClass_Url": "src/sport/sport_score_player/entities/en_sport_score_player",
+          "joinEnClassPro": "sportScorePlayers",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "scoreType",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnSportScoreTeam",
+          "joinEnClass_Url": "src/sport/sport_score_team/entities/en_sport_score_team",
+          "joinEnClassPro": "sportScoreTeams",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "scoreType",
+          "isJoinRelations": false
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "role\\role",
+      "tableName": "role",
+      "selCols": [
+        "status"
+      ],
+      "selColsGap": [
+        "create_at",
+        "update_at"
+      ],
+      "selColsSort": {
+        "create_at": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnRoleMenu",
+          "joinEnClass_Url": "src/role/role_menu/entities/en_role_menu",
+          "joinEnClassPro": "roleMenu",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "role",
+          "isJoinRelations": false
+        }
+      ]
+    }
+  ]
+}

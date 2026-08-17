@@ -1,0 +1,21 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "system\\system_task_log",
+      "tableName": "system_task_log",
+      "selCols": [
+        "code"
+      ],
+      "selColsLike": [
+        "name"
+      ],
+      "selColsGap": [
+        "create_time"
+      ],
+      "selColsSort": {
+        "code": "ASC"
+      }
+    }
+  ]
+}

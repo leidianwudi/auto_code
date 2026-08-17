@@ -1,0 +1,21 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "coin\\coin_log",
+      "tableName": "coin_log",
+      "selCols": [
+        "uid",
+        "in_out_type",
+        "type",
+        "sn_ext"
+      ],
+      "selColsLike": [
+        "sn"
+      ],
+      "selColsSort": {
+        "create_time": "DESC"
+      }
+    }
+  ]
+}

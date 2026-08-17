@@ -1,0 +1,95 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\sport_league",
+      "tableName": "sport_league",
+      "selCols": [
+        "sport_id",
+        "region_id",
+        "level"
+      ],
+      "selColsLike": [
+        "name_zh",
+        "name_en",
+        "short_name_zh",
+        "short_name_en",
+        "intro_zh",
+        "intro_en"
+      ],
+      "selColsSort": {
+        "hot": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportType",
+          "joinEnClass_Url": "src/sport/sport_type/entities/en_sport_type",
+          "joinEnClassPro": "sportType",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportLeagues",
+          "joinColumn": {
+            "name": "sport_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportLeagueStage",
+          "joinEnClass_Url": "src/sport/sport_league_stage/entities/en_sport_league_stage",
+          "joinEnClassPro": "sportLeagueStages",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "sportLeague",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnSportTeam",
+          "joinEnClass_Url": "src/sport/sport_team/entities/en_sport_team",
+          "joinEnClassPro": "team",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "league",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnSportLeagueSchedule",
+          "joinEnClass_Url": "src/sport/sport_league_schedule/entities/en_sport_league_schedule",
+          "joinEnClassPro": "sportLeagueSchedules",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "sportLeague",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnSportScoreFootball",
+          "joinEnClass_Url": "src/sport/sport_score_football/entities/en_sport_score_football",
+          "joinEnClassPro": "sportScoreFootballs",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "sportLeague",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnSportScoreBasketball",
+          "joinEnClass_Url": "src/sport/sport_score_basketball/entities/en_sport_score_basketball",
+          "joinEnClassPro": "sportScoreBasketballs",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "sportLeague",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnSportScorePlayer",
+          "joinEnClass_Url": "src/sport/sport_score_player/entities/en_sport_score_player",
+          "joinEnClassPro": "sportScorePlayers",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "sportLeague",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnSportScoreTeam",
+          "joinEnClass_Url": "src/sport/sport_score_team/entities/en_sport_score_team",
+          "joinEnClassPro": "sportScoreTeams",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "sportLeague",
+          "isJoinRelations": false
+        }
+      ]
+    }
+  ]
+}

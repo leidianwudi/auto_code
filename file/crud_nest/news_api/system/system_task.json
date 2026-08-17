@@ -1,0 +1,24 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "system\\system_task",
+      "tableName": "system_task",
+      "selCols": [
+        "code",
+        "enable"
+      ],
+      "selColsLike": [
+        "name"
+      ],
+      "selColsSort": {
+        "code": "ASC"
+      },
+      "tableEnum": {
+        "key": "code",
+        "value": "value",
+        "comment": "desc"
+      }
+    }
+  ]
+}

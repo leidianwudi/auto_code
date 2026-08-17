@@ -1,0 +1,19 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "msg\\msg_notice",
+      "tableName": "msg_notice",
+      "selCols": [
+        "uid",
+        "is_read"
+      ],
+      "selColsLike": [
+        "title"
+      ],
+      "selColsSort": {
+        "create_time": "DESC"
+      }
+    }
+  ]
+}

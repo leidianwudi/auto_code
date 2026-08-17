@@ -1,0 +1,70 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\match\\sport_match_position",
+      "tableName": "sport_match_position",
+      "selCols": [
+        "schedule_id",
+        "team_id",
+        "player_id",
+        "position_id",
+        "is_first"
+      ],
+      "selColsSort": {
+        "is_first": "DESC",
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportLeagueSchedule",
+          "joinEnClass_Url": "src/sport/sport_league_schedule/entities/en_sport_league_schedule",
+          "joinEnClassPro": "sportLeagueSchedule",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportMatchPositions",
+          "joinColumn": {
+            "name": "schedule_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportTeam",
+          "joinEnClass_Url": "src/sport/sport_team/entities/en_sport_team",
+          "joinEnClassPro": "team",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportMatchPositions",
+          "joinColumn": {
+            "name": "team_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportPlayer",
+          "joinEnClass_Url": "src/sport/sport_player/entities/en_sport_player",
+          "joinEnClassPro": "player",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportMatchPositions",
+          "joinColumn": {
+            "name": "player_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportPosition",
+          "joinEnClass_Url": "src/sport/sport_position/entities/en_sport_position",
+          "joinEnClassPro": "sportPosition",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportMatchPositions",
+          "joinColumn": {
+            "name": "position_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}

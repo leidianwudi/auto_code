@@ -1,0 +1,22 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "task\\task",
+      "tableName": "task",
+      "selCols": [
+        "code",
+        "type_code",
+        "enable"
+      ],
+      "selColsSort": {
+        "sort": "ASC"
+      },
+      "tableEnum": {
+        "key": "code",
+        "value": "code",
+        "comment": "name_zh"
+      }
+    }
+  ]
+}

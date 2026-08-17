@@ -1,0 +1,46 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\honor\\sport_honor_team",
+      "tableName": "sport_honor_team",
+      "selCols": [
+        "team_id",
+        "honor_id"
+      ],
+      "selColsLike": [
+        "year"
+      ],
+      "selColsSort": {
+        "year": "DESC",
+        "id": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportTeam",
+          "joinEnClass_Url": "src/sport/sport_team/entities/en_sport_team",
+          "joinEnClassPro": "team",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportHonorTeams",
+          "joinColumn": {
+            "name": "team_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportHonor",
+          "joinEnClass_Url": "src/sport/honor/sport_honor/entities/en_sport_honor",
+          "joinEnClassPro": "honor",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportHonorTeams",
+          "joinColumn": {
+            "name": "honor_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}

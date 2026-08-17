@@ -1,0 +1,29 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "info\\info_news_content",
+      "tableName": "info_news_content",
+      "selCols": [
+        "lang"
+      ],
+      "selColsSort": {
+        "create_time": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnInfoNews",
+          "joinEnClass_Url": "src/info/info_news/entities/en_info_news",
+          "joinEnClassPro": "infoNews",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "infoNewsContent",
+          "joinColumn": {
+            "name": "new_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": false
+        }
+      ]
+    }
+  ]
+}

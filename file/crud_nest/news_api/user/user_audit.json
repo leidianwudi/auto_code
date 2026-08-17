@@ -1,0 +1,16 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "user\\user_audit",
+      "tableName": "user_audit",
+      "selCols": [
+        "uid",
+        "status"
+      ],
+      "selColsSort": {
+        "apply_time": "DESC"
+      }
+    }
+  ]
+}

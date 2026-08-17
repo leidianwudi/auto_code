@@ -1,0 +1,19 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "user\\user_block",
+      "tableName": "user_block",
+      "selCols": [
+        "uid",
+        "block_uid"
+      ],
+      "selColsLike": [
+        "nick"
+      ],
+      "selColsSort": {
+        "create_time": "DESC"
+      }
+    }
+  ]
+}

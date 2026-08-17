@@ -1,0 +1,20 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "user\\user_fans",
+      "tableName": "user_fans",
+      "selCols": [
+        "uid",
+        "fans_uid"
+      ],
+      "selColsLike": [
+        "nick",
+        "fans_nick"
+      ],
+      "selColsSort": {
+        "create_time": "DESC"
+      }
+    }
+  ]
+}

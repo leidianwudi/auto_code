@@ -1,0 +1,45 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\infer\\sport_infer_stats",
+      "tableName": "sport_infer_stats",
+      "selCols": [
+        "sport_id",
+        "success_count",
+        "fail_count",
+        "last_count",
+        "uid"
+      ],
+      "selColsSort": {
+        "id": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportType",
+          "joinEnClass_Url": "src/sport/sport_type/entities/en_sport_type",
+          "joinEnClassPro": "sportType",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportInferStatsList",
+          "joinColumn": {
+            "name": "sport_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnUser",
+          "joinEnClass_Url": "src/user/user/entities/en_user",
+          "joinEnClassPro": "user",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportInferStatsList",
+          "joinColumn": {
+            "name": "uid",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}

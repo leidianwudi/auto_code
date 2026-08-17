@@ -1,0 +1,47 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "info\\info_thread",
+      "tableName": "info_thread",
+      "selCols": [
+        "circle_id",
+        "uid"
+      ],
+      "selColsLike": [
+        "title"
+      ],
+      "selColsSort": {
+        "hot": "DESC",
+        "create_time": "DESC",
+        "update_time": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnCircle",
+          "joinEnClass_Url": "src/circle/circle/entities/en_circle",
+          "joinEnClassPro": "circle",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "infoThreads",
+          "joinColumn": {
+            "name": "circle_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnUser",
+          "joinEnClass_Url": "src/user/user/entities/en_user",
+          "joinEnClassPro": "user",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "infoThreads",
+          "joinColumn": {
+            "name": "uid",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}

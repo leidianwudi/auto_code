@@ -1,0 +1,38 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "circle\\circle",
+      "tableName": "circle",
+      "selCols": [
+        "enable",
+        "lang"
+      ],
+      "selColsLike": [
+        "title"
+      ],
+      "selColsSort": {
+        "hot": "DESC",
+        "create_time": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnInfoThread",
+          "joinEnClass_Url": "src/info/info_thread/entities/en_info_thread",
+          "joinEnClassPro": "infoThreads",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "circle",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnSportBind",
+          "joinEnClass_Url": "src/sport/sport_bind/entities/en_sport_bind",
+          "joinEnClassPro": "sportBinds",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "circle",
+          "isJoinRelations": false
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\sport_score_player",
+      "tableName": "sport_score_player",
+      "selCols": [
+        "sport_id",
+        "league_id",
+        "player_id",
+        "team_id",
+        "score_type_id"
+      ],
+      "selColsLike": [
+        "year"
+      ],
+      "selColsGap": [
+        "score"
+      ],
+      "selColsSort": {
+        "score": "DESC",
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportLeague",
+          "joinEnClass_Url": "src/sport/sport_league/entities/en_sport_league",
+          "joinEnClassPro": "sportLeague",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportScorePlayers",
+          "joinColumn": {
+            "name": "league_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnSportPlayer",
+          "joinEnClass_Url": "src/sport/sport_player/entities/en_sport_player",
+          "joinEnClassPro": "player",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportScorePlayers",
+          "joinColumn": {
+            "name": "player_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportTeam",
+          "joinEnClass_Url": "src/sport/sport_team/entities/en_sport_team",
+          "joinEnClassPro": "team",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportScorePlayers",
+          "joinColumn": {
+            "name": "team_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportScoreType",
+          "joinEnClass_Url": "src/sport/sport_score_type/entities/en_sport_score_type",
+          "joinEnClassPro": "scoreType",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportScorePlayers",
+          "joinColumn": {
+            "name": "score_type_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\sport_score_football",
+      "tableName": "sport_score_football",
+      "selCols": [
+        "league_id",
+        "team_id",
+        "stage_id",
+        "group",
+        "mode"
+      ],
+      "selColsLike": [
+        "year"
+      ],
+      "selColsSort": {
+        "score": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportLeague",
+          "joinEnClass_Url": "src/sport/sport_league/entities/en_sport_league",
+          "joinEnClassPro": "sportLeague",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportScoreFootballs",
+          "joinColumn": {
+            "name": "league_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportTeam",
+          "joinEnClass_Url": "src/sport/sport_team/entities/en_sport_team",
+          "joinEnClassPro": "team",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportScoreFootballs",
+          "joinColumn": {
+            "name": "team_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportLeagueStage",
+          "joinEnClass_Url": "src/sport/sport_league_stage/entities/en_sport_league_stage",
+          "joinEnClassPro": "sportLeagueStage",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportScoreFootballs",
+          "joinColumn": {
+            "name": "stage_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}

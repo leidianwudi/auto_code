@@ -1,0 +1,17 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "crud\\api\\crud_api_enum",
+      "tableName": "crud_api_enum",
+      "selColsLike": [
+        "table",
+        "column",
+        "key"
+      ],
+      "selColsSort": {
+        "sort": "ASC"
+      }
+    }
+  ]
+}

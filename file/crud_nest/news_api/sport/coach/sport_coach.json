@@ -1,0 +1,49 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\sport_coach",
+      "tableName": "sport_coach",
+      "selCols": [
+        "type",
+        "team_id"
+      ],
+      "selColsLike": [
+        "name_zh",
+        "name_en",
+        "country",
+        "country_en"
+      ],
+      "selColsGap": [
+        "join_time",
+        "contract_end_time"
+      ],
+      "selColsSort": {
+        "country_en": "ASC",
+        "name_en": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportTeam",
+          "joinEnClass_Url": "src/sport/sport_team/entities/en_sport_team",
+          "joinEnClassPro": "team",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "coaches",
+          "joinColumn": {
+            "name": "team_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportMatchStar",
+          "joinEnClass_Url": "src/sport/match/sport_match_star/entities/en_sport_match_star",
+          "joinEnClassPro": "sportMatchStars",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "coach",
+          "isJoinRelations": false
+        }
+      ]
+    }
+  ]
+}

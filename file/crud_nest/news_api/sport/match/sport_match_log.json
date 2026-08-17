@@ -1,0 +1,74 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\match\\sport_match_log",
+      "tableName": "sport_match_log",
+      "selCols": [
+        "schedule_id",
+        "team_id",
+        "event_id",
+        "player_id",
+        "match_time"
+      ],
+      "selColsLike": [
+        "txt_zh",
+        "txt_en"
+      ],
+      "selColsSort": {
+        "match_time": "ASC",
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportLeagueSchedule",
+          "joinEnClass_Url": "src/sport/sport_league_schedule/entities/en_sport_league_schedule",
+          "joinEnClassPro": "sportLeagueSchedule",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportMatchLogs",
+          "joinColumn": {
+            "name": "schedule_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportTeam",
+          "joinEnClass_Url": "src/sport/sport_team/entities/en_sport_team",
+          "joinEnClassPro": "team",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportMatchLogs",
+          "joinColumn": {
+            "name": "team_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportMatchEvent",
+          "joinEnClass_Url": "src/sport/match/sport_match_event/entities/en_sport_match_event",
+          "joinEnClassPro": "sportMatchEvent",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportMatchLogs",
+          "joinColumn": {
+            "name": "event_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportPlayer",
+          "joinEnClass_Url": "src/sport/sport_player/entities/en_sport_player",
+          "joinEnClassPro": "sportPlayer",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportMatchLogs",
+          "joinColumn": {
+            "name": "player_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}

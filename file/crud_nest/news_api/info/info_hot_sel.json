@@ -1,0 +1,12 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "info\\info_hot_sel",
+      "tableName": "info_hot_sel",
+      "selColsSort": {
+        "hot": "DESC"
+      }
+    }
+  ]
+}

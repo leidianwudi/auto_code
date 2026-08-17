@@ -1,0 +1,64 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\match\\sport_match_star",
+      "tableName": "sport_match_star",
+      "selCols": [
+        "schedule_id",
+        "belong_id"
+      ],
+      "selColsSort": {
+        "star_sum": "DESC",
+        "star_count": "DESC",
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportLeagueSchedule",
+          "joinEnClass_Url": "src/sport/sport_league_schedule/entities/en_sport_league_schedule",
+          "joinEnClassPro": "sportLeagueSchedule",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportMatchStars",
+          "joinColumn": {
+            "name": "schedule_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportPlayer",
+          "joinEnClass_Url": "src/sport/sport_player/entities/en_sport_player",
+          "joinEnClassPro": "player",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportMatchStars",
+          "joinColumn": {
+            "name": "belong_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportCoach",
+          "joinEnClass_Url": "src/sport/sport_coach/entities/en_sport_coach",
+          "joinEnClassPro": "coach",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportMatchStars",
+          "joinColumn": {
+            "name": "belong_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnSportMatchStarLog",
+          "joinEnClass_Url": "src/sport/match/sport_match_star_log/entities/en_sport_match_star_log",
+          "joinEnClassPro": "sportMatchStarLogs",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "sportMatchStar",
+          "isJoinRelations": false
+        }
+      ]
+    }
+  ]
+}

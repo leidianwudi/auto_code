@@ -1,0 +1,49 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "chat\\chat_group",
+      "tableName": "chat_group",
+      "selCols": [
+        "owner_user_id"
+      ],
+      "selColsLike": [
+        "group_name",
+        "group_desc"
+      ],
+      "selColsSort": {
+        "create_time": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnUser",
+          "joinEnClass_Url": "src/user/user/entities/en_user",
+          "joinEnClassPro": "owner",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "ownedChatGroups",
+          "joinColumn": {
+            "name": "owner_user_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnChatGroupMember",
+          "joinEnClass_Url": "src/chat/chat_group_member/entities/en_chat_group_member",
+          "joinEnClassPro": "members",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "group",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnChatGroupMessage",
+          "joinEnClass_Url": "src/chat/chat_group_message/entities/en_chat_group_message",
+          "joinEnClassPro": "messages",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "group",
+          "isJoinRelations": false
+        }
+      ]
+    }
+  ]
+}

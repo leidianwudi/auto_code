@@ -1,0 +1,75 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\trans\\sport_player_trans",
+      "tableName": "sport_player_trans",
+      "selCols": [
+        "player_id",
+        "type_id",
+        "team_id_out",
+        "team_id_in"
+      ],
+      "selColsLike": [
+        "market_value_currency"
+      ],
+      "selColsGap": [
+        "date"
+      ],
+      "selColsSort": {
+        "date": "DESC",
+        "id": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportPlayer",
+          "joinEnClass_Url": "src/sport/sport_player/entities/en_sport_player",
+          "joinEnClassPro": "player",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportPlayerTranses",
+          "joinColumn": {
+            "name": "player_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportPlayerTransType",
+          "joinEnClass_Url": "src/sport/trans/sport_player_trans_type/entities/en_sport_player_trans_type",
+          "joinEnClassPro": "transType",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportPlayerTranses",
+          "joinColumn": {
+            "name": "type_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportTeam",
+          "joinEnClass_Url": "src/sport/sport_team/entities/en_sport_team",
+          "joinEnClassPro": "teamOut",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "transferOutList",
+          "joinColumn": {
+            "name": "team_id_out",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportTeam",
+          "joinEnClass_Url": "src/sport/sport_team/entities/en_sport_team",
+          "joinEnClassPro": "teamIn",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "transferInList",
+          "joinColumn": {
+            "name": "team_id_in",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}

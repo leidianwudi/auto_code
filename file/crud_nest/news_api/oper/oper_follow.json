@@ -1,0 +1,67 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "oper\\oper_follow",
+      "tableName": "oper_follow",
+      "selCols": [
+        "uid",
+        "type",
+        "belong_id"
+      ],
+      "selColsSort": {
+        "id": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnUser",
+          "joinEnClass_Url": "src/user/user/entities/en_user",
+          "joinEnClassPro": "user",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "operFollows",
+          "joinColumn": {
+            "name": "uid",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportTeam",
+          "joinEnClass_Url": "src/sport/sport_team/entities/en_sport_team",
+          "joinEnClassPro": "team",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "operFollowTeams",
+          "joinColumn": {
+            "name": "belong_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportPlayer",
+          "joinEnClass_Url": "src/sport/sport_player/entities/en_sport_player",
+          "joinEnClassPro": "player",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "operFollowPlayers",
+          "joinColumn": {
+            "name": "belong_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportLeagueSchedule",
+          "joinEnClass_Url": "src/sport/sport_league_schedule/entities/en_sport_league_schedule",
+          "joinEnClassPro": "sportLeagueSchedule",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "operFollowSchedules",
+          "joinColumn": {
+            "name": "belong_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}

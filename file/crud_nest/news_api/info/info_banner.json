@@ -1,0 +1,20 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "info\\info_banner",
+      "tableName": "info_banner",
+      "selCols": [
+        "lang",
+        "enable",
+        "scene"
+      ],
+      "selColsLike": [
+        "title"
+      ],
+      "selColsSort": {
+        "sort": "ASC"
+      }
+    }
+  ]
+}

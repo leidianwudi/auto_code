@@ -1,0 +1,35 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "info\\info_news",
+      "tableName": "info_news",
+      "selCols": [
+        "lang",
+        "enable",
+        "sport_id"
+      ],
+      "selColsLike": [
+        "title"
+      ],
+      "selColsSort": {
+        "create_time": "DESC",
+        "hot": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnInfoNewsContent",
+          "joinEnClass_Url": "src/info/info_news_content/entities/en_info_news_content",
+          "joinEnClassPro": "infoNewsContent",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "infoNews",
+          "joinColumn": {
+            "name": "id",
+            "referencedColumnName": "new_id"
+          },
+          "isJoinRelations": false
+        }
+      ]
+    }
+  ]
+}

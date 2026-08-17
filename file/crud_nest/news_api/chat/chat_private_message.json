@@ -1,0 +1,37 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "chat\\chat_private_message",
+      "tableName": "chat_private_message",
+      "selCols": [
+        "conversation_key",
+        "sender_id",
+        "client_msg_id",
+        "msg_content_type",
+        "is_recall"
+      ],
+      "selColsGap": [
+        "send_time"
+      ],
+      "selColsSort": {
+        "id": "DESC",
+        "send_time": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnUser",
+          "joinEnClass_Url": "src/user/user/entities/en_user",
+          "joinEnClassPro": "sender",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "chatPrivateMessages",
+          "joinColumn": {
+            "name": "sender_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "chat\\chat_group_message",
+      "tableName": "chat_group_message",
+      "selCols": [
+        "group_id",
+        "sender_id",
+        "client_msg_id",
+        "msg_content_type",
+        "is_recall"
+      ],
+      "selColsGap": [
+        "send_time"
+      ],
+      "selColsSort": {
+        "id": "DESC",
+        "send_time": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnChatGroup",
+          "joinEnClass_Url": "src/chat/chat_group/entities/en_chat_group",
+          "joinEnClassPro": "group",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "messages",
+          "joinColumn": {
+            "name": "group_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnUser",
+          "joinEnClass_Url": "src/user/user/entities/en_user",
+          "joinEnClassPro": "sender",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "chatGroupMessages",
+          "joinColumn": {
+            "name": "sender_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}

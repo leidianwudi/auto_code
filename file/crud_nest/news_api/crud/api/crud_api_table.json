@@ -1,0 +1,18 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "crud\\api\\crud_api_table",
+      "tableName": "crud_api_table",
+      "selColsLike": [
+        "table"
+      ],
+      "selColsGap": [
+        "update_time"
+      ],
+      "selColsSort": {
+        "update_time": "DESC"
+      }
+    }
+  ]
+}

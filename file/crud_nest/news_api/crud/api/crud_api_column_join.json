@@ -1,0 +1,13 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "crud\\api\\crud_api_column_join",
+      "tableName": "crud_api_column_join",
+      "selColsLike": [
+        "table",
+        "column"
+      ]
+    }
+  ]
+}

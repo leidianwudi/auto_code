@@ -1,0 +1,44 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\match\\sport_match_star_log",
+      "tableName": "sport_match_star_log",
+      "selCols": [
+        "star_id",
+        "uid",
+        "star"
+      ],
+      "selColsSort": {
+        "update_time": "DESC",
+        "id": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportMatchStar",
+          "joinEnClass_Url": "src/sport/match/sport_match_star/entities/en_sport_match_star",
+          "joinEnClassPro": "sportMatchStar",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportMatchStarLogs",
+          "joinColumn": {
+            "name": "star_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnUser",
+          "joinEnClass_Url": "src/user/user/entities/en_user",
+          "joinEnClassPro": "user",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportMatchStarLogs",
+          "joinColumn": {
+            "name": "uid",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "info\\info_img",
+      "tableName": "info_img",
+      "selCols": [
+        "type",
+        "belong_id"
+      ],
+      "selColsSort": {
+        "create_time": "DESC"
+      }
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "chat\\chat_session",
+      "tableName": "chat_session",
+      "manualUpdateTime": true,
+      "selCols": [
+        "uid",
+        "conversation_key",
+        "is_friend",
+        "chat_limit",
+        "is_top",
+        "is_mute"
+      ],
+      "selColsLike": [
+        "remark"
+      ],
+      "selColsSort": {
+        "update_time": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnUser",
+          "joinEnClass_Url": "src/user/user/entities/en_user",
+          "joinEnClassPro": "user",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "chatSessions",
+          "joinColumn": {
+            "name": "uid",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}

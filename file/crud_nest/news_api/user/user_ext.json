@@ -1,0 +1,15 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "user\\user_ext",
+      "tableName": "user_ext",
+      "selCols": [
+        "account"
+      ],
+      "selColsSort": {
+        "id": "DESC"
+      }
+    }
+  ]
+}

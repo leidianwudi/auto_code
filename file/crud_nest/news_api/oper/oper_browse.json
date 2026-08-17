@@ -1,0 +1,31 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "oper\\oper_browse",
+      "tableName": "oper_browse",
+      "selCols": [
+        "uid",
+        "type",
+        "belong_id"
+      ],
+      "selColsSort": {
+        "create_time": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnUser",
+          "joinEnClass_Url": "src/user/user/entities/en_user",
+          "joinEnClassPro": "user",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "operBrowses",
+          "joinColumn": {
+            "name": "uid",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}

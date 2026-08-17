@@ -1,0 +1,30 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "item\\item_log",
+      "tableName": "item_log",
+      "selCols": [
+        "type",
+        "uid"
+      ],
+      "selColsSort": {
+        "create_time": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnItemType",
+          "joinEnClass_Url": "src/item/item_type/entities/en_item_type",
+          "joinEnClassPro": "itemType",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "itemLogs",
+          "joinColumn": {
+            "name": "item_code",
+            "referencedColumnName": "code"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}

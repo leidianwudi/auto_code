@@ -1,0 +1,37 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\trans\\sport_player_trans_type",
+      "tableName": "sport_player_trans_type",
+      "selCols": [
+        "sport_id",
+        "enable"
+      ],
+      "selColsLike": [
+        "code",
+        "name_zh",
+        "name_en"
+      ],
+      "selColsSort": {
+        "sort": "ASC",
+        "id": "ASC"
+      },
+      "tableEnum": {
+        "key": "code",
+        "value": "id",
+        "comment": "name_zh"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportPlayerTrans",
+          "joinEnClass_Url": "src/sport/trans/sport_player_trans/entities/en_sport_player_trans",
+          "joinEnClassPro": "sportPlayerTranses",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "transType",
+          "isJoinRelations": false
+        }
+      ]
+    }
+  ]
+}

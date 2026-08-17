@@ -1,0 +1,129 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\sport_player",
+      "tableName": "sport_player",
+      "selCols": [
+        "team_id",
+        "sport_id",
+        "age",
+        "height",
+        "weight",
+        "league_career_age",
+        "market_value"
+      ],
+      "selColsLike": [
+        "name_zh",
+        "name_en",
+        "intro_zh",
+        "intro_en",
+        "preferred_foot",
+        "position_id",
+        "market_value_currency",
+        "number"
+      ],
+      "selColsGap": [
+        "contract_end_time"
+      ],
+      "selColsSort": {
+        "market_value": "DESC",
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportTeam",
+          "joinEnClass_Url": "src/sport/sport_team/entities/en_sport_team",
+          "joinEnClassPro": "team",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportPlayers",
+          "joinColumn": {
+            "name": "team_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportPosition",
+          "joinEnClass_Url": "src/sport/sport_position/entities/en_sport_position",
+          "joinEnClassPro": "sportPosition",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportPlayers",
+          "joinColumn": {
+            "name": "position_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportType",
+          "joinEnClass_Url": "src/sport/sport_type/entities/en_sport_type",
+          "joinEnClassPro": "sportType",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportPlayers",
+          "joinColumn": {
+            "name": "sport_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportScorePlayer",
+          "joinEnClass_Url": "src/sport/sport_score_player/entities/en_sport_score_player",
+          "joinEnClassPro": "sportScorePlayers",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "player",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnSportMatchLog",
+          "joinEnClass_Url": "src/sport/match/sport_match_log/entities/en_sport_match_log",
+          "joinEnClassPro": "sportMatchLogs",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "sportPlayer",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnSportMatchPosition",
+          "joinEnClass_Url": "src/sport/match/sport_match_position/entities/en_sport_match_position",
+          "joinEnClassPro": "sportMatchPositions",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "player",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnSportMatchStar",
+          "joinEnClass_Url": "src/sport/match/sport_match_star/entities/en_sport_match_star",
+          "joinEnClassPro": "sportMatchStars",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "player",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnSportHonorPlayer",
+          "joinEnClass_Url": "src/sport/honor/sport_honor_player/entities/en_sport_honor_player",
+          "joinEnClassPro": "sportHonorPlayers",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "player",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnSportPlayerTrans",
+          "joinEnClass_Url": "src/sport/trans/sport_player_trans/entities/en_sport_player_trans",
+          "joinEnClassPro": "sportPlayerTranses",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "player",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnOperFollow",
+          "joinEnClass_Url": "src/oper/oper_follow/entities/en_oper_follow",
+          "joinEnClassPro": "operFollowPlayers",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "player",
+          "isJoinRelations": false
+        }
+      ]
+    }
+  ]
+}

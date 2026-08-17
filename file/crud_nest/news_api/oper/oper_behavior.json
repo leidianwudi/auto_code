@@ -1,0 +1,32 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "oper\\oper_behavior",
+      "tableName": "oper_behavior",
+      "selCols": [
+        "uid",
+        "type",
+        "belong_id",
+        "behavior_type"
+      ],
+      "selColsSort": {
+        "update_time": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnUser",
+          "joinEnClass_Url": "src/user/user/entities/en_user",
+          "joinEnClassPro": "user",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "operBehaviors",
+          "joinColumn": {
+            "name": "uid",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}

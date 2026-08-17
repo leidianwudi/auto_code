@@ -1,0 +1,15 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "crud\\vue\\crud_vue_data",
+      "tableName": "crud_vue_data",
+      "selCols": [
+        "bar_id"
+      ],
+      "selColsSort": {
+        "sort": "ASC"
+      }
+    }
+  ]
+}

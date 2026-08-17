@@ -1,0 +1,52 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\sport_position",
+      "tableName": "sport_position",
+      "selCols": [
+        "sport_id",
+        "show_pos"
+      ],
+      "selColsLike": [
+        "code",
+        "name_zh",
+        "name_en"
+      ],
+      "selColsSort": {
+        "sort": "ASC",
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportType",
+          "joinEnClass_Url": "src/sport/sport_type/entities/en_sport_type",
+          "joinEnClassPro": "sportType",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportPositions",
+          "joinColumn": {
+            "name": "sport_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportMatchPosition",
+          "joinEnClass_Url": "src/sport/match/sport_match_position/entities/en_sport_match_position",
+          "joinEnClassPro": "sportMatchPositions",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "sportPosition",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnSportPlayer",
+          "joinEnClass_Url": "src/sport/sport_player/entities/en_sport_player",
+          "joinEnClassPro": "sportPlayers",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "sportPosition",
+          "isJoinRelations": false
+        }
+      ]
+    }
+  ]
+}

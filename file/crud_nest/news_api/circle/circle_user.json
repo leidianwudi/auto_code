@@ -1,0 +1,16 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "circle\\circle_user",
+      "tableName": "circle_user",
+      "selCols": [
+        "circle_id",
+        "uid"
+      ],
+      "selColsSort": {
+        "create_time": "DESC"
+      }
+    }
+  ]
+}

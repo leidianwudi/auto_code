@@ -1,90 +1,126 @@
 {
-  // 指定 schema 文件，用于智能提示与校验
-  // 以 / 开头的路径基于项目根目录（file/），所有 json 文件均可复制此行
-  $schema: '/crud_nest/template/tool/param.schema.json',
-  // 多表配置示例：一个 JS2ON 文件可配置多张表，每项都是单表配置对象
-  // 每个表配置支持：tableName、modelName、selCols、selColsLike、selColsSort、joinTable 等字段
-  tables: [
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
     {
-      // 用户表
-      modelName: 'user\\user',
-      tableName: 'user', // 模糊查询名字  
-      selCols: [
-        'account',
+      "modelName": "user\\user",
+      "tableName": "user",
+      "selCols": [
+        "id",
+        "account"
       ],
-      selColsLike: [
-        'nick',
+      "selColsLike": [
+        "nick"
       ],
-      selColsSort: {
-        id: 'DESC',
-        fans_count: 'DESC',
+      "selColsSort": {
+        "id": "DESC",
+        "fans_count": "DESC"
       },
-      joinTable: [
+      "joinTable": [
         {
-          inverseJoinEnClassPro: 'user',
-          isJoinRelations: false,
-          joinEnClass: 'EnSportLeagueScheduleLike',
-          joinEnClassPro: 'sportLeagueScheduleLikes',
-          joinEnClass_Url: 'src/sport/sport_league_schedule_like/entities/en_sport_league_schedule_like',
-          joinType: 'OneToMany',
+          "joinEnClass": "EnSportLeagueScheduleLike",
+          "joinEnClass_Url": "src/sport/sport_league_schedule_like/entities/en_sport_league_schedule_like",
+          "joinEnClassPro": "sportLeagueScheduleLikes",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "user",
+          "isJoinRelations": false
         },
         {
-          inverseJoinEnClassPro: 'user',
-          isJoinRelations: false,
-          joinEnClass: 'EnSportMatchStarLog',
-          joinEnClassPro: 'sportMatchStarLogs',
-          joinEnClass_Url: 'src/sport/match/sport_match_star_log/entities/en_sport_match_star_log',
-          joinType: 'OneToMany',
+          "joinEnClass": "EnSportMatchStarLog",
+          "joinEnClass_Url": "src/sport/match/sport_match_star_log/entities/en_sport_match_star_log",
+          "joinEnClassPro": "sportMatchStarLogs",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "user",
+          "isJoinRelations": false
         },
         {
-          inverseJoinEnClassPro: 'user',
-          isJoinRelations: false,
-          joinEnClass: 'EnSportInfer',
-          joinEnClassPro: 'sportInfers',
-          joinEnClass_Url: 'src/sport/infer/sport_infer/entities/en_sport_infer',
-          joinType: 'OneToMany',
+          "joinEnClass": "EnSportInfer",
+          "joinEnClass_Url": "src/sport/infer/sport_infer/entities/en_sport_infer",
+          "joinEnClassPro": "sportInfers",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "user",
+          "isJoinRelations": false
         },
         {
-          inverseJoinEnClassPro: 'user',
-          isJoinRelations: false,
-          joinEnClass: 'EnSportInferStats',
-          joinEnClassPro: 'sportInferStatsList',
-          joinEnClass_Url: 'src/sport/infer/sport_infer_stats/entities/en_sport_infer_stats',
-          joinType: 'OneToMany',
+          "joinEnClass": "EnSportInferStats",
+          "joinEnClass_Url": "src/sport/infer/sport_infer_stats/entities/en_sport_infer_stats",
+          "joinEnClassPro": "sportInferStatsList",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "user",
+          "isJoinRelations": false
         },
         {
-          inverseJoinEnClassPro: 'user',
-          isJoinRelations: false,
-          joinEnClass: 'EnInfoThread',
-          joinEnClassPro: 'infoThreads',
-          joinEnClass_Url: 'src/info/info_thread/entities/en_info_thread',
-          joinType: 'OneToMany',
+          "joinEnClass": "EnInfoThread",
+          "joinEnClass_Url": "src/info/info_thread/entities/en_info_thread",
+          "joinEnClassPro": "infoThreads",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "user",
+          "isJoinRelations": false
         },
         {
-          inverseJoinEnClassPro: 'user',
-          isJoinRelations: false,
-          joinEnClass: 'EnOperFollow',
-          joinEnClassPro: 'operFollows',
-          joinEnClass_Url: 'src/oper/oper_follow/entities/en_oper_follow',
-          joinType: 'OneToMany',
+          "joinEnClass": "EnOperFollow",
+          "joinEnClass_Url": "src/oper/oper_follow/entities/en_oper_follow",
+          "joinEnClassPro": "operFollows",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "user",
+          "isJoinRelations": false
         },
         {
-          inverseJoinEnClassPro: 'user',
-          isJoinRelations: false,
-          joinEnClass: 'EnOperBehavior',
-          joinEnClassPro: 'operBehaviors',
-          joinEnClass_Url: 'src/oper/oper_behavior/entities/en_oper_behavior',
-          joinType: 'OneToMany',
+          "joinEnClass": "EnOperBehavior",
+          "joinEnClass_Url": "src/oper/oper_behavior/entities/en_oper_behavior",
+          "joinEnClassPro": "operBehaviors",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "user",
+          "isJoinRelations": false
         },
         {
-          inverseJoinEnClassPro: 'user',
-          isJoinRelations: false,
-          joinEnClass: 'EnOperBrowse',
-          joinEnClassPro: 'operBrowses',
-          joinEnClass_Url: 'src/oper/oper_browse/entities/en_oper_browse',
-          joinType: 'OneToMany',
+          "joinEnClass": "EnOperBrowse",
+          "joinEnClass_Url": "src/oper/oper_browse/entities/en_oper_browse",
+          "joinEnClassPro": "operBrowses",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "user",
+          "isJoinRelations": false
         },
-      ],
-    },
-  ],
+        {
+          "joinEnClass": "EnChatGroup",
+          "joinEnClass_Url": "src/chat/chat_group/entities/en_chat_group",
+          "joinEnClassPro": "ownedChatGroups",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "owner",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnChatGroupMember",
+          "joinEnClass_Url": "src/chat/chat_group_member/entities/en_chat_group_member",
+          "joinEnClassPro": "chatGroupMembers",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "user",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnChatPrivateMessage",
+          "joinEnClass_Url": "src/chat/chat_private_message/entities/en_chat_private_message",
+          "joinEnClassPro": "chatPrivateMessages",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "sender",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnChatGroupMessage",
+          "joinEnClass_Url": "src/chat/chat_group_message/entities/en_chat_group_message",
+          "joinEnClassPro": "chatGroupMessages",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "sender",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnChatSession",
+          "joinEnClass_Url": "src/chat/chat_session/entities/en_chat_session",
+          "joinEnClassPro": "chatSessions",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "user",
+          "isJoinRelations": false
+        }
+      ]
+    }
+  ]
 }

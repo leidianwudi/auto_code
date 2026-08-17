@@ -1,0 +1,43 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\infer\\sport_infer_type",
+      "tableName": "sport_infer_type",
+      "selCols": [
+        "sport_id",
+        "option_count"
+      ],
+      "selColsLike": [
+        "code",
+        "name_zh",
+        "name_en"
+      ],
+      "selColsSort": {
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportType",
+          "joinEnClass_Url": "src/sport/sport_type/entities/en_sport_type",
+          "joinEnClassPro": "sportType",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportInferTypes",
+          "joinColumn": {
+            "name": "sport_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportInferOption",
+          "joinEnClass_Url": "src/sport/infer/sport_infer_option/entities/en_sport_infer_option",
+          "joinEnClassPro": "sportInferOptions",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "sportInferType",
+          "isJoinRelations": false
+        }
+      ]
+    }
+  ]
+}

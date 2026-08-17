@@ -1,0 +1,47 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\match\\sport_match_stats_type",
+      "tableName": "sport_match_stats_type",
+      "selCols": [
+        "sport_id",
+        "enable"
+      ],
+      "selColsLike": [
+        "name_zh",
+        "name_en"
+      ],
+      "selColsSort": {
+        "id": "ASC"
+      },
+      "tableEnum": {
+        "key": "code",
+        "value": "id",
+        "comment": "name_zh"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportType",
+          "joinEnClass_Url": "src/sport/sport_type/entities/en_sport_type",
+          "joinEnClassPro": "sportType",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportMatchStatsTypes",
+          "joinColumn": {
+            "name": "sport_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportMatchStats",
+          "joinEnClass_Url": "src/sport/match/sport_match_stats/entities/en_sport_match_stats",
+          "joinEnClassPro": "sportMatchStats",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "sportMatchStatsType",
+          "isJoinRelations": false
+        }
+      ]
+    }
+  ]
+}

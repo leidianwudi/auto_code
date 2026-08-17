@@ -1,0 +1,16 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "vip\\vip_price",
+      "tableName": "vip_price",
+      "selCols": [
+        "vip_level",
+        "id"
+      ],
+      "selColsSort": {
+        "id": "ASC"
+      }
+    }
+  ]
+}

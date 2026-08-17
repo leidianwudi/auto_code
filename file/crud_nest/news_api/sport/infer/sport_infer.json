@@ -1,0 +1,58 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\infer\\sport_infer",
+      "tableName": "sport_infer",
+      "selCols": [
+        "option_id",
+        "schedule_id",
+        "result",
+        "coin",
+        "is_vip_free",
+        "uid"
+      ],
+      "selColsSort": {
+        "id": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportInferOption",
+          "joinEnClass_Url": "src/sport/infer/sport_infer_option/entities/en_sport_infer_option",
+          "joinEnClassPro": "sportInferOption",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportInfers",
+          "joinColumn": {
+            "name": "option_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportLeagueSchedule",
+          "joinEnClass_Url": "src/sport/sport_league_schedule/entities/en_sport_league_schedule",
+          "joinEnClassPro": "sportLeagueSchedule",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportInfers",
+          "joinColumn": {
+            "name": "schedule_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnUser",
+          "joinEnClass_Url": "src/user/user/entities/en_user",
+          "joinEnClassPro": "user",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportInfers",
+          "joinColumn": {
+            "name": "uid",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}

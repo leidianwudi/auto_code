@@ -1,0 +1,44 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\sport_bind",
+      "tableName": "sport_bind",
+      "selCols": [
+        "belong_type",
+        "belong_id",
+        "bind_type",
+        "bind_id"
+      ],
+      "selColsSort": {
+        "id": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnInfoNews",
+          "joinEnClass_Url": "src/info/info_news/entities/en_info_news",
+          "joinEnClassPro": "infoNews",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportBinds",
+          "joinColumn": {
+            "name": "belong_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnCircle",
+          "joinEnClass_Url": "src/circle/circle/entities/en_circle",
+          "joinEnClassPro": "circle",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportBinds",
+          "joinColumn": {
+            "name": "belong_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}

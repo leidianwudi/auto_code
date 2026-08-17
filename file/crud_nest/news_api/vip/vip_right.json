@@ -1,0 +1,20 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "vip\\vip_right",
+      "tableName": "vip_right",
+      "selCols": [
+        "code"
+      ],
+      "selColsSort": {
+        "sort": "ASC"
+      },
+      "tableEnum": {
+        "key": "code",
+        "value": "code",
+        "comment": "name_zh"
+      }
+    }
+  ]
+}

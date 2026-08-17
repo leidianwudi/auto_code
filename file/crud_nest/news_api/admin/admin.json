@@ -1,0 +1,12 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "admin\\admin",
+      "tableName": "admin",
+      "selColsLike": [
+        "account"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "vip\\vip_type",
+      "tableName": "vip_type",
+      "selCols": [
+        "enable",
+        "level"
+      ],
+      "selColsSort": {
+        "level": "ASC"
+      }
+    }
+  ]
+}

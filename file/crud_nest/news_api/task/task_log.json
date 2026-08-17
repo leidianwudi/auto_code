@@ -1,0 +1,19 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "task\\task_log",
+      "tableName": "task_log",
+      "selCols": [
+        "task_code",
+        "uid"
+      ],
+      "selColsGap": [
+        "create_time"
+      ],
+      "selColsSort": {
+        "create_time": "DESC"
+      }
+    }
+  ]
+}

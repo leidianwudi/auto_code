@@ -1,0 +1,63 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\sport_score_basketball",
+      "tableName": "sport_score_basketball",
+      "selCols": [
+        "league_id",
+        "team_id",
+        "stage_id",
+        "group",
+        "mode",
+        "win_count_diff",
+        "win_loss_near"
+      ],
+      "selColsLike": [
+        "year"
+      ],
+      "selColsSort": {
+        "win_count_diff": "DESC",
+        "win_loss_near": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportLeague",
+          "joinEnClass_Url": "src/sport/sport_league/entities/en_sport_league",
+          "joinEnClassPro": "sportLeague",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportScoreBasketballs",
+          "joinColumn": {
+            "name": "league_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportTeam",
+          "joinEnClass_Url": "src/sport/sport_team/entities/en_sport_team",
+          "joinEnClassPro": "team",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportScoreBasketballs",
+          "joinColumn": {
+            "name": "team_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportLeagueStage",
+          "joinEnClass_Url": "src/sport/sport_league_stage/entities/en_sport_league_stage",
+          "joinEnClassPro": "sportLeagueStage",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportScoreBasketballs",
+          "joinColumn": {
+            "name": "stage_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}

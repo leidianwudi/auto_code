@@ -1,0 +1,58 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\match\\sport_match_stats",
+      "tableName": "sport_match_stats",
+      "selCols": [
+        "schedule_id",
+        "team_id",
+        "stats_id"
+      ],
+      "selColsGap": [
+        "score"
+      ],
+      "selColsSort": {
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportLeagueSchedule",
+          "joinEnClass_Url": "src/sport/sport_league_schedule/entities/en_sport_league_schedule",
+          "joinEnClassPro": "sportLeagueSchedule",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportMatchStats",
+          "joinColumn": {
+            "name": "schedule_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportTeam",
+          "joinEnClass_Url": "src/sport/sport_team/entities/en_sport_team",
+          "joinEnClassPro": "team",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportMatchStats",
+          "joinColumn": {
+            "name": "team_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportMatchStatsType",
+          "joinEnClass_Url": "src/sport/match/sport_match_stats_type/entities/en_sport_match_stats_type",
+          "joinEnClassPro": "sportMatchStatsType",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "sportMatchStats",
+          "joinColumn": {
+            "name": "stats_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}
