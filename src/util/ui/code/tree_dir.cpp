@@ -45,7 +45,6 @@ static void buildPathMap(QTreeWidgetItem *item, const QString &parentRel,
 // ──────────────────────────────────────────────────────────────
 //  ModifiedFileDelegate 实现
 // ──────────────────────────────────────────────────────────────
-
 void ModifiedFileDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
                                  const QModelIndex &index) const {
   int errorCount = index.data(Qt::UserRole + 3).toInt();

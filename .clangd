@@ -1,6 +1,14 @@
 CompileFlags:
   Compiler: cl
   Add:
+    # 工程根目录：代码里大量使用 #include "src/engine/..." 这种基于工程根目录的写法，
+    # 需将工程根加入 include 路径才能解析（compile_commands.json 缺失时尤其关键）。
+    - "-ID:/work/github/auto_code"
+
+    # CMake 注入的编译宏（CMakeLists.txt 中 target_compile_definitions 定义）。
+    # VS 生成器不生成 compile_commands.json，clangd 无法自动获取，需手动补齐。
+    - "-DPROJECT_SOURCE_DIR=\"D:/work/github/auto_code\""
+
     # ---------- sql ----------
     - "-ID:/tool/Qt/6.12.0/msvc2022_64/include/QtSql"
     - "-ID:/tool/Qt/6.12.0/msvc2022_64/include"
@@ -10,6 +18,14 @@ CompileFlags:
     - "-ID:/tool/Qt/6.12.0/msvc2022_64/include/QtWidgets"
     - "-ID:/tool/Qt/6.12.0/msvc2022_64/include/QtNetwork"
     - "-ID:/tool/Qt/6.12.0/msvc2022_64/include/QtSvg"
+
+    # ---------- MSVC 标准库 / Windows SDK 头文件路径 ----------
+    # VS 生成器不生成 compile_commands.json，clangd 需在此手动补齐这些路径，
+    # 否则 #include <vector> 等系统头全部解析失败，报错海量直至停止。
+    - "-ID:/tool/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.43.34808/include"
+    - "-IC:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/ucrt"
+    - "-IC:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/um"
+    - "-IC:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/shared"
 
     # Qt模块宏，解决 QT_DEPRECATED_SINCE 未定义报错
     - "-DQT_CORE_LIB"
@@ -23,6 +39,10 @@ CompileFlags:
     - "-DWIN32"
     - "-D_WINDOWS"
     - "-D_MSC_VER=1934"
+
+    # C++17 标准（clang-cl 驱动需用 MSVC 风格 /std 开关）
+    - "/std:c++17"
+    - "/Zc:__cplusplus"
 
 Index:
   Background: Build
