@@ -134,6 +134,10 @@ private:
   /// 递归选中/取消某个节点下的所有 json 文件
   void setJsonChildrenCheckState(QTreeWidgetItem *item, Qt::CheckState state);
 
+  /// 后序重算文件夹复选框状态（三态聚合：全勾/全不勾/部分勾小方块）
+  /// 配置恢复后调用——json 文件勾选已就位，文件夹状态需由子节点聚合得出
+  void recomputeFolderCheckStates(QTreeWidgetItem *item);
+
   /// 递归收集所有 json 文件路径（绝对路径）
   void collectJsonFiles(QTreeWidgetItem *item, QStringList &files) const;
 

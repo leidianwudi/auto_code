@@ -418,6 +418,9 @@ public:
 private:
   static bool isChecked(const QStyleOption *o) { return o->state & QStyle::State_On; }
 
+  /// 部分勾选（三态 PartialiallyChecked 对应 State_NoChange 标志）
+  static bool isPartial(const QStyleOption *o) { return o->state & QStyle::State_NoChange; }
+
   static QRectF innerRect(const QStyleOption *o) {
     return QRectF(o->rect).adjusted(1.0, 1.0, -1.0, -1.0);
   }
@@ -440,6 +443,15 @@ private:
     p->drawPath(path);
   }
 
+  /// 绘制部分勾选标记：填充色方块内嵌一个白色小方块（居中，约 36% 尺寸）
+  static void drawPartialMark(QPainter *p, const QRectF &r) {
+    QRectF inner(0.0, 0.0, r.width() * 0.36, r.height() * 0.36);
+    inner.moveCenter(r.center());
+    p->setPen(Qt::NoPen);
+    p->setBrush(Qt::white);
+    p->drawRect(inner);
+  }
+
   void drawCheckBox(const QStyleOption *o, QPainter *p) const {
     p->save();
     p->setRenderHint(QPainter::Antialiasing, true);
@@ -449,6 +461,11 @@ private:
       p->setBrush(accent());
       p->drawRoundedRect(r, 2.0, 2.0);
       drawCheckMark(p, r, 2.0);
+    } else if (isPartial(o)) {
+      p->setPen(Qt::NoPen);
+      p->setBrush(accent());
+      p->drawRoundedRect(r, 2.0, 2.0);
+      drawPartialMark(p, r);
     } else {
       p->setPen(QPen(boxBorder(), 1.0));
       p->setBrush(boxFill());
@@ -488,6 +505,12 @@ private:
       p->setBrush(accent());
       p->drawRect(r);
       drawCheckMark(p, r, 1.6);
+    } else if (isPartial(o)) {
+      // 部分勾选：填充色方块 + 中心白色小方块（树形目录文件夹三态）
+      p->setPen(Qt::NoPen);
+      p->setBrush(accent());
+      p->drawRect(r);
+      drawPartialMark(p, r);
     } else {
       p->setPen(QPen(boxBorder(), 1.0));
       p->setBrush(boxFill());

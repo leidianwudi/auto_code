@@ -417,6 +417,38 @@ void TreeDir::setJsonChildrenCheckState(QTreeWidgetItem *item, Qt::CheckState st
   }
 }
 
+/// 后序重算文件夹复选框状态：先递归子节点，再由子节点聚合出自身三态
+/// （全勾=打勾 / 部分勾=小方块 / 全不勾=空）。仅在配置恢复后调用一次，
+/// 因为 applyStateToTree 只恢复 json 文件的勾选，文件夹状态需重新聚合。
+void TreeDir::recomputeFolderCheckStates(QTreeWidgetItem *item) {
+  for (int i = 0; i < item->childCount(); ++i) recomputeFolderCheckStates(item->child(i));
+
+  // 仅处理文件夹节点（文件路径为空）且自身有复选框（CheckStateRole 有效）
+  if (!item->data(0, Qt::UserRole + 1).toString().isEmpty()) return;
+  if (!item->data(0, Qt::CheckStateRole).isValid()) return;
+
+  int checked = 0;
+  int total = 0;
+  bool partial = false;
+  for (int i = 0; i < item->childCount(); ++i) {
+    QTreeWidgetItem *child = item->child(i);
+    if (!child->data(0, Qt::CheckStateRole).isValid()) continue;
+    ++total;
+    const Qt::CheckState cs = child->checkState(0);
+    if (cs == Qt::Checked)
+      ++checked;
+    else if (cs == Qt::PartiallyChecked)
+      partial = true;
+  }
+
+  Qt::CheckState st = Qt::Unchecked;
+  if (total > 0 && checked == total)
+    st = Qt::Checked;
+  else if (partial || (checked > 0 && checked < total))
+    st = Qt::PartiallyChecked;
+  item->setCheckState(0, st);
+}
+
 void TreeDir::updateParentCheckState(QTreeWidgetItem *item) {
   QTreeWidgetItem *parent = item->parent();
   if (!parent) return;
@@ -584,6 +616,10 @@ void TreeDir::applyCheckedToTree(const QStringList &checkedRelPaths) {
   // 但此时 m_startupFiles 尚未恢复，saveState 会写入空数组覆盖原数据，
   // 因此在 loadState 期间设置 m_bulkUpdating 禁止保存）
   for (int i = 0; i < topLevelItemCount(); ++i) applyStateToTree(topLevelItem(i), checkedAbsPaths);
+
+  // json 文件勾选已恢复，后序重算所有文件夹的三态（部分勾=小方块），
+  // 否则重启后子 json 已勾选而文件夹仍显示未勾选
+  for (int i = 0; i < topLevelItemCount(); ++i) recomputeFolderCheckStates(topLevelItem(i));
 }
 
 void TreeDir::applyExpandedToTree(const QStringList &expandedRelPaths) {
