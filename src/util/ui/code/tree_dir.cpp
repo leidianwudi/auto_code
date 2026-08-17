@@ -280,20 +280,16 @@ void TreeDir::onItemClicked(QTreeWidgetItem *item, int column) {
   }
 
   // 文件节点
-  if (isJsonLike(filePath)) {
-    if (m_lastClickOnCheckbox) {
-      // 单击复选框 → Qt 已自动切换复选框，刷新状态
-      updateParentCheckState(item);
-      scheduleSave();
-    } else {
-      // 单击文本/图标区域 → 打开文件
-      emit fileActivated(filePath);
-    }
+  if (isJsonLike(filePath) && m_lastClickOnCheckbox) {
+    // 单击 json/jsonvue 复选框 → Qt 已自动切换复选框，刷新父级三态并保存
+    updateParentCheckState(item);
+    scheduleSave();
+  } else {
+    // 单击文本/图标区域 → 打开文件（所有类型统一单击打开；
+    // locateFile 已改为仅在节点不可见时滚动，单击打开不会引起树滚动，
+    // 双击的第二次点击仍落在原节点上，不会再出现定位错乱）
+    emit fileActivated(filePath);
   }
-  // .ac / .tpl 文件：单击仅选中，双击才打开。
-  // 若单击即打开，会在双击的两次点击之间抢走焦点并触发 locateFile 滚动目录树，
-  // 导致第二次点击落在其它节点上，出现"刷新定位到其它节点"的异常。
-  // 文件打开统一由 onItemDoubleClicked 处理。
 }
 
 void TreeDir::onItemDoubleClicked(QTreeWidgetItem *item, int column) {
@@ -1046,7 +1042,12 @@ void TreeDir::locateFile(const QString &filePath) {
     parent->setExpanded(true);
     parent = parent->parent();
   }
-  // 选中并滚动到可见
   setCurrentItem(item);
-  scrollToItem(item, QAbstractItemView::PositionAtCenter);
+
+  // 仅当节点不在视口内时才滚动定位。树上单击打开文件会经标签切换/焦点变化
+  // 触发本函数，若无条件居中滚动会导致滚动条跳动（用户正在点击的节点必然
+  // 可见，无需滚动）；外部触发（如编辑器跳转）且节点滚出视口时才需要定位。
+  const QRect vr = visualItemRect(item);
+  if (!vr.isValid() || !vr.intersects(viewport()->rect()))
+    scrollToItem(item, QAbstractItemView::PositionAtCenter);
 }
