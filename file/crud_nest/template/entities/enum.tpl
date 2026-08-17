@@ -32,7 +32,7 @@ ${each enum in enums}
  */
 export enum ${enum.enumName} {
 ${each item in enum.items}  /* ${item.label} */
-  ${item.key} = ${item.valueStr},
+  ${item.key} = ${item.valueStr}${if !item_last},${/if}
 ${/each}}
 
 ${/each}

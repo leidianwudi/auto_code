@@ -38,29 +38,13 @@ export class QueryData {
   // 构建 selFields 数组（InSel 查询字段列表）
   //
   // 逻辑：
-  //   1. 主键字段（isPrimary）→ isLike = false
-  //   2. json.selCols 精确查询字段 → isLike = false
-  //   3. json.selColsLike 模糊查询字段 → isLike = true
+  //   1. json.selCols 精确查询字段 → isLike = false
+  //   2. json.selColsLike 模糊查询字段 → isLike = true
+  //   注意：主键不自动加入（需查询时在 JSON 的 selCols 里显式配置）
   // --------------------------------------------------------------------------
   function buildSelFields(json: Object, param: Param): SelFieldDef[] {
     let selFields: SelFieldDef[] = [];
     let selFieldNames: String[] = [];
-
-    // 先加主键字段
-    for (field in param.fields) {
-      if (field.isPrimary) {
-        let sf = new SelFieldDef();
-        sf.name = field.name;
-        sf.comment = field.comment;
-        sf.tsType = field.tsType;
-        sf.isPrimary = field.isPrimary;
-        sf.isCoin = field.isCoin;
-        sf.isLike = false;
-        selFields.append(sf);
-        selFieldNames.append(field.name);
-      
-      }
-    }
 
     // 加 selCols（精确查询字段）
     if (json.selCols) {

@@ -9,7 +9,6 @@ ${#   - constructor(data?: EnXxx)：从实体构造 InIns                       
 ${#   - toEntity()：InIns 转回实体                                               }
 ${# ============================================================================}
 ${# ── 头部：注释和静态 import ──────────────────────────────────────────────   }
-
 //此代码为AutoCode框架生成，请勿手动修改
 ${# Swagger API 文档：@ApiProperty 用于生成接口字段说明                          }
 import { ApiProperty } from '@nestjs/swagger';
@@ -24,7 +23,7 @@ import { ToolTime } from '@/common/tool/tool_time';
 
 ${# ── 类声明 ───────────────────────────────────────────────────────────────   }
 ${# 类名格式：InIns + 表名首字母大写，如 InInsUser                               }
-//${tableDesc}实体对应in类，客户端插入或修改表时，传输的数据格式
+//${tableDesc}(${entityClass})实体对应in类，客户端插入或修改表时，传输的数据格式
 export class ${insClass} {
   ${# ── 字段循环展开 ────────────────────────────────────────────────────   }
   ${# param.ac 生成的 fields 数组，每个字段（field）包含：                 }

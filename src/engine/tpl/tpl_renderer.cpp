@@ -272,9 +272,66 @@ QJsonValue evalExprToJson(const QString &expr, const QJsonObject &context,
   return engine.resolvePath(expr, context);
 }
 
-/// @brief 解析条件表达式（支持 ! 取反）
+/// @brief 比较两个 JSON 值是否相等（按类型严格比较）
+static bool valuesEqual(const QJsonValue &l, const QJsonValue &r) {
+  if (l.type() != r.type()) {
+    // 数值与字符串不宽松互比（模板场景均为同类型比较）
+    return false;
+  }
+  switch (l.type()) {
+    case QJsonValue::Bool:
+      return l.toBool() == r.toBool();
+    case QJsonValue::Double:
+      return l.toDouble() == r.toDouble();
+    case QJsonValue::String:
+      return l.toString() == r.toString();
+    default:
+      return l == r;
+  }
+}
+
+/// @brief 在表达式顶层（引号、括号外）查找 == / != 比较运算符位置
+/// @return 位置索引；未找到返回 -1。isNeq 标记是否为 !=
+static int findTopLevelCompare(const QString &expr, bool &isNeq) {
+  bool inSQuote = false, inDQuote = false;
+  int parenDepth = 0;
+  for (int i = 0; i + 1 < expr.length(); ++i) {
+    const QChar c = expr[i];
+    if (c == QChar('"') && !inSQuote) {
+      inDQuote = !inDQuote;
+    } else if (c == QChar('\'') && !inDQuote) {
+      inSQuote = !inSQuote;
+    } else if (!inSQuote && !inDQuote) {
+      if (c == QChar('(')) {
+        ++parenDepth;
+      } else if (c == QChar(')')) {
+        --parenDepth;
+      } else if (parenDepth == 0 && c == QChar('=') && expr[i + 1] == QChar('=')) {
+        isNeq = false;
+        return i;
+      } else if (parenDepth == 0 && c == QChar('!') && expr[i + 1] == QChar('=')) {
+        isNeq = true;
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+
+/// @brief 解析条件表达式（支持 ! 取反、== / != 比较）
 bool evalCondition(QString expr, const QJsonObject &context, const TplEngine &engine) {
   expr = expr.trimmed();
+  // == / != 比较（先于 ! 前缀处理，避免 field.a != "x" 被误剥）
+  bool isNeq = false;
+  const int cmpPos = findTopLevelCompare(expr, isNeq);
+  if (cmpPos > 0) {
+    const QString lhs = expr.left(cmpPos).trimmed();
+    const QString rhs = expr.mid(cmpPos + 2).trimmed();
+    const QJsonValue l = evalExprToJson(lhs, context, engine);
+    const QJsonValue r = evalExprToJson(rhs, context, engine);
+    const bool equal = valuesEqual(l, r);
+    return isNeq ? !equal : equal;
+  }
   bool negate = false;
   if (expr.startsWith(QLatin1Char('!'))) {
     negate = true;
@@ -341,8 +398,13 @@ QString renderEach(const TplAst::EachNode *node, const QJsonObject &context,
 
   QString result;
   QJsonArray arr = arrVal.toArray();
+  int idx = 0;
   for (const QJsonValue &item : arr) {
     QJsonObject itemContext = context;
+    // 注入循环元信息：${item名}_index（从 0 起）、${item名}_last（是否末项）
+    // 模板可用 ${if !item_last},${/if} 实现末项无分隔符等排版
+    itemContext[node->itemName + QStringLiteral("_index")] = idx;
+    itemContext[node->itemName + QStringLiteral("_last")] = (idx == arr.size() - 1);
     if (item.isObject()) {
       QJsonObject itemObj = item.toObject();
       if (node->explicitNaming) {
@@ -359,6 +421,7 @@ QString renderEach(const TplAst::EachNode *node, const QJsonObject &context,
       itemContext[node->itemName] = item;
     }
     result += renderNodes(node->body, itemContext, engine);
+    ++idx;
   }
   return result;
 }

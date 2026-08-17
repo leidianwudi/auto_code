@@ -22,7 +22,7 @@
 
 import { Param } from "./core/param.ac";
 import { QueryData } from "./core/query_data.ac";
-import { escapeJsStr, capitalizeFirst } from "../../tool/tool_str.ac";
+import { escapeJsStr, capitalizeFirst, snakeToCamel, snakeToPascal, isNumericStr } from "../../tool/tool_str.ac";
 
 /// @brief 模板配置（一个模板对应一个生成的代码文件）
 class TemplateConfig {
@@ -155,6 +155,11 @@ export function generateApiMain(params: Object): Void {
     //      构建成模板所需的 {enumName, columnName, columnComment, items[]} 结构
     let enums: Object[] = [];
     let hasEnums = false;
+    // apiEnums - 仅含 crud_api_enum 来源的枚举（isTableEnum=false）。
+    //   tableEnum 整表枚举只生成枚举定义（enum.tpl），
+    //   不生成 StringKeyOutEnum 记录（out_enum.tpl）和 getCodeRecords 接口（controller_.tpl）
+    let apiEnums: Object[] = [];
+    let hasApiEnums = false;
     {
       // crud_api_enum 表结构：table, column, key, value, desc, sort
       let enumRows = db.query({sql: "SELECT * FROM crud_api_enum WHERE `table` = '" + json.tableName + "' ORDER BY `column`, `sort`"});
@@ -162,25 +167,27 @@ export function generateApiMain(params: Object): Void {
       printLog("enum rows count: " + enumRowsLen);
       if (enumRowsLen > 0) {
         hasEnums = true;
+        hasApiEnums = true;
         let currentCol = "";
         let currentEnum = null;
         for (er in enumRows) {
           let colName = er["column"];
           if (colName != currentCol) {
-            // 新列，先把上一个枚举的 columnComment 构建完整再 append
+            // 新列，先把上一个枚举处理完再 append
             if (currentEnum != null) {
-              let fullComment = currentEnum.columnComment;
-              let first = true;
-              for (item in currentEnum.items) {
-                if (first) {
-                  fullComment = fullComment + ":" + item.key + ":" + item.label;
-                  first = false;
+              // key 类型判断：valueStr 由数值判断生成（数值无引号/字符串带引号），
+              // 首项带单引号 → StringKeyOutEnum，否则 NumberKeyOutEnum。
+              // 不直接对 value 做算术判断：Object 标注参与 * 运算会被类型检查拒绝
+              if (currentEnum.items.length > 0) {
+                let vs0: String = currentEnum.items[0].valueStr;
+                if (vs0.startsWith("'")) {
+                  currentEnum.outEnumType = "StringKeyOutEnum";
                 } else {
-                  fullComment = fullComment + ";" + item.key + ":" + item.label;
+                  currentEnum.outEnumType = "NumberKeyOutEnum";
                 }
               }
-              currentEnum.columnComment = fullComment;
               enums.append(currentEnum);
+              apiEnums.append(currentEnum);
             }
             currentCol = colName;
             // 从 schema 中查找列注释
@@ -211,34 +218,35 @@ export function generateApiMain(params: Object): Void {
             };
           }
           {
-            // value 为数值型时去掉引号（如 "0" → 0），字符串型保留引号（如 "Normal" → 'Normal'）
+            // value 为数值型时去掉引号（如 "0" → 0），字符串型保留引号（如 "Normal" → 'Normal'）。
+            // 用 isNumericStr 逐字符判断：v*1==v 对 DB 读出的字符串值（如 "1"）存在
+            // Number 与 String 比较类型不匹配问题，导致本应无引号的数值被误判为字符串
             let v = er["value"];
             let valueStr = "'" + v + "'";
-            if (v * 1 == v) {
+            if (isNumericStr("" + v)) {
               valueStr = "" + v;
             }
             currentEnum.items.append({
-              key: er["key"],
+              key: snakeToPascal(er["key"]),
               value: v,
               valueStr: valueStr,
               label: er["desc"]
             });
           }
         }
-        // 处理最后一个枚举：构建完整 columnComment 再 append
+        // 处理最后一个枚举再 append
         if (currentEnum != null) {
-          let fullComment = currentEnum.columnComment;
-          let first = true;
-          for (item in currentEnum.items) {
-            if (first) {
-              fullComment = fullComment + ":" + item.key + ":" + item.label;
-              first = false;
+          // key 类型判断（同上：按首项 valueStr 引号判断）
+          if (currentEnum.items.length > 0) {
+            let vs0: String = currentEnum.items[0].valueStr;
+            if (vs0.startsWith("'")) {
+              currentEnum.outEnumType = "StringKeyOutEnum";
             } else {
-              fullComment = fullComment + ";" + item.key + ":" + item.label;
+              currentEnum.outEnumType = "NumberKeyOutEnum";
             }
           }
-          currentEnum.columnComment = fullComment;
           enums.append(currentEnum);
+          apiEnums.append(currentEnum);
         }
       }
     }
@@ -289,23 +297,27 @@ export function generateApiMain(params: Object): Void {
         };
         for (row in tableRows) {
           tableEnumObj.items.append({
-            key: row[keyCol],
+            key: snakeToPascal(row[keyCol]),
             value: row[valueCol],
             valueStr: "" + row[valueCol],
             label: row[commentCol]
           });
         }
+        // tableEnum 枚举只生成枚举定义（enum.tpl），不生成 records/接口，
+        // 无需 outEnumType（模板中 ${enum.outEnumType} 仅出现在 apiEnums 循环内）
         enums.append(tableEnumObj);
       }
     }
 
     // 构建 enum import 名称字符串（如 "TypeRecords, VipStatusRecords"）
-    let enumImportNames = "";
     // 构建 enum 枚举名列表字符串（如 "EnumUserType, EnumUserVipStatus"）
+    // 仅含 apiEnums（crud_api_enum 来源）：tableEnum 整表枚举不生成 records，
+    // 其 recordsName 不得出现在 import 中（out_enum 文件里已无对应导出）
+    let enumImportNames = "";
     let enumNames = "";
-    if (hasEnums) {
+    if (hasApiEnums) {
       let firstEnum = true;
-      for (e in enums) {
+      for (e in apiEnums) {
         if (firstEnum) {
           enumImportNames = e.recordsName;
           enumNames = e.enumName;
@@ -329,9 +341,20 @@ export function generateApiMain(params: Object): Void {
     tplData["fields"]           = param.fields;         // ${each field in fields} 循环
     tplData["imports"]          = param.imports;        // ${each imp in imports} 循环
     tplData["relations"]        = param.relations;      // ${each rel in relations} 循环
+    // 联表查询属性名列表（isJoinRelations=true 的关联），如 "'sportType'"，用于 db_.tpl 的 relations
+    let joinRelationNames: String[] = [];
+    for (rel in param.relations) {
+      if (rel.isJoinRelations) {
+        joinRelationNames.append("'" + rel.propertyName + "'");
+      }
+    }
+    tplData["relationsForQuery"] = joinRelationNames.join(", "); // ${relationsForQuery}
     // 枚举数据（来自 crud_api_enum 表）
-    tplData["enums"]            = enums;                // ${each enum in enums} 循环
-    tplData["hasEnums"]         = hasEnums;             // ${hasEnums} 是否有枚举
+    tplData["enums"]            = enums;                // ${each enum in enums} 循环（enum.tpl 枚举定义，含 tableEnum）
+    tplData["hasEnums"]         = hasEnums;             // ${hasEnums} 是否有枚举定义
+    // apiEnums - 生成 StringKeyOutEnum 记录与 getCodeRecords 接口的枚举（不含 tableEnum）
+    tplData["apiEnums"]         = apiEnums;             // ${each enum in apiEnums} 循环（out_enum.tpl / controller_.tpl）
+    tplData["hasApiEnums"]      = hasApiEnums;          // ${hasApiEnums} 是否有需要生成 records/接口的枚举
     tplData["enumImportNames"]  = enumImportNames;      // ${enumImportNames} import 名称列表
     tplData["enumNames"]        = enumNames;            // ${enumNames} 枚举名列表
     // 查询场景数据（由 QueryData 构建）
@@ -347,7 +370,8 @@ export function generateApiMain(params: Object): Void {
     tplData["dbClass"]          = modelBaseName + "Db";  // ${dbClass} 如 UserDb
     tplData["dbBaseClassFile"]  = param.tableName + ".db_";  // ${dbBaseClassFile} 如 user.db_
     tplData["dbClassFile"]      = param.tableName + ".db";   // ${dbClassFile} 如 user.db
-    tplData["dbVarName"]        = param.tableName + "Db";    // ${dbVarName} 如 userDb
+    // 变量名用小驼峰（snakeToCamel）：sport_score_type → sportScoreType
+    tplData["dbVarName"]        = snakeToCamel(param.tableName) + "Db";    // ${dbVarName} 如 sportScoreTypeDb
     // OutPage 类名
     tplData["outPageClass"]     = "OutPage" + modelBaseName; // ${outPageClass} 如 OutPageUser
     // Service 类名
@@ -355,7 +379,7 @@ export function generateApiMain(params: Object): Void {
     tplData["serviceClass"]     = modelBaseName + "Service";  // ${serviceClass} 如 UserService
     tplData["serviceBaseClassFile"] = param.tableName + ".service_"; // ${serviceBaseClassFile} 如 user.service_
     tplData["serviceClassFile"]     = param.tableName + ".service";  // ${serviceClassFile} 如 user.service
-    tplData["serviceVarName"]       = param.tableName + "Service";   // ${serviceVarName} 如 userService
+    tplData["serviceVarName"]       = snakeToCamel(param.tableName) + "Service";   // ${serviceVarName} 如 sportScoreTypeService
     // Controller 类名
     tplData["controllerBaseClass"] = modelBaseName + "Controller_"; // ${controllerBaseClass} 如 UserController_
     tplData["controllerClass"]     = modelBaseName + "Controller";  // ${controllerClass} 如 UserController

@@ -9,9 +9,7 @@ ${#   4. renderTpl 渲染结果 → 写入 xxx.entity.ts                        
 ${# ============================================================================}
 ${# ── 头部：输出到 TS 文件的注释和静态 import ──────────────────────────────   }
 ${# 注意：下面以 "//" 开头的行会原样输出到生成的 TS 文件，不是模板注释            }
-
 // 此代码为AutoCode框架生成，请勿手动修改
-
 ${# TypeORM 装饰器：@Entity @Column @PrimaryGeneratedColumn 等                 }
 import {
   Entity,
@@ -44,7 +42,7 @@ ${/each}
 
 ${# ── 实体类声明 ───────────────────────────────────────────────────────────   }
 ${# @Entity('table_name') 标记这是一个数据库实体类，TypeORM 会根据它建表/建约束  }
-// ${tableDesc} 实体
+// ${tableDesc}(${tableName}) 实体
 @Entity('${tableName}')
 export class ${entityClass} {
   ${# ── 字段循环展开 ────────────────────────────────────────────────────   }
@@ -60,18 +58,18 @@ export class ${entityClass} {
   @ApiProperty({ description: '${field.comment}' })
   @PrimaryGeneratedColumn()
   ${field.name}: ${field.tsType};
-  
-    ${else if field.isCoin}   
+
+    ${else if field.isCoin}
   @ApiProperty({ description: '${field.comment}' })
   @Column(${field.columnOptions})
   @Transform(({ value }) => value.toJSON())
   ${field.name}: ${field.tsType};
-  
+
     ${else}
   @ApiProperty({ description: '${field.comment}' })
   @Column(${field.columnOptions})
   ${field.name}: ${field.tsType};
-  
+
     ${/if}
   ${/each}
   ${# ── 关联关系：由 param.ac 生成的 relations 数组 ─────────────────────   }
@@ -90,7 +88,7 @@ export class ${entityClass} {
   ${else}
   ${rel.propertyName}: ${rel.targetEntity};
   ${/if}
-  
+
   ${/each}
   ${# ── 辅助方法：返回数据库表名，用于查询/联表时拼接 SQL ──────────   }
   static getTableName() {

@@ -64,3 +64,4 @@ export class ${serviceBaseClass} {
     return result.affected;
   }
 }
+

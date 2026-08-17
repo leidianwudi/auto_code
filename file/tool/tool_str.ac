@@ -48,3 +48,39 @@ export function snakeToPascal(str: String): String {
   }
   return res;
 }
+
+/// @brief 下划线命名 → 小驼峰命名（camelCase）
+/// @param str 下划线字符串，如 "sport_score_type"
+/// @return 小驼峰命名，如 "sport_score_type" → "sportScoreType"
+export function snakeToCamel(str: String): String {
+  let pascal = snakeToPascal(str);
+  if (pascal.length == 0) {
+    return pascal;
+  }
+  return pascal.substring(0, 1).toLowerCase() + pascal.substring(1);
+}
+
+/// @brief 判断字符串是否为纯数值（整数/小数，可带正负号）
+/// @param s 待判断字符串
+/// @return 数值字符串返回 true（如 "0"、"1"、"-1.5"），其它（如 "Normal"、""）返回 false
+///   用逐字符判断而非 v*1==v：后者对字符串值（如 DB 读出的 "1"）存在
+///   Number 与 String 比较类型不匹配的问题，行为不可靠
+export function isNumericStr(s: String): Bool {
+  if (s == null || s.length == 0) {
+    return false;
+  }
+  let hasDigit = false;
+  for (let i = 0; i < s.length; i = i + 1) {
+    let c = s[i];
+    if (c >= "0" && c <= "9") {
+      hasDigit = true;
+    } else if (i == 0 && (c == "-" || c == "+")) {
+      // 允许首字符为符号
+    } else if (c == ".") {
+      // 允许小数点
+    } else {
+      return false;
+    }
+  }
+  return hasDigit;
+}

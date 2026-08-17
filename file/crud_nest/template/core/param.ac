@@ -108,11 +108,19 @@ export class Param {
           // decimal 金额字段：默认 0.00，精度和缩放用全局常量统一管理
           options += ", default: 0.00, precision: COIN_PRECISION, scale: COIN_SCALE, transformer: new CoinTransformer()";
         } else if (colType.includes("varchar") || colType.includes("char")) {
-          // 字符串字段：默认空字符串
-          options += ", default: ''";
+          // 字符串字段：优先用 DB 列默认值（如 code 列默认 '0'），无默认值时用空字符串
+          if (colDefault != null && colDefault != "") {
+            options += ", default: '" + colDefault + "'";
+          } else {
+            options += ", default: ''";
+          }
         } else if (colType.includes("int") && !isAutoIncrement(field.extra)) {
-          // 非自增的整数字段：默认 0
-          options += ", default: 0";
+          // 非自增的整数字段：优先用 DB 列默认值，无默认值时用 0
+          if (colDefault != null && colDefault != "") {
+            options += ", default: " + colDefault;
+          } else {
+            options += ", default: 0";
+          }
         }
       }
 

@@ -10,12 +10,11 @@ ${#   - getOrderByKey/getOrderByIn 排序逻辑                                 
 ${#   - selectById/insert/update/delete 基本 CRUD                                }
 ${# ============================================================================}
 ${# ── 头部：注释和静态 import ──────────────────────────────────────────────   }
-
 //此代码为AutoCode框架生成，请勿手动修改
 ${# Repository 基类封装 }
 import { RepositorySuper } from "src/common/tool/repository_super";
 ${# TypeORM 核心类型 }
-import { Repository, InsertResult, UpdateResult, DeleteResult  } from "typeorm";
+import { EntityManager, Repository, InsertResult, UpdateResult, DeleteResult  } from "typeorm";
 ${# NestJS 异常处理 }
 import { HttpException } from "@nestjs/common";
 ${# 对应的实体类 }
@@ -39,8 +38,8 @@ export class ${dbBaseClass} extends RepositorySuper<${entityClass}> {
   }
 
   ${# ── 分页查询 ────────────────────────────────────────────────────────   }
-  // 分页查询
-  public async selectByIn(sel: ${selClass}): Promise<{list: ${entityClass}[], total: number, sumList?: Record<string, number> | null}> {
+  // 分页查询（manager 可选：传入事务管理器使查询加入事务）
+  public async selectByIn(sel: ${selClass}, manager?: EntityManager): Promise<{list: ${entityClass}[], total: number, sumList?: Record<string, number> | null}> {
     const where = this.getWhereByIn(sel);
     const order = this.getOrderByIn(sel);
     // 可根据实际字段完善查询条件
@@ -49,11 +48,12 @@ export class ${dbBaseClass} extends RepositorySuper<${entityClass}> {
       sel.pageSize,
       {
         where,
-        relations: [], //关联的属性名
+        relations: [${relationsForQuery}], //关联的属性名
         order,    //排序
-      }
+      },
+      manager,
     );
-    
+
     return { list, total };
   }
 
@@ -91,24 +91,26 @@ export class ${dbBaseClass} extends RepositorySuper<${entityClass}> {
 
   ${# ── 基本 CRUD ───────────────────────────────────────────────────────   }
   // 根据id查询单条记录
-  public async selectById(id: number): Promise<${entityClass}>  {
-    return await this.db.findOne({ where: { id } });
+  public async selectById(id: number, manager?: EntityManager): Promise<${entityClass}>  {
+    const where: Where<${entityClass}> = ToolDb.getWhere<${entityClass}>();
+    where.add('id', id);
+    return await this.getRepository(manager).findOne({ where });
   }
 
   // 新增一条记录
-  public async insert(data: ${entityClass}): Promise<number> {
-    const res = await this.db.insert(data);
+  public async insert(data: ${entityClass}, manager?: EntityManager): Promise<number> {
+    const res = await this.getRepository(manager).insert(data);
     return res.identifiers[0].id;//返回id
   }
 
   // 更新一条记录
-  public async update(data: ${entityClass}): Promise<number> {
-    const res = await this.db.update(data.id, data);
+  public async update(data: ${entityClass}, manager?: EntityManager): Promise<number> {
+    const res = await this.getRepository(manager).update(data.id, data);
     return res.affected;//返回更新的记录数
   }
 
   // 删除记录
-  public async delete(ids: number[]): Promise<DeleteResult> {
-    return await this.db.delete(ids);
+  public async delete(ids: number[], manager?: EntityManager): Promise<DeleteResult> {
+    return await this.getRepository(manager).delete(ids);
   }
 }

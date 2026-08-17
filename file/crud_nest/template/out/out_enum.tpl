@@ -6,25 +6,25 @@ ${#   生成枚举的输出记录文件，包含：                             
 ${#   - import 引用枚举定义                                                     }
 ${#   - 每个 records 数组（StringKeyOutEnum[]）                                 }
 ${# 数据来源（tplData）：                                                        }
-${#   tableName  - 表名（如 user）                                              }
-${#   enumNames  - 枚举名列表（如 "EnumUserType, EnumUserVipStatus"）           }
-${#   hasEnums   - 是否有枚举定义                                               }
-${#   enums      - 枚举定义数组                                                 }
+${#   tableName   - 表名（如 user）                                              }
+${#   enumNames   - 枚举名列表（如 "EnumUserType, EnumUserVipStatus"）           }
+${#   hasApiEnums - 是否有需要生成 records 的枚举（tableEnum 整表枚举不生成）     }
+${#   apiEnums    - 枚举定义数组（仅 crud_api_enum 来源，不含 tableEnum）        }
 ${#     [{enumName, recordsName, columnName, items: [{key, value, label}]}]     }
 ${# ============================================================================}
-${if hasEnums}
+${if hasApiEnums}
 // 此代码为AutoCode框架生成，请勿手动修改
 import {
   ${enumNames}
 } from "../entities/enum_${tableName}";
 import { NumberKeyOutEnum, StringKeyOutEnum } from "@/common/tool/out_enum_record";
-${each enum in enums}
+${each enum in apiEnums}
 
 /**
  * ${tableName}.${enum.columnName} 的枚举输出列表
  */
-export const ${enum.recordsName}: StringKeyOutEnum[] = [
-${each item in enum.items}  { key: ${enum.enumName}.${item.key}, value: "${item.label}" },
+export const ${enum.recordsName}: ${enum.outEnumType}[] = [
+${each item in enum.items}  { key: ${enum.enumName}.${item.key}, value: "${item.label}" }${if !item_last},${/if}
 ${/each}];
 ${/each}
 ${/if}

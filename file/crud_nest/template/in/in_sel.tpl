@@ -8,7 +8,6 @@ ${#   - @ApiProperty + @IsOptional + @IsXxx 验证装饰器                     
 ${#   - 固定的 sort 字段（可排序字段列表）                                        }
 ${# ============================================================================}
 ${# ── 头部：注释和静态 import ──────────────────────────────────────────────   }
-
 //此代码为AutoCode框架生成，请勿手动修改
 ${# 分页基类 }
 import { In_BasePage } from 'src/common/interface/in_base_page';
@@ -22,7 +21,7 @@ import { Type } from 'class-transformer';
 ${# ── 类声明 ───────────────────────────────────────────────────────────────   }
 ${# 类名格式：InSel + 表名首字母大写，如 InSelUser                               }
 ${# 继承 In_BasePage 提供分页参数（pageNum、pageSize 等）                        }
-//${tableDesc}实体对应in类，客户端查询分页数据时，传输的数据格式
+//${tableDesc}(${entityClass})实体对应in类，客户端查询分页数据时，传输的数据格式
 export class ${selClass} extends In_BasePage {
   ${# ── 查询字段循环展开 ──────────────────────────────────────────────   }
   ${# selFields 数组由 news_main.ac 从 selCols + selColsLike + 主键 构建  }
@@ -36,9 +35,17 @@ export class ${selClass} extends In_BasePage {
   ${each field in selFields}
   @ApiProperty({ description: '${field.comment}', required: false })
   @IsOptional()
-${if field.isPrimary}@IsInt({ message: "${field.name}必须是整数" })
-  @Type(() => Number)${else if field.tsType == "number"}@IsInt({ message: "${field.name}必须是整数" })
-  @Type(() => Number)${else if field.tsType == "string"}@IsString()${else if field.tsType == "boolean"}@IsBoolean()${/if}
+  ${if field.isPrimary}
+  @IsInt({ message: "${field.name}必须是整数" })
+  @Type(() => Number)
+  ${else if field.tsType == "number"}
+  @IsInt({ message: "${field.name}必须是整数" })
+  @Type(() => Number)
+  ${else if field.tsType == "string"}
+  @IsString()
+  ${else if field.tsType == "boolean"}
+  @IsBoolean()
+  ${/if}
   ${field.name}?: ${if field.tsType == "Coin"}string${else}${field.tsType}${/if};
 
   ${/each}

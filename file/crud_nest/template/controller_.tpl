@@ -13,7 +13,7 @@ ${# ============================================================================
 import { Controller, Get, Post, Put, Body, Param, Query, Delete, HttpCode, HttpStatus } from '@nestjs/common';
 import { NumberKeyOutEnum, StringKeyOutEnum } from '@/common/tool/out_enum_record';
 import { OutBasePage } from '@/common/interface/out_base_page';
-import { OutReq } from 'src/common/interface/out_req';
+import { OutReq } from '@/common/interface/out_req';
 import { HttpBackCode, HttpBackCodeMsg } from '@/common/core/http_back_code';
 import { OutBaseId, OutBaseIdsCount } from '@/common/interface/out_base_id';
 import { InBaseId } from '@/common/interface/in_base_id';
@@ -23,10 +23,9 @@ import { ${insClass} } from './in/in_ins_${tableName}';
 import { ${selClass} } from './in/in_sel_${tableName}';
 import { ${outPageClass} } from './out/out_page_${tableName}';
 import { ${entityClass} } from './entities/${entityClassFile}';
-${if hasEnums}
+${if hasApiEnums}
 import { ${enumImportNames} } from './out/out_enum_${tableName}';
 ${/if}
-
 
 /**
  * ${entityClass}实体(${tableDesc})，通用的增删改查控制器基类。
@@ -108,16 +107,16 @@ export class ${controllerBaseClass} {
     // 未使用Out_Req对返回结果进行封装, 拦截器会自动进行包装
     return OutBaseIdsCount.of(result)
   }
-${if hasEnums}
-${each enum in enums}
+${if hasApiEnums}
+${each enum in apiEnums}
   /**
    * ${enum.columnComment}枚举列表
    */
   @ApiOperation({ summary: '${enum.columnComment}枚举列表' })
-  @ApiResponse({ status: 200, description: '返回${enum.columnComment}的所有枚举信息', type: StringKeyOutEnum })
+  @ApiResponse({ status: 200, description: '返回${enum.columnComment}的所有枚举信息', type: ${enum.outEnumType} })
   @HttpCode(HttpStatus.OK)
   @Post('${enum.methodName}')
-  async ${enum.methodName}(): Promise<OutBasePage<StringKeyOutEnum>> {
+  async ${enum.methodName}(): Promise<OutBasePage<${enum.outEnumType}>> {
     // 未使用Out_Req对返回结果进行封装, 拦截器会自动进行包装
     return OutBasePage.ofAll(${enum.recordsName});
   }
