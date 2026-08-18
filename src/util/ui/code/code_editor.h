@@ -40,6 +40,7 @@
 #include "symbol_navigator.h"
 
 class CodeFindBar;
+class FixedLineHeightLayout;  ///< 统一行高布局（修复中文 fallback 导致的行高变化）
 class QPaintEvent;
 class QResizeEvent;
 class QWidget;
@@ -153,8 +154,13 @@ public:
   /// 从设置读取代码字体大小并应用（构造与字体设置变化时调用）
   void applyFontFromSetting();
 
+  /// 根据字体测量并设置统一行高（消除中英文混排时的行高抖动）
+  void updateFixedLineHeight(const QFont &font);
+
 signals:
   void validationMessage(const QString &message, int errorCount = 0);
+  /// 结构化验证结果（文件路径 + 问题列表），供底部“问题”面板展示与双击跳转
+  void validationIssues(const QString &filePath, const QVector<ValidationResult> &issues);
   void requestGoToLine(const QString &filePath, int line);
   void aboutToNavigate(const QString &targetFilePath, int targetLine);
   void requestFindReferences(const QString &filePath, int line, const QString &context);
@@ -221,10 +227,6 @@ private:
   // ── 符号高亮（用于查找引用）──
   void highlightSymbolReferences(const QString &name);
 
-  // ── 错误处理（委托给 CodeValidator）──
-  void applyErrorUnderline(int start, int length, const QString &tooltip,
-                           QList<QTextEdit::ExtraSelection> &selections);
-
   // ── 悬停提示（使用 SymbolNavigator）──
   void showSymbolHover(int pos, const QPoint &gpos);
 
@@ -259,8 +261,7 @@ private:
   mutable QString m_cachedText;     ///< 缓存的文本内容
   mutable int m_cacheVersion = -1;  ///< 文档版本号（用于失效检测）
 
-  // 错误标记（从 CodeValidator 同步）
-  QList<QTextEdit::ExtraSelection> m_errorSelections;
+  // 错误标记（错误波浪线统一由 paintEvent 依据 m_errorRanges 绘制，不再使用 ExtraSelection）
   QList<QTextEdit::ExtraSelection> m_referenceSelections;  ///< 引用高亮标记
   QSet<int> m_errorLines;
 
@@ -280,6 +281,9 @@ private:
 
   // 语法高亮器（主题切换时刷新）
   QSyntaxHighlighter *m_highlighter = nullptr;
+
+  // 统一行高布局（消除中英文混排时行高随内容抖动）
+  FixedLineHeightLayout *m_fixedLineHeightLayout = nullptr;
 
   struct ErrorRange {
     int start;

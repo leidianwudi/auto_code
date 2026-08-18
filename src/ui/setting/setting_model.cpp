@@ -91,6 +91,8 @@ QList<FontEntry> SettingModel::fonts() const {
     e.label = m_store.fontLabel(key);
     e.size = m_store.fontSize(key);
     e.custom = m_store.hasCustomFont(key);
+    e.family = m_store.fontFamily(key);
+    e.familyCustom = m_store.hasCustomFontFamily(key);
     list.append(e);
   }
   return list;
@@ -98,7 +100,13 @@ QList<FontEntry> SettingModel::fonts() const {
 
 void SettingModel::setFontSize(const QString &key, int size) { m_store.setFontSize(key, size); }
 
+void SettingModel::setFontFamily(const QString &key, const QString &family) {
+  m_store.setFontFamily(key, family);
+}
+
 void SettingModel::resetFontSize(const QString &key) { m_store.resetFontSize(key); }
+
+void SettingModel::resetFontFamily(const QString &key) { m_store.resetFontFamily(key); }
 
 void SettingModel::resetAllFonts() { m_store.resetAllFonts(); }
 

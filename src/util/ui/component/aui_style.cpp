@@ -6,6 +6,7 @@
 #include "aui_style.h"
 
 #include <QApplication>
+#include <QFontDatabase>
 #include <QLabel>
 #include <QMenu>
 #include <QPainter>
@@ -24,6 +25,32 @@ static const char *kFusionTabProperty = "aui_fusion_tab";
 
 /// 标记编辑器标签栏的聚焦状态（true=所在面板有焦点），供代理样式绘制文字颜色
 static const char *kFocusTabProperty = "aui_focus_tab";
+
+// ──────────────────────────────────────────────────────────────
+//  错误波浪线 — 编辑器与标签栏共用（VSCode 风格，样式/粗细统一）
+// ──────────────────────────────────────────────────────────────
+
+void AuiStyle::drawErrorUnderline(QPainter &p, int x1, int x2, int y, const QColor &color) {
+  if (x2 < x1) x2 = x1;
+  // VSCode 风格：细线 + 上下交替的半椭圆弧，波浪中心线为基线 y
+  const float w = 5;      // 单个半波宽度
+  const float amp = 1.5;  // 振幅（上凸最高到 y-amp，下凸最低到 y+amp）
+  QPen pen(color, 1.2);
+  pen.setCapStyle(Qt::FlatCap);  // 平头端点，避免端点形成多余圆点
+  p.setPen(pen);
+  p.setBrush(Qt::NoBrush);
+  // 上凸/下凸弧共用同一矩形（椭圆中心都在基线 y 上），仅弧的角度相反，
+  // 保证相邻弧的端点都落在 y 上连续衔接，波浪平滑不跳变、方向正确
+  bool up = true;
+  int x = x1;
+  while (x <= x2 - w + 1) {
+    const QRect arcRect(x, y - amp, w, 2 * amp);
+    // 上凸：从左侧中点经上顶点到右侧中点；下凸：从右侧中点经下顶点到左侧中点
+    p.drawArc(arcRect, up ? 180 * 16 : 0, 180 * 16);
+    x += w;
+    up = !up;
+  }
+}
 
 // ════════════════════════════════════════════════════════════
 //  全局样式表 — 所有窗口共用
@@ -163,9 +190,32 @@ void AuiStyle::applyMenuButtonStyle(QToolButton *btn) {
 //  applyAppFont — 应用窗口字体到 qApp 及所有已创建窗口
 // ════════════════════════════════════════════════════════════
 
+QStringList AuiStyle::monoFontCandidates() {
+  // 先保存到命名局部变量，避免「临时对象 + 悬垂迭代器」导致的崩溃
+  const QStringList installed = QFontDatabase::families();
+  // VSCode 常用的等宽编程字体（按优先级排列），仅保留本机已安装者
+  const QStringList preferred = {
+      QStringLiteral("Consolas"),        QStringLiteral("Courier New"),
+      QStringLiteral("Cascadia Mono"),   QStringLiteral("Cascadia Code"),
+      QStringLiteral("Fira Code"),       QStringLiteral("JetBrains Mono"),
+      QStringLiteral("Source Code Pro"), QStringLiteral("Menlo"),
+      QStringLiteral("Monaco"),          QStringLiteral("DejaVu Sans Mono"),
+      QStringLiteral("Ubuntu Mono"),     QStringLiteral("微软雅黑"),
+      QStringLiteral("Microsoft YaHei")};
+  QStringList result;
+  result.reserve(preferred.size());
+  for (const QString &fam : preferred) {
+    if (installed.contains(fam)) result.append(fam);
+  }
+  return result;
+}
+
 void AuiStyle::applyAppFont() {
   if (!qApp) return;
   QFont f = qApp->font();
+  // 窗口字体族：跟随「窗口字体」设置（未设置时沿用系统字体）
+  const QString fam = SettingStore::ins().fontFamily(QStringLiteral("font.ui"));
+  if (!fam.isEmpty()) f.setFamily(fam);
   f.setPointSize(windowFontSize());
   qApp->setFont(f);
 

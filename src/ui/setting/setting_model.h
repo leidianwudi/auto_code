@@ -42,13 +42,15 @@ struct ShortcutSettingEntry {
 
 /**
  * @struct FontEntry
- * @brief 单个可配置字体大小条目
+ * @brief 单个可配置字体条目（大小 + 字体风格）
  */
 struct FontEntry {
-  QString key;          ///< 字体 key（对应 SettingStore 中的存储键）
-  QString label;        ///< 显示名
-  int size = 0;         ///< 当前字体大小（磅值）
-  bool custom = false;  ///< 是否为用户自定义
+  QString key;                ///< 字体 key（对应 SettingStore 中的存储键）
+  QString label;              ///< 显示名
+  int size = 0;               ///< 当前字体大小（磅值）
+  bool custom = false;        ///< 大小是否为用户自定义
+  QString family;             ///< 当前字体风格（字体族）；空串表示默认
+  bool familyCustom = false;  ///< 字体风格是否为用户自定义
 };
 
 /**
@@ -86,9 +88,13 @@ public:
   QList<FontEntry> fonts() const;
   /// 设置单个字体大小（磅值）
   void setFontSize(const QString &key, int size);
+  /// 设置单个字体风格（字体族）；空串表示恢复默认
+  void setFontFamily(const QString &key, const QString &family);
   /// 重置单个字体大小为默认
   void resetFontSize(const QString &key);
-  /// 重置所有字体大小
+  /// 重置单个字体风格为默认
+  void resetFontFamily(const QString &key);
+  /// 重置所有字体大小与风格
   void resetAllFonts();
 
   /// 保存到磁盘

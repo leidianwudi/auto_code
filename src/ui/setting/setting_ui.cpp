@@ -6,6 +6,7 @@
 #include "setting_ui.h"
 
 #include <QColorDialog>
+#include <QComboBox>
 #include <QDialogButtonBox>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -230,7 +231,7 @@ void SettingUi::buildFontPage() {
   title->setFont(tf);
   layout->addWidget(title);
 
-  auto *desc = new QLabel(QStringLiteral("调整各部分文字大小（磅值），修改后立即生效。"), page);
+  auto *desc = new QLabel(QStringLiteral("调整各部分字体的大小与风格，修改后立即生效。"), page);
   desc->setWordWrap(true);
   desc->setStyleSheet(QStringLiteral("color: %1;").arg(AuiStyle::inactiveTabColor().name()));
   layout->addWidget(desc);
@@ -241,13 +242,29 @@ void SettingUi::buildFontPage() {
   sep->setStyleSheet(QStringLiteral("color: %1;").arg(AuiStyle::borderColor().name()));
   layout->addWidget(sep);
 
-  // ── 字体大小行（名称 + SpinBox + 单行重置） ──
+  // ── 字体行（名称 + 大小 + 字体风格下拉框 + 单行重置） ──
   auto *grid = new QGridLayout;
   grid->setHorizontalSpacing(16);
   grid->setVerticalSpacing(12);
+
+  // 表头
+  auto makeHeader = [page](const QString &text) {
+    auto *l = new QLabel(text, page);
+    QFont f = AuiStyle::createEditorFont();
+    f.setBold(true);
+    l->setFont(f);
+    return l;
+  };
+  grid->addWidget(makeHeader(QStringLiteral("名称")), 0, 0);
+  grid->addWidget(makeHeader(QStringLiteral("大小")), 0, 1);
+  grid->addWidget(makeHeader(QStringLiteral("字体风格")), 0, 2);
+  grid->addWidget(new QWidget(page), 0, 3);  // 操作列占位
+
   if (m_model) {
     const QList<FontEntry> entries = m_model->fonts();
-    int row = 0;
+    // VSCode 常用的等宽编程字体（仅本机已安装），供下拉选择
+    const QStringList families = AuiStyle::monoFontCandidates();
+    int row = 1;
     for (const auto &e : entries) {
       auto *label = new QLabel(e.label, page);
       grid->addWidget(label, row, 0);
@@ -263,17 +280,28 @@ void SettingUi::buildFontPage() {
       connect(spin, QOverload<int>::of(&QSpinBox::valueChanged), this,
               &SettingUi::onFontValueChanged);
 
+      auto *combo = new QComboBox(page);
+      combo->addItem(QStringLiteral("默认"), QString());  // 首项=跟随默认字体
+      for (const QString &fam : families) combo->addItem(fam, fam);
+      combo->setMinimumWidth(170);
+      combo->setProperty("fontKey", e.key);
+      grid->addWidget(combo, row, 2);
+      m_fontFamilyCombos.insert(e.key, combo);
+      connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+              &SettingUi::onFontFamilyChanged);
+
       auto *resetBtn = new QPushButton(QStringLiteral("重置"), page);
       AuiButton::applyDialogButtonStyle(resetBtn);
-      resetBtn->setEnabled(e.custom);
+      resetBtn->setEnabled(e.custom || e.familyCustom);
       resetBtn->setProperty("fontKey", e.key);
-      grid->addWidget(resetBtn, row, 2);
+      grid->addWidget(resetBtn, row, 3);
       m_fontResetBtns.insert(e.key, resetBtn);
       connect(resetBtn, &QPushButton::clicked, this, &SettingUi::onResetFont);
       ++row;
     }
   }
   grid->setColumnStretch(1, 1);
+  grid->setColumnStretch(2, 1);
   layout->addLayout(grid);
 
   layout->addStretch(1);
@@ -463,7 +491,22 @@ void SettingUi::reloadFonts() {
       const QSignalBlocker blocker(spin);
       spin->setValue(e.size);
     }
-    if (auto *btn = m_fontResetBtns.value(e.key)) btn->setEnabled(e.custom);
+    if (auto *combo = m_fontFamilyCombos.value(e.key)) {
+      const QSignalBlocker blocker(combo);
+      int idx = 0;  // 默认
+      // 仅在用户自定义过字体风格时才匹配列表项；未自定义（含默认族）始终显示「默认」，
+      // 避免将默认字体族（如 Consolas）当成已选风格
+      if (e.familyCustom) {
+        for (int i = 1; i < combo->count(); ++i) {
+          if (combo->itemData(i).toString() == e.family) {
+            idx = i;
+            break;
+          }
+        }
+      }
+      combo->setCurrentIndex(idx);
+    }
+    if (auto *btn = m_fontResetBtns.value(e.key)) btn->setEnabled(e.custom || e.familyCustom);
   }
 }
 
@@ -577,12 +620,25 @@ void SettingUi::onFontValueChanged() {
   reloadFonts();
 }
 
+void SettingUi::onFontFamilyChanged() {
+  auto *combo = qobject_cast<QComboBox *>(sender());
+  if (!combo || !m_model) return;
+  const QString key = combo->property("fontKey").toString();
+  if (key.isEmpty()) return;
+  const QString family = combo->currentData().toString();
+  m_model->setFontFamily(key, family);
+  m_model->save();
+  reloadFonts();
+}
+
 void SettingUi::onResetFont() {
   auto *btn = qobject_cast<QPushButton *>(sender());
   if (!btn || !m_model) return;
   const QString key = btn->property("fontKey").toString();
   if (key.isEmpty()) return;
+  // 同时重置大小与字体风格
   m_model->resetFontSize(key);
+  m_model->resetFontFamily(key);
   m_model->save();
   reloadFonts();
 }

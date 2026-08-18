@@ -13,6 +13,7 @@
 #pragma once
 
 #include <QFuture>
+#include <QFutureWatcher>
 #include <QHash>
 #include <QMap>
 #include <QObject>
@@ -20,9 +21,10 @@
 #include <QStack>
 
 #include "src/engine/script/ac_debugger.h"
+#include "src/engine/validation_result.h"
 #include "src/ui/main_dev/main_dev_ui_ext.h"
+#include "src/util/common/workspace_diag.h"
 #include "src/util/ui/aui_mgr.h"
-
 
 class QTabWidget;
 class QTimer;
@@ -89,8 +91,12 @@ private slots:
   void updateCursorPosition();
   /// 应用程序焦点变化时，连接新焦点的编辑器信号
   void onFocusChanged(QWidget *oldFocus, QWidget *newFocus);
-  /// 编辑器验证结果变化时，更新状态栏错误信息
+  /// 编辑器验证结果变化时，更新文件树/标签栏错误状态
   void onValidationMessage(const QString &msg, int errorCount);
+  /// 编辑器结构化验证结果：填充底部“问题”面板
+  void onValidationIssues(const QString &filePath, const QVector<ValidationResult> &issues);
+  /// 后台工作区全量错误扫描完成：合并结果到问题面板
+  void onWorkspaceScanFinished();
   /// 处理文件/文件夹重命名请求
   void onRenameFile(const QString &oldPath, const QString &newName);
   /// 处理文件/文件夹删除请求
@@ -173,6 +179,8 @@ private:
   QTabWidget *currentTabWidget() const;
   /// 连接编辑器的光标位置信号
   void connectEditor(CodeEditor *editor);
+  /// 重建底部「问题」面板（从 m_fileIssues 聚合全部已打开文件的问题）
+  void refreshProblemPanel();
   /// 关闭指定面板中的指定标签页（不依赖 sender()）
   void closeTab(QTabWidget *tabs, int index);
   /// 检查所有编辑器的修改状态，更新保存按钮可用性
@@ -218,6 +226,15 @@ protected:
 
   // 断点持久化：按文件路径保存断点（行号 → 是否生效），关闭后重新打开仍保留
   QHash<QString, QMap<int, bool>> m_persistedBreakpoints;
+
+  /// 工作区问题聚合：文件路径 → 验证结果列表（供底部「问题」面板跨文件汇总）
+  QMap<QString, QVector<ValidationResult>> m_fileIssues;
+
+  /// 工作区全量扫描的后台任务监视器（扫描在 Qt 全局线程池中执行，避免阻塞 UI）
+  QFutureWatcher<QVector<WorkspaceFileDiag>> *m_workspaceScanWatcher = nullptr;
+
+  /// 启动一次后台工作区全量错误扫描（应用启动时调用，不阻塞 UI）
+  void startWorkspaceScan();
 
   /// 会话恢复：为 true 时抑制由打开文件触发的目录树定位，
   /// 避免启动还原上次打开的文件时自动展开/滚动目录树，破坏保存的展开状态

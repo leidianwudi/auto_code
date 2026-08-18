@@ -33,6 +33,16 @@ public:
   void setTabError(int index, bool hasError);
   bool isTabError(int index) const;
 
+  /// 设置是否显示关闭按钮（默认 true）。
+  /// 纯标签页（如底部「输出 / 问题」tab）可关闭关闭按钮，仅保留自绘样式。
+  void setShowCloseButton(bool show);
+  bool showCloseButton() const { return m_showCloseButton; }
+
+  /// 设置固定标签高度（0 表示使用默认高度）。
+  /// 用于压缩底部面板标签栏（如「输出 / 问题」tab 头调小）。
+  void setTabHeight(int height);
+  int tabHeight() const { return m_tabHeight; }
+
 protected:
   void paintEvent(QPaintEvent *event) override;
   bool event(QEvent *event) override;                  // ToolTip → 中文「关闭标签」
@@ -54,6 +64,8 @@ private:
   /// 计算能完整显示文件名所需的最小标签宽度（文字宽 + tab 空白 + 关闭按钮区）
   int fullTabWidth(int index) const;
 
-  QSet<int> m_modifiedTabs;  ///< 已修改标签页索引集合
-  QSet<int> m_errorTabs;     ///< 有错误标签页索引集合
+  QSet<int> m_modifiedTabs;       ///< 已修改标签页索引集合
+  QSet<int> m_errorTabs;          ///< 有错误标签页索引集合
+  bool m_showCloseButton = true;  ///< 是否绘制关闭按钮（纯标签页可关闭）
+  int m_tabHeight = 0;            ///< 固定标签高度（0 为默认高度）
 };

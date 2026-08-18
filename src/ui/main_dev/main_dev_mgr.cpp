@@ -116,6 +116,9 @@ QWidget *MainDevMgr::onCreateWindow() {
   // ── 加载文件树 ──
   loadFiles();
 
+  // ── 启动后台工作区全量错误扫描（不阻塞 UI，完成后填充底部「问题」面板） ──
+  startWorkspaceScan();
+
   // ── 恢复上次保存的断点（程序重启后还原） ──
   loadBreakpointsFromDisk();
   refreshBreakpointList();
@@ -589,6 +592,9 @@ void MainDevMgr::connectEditorPanels() {
     connectEditorPanel(m_ui->editorPanelAt(i));
   }
 
+  // 底部“问题”面板：双击错误项 → 打开对应文件并定位到出错行
+  connect(m_ui->problemPanel(), &ProblemPanel::issueActivated, this, &MainDevMgr::onGoToLine);
+
   // 安装事件过滤器以捕获鼠标侧键（前进/后退）
   // 注意：需要在 QApplication 级别安装，因为鼠标事件可能被子控件消费
   qApp->installEventFilter(this);
@@ -616,6 +622,49 @@ void MainDevMgr::loadFiles() {
   }
 
   m_ui->fileTree()->buildTree(baseDir.absolutePath());
+}
+
+/// 启动后台工作区全量错误扫描：收集所有可验证文件，在工作线程逐个验证，
+/// 完成后通过 onWorkspaceScanFinished 合并到问题面板（不阻塞 UI）
+void MainDevMgr::startWorkspaceScan() {
+  if (m_workspaceScanWatcher) return;  // 已有扫描任务，避免重复启动
+  const QString rootDir = m_ui ? m_ui->fileTree()->rootPath() : QString();
+  if (rootDir.isEmpty()) return;
+
+  const QStringList files = collectWorkspaceFiles(rootDir);
+  if (files.isEmpty()) return;
+
+  m_workspaceScanWatcher = new QFutureWatcher<QVector<WorkspaceFileDiag>>(this);
+  connect(m_workspaceScanWatcher, &QFutureWatcherBase::finished, this,
+          &MainDevMgr::onWorkspaceScanFinished);
+  QFuture<QVector<WorkspaceFileDiag>> future = QtConcurrent::run(scanWorkspaceDiagnostics, files);
+  m_workspaceScanWatcher->setFuture(future);
+  m_ui->appendOutput(QStringLiteral("开始检查工作区错误（%1 个文件）...").arg(files.size()), false);
+}
+
+/// 后台扫描完成：将结果合并到工作区问题聚合。
+/// 打开中的文件以实时验证结果为准（跳过扫描结果），避免覆盖正在编辑的内容。
+void MainDevMgr::onWorkspaceScanFinished() {
+  if (!m_workspaceScanWatcher) return;
+  const QVector<WorkspaceFileDiag> results = m_workspaceScanWatcher->future().result();
+  m_workspaceScanWatcher->deleteLater();
+  m_workspaceScanWatcher = nullptr;
+
+  for (const WorkspaceFileDiag &diag : results) {
+    // 打开中的文件已由实时验证维护 m_fileIssues，扫描结果可能是读取时的旧内容，跳过
+    if (findEditorForFile(diag.filePath)) continue;
+    if (diag.issues.isEmpty())
+      m_fileIssues.remove(diag.filePath);
+    else
+      m_fileIssues[diag.filePath] = diag.issues;
+  }
+  refreshProblemPanel();
+
+  // 统计问题面板当前实际展示的问题总数（含已打开文件的实时验证结果，与面板保持一致）
+  int problemCount = 0;
+  for (auto it = m_fileIssues.cbegin(); it != m_fileIssues.cend(); ++it)
+    problemCount += it.value().size();
+  m_ui->appendOutput(QStringLiteral("工作区错误检查完成，共 %1 个问题").arg(problemCount), false);
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -892,6 +941,9 @@ void MainDevMgr::refreshTheme() {
 
   // 刷新主窗口 log 输出面板（背景/文字色随主题更新）
   if (m_ui->outputPanel()) m_ui->outputPanel()->reloadStyle();
+
+  // 刷新问题面板（背景/文字/条目颜色随主题重建）
+  if (m_ui->problemPanel()) m_ui->problemPanel()->reloadStyle();
 
   // 刷新调试面板（调用栈/变量/断点页签栏与列表的颜色随主题重建）
   if (m_ui->debugPanel()) m_ui->debugPanel()->refreshStyle();

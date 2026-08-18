@@ -120,6 +120,8 @@ void MainDevMgr::closeTab(QTabWidget *tabs, int index) {
     m_model->unregisterFile(filePath);
     // 清除目录树的红点状态（关闭不保存时修改已丢弃）
     m_ui->fileTree()->setFileModified(filePath, false);
+    // 注意：不删除 m_fileIssues 中该文件的诊断——关闭文件后问题面板仍保留其错误
+    // （VSCode 行为），双击错误项会自动重新打开文件并定位。
   }
 
   tabs->removeTab(index);

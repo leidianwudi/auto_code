@@ -29,6 +29,10 @@ public:
   /// 对已有下拉框应用样式（含自定义三角箭头）
   static void applyStyle(QComboBox *combo);
 
+  /// 安装全局事件过滤器：所有 QComboBox 的弹出列表一律向下展开（不上弹）。
+  /// 程序启动时调用一次即可（幂等）。
+  static void ensureGlobalPopDown();
+
 private:
   AuiComboBox() = delete;
 };

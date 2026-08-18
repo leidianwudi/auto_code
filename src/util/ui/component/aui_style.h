@@ -13,11 +13,13 @@
 #include <QMargins>
 #include <QSize>
 #include <QString>
+#include <QStringList>
 #include <QTextBlockFormat>
 
 #include "src/util/ui/setting_store.h"
 
 class QLabel;
+class QPainter;
 class QStyle;
 class QTabBar;
 class QToolButton;
@@ -168,8 +170,19 @@ public:
   //  编辑器 / 输出面板字体
   // ════════════════════════════════════════════════════════════
 
-  /// 编辑器默认字体 family (等宽编程字体)
-  static QString editorFontFamily() { return QStringLiteral("Consolas"); }
+  /// 编辑器默认字体 family 常量（等宽编程字体）
+  static QString defaultEditorFontFamily() { return QStringLiteral("Consolas"); }
+
+  /// 编辑器当前字体 family：跟随「代码字体」设置（未设置时用默认）
+  /// 注意：不得在 SettingStore 构造函数内调用（会重入 SettingStore::ins() 导致卡死），
+  /// 构造函数中注册默认字体族时请使用 defaultEditorFontFamily()。
+  static QString editorFontFamily() {
+    const QString fam = SettingStore::ins().fontFamily(QStringLiteral("font.code"));
+    return fam.isEmpty() ? defaultEditorFontFamily() : fam;
+  }
+
+  /// 设置界面「字体风格」下拉框候选字体：VSCode 常用的等宽编程字体（仅保留本机已安装）
+  static QStringList monoFontCandidates();
   /// 编辑器默认字体大小（磅值）
   static int editorFontSize() { return 11; }
   /// 创建编辑器默认字体对象
@@ -253,6 +266,11 @@ public:
   static QColor errorUnderlineColor() {
     return SettingStore::ins().color(QStringLiteral("editor.errorUnderline"));
   }
+
+  /// @brief 绘制 VSCode 风格的错误波浪线（编辑器与标签栏共用，样式/粗细统一）。
+  /// 沿 x1..x2 在基线 y 上绘制上下交替的半椭圆弧，细线(1.2px) + 平头端点，
+  /// 波纹半宽 4px、振幅 2px；颜色由调用方传入。
+  static void drawErrorUnderline(QPainter &p, int x1, int x2, int y, const QColor &color);
 
   /// 错误行背景色（浅红，类似 VS Code 的 #f2dede）
   static QColor errorLineBackground() {

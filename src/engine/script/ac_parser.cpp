@@ -44,6 +44,17 @@ bool AcParser::expect(TokenType t, const QString &msg) {
   return false;
 }
 
+bool AcParser::expectSemi(const QString &msg, int stmtLine) {
+  if (peek().type == TOK_SEMI) {
+    advance();
+    return true;
+  }
+  // 分号缺失时，错误定位到语句所在行而不是下一个 token 的行，
+  // 避免错误行号跳到后续行（如下一行是空行/注释/另一条语句）导致波浪线画错位置
+  m_error = QStringLiteral("%1 at line %2").arg(msg).arg(stmtLine > 0 ? stmtLine : peek().line);
+  return false;
+}
+
 bool AcParser::isPropertyName(TokenType t) const {
   return t == TOK_IDENT || t == TOK_STRING || t == TOK_DEFAULT || t == TOK_CASE || t == TOK_NULL ||
          t == TOK_UNDEFINED || t == TOK_WHILE || t == TOK_BREAK || t == TOK_CONTINUE ||
@@ -97,7 +108,7 @@ bool AcParser::parseProgram(Block &block) {
       stmt.kind = Block::Stmt::kImport;
       if (!parseImportStmt(stmt.importStmt)) return false;
       block.stmts.append(stmt);
-      if (!expect(TOK_SEMI, QStringLiteral("expected ';' after import statement"))) return false;
+      if (!expectSemi(QStringLiteral("expected ';' after import statement"), t.line)) return false;
       continue;
     }
 
@@ -108,7 +119,7 @@ bool AcParser::parseProgram(Block &block) {
       block.stmts.append(stmt);
       if (stmt.kind != Block::Stmt::kClassDef && stmt.kind != Block::Stmt::kInterfaceDef &&
           stmt.kind != Block::Stmt::kEnumDef && stmt.kind != Block::Stmt::kFuncDef) {
-        if (!expect(TOK_SEMI, QStringLiteral("expected ';' after statement"))) return false;
+        if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.line)) return false;
       }
       continue;
     }
@@ -159,7 +170,7 @@ bool AcParser::parseProgram(Block &block) {
       if (!parseAssignStmt(stmt.assign)) return false;
       stmt.assign.line = t.line;
       block.stmts.append(stmt);
-      if (!expect(TOK_SEMI, QStringLiteral("expected ';' after statement"))) return false;
+      if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.line)) return false;
     } else if (t.type == TOK_IDENT && t.text == QString::fromLatin1(AcKeyword::kMain)) {
       advance();
       if (!parseBlock(block)) return false;
@@ -170,7 +181,7 @@ bool AcParser::parseProgram(Block &block) {
       block.stmts.append(stmt);
       if (stmt.kind != Block::Stmt::kClassDef && stmt.kind != Block::Stmt::kInterfaceDef &&
           stmt.kind != Block::Stmt::kEnumDef && stmt.kind != Block::Stmt::kFuncDef) {
-        if (!expect(TOK_SEMI, QStringLiteral("expected ';' after statement"))) return false;
+        if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.line)) return false;
       }
       continue;
     }
@@ -192,7 +203,7 @@ bool AcParser::parseBlock(Block &block) {
         stmt.kind != Block::Stmt::kIf && stmt.kind != Block::Stmt::kFor &&
         stmt.kind != Block::Stmt::kWhile && stmt.kind != Block::Stmt::kSwitch &&
         stmt.kind != Block::Stmt::kBlock) {
-      if (!expect(TOK_SEMI, QStringLiteral("expected ';' after statement"))) return false;
+      if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.line)) return false;
     }
   }
   return expect(TOK_RBRACE, QStringLiteral("expected '}'"));
@@ -209,7 +220,7 @@ bool AcParser::parseBlockOrStmt(Block &block) {
       stmt.kind != Block::Stmt::kEnumDef && stmt.kind != Block::Stmt::kFuncDef &&
       stmt.kind != Block::Stmt::kIf && stmt.kind != Block::Stmt::kFor &&
       stmt.kind != Block::Stmt::kWhile && stmt.kind != Block::Stmt::kSwitch) {
-    if (!expect(TOK_SEMI, QStringLiteral("expected ';' after statement"))) return false;
+    if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.line)) return false;
   }
   return true;
 }

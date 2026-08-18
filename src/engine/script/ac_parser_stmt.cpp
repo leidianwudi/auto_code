@@ -200,6 +200,14 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
   }
 
   // 默认：表达式语句
+  // 独立的值字面量（数字/字符串/布尔等）作为语句没有任何效果，视为错误并定位到该行。
+  // 若不在此拦截，`11111111111` 会被当作合法表达式，随后在“缺分号”检查时
+  // 用下一个 token 的行号报错，导致波浪线画到错误的行上。
+  if (t.type == TOK_NUMBER || t.type == TOK_STRING || t.type == TOK_TRUE || t.type == TOK_FALSE ||
+      t.type == TOK_NULL || t.type == TOK_UNDEFINED || t.type == TOK_TEMPLATE_STRING) {
+    m_error = QStringLiteral("独立的字面值语句没有效果 at line %1").arg(t.line);
+    return false;
+  }
   stmt.kind = Block::Stmt::kExpr;
   return parseExpr(stmt.exprStmt);
 }
@@ -634,7 +642,7 @@ bool AcParser::parseSwitchStmt(SwitchStmt &ss) {
             stmt.kind != Block::Stmt::kWhile && stmt.kind != Block::Stmt::kSwitch &&
             stmt.kind != Block::Stmt::kClassDef && stmt.kind != Block::Stmt::kInterfaceDef &&
             stmt.kind != Block::Stmt::kEnumDef && stmt.kind != Block::Stmt::kFuncDef) {
-          if (!expect(TOK_SEMI, QStringLiteral("expected ';' after statement"))) return false;
+          if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.line)) return false;
         }
       }
       ss.cases.append(sc);
@@ -652,7 +660,7 @@ bool AcParser::parseSwitchStmt(SwitchStmt &ss) {
             stmt.kind != Block::Stmt::kWhile && stmt.kind != Block::Stmt::kSwitch &&
             stmt.kind != Block::Stmt::kClassDef && stmt.kind != Block::Stmt::kInterfaceDef &&
             stmt.kind != Block::Stmt::kEnumDef && stmt.kind != Block::Stmt::kFuncDef) {
-          if (!expect(TOK_SEMI, QStringLiteral("expected ';' after statement"))) return false;
+          if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.line)) return false;
         }
       }
       ss.cases.append(sc);

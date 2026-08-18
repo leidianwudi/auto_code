@@ -30,10 +30,27 @@ AuiTabBar::Style AuiTabBar::currentStyle() {
   return st;
 }
 
-void AuiTabBar::paintBarBackground(QPainter &p, const QRect &rect, const Style &st) {
-  // 整条 tab 栏背景 + 底部分隔线
+void AuiTabBar::paintBarBackground(QPainter &p, const QRect &rect, const Style &st,
+                                   const QRect &selectedTabRect) {
+  // 整条 tab 栏背景
   p.fillRect(rect, st.stripBg);
-  p.fillRect(QRect(rect.left(), rect.bottom() - 1, rect.width(), 1), st.border);
+  // 底部分隔线：默认整条；若指定选中 tab 区域则跳过它（选中 tab 与内容区同色无缝衔接）
+  const int lineY = rect.bottom() - 1;
+  const int left = rect.left();
+  const int right = rect.right();
+  if (selectedTabRect.isNull()) {
+    p.fillRect(QRect(left, lineY, rect.width(), 1), st.border);
+    return;
+  }
+  // 分隔线左侧段
+  if (selectedTabRect.left() > left) {
+    p.fillRect(QRect(left, lineY, selectedTabRect.left() - left, 1), st.border);
+  }
+  // 分隔线右侧段
+  if (selectedTabRect.right() < right) {
+    p.fillRect(QRect(selectedTabRect.right() + 1, lineY, right - selectedTabRect.right(), 1),
+               st.border);
+  }
 }
 
 void AuiTabBar::paintTabBackground(QPainter &p, const QRect &r, bool selected, bool activePanel,
@@ -92,22 +109,9 @@ void AuiTabBar::paintCloseButton(QPainter &p, const QRect &rect, bool hovered, b
 QString AuiTabBar::closeButtonTip() { return QStringLiteral("关闭标签"); }
 
 void AuiTabBar::paintErrorUnderline(QPainter &p, const QRect &textRect, const Style &st) {
-  // 沿文字底部绘制一段段上下交替的半椭圆弧，形成 VSCode 风格的红色波浪线
-  const int w = 4;                      // 单个波纹宽度
-  const int h = 3;                      // 波纹高度
-  const int y = textRect.bottom() + 2;  // 基线（相对文字下移 3px，避免与文件名重合）
-  QPen pen(st.errorUnderline, 1.2);
-  pen.setCapStyle(Qt::RoundCap);
-  p.setPen(pen);
-  p.setBrush(Qt::NoBrush);
-  int x = textRect.left();
-  bool up = true;
-  while (x <= textRect.right() - w + 1) {
-    // 上凸：上半椭圆弧；下凸：下半椭圆弧
-    p.drawArc(QRect(x, up ? y - h : y, w, h), up ? 180 * 16 : 0, 180 * 16);
-    x += w;
-    up = !up;
-  }
+  // 与代码编辑器共用 VSCode 风格红色波浪线（样式/粗细统一）
+  const int y = textRect.bottom() + 2;  // 基线（相对文字下移 2px，避免与文件名重合）
+  AuiStyle::drawErrorUnderline(p, textRect.left(), textRect.right(), y, st.errorUnderline);
 }
 
 void AuiTabBar::localizeCloseButton(QTabBar *bar, int index) {

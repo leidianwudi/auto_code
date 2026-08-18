@@ -20,6 +20,7 @@
 #include "src/util/common/util_json.h"
 #include "src/util/ui/aui_window.h"
 #include "src/util/ui/code/format_code.h"
+#include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/setting_store.h"
 
 static void appendLog(QTextStream &ts, const QString &title, const QString &content) {
@@ -38,6 +39,9 @@ int main(int argc, char *argv[]) {
 
   // 设置应用程序级图标（影响 Windows 任务管理器进程图标）
   a.setWindowIcon(QIcon(AuiWindow::appIconPixmap(256)));
+
+  // 全局生效：所有下拉框的弹出列表一律向下展开（不上弹）
+  AuiComboBox::ensureGlobalPopDown();
 
   // 注册所有 C++ 函数到 FunMgr（模板引擎 ${...} 调用基础）
   FunMgr::init();

@@ -5,7 +5,7 @@ if(NOT DEFINED CMAKE_PREFIX_PATH)
     set(CMAKE_PREFIX_PATH "D:/tool/Qt/6.12.0/msvc2022_64")
 endif()
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Sql Network Svg)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Sql Network Svg Concurrent)
 
 qt_standard_project_setup()
 
@@ -88,6 +88,8 @@ qt_add_executable(auto_code
     src/util/common/http_client.h
     src/util/common/http_client.cpp
     src/util/common/ac_log.h
+    src/util/common/workspace_diag.h
+    src/util/common/workspace_diag.cpp
     src/util/ui/code/tree_dir.h
     src/util/ui/code/tree_dir.cpp
     src/util/ui/code/tree_state_store.h
@@ -108,6 +110,8 @@ qt_add_executable(auto_code
     src/util/ui/code/symbol_navigator.cpp
     src/util/ui/code/code_log.h
     src/util/ui/code/code_log.cpp
+    src/util/ui/code/problem_panel.h
+    src/util/ui/code/problem_panel.cpp
     src/util/ui/highlighter/light_color.h
     src/util/ui/highlighter/light_tpl.h
     src/util/ui/highlighter/light_tpl.cpp
@@ -223,6 +227,7 @@ target_link_libraries(auto_code
         Qt::Sql
         Qt::Network
         Qt::Svg
+        Qt::Concurrent
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mysql-connector-c/lib/libmysql.lib
         dwmapi.lib
 )

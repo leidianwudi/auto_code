@@ -290,11 +290,13 @@ SettingStore::SettingStore() : QObject(nullptr) {
   registerShortcut(QString::fromLatin1(kSC_Settings), QStringLiteral("打开设置"),
                    QStringLiteral("视图"), QStringLiteral(""));
 
-  // ── 字体大小 ──
+  // ── 字体大小 / 字体风格 ──
   registerFont(QString::fromLatin1(kFontUI), QStringLiteral("窗口字体"), 10);
   registerFont(QString::fromLatin1(kFontTree), QStringLiteral("目录树字体"), 10);
+  // 注意：构造函数内禁止调用 editorFontFamily()（其读取 SettingStore 会造成重入卡死），
+  // 这里直接用默认字体族常量注册，与 editorFontFamily() 回退值一致
   registerFont(QString::fromLatin1(kFontCode), QStringLiteral("代码字体"),
-               CodeConstants::Editor::kDefaultFontSize);
+               CodeConstants::Editor::kDefaultFontSize, AuiStyle::defaultEditorFontFamily());
 
   // 字体修改防抖：拖动字号 SpinBox 会连续触发，合并为一次应用，避免全窗口刷新卡顿
   m_fontTimer = new QTimer(this);
@@ -327,9 +329,11 @@ void SettingStore::registerShortcut(const QString &key, const QString &label,
   if (!m_shortcutOrder.contains(key)) m_shortcutOrder.append(key);
 }
 
-void SettingStore::registerFont(const QString &key, const QString &label, int defaultSize) {
+void SettingStore::registerFont(const QString &key, const QString &label, int defaultSize,
+                                const QString &defaultFamily) {
   m_fontDefaults[key] = defaultSize;
   m_fontLabels[key] = label;
+  m_fontFamilyDefaults[key] = defaultFamily;
   if (!m_fontOrder.contains(key)) m_fontOrder.append(key);
 }
 
@@ -377,6 +381,12 @@ void SettingStore::loadFromFile() {
   QJsonObject fonts = root.value(QStringLiteral("fonts")).toObject();
   for (auto it = fonts.begin(); it != fonts.end(); ++it) {
     if (m_fontDefaults.contains(it.key())) m_fontCustom[it.key()] = it.value().toInt();
+  }
+
+  // 自定义字体风格（字体族）
+  QJsonObject fontFamilies = root.value(QStringLiteral("fontFamilies")).toObject();
+  for (auto it = fontFamilies.begin(); it != fontFamilies.end(); ++it) {
+    if (m_fontOrder.contains(it.key())) m_fontFamilyCustom[it.key()] = it.value().toString();
   }
 }
 
@@ -499,9 +509,48 @@ void SettingStore::resetFontSize(const QString &key) {
   }
 }
 
+// ── 字体风格（字体族） ──
+
+QString SettingStore::fontFamily(const QString &key) const {
+  // 自定义优先；未自定义返回默认（可能为空串=跟随系统/默认）
+  return m_fontFamilyCustom.value(key, m_fontFamilyDefaults.value(key, QString()));
+}
+
+bool SettingStore::hasCustomFontFamily(const QString &key) const {
+  return m_fontFamilyCustom.contains(key);
+}
+
+void SettingStore::setFontFamily(const QString &key, const QString &family) {
+  if (!m_fontOrder.contains(key)) return;
+  // 语义约定：空串 = 恢复默认（跟随内置默认族）；非空 = 用户显式自定义。
+  // 注意：即使 family 恰好等于默认族（如 Consolas），也按「用户显式选择」保存，
+  // 以便界面能区分「默认」与「显式选了默认族」这两种状态。
+  if (family.isEmpty()) {
+    m_fontFamilyCustom.remove(key);
+  } else {
+    m_fontFamilyCustom[key] = family;
+  }
+  if (key == QString::fromLatin1(kFontUI)) {
+    // 窗口字体：全窗口级刷新代价大，防抖合并后统一应用
+    m_fontTimer->start();
+  } else {
+    emit fontsChanged();
+  }
+}
+
+void SettingStore::resetFontFamily(const QString &key) {
+  if (!m_fontFamilyCustom.remove(key) || !m_fontOrder.contains(key)) return;
+  if (key == QString::fromLatin1(kFontUI)) {
+    m_fontTimer->start();
+  } else {
+    emit fontsChanged();
+  }
+}
+
 void SettingStore::resetAllFonts() {
-  if (m_fontCustom.isEmpty()) return;
+  if (m_fontCustom.isEmpty() && m_fontFamilyCustom.isEmpty()) return;
   m_fontCustom.clear();
+  m_fontFamilyCustom.clear();
   // 可能包含窗口字体，统一走防抖（其内也会广播 fontsChanged 供组件重置）
   m_fontTimer->start();
 }
@@ -554,6 +603,12 @@ void SettingStore::save() {
     fonts[it.key()] = it.value();
   }
   root[QStringLiteral("fonts")] = fonts;
+
+  QJsonObject fontFamilies;
+  for (auto it = m_fontFamilyCustom.begin(); it != m_fontFamilyCustom.end(); ++it) {
+    fontFamilies[it.key()] = it.value();
+  }
+  root[QStringLiteral("fontFamilies")] = fontFamilies;
 
   QFile f(storePath());
   if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) return;

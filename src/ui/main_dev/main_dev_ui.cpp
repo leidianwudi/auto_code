@@ -237,10 +237,21 @@ void MainDevUi::setupEditorArea() {
   m_outputPanel = new CodeLog;
   m_outputPanel->installEventFilter(this);
 
-  // ── 垂直分割器：编辑器 + 输出面板 ──
+  // ── 问题面板（VSCode 风格：可双击跳转的错误/警告列表） ──
+  m_problemPanel = new ProblemPanel;
+  m_problemPanel->installEventFilter(this);
+
+  // ── 底部 tab 容器：输出 + 问题 ──
+  // BottomTabWidget 复用 AuiCodeTabBar 自绘样式（选中蓝色指示条/主题背景/文字），
+  // 纯标签页不显示关闭按钮，始终高亮选中标签（VSCode 风格）。
+  m_outputTabs = new BottomTabWidget;
+  m_outputTabs->addTab(m_outputPanel, QStringLiteral("输出"));
+  m_outputTabs->addTab(m_problemPanel, QStringLiteral("问题"));
+
+  // ── 垂直分割器：编辑器 + 底部 tab 面板 ──
   m_contentSplitter = new QSplitter(Qt::Vertical);
   m_contentSplitter->addWidget(m_editorSplitter);
-  m_contentSplitter->addWidget(m_outputPanel);
+  m_contentSplitter->addWidget(m_outputTabs);
   m_contentSplitter->setStretchFactor(0, 1);
   m_contentSplitter->setStretchFactor(1, 0);
 
@@ -262,23 +273,12 @@ void MainDevUi::setupStatusBar(QWidget *contentWidget, QVBoxLayout *contentLayou
   statusBarContentLayout->setContentsMargins(4, 0, 4, 0);
   statusBarContentLayout->setSpacing(0);
 
-  m_errorLabel = new QPlainTextEdit;
-  m_errorLabel->setStyleSheet(
-      QStringLiteral("QPlainTextEdit { color: %1; background: transparent; border: none; }")
-          .arg(AuiStyle::errorTextColor().name()));
-  m_errorLabel->setReadOnly(true);
-  m_errorLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-  m_errorLabel->setCursor(Qt::IBeamCursor);
-  m_errorLabel->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-  m_errorLabel->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-  m_errorLabel->setLineWrapMode(QPlainTextEdit::WidgetWidth);
-  m_errorLabel->setMaximumHeight(30);  // 底部工具栏初始高度为 20px，后续根据内容自动调整
-  m_errorLabel->setFrameShape(QFrame::NoFrame);
-  statusBarContentLayout->addWidget(m_errorLabel, 1);
-
+  // 错误信息已移至底部“问题”tab，状态栏仅保留光标位置（靠右显示）
+  statusBarContentLayout->addStretch(1);
   m_cursorPositionLabel = new QLabel(QStringLiteral("行: 1, 列: 1"));
   m_cursorPositionLabel->setMinimumWidth(120);
   m_cursorPositionLabel->setAlignment(Qt::AlignCenter);
+  m_cursorPositionLabel->setFixedHeight(18);  // 收紧工具栏高度
   statusBarContentLayout->addWidget(m_cursorPositionLabel);
 
   contentLayout->addWidget(AuiWindow::createStatusBar(contentWidget, statusBarContent));
@@ -442,12 +442,6 @@ int MainDevUi::fileTreeWidth() const { return m_fileTree->width(); }
 // ══════════════════════════════════════════════════════════════
 
 void MainDevUi::setCursorStatusText(const QString &text) { m_cursorPositionLabel->setText(text); }
-
-void MainDevUi::setErrorMessage(const QString &msg) {
-  m_errorLabel->setPlainText(msg);
-  // 滚动到顶部，方便查看最早的错误
-  m_errorLabel->verticalScrollBar()->setValue(0);
-}
 
 // ══════════════════════════════════════════════════════════════
 //  标签页颜色

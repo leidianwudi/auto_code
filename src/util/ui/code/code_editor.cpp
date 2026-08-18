@@ -41,6 +41,44 @@
 #include "src/util/ui/highlighter/light_ts.h"
 #include "src/util/ui/setting_store.h"
 
+/**
+ * @class FixedLineHeightLayout
+ * @brief 统一行高的文档布局（消除中文输入导致的行高“抖动”）
+ *
+ * 背景：QPlainTextEdit 的块高度由 QTextLayout 按行内所有字体（含中文 fallback
+ * 字体）的度量计算，且 QPlainTextDocumentLayout 忽略块级 BlockLineHeight。
+ * 等宽字体（Consolas/Courier New 等）不含中文字形，输入中文时触发字体 fallback
+ * （如微软雅黑），其 ascent/descent 与主字体不同，使行高随内容变化。
+ *
+ * 方案：覆写 blockBoundingRect 强制所有块等高（末块保留原生底部边距），
+ * 实现 VSCode 式的统一行高，保证输入中文前后行高一致。
+ */
+class FixedLineHeightLayout : public QPlainTextDocumentLayout {
+public:
+  explicit FixedLineHeightLayout(QTextDocument *doc) : QPlainTextDocumentLayout(doc) {}
+
+  /// 设置统一行高（非正数表示不启用）
+  void setFixedLineHeight(qreal h) {
+    if (qFuzzyCompare(m_h, h)) return;
+    m_h = h;
+    // 强制重新布局，使新行高立即生效
+    document()->markContentsDirty(0, document()->characterCount());
+  }
+
+  QRectF blockBoundingRect(const QTextBlock &block) const override {
+    QRectF r = QPlainTextDocumentLayout::blockBoundingRect(block);
+    if (m_h > 0) {
+      r.setHeight(m_h);
+      if (!block.next().isValid())  // 末块保留底部边距（与原生行为一致）
+        r.setHeight(m_h + document()->documentMargin());
+    }
+    return r;
+  }
+
+private:
+  qreal m_h = 0;  ///< 统一行高（像素）
+};
+
 // ──────────────────────────────────────────────────────────────
 //  构造与初始化（精简后）
 // ──────────────────────────────────────────────────────────────
@@ -56,6 +94,10 @@ CodeEditor::CodeEditor(QWidget *parent) : QPlainTextEdit(parent) {
 
   updateLineNumberAreaWidth(0);
   highlightCurrentLine();
+
+  // 使用统一行高布局：修复等宽字体不含中文时，输入中文触发 fallback 导致的行高变化
+  m_fixedLineHeightLayout = new FixedLineHeightLayout(document());
+  document()->setDocumentLayout(m_fixedLineHeightLayout);
 
   // 使用常量配置
   applyFontFromSetting();
@@ -81,6 +123,12 @@ CodeEditor::CodeEditor(QWidget *parent) : QPlainTextEdit(parent) {
   m_validationTimer->setInterval(CodeConstants::Performance::kValidationDebounceMs);
   connect(m_validationTimer, &QTimer::timeout, this, &CodeEditor::performValidation);
 
+  // 文本变化即触发验证：监听 QTextDocument::contentsChange，
+  // 覆盖打字/删除/粘贴/撤销重做/IME 输入法/拖放等所有编辑方式。
+  // 不再依赖 keyPressEvent 手动触发（避免个别输入路径漏触发导致“输入不提示”）；
+  // 0ms 防抖保证输入后立即验证（实测验证 <1ms），同事件循环内多次变化合并为一次验证。
+  connect(document(), &QTextDocument::contentsChange, this, &CodeEditor::scheduleValidation);
+
   // 初始化查找/替换栏（嵌入编辑器上方，默认隐藏）
   m_findBar = new CodeFindBar(this, this);
   connect(m_findBar, &CodeFindBar::findBarClosed, this, [this]() {
@@ -100,11 +148,35 @@ CodeEditor::~CodeEditor() {
 
 void CodeEditor::applyFontFromSetting() {
   QFont font = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+  // 字体族：跟随「代码字体」设置（未设置时用系统等宽字体）
+  const QString fam = SettingStore::ins().fontFamily(QStringLiteral("font.code"));
+  if (!fam.isEmpty()) font.setFamily(fam);
   font.setPointSize(SettingStore::ins().fontSize(QStringLiteral("font.code")));
   setFont(font);
   // 等宽字体变化后 Tab 宽度按新字体的空格宽度重新计算
   setTabStopDistance(fontMetrics().horizontalAdvance(QLatin1Char(' ')) *
                      CodeConstants::Editor::kTabWidthSpaces);
+  // 字体变化后同步刷新统一行高
+  updateFixedLineHeight(font);
+}
+
+// ──────────────────────────────────────────────────────────────
+//  updateFixedLineHeight — 测量并设置统一行高
+// ──────────────────────────────────────────────────────────────
+
+void CodeEditor::updateFixedLineHeight(const QFont &font) {
+  if (!m_fixedLineHeightLayout) return;
+  // 用临时文档测量「拉丁+中文」混合行的自然行高（非末块，不含底部边距）。
+  // 触发中文 fallback 的行是行内所有字体中度量最大者，作为统一行高可保证任何行不被裁剪。
+  QTextDocument probe;
+  probe.setDefaultFont(font);
+  probe.setPlainText(QStringLiteral("a高\n"));  // 首行混合（非末块），避免末块底部边距
+  auto *pl = new QPlainTextDocumentLayout(&probe);
+  probe.setDocumentLayout(pl);  // probe 接管所有权
+  pl->documentSize();           // 强制布局
+  // 自然行高 + 额外间距，保证任何行不被裁剪且行不显得拥挤
+  m_fixedLineHeightLayout->setFixedLineHeight(pl->blockBoundingRect(probe.firstBlock()).height() +
+                                              CodeConstants::Editor::kLineHeightExtraSpacing);
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -154,7 +226,6 @@ void CodeEditor::performValidation() {
   if (m_validationMode == NoValidation) return;
 
   // 清除旧的错误标记
-  m_errorSelections.clear();
   m_errorLines.clear();
   m_errorRanges.clear();  // 清除错误位置范围（供 paintEvent 使用）
 
@@ -197,9 +268,11 @@ void CodeEditor::performValidation() {
   // 刷新行号区域（错误行号显示红色）
   m_lineNumberArea->update();
 
-  // 强制触发一次完整重绘（确保自定义波浪线立即完整显示）
-  // 不带参数的 update() 会标记整个控件为脏区域
+  // 强制触发一次完整重绘（确保自定义波浪线立即完整显示/清除）
+  // 不带参数的 update() 会标记整个控件为脏区域；
+  // 额外刷新视口，确保自定义波浪线的旧像素（含越界残留）被彻底覆盖
   update();
+  viewport()->update();
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -230,18 +303,19 @@ void CodeEditor::applyValidationResults(const QVector<ValidationResult> &results
     QTextBlock block = document()->findBlockByNumber(result.line - 1);
     if (block.isValid()) {
       int blockPos = block.position();
-      int length = result.length > 0 ? result.length : block.length() - 1;
-      if (result.column > 0) {
-        // 有精确列号，从指定列开始标记
-        applyErrorUnderline(blockPos + result.column - 1, length, result.message,
-                            m_errorSelections);
-        // 记录错误位置范围（供 paintEvent 自定义绘制）
-        m_errorRanges.append(ErrorRange(blockPos + result.column - 1, length, result.message));
-      } else {
-        // 无列号，标记整行
-        applyErrorUnderline(blockPos, length, result.message, m_errorSelections);
-        m_errorRanges.append(ErrorRange(blockPos, length, result.message));
-      }
+      int blockTextLen = block.length() - 1;  // 行文本长度（不含行尾换行符）
+      int startOffset = qBound(0, result.column > 0 ? result.column - 1 : 0, blockTextLen);
+      // 无明确长度时默认标记到行尾；有明确长度时按其值，但都钳制在行内，
+      // 避免范围越过行尾把波浪线画到下一行（错误改正后下一行残留成红点）
+      int length = result.length > 0 ? result.length : blockTextLen - startOffset;
+      // 空行（blockTextLen==0）时长度为 0，不绘制；有内容时至少标记 1 个字符。
+      // 关键：范围绝不越过行尾，否则空行/短行错误会把波浪线画到下一行（“有时画了 2 行”）
+      int maxLen = blockTextLen - startOffset;
+      length = qBound(maxLen > 0 ? 1 : 0, length, maxLen);
+
+      // 统一记录错误范围（paintEvent 单行绘制，绝不跨行）
+      int startPos = (result.column > 0) ? (blockPos + startOffset) : blockPos;
+      m_errorRanges.append(ErrorRange(startPos, length, result.message));
       m_errorLines.insert(result.line);
     }
   }
@@ -252,6 +326,9 @@ void CodeEditor::applyValidationResults(const QVector<ValidationResult> &results
   } else {
     emit validationMessage(errors.join(QLatin1Char('\n')), errors.size());
   }
+
+  // 发出结构化验证结果（供底部“问题”面板展示与双击跳转）
+  emit validationIssues(objectName(), results);
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -317,20 +394,6 @@ void CodeEditor::runSchemaValidation(const QJsonObject &doc, QVector<ValidationR
     int line = findSchemaKeyLine(text, prop);
     results.append(ValidationResult(line, 1, 1, QStringLiteral("Schema: %1").arg(e)));
   }
-}
-
-void CodeEditor::applyErrorUnderline(int from, int length, const QString &tooltip,
-                                     QList<QTextEdit::ExtraSelection> &selections) {
-  QTextCursor cursor(document());
-  cursor.setPosition(from);
-  cursor.setPosition(from + length, QTextCursor::KeepAnchor);
-
-  QTextEdit::ExtraSelection sel;
-  sel.cursor = cursor;
-  sel.format.setProperty(QTextFormat::TextUnderlineStyle, QTextCharFormat::WaveUnderline);
-  sel.format.setProperty(QTextFormat::TextUnderlineColor, AuiStyle::errorUnderlineColor());
-  sel.format.setToolTip(tooltip);
-  selections.append(sel);
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -608,6 +671,10 @@ void CodeEditor::paintEvent(QPaintEvent *event) {
       int cursorLine = textCursor().blockNumber() + 1;
       int cursorIndent = IndentGuide::lineIndentLevel(textCursor().block().text(), tabW);
 
+      // 光标矩形（视口坐标）：引导线在光标所在列让位，保证光标始终可见不被覆盖
+      const QRect cr = cursorRect();
+      const qreal caretX = cr.x() + cr.width() * 0.5;
+
       QColor normalColor = AuiStyle::indentGuideColor();
       QColor activeColor = AuiStyle::indentGuideActiveColor();
 
@@ -624,55 +691,58 @@ void CodeEditor::paintEvent(QPaintEvent *event) {
         qreal y1 = blockBoundingGeometry(startBlk).translated(contentOffset()).top();
         qreal y2 = blockBoundingGeometry(endBlk).translated(contentOffset()).bottom();
 
-        // 使用 QTextLayout::cursorToX 获取精确像素位置，避免 charWidth 估算误差
+        // 使用 QTextLayout::cursorToX 获取精确像素位置，避免 charWidth 估算误差；
+        // 竖线相对缩进列左移 2 列（落在缩进空白处），避免紧贴/压住代码首字符
         qreal x = 0;
+        const int guideCol = qMax(0, range.indent - 2);
         QTextLayout *layout = startBlk.layout();
         if (layout && layout->lineCount() > 0) {
-          int centerCol = range.indent - tabW / 2;
-          x = layout->lineAt(0).cursorToX(centerCol) + contentOffset().x();
+          x = layout->lineAt(0).cursorToX(guideCol) + contentOffset().x();
         } else {
-          x = (range.indent - tabW / 2.0) * charWidth + contentOffset().x();
+          x = guideCol * charWidth + contentOffset().x();
         }
 
         bool isActive = (cursorLine >= range.startLine && cursorLine <= range.endLine &&
                          cursorIndent >= range.indent);
         guidePainter.setPen(QPen(isActive ? activeColor : normalColor, 1, Qt::SolidLine));
-        guidePainter.drawLine(qRound(x), qRound(y1), qRound(x), qRound(y2));
+        // 引导线与光标同列时，在光标所在行让位（断开一小段），避免覆盖光标
+        if (qAbs(x - caretX) < 1.0 && cr.top() < y2 && cr.bottom() > y1) {
+          if (y1 < cr.top()) guidePainter.drawLine(qRound(x), qRound(y1), qRound(x), cr.top());
+          if (cr.bottom() < y2)
+            guidePainter.drawLine(qRound(x), cr.bottom(), qRound(x), qRound(y2));
+        } else {
+          guidePainter.drawLine(qRound(x), qRound(y1), qRound(x), qRound(y2));
+        }
       }
     }
   }
 
-  // 在标准绘制之上，额外绘制超粗红色波浪线（覆盖默认细波浪线）
+  // 统一绘制红色波浪线（唯一绘制机制：单行绘制，终点钳制在行尾，绝不跨行）
   if (m_errorRanges.isEmpty()) return;
 
   QPainter painter(viewport());
   painter.setRenderHint(QPainter::Antialiasing);
-  painter.setPen(QPen(AuiStyle::errorUnderlineColor(), 3, Qt::SolidLine, Qt::RoundCap));
 
+  const int viewH = viewport()->height();
   for (const auto &err : m_errorRanges) {
-    QTextCursor cursor(document());
-    cursor.setPosition(err.start);
-    cursor.setPosition(err.start + err.length, QTextCursor::KeepAnchor);
+    // 取错误范围起点所在行的视口横坐标（cursorRect 会把整行错误缩成行尾小锯齿，不可用）
+    QTextCursor startCursor(document());
+    startCursor.setPosition(err.start);
+    const QTextBlock blk = startCursor.block();
+    if (!blk.isValid()) continue;
+    const QRectF blkRect = blockBoundingGeometry(blk).translated(contentOffset());
+    // 仅绘制可见行
+    if (blkRect.bottom() < 0 || blkRect.top() > viewH) continue;
 
-    // 获取文本区域在视口中的矩形
-    QRect rect = cursorRect(cursor);
-    if (!rect.isValid()) continue;
-
-    // 绘制粗波浪线（在文本下方）
-    int y = rect.bottom() - 2;
-    int x1 = rect.left();
-    int x2 = rect.right();
-
-    // 锯齿形波浪线
-    QPainterPath path;
-    path.moveTo(x1, y);
-    int step = 4;
-    bool up = true;
-    for (int x = x1; x <= x2; x += step) {
-      path.lineTo(x, up ? y - 3 : y + 3);
-      up = !up;
-    }
-    painter.drawPath(path);
+    // 错误终点：取 err 终点与该行行尾的较小者，确保绝不越界画到下一行
+    const int lineEndPos = blk.position() + qMax(0, blk.length() - 1);
+    QTextCursor endCursor(document());
+    endCursor.setPosition(qBound(err.start, err.start + err.length, lineEndPos));
+    const int x1 = cursorRect(startCursor).left();
+    const int x2 = cursorRect(endCursor).right();
+    // 与标签栏共用 VSCode 风格波浪线（样式/粗细统一）
+    AuiStyle::drawErrorUnderline(painter, x1, x2, qRound(blkRect.bottom()) - 2,
+                                 AuiStyle::errorUnderlineColor());
   }
 }
 
@@ -787,8 +857,8 @@ void CodeEditor::highlightCurrentLine() {
     }
   }
 
-  // 错误波浪下划线
-  extra.append(m_errorSelections);
+  // 错误波浪下划线由 paintEvent 依据 m_errorRanges 统一绘制（单行、钳制行尾），
+  // 不在此通过 ExtraSelection 绘制，避免与自定义绘制重叠（粗/细两条线并存）
 
   // 调试当前行高亮（黄色背景，标红箭头）
   if (m_debugLine > 0) {
@@ -907,7 +977,6 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
   if (event->key() == Qt::Key_ParenLeft && m_validationMode == AcValidation) {
     QPlainTextEdit::keyPressEvent(event);
     showSignatureHelp();
-    scheduleValidation();
     if (m_completer) showCompleter();
     return;
   }
@@ -939,21 +1008,17 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
     return;
   }
 
-  // Tab 插入空格
+  // Tab 插入空格（按 Tab 宽度对齐，与 kTabWidthSpaces 保持一致）
   if (event->key() == Qt::Key_Tab && !event->modifiers()) {
     QTextCursor cursor = textCursor();
-    int spaces = 4 - (cursor.positionInBlock() % 4);
+    int tabW = CodeConstants::Editor::kTabWidthSpaces;
+    int spaces = tabW - (cursor.positionInBlock() % tabW);
     insertPlainText(QString(spaces, QLatin1Char(' ')));
     event->accept();
     return;
   }
 
   QPlainTextEdit::keyPressEvent(event);
-
-  // 触发验证防抖
-  if (m_validationMode != NoValidation) {
-    scheduleValidation();
-  }
 
   // 显示补全列表
   if (m_completer) {
@@ -973,7 +1038,7 @@ int CodeEditor::calculateNewLineIndent(const QString &linePrefix) const {
   // 如果上一行以 { 结尾，增加缩进
   QString trimmed = linePrefix.trimmed();
   if (trimmed.endsWith(QLatin1Char('{'))) {
-    indent += 4;
+    indent += CodeConstants::Editor::kIndentSpaces;
   }
 
   return indent;

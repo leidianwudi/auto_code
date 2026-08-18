@@ -34,6 +34,8 @@ private:
   Token advance();
   bool match(TokenType t);
   bool expect(TokenType t, const QString &msg);
+  /// @brief 期望分号；缺失时错误定位到语句所在行（stmtLine），而非下一个 token 的行
+  bool expectSemi(const QString &msg, int stmtLine);
   bool isPropertyName(TokenType t) const;
 
   // ── 二元运算解析辅助（模板化，消除重复代码） ──

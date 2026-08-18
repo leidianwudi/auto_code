@@ -16,8 +16,11 @@ namespace CodeConstants {
 
 namespace Editor {
 constexpr int kDefaultFontSize = 10;  ///< 默认字体大小（pt）
-constexpr int kTabWidthSpaces = 4;    ///< Tab 键对应的空格数
+constexpr int kTabWidthSpaces = 2;    ///< Tab 键对应的空格数
 constexpr int kIndentSpaces = 2;      ///< 自动缩进的空格数
+///< 统一行高的额外间距（像素），叠加在自然行高上，避免行过于拥挤
+constexpr int kLineHeightExtraSpacing = 2;
+constexpr int kEditorTabHeight = 30;  ///< 代码编辑框 tab 头高度（px），可自行调整
 }  // namespace Editor
 
 // ──────────────────────────────────────────────────────────────
@@ -25,9 +28,10 @@ constexpr int kIndentSpaces = 2;      ///< 自动缩进的空格数
 // ──────────────────────────────────────────────────────────────
 
 namespace Performance {
-constexpr int kValidationDebounceMs = 500;  ///< 验证防抖时间（毫秒）
-constexpr int kHoverDebounceMs = 500;       ///< 悬停提示防抖时间（毫秒）
-constexpr int kMaxLogLines = 5000;          ///< 日志最大行数（防止内存溢出）
+constexpr int kValidationDebounceMs =
+    0;  ///< 验证防抖时间（毫秒）；0 = 输入后立即验证（验证耗时 <1ms，即时反馈）
+constexpr int kHoverDebounceMs = 500;  ///< 悬停提示防抖时间（毫秒）
+constexpr int kMaxLogLines = 5000;     ///< 日志最大行数（防止内存溢出）
 }  // namespace Performance
 
 // ──────────────────────────────────────────────────────────────

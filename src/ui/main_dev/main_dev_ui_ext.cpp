@@ -227,6 +227,9 @@ DimmableTabWidget::DimmableTabWidget(QWidget *parent) : QTabWidget(parent) {
   // 文字颜色由 paintEvent 直接自绘，不依赖 setTabTextColor 或代理样式
   AuiStyle::applyTabBarPadding(bar, 4, 4, 0, 4);
 
+  // 代码编辑框 tab 头高度（常量可调）
+  bar->setTabHeight(CodeConstants::Editor::kEditorTabHeight);
+
   // 标签拖到 tab 头左/右边缘 → 转发为面板的拆分请求信号
   connect(bar, &DraggableTabBar::tabSplitDropped, this, &DimmableTabWidget::splitDropped);
 

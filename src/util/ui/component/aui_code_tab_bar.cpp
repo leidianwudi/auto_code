@@ -56,7 +56,19 @@ void AuiCodeTabBar::setTabError(int index, bool hasError) {
 
 bool AuiCodeTabBar::isTabError(int index) const { return m_errorTabs.contains(index); }
 
+void AuiCodeTabBar::setShowCloseButton(bool show) {
+  m_showCloseButton = show;
+  update();
+}
+
+void AuiCodeTabBar::setTabHeight(int height) {
+  m_tabHeight = height;
+  updateGeometry();  // 触发 sizeHint 重新计算，让整条 tab 栏高度随标签高度收紧
+  update();
+}
+
 QRect AuiCodeTabBar::closeButtonRectForIndex(int index) const {
+  if (!m_showCloseButton) return QRect();
   const QRect r = tabRect(index);
   if (r.isNull()) return QRect();
   return QRect(r.right() - kCloseSize - kCloseRightMargin + 1,
@@ -69,8 +81,10 @@ QRect AuiCodeTabBar::textRectForIndex(int index) const {
   initStyleOption(&opt, index);
   QRect tr = style()->subElementRect(QStyle::SE_TabBarTabText, &opt, this);
   if (tr.isNull()) tr = tabRect(index);
-  const int closeLeft = closeButtonRectForIndex(index).left() - kCloseLeftSpacing;
-  if (tr.right() > closeLeft) tr.setRight(closeLeft);
+  if (m_showCloseButton) {
+    const int closeLeft = closeButtonRectForIndex(index).left() - kCloseLeftSpacing;
+    if (tr.right() > closeLeft) tr.setRight(closeLeft);
+  }
   return tr;
 }
 
@@ -79,13 +93,17 @@ int AuiCodeTabBar::fullTabWidth(int index) const {
   const QFontMetrics fm(font());
   const int textWidth = fm.horizontalAdvance(tabText(index));
   const int hspace = style()->pixelMetric(QStyle::PM_TabBarTabHSpace, nullptr, this);
-  return textWidth + hspace + kCloseLeftSpacing + kCloseSize + kCloseRightMargin;
+  int width = textWidth + hspace;
+  if (m_showCloseButton) width += kCloseLeftSpacing + kCloseSize + kCloseRightMargin;
+  return width;
 }
 
 QSize AuiCodeTabBar::tabSizeHint(int index) const {
   QSize s = QTabBar::tabSizeHint(index);
   // 保证标签宽度至少容纳完整文件名，避免样式/布局在空间足够时提前省略文字
   s.setWidth(qMax(s.width(), fullTabWidth(index)));
+  // 固定标签高度（底部面板标签栏压缩用）
+  if (m_tabHeight > 0) s.setHeight(m_tabHeight);
   return s;
 }
 
@@ -110,8 +128,8 @@ void AuiCodeTabBar::paintEvent(QPaintEvent *) {
   const AuiTabBar::Style st = AuiTabBar::currentStyle();
   const QPoint mousePos = mapFromGlobal(QCursor::pos());
 
-  // 整条 tab 栏背景 + 底部分隔线
-  AuiTabBar::paintBarBackground(painter, rect(), st);
+  // 整条 tab 栏背景 + 底部分隔线（选中 tab 底部不画线，与内容区无缝衔接）
+  AuiTabBar::paintBarBackground(painter, rect(), st, cur >= 0 ? tabRect(cur) : QRect());
 
   QFontMetrics fm(font());
   for (int i = 0; i < count(); ++i) {
@@ -144,19 +162,21 @@ void AuiCodeTabBar::paintEvent(QPaintEvent *) {
       AuiTabBar::paintErrorUnderline(painter, textRect, st);
     }
 
-    // 关闭按钮：已修改且未悬停时显示实心圆点，悬停/未修改时显示 X
-    const QRect closeRect = closeButtonRectForIndex(i);
-    if (!closeRect.isNull()) {
-      const bool closeHovered = closeRect.contains(mousePos);
-      AuiTabBar::paintCloseButton(painter, closeRect, closeHovered, isSelected,
-                                  m_modifiedTabs.contains(i), st);
+    // 关闭按钮：已修改且未悬停时显示实心圆点，悬停/未修改时显示 X（纯标签页可关闭）
+    if (m_showCloseButton) {
+      const QRect closeRect = closeButtonRectForIndex(i);
+      if (!closeRect.isNull()) {
+        const bool closeHovered = closeRect.contains(mousePos);
+        AuiTabBar::paintCloseButton(painter, closeRect, closeHovered, isSelected,
+                                    m_modifiedTabs.contains(i), st);
+      }
     }
   }
 }
 
 bool AuiCodeTabBar::event(QEvent *event) {
   // 悬停在关闭按钮上时显示中文提示"关闭标签"
-  if (event->type() == QEvent::ToolTip) {
+  if (m_showCloseButton && event->type() == QEvent::ToolTip) {
     auto *he = static_cast<QHelpEvent *>(event);
     const int index = tabAt(he->pos());
     if (index >= 0 && closeButtonRectForIndex(index).contains(he->pos())) {
@@ -168,6 +188,7 @@ bool AuiCodeTabBar::event(QEvent *event) {
 }
 
 bool AuiCodeTabBar::handleClosePress(const QPoint &pos) {
+  if (!m_showCloseButton) return false;
   const int index = tabAt(pos);
   if (index < 0) return false;
   if (!closeButtonRectForIndex(index).contains(pos)) return false;

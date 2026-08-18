@@ -6,7 +6,10 @@
 #include "aui_combo_box.h"
 
 #include <QAbstractItemView>
+#include <QEvent>
+#include <QGuiApplication>
 #include <QPainter>
+#include <QScreen>
 #include <QStyleOption>
 #include <QStylePainter>
 #include <QTimer>
@@ -22,22 +25,13 @@
  *
  * 样式表负责框架外观（背景、边框、圆角），
  * 此类在样式表渲染完成后，在 drop-down 区域绘制三角箭头。
+ * 弹出列表「永远向下」的行为统一由 ComboPopDownFilter 全局过滤器处理。
  */
 class AuiComboBoxWidget : public QComboBox {
 public:
   using QComboBox::QComboBox;
 
 protected:
-  // 强制弹出列表始终向下展开：标题栏处的下拉框若可向下空间不足，Qt 默认会往上弹，
-  // 视觉上很别扭；这里在弹出后把列表移动到下拉框正下方（左对齐 + 顶边对齐）
-  void showPopup() override {
-    QComboBox::showPopup();
-    if (QWidget *popup = view()->window()) {
-      const QPoint pos = mapToGlobal(QPoint(0, height()));
-      QTimer::singleShot(0, popup, [popup, pos]() { popup->move(pos); });
-    }
-  }
-
   void paintEvent(QPaintEvent *e) override {
     // ── 1. 让 QComboBox 自身（含样式表）完成框架渲染 ──
     QComboBox::paintEvent(e);
@@ -70,6 +64,45 @@ protected:
 };
 
 // ════════════════════════════════════════════════════════════
+//  全局过滤器 — 所有下拉框弹出列表一律向下展开
+// ════════════════════════════════════════════════════════════
+
+/**
+ * @brief 全局事件过滤器：拦截所有 QComboBox 弹出层（Qt::Popup）的显示事件，
+ *        在弹出后将其强制移动到下拉框正下方（左对齐 + 顶边对齐）。
+ *
+ * 无论下拉框是 AuiComboBox::create() 创建还是直接 new QComboBox，均生效。
+ * 若下方空间不足，只压缩列表高度而不向上弹。
+ */
+class ComboPopDownFilter : public QObject {
+public:
+  using QObject::QObject;
+
+  bool eventFilter(QObject *watched, QEvent *event) override {
+    if (event->type() == QEvent::Show) {
+      auto *w = qobject_cast<QWidget *>(watched);
+      if (w && w->isWindow() && (w->windowType() == Qt::Popup)) {
+        if (auto *combo = qobject_cast<QComboBox *>(w->parentWidget())) {
+          // 弹出列表已经显示，等当前事件处理完（Qt 内部布局完成）后再移动到正下方
+          const QPoint pos = combo->mapToGlobal(QPoint(0, combo->height()));
+          QTimer::singleShot(0, w, [w, pos]() {
+            QRect g = w->geometry();
+            g.moveTopLeft(pos);
+            // 始终向下：若超出屏幕底部，压缩高度而非向上弹
+            if (QScreen *screen = QGuiApplication::screenAt(pos)) {
+              const QRect avail = screen->availableGeometry();
+              if (g.bottom() > avail.bottom()) g.setHeight(avail.bottom() - g.top() + 1);
+            }
+            w->setGeometry(g);
+          });
+        }
+      }
+    }
+    return QObject::eventFilter(watched, event);
+  }
+};
+
+// ════════════════════════════════════════════════════════════
 //  公共 API
 // ════════════════════════════════════════════════════════════
 
@@ -84,4 +117,11 @@ void AuiComboBox::applyStyle(QComboBox *combo) {
   // 不在控件上单独 setStyleSheet，避免切换主题时文字固化旧色导致深色下看不清
   combo->setProperty("auiNoSheet", true);
   combo->update();
+}
+
+void AuiComboBox::ensureGlobalPopDown() {
+  static bool installed = false;
+  if (installed) return;
+  installed = true;
+  qApp->installEventFilter(new ComboPopDownFilter(qApp));
 }

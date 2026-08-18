@@ -35,7 +35,7 @@ class TemplateConfig {
 export function generateApiMain(params: Object): Void {
   // ── 1. 数据库连接配置 ──────────────────────────────────────────────
   let db = new DB(params["dbConfig"]);
-
+  
   // ── 2. 输出文件的根目录（所有代码文件都写到这个目录下）──────────
   let basePath: String = params["basePath"];
 
@@ -105,7 +105,7 @@ export function generateApiMain(params: Object): Void {
     let schema = db.tableSchema({ table: json.tableName });
     let schemaLen = schema.length;
     printLog("schema count: " + schemaLen);
-
+ 
     // ── 5.2b 获取表的元信息（表注释、引擎等）──────────────────────
     //      db.tableInfo() 返回 { comment: "用户表", engine: "InnoDB" }
     //      表注释来自 DDL 中的 COMMENT '用户表'

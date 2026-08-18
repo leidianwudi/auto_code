@@ -12,6 +12,7 @@
 #include <QTabWidget>
 
 #include "src/util/ui/component/aui_code_tab_bar.h"
+#include "src/util/ui/component/aui_style.h"
 
 class QDragEnterEvent;
 class QDragLeaveEvent;
@@ -89,6 +90,26 @@ private:
 
   static DraggableTabBar *s_sourceBar;
   static int s_sourceIndex;
+};
+
+// ════════════════════════════════════════════════════════════
+//  BottomTabWidget — 底部面板 tab 容器（输出 / 问题）
+//  复用 AuiCodeTabBar 的自绘样式（选中蓝色指示条/主题背景/文字），
+//  纯标签页不显示关闭按钮；底部面板不参与编辑器面板聚焦切换，始终高亮选中标签。
+// ════════════════════════════════════════════════════════════
+
+class BottomTabWidget : public QTabWidget {
+public:
+  explicit BottomTabWidget(QWidget *parent = nullptr) : QTabWidget(parent) {
+    setDocumentMode(true);
+    auto *bar = new AuiCodeTabBar;
+    bar->setShowCloseButton(false);
+    bar->setProperty("aui_focus_tab", true);
+    bar->setTabHeight(22);  // 比代码标签栏更紧凑（默认约 30px）
+    // 与代码标签栏一致：Fusion 风格 + 四边空白，保证未选中标签文字完整显示
+    AuiStyle::applyTabBarPadding(bar, 12, 4, 12, 2);
+    setTabBar(bar);
+  }
 };
 
 // ════════════════════════════════════════════════════════════

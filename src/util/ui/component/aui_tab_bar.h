@@ -50,7 +50,10 @@ public:
   static Style currentStyle();
 
   /// 绘制整条标签栏背景与底部分隔线
-  static void paintBarBackground(QPainter &p, const QRect &rect, const Style &st);
+  /// @param selectedTabRect 选中标签的矩形；非空时跳过该区域底部分隔线，
+  ///                        使选中标签与内容区无缝衔接（VSCode 风格）
+  static void paintBarBackground(QPainter &p, const QRect &rect, const Style &st,
+                                 const QRect &selectedTabRect);
 
   /// 绘制单个标签的背景与顶部指示条
   /// @param selected 是否为当前标签

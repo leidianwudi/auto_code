@@ -14,6 +14,7 @@
 #include <QDialog>
 #include <QHash>
 
+class QComboBox;
 class QListWidget;
 class QPushButton;
 class QRadioButton;
@@ -69,6 +70,8 @@ private slots:
   void onShortcutDoubleClicked(int row, int column);
   /// 字体大小变化
   void onFontValueChanged();
+  /// 字体风格（字体族）变化
+  void onFontFamilyChanged();
   /// 重置单个字体
   void onResetFont();
   /// 重置所有字体
@@ -96,18 +99,19 @@ private:
   /// 创建快捷键捕获对话框并返回新序列（取消返回空）
   bool captureShortcut(const QString &current, QString *out);
 
-  QWidget *m_titleBar = nullptr;                  ///< 自定义标题栏（nativeEvent 拖拽）
-  QListWidget *m_sections = nullptr;              ///< 左侧分区导航
-  QStackedWidget *m_stack = nullptr;              ///< 右侧设置页堆栈
-  QRadioButton *m_lightRadio = nullptr;           ///< 浅色主题
-  QRadioButton *m_darkRadio = nullptr;            ///< 深色主题
-  QRadioButton *m_customRadio = nullptr;          ///< 自定义主题
-  QPushButton *m_resetAllColorBtn = nullptr;      ///< 重置所有颜色按钮
-  QTableWidget *m_colorTable = nullptr;           ///< 颜色表
-  QTableWidget *m_shortcutTable = nullptr;        ///< 快捷键表
-  QHash<QString, QSpinBox *> m_fontSpins;         ///< 字体 key → 字号 SpinBox
-  QHash<QString, QPushButton *> m_fontResetBtns;  ///< 字体 key → 单行重置按钮
-  QPushButton *m_resetAllFontBtn = nullptr;       ///< 重置所有字体按钮
+  QWidget *m_titleBar = nullptr;                   ///< 自定义标题栏（nativeEvent 拖拽）
+  QListWidget *m_sections = nullptr;               ///< 左侧分区导航
+  QStackedWidget *m_stack = nullptr;               ///< 右侧设置页堆栈
+  QRadioButton *m_lightRadio = nullptr;            ///< 浅色主题
+  QRadioButton *m_darkRadio = nullptr;             ///< 深色主题
+  QRadioButton *m_customRadio = nullptr;           ///< 自定义主题
+  QPushButton *m_resetAllColorBtn = nullptr;       ///< 重置所有颜色按钮
+  QTableWidget *m_colorTable = nullptr;            ///< 颜色表
+  QTableWidget *m_shortcutTable = nullptr;         ///< 快捷键表
+  QHash<QString, QSpinBox *> m_fontSpins;          ///< 字体 key → 字号 SpinBox
+  QHash<QString, QComboBox *> m_fontFamilyCombos;  ///< 字体 key → 字体风格下拉框
+  QHash<QString, QPushButton *> m_fontResetBtns;   ///< 字体 key → 单行重置按钮
+  QPushButton *m_resetAllFontBtn = nullptr;        ///< 重置所有字体按钮
 
   SettingModel *m_model = nullptr;  ///< 数据模型（由控制器注入）
 

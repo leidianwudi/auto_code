@@ -118,8 +118,22 @@ public:
   /// 恢复所有字体为默认字号
   void resetAllFonts();
 
-  /// 将「窗口字体」大小应用到 qApp（保留系统字体族，仅改字号）
+  /// 将「窗口字体」应用到 qApp（字号 + 字体族，未自定义字体族时沿用系统字体）
   void applyWindowFont();
+
+  // ── 字体风格（字体族） ──
+
+  /// 获取字体风格（字体族）；未自定义时返回空串（应用方回退到各自默认字体）
+  QString fontFamily(const QString &key) const;
+
+  /// 设置字体风格（字体族）；空串表示恢复默认
+  void setFontFamily(const QString &key, const QString &family);
+
+  /// 该字体的风格是否为用户自定义
+  bool hasCustomFontFamily(const QString &key) const;
+
+  /// 恢复该 key 为默认字体风格
+  void resetFontFamily(const QString &key);
 
   // ── 持久化 ──
 
@@ -170,8 +184,9 @@ private:
   void registerShortcut(const QString &key, const QString &label, const QString &category,
                         const QString &defaultSeq);
 
-  /// 注册一个字体 key（含标签、默认磅值）
-  void registerFont(const QString &key, const QString &label, int defaultSize);
+  /// 注册一个字体 key（含标签、默认磅值、默认字体族；字体族空串表示跟随系统/默认）
+  void registerFont(const QString &key, const QString &label, int defaultSize,
+                    const QString &defaultFamily = QString());
 
   /// 从文件加载
   void loadFromFile();
@@ -197,6 +212,9 @@ private:
   QHash<QString, int> m_fontDefaults;
   QHash<QString, int> m_fontCustom;
   QHash<QString, QString> m_fontLabels;
+  /// 字体族默认值与自定义值（空串 = 跟随系统/默认）
+  QHash<QString, QString> m_fontFamilyDefaults;
+  QHash<QString, QString> m_fontFamilyCustom;
   QStringList m_fontOrder;
 
   Theme m_theme = ThemeLight;

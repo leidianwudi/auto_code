@@ -28,6 +28,8 @@ void MainDevMgr::connectEditor(CodeEditor *editor) {
                &MainDevMgr::updateCursorPosition);
     disconnect(m_model->connectedEditor, &CodeEditor::validationMessage, this,
                &MainDevMgr::onValidationMessage);
+    disconnect(m_model->connectedEditor, &CodeEditor::validationIssues, this,
+               &MainDevMgr::onValidationIssues);
     disconnect(m_model->connectedEditor, &CodeEditor::requestGoToLine, this,
                &MainDevMgr::onGoToLine);
     disconnect(m_model->connectedEditor, &CodeEditor::aboutToNavigate, this,
@@ -46,6 +48,7 @@ void MainDevMgr::connectEditor(CodeEditor *editor) {
     connect(editor, &QPlainTextEdit::cursorPositionChanged, this,
             &MainDevMgr::updateCursorPosition);
     connect(editor, &CodeEditor::validationMessage, this, &MainDevMgr::onValidationMessage);
+    connect(editor, &CodeEditor::validationIssues, this, &MainDevMgr::onValidationIssues);
     // 跨文件跳转信号
     connect(editor, &CodeEditor::requestGoToLine, this, &MainDevMgr::onGoToLine);
     // 即将导航信号（用于记录历史）
@@ -121,7 +124,6 @@ void MainDevMgr::connectEditor(CodeEditor *editor) {
     editor->validate();
   } else {
     m_ui->setCursorStatusText(MainDevUi::cursorDefault());
-    m_ui->setErrorMessage(QString());
   }
 }
 
@@ -198,7 +200,8 @@ void MainDevMgr::updateCursorPosition() {
 }
 
 void MainDevMgr::onValidationMessage(const QString &msg, int errorCount) {
-  m_ui->setErrorMessage(msg);
+  // 错误文本已移至底部“问题”tab（由 onValidationIssues 填充），
+  // 本槽仅维护文件树与标签栏的错误状态标记。
 
   // 通知 TreeDir 更新文件错误状态
   if (m_model->connectedEditor && m_ui->fileTree()) {
@@ -230,6 +233,34 @@ void MainDevMgr::onValidationMessage(const QString &msg, int errorCount) {
       }
     }
   }
+}
+
+/// 结构化验证结果：更新工作区问题聚合并重建「问题」面板
+void MainDevMgr::onValidationIssues(const QString &filePath,
+                                    const QVector<ValidationResult> &issues) {
+  if (filePath.isEmpty()) return;
+  if (issues.isEmpty())
+    m_fileIssues.remove(filePath);
+  else
+    m_fileIssues[filePath] = issues;
+  refreshProblemPanel();
+}
+
+/// 从工作区聚合重建底部「问题」面板（跨文件汇总所有已打开文件的错误/警告）
+void MainDevMgr::refreshProblemPanel() {
+  QVector<IssueItem> all;
+  for (auto it = m_fileIssues.begin(); it != m_fileIssues.end(); ++it) {
+    for (const ValidationResult &r : it.value()) {
+      IssueItem item;
+      item.filePath = it.key();
+      item.fileName = QFileInfo(it.key()).fileName();
+      item.line = r.line;
+      item.message = r.message;
+      item.severity = r.severity;
+      all.append(item);
+    }
+  }
+  m_ui->problemPanel()->setIssues(all);
 }
 
 // ──────────────────────────────────────────────────────────────

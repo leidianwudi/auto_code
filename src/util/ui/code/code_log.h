@@ -65,6 +65,9 @@ private:
   LineNumberArea *m_lineNumberArea = nullptr;  ///< 行号区域控件
   int m_lineNumber = 0;                        ///< 日志行号计数器
 
+  /// 从设置读取「代码字体」大小与字体族并应用
+  void applyFontFromSetting();
+
   int lineNumberAreaWidth() const;
   void updateLineNumberAreaWidth(int newBlockCount = 0);
   void lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area);

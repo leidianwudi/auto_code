@@ -23,6 +23,7 @@ class QVBoxLayout;
 #include "debug_panel.h"
 #include "main_dev_ui_ext.h"
 #include "src/util/ui/code/code_log.h"
+#include "src/util/ui/code/problem_panel.h"
 #include "src/util/ui/code/tree_dir.h"
 
 // ════════════════════════════════════════════════════════════
@@ -90,7 +91,6 @@ public:
   // ════════════════════════════════════════════════════════════
 
   void setCursorStatusText(const QString &text);
-  void setErrorMessage(const QString &msg);
 
   // ════════════════════════════════════════════════════════════
   //  标签页颜色
@@ -102,12 +102,13 @@ public:
   void refreshTitleBarStyle();
 
   // ════════════════════════════════════════════════════════════
-  //  输出面板
+  //  底部输出/问题面板
   // ════════════════════════════════════════════════════════════
 
   void appendOutput(const QString &text, bool isError = false);
   void clearOutput();
   CodeLog *outputPanel() const { return m_outputPanel; }
+  ProblemPanel *problemPanel() const { return m_problemPanel; }
 
   // ════════════════════════════════════════════════════════════
   //  控件 getter
@@ -165,7 +166,6 @@ private:
   QSplitter *m_editorSplitter = nullptr;
   bool m_layoutRestored = false;  ///< 是否已从设置还原布局（首显时不再覆盖默认比例）
   QLabel *m_cursorPositionLabel = nullptr;
-  QPlainTextEdit *m_errorLabel = nullptr;
   QAction *m_splitAction = nullptr;
   QAction *m_closeAction = nullptr;
   QAction *m_openAction = nullptr;
@@ -187,7 +187,9 @@ private:
   QPushButton *m_saveBtn = nullptr;
   QPushButton *m_saveAllBtn = nullptr;
 
-  // ── 输出面板 ──
+  // ── 底部输出/问题面板 ──
   QSplitter *m_contentSplitter = nullptr;
+  QTabWidget *m_outputTabs = nullptr;  ///< 底部 tab 容器（输出 / 问题）
   CodeLog *m_outputPanel = nullptr;
+  ProblemPanel *m_problemPanel = nullptr;  ///< 问题列表（可跳转错误）
 };

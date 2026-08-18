@@ -5,13 +5,19 @@
 
 #include "code_log.h"
 
+#include <QFontDatabase>
 #include <QPainter>
 #include <QTextBlock>
 #include <QTextBlockFormat>
 #include <QTextCursor>
 #include <QTextDocument>
+#include <QTextFragment>
 
 #include "src/util/ui/component/aui_style.h"
+#include "src/util/ui/setting_store.h"
+
+// 自定义字符格式属性：标记错误文本（用于主题切换时重建颜色）
+enum { PropertyIsError = QTextFormat::UserProperty + 1 };
 
 // ════════════════════════════════════════════════════════════════
 //  构造
@@ -20,12 +26,14 @@
 CodeLog::CodeLog(QWidget *parent) : QPlainTextEdit(parent) {
   setReadOnly(true);
   setLineWrapMode(QPlainTextEdit::NoWrap);  // 长行不自动换行，使用水平滚动条
-  setMaximumBlockCount(5000);  // 限制行数，防止内存溢出
+  setMaximumBlockCount(5000);               // 限制行数，防止内存溢出
   document()->setDocumentMargin(0);
 
-  // 使用 AuiStyle 统一样式表
+  // 字体跟随「代码字体」设置（大小 + 字体族）
+  applyFontFromSetting();
+
+  // 使用 AuiStyle 统一样式表（背景/文字色随主题）
   setStyleSheet(AuiStyle::logPanelStyleSheet());
-  // setFont(AuiStyle::createLogFont());  // 字体大小 10pt，等宽，列间距归零
 
   // 行间隔为 0 — 只使用字体本身高度，无额外间距
   QTextBlockFormat blockFmt = AuiStyle::createLogBlockFormat(font());
@@ -43,6 +51,9 @@ CodeLog::CodeLog(QWidget *parent) : QPlainTextEdit(parent) {
       m_lineNumberArea->update(0, rect.y(), m_lineNumberArea->width(), rect.height());
   });
 
+  // 字体大小 / 字体族变化时即时刷新
+  connect(&SettingStore::ins(), &SettingStore::fontsChanged, this, &CodeLog::reloadStyle);
+
   updateLineNumberAreaWidth(0);
 }
 
@@ -59,10 +70,11 @@ void CodeLog::append(const QString &text, bool isError) {
 
   QTextCharFormat msgFmt;
   if (isError) {
+    // 错误文本：标记属性 + 当前主题的错误红色
+    msgFmt.setProperty(PropertyIsError, true);
     msgFmt.setForeground(AuiStyle::errorTextColor());
-  } else {
-    msgFmt.setForeground(AuiStyle::textColor());
   }
+  // 普通日志不设前景色，沿用样式表文字色（主题切换时自动跟随）
 
   QTextCursor cursor(doc);
   cursor.movePosition(QTextCursor::End);
@@ -97,10 +109,46 @@ void CodeLog::clearLog() {
 }
 
 void CodeLog::reloadStyle() {
-  // 重新应用样式表（背景/文字色随当前主题重建），并重绘行号与正文
+  // 字体（大小/字体族）随设置更新
+  applyFontFromSetting();
+  // 重新应用样式表（背景/文字色随当前主题重建）
   setStyleSheet(AuiStyle::logPanelStyleSheet());
+
+  // 重建已有文本的字符颜色：错误红随当前主题刷新；普通文本沿用样式表文字色（不设前景色）
+  QTextDocument *doc = document();
+  QTextCursor cur(doc);
+  QTextBlock block = doc->begin();
+  while (block.isValid()) {
+    for (QTextBlock::iterator it = block.begin(); !it.atEnd(); ++it) {
+      const QTextFragment frag = it.fragment();
+      if (!frag.isValid()) continue;
+      if (frag.charFormat().property(PropertyIsError).toBool()) {
+        QTextCharFormat nf = frag.charFormat();
+        nf.setForeground(AuiStyle::errorTextColor());
+        cur.setPosition(frag.position());
+        cur.setPosition(frag.position() + frag.length(), QTextCursor::KeepAnchor);
+        cur.setCharFormat(nf);
+      }
+    }
+    block = block.next();
+  }
+
   viewport()->update();
   m_lineNumberArea->update();
+}
+
+// ════════════════════════════════════════════════════════════════
+//  字体设置
+// ════════════════════════════════════════════════════════════════
+
+void CodeLog::applyFontFromSetting() {
+  QFont font = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+  // 字体族：跟随「代码字体」设置（未设置时用系统等宽字体）
+  const QString fam = SettingStore::ins().fontFamily(QStringLiteral("font.code"));
+  if (!fam.isEmpty()) font.setFamily(fam);
+  font.setPointSize(SettingStore::ins().fontSize(QStringLiteral("font.code")));
+  setFont(font);
+  updateLineNumberAreaWidth(0);
 }
 
 // ════════════════════════════════════════════════════════════════

@@ -195,6 +195,9 @@ TreeDir::TreeDir(QWidget *parent) : QTreeWidget(parent) {
 
 void TreeDir::applyFontFromSetting() {
   QFont f = font();
+  // 字体族：跟随「目录树字体」设置（未设置时沿用当前默认字体）
+  const QString fam = SettingStore::ins().fontFamily(QStringLiteral("font.tree"));
+  if (!fam.isEmpty()) f.setFamily(fam);
   f.setPointSize(SettingStore::ins().fontSize(QStringLiteral("font.tree")));
   setFont(f);
 }
