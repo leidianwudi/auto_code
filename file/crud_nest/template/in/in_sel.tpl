@@ -11,8 +11,8 @@ ${# ── 头部：注释和静态 import ────────────�
 //此代码为AutoCode框架生成，请勿手动修改
 ${# 分页基类 }
 import { In_BasePage } from 'src/common/interface/in_base_page';
-${# class-validator：请求参数验证装饰器                                          }
-import { IsOptional, IsInt, IsString, IsBoolean } from 'class-validator';
+${# class-validator：请求参数验证装饰器（查询参数均可空，仅保留 IsOptional）      }
+import { IsOptional } from 'class-validator';
 ${# Swagger API 文档：@ApiProperty 用于生成接口字段说明                          }
 import { ApiProperty } from '@nestjs/swagger';
 ${# class-transformer：类型转换                                                  }
@@ -32,19 +32,15 @@ export class ${selClass} extends In_BasePage {
   ${#   .isPrimary     是否主键                                          }
   ${#   .isCoin        是否 decimal 金额类型                             }
   ${#   .isLike        是否模糊查询字段                                  }
+  ${# 注意：查询参数均可空，不加 IsString/IsInt 等类型限制校验，只保留    }
+  ${#       IsOptional 与类型转换 Type（保证从 query 传入的字符串正确转型）}
   ${each field in selFields}
   @ApiProperty({ description: '${field.comment}', required: false })
   @IsOptional()
-  ${if field.isPrimary}
-  @IsInt({ message: "${field.name}必须是整数" })
+  ${if field.tsType == "number"}
   @Type(() => Number)
-  ${else if field.tsType == "number"}
-  @IsInt({ message: "${field.name}必须是整数" })
-  @Type(() => Number)
-  ${else if field.tsType == "string"}
-  @IsString()
   ${else if field.tsType == "boolean"}
-  @IsBoolean()
+  @Type(() => Boolean)
   ${else if field.tsType == "Date"}
   @Type(() => Date)
   ${/if}
