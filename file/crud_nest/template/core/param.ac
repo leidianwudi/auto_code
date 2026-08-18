@@ -120,18 +120,15 @@ export class Param {
           // decimal 金额字段：默认 0.00，精度和缩放用全局常量统一管理
           options += ", default: 0.00, precision: COIN_PRECISION, scale: COIN_SCALE, transformer: new CoinTransformer()";
         } else if (colType.includes("varchar") || colType.includes("char")) {
-          // 字符串字段：优先用 DB 列默认值（如 code 列默认 '0'），无默认值时用空字符串
-          if (colDefault != null && colDefault != "") {
+          // 字符串字段：仅当 DB 列有默认值时输出（null=无默认值 → 不生成 default，
+          // ""=默认值为空字符串 → 生成 default: ''），与参考实现保持一致
+          if (colDefault != null) {
             options += ", default: '" + colDefault + "'";
-          } else {
-            options += ", default: ''";
           }
         } else if (colType.includes("int") && !isAutoIncrement(field.extra)) {
-          // 非自增的整数字段：优先用 DB 列默认值，无默认值时用 0
-          if (colDefault != null && colDefault != "") {
+          // 非自增的整数字段：仅当 DB 列有默认值时输出，无默认值不生成 default
+          if (colDefault != null) {
             options += ", default: " + colDefault;
-          } else {
-            options += ", default: 0";
           }
         } else if (colType.includes("datetime") || colType.includes("timestamp")) {
           // 日期时间字段：DB 列带默认值（如 CURRENT_TIMESTAMP）或创建时间列时，
