@@ -14,8 +14,8 @@ ${# Swagger API 文档：@ApiProperty 用于生成接口字段说明            
 import { ApiProperty } from '@nestjs/swagger';
 ${# 引用对应的实体类                                                             }
 import { ${entityClass} } from '../entities/${entityClassFile}';
-${# class-validator：请求参数验证装饰器                                          }
-import { IsNotEmpty, IsString, IsOptional, IsNumber, IsDateString } from 'class-validator';
+${# class-validator：请求参数验证装饰器（所有属性均可空，仅保留 IsOptional）      }
+import { IsOptional } from 'class-validator';
 ${# Coin 类型：处理金额/decimal/浮点数                                           }
 import { Coin } from '@/common/tool/coin';
 ${# 时间工具类                                                                  }
@@ -32,7 +32,9 @@ export class ${insClass} {
   ${#   .tsType        TypeScript 类型（number/string/Date/Coin/boolean）    }
   ${#   .isPrimary     是否主键                                              }
   ${#   .isCoin        是否 decimal 金额类型                                 }
-  ${#   .isNullable    是否可空（可空字段 required: false + @IsOptional + ?） }
+  ${#   .isNullable    是否可空（对应实体表列是否允许 NULL）                 }
+  ${# 注意：仅当列允许 NULL 时，才加上 required: false + @IsOptional + ?；  }
+  ${#       非空列不加任何修饰（不加 IsNumber/IsString 等类型限制校验）      }
   ${each field in insFields}
   ${if field.isNullable}
   @ApiProperty({ description: '${field.comment}', required: false })
@@ -40,7 +42,6 @@ export class ${insClass} {
   ${field.name}?: ${if field.isCoin}string${else}${field.tsType}${/if};
   ${else}
   @ApiProperty({ description: '${field.comment}' })
-  ${if field.isCoin}@IsString()${else if field.tsType == "number"}@IsNumber()${else if field.tsType == "string"}@IsString()${else if field.tsType == "Date"}@IsDateString()${else if field.tsType == "boolean"}@IsNotEmpty()${/if}
   ${field.name}: ${if field.isCoin}string${else}${field.tsType}${/if};
   ${/if}
 
