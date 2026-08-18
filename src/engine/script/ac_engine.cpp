@@ -10,11 +10,6 @@
 
 #include "ac_executor.h"
 
-AcEngine &AcEngine::ins() {
-  static AcEngine instance;
-  return instance;
-}
-
 QString AcEngine::readFileUtf8(const QString &path) {
   QFile f(path);
   if (!f.open(QIODevice::ReadOnly)) return {};

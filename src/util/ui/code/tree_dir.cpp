@@ -152,7 +152,10 @@ void ModifiedFileDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
 // ============================================================================
 
 TreeDir::TreeDir(QWidget *parent) : QTreeWidget(parent) {
-  setHeaderLabel(QString::fromUtf8(CodeConstants::UiText::kFile));
+  // 宿主左侧已有「文件」tab，隐藏树目录自身的「文件」表头
+  setHeaderHidden(true);
+  // 宿主左侧面板自带边框，文件树不再绘制默认 frame 边框/外边距
+  setFrameShape(QFrame::NoFrame);
   setMinimumWidth(kMinWidth);
   // 不设最大宽度，允许用户拖动分隔条自由加宽目录树
   setAnimated(false);

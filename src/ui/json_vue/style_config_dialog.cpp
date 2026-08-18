@@ -24,9 +24,8 @@
 #include <QVBoxLayout>
 
 #include "combobox_config_dialog.h"
+#include "config_dialog_common.h"
 #include "src/util/common/code_constants.h"
-#include "src/util/ui/aui_window.h"
-#include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_style.h"
 
 // ════════════════════════════════════════════════════════════
@@ -87,26 +86,10 @@ ColumnStyleDialog::~ColumnStyleDialog() {
 // ════════════════════════════════════════════════════════════
 
 void ColumnStyleDialog::setupUI() {
-  setWindowTitle(QStringLiteral("列样式配置"));
   setMinimumWidth(520);
   // 不设置 minimumHeight/maximumHeight，让对话框高度随内容自适应
-
-  // ── 无边框对话框 ──
-  AuiWindow::setupFramelessDialog(this);
-
-  // ── 自定义标题栏 ──
-  TitleBarOptions opts;
-  opts.title = QStringLiteral("列样式配置");
-  opts.showMinButton = false;
-  opts.showMaxButton = false;
-  opts.closeRejectsDialog = true;
-  auto tb = AuiWindow::createTitleBar(this, opts);
-
-  // ── 内容区域 ──
-  auto *contentWidget = new QWidget;
-  auto *mainLayout = new QVBoxLayout(contentWidget);
-  mainLayout->setContentsMargins(8, 8, 8, 8);
-  mainLayout->setSpacing(6);
+  auto frame = beginConfigDialog(this, QStringLiteral("列样式配置"));
+  auto *mainLayout = frame.contentLayout;
 
   m_formLayout = new QFormLayout;
   m_formLayout->setContentsMargins(0, 0, 0, 0);
@@ -209,8 +192,7 @@ void ColumnStyleDialog::setupUI() {
   m_editStyleCombo->addItem(QStringLiteral("多行文本(textarea)"),
                             QString::fromLatin1(JsonVueStyle::kTextarea));
   // 设置当前编辑样式
-  int editIdx = m_editStyleCombo->findData(editStyleToString(m_editStyle));
-  if (editIdx >= 0) m_editStyleCombo->setCurrentIndex(editIdx);
+  comboSelectData(m_editStyleCombo, editStyleToString(m_editStyle));
   addRow(QStringLiteral("编辑样式:"), m_editStyleCombo);
 
   // 编辑样式子控件容器
@@ -230,14 +212,8 @@ void ColumnStyleDialog::setupUI() {
     // 缓存当前值
     if (m_placeholderEdit) m_cachedPlaceholder = m_placeholderEdit->text().trimmed();
     if (m_maxlengthCombo) m_cachedMaxlength = m_maxlengthCombo->currentData().toInt();
-    if (m_minValueCombo) {
-      QVariant d = m_minValueCombo->currentData();
-      m_cachedMinValue = d.isValid() ? d.toDouble() : m_minValueCombo->currentText().toDouble();
-    }
-    if (m_maxValueCombo) {
-      QVariant d = m_maxValueCombo->currentData();
-      m_cachedMaxValue = d.isValid() ? d.toDouble() : m_maxValueCombo->currentText().toDouble();
-    }
+    if (m_minValueCombo) m_cachedMinValue = numericComboValue(m_minValueCombo, m_cachedMinValue);
+    if (m_maxValueCombo) m_cachedMaxValue = numericComboValue(m_maxValueCombo, m_cachedMaxValue);
     if (m_precisionCombo) m_cachedPrecision = m_precisionCombo->currentData().toInt();
     if (m_dateFormatCombo) m_cachedDateFormat = m_dateFormatCombo->currentData().toString();
     if (m_textareaRowsCombo) m_cachedTextareaRows = m_textareaRowsCombo->currentData().toInt();
@@ -282,14 +258,7 @@ void ColumnStyleDialog::setupUI() {
   m_defaultSortCombo->addItem(QStringLiteral("降序"), QStringLiteral("desc"));
   addRow(QStringLiteral("默认排序:"), m_defaultSortCombo);
 
-  // ── 底部按钮 ──
-  auto btns = AuiButton::createDialogButtons(this);
-  mainLayout->addLayout(btns.layout);
-
-  connect(btns.okBtn, &QPushButton::clicked, this, &QDialog::accept);
-  connect(btns.cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
-
-  AuiWindow::applyWindowFrame(this, tb.titleBar, contentWidget);
+  finishConfigDialog(this, frame);
 
   // 初次构建后按内容自适应高度
   adjustToContents();
@@ -434,59 +403,34 @@ static QComboBox *createColorCombo(QWidget *parent, const QString &currentColor)
   return combo;
 }
 
+void ColumnStyleDialog::insertTagRow(int row, const TagItem &item) {
+  m_tagItemsTable->insertRow(row);
+  m_tagItemsTable->setItem(row, 0, new QTableWidgetItem(item.value));
+  m_tagItemsTable->setItem(row, 1, new QTableWidgetItem(item.text));
+  m_tagItemsTable->setCellWidget(row, 2, createColorCombo(m_tagItemsTable, item.color));
+  m_tagItemsTable->setCellWidget(row, 3,
+                                 makeTableDeleteButton(m_tagItemsTable, 3, m_tagItemsTable));
+}
+
 void ColumnStyleDialog::populateTagItems(const QList<TagItem> &items) {
   if (!m_tagItemsTable) return;
   m_tagItemsTable->setRowCount(0);
   for (const auto &item : items) {
-    int row = m_tagItemsTable->rowCount();
-    m_tagItemsTable->insertRow(row);
-    m_tagItemsTable->setItem(row, 0, new QTableWidgetItem(item.value));
-    m_tagItemsTable->setItem(row, 1, new QTableWidgetItem(item.text));
-    auto *colorCombo = createColorCombo(m_tagItemsTable, item.color);
-    m_tagItemsTable->setCellWidget(row, 2, colorCombo);
-    auto *delBtn =
-        new QPushButton(QString::fromUtf8(CodeConstants::UiText::kDelete), m_tagItemsTable);
-    m_tagItemsTable->setCellWidget(row, 3, delBtn);
-    // 删除按钮：删除当前行
-    connect(delBtn, &QPushButton::clicked, this, [this, delBtn]() {
-      for (int r = 0; r < m_tagItemsTable->rowCount(); ++r) {
-        if (m_tagItemsTable->cellWidget(r, 3) == delBtn) {
-          m_tagItemsTable->removeRow(r);
-          break;
-        }
-      }
-    });
+    insertTagRow(m_tagItemsTable->rowCount(), item);
   }
-  // 添加"+"行按钮（在表格下方）
-  // 用一行特殊行表示新增
+  // 末尾"+"添加行（特殊行，仅操作列有按钮；点击在其前面插入新行）
   int addRowIdx = m_tagItemsTable->rowCount();
   m_tagItemsTable->insertRow(addRowIdx);
   auto *addBtn = new QPushButton(QStringLiteral("+ 添加"), m_tagItemsTable);
   m_tagItemsTable->setCellWidget(addRowIdx, 3, addBtn);
   connect(addBtn, &QPushButton::clicked, this, [this, addBtn]() {
-    // 找到当前 + 行的位置，在其前面插入新行
     for (int r = 0; r < m_tagItemsTable->rowCount(); ++r) {
       if (m_tagItemsTable->cellWidget(r, 3) == addBtn) {
         TagItem empty;
         empty.value = QStringLiteral("0");
         empty.text = QString();
         empty.color = QString::fromLatin1(JsonVueColor::kInfo);
-        m_tagItemsTable->insertRow(r);
-        m_tagItemsTable->setItem(r, 0, new QTableWidgetItem(empty.value));
-        m_tagItemsTable->setItem(r, 1, new QTableWidgetItem(empty.text));
-        auto *colorCombo = createColorCombo(m_tagItemsTable, empty.color);
-        m_tagItemsTable->setCellWidget(r, 2, colorCombo);
-        auto *delBtn =
-            new QPushButton(QString::fromUtf8(CodeConstants::UiText::kDelete), m_tagItemsTable);
-        m_tagItemsTable->setCellWidget(r, 3, delBtn);
-        connect(delBtn, &QPushButton::clicked, this, [this, delBtn]() {
-          for (int rr = 0; rr < m_tagItemsTable->rowCount(); ++rr) {
-            if (m_tagItemsTable->cellWidget(rr, 3) == delBtn) {
-              m_tagItemsTable->removeRow(rr);
-              break;
-            }
-          }
-        });
+        insertTagRow(r, empty);
         break;
       }
     }
@@ -548,34 +492,19 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
       for (int ml : {10, 20, 50, 100, 200, 500, 1000}) {
         m_maxlengthCombo->addItem(QString::number(ml), ml);
       }
-      int idx = m_maxlengthCombo->findData(m_cachedMaxlength);
-      m_maxlengthCombo->setCurrentIndex(idx >= 0 ? idx : 0);
+      comboSelectData(m_maxlengthCombo, m_cachedMaxlength, 0);
       form->addRow(QStringLiteral("  最大长度:"), m_maxlengthCombo);
       break;
     }
     case EditStyle::Int: {
-      m_minValueCombo = new QComboBox(m_editStyleWidget);
-      m_minValueCombo->setEditable(true);
-      for (double v : {0.0, 1.0, 10.0, 100.0, 1000.0, -1.0, -10.0, -100.0}) {
-        m_minValueCombo->addItem(QString::number(v), v);
-      }
-      int idx = m_minValueCombo->findData(m_cachedMinValue);
-      if (idx >= 0)
-        m_minValueCombo->setCurrentIndex(idx);
-      else
-        m_minValueCombo->setEditText(QString::number(m_cachedMinValue));
+      m_minValueCombo = createNumericCombo(m_editStyleWidget,
+                                           {0.0, 1.0, 10.0, 100.0, 1000.0, -1.0, -10.0, -100.0},
+                                           m_cachedMinValue);
       form->addRow(QStringLiteral("  最小值:"), m_minValueCombo);
 
-      m_maxValueCombo = new QComboBox(m_editStyleWidget);
-      m_maxValueCombo->setEditable(true);
-      for (double v : {1.0, 10.0, 100.0, 1000.0, 9999.0, 99999.0, 999999.0}) {
-        m_maxValueCombo->addItem(QString::number(v), v);
-      }
-      idx = m_maxValueCombo->findData(m_cachedMaxValue);
-      if (idx >= 0)
-        m_maxValueCombo->setCurrentIndex(idx);
-      else
-        m_maxValueCombo->setEditText(QString::number(m_cachedMaxValue));
+      m_maxValueCombo = createNumericCombo(m_editStyleWidget,
+                                           {1.0, 10.0, 100.0, 1000.0, 9999.0, 99999.0, 999999.0},
+                                           m_cachedMaxValue);
       form->addRow(QStringLiteral("  最大值:"), m_maxValueCombo);
       break;
     }
@@ -584,32 +513,17 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
       for (int p : {0, 1, 2, 3, 4, 6}) {
         m_precisionCombo->addItem(QString::number(p), p);
       }
-      int idx = m_precisionCombo->findData(m_cachedPrecision);
-      m_precisionCombo->setCurrentIndex(idx >= 0 ? idx : 2);
+      comboSelectData(m_precisionCombo, m_cachedPrecision, 2);
       form->addRow(QStringLiteral("  小数位数:"), m_precisionCombo);
 
-      m_minValueCombo = new QComboBox(m_editStyleWidget);
-      m_minValueCombo->setEditable(true);
-      for (double v : {0.0, 1.0, 10.0, 100.0, 1000.0, -1.0, -10.0, -100.0}) {
-        m_minValueCombo->addItem(QString::number(v), v);
-      }
-      idx = m_minValueCombo->findData(m_cachedMinValue);
-      if (idx >= 0)
-        m_minValueCombo->setCurrentIndex(idx);
-      else
-        m_minValueCombo->setEditText(QString::number(m_cachedMinValue));
+      m_minValueCombo = createNumericCombo(m_editStyleWidget,
+                                           {0.0, 1.0, 10.0, 100.0, 1000.0, -1.0, -10.0, -100.0},
+                                           m_cachedMinValue);
       form->addRow(QStringLiteral("  最小值:"), m_minValueCombo);
 
-      m_maxValueCombo = new QComboBox(m_editStyleWidget);
-      m_maxValueCombo->setEditable(true);
-      for (double v : {1.0, 10.0, 100.0, 1000.0, 9999.0, 99999.0, 999999.0}) {
-        m_maxValueCombo->addItem(QString::number(v), v);
-      }
-      idx = m_maxValueCombo->findData(m_cachedMaxValue);
-      if (idx >= 0)
-        m_maxValueCombo->setCurrentIndex(idx);
-      else
-        m_maxValueCombo->setEditText(QString::number(m_cachedMaxValue));
+      m_maxValueCombo = createNumericCombo(m_editStyleWidget,
+                                           {1.0, 10.0, 100.0, 1000.0, 9999.0, 99999.0, 999999.0},
+                                           m_cachedMaxValue);
       form->addRow(QStringLiteral("  最大值:"), m_maxValueCombo);
       break;
     }
@@ -619,8 +533,7 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
       for (int p : {0, 1, 2, 3, 4, 6}) {
         m_precisionCombo->addItem(QString::number(p), p);
       }
-      int idx = m_precisionCombo->findData(m_cachedPrecision);
-      m_precisionCombo->setCurrentIndex(idx >= 0 ? idx : 2);
+      comboSelectData(m_precisionCombo, m_cachedPrecision, 2);
       form->addRow(QStringLiteral("  小数位数:"), m_precisionCombo);
       break;
     }
@@ -637,8 +550,7 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
       m_dateFormatCombo->addItem(QStringLiteral("年"), QString::fromLatin1(JsonVueStyle::kYear));
       m_dateFormatCombo->addItem(QString::fromUtf8(CodeConstants::UiText::kDateRange),
                                  QString::fromLatin1(JsonVueStyle::kDaterange));
-      int idx = m_dateFormatCombo->findData(m_cachedDateFormat);
-      m_dateFormatCombo->setCurrentIndex(idx >= 0 ? idx : 1);
+      comboSelectData(m_dateFormatCombo, m_cachedDateFormat, 1);
       form->addRow(QStringLiteral("  日期格式:"), m_dateFormatCombo);
       break;
     }
@@ -680,8 +592,7 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
       for (int r : {2, 3, 4, 5, 6, 8, 10}) {
         m_textareaRowsCombo->addItem(QString::number(r), r);
       }
-      int idx = m_textareaRowsCombo->findData(m_cachedTextareaRows);
-      m_textareaRowsCombo->setCurrentIndex(idx >= 0 ? idx : 1);
+      comboSelectData(m_textareaRowsCombo, m_cachedTextareaRows, 1);
       form->addRow(QStringLiteral("  行数:"), m_textareaRowsCombo);
 
       m_placeholderEdit = new QLineEdit(m_editStyleWidget);
@@ -700,10 +611,7 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
 
 void ColumnStyleDialog::setEditStyle(EditStyle style) {
   m_editStyle = style;
-  if (m_editStyleCombo) {
-    int idx = m_editStyleCombo->findData(editStyleToString(style));
-    if (idx >= 0) m_editStyleCombo->setCurrentIndex(idx);
-  }
+  if (m_editStyleCombo) comboSelectData(m_editStyleCombo, editStyleToString(style));
 }
 
 EditStyle ColumnStyleDialog::editStyle() const {
@@ -741,10 +649,7 @@ QString ColumnStyleDialog::placeholder() const {
 
 void ColumnStyleDialog::setMaxlength(int v) {
   m_cachedMaxlength = v;
-  if (m_maxlengthCombo) {
-    int idx = m_maxlengthCombo->findData(v);
-    if (idx >= 0) m_maxlengthCombo->setCurrentIndex(idx);
-  }
+  if (m_maxlengthCombo) comboSelectData(m_maxlengthCombo, v);
 }
 
 int ColumnStyleDialog::maxlength() const {
@@ -754,43 +659,34 @@ int ColumnStyleDialog::maxlength() const {
 void ColumnStyleDialog::setMinValue(double v) {
   m_cachedMinValue = v;
   if (m_minValueCombo) {
-    int idx = m_minValueCombo->findData(v);
-    if (idx >= 0)
-      m_minValueCombo->setCurrentIndex(idx);
+    if (m_minValueCombo->findData(v) >= 0)
+      comboSelectData(m_minValueCombo, v);
     else
       m_minValueCombo->setEditText(QString::number(v));
   }
 }
 
 double ColumnStyleDialog::minValue() const {
-  if (!m_minValueCombo) return m_cachedMinValue;
-  QVariant d = m_minValueCombo->currentData();
-  return d.isValid() ? d.toDouble() : m_minValueCombo->currentText().toDouble();
+  return m_minValueCombo ? numericComboValue(m_minValueCombo, m_cachedMinValue) : m_cachedMinValue;
 }
 
 void ColumnStyleDialog::setMaxValue(double v) {
   m_cachedMaxValue = v;
   if (m_maxValueCombo) {
-    int idx = m_maxValueCombo->findData(v);
-    if (idx >= 0)
-      m_maxValueCombo->setCurrentIndex(idx);
+    if (m_maxValueCombo->findData(v) >= 0)
+      comboSelectData(m_maxValueCombo, v);
     else
       m_maxValueCombo->setEditText(QString::number(v));
   }
 }
 
 double ColumnStyleDialog::maxValue() const {
-  if (!m_maxValueCombo) return m_cachedMaxValue;
-  QVariant d = m_maxValueCombo->currentData();
-  return d.isValid() ? d.toDouble() : m_maxValueCombo->currentText().toDouble();
+  return m_maxValueCombo ? numericComboValue(m_maxValueCombo, m_cachedMaxValue) : m_cachedMaxValue;
 }
 
 void ColumnStyleDialog::setPrecision(int v) {
   m_cachedPrecision = v;
-  if (m_precisionCombo) {
-    int idx = m_precisionCombo->findData(v);
-    if (idx >= 0) m_precisionCombo->setCurrentIndex(idx);
-  }
+  if (m_precisionCombo) comboSelectData(m_precisionCombo, v);
 }
 
 int ColumnStyleDialog::precision() const {
@@ -799,10 +695,7 @@ int ColumnStyleDialog::precision() const {
 
 void ColumnStyleDialog::setDateFormat(const QString &v) {
   m_cachedDateFormat = v;
-  if (m_dateFormatCombo) {
-    int idx = m_dateFormatCombo->findData(v);
-    if (idx >= 0) m_dateFormatCombo->setCurrentIndex(idx);
-  }
+  if (m_dateFormatCombo) comboSelectData(m_dateFormatCombo, v);
 }
 
 QString ColumnStyleDialog::dateFormat() const {
@@ -811,10 +704,7 @@ QString ColumnStyleDialog::dateFormat() const {
 
 void ColumnStyleDialog::setTextareaRows(int v) {
   m_cachedTextareaRows = v;
-  if (m_textareaRowsCombo) {
-    int idx = m_textareaRowsCombo->findData(v);
-    if (idx >= 0) m_textareaRowsCombo->setCurrentIndex(idx);
-  }
+  if (m_textareaRowsCombo) comboSelectData(m_textareaRowsCombo, v);
 }
 
 int ColumnStyleDialog::textareaRows() const {
@@ -832,10 +722,7 @@ bool ColumnStyleDialog::required() const {
 }
 
 void ColumnStyleDialog::setColumnWidth(int v) {
-  if (m_columnWidthCombo) {
-    int idx = m_columnWidthCombo->findData(v);
-    if (idx >= 0) m_columnWidthCombo->setCurrentIndex(idx);
-  }
+  if (m_columnWidthCombo) comboSelectData(m_columnWidthCombo, v);
 }
 
 int ColumnStyleDialog::columnWidth() const {
@@ -843,10 +730,7 @@ int ColumnStyleDialog::columnWidth() const {
 }
 
 void ColumnStyleDialog::setColumnFixed(const QString &v) {
-  if (m_columnFixedCombo) {
-    int idx = m_columnFixedCombo->findData(v);
-    if (idx >= 0) m_columnFixedCombo->setCurrentIndex(idx);
-  }
+  if (m_columnFixedCombo) comboSelectData(m_columnFixedCombo, v);
 }
 
 QString ColumnStyleDialog::columnFixed() const {
@@ -854,10 +738,7 @@ QString ColumnStyleDialog::columnFixed() const {
 }
 
 void ColumnStyleDialog::setFormatter(const QString &v) {
-  if (m_formatterCombo) {
-    int idx = m_formatterCombo->findData(v);
-    if (idx >= 0) m_formatterCombo->setCurrentIndex(idx);
-  }
+  if (m_formatterCombo) comboSelectData(m_formatterCombo, v);
 }
 
 QString ColumnStyleDialog::formatter() const {
@@ -865,10 +746,7 @@ QString ColumnStyleDialog::formatter() const {
 }
 
 void ColumnStyleDialog::setFormSpan(int v) {
-  if (m_formSpanCombo) {
-    int idx = m_formSpanCombo->findData(v);
-    if (idx >= 0) m_formSpanCombo->setCurrentIndex(idx);
-  }
+  if (m_formSpanCombo) comboSelectData(m_formSpanCombo, v);
 }
 
 int ColumnStyleDialog::formSpan() const {
@@ -955,10 +833,7 @@ QString ColumnStyleDialog::defaultValue() const {
 }
 
 void ColumnStyleDialog::setDefaultSort(const QString &v) {
-  if (m_defaultSortCombo) {
-    int idx = m_defaultSortCombo->findData(v);
-    m_defaultSortCombo->setCurrentIndex(idx >= 0 ? idx : 0);
-  }
+  if (m_defaultSortCombo) comboSelectData(m_defaultSortCombo, v, 0);
 }
 
 QString ColumnStyleDialog::defaultSort() const {
@@ -1001,109 +876,4 @@ void ColumnStyleDialog::accept() {
     }
   }
   QDialog::accept();
-}
-
-// ════════════════════════════════════════════════════════════
-//  QueryStyleDialog：查询字段样式对话框
-// ════════════════════════════════════════════════════════════
-
-QueryStyleDialog::QueryStyleDialog(QueryInputStyle style, QWidget *parent) : QDialog(parent) {
-  m_queryStyle = style;
-  setupUI();
-}
-
-void QueryStyleDialog::setupUI() {
-  setWindowTitle(QStringLiteral("查询样式配置"));
-  setMinimumWidth(420);
-  // 不设置 minimumHeight/maximumHeight，让对话框高度随内容自适应
-
-  // ── 无边框对话框 ──
-  AuiWindow::setupFramelessDialog(this);
-
-  // ── 自定义标题栏 ──
-  TitleBarOptions opts;
-  opts.title = QStringLiteral("查询样式配置");
-  opts.showMinButton = false;
-  opts.showMaxButton = false;
-  opts.closeRejectsDialog = true;
-  auto tb = AuiWindow::createTitleBar(this, opts);
-
-  // ── 内容区域 ──
-  auto *contentWidget = new QWidget;
-  auto *mainLayout = new QVBoxLayout(contentWidget);
-  mainLayout->setContentsMargins(8, 8, 8, 8);
-  mainLayout->setSpacing(6);
-
-  auto *form = new QFormLayout;
-  form->setContentsMargins(0, 0, 0, 0);
-  form->setSpacing(6);
-  form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
-  mainLayout->addLayout(form);
-
-  switch (m_queryStyle) {
-    case QueryInputStyle::Text: {
-      m_placeholderEdit = new QLineEdit(this);
-      m_placeholderEdit->setPlaceholderText(QStringLiteral("请输入占位提示"));
-      m_placeholderEdit->setText(m_cachedPlaceholder);
-      form->addRow(QStringLiteral("占位提示:"), m_placeholderEdit);
-      break;
-    }
-    case QueryInputStyle::Date: {
-      m_dateFormatCombo = new QComboBox(this);
-      m_dateFormatCombo->addItem(QString::fromUtf8(CodeConstants::UiText::kDatetimeFull),
-                                 QStringLiteral("datetime"));
-      m_dateFormatCombo->addItem(QStringLiteral("时分秒"), QStringLiteral("time"));
-      m_dateFormatCombo->addItem(QStringLiteral("年月日"), QStringLiteral("date"));
-      m_dateFormatCombo->addItem(QString::fromUtf8(CodeConstants::UiText::kYearMonth),
-                                 QStringLiteral("month"));
-      m_dateFormatCombo->addItem(QStringLiteral("年"), QStringLiteral("year"));
-      // 注：日期范围不属于格式，应通过查询关系（QColRelation）配置
-      int idx = m_dateFormatCombo->findData(m_cachedDateFormat);
-      m_dateFormatCombo->setCurrentIndex(idx >= 0 ? idx : 1);
-      form->addRow(QStringLiteral("日期格式:"), m_dateFormatCombo);
-      break;
-    }
-    case QueryInputStyle::Select:
-      // Select 样式由 ComboboxConfigDialog 配置，此处不构建任何控件
-      // 理论上不应进入此对话框（onConfigureQuerySelect 中 Select 直接走 ComboboxConfigDialog）
-      break;
-  }
-
-  // ── 底部按钮 ──
-  auto btns = AuiButton::createDialogButtons(this);
-  mainLayout->addLayout(btns.layout);
-
-  connect(btns.okBtn, &QPushButton::clicked, this, &QDialog::accept);
-  connect(btns.cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
-
-  AuiWindow::applyWindowFrame(this, tb.titleBar, contentWidget);
-
-  // 按内容自适应大小
-  layout()->activate();
-  resize(layout()->sizeHint());
-}
-
-// ── 配置读写 ──
-
-void QueryStyleDialog::setPlaceholder(const QString &v) {
-  m_cachedPlaceholder = v;
-  if (m_placeholderEdit) m_placeholderEdit->setText(v);
-}
-
-QString QueryStyleDialog::placeholder() const {
-  return m_placeholderEdit ? m_placeholderEdit->text().trimmed() : m_cachedPlaceholder;
-}
-
-void QueryStyleDialog::setDateFormat(const QString &v) {
-  m_cachedDateFormat = v;
-  if (m_dateFormatCombo) {
-    int idx = m_dateFormatCombo->findData(v);
-    // 若旧值为 "daterange"（已废弃），回退到默认 "date"
-    if (idx < 0) idx = m_dateFormatCombo->findData(QString::fromLatin1(JsonVueStyle::kDate));
-    if (idx >= 0) m_dateFormatCombo->setCurrentIndex(idx);
-  }
-}
-
-QString QueryStyleDialog::dateFormat() const {
-  return m_dateFormatCombo ? m_dateFormatCombo->currentData().toString() : m_cachedDateFormat;
 }

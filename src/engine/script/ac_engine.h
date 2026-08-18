@@ -19,21 +19,23 @@
 #include <atomic>
 #include <functional>
 
+#include "src/util/design/singleton.h"
+
 class AcDebugger;
 
 /**
  * @class AcEngine
  * @brief .ac 脚本引擎 — 解析并执行 .ac 脚本文件
  *
- * 单例类，负责整个脚本生命周期的管理：
+ * 单例类（继承 Singleton<AcEngine>），负责整个脚本生命周期的管理：
  * - 读取 .ac 源文件
  * - 调用 AcExecutor 解析并执行脚本
  * - 收集执行过程中生成的文件列表
  * - 通过回调机制将 print() 输出传递给 UI
  */
-class AcEngine {
+class AcEngine : public Singleton<AcEngine> {
 public:
-  static AcEngine &ins();
+  AcEngine() = default;
 
   using LogCallback = std::function<void(const QString &text, bool isError)>;
 
@@ -59,7 +61,6 @@ public:
   QStringList generatedFiles() const { return m_generatedFiles; }
 
 private:
-  AcEngine() = default;
   QString readFileUtf8(const QString &path);
 
   QString m_rootDir;

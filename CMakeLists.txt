@@ -121,6 +121,7 @@ qt_add_executable(auto_code
     src/util/ui/highlighter/light_ts.cpp
     src/util/ui/highlighter/light_ac.h
     src/util/ui/highlighter/light_ac.cpp
+    src/util/design/singleton.h
     src/util/ui/aui_mgr.h
     src/util/ui/setting_store.h
     src/util/ui/setting_store.cpp
@@ -156,6 +157,9 @@ qt_add_executable(auto_code
     src/ui/main_dev/main_dev_ui_ext.cpp
     src/ui/main_dev/debug_panel.h
     src/ui/main_dev/debug_panel.cpp
+    src/ui/main_dev/debug_controller.h
+    src/ui/main_dev/debug_controller.cpp
+    src/ui/main_dev/editor_lookup.h
     src/ui/main_dev/main_dev_mgr.h
     src/ui/main_dev/main_dev_mgr.cpp
     src/ui/main_dev/main_dev_mgr_file.cpp
@@ -188,16 +192,24 @@ qt_add_executable(auto_code
     src/ui/json_vue/json_vue_model.cpp
     src/ui/json_vue/json_vue_editor.h
     src/ui/json_vue/json_vue_editor.cpp
+    src/ui/json_vue/json_vue_editor_http.cpp
+    src/ui/json_vue/json_vue_editor_columns.cpp
+    src/ui/json_vue/json_vue_editor_config.cpp
+    src/ui/json_vue/json_vue_editor_helpers.h
     src/ui/json_vue/combobox_config_dialog.h
     src/ui/json_vue/combobox_config_dialog.cpp
+    src/ui/json_vue/config_dialog_common.h
+    src/ui/json_vue/config_dialog_common.cpp
     src/ui/json_vue/style_config_dialog.h
     src/ui/json_vue/style_config_dialog.cpp
+    src/ui/json_vue/style_config_query_dialog.cpp
     src/ui/json_vue/button_config_dialog.h
     src/ui/json_vue/button_config_dialog.cpp
     src/ui/json_vue/icon_loader.h
     src/ui/json_vue/icon_loader.cpp
     src/ui/json_vue/icon_picker_dialog.h
     src/ui/json_vue/icon_picker_dialog.cpp
+    src/ui/json_vue/icon_picker_data.cpp
     src/ui/json_vue/json_vue_widget.h
     src/ui/json_vue/json_vue_widget.cpp
     src/ui/setting/setting_model.h

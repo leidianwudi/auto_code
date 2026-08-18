@@ -32,6 +32,8 @@
 #include <QToolButton>
 #include <QtConcurrent/QtConcurrent>
 
+#include "debug_controller.h"
+#include "editor_lookup.h"
 #include "main_dev_model.h"
 #include "main_dev_ui.h"
 #include "main_dev_ui_ext.h"
@@ -47,6 +49,7 @@
 #include "src/util/ui/component/aui_style.h"
 #include "src/util/ui/setting_store.h"
 
+
 // ──────────────────────────────────────────────────────────────
 //  静态方法（通过单例转发）
 // ──────────────────────────────────────────────────────────────
@@ -61,18 +64,10 @@ void MainDevMgr::splitRight() { ins().onSplitRight(); }
 void MainDevMgr::closeCurrentEditor() { ins().onCloseEditor(); }
 
 // ──────────────────────────────────────────────────────────────
-//  析构 — 等待脚本线程结束，避免异步回调访问已释放对象
+//  析构 — 脚本线程的等待清理由 DebugController 析构处理
 // ──────────────────────────────────────────────────────────────
 
-MainDevMgr::~MainDevMgr() {
-  if (m_scriptFuture.isRunning()) {
-    // 调试中：解释器可能阻塞在调试器的等待条件上（断点暂停），
-    // 需先唤醒它（stop 会设置停止标志并 wakeAll），否则线程无法响应取消导致无法退出
-    if (m_debugger) m_debugger->stop();
-    AcEngine::ins().requestCancel();
-    m_scriptFuture.waitForFinished();
-  }
-}
+MainDevMgr::~MainDevMgr() = default;
 
 // ──────────────────────────────────────────────────────────────
 //  onCreateWindow — 创建 MainDevUi 窗口（首次 open() 时调用）
@@ -88,23 +83,28 @@ QWidget *MainDevMgr::onCreateWindow() {
   m_ui->resize(1400, 850);
   m_ui->setWindowTitle(MainDevUi::defaultTitle());
 
+  // ── 创建调试控制器（调试会话/脚本执行/断点管理）并注入协作回调 ──
+  m_debug = new DebugController(m_ui, this);
+  m_debug->setEditorProvider([this]() { return currentEditor(); });
+  m_debug->setFileOpener([this](const QString &fp) { return openFileInEditor(fp); });
+  m_debug->init();
+  // 双击断点/调用栈/变量条目：打开对应文件并定位到行
+  connect(m_debug, &DebugController::navigateToRequested, this,
+          [this](const QString &filePath, int line) {
+            CodeEditor *editor = openFileInEditor(filePath);
+            if (!editor) return;
+            editor->setFocus();
+            if (line > 0) {
+              QTextBlock block = editor->document()->findBlockByNumber(line - 1);
+              if (block.isValid()) {
+                QTextCursor cursor(block);
+                editor->setTextCursor(cursor);
+              }
+            }
+          });
+
   // ── 连接信号 ──
   initUi();
-
-  // ── 创建调试器并接入引擎（工作线程中的解释器通过它执行断点/单步） ──
-  m_debugger = new AcDebugger(this);
-  AcEngine::ins().setDebugger(m_debugger);
-  connect(m_debugger, &AcDebugger::paused, this, &MainDevMgr::onDebuggerPaused);
-  connect(m_debugger, &AcDebugger::resumed, this, &MainDevMgr::onDebuggerResumed);
-  connect(m_debugger, &AcDebugger::finished, this, &MainDevMgr::onDebuggerFinished);
-
-  // 应用退出前（aboutToQuit 在事件循环退出前、静态析构之前触发），
-  // 先唤醒可能阻塞在调试等待条件上的工作线程并请求取消，
-  // 否则 Qt 全局线程池析构时 waitForDone() 会因线程阻塞而挂起，导致进程无法退出
-  connect(qApp, &QCoreApplication::aboutToQuit, this, [this]() {
-    if (m_debugger) m_debugger->stop();
-    AcEngine::ins().requestCancel();
-  });
 
   // ── 设置日志回调：脚本中 printLog() 输出到 UI 面板 ──
   // 脚本在工作线程执行，日志回调可能从工作线程触发，需投递到 GUI 线程
@@ -120,8 +120,8 @@ QWidget *MainDevMgr::onCreateWindow() {
   startWorkspaceScan();
 
   // ── 恢复上次保存的断点（程序重启后还原） ──
-  loadBreakpointsFromDisk();
-  refreshBreakpointList();
+  m_debug->loadBreakpointsFromDisk();
+  m_debug->refreshBreakpointList();
 
   // ── 恢复可视化编辑按钮状态 ──
   // 必须在还原文件之前设置，否则 openFileInEditor 打开 .jsonvue 时
@@ -147,10 +147,9 @@ void MainDevMgr::initUi() {
   connectVisualToggle();
   connectBuildAction();
   connectEditorPanels();
-  connectDebugAction();
   // 窗口关闭前保存断点与会话状态
   connect(m_ui, &MainDevUi::uiClosing, this, [this]() {
-    saveBreakpointsToDisk();
+    m_debug->saveBreakpointsToDisk();
     saveOpenFilesToSettings();
   });
 
@@ -264,10 +263,10 @@ void MainDevMgr::connectVisualToggle() {
   });
 }
 
-/// 执行按钮
+/// 执行按钮（实际执行/状态管理由 DebugController 负责）
 void MainDevMgr::connectBuildAction() {
   connect(m_ui->buildBtn(), &QPushButton::clicked, this, [this]() {
-    if (m_scriptRunning) {
+    if (m_debug->isScriptRunning()) {
       m_ui->appendOutput(QStringLiteral("脚本正在执行中，请先停止"), true);
       return;
     }
@@ -276,296 +275,20 @@ void MainDevMgr::connectBuildAction() {
       m_ui->appendOutput(QStringLiteral("未选择启动项"), true);
       return;
     }
-    m_ui->appendOutput(QStringLiteral("执行: %1").arg(scriptPath), false);
-    m_scriptRunning = true;
-    m_ui->buildBtn()->setEnabled(false);
-    m_ui->stopBtn()->setEnabled(true);
-
-    // 在工作线程执行脚本，避免卡住 GUI 线程
-    QString rootDir = m_ui->fileTree()->rootPath();
-    m_scriptFuture = QtConcurrent::run([this, scriptPath, rootDir]() {
-      AcEngine::ins().setRootDir(rootDir);
-      QString err = AcEngine::ins().execute(scriptPath);
-      // 结果投递回 GUI 线程处理
-      QMetaObject::invokeMethod(
-          this,
-          [this, err]() {
-            m_scriptRunning = false;
-            m_ui->buildBtn()->setEnabled(true);
-            m_ui->stopBtn()->setEnabled(false);
-            if (AcEngine::ins().isCancelRequested()) {
-              m_ui->appendOutput(QStringLiteral("执行已取消"), true);
-            } else if (!err.isEmpty()) {
-              m_ui->appendOutput(err, true);
-            } else {
-              m_ui->appendOutput(QStringLiteral("执行完成"), false);
-              const QStringList files = AcEngine::ins().generatedFiles();
-              for (const QString &f : files)
-                m_ui->appendOutput(QStringLiteral("  生成: %1").arg(f), false);
-            }
-          },
-          Qt::QueuedConnection);
-    });
+    m_debug->runScript(scriptPath, m_ui->fileTree()->rootPath(), false);
   });
 
   // 停止按钮：设置取消标志，由工作线程轮询检查
-  connect(m_ui->stopBtn(), &QPushButton::clicked, this, &MainDevMgr::onStopScript);
-}
-
-/// 停止正在执行的脚本
-void MainDevMgr::onStopScript() {
-  if (!m_scriptRunning) return;
-  // 调试中：唤醒被阻塞在工作线程的解释器，使其能检查取消标志
-  if (m_debugging && m_debugger) {
-    m_debugger->stop();
-  }
-  AcEngine::ins().requestCancel();
-  m_ui->appendOutput(QStringLiteral("正在请求取消..."), false);
+  connect(m_ui->stopBtn(), &QPushButton::clicked, m_debug, &DebugController::stopScript);
 }
 
 // ──────────────────────────────────────────────────────────────
-//  调试会话
+//  编辑器查找
 // ──────────────────────────────────────────────────────────────
-
-/// 连接调试按钮与调试器信号
-void MainDevMgr::connectDebugAction() {
-  connect(m_ui->debugBtn(), &QPushButton::clicked, this, &MainDevMgr::onDebugBtnClicked);
-
-  // 调试面板按钮
-  DebugPanel *panel = m_ui->debugPanel();
-  connect(panel, &DebugPanel::continueClicked, this, [this]() {
-    if (m_debugger && m_debugger->isPaused()) m_debugger->continueRun();
-  });
-  connect(panel, &DebugPanel::stepOverClicked, this, &MainDevMgr::onDebugStepOver);
-  connect(panel, &DebugPanel::stepIntoClicked, this, &MainDevMgr::onDebugStepInto);
-  connect(panel, &DebugPanel::stepOutClicked, this, &MainDevMgr::onDebugStepOut);
-  // 双击断点条目：打开对应文件并定位到断点行
-  connect(panel, &DebugPanel::breakpointActivated, this, &MainDevMgr::onBreakpointActivated);
-  // 双击调用栈条目：打开对应文件并定位到函数所在行
-  connect(panel, &DebugPanel::stackFrameActivated, this, &MainDevMgr::onBreakpointActivated);
-  // 双击变量条目：打开对应文件并定位到变量声明行
-  connect(panel, &DebugPanel::varActivated, this, &MainDevMgr::onBreakpointActivated);
-  // 断点面板：切换生效状态 / 删除单个 / 删除全部
-  connect(panel, &DebugPanel::breakpointToggleEnabledRequested, this,
-          &MainDevMgr::onBreakpointToggleEnabledRequested);
-  connect(panel, &DebugPanel::breakpointDeleteRequested, this,
-          &MainDevMgr::onBreakpointDeleteRequested);
-  connect(panel, &DebugPanel::breakpointRemoveAllRequested, this,
-          &MainDevMgr::onBreakpointRemoveAllRequested);
-}
-
-/// 调试按钮：未调试则启动会话；已暂停则继续执行
-void MainDevMgr::onDebugBtnClicked() {
-  if (m_debugging) {
-    if (m_debugger && m_debugger->isPaused()) {
-      m_debugger->continueRun();
-    }
-    return;
-  }
-  startDebugSession();
-}
-
-/// 编辑器 F5：未调试则启动会话；已暂停则继续执行
-void MainDevMgr::onDebugStart() {
-  if (m_debugging) {
-    if (m_debugger && m_debugger->isPaused()) {
-      m_debugger->continueRun();
-    }
-    return;
-  }
-  startDebugSession();
-}
-
-void MainDevMgr::onDebugStepOver() {
-  if (m_debugging && m_debugger && m_debugger->isPaused()) m_debugger->stepOver();
-}
-
-void MainDevMgr::onDebugStepInto() {
-  if (m_debugging && m_debugger && m_debugger->isPaused()) m_debugger->stepInto();
-}
-
-void MainDevMgr::onDebugStepOut() {
-  if (m_debugging && m_debugger && m_debugger->isPaused()) m_debugger->stepOut();
-}
-
-/// 双击断点面板条目：打开对应文件（若未打开）并定位到断点行
-void MainDevMgr::onBreakpointActivated(const QString &filePath, int line) {
-  CodeEditor *editor = openFileInEditor(filePath);
-  if (!editor) return;
-  editor->setFocus();
-  if (line > 0) {
-    QTextBlock block = editor->document()->findBlockByNumber(line - 1);
-    if (block.isValid()) {
-      QTextCursor cursor(block);
-      editor->setTextCursor(cursor);
-    }
-  }
-}
-
-/// 断点面板切换生效状态：更新对应编辑器（或持久存储）中该断点的生效标记
-void MainDevMgr::onBreakpointToggleEnabledRequested(const QString &filePath, int line,
-                                                    bool enabled) {
-  CodeEditor *editor = findEditorForFile(filePath);
-  if (editor) {
-    editor->setBreakpointEnabled(line, enabled);
-  } else if (m_persistedBreakpoints.contains(filePath)) {
-    if (m_persistedBreakpoints[filePath].contains(line)) {
-      m_persistedBreakpoints[filePath][line] = enabled;
-    }
-  }
-  refreshBreakpointList();
-}
-
-/// 断点面板删除单个断点
-void MainDevMgr::onBreakpointDeleteRequested(const QString &filePath, int line) {
-  CodeEditor *editor = findEditorForFile(filePath);
-  if (editor) {
-    if (editor->hasBreakpoint(line)) editor->toggleBreakpoint(line - 1);  // 存在则移除
-  } else if (m_persistedBreakpoints.contains(filePath)) {
-    m_persistedBreakpoints[filePath].remove(line);
-    if (m_persistedBreakpoints[filePath].isEmpty()) m_persistedBreakpoints.remove(filePath);
-  }
-  refreshBreakpointList();
-}
-
-/// 断点面板删除全部断点
-void MainDevMgr::onBreakpointRemoveAllRequested() {
-  for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
-    auto *tabs = m_ui->editorPanelAt(pi);
-    if (!tabs) continue;
-    for (int ti = 0; ti < tabs->count(); ++ti) {
-      auto *w = tabs->widget(ti);
-      CodeEditor *editor = qobject_cast<CodeEditor *>(w);
-      if (!editor) {
-        auto *jvw = qobject_cast<JsonVueWidget *>(w);
-        if (jvw) editor = jvw->codeEditor();
-      }
-      if (editor) editor->clearBreakpoints();
-    }
-  }
-  m_persistedBreakpoints.clear();
-  refreshBreakpointList();
-}
 
 /// 在所有编辑面板中查找已打开指定文件的编辑器
 CodeEditor *MainDevMgr::findEditorForFile(const QString &filePath) const {
-  for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
-    auto *tabs = m_ui->editorPanelAt(pi);
-    if (!tabs) continue;
-    for (int ti = 0; ti < tabs->count(); ++ti) {
-      auto *w = tabs->widget(ti);
-      CodeEditor *editor = qobject_cast<CodeEditor *>(w);
-      if (!editor) {
-        auto *jvw = qobject_cast<JsonVueWidget *>(w);
-        if (jvw) editor = jvw->codeEditor();
-      }
-      if (editor && editor->objectName() == filePath) return editor;
-    }
-  }
-  return nullptr;
-}
-
-/// 启动一次调试会话：收集当前编辑器断点，运行脚本
-void MainDevMgr::startDebugSession() {
-  if (m_scriptRunning) {
-    m_ui->appendOutput(QStringLiteral("脚本正在执行中，请先停止"), true);
-    return;
-  }
-  QString scriptPath = m_ui->startupCombo()->currentData().toString();
-  if (scriptPath.isEmpty()) {
-    m_ui->appendOutput(QStringLiteral("未选择启动项"), true);
-    return;
-  }
-
-  // 当前编辑器可为空：断点命中未打开文件时会自动打开并定位（类似 VSCode）
-  m_debugEditor = currentEditor();
-  m_debugging = true;
-  m_scriptRunning = true;
-  m_ui->appendOutput(QStringLiteral("开始调试: %1").arg(scriptPath), false);
-  m_ui->buildBtn()->setEnabled(false);
-  m_ui->stopBtn()->setEnabled(true);
-  m_ui->debugPanel()->setActive(true);
-  m_ui->debugPanel()->setPaused(false);
-  m_ui->debugPanel()->setStatus(QStringLiteral("运行中..."));
-
-  // 收集全部断点（含其他文件）并告知调试器
-  m_debugger->setBreakpoints(debugBreakpoints());
-  m_debugger->begin();
-
-  QString rootDir = m_ui->fileTree()->rootPath();
-  m_scriptFuture = QtConcurrent::run([this, scriptPath, rootDir]() {
-    AcEngine::ins().setRootDir(rootDir);
-    QString err = AcEngine::ins().execute(scriptPath);
-    // 结果投递回 GUI 线程处理
-    QMetaObject::invokeMethod(
-        this,
-        [this, err]() {
-          m_scriptRunning = false;
-          m_debugging = false;
-          m_ui->buildBtn()->setEnabled(true);
-          m_ui->stopBtn()->setEnabled(false);
-          m_ui->debugPanel()->setActive(false);
-          m_ui->debugPanel()->clear();
-          if (m_debugger) m_debugger->end();
-          if (m_debugEditor) {
-            m_debugEditor->clearDebugLine();
-            m_debugEditor->clearDebugVariables();
-            m_debugEditor = nullptr;
-          }
-          if (AcEngine::ins().isCancelRequested()) {
-            m_ui->appendOutput(QStringLiteral("调试已取消"), true);
-          } else if (!err.isEmpty()) {
-            m_ui->appendOutput(err, true);
-          } else {
-            m_ui->appendOutput(QStringLiteral("调试完成"), false);
-          }
-        },
-        Qt::QueuedConnection);
-  });
-}
-
-/// 调试器暂停（工作线程阻塞中），高亮当前行并填充面板
-void MainDevMgr::onDebuggerPaused(const QString &filePath, int line,
-                                  const QVector<AcDebugFrame> &stack,
-                                  const QList<AcDebugVar> &vars) {
-  // 定位到断点所在文件：若该文件未打开则自动打开，并滚动到断点行（类似 VSCode）
-  CodeEditor *target = m_debugEditor;
-  if (!filePath.isEmpty() && (!target || QFileInfo(target->objectName()).absoluteFilePath() !=
-                                             QFileInfo(filePath).absoluteFilePath())) {
-    CodeEditor *opened = openFileInEditor(filePath);
-    if (opened) {
-      target = opened;
-      m_debugEditor = opened;  // 后续继续/结束清除高亮针对新打开的编辑器
-    }
-  }
-  if (target) {
-    target->setDebugLine(line);
-    target->setDebugVariables(vars);
-  }
-  m_ui->debugPanel()->setSnapshot(stack, vars);
-  m_ui->debugPanel()->setPaused(true);
-  m_ui->debugPanel()->setStatus(
-      QStringLiteral("已暂停 @ 行 %1").arg(line > 0 ? QString::number(line) : QStringLiteral("?")));
-}
-
-/// 调试器恢复执行，清除行高亮
-void MainDevMgr::onDebuggerResumed() {
-  if (m_debugEditor) {
-    m_debugEditor->clearDebugLine();
-    m_debugEditor->clearDebugVariables();
-  }
-  m_ui->debugPanel()->setPaused(false);
-  m_ui->debugPanel()->setStatus(QStringLiteral("运行中..."));
-}
-
-/// 调试会话结束，复位状态
-void MainDevMgr::onDebuggerFinished() {
-  if (m_debugEditor) {
-    m_debugEditor->clearDebugLine();
-    m_debugEditor->clearDebugVariables();
-  }
-  m_ui->debugPanel()->setPaused(false);
-  m_ui->debugPanel()->setStatus(QStringLiteral("已停止"));
+  return editorForFile(m_ui, filePath);
 }
 
 /// 连接单个编辑器面板的信号（关闭/切换/标签栏交互）
@@ -676,138 +399,14 @@ void MainDevMgr::updateSaveButtonState() {
   m_ui->saveBtn()->setEnabled(cur && cur->document()->isModified());
   // 全部保存：遍历所有面板的所有编辑器（含拆分副本，拆分副本不在 openFiles 中）
   bool anyModified = false;
-  for (int pi = 0; pi < m_ui->editorPanelCount() && !anyModified; ++pi) {
-    auto *tabs = m_ui->editorPanelAt(pi);
-    if (!tabs) continue;
-    for (int ti = 0; ti < tabs->count() && !anyModified; ++ti) {
-      auto *w = tabs->widget(ti);
-      CodeEditor *editor = qobject_cast<CodeEditor *>(w);
-      if (!editor) {
-        auto *jvw = qobject_cast<JsonVueWidget *>(w);
-        if (jvw) editor = jvw->codeEditor();
-      }
-      if (editor && editor->document()->isModified()) anyModified = true;
+  forEachEditor(m_ui, [&anyModified](CodeEditor *editor) {
+    if (editor->document()->isModified()) {
+      anyModified = true;
+      return false;  // 提前结束
     }
-  }
+    return true;
+  });
   m_ui->saveAllBtn()->setEnabled(anyModified);
-}
-
-void MainDevMgr::refreshBreakpointList() {
-  // 1) 将当前所有已打开编辑器的断点同步到持久存储（关闭文件时仍保留）
-  for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
-    auto *tabs = m_ui->editorPanelAt(pi);
-    if (!tabs) continue;
-    for (int ti = 0; ti < tabs->count(); ++ti) {
-      auto *w = tabs->widget(ti);
-      CodeEditor *editor = qobject_cast<CodeEditor *>(w);
-      if (!editor) {
-        auto *jvw = qobject_cast<JsonVueWidget *>(w);
-        if (jvw) editor = jvw->codeEditor();
-      }
-      if (!editor) continue;
-      const QString filePath = editor->objectName();
-      if (!filePath.isEmpty()) {
-        m_persistedBreakpoints[filePath] = editor->breakpoints();
-      }
-    }
-  }
-
-  // 2) 从持久存储构建断点列表（含已关闭文件），刷新调试面板
-  QList<QPair<QString, AcBreakpoint>> bps;
-  for (auto it = m_persistedBreakpoints.cbegin(); it != m_persistedBreakpoints.cend(); ++it) {
-    for (auto lit = it.value().cbegin(); lit != it.value().cend(); ++lit) {
-      bps.append({it.key(), AcBreakpoint{lit.key(), lit.value()}});
-    }
-  }
-  m_ui->debugPanel()->setBreakpoints(bps);
-
-  // 3) 调试期间将断点变更同步到调试器，否则删除/新增断点不会生效
-  if (m_debugging && m_debugger) {
-    m_debugger->setBreakpoints(debugBreakpoints());
-  }
-
-  // 4) 断点变更后持久化到磁盘，程序重启后还原
-  saveBreakpointsToDisk();
-}
-
-/// @brief 断点存储文件路径（AppData 目录下，目录不存在则创建）
-static QString breakpointStorePath() {
-  QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-  if (dir.isEmpty())
-    dir = QDir::homePath() + QString::fromUtf8(CodeConstants::Paths::kAppDataDirName);
-  QDir().mkpath(dir);
-  return dir + QString::fromUtf8(CodeConstants::Paths::kBreakpointsStoreFile);
-}
-
-void MainDevMgr::saveBreakpointsToDisk() {
-  // 先从所有已打开编辑器同步到持久存储，再落盘
-  for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
-    auto *tabs = m_ui->editorPanelAt(pi);
-    if (!tabs) continue;
-    for (int ti = 0; ti < tabs->count(); ++ti) {
-      auto *w = tabs->widget(ti);
-      CodeEditor *editor = qobject_cast<CodeEditor *>(w);
-      if (!editor) {
-        auto *jvw = qobject_cast<JsonVueWidget *>(w);
-        if (jvw) editor = jvw->codeEditor();
-      }
-      if (!editor) continue;
-      const QString filePath = editor->objectName();
-      if (!filePath.isEmpty()) m_persistedBreakpoints[filePath] = editor->breakpoints();
-    }
-  }
-
-  QJsonObject root;
-  QJsonArray arr;
-  for (auto it = m_persistedBreakpoints.cbegin(); it != m_persistedBreakpoints.cend(); ++it) {
-    if (it.value().isEmpty()) continue;
-    QJsonArray lines;
-    for (auto lit = it.value().cbegin(); lit != it.value().cend(); ++lit) {
-      QJsonObject bp;
-      bp[QStringLiteral("line")] = lit.key();
-      bp[QStringLiteral("enabled")] = lit.value();
-      lines.append(bp);
-    }
-    QJsonObject entry;
-    entry[QStringLiteral("file")] = it.key();
-    entry[QString::fromUtf8(CodeConstants::Paths::kBreakpointsJsonKey)] = lines;
-    arr.append(entry);
-  }
-  root[QString::fromUtf8(CodeConstants::Paths::kBreakpointsJsonKey)] = arr;
-
-  QFile f(breakpointStorePath());
-  if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-    f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
-  }
-}
-
-void MainDevMgr::loadBreakpointsFromDisk() {
-  m_persistedBreakpoints.clear();
-  QFile f(breakpointStorePath());
-  if (!f.open(QIODevice::ReadOnly)) return;
-  const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
-  const QJsonArray arr =
-      doc.object().value(QString::fromUtf8(CodeConstants::Paths::kBreakpointsJsonKey)).toArray();
-  for (const QJsonValue &v : arr) {
-    const QJsonObject entry = v.toObject();
-    const QString file = entry.value(QStringLiteral("file")).toString();
-    if (file.isEmpty()) continue;
-    QMap<int, bool> lines;
-    const QJsonArray lineArr =
-        entry.value(QString::fromUtf8(CodeConstants::Paths::kBreakpointsJsonKey)).toArray();
-    if (lineArr.isEmpty()) {
-      // 兼容旧格式：直接是行号数组
-      const QJsonArray oldArr = entry.value(QStringLiteral("lines")).toArray();
-      for (const QJsonValue &lv : oldArr) lines.insert(lv.toInt(), true);
-    } else {
-      for (const QJsonValue &lv : lineArr) {
-        const QJsonObject bpo = lv.toObject();
-        lines.insert(bpo.value(QStringLiteral("line")).toInt(),
-                     bpo.value(QStringLiteral("enabled")).toBool(true));
-      }
-    }
-    if (!lines.isEmpty()) m_persistedBreakpoints[file] = lines;
-  }
 }
 
 /// @brief 会话状态存储文件（记录上次打开的文件列表）
@@ -828,12 +427,7 @@ void MainDevMgr::saveOpenFilesToSettings() {
     if (!tabs) continue;
     QStringList files;
     for (int ti = 0; ti < tabs->count(); ++ti) {
-      auto *w = tabs->widget(ti);
-      CodeEditor *editor = qobject_cast<CodeEditor *>(w);
-      if (!editor) {
-        auto *jvw = qobject_cast<JsonVueWidget *>(w);
-        if (jvw) editor = jvw->codeEditor();
-      }
+      CodeEditor *editor = editorFromWidget(tabs->widget(ti));
       if (!editor) continue;
       const QString fp = editor->objectName();
       if (!fp.isEmpty()) files.append(fp);
@@ -884,38 +478,6 @@ void MainDevMgr::restoreOpenFilesFromSettings() {
   }
 
   m_restoringSession = false;
-}
-
-/// 收集全部断点（已打开编辑器 + 已关闭的持久化断点），供调试器按文件命中
-QMap<QString, QMap<int, bool>> MainDevMgr::debugBreakpoints() {
-  QMap<QString, QMap<int, bool>> result;
-  // 1) 已打开编辑器内的断点
-  for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
-    auto *tabs = m_ui->editorPanelAt(pi);
-    if (!tabs) continue;
-    for (int ti = 0; ti < tabs->count(); ++ti) {
-      auto *w = tabs->widget(ti);
-      CodeEditor *editor = qobject_cast<CodeEditor *>(w);
-      if (!editor) {
-        auto *jvw = qobject_cast<JsonVueWidget *>(w);
-        if (jvw) editor = jvw->codeEditor();
-      }
-      if (!editor) continue;
-      const QString filePath = editor->objectName();
-      if (filePath.isEmpty()) continue;
-      QMap<int, bool> lines = editor->breakpoints();
-      if (!lines.isEmpty()) result.insert(filePath, lines);
-    }
-  }
-  // 2) 已关闭文件的持久化断点
-  for (auto it = m_persistedBreakpoints.cbegin(); it != m_persistedBreakpoints.cend(); ++it) {
-    if (it.value().isEmpty()) continue;
-    auto &target = result[it.key()];
-    for (auto lit = it.value().cbegin(); lit != it.value().cend(); ++lit) {
-      target.insert(lit.key(), lit.value());
-    }
-  }
-  return result;
 }
 
 void MainDevMgr::syncJsonVueBeforeSave() {

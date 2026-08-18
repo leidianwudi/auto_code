@@ -10,6 +10,8 @@
 #include <QScrollBar>
 #include <QTextStream>
 
+#include "debug_controller.h"
+#include "editor_lookup.h"
 #include "main_dev_mgr.h"
 #include "main_dev_model.h"
 #include "main_dev_ui.h"
@@ -35,10 +37,8 @@ CodeEditor *MainDevMgr::createEditorForFile(const QString &filePath) {
   } else if (filePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive)) {
     editor->setSyntaxHighlighter(new LightAc(editor->document()));
     editor->setValidationMode(CodeEditor::AcValidation);
-  } else if (filePath.endsWith(AcFileSuffix::kTpl, Qt::CaseInsensitive)) {
-    editor->setSyntaxHighlighter(new LightTpl(editor->document()));
-    editor->setValidationMode(CodeEditor::TemplateValidation);
   } else {
+    // .tpl 及其他未知类型统一按模板处理
     editor->setSyntaxHighlighter(new LightTpl(editor->document()));
     editor->setValidationMode(CodeEditor::TemplateValidation);
   }
@@ -53,14 +53,7 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
     auto *tabs = m_ui->editorPanelAt(i);
     if (!tabs) continue;
     for (int j = 0; j < tabs->count(); ++j) {
-      auto *w = tabs->widget(j);
-      // 直接 CodeEditor
-      auto *editor = qobject_cast<CodeEditor *>(w);
-      if (!editor) {
-        // JsonVueWidget 包装器
-        auto *jvw = qobject_cast<JsonVueWidget *>(w);
-        if (jvw) editor = jvw->codeEditor();
-      }
+      CodeEditor *editor = editorFromWidget(tabs->widget(j));
       if (editor && editor->objectName() == filePath) {
         tabs->setCurrentIndex(j);
         // 会话恢复阶段不主动抢焦点，让用户首次点击时触发 focusChanged → 定位目录树
@@ -137,35 +130,18 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
   // 否则验证时 m_filePath 为空，import 解析被跳过，导致误报 "class X has no method" 类型错误
   editor->setObjectName(filePath);
   editor->validate();
-  // 恢复该文件持久化的断点（关闭重开后保留）
-  // 若文件被重构导致行数减少，行号超出当前文件长度的断点视为失效，自动清除
-  const int totalLines = editor->document()->blockCount();
-  QMap<int, bool> restoredBps;
-  bool bpsChanged = false;
-  auto bpIt = m_persistedBreakpoints.find(filePath);
-  if (bpIt != m_persistedBreakpoints.end()) {
-    for (auto lit = bpIt.value().cbegin(); lit != bpIt.value().cend(); ++lit) {
-      if (lit.key() >= 1 && lit.key() <= totalLines) {
-        restoredBps.insert(lit.key(), lit.value());
-      } else {
-        bpsChanged = true;  // 该断点行已不存在，清除
-      }
-    }
-    if (bpsChanged) {
-      if (restoredBps.isEmpty())
-        m_persistedBreakpoints.erase(bpIt);
-      else
-        bpIt.value() = restoredBps;
-    }
-  }
-  editor->setBreakpoints(restoredBps);
+  // 恢复该文件持久化的断点（关闭重开后保留）：
+  // 剔除超出总行数的失效行并同步更新持久存储（DebugController 内处理）
+  editor->setBreakpoints(
+      debugController()->takeBreakpointsForFile(filePath, editor->document()->blockCount()));
   // 会话恢复阶段不主动抢焦点，让用户首次点击时触发 focusChanged → 定位目录树
   if (!m_restoringSession) editor->setFocus();
   m_ui->setWindowTitle(MainDevUi::fileTitle(fi.fileName()));
 
   // ── 断点变化时刷新调试面板「断点」列表 ──
-  connect(editor, &CodeEditor::breakpointsChanged, this, &MainDevMgr::refreshBreakpointList);
-  refreshBreakpointList();
+  connect(editor, &CodeEditor::breakpointsChanged, this,
+          [this]() { debugController()->refreshBreakpointList(); });
+  debugController()->refreshBreakpointList();
 
   // ── 修改标记：内容变化时标签页和树节点绘制红色 "*" ──
   connect(editor->document(), &QTextDocument::modificationChanged, this,
@@ -215,12 +191,7 @@ void MainDevMgr::syncEditorsForFile(const QString &filePath, const QString &cont
     auto *tabs = m_ui->editorPanelAt(pi);
     if (!tabs) continue;
     for (int ti = 0; ti < tabs->count(); ++ti) {
-      auto *w = tabs->widget(ti);
-      CodeEditor *editor = qobject_cast<CodeEditor *>(w);
-      if (!editor) {
-        auto *jvw = qobject_cast<JsonVueWidget *>(w);
-        if (jvw) editor = jvw->codeEditor();
-      }
+      CodeEditor *editor = editorFromWidget(tabs->widget(ti));
       if (!editor || editor == sourceEditor) continue;
       if (editor->objectName() != filePath) continue;
 

@@ -208,12 +208,11 @@ void MainDevUi::setupTitleBar() {
 // ──────────────────────────────────────────────────────────────
 
 void MainDevUi::setupEditorArea() {
-  // ── 左侧：文件树 + 调试面板 双 tab ──
+  // ── 左侧：文件树 + 调试面板 双 tab（LeftPanelTabWidget 复用 AuiCodeTabBar 自绘样式）──
   m_fileTree = new TreeDir;
   m_debugPanel = new DebugPanel;
 
-  auto *leftTabs = new QTabWidget;
-  leftTabs->setDocumentMode(true);
+  auto *leftTabs = new LeftPanelTabWidget;
   leftTabs->addTab(m_fileTree, QString::fromUtf8(CodeConstants::UiText::kFile));
   leftTabs->addTab(m_debugPanel, QStringLiteral("调试"));
 

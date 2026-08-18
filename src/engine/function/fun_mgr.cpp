@@ -17,11 +17,6 @@
 
 QString FunMgr::s_lastError;
 
-FunMgr &FunMgr::ins() {
-  static FunMgr s_inst;
-  return s_inst;
-}
-
 FunMgr::~FunMgr() = default;
 
 // ============================================================================

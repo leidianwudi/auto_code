@@ -11,6 +11,7 @@
 #include <QRegularExpression>
 #include <QTextCursor>
 
+#include "debug_controller.h"
 #include "main_dev_mgr.h"
 #include "main_dev_model.h"
 #include "main_dev_ui.h"
@@ -116,10 +117,13 @@ void MainDevMgr::connectEditor(CodeEditor *editor) {
       m_ui->appendOutput(QStringLiteral("共 %1 处匹配").arg(totalFound), false);
     });
     // 调试快捷键：F5 启动/继续、F10 单步执行、F11 单步进入、Shift+F11 单步跳出
-    connect(editor, &CodeEditor::requestDebugStart, this, &MainDevMgr::onDebugStart);
-    connect(editor, &CodeEditor::requestDebugStepOver, this, &MainDevMgr::onDebugStepOver);
-    connect(editor, &CodeEditor::requestDebugStepInto, this, &MainDevMgr::onDebugStepInto);
-    connect(editor, &CodeEditor::requestDebugStepOut, this, &MainDevMgr::onDebugStepOut);
+    connect(editor, &CodeEditor::requestDebugStart, debugController(),
+            &DebugController::startOrContinue);
+    connect(editor, &CodeEditor::requestDebugStepOver, debugController(),
+            &DebugController::stepOver);
+    connect(editor, &CodeEditor::requestDebugStepInto, debugController(),
+            &DebugController::stepInto);
+    connect(editor, &CodeEditor::requestDebugStepOut, debugController(), &DebugController::stepOut);
     updateCursorPosition();
     editor->validate();
   } else {

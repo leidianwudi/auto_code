@@ -18,11 +18,10 @@
 #include <QVBoxLayout>
 
 #include "combobox_config_dialog.h"
+#include "config_dialog_common.h"
 #include "icon_loader.h"
 #include "icon_picker_dialog.h"
 #include "src/util/common/code_constants.h"
-#include "src/util/ui/aui_window.h"
-#include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_style.h"
 
 // ════════════════════════════════════════════════════════════
@@ -42,26 +41,10 @@ ButtonConfigDialog::ButtonConfigDialog(const ButtonConfig &config, QWidget *pare
 // ════════════════════════════════════════════════════════════
 
 void ButtonConfigDialog::setupUI() {
-  setWindowTitle(QStringLiteral("按钮配置"));
   setMinimumWidth(700);
   setMinimumHeight(600);
-
-  // ── 无边框对话框 ──
-  AuiWindow::setupFramelessDialog(this);
-
-  // ── 自定义标题栏 ──
-  TitleBarOptions opts;
-  opts.title = QStringLiteral("按钮配置");
-  opts.showMinButton = false;
-  opts.showMaxButton = false;
-  opts.closeRejectsDialog = true;
-  auto tb = AuiWindow::createTitleBar(this, opts);
-
-  // ── 内容区域 ──
-  auto *contentWidget = new QWidget;
-  auto *mainLayout = new QVBoxLayout(contentWidget);
-  mainLayout->setContentsMargins(12, 8, 12, 12);
-  mainLayout->setSpacing(8);
+  auto frame = beginConfigDialog(this, QStringLiteral("按钮配置"), QMargins(12, 8, 12, 12), 8);
+  auto *mainLayout = frame.contentLayout;
 
   // ── 基本信息 ──
   auto *basicGroup = new QLabel(QStringLiteral("基本信息"));
@@ -257,24 +240,7 @@ void ButtonConfigDialog::setupUI() {
   // ── 弹性空间 ──
   mainLayout->addStretch();
 
-  // ── 底部按钮 ──
-  auto *btnLayout = new QHBoxLayout();
-  btnLayout->addStretch();
-  auto *okBtn = new QPushButton(QString::fromUtf8(CodeConstants::UiText::kConfirm));
-  auto *cancelBtn = new QPushButton(QString::fromUtf8(CodeConstants::UiText::kCancel));
-  okBtn->setMinimumWidth(80);
-  cancelBtn->setMinimumWidth(80);
-  AuiButton::applyDialogButtonStyle(okBtn);
-  AuiButton::applyDialogButtonStyle(cancelBtn);
-  connect(okBtn, &QPushButton::clicked, this, &QDialog::accept);
-  connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
-  btnLayout->addWidget(okBtn);
-  btnLayout->addSpacing(8);
-  btnLayout->addWidget(cancelBtn);
-  mainLayout->addLayout(btnLayout);
-
-  // ── 应用窗口框架 ──
-  AuiWindow::applyWindowFrame(this, tb.titleBar, contentWidget);
+  finishConfigDialog(this, frame);
 
   updateBehaviorVisibility();
 }
@@ -367,18 +333,9 @@ void ButtonConfigDialog::onAddDialogField() {
   requiredCheck->setChecked(false);
   m_dialogFieldsTable->setCellWidget(row, 3, requiredCheck);
 
-  // 配置按钮（仅 select 样式可用）
-  auto *configBtn = new QPushButton(QStringLiteral("配置"));
+  // 配置按钮（仅 select 样式可用；紧凑样式适合表格单元格，disabled 时变灰）
+  auto *configBtn = makeCompactButton(QStringLiteral("配置"), m_dialogFieldsTable);
   configBtn->setEnabled(false);  // 默认 text 样式，禁用
-  // 紧凑样式（适合表格单元格），disabled 时变灰
-  configBtn->setStyleSheet(
-      QStringLiteral("QPushButton { background: %1; border: 1px solid %2; border-radius: 3px;"
-                     "  padding: 2px 6px; font-size: 12px;"
-                     "}"
-                     "QPushButton:hover { background: %3; }"
-                     "QPushButton:disabled { color: %4; background: %1; }")
-          .arg(AuiStyle::background().name(), AuiStyle::borderColor().name(),
-               AuiStyle::hoverBackground().name(), AuiStyle::mutedTextColor().name()));
   configBtn->setProperty("row", row);
   connect(configBtn, &QPushButton::clicked, this, [this, configBtn]() {
     // 动态获取当前行（按钮可能在行移动后位置变化）
@@ -395,15 +352,8 @@ void ButtonConfigDialog::onAddDialogField() {
   m_dialogFieldsTable->setCellWidget(row, 4, configBtn);
 
   // 删除按钮
-  auto *delBtn = new QPushButton(QString::fromUtf8(CodeConstants::UiText::kDelete));
-  delBtn->setStyleSheet(
-      QStringLiteral("QPushButton { background: %1; border: 1px solid %2; border-radius: 3px;"
-                     "  padding: 2px 6px; font-size: 12px;"
-                     "}"
-                     "QPushButton:hover { background: %3; }"
-                     "QPushButton:disabled { color: %4; }")
-          .arg(AuiStyle::background().name(), AuiStyle::borderColor().name(),
-               AuiStyle::hoverBackground().name(), AuiStyle::mutedTextColor().name()));
+  auto *delBtn =
+      makeCompactButton(QString::fromUtf8(CodeConstants::UiText::kDelete), m_dialogFieldsTable);
   connect(delBtn, &QPushButton::clicked, this, [this, delBtn]() {
     for (int i = 0; i < m_dialogFieldsTable->rowCount(); ++i) {
       if (m_dialogFieldsTable->cellWidget(i, 5) == delBtn) {
@@ -585,22 +535,13 @@ void ButtonConfigDialog::setData(const ButtonConfig &config) {
   setIconName(config.icon);
 
   // 位置
-  int posIdx = m_positionCombo->findData(static_cast<int>(config.position));
-  if (posIdx >= 0) {
-    m_positionCombo->setCurrentIndex(posIdx);
-  }
+  comboSelectData(m_positionCombo, static_cast<int>(config.position));
 
   // 按钮样式
-  int typeIdx = m_buttonTypeCombo->findData(config.buttonType);
-  if (typeIdx >= 0) {
-    m_buttonTypeCombo->setCurrentIndex(typeIdx);
-  }
+  comboSelectData(m_buttonTypeCombo, config.buttonType);
 
   // 行为类型
-  int actionIdx = m_actionTypeCombo->findData(static_cast<int>(config.actionType));
-  if (actionIdx >= 0) {
-    m_actionTypeCombo->setCurrentIndex(actionIdx);
-  }
+  comboSelectData(m_actionTypeCombo, static_cast<int>(config.actionType));
 
   // 行为特定字段
   m_apiNameEdit->setText(config.apiName);

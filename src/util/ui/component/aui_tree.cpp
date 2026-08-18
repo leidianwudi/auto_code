@@ -33,13 +33,15 @@ public:
 };
 
 /// @brief 列表样式表：交替行、选中/悬停态、行内边距、表头
+/// 仅保留上边框（与上方 tab 头/控制栏分隔）；
+/// 左右下边框由宿主面板容器提供，内部列表不再重复绘制。
 QString AuiTree::listStyleSheet() {
   return QStringLiteral(
              "QTreeWidget {"
              "  background: %1;"
-             "  border: 1px solid %2;"
              "  outline: 0;"
-             "  margin: 1px;"
+             "  border: none;"
+             "  border-top: 1px solid %2;"
              "}"
              "QTreeWidget::item {"
              "  padding: 2px 3px;"
@@ -75,6 +77,8 @@ QString AuiTree::listStyleSheet() {
 QTreeWidget *AuiTree::createListTree() {
   auto *tree = new QTreeWidget;
   tree->setAlternatingRowColors(true);
+  // 宿主容器（面板/tab 页）自带边框，列表不再绘制默认 frame 边框
+  tree->setFrameShape(QFrame::NoFrame);
   tree->setStyleSheet(listStyleSheet());
   // 所有列均可拖动列边线调整宽度；最后一列自动拉伸填满剩余宽度，
   // 使列宽总和小于父控件宽度时右边界线也能贴合控件右缘

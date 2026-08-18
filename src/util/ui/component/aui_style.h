@@ -16,6 +16,7 @@
 #include <QStringList>
 #include <QTextBlockFormat>
 
+#include "src/util/common/code_constants.h"
 #include "src/util/ui/setting_store.h"
 
 class QLabel;
@@ -170,12 +171,14 @@ public:
   //  编辑器 / 输出面板字体
   // ════════════════════════════════════════════════════════════
 
-  /// 编辑器默认字体 family 常量（等宽编程字体）
-  static QString defaultEditorFontFamily() { return QStringLiteral("Consolas"); }
+  /// 编辑器默认字体 family 常量（等宽编程字体），统一定义在 CodeConstants
+  static QString defaultEditorFontFamily() {
+    return QString::fromLatin1(CodeConstants::Editor::kDefaultEditorFontFamily);
+  }
 
-  /// 编辑器当前字体 family：跟随「代码字体」设置（未设置时用默认）
+  /// 编辑器当前字体 family：跟随「代码字体」设置（未设置时用默认）。
   /// 注意：不得在 SettingStore 构造函数内调用（会重入 SettingStore::ins() 导致卡死），
-  /// 构造函数中注册默认字体族时请使用 defaultEditorFontFamily()。
+  /// 构造函数中注册默认字体族时请改用 CodeConstants::Editor::kDefaultEditorFontFamily。
   static QString editorFontFamily() {
     const QString fam = SettingStore::ins().fontFamily(QStringLiteral("font.code"));
     return fam.isEmpty() ? defaultEditorFontFamily() : fam;

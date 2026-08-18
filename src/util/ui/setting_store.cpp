@@ -119,11 +119,6 @@ constexpr int kFontSizeMax = 40;
 
 }  // namespace
 
-SettingStore &SettingStore::ins() {
-  static SettingStore instance;
-  return instance;
-}
-
 SettingStore::SettingStore() : QObject(nullptr) {
   // ── 界面颜色 ──
   registerColor(QString::fromLatin1(kUI_Bg), QStringLiteral("窗口背景"), QStringLiteral("界面"),
@@ -293,10 +288,11 @@ SettingStore::SettingStore() : QObject(nullptr) {
   // ── 字体大小 / 字体风格 ──
   registerFont(QString::fromLatin1(kFontUI), QStringLiteral("窗口字体"), 10);
   registerFont(QString::fromLatin1(kFontTree), QStringLiteral("目录树字体"), 10);
-  // 注意：构造函数内禁止调用 editorFontFamily()（其读取 SettingStore 会造成重入卡死），
-  // 这里直接用默认字体族常量注册，与 editorFontFamily() 回退值一致
+  // 默认字体族常量统一在 CodeConstants 定义（AuiStyle 运行时回退也用它），
+  // 避免 SettingStore 反向依赖 AuiStyle 造成循环依赖
   registerFont(QString::fromLatin1(kFontCode), QStringLiteral("代码字体"),
-               CodeConstants::Editor::kDefaultFontSize, AuiStyle::defaultEditorFontFamily());
+               CodeConstants::Editor::kDefaultFontSize,
+               QString::fromLatin1(CodeConstants::Editor::kDefaultEditorFontFamily));
 
   // 字体修改防抖：拖动字号 SpinBox 会连续触发，合并为一次应用，避免全窗口刷新卡顿
   m_fontTimer = new QTimer(this);

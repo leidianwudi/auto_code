@@ -3,7 +3,7 @@
  * @brief UI 控制器基类
  *
  * 所有 UI 控制器的基类，提供单例管理和窗口打开/关闭功能。
- * 继承 Singleton<TDerived> 实现单例，继承 QObject 支持 Qt 信号槽。
+ * 通过 CRTP 实现单例（ins()），继承 QObject 支持 Qt 信号槽。
  *
  * 使用方式：
  *   class MyMgr : public AuiMgr<MyMgr> {
@@ -25,7 +25,7 @@
 #include <QObject>
 #include <QWidget>
 
-#include "src/util/design/Singleton.h"
+#include "src/util/design/singleton.h"
 
 /**
  * @class AuiMgr
@@ -34,7 +34,7 @@
  * @tparam TDerived 派生类（CRTP 模式）
  *
  * 特性：
- * - 继承 Singleton<TDerived> 实现全局唯一实例
+ * - ins() 提供全局唯一实例（继承自 Singleton<TDerived>，首次调用时构造）
  * - 继承 QObject 使派生类支持 Q_OBJECT 宏
  * - open() 可重复调用，首次创建窗口，后续仅激活
  * - closeWindow() 隐藏窗口，不会销毁窗口对象

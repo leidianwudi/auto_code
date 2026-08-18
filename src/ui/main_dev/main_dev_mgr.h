@@ -12,15 +12,12 @@
 
 #pragma once
 
-#include <QFuture>
 #include <QFutureWatcher>
 #include <QHash>
 #include <QMap>
 #include <QObject>
-#include <QSet>
 #include <QStack>
 
-#include "src/engine/script/ac_debugger.h"
 #include "src/engine/validation_result.h"
 #include "src/ui/main_dev/main_dev_ui_ext.h"
 #include "src/util/common/workspace_diag.h"
@@ -29,6 +26,7 @@
 class QTabWidget;
 class QTimer;
 class CodeEditor;
+class DebugController;
 class MainDevUi;
 class MainDevModel;
 
@@ -113,33 +111,6 @@ private slots:
   void navigateBack();
   /// 鼠标侧键：前进（XButton2）
   void navigateForward();
-  /// 停止正在执行的脚本（设置取消标志，工作线程轮询检查）
-  void onStopScript();
-  /// 调试按钮点击：启动调试会话（若已暂停则继续执行）
-  void onDebugBtnClicked();
-  /// 编辑器 F5：启动调试/继续
-  void onDebugStart();
-  /// 编辑器 F10：单步执行
-  void onDebugStepOver();
-  /// 编辑器 F11：单步进入
-  void onDebugStepInto();
-  /// 编辑器 Shift+F11：单步跳出
-  void onDebugStepOut();
-  /// 双击断点面板条目：打开文件并定位到断点行
-  void onBreakpointActivated(const QString &filePath, int line);
-  /// 断点面板切换生效状态：更新对应编辑器中该断点的生效标记
-  void onBreakpointToggleEnabledRequested(const QString &filePath, int line, bool enabled);
-  /// 断点面板删除单个断点
-  void onBreakpointDeleteRequested(const QString &filePath, int line);
-  /// 断点面板删除全部断点
-  void onBreakpointRemoveAllRequested();
-  /// 调试器暂停（工作线程阻塞中），高亮当前行
-  void onDebuggerPaused(const QString &filePath, int line, const QVector<AcDebugFrame> &stack,
-                        const QList<AcDebugVar> &vars);
-  /// 调试器恢复执行，清除行高亮
-  void onDebuggerResumed();
-  /// 调试会话结束，复位状态
-  void onDebuggerFinished();
 
 private:
   /// 查找并加载 file/ 目录
@@ -151,7 +122,6 @@ private:
   void connectSaveActions();   ///< 保存/Ctrl+S/保存全部
   void connectVisualToggle();  ///< 可视化/代码切换按钮
   void connectBuildAction();   ///< 执行按钮
-  void connectDebugAction();   ///< 调试按钮与调试器信号
   void connectEditorPanels();  ///< 编辑器面板信号 + 事件过滤器
   /// 连接单个编辑器面板的信号（关闭/切换/标签栏交互）
   void connectEditorPanel(QTabWidget *tabs);
@@ -163,18 +133,10 @@ private:
   CodeEditor *currentEditor() const;
   /// 在所有编辑面板中查找已打开指定文件的编辑器（未打开则返回 nullptr）
   CodeEditor *findEditorForFile(const QString &filePath) const;
-  /// 收集所有编辑器中的断点并刷新调试面板「断点」页
-  void refreshBreakpointList();
-  /// 将当前全部断点持久化到磁盘（程序重启后还原）
-  void saveBreakpointsToDisk();
-  /// 从磁盘加载断点到持久存储（程序启动时调用）
-  void loadBreakpointsFromDisk();
   /// 保存当前打开的文件列表到设置（下次启动还原）
   void saveOpenFilesToSettings();
   /// 从设置还原上次打开的文件列表并重新打开
   void restoreOpenFilesFromSettings();
-  /// 收集全部已打开编辑器及持久化断点（文件路径 → 行号 → 是否生效），供调试器使用
-  QMap<QString, QMap<int, bool>> debugBreakpoints();
   /// 获取当前活跃的面板组
   QTabWidget *currentTabWidget() const;
   /// 连接编辑器的光标位置信号
@@ -210,22 +172,15 @@ protected:
   MainDevUi *m_ui = nullptr;
   MainDevModel *m_model = nullptr;
 
+  /// 调试/脚本执行控制器（调试会话、断点管理，从本类拆出）
+  DebugController *m_debug = nullptr;
+  /// 调试控制器访问（供分文件 main_dev_mgr_*.cpp 使用）
+  DebugController *debugController() const { return m_debug; }
+
   // 导航历史栈
   QStack<NavigationEntry> m_navHistory;       ///< 后退栈
   QStack<NavigationEntry> m_navForwardStack;  ///< 前进栈
   bool m_navigating = false;                  ///< 是否正在执行导航（避免循环记录）
-
-  // 脚本执行（工作线程）
-  QFuture<void> m_scriptFuture;  ///< 脚本执行任务（工作线程）
-  bool m_scriptRunning = false;  ///< 脚本是否正在执行
-
-  // 调试会话
-  AcDebugger *m_debugger = nullptr;     ///< 调试器（由 MainDevMgr 创建并持有）
-  bool m_debugging = false;             ///< 是否处于调试模式
-  CodeEditor *m_debugEditor = nullptr;  ///< 当前调试会话的目标编辑器（用于行高亮）
-
-  // 断点持久化：按文件路径保存断点（行号 → 是否生效），关闭后重新打开仍保留
-  QHash<QString, QMap<int, bool>> m_persistedBreakpoints;
 
   /// 工作区问题聚合：文件路径 → 验证结果列表（供底部「问题」面板跨文件汇总）
   QMap<QString, QVector<ValidationResult>> m_fileIssues;
@@ -242,7 +197,4 @@ protected:
 
   /// 主题刷新防抖定时器：合并短时间内多次颜色变化，减少切换卡顿
   QTimer *m_themeTimer = nullptr;
-
-  /// 启动一次调试会话（收集当前编辑器断点，运行脚本）
-  void startDebugSession();
 };

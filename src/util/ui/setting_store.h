@@ -18,6 +18,8 @@
 #include <QPalette>
 #include <QString>
 
+#include "src/util/design/singleton.h"
+
 class QTimer;
 
 /**
@@ -31,15 +33,15 @@ class QTimer;
  * - 从 AppData/settings.json 加载、保存
  * - 主题或颜色变化时发出信号，供界面实时刷新
  */
-class SettingStore : public QObject {
+class SettingStore : public QObject, public Singleton<SettingStore> {
   Q_OBJECT
 
 public:
   /// 主题类型
   enum Theme { ThemeLight, ThemeDark, ThemeCustom };
 
-  /// 获取单例
-  static SettingStore &ins();
+  SettingStore();
+  ~SettingStore() override = default;
 
   /// 初始化（注册默认颜色、加载配置文件）
   void init();
@@ -168,11 +170,6 @@ signals:
   void windowFontChanged();
 
 private:
-  SettingStore();
-  ~SettingStore() override = default;
-  SettingStore(const SettingStore &) = delete;
-  SettingStore &operator=(const SettingStore &) = delete;
-
   /// 配置文件路径（AppData 目录）
   QString storePath() const;
 

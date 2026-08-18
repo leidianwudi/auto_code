@@ -141,8 +141,10 @@ private:
   void rebuildEditStyleControls();
   /// 从 tagItems 表格收集数据
   QList<TagItem> collectTagItems() const;
-  /// 用 tagItems 填充表格
+  /// 用 tagItems 填充表格（末尾附"+"添加行）
   void populateTagItems(const QList<TagItem> &items);
+  /// 在指定行处插入一个标签映射行（值/文字/颜色下拉/删除按钮）
+  void insertTagRow(int row, const TagItem &item);
   /// 验证 tagItems 数据（检查空值和重复 value）
   bool validateTagItems(QString *error) const;
   /// 动态重建后自适应对话框大小

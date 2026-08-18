@@ -1,18 +1,39 @@
-#ifndef SINGLETON_H
-#define SINGLETON_H
+/**
+ * @file singleton.h
+ * @brief 通用单例基类（CRTP + Meyers 单例）
+ *
+ * 通过 CRTP 继承获得线程安全的全局唯一实例：
+ *
+ *   class Foo : public Singleton<Foo> { ... };
+ *   Foo &f = Foo::ins();
+ *
+ * 说明：
+ * - 使用 C++11 静态局部变量初始化，线程安全
+ * - 自动禁用拷贝构造与赋值
+ * - 派生类构造函数需可被 Singleton 访问（设为 public，
+ *   或添加 friend class Singleton<派生类>）
+ */
 
-// 单例模式
-template <typename T> class Singleton {
+#pragma once
+
+/**
+ * @class Singleton
+ * @brief 单例基类（CRTP）
+ * @tparam T 派生类类型
+ */
+template <typename T>
+class Singleton {
 public:
-  Singleton() = default; // 默认构造函数（被 delete 拷贝构造抑制）
+  Singleton(const Singleton &) = delete;
+  Singleton &operator=(const Singleton &) = delete;
 
+  /// 全局唯一实例（首次调用时构造，线程安全）
   static T &ins() {
-    static T s_t;
-    return s_t;
+    static T instance;
+    return instance;
   }
 
-  Singleton(const Singleton &) = delete;            // 禁用拷贝构造函数
-  Singleton &operator=(const Singleton &) = delete; // 禁用赋值操作符
+protected:
+  Singleton() = default;
+  ~Singleton() = default;
 };
-
-#endif // SINGLETON_H

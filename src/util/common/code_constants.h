@@ -16,6 +16,10 @@ namespace CodeConstants {
 
 namespace Editor {
 constexpr int kDefaultFontSize = 10;  ///< 默认字体大小（pt）
+/// 编辑器默认等宽字体族（Consolas：Windows 自带、VSCode 常用）。
+/// 供 SettingStore 注册默认值与 AuiStyle 运行时回退共用，
+/// 避免两层模块相互依赖。
+constexpr const char *kDefaultEditorFontFamily = "Consolas";
 constexpr int kTabWidthSpaces = 2;    ///< Tab 键对应的空格数
 constexpr int kIndentSpaces = 2;      ///< 自动缩进的空格数
 ///< 统一行高的额外间距（像素），叠加在自然行高上，避免行过于拥挤

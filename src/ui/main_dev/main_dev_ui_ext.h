@@ -113,6 +113,26 @@ public:
 };
 
 // ════════════════════════════════════════════════════════════
+//  LeftPanelTabWidget — 左侧面板 tab 容器（文件 / 调试）
+//  复用 AuiCodeTabBar 的自绘样式，纯标签页不显示关闭按钮；
+//  padding 与代码编辑 tab 完全一致（4,4,0,4），仅高度压缩为 24px，
+//  选中态跟随 currentIndex 正常交互。
+// ════════════════════════════════════════════════════════════
+
+class LeftPanelTabWidget : public QTabWidget {
+public:
+  explicit LeftPanelTabWidget(QWidget *parent = nullptr) : QTabWidget(parent) {
+    setDocumentMode(true);
+    auto *bar = new AuiCodeTabBar;
+    bar->setShowCloseButton(false);
+    bar->setTabHeight(26);  // 比代码标签栏（约 30px）紧凑
+    // 与代码编辑 tab 一致：Fusion 风格 + 同一四边空白，保证视觉统一
+    AuiStyle::applyTabBarPadding(bar, 14, 4, 14, 4);
+    setTabBar(bar);
+  }
+};
+
+// ════════════════════════════════════════════════════════════
 //  DimmableTabWidget  — 内置 DraggableTabBar 的标签页容器
 // ════════════════════════════════════════════════════════════
 

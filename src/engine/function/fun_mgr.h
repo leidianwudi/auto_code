@@ -28,23 +28,23 @@
 #include <functional>
 #include <map>
 
+#include "src/util/design/singleton.h"
+
 /**
  * @class FunMgr
- * @brief 函数管理器（单例）
+ * @brief 函数管理器（单例，继承 Singleton<FunMgr>）
  *
  * 线程安全说明：当前为单线程设计，未加锁。
  */
-class FunMgr {
+class FunMgr : public Singleton<FunMgr> {
 public:
+  FunMgr() = default;
+  ~FunMgr();
+
   /// 函数指针类型：接收 QJsonArray 参数，返回 QJsonValue
   using FunPtr = std::function<QJsonValue(const QJsonArray &)>;
   /// 无参函数指针类型：不接收参数，返回 QJsonValue
   using FunPtrVoid = std::function<QJsonValue()>;
-
-  /**
-   * @brief 单例访问
-   */
-  static FunMgr &ins();
 
   /**
    * @brief
@@ -105,11 +105,6 @@ public:
   static QString takeError();
 
 private:
-  FunMgr() = default;
-  ~FunMgr();
-  FunMgr(const FunMgr &) = delete;
-  FunMgr &operator=(const FunMgr &) = delete;
-
   /// 二级映射：className → (funcName → FunPtr)
   std::map<QString, std::map<QString, FunPtr>> m_registry;
 
