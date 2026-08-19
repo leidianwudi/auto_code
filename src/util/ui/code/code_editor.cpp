@@ -1193,14 +1193,18 @@ void CodeEditor::mouseMoveEvent(QMouseEvent *event) {
   QTextCursor cursor = cursorForPosition(event->pos());
   int pos = cursor.position();
 
+  // ── 统一的光标样式：悬停手形与 Ctrl+点击跳转共用 navigationTargetAt ──
+  //   这样 AC / JSON 各模式下"手形 ⇔ 可跳转"严格一致
+  bool canNavigate = navigationTargetAt(pos);
+  if (event->modifiers() & Qt::ControlModifier) {
+    viewport()->setCursor(canNavigate ? Qt::PointingHandCursor : Qt::IBeamCursor);
+  } else {
+    viewport()->setCursor(Qt::IBeamCursor);
+  }
+
   // ── JSON 模式：属性悬停提示（基于 $schema）──
   if (m_validationMode == JsonValidation && m_schemaLoaded) {
     QString path = m_schema.propertyPathAt(cachedText(), pos);
-    if (event->modifiers() & Qt::ControlModifier) {
-      viewport()->setCursor(path.isEmpty() ? Qt::IBeamCursor : Qt::PointingHandCursor);
-    } else {
-      viewport()->setCursor(Qt::IBeamCursor);
-    }
     if (!path.isEmpty()) {
       m_hoverTimer->stop();
       QPoint gpos = event->globalPosition().toPoint();
@@ -1218,17 +1222,9 @@ void CodeEditor::mouseMoveEvent(QMouseEvent *event) {
 
   if (m_validationMode != AcValidation) return;
 
+  // ── AC 模式：悬停提示（不需要 Ctrl，始终显示）──
   int idStart = 0, idEnd = 0;
   QString identifier = identifierAtCursor(pos, &idStart, &idEnd);
-
-  // 更新光标样式（仅 Ctrl 按下时变为手形）
-  if (!identifier.isEmpty() && (event->modifiers() & Qt::ControlModifier)) {
-    viewport()->setCursor(Qt::PointingHandCursor);
-  } else {
-    viewport()->setCursor(Qt::IBeamCursor);
-  }
-
-  // 悬停提示（不需要 Ctrl，始终显示）
   if (!identifier.isEmpty()) {
     m_hoverTimer->stop();
     QPoint gpos = event->globalPosition().toPoint();
@@ -1262,15 +1258,40 @@ void CodeEditor::mouseReleaseEvent(QMouseEvent *event) {
       }
     }
 
-    int idStart = 0, idEnd = 0;
-    QString identifier = identifierAtCursor(pos, &idStart, &idEnd);
-    if (!identifier.isEmpty()) {
-      goToDefinition(identifier);
-      return;
+    // ── AC 模式：Ctrl+点击标识符 → 转到定义 ──
+    //   （JSON 无 schema 时不再走标识符兜底，保证与手形判定一致）
+    if (m_validationMode == AcValidation) {
+      int idStart = 0, idEnd = 0;
+      QString identifier = identifierAtCursor(pos, &idStart, &idEnd);
+      if (!identifier.isEmpty()) {
+        goToDefinition(identifier);
+        return;
+      }
     }
   }
 
   QPlainTextEdit::mouseReleaseEvent(event);
+}
+
+// ── 统一的导航目标判定（悬停手形与 Ctrl+点击跳转共用）──
+bool CodeEditor::navigationTargetAt(int pos) const {
+  switch (m_validationMode) {
+    case JsonValidation: {
+      // 与鼠标点击跳转完全一致：路径非空 + schema 中可解析到属性
+      if (!m_schemaLoaded) return false;
+      QString path = m_schema.propertyPathAt(cachedText(), pos);
+      QString className, propName;
+      return !path.isEmpty() && m_schema.propertyContext(path, &className, &propName) &&
+             !propName.isEmpty();
+    }
+    case AcValidation: {
+      // 与 AC 现状一致：任意标识符均可提示/尝试跳转
+      int start = 0, end = 0;
+      return !identifierAtCursor(pos, &start, &end).isEmpty();
+    }
+    default:
+      return false;
+  }
 }
 
 // ── JSON 属性悬停提示（基于 $schema）──

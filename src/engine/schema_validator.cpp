@@ -300,11 +300,16 @@ CursorCtx findCursorCtx(const QString &text, int pos) {
     const QChar c = text[i];
     if (inString) {
       if (escaped) {
+        // 转义字符：键名一般不含转义，简单保留转义后的字符
         escaped = false;
+        if (!afterColon) keyAcc += c;
       } else if (c == QLatin1Char('\\')) {
         escaped = true;
       } else if (c == quote) {
-        inString = false;
+        inString = false;  // 字符串结束（内容已累积到 keyAcc/valueAcc）
+      } else if (!afterColon) {
+        // 键位置的字符串内容（带引号 key）累积到 keyAcc，供 ':' 处生成 lastKey
+        keyAcc += c;
       }
       ++i;
       continue;

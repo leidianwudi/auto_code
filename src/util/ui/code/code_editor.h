@@ -234,6 +234,10 @@ private:
   void showJsonPropertyHover(const QString &jsonPath, const QPoint &gpos);
   int findSchemaPropertyLine(const QString &className, const QString &propName) const;
 
+  // ── 统一的导航目标判定（悬停手形光标与 Ctrl+点击跳转共用同一判定）──
+  //   保证各模式下"手形 ⇔ 可跳转"，避免两套逻辑表现不一致
+  bool navigationTargetAt(int pos) const;
+
   // ── 成员变量（精简后）──
 
   ValidationMode m_validationMode = NoValidation;
