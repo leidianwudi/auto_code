@@ -28,13 +28,16 @@ void FunFile::init() {
 // ============================================================================
 
 QJsonValue FunFile::read(const QJsonArray &args) {
+  // 原生类实例方法约定 args[0]=对象实例（见 evalClassMethod）；
+  // 一级函数 readFile 委托调用时不带实例，args[0] 即为路径 → 自适应两种形态
+  const int base = (!args.isEmpty() && args[0].isObject()) ? 1 : 0;
   // 参数校验：需要一个文件路径字符串参数
-  if (args.isEmpty() || !args[0].isString()) {
+  if (args.size() <= base || !args[base].isString()) {
     FunMgr::setError(QStringLiteral("File::read() requires a file path argument"));
     return QJsonValue();
   }
 
-  const QString path = args[0].toString();
+  const QString path = args[base].toString();
 
   // 打开文件，只读模式
   QFile file(path);
@@ -57,14 +60,17 @@ QJsonValue FunFile::read(const QJsonArray &args) {
 // ============================================================================
 
 QJsonValue FunFile::write(const QJsonArray &args) {
+  // 原生类实例方法约定 args[0]=对象实例（见 evalClassMethod）；
+  // 一级函数 writeFile 委托调用时不带实例 → 自适应两种形态
+  const int base = (!args.isEmpty() && args[0].isObject()) ? 1 : 0;
   // 参数校验：需要 path 和 content 两个字符串参数
-  if (args.size() < 2 || !args[0].isString() || !args[1].isString()) {
+  if (args.size() < base + 2 || !args[base].isString() || !args[base + 1].isString()) {
     FunMgr::setError(QStringLiteral("File::write() requires 2 arguments: file path and content"));
     return QJsonValue();
   }
 
-  const QString path = args[0].toString();
-  const QString content = args[1].toString();
+  const QString path = args[base].toString();
+  const QString content = args[base + 1].toString();
 
   QDir().mkpath(QFileInfo(path).absolutePath());
 

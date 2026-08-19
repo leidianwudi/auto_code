@@ -45,6 +45,9 @@ public:
   using FunPtr = std::function<QJsonValue(const QJsonArray &)>;
   /// 无参函数指针类型：不接收参数，返回 QJsonValue
   using FunPtrVoid = std::function<QJsonValue()>;
+  /// 实例方法指针类型：显式接收对象实例（this）与实参，返回 QJsonValue
+  /// 由 registerFuncsWithThis() 注册，用于需要访问对象状态的类方法（如 DB 实例）
+  using FunPtrThis = std::function<QJsonValue(const QJsonValue &thisObj, const QJsonArray &args)>;
 
   /**
    * @brief
@@ -76,13 +79,41 @@ public:
   void registerFuncs(const QString &className, const std::map<QString, FunPtrVoid> &funcs);
 
   /**
-   * @brief 调用已注册的类成员函数
+   * @brief 注册一个类的实例方法（显式接收对象实例 thisObj）
+   *
+   * 与方法参数约定不同：实例方法第一个参数为对象实例，后续才是实参。
+   * 由 new 实例化类的实例方法（如 DB 的 tableSchema/query）使用，
+   * 签名在编译期强制显式声明"接收实例"，避免 args[0] 约定混乱。
+   *
+   * @param className 类名
+   * @param funcs     函数名 → 实例方法指针 映射表
+   */
+  void registerFuncsWithThis(const QString &className, const std::map<QString, FunPtrThis> &funcs);
+
+  /**
+   * @brief 调用已注册的类成员函数（不携带对象实例，thisObj 为 Null）
+   *
+   * 适用于静态类函数与 call("类","方法",...) 系统调用。
    * @param className 类名（如 "builtin"、"str"、"DB"）
    * @param funcName  函数名
    * @param args      参数数组
    * @return 执行结果；未注册时返回 Null
    */
   QJsonValue call(const QString &className, const QString &funcName, const QJsonArray &args);
+
+  /**
+   * @brief 调用已注册的类实例方法（显式携带对象实例）
+   *
+   * 适用于 new 实例化类的实例方法调用，thisObj 为对象实例本身。
+   * 静态类函数调用时传 QJsonValue() 即可。
+   * @param className 类名
+   * @param funcName  函数名
+   * @param thisObj   对象实例（this）
+   * @param args      实参数组
+   * @return 执行结果；未注册时返回 Null
+   */
+  QJsonValue call(const QString &className, const QString &funcName, const QJsonValue &thisObj,
+                  const QJsonArray &args);
 
   /**
    * @brief 检查某类是否已注册
@@ -105,8 +136,9 @@ public:
   static QString takeError();
 
 private:
-  /// 二级映射：className → (funcName → FunPtr)
-  std::map<QString, std::map<QString, FunPtr>> m_registry;
+  /// 二级映射：className → (funcName → FunPtrThis)
+  /// 纯参数方法注册时自动包装为忽略 this 的实例方法签名，保证调用路径统一
+  std::map<QString, std::map<QString, FunPtrThis>> m_registry;
 
   /// 最后一次函数执行错误（单线程，每次执行前清空）
   static QString s_lastError;
