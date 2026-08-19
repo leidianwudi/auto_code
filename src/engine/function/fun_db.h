@@ -58,37 +58,40 @@ public:
    * @brief 析构 DB 实例（引用计数归零时自动调用）
    *
    * 关闭 MySQL 连接并释放资源，与 disconnect() 逻辑相同。
-   * args[0] JSON: DB 实例对象
+   * thisObj: DB 实例对象
    */
-  static QJsonValue destructor(const QJsonArray &args);
+  static QJsonValue destructor(const QJsonValue &thisObj, const QJsonArray &args);
 
   /**
    * @brief 断开数据库连接并释放资源
-   * this 是当前 DB 实例
+   * thisObj: DB 实例对象
    * @return 成功返回 true
    */
-  static QJsonValue disconnect(const QJsonArray &args);
+  static QJsonValue disconnect(const QJsonValue &thisObj, const QJsonArray &args);
 
   /**
    * @brief 获取指定表的列信息
+   * thisObj: DB 实例对象
    * args[0] JSON: { table }
    * @return 列信息 JSON 数组
    */
-  static QJsonValue tableSchema(const QJsonArray &args);
+  static QJsonValue tableSchema(const QJsonValue &thisObj, const QJsonArray &args);
 
   /**
    * @brief 获取指定表的元信息（表注释、引擎等）
+   * thisObj: DB 实例对象
    * args[0] JSON: { table }
    * @return { comment: "表注释", engine: "InnoDB" }
    */
-  static QJsonValue tableInfo(const QJsonArray &args);
+  static QJsonValue tableInfo(const QJsonValue &thisObj, const QJsonArray &args);
 
   /**
    * @brief 执行自定义 SQL 查询
+   * thisObj: DB 实例对象
    * args[0] JSON: { sql }
    * @return 查询结果 JSON 数组
    */
-  static QJsonValue query(const QJsonArray &args);
+  static QJsonValue query(const QJsonValue &thisObj, const QJsonArray &args);
 
 private:
   /// 获取实例的连接（根据 this.obj 中的 connId）

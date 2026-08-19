@@ -712,12 +712,11 @@ QJsonValue AcInterpreter::evalClassMethod(const QJsonObject &obj, const QString 
   const ClassDef &cd = m_classes[className];
 
   if (cd.isNative) {
-    // 原生类实例方法统一约定：args[0] = 对象实例（this），后续为实参
-    // （DB 实例方法、dispose 均依赖该约定；FunFile 内部对一级函数委托做自适应）
+    // 原生类实例方法：通过 FunMgr 的显式 this 参数传递对象实例，
+    // 实参为纯参数列表（不含对象自身）；接收实例的方法经 registerFuncsWithThis 注册
     QJsonArray args;
-    args.append(QJsonValue(obj));
     for (const auto &argExpr : expr.methodCall.args) args.append(evalExpr(*argExpr));
-    QJsonValue r = FunMgr::ins().call(className, expr.methodCall.methodName, args);
+    QJsonValue r = FunMgr::ins().call(className, expr.methodCall.methodName, QJsonValue(obj), args);
     QString err = FunMgr::takeError();
     if (!err.isEmpty()) {
       setError(err, expr.line);

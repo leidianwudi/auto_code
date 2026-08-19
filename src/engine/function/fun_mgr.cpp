@@ -43,14 +43,24 @@ void FunMgr::cleanup() { FunDb::cleanup(); }
 
 void FunMgr::registerFuncs(const QString &className, const std::map<QString, FunPtr> &funcs) {
   auto &target = m_registry[className];
-  for (const auto &[name, fn] : funcs) target[name] = fn;
+  // 纯参数方法 → 包装为忽略 this 的实例方法签名，统一调用路径
+  for (const auto &[name, fn] : funcs) {
+    target[name] = [fn](const QJsonValue &, const QJsonArray &args) { return fn(args); };
+  }
 }
 
 void FunMgr::registerFuncs(const QString &className, const std::map<QString, FunPtrVoid> &funcs) {
   auto &target = m_registry[className];
   for (const auto &[name, fn] : funcs) {
-    target[name] = [fn](const QJsonArray &) { return fn(); };
+    target[name] = [fn](const QJsonValue &, const QJsonArray &) { return fn(); };
   }
+}
+
+void FunMgr::registerFuncsWithThis(const QString &className,
+                                   const std::map<QString, FunPtrThis> &funcs) {
+  auto &target = m_registry[className];
+  // 实例方法直接以原始签名注册（显式接收 thisObj）
+  for (const auto &[name, fn] : funcs) target[name] = fn;
 }
 
 // ============================================================================
@@ -58,6 +68,11 @@ void FunMgr::registerFuncs(const QString &className, const std::map<QString, Fun
 // ============================================================================
 
 QJsonValue FunMgr::call(const QString &className, const QString &funcName, const QJsonArray &args) {
+  return call(className, funcName, QJsonValue(), args);
+}
+
+QJsonValue FunMgr::call(const QString &className, const QString &funcName,
+                        const QJsonValue &thisObj, const QJsonArray &args) {
   auto clsIt = m_registry.find(className);
   if (clsIt == m_registry.end()) return QJsonValue();
 
@@ -65,7 +80,7 @@ QJsonValue FunMgr::call(const QString &className, const QString &funcName, const
   auto funcIt = funcs.find(funcName);
   if (funcIt == funcs.end()) return QJsonValue();
 
-  return funcIt->second(args);
+  return funcIt->second(thisObj, args);
 }
 
 // ============================================================================

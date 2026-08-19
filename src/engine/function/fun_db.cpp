@@ -24,17 +24,19 @@ QHash<QString, AcDB::DbConfig> FunDb::s_configs;
 
 // init — 注册所有数据库函数到 FunMgr
 void FunDb::init() {
-  // 注册原生类 DB 的构造器、析构器和方法（名称来自 ac_language.h）
+  // 注册原生类 DB 的构造器（纯参数，new DB({...}) 时调用）
   FunMgr::ins().registerFuncs(QString::fromLatin1(AcDB::kClassName),
-                              {
-                                  {QString::fromLatin1(AcRuntime::kConstructor), constructor},
-                                  {QString::fromLatin1(AcRuntime::kDestructor), destructor},
-                                  {QString::fromLatin1(AcDB::kTableSchema), tableSchema},
-                                  {QString::fromLatin1(AcDB::kTableInfo), tableInfo},
-                                  {QString::fromLatin1(AcDB::kQuery), query},
-                                  {QString::fromLatin1(AcDB::kDisconnect), disconnect},
-                                  {QString::fromLatin1(AcKeyword::kDispose), disconnect},
-                              });
+                              {{QString::fromLatin1(AcRuntime::kConstructor), constructor}});
+  // 实例方法：显式接收 DB 实例对象（thisObj），编译期声明"接收实例"约定
+  FunMgr::ins().registerFuncsWithThis(QString::fromLatin1(AcDB::kClassName),
+                                      {
+                                          {QString::fromLatin1(AcRuntime::kDestructor), destructor},
+                                          {QString::fromLatin1(AcDB::kTableSchema), tableSchema},
+                                          {QString::fromLatin1(AcDB::kTableInfo), tableInfo},
+                                          {QString::fromLatin1(AcDB::kQuery), query},
+                                          {QString::fromLatin1(AcDB::kDisconnect), disconnect},
+                                          {QString::fromLatin1(AcKeyword::kDispose), disconnect},
+                                      });
 }
 
 // cleanup — 关闭所有连接
@@ -101,9 +103,9 @@ QJsonValue FunDb::constructor(const QJsonArray &args) {
 }
 
 // destructor — 引用计数归零时自动调用，关闭 MySQL 连接
-QJsonValue FunDb::destructor(const QJsonArray &args) {
-  if (args.isEmpty() || !args[0].isObject()) return QJsonValue(false);
-  const QJsonObject instance = args[0].toObject();
+QJsonValue FunDb::destructor(const QJsonValue &thisObj, const QJsonArray &) {
+  if (!thisObj.isObject()) return QJsonValue(false);
+  const QJsonObject instance = thisObj.toObject();
   const QString connId = instance.value(QString::fromLatin1(AcDB::kConnId)).toString();
   if (connId.isEmpty()) return QJsonValue(false);
   if (s_connections.contains(connId)) {
@@ -116,13 +118,13 @@ QJsonValue FunDb::destructor(const QJsonArray &args) {
 }
 
 // disconnect — 断开连接
-QJsonValue FunDb::disconnect(const QJsonArray &args) {
-  if (args.isEmpty() || !args[0].isObject()) {
+QJsonValue FunDb::disconnect(const QJsonValue &thisObj, const QJsonArray &) {
+  if (!thisObj.isObject()) {
     FunMgr::setError(QStringLiteral("DB::disconnect() requires a DB instance object"));
     return QJsonValue(false);
   }
 
-  const QJsonObject instance = args[0].toObject();
+  const QJsonObject instance = thisObj.toObject();
   const QString connId = instance.value(QString::fromLatin1(AcDB::kConnId)).toString();
   if (connId.isEmpty()) {
     FunMgr::setError(QStringLiteral("DB::disconnect() invalid DB instance"));
@@ -139,14 +141,14 @@ QJsonValue FunDb::disconnect(const QJsonArray &args) {
 }
 
 // tableSchema — 获取表列信息
-QJsonValue FunDb::tableSchema(const QJsonArray &args) {
-  if (args.size() < 2 || !args[0].isObject() || !args[1].isObject()) {
+QJsonValue FunDb::tableSchema(const QJsonValue &thisObj, const QJsonArray &args) {
+  if (!thisObj.isObject() || args.isEmpty() || !args[0].isObject()) {
     FunMgr::setError(QStringLiteral("DB::tableSchema() requires a DB instance and params object"));
     return QJsonValue();
   }
 
-  const QJsonObject instance = args[0].toObject();
-  const QJsonObject params = args[1].toObject();
+  const QJsonObject instance = thisObj.toObject();
+  const QJsonObject params = args[0].toObject();
 
   MYSQL *conn = getConnection(instance);
   if (!conn) {
@@ -206,14 +208,14 @@ QJsonValue FunDb::tableSchema(const QJsonArray &args) {
 }
 
 // tableInfo — 获取表元信息（表注释、引擎等）
-QJsonValue FunDb::tableInfo(const QJsonArray &args) {
-  if (args.size() < 2 || !args[0].isObject() || !args[1].isObject()) {
+QJsonValue FunDb::tableInfo(const QJsonValue &thisObj, const QJsonArray &args) {
+  if (!thisObj.isObject() || args.isEmpty() || !args[0].isObject()) {
     FunMgr::setError(QStringLiteral("DB::tableInfo() requires a DB instance and params object"));
     return QJsonValue();
   }
 
-  const QJsonObject instance = args[0].toObject();
-  const QJsonObject params = args[1].toObject();
+  const QJsonObject instance = thisObj.toObject();
+  const QJsonObject params = args[0].toObject();
 
   MYSQL *conn = getConnection(instance);
   if (!conn) {
@@ -262,14 +264,14 @@ QJsonValue FunDb::tableInfo(const QJsonArray &args) {
 }
 
 // query — 执行自定义 SQL
-QJsonValue FunDb::query(const QJsonArray &args) {
-  if (args.size() < 2 || !args[0].isObject() || !args[1].isObject()) {
+QJsonValue FunDb::query(const QJsonValue &thisObj, const QJsonArray &args) {
+  if (!thisObj.isObject() || args.isEmpty() || !args[0].isObject()) {
     FunMgr::setError(QStringLiteral("DB::query() requires a DB instance and params object"));
     return QJsonValue();
   }
 
-  const QJsonObject instance = args[0].toObject();
-  const QJsonObject params = args[1].toObject();
+  const QJsonObject instance = thisObj.toObject();
+  const QJsonObject params = args[0].toObject();
 
   MYSQL *conn = getConnection(instance);
   if (!conn) {
