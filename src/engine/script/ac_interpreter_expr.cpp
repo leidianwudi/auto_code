@@ -509,8 +509,9 @@ QJsonValue AcInterpreter::callBuiltin(const QString &name,
     }
     QString cls = arr[0].toString();
     QString func = arr[1].toString();
+    // 收集第 3 个及以后的所有参数（call("类","方法", 参数...)）
     QJsonArray callArgs;
-    if (arr.size() >= 3) callArgs.append(arr[2]);
+    for (int i = 2; i < arr.size(); ++i) callArgs.append(arr[i]);
     QJsonValue r = FunMgr::ins().call(cls, func, callArgs);
     QString err = FunMgr::takeError();
     if (!err.isEmpty()) {
@@ -711,8 +712,8 @@ QJsonValue AcInterpreter::evalClassMethod(const QJsonObject &obj, const QString 
   const ClassDef &cd = m_classes[className];
 
   if (cd.isNative) {
+    // 原生函数签名为纯参数列表（不含对象自身），与 call("类","方法",...) 约定一致
     QJsonArray args;
-    args.append(QJsonValue(obj));
     for (const auto &argExpr : expr.methodCall.args) args.append(evalExpr(*argExpr));
     QJsonValue r = FunMgr::ins().call(className, expr.methodCall.methodName, args);
     QString err = FunMgr::takeError();

@@ -887,9 +887,9 @@ main {
     return fibonacci(n - 1) + fibonacci(n - 2);
   }
 
-  let fibResult = fibonacci(30);  // 注意：不要超过 35，否则会很慢
+  let fibResult = fibonacci(10);  // 注意：递归指数级增长，30 会导致解释器长时间无响应，20 即足够验证递归
 
-  printLog(`斐波那契数列第 30 项: ${fibResult}`);
+  printLog(`斐波那契数列第 20 项: ${fibResult}`);
 
   // ── 16. call() 系统函数调用测试 ──
   printLog("\n--- 16. call() 系统函数调用测试 ---");

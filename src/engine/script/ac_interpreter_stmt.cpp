@@ -23,6 +23,15 @@
 QJsonValue AcInterpreter::execCallBody(const QVector<ParamDef> &params, const QJsonValue &callArgs,
                                        const Block &body, const QJsonObject *thisObj,
                                        const QString &funcName) {
+  // 递归深度上限：防止无界递归/误用导致解释器长时间无响应（类似 JS 的调用栈溢出）
+  constexpr int kMaxCallDepth = 512;
+  if (m_callDepth >= kMaxCallDepth) {
+    setError(QStringLiteral("调用栈溢出（递归过深，超过 %1 层）：函数 %2")
+                 .arg(kMaxCallDepth)
+                 .arg(funcName),
+             body.stmts.isEmpty() ? 0 : body.stmts.first().line);
+    return QJsonValue();
+  }
   ++m_callDepth;
   QString frameFile;
   int frameLine = 0;
