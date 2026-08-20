@@ -45,6 +45,16 @@ JsonVueWidget::JsonVueWidget(QWidget *parent) : QStackedWidget(parent) {
 //  模式切换
 // ════════════════════════════════════════════════════════════
 
+void JsonVueWidget::focusActiveView() {
+  // 聚焦当前显示的页：可视化模式下代码编辑器页隐藏，setFocus 不会生效，
+  // 必须聚焦可视化编辑器本身，才能触发主窗口的 onFocusChanged 完成面板激活
+  if (isVisualMode()) {
+    m_visual->setFocus();
+  } else {
+    m_editor->setFocus();
+  }
+}
+
 void JsonVueWidget::switchToCode() {
   if (currentIndex() == 0) return;
   // 从可视化切到代码：把可视化配置写回代码

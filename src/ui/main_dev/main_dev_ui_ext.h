@@ -25,7 +25,7 @@ class QPaintEvent;
 //  SplitSide — 拖拽拆分方向（VSCode 风格：拖到左/右边缘拆分）
 // ════════════════════════════════════════════════════════════
 
-enum class SplitSide { None = 0, Left, Right };
+enum class SplitSide { None = 0, Full, Left, Right };
 
 // ════════════════════════════════════════════════════════════
 //  SplitOverlay — 拆分高亮覆盖层（半透明蓝色，覆盖左/右半区）

@@ -142,12 +142,11 @@ void MainDevMgr::closeTab(QTabWidget *tabs, int index) {
     QTabWidget *remaining = currentTabWidget();
     if (remaining && remaining->count() > 0) {
       auto *w = remaining->currentWidget();
-      auto *ed = qobject_cast<CodeEditor *>(w);
-      if (!ed) {
-        auto *jvw = qobject_cast<JsonVueWidget *>(w);
-        if (jvw) ed = jvw->codeEditor();
+      if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) {
+        jvw->focusActiveView();
+      } else if (auto *ed = qobject_cast<CodeEditor *>(w)) {
+        ed->setFocus();
       }
-      if (ed) ed->setFocus();
     }
     connectEditor(currentEditor());
     m_ui->applyTabDimming(currentTabWidget());
@@ -240,12 +239,13 @@ void MainDevMgr::onTabBarClicked(int index) {
   if (!tabs || index < 0 || index >= tabs->count()) return;
 
   // 将焦点设置到当前编辑器，触发 onFocusChanged 完成面板切换
+  // jsonvue 需聚焦当前显示的视图（可视化/代码），避免聚焦到隐藏页导致切换无效
   auto *w = tabs->widget(index);
-  auto *editor = qobject_cast<CodeEditor *>(w);
-  if (!editor) {
-    auto *jvw = qobject_cast<JsonVueWidget *>(w);
-    if (jvw) editor = jvw->codeEditor();
+  if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) {
+    jvw->focusActiveView();
+    return;
   }
+  auto *editor = qobject_cast<CodeEditor *>(w);
   if (editor) editor->setFocus();
 }
 
@@ -361,11 +361,13 @@ void MainDevMgr::onSplitRight() {
   m_model->lastActivePanel = newPanel;
   m_ui->applyTabDimming(newPanel);
 
-  auto *editorInPanel = qobject_cast<CodeEditor *>(newPanel->currentWidget());
-  if (editorInPanel)
-    editorInPanel->setFocus();
-  else
+  if (auto *editor = qobject_cast<CodeEditor *>(newPanel->currentWidget())) {
+    editor->setFocus();
+  } else if (auto *jvw = qobject_cast<JsonVueWidget *>(newPanel->currentWidget())) {
+    jvw->focusActiveView();
+  } else {
     newPanel->setFocus();
+  }
 }
 
 void MainDevMgr::onCloseEditor() {
@@ -467,11 +469,9 @@ void MainDevMgr::onTabSplitDropped(int fromIndex, DraggableTabBar *fromBar, Spli
   m_model->lastActivePanel = newPanel;
   m_ui->applyTabDimming(newPanel);
 
-  CodeEditor *editor = qobject_cast<CodeEditor *>(newPanel->currentWidget());
-  if (editor) {
+  if (auto *editor = qobject_cast<CodeEditor *>(newPanel->currentWidget())) {
     editor->setFocus();
-  } else {
-    auto *jvw = qobject_cast<JsonVueWidget *>(newPanel->currentWidget());
-    if (jvw) jvw->codeEditor()->setFocus();
+  } else if (auto *jvw = qobject_cast<JsonVueWidget *>(newPanel->currentWidget())) {
+    jvw->focusActiveView();
   }
 }

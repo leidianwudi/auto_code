@@ -244,21 +244,15 @@ void MainDevMgr::connectVisualToggle() {
   connect(m_ui->visualToggleBtn(), &QPushButton::toggled, this, [this](bool checked) {
     // 保存按钮状态到 tree.config
     m_ui->fileTree()->setVisualToggle(checked);
-    // 获取当前 tab 的 widget
-    for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
-      auto *tabs = m_ui->editorPanelAt(i);
-      if (!tabs) continue;
-      if (!tabs->isVisible()) continue;
-      auto *w = tabs->currentWidget();
-      auto *jvw = qobject_cast<JsonVueWidget *>(w);
-      if (jvw) {
-        if (checked) {
-          jvw->switchToVisual();
-        } else {
-          jvw->switchToCode();
-        }
-        return;
-      }
+    // 作用于当前获得焦点（或最后活跃）的编辑器面板，而不是第一个可见面板
+    auto *tabs = currentTabWidget();
+    if (!tabs) return;
+    auto *jvw = qobject_cast<JsonVueWidget *>(tabs->currentWidget());
+    if (!jvw) return;
+    if (checked) {
+      jvw->switchToVisual();
+    } else {
+      jvw->switchToCode();
     }
   });
 }

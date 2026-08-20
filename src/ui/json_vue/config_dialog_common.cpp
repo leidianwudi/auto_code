@@ -44,6 +44,10 @@ ConfigDialogFrame beginConfigDialog(QDialog *dialog, const QString &title, const
 void finishConfigDialog(QDialog *dialog, const ConfigDialogFrame &frame) {
   // 底部按钮在业务内容之后添加，保证显示在对话框底部
   auto btns = AuiButton::createDialogButtons(dialog);
+  // 确定 → accept，取消 → reject（此前遗漏连接，导致三个配置对话框按钮无效）
+  QObject::connect(btns.okBtn, &QPushButton::clicked, dialog, &QDialog::accept);
+  if (btns.cancelBtn)
+    QObject::connect(btns.cancelBtn, &QPushButton::clicked, dialog, &QDialog::reject);
   frame.contentLayout->addLayout(btns.layout);
   AuiWindow::applyWindowFrame(dialog, frame.titleBar, frame.contentWidget);
 }

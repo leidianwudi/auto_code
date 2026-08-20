@@ -106,6 +106,12 @@ CodeEditor::CodeEditor(QWidget *parent) : QPlainTextEdit(parent) {
   connect(&SettingStore::ins(), &SettingStore::fontsChanged, this,
           &CodeEditor::applyFontFromSetting);
 
+  // 禁用编辑器的拖放接受（默认 QPlainTextEdit viewport 接受 drop，
+  // 会吞掉跨面板标签拖拽事件，导致 DimmableTabWidget 收不到 dragMove，
+  // 拆分高亮覆盖层无法显示）。系统拖文件到编辑器打开等高级功能暂未实现。
+  setAcceptDrops(false);
+  viewport()->setAcceptDrops(false);
+
   // 禁用自动换行，启用水平滚动条
   setLineWrapMode(QPlainTextEdit::NoWrap);
   setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);

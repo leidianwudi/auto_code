@@ -34,7 +34,12 @@
 //  构造
 // ════════════════════════════════════════════════════════════
 
-JsonVueEditor::JsonVueEditor(QWidget *parent) : QWidget(parent) { setupUI(); }
+JsonVueEditor::JsonVueEditor(QWidget *parent) : QWidget(parent) {
+  // 允许容器自身获得焦点：面板切换（如点击 tab 头）时 focusActiveView()
+  // 需要在可视化模式下聚焦到当前页，默认 NoFocus 会导致 setFocus 无效
+  setFocusPolicy(Qt::StrongFocus);
+  setupUI();
+}
 
 // ════════════════════════════════════════════════════════════
 //  界面构建

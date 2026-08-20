@@ -97,10 +97,10 @@ public:
     return SettingStore::ins().color(QStringLiteral("ui.modifiedColor"));
   }
 
-  /// 修改文件名颜色（更醒目的琥珀橙，与错误红、普通文字色区分）
+  /// 修改文件名颜色（醒目的琥珀金，色相偏黄与错误红区分）
   static QColor modifiedTextColor() {
     const bool dark = (SettingStore::ins().theme() == SettingStore::ThemeDark);
-    return dark ? QColor(0xff, 0xa5, 0x00) : QColor(0xc2, 0x3b, 0x00);
+    return dark ? QColor(0xff, 0xc4, 0x00) : QColor(0xb3, 0x77, 0x00);
   }
 
   /// 错误文本颜色（输出面板用），红色

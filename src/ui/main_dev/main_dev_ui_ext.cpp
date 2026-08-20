@@ -42,8 +42,8 @@ void SplitOverlay::showForSide(SplitSide side, const QRect &area) {
 void SplitOverlay::paintEvent(QPaintEvent * /*event*/) {
   QPainter p(this);
   p.setRenderHint(QPainter::Antialiasing);
-  // 高亮色与选中标签顶部指示条一致（VSCode 风格的蓝色）
-  const QColor fill(14, 122, 254, 70);
+  // 高亮色与选中标签顶部指示条一致（VSCode 风格的蓝色），半透明足够醒目
+  const QColor fill(14, 122, 254, 95);
   const QColor border(14, 122, 254, 220);
   p.setPen(QPen(border, 2));
   p.setBrush(fill);
@@ -153,14 +153,13 @@ void DraggableTabBar::dragMoveEvent(QDragMoveEvent *event) {
   }
   event->acceptProposedAction();
 
-  // 拖到 tab 头左/右边缘 → 显示拆分高亮（覆盖整个所属面板）
+  // 拖到 tab 头左/右边缘 → 拆分高亮（覆盖所属面板半区）；
+  // 中间区域 → 整面板高亮（移入本面板）。display 与 m_splitSide 分开：
+  // m_splitSide 仅记录真实拆分方向（中间为 None → drop 走 tab 移动），显示用 Full
   m_splitSide = splitSideAt(event->position().toPoint(), this);
   if (auto *panel = qobject_cast<DimmableTabWidget *>(parentWidget())) {
-    if (m_splitSide != SplitSide::None) {
-      panel->showSplitOverlay(m_splitSide);
-    } else {
-      panel->hideSplitOverlay();
-    }
+    SplitSide display = (m_splitSide == SplitSide::None) ? SplitSide::Full : m_splitSide;
+    panel->showSplitOverlay(display);
   }
 }
 
@@ -179,7 +178,8 @@ void DraggableTabBar::dropEvent(QDropEvent *event) {
   }
 
   // 命中拆分区域 → 触发拆分（由 MainDevMgr 创建新面板并移动标签）
-  if (m_splitSide != SplitSide::None) {
+  // 仅 Left/Right 触发拆分；Full（tab 头中间）落入下方 tab 移动逻辑
+  if (m_splitSide == SplitSide::Left || m_splitSide == SplitSide::Right) {
     SplitSide side = m_splitSide;
     m_splitSide = SplitSide::None;
     if (auto *panel = qobject_cast<DimmableTabWidget *>(parentWidget())) panel->hideSplitOverlay();
@@ -280,7 +280,7 @@ DimmableTabWidget::DimmableTabWidget(QWidget *parent) : QTabWidget(parent) {
 void DimmableTabWidget::showSplitOverlay(SplitSide side) {
   if (!m_splitOverlay) return;
   m_splitSide = side;
-  // 覆盖层只覆盖左半区（拆分到左）或右半区（拆分到右），VSCode 风格
+  // VSCode 风格：Left/Right 高亮左/右半区（拆分），Full 高亮整个面板（移动到本面板）
   QRect area = rect();
   if (side == SplitSide::Left) {
     area.setWidth(area.width() / 2);
@@ -313,14 +313,11 @@ void DimmableTabWidget::dragMoveEvent(QDragMoveEvent *event) {
   }
   event->acceptProposedAction();
 
-  // 拖到内容区左/右边缘 → 显示拆分高亮
+  // 拖到内容区：左/右边缘 → 拆分高亮；中间区域 → 整面板高亮（移入本面板，VSCode 风格）
   SplitSide side = splitSideAt(event->position().toPoint(), this);
+  if (side == SplitSide::None) side = SplitSide::Full;
   if (side != m_splitSide) {
-    if (side != SplitSide::None) {
-      showSplitOverlay(side);
-    } else {
-      hideSplitOverlay();
-    }
+    showSplitOverlay(side);
   }
 }
 
@@ -336,7 +333,8 @@ void DimmableTabWidget::dropEvent(QDropEvent *event) {
   }
 
   // 命中拆分区域 → 触发拆分（先取出方向，再隐藏覆盖层重置状态）
-  if (m_splitSide != SplitSide::None) {
+  // 仅 Left/Right 触发拆分；Full（中间区域）落入下方普通移动逻辑
+  if (m_splitSide == SplitSide::Left || m_splitSide == SplitSide::Right) {
     SplitSide side = m_splitSide;
     hideSplitOverlay();
     auto *fromBar = DraggableTabBar::dragSourceBar();

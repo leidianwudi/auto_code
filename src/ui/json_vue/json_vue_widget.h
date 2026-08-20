@@ -42,6 +42,9 @@ public:
   /// 当前是否为可视化模式
   bool isVisualMode() const { return currentIndex() == 1; }
 
+  /// 聚焦当前显示的视图（可视化模式聚焦可视化编辑器，否则聚焦代码编辑器）
+  void focusActiveView();
+
   /// 切换到代码模式
   void switchToCode();
 
