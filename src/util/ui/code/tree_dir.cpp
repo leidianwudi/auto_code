@@ -6,6 +6,7 @@
 #include "tree_dir.h"
 
 #include <QApplication>
+#include <QAbstractItemModel>
 #include <QContextMenuEvent>
 #include <QDir>
 #include <QFileInfo>
@@ -49,28 +50,71 @@ void ModifiedFileDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
                                  const QModelIndex &index) const {
   int errorCount = index.data(Qt::UserRole + 3).toInt();
   bool modified = index.data(Qt::UserRole + 2).toBool();
-  const QTreeWidget *tree = qobject_cast<const QTreeWidget *>(parent());
-
-  // 1) 背景 / 选中高亮 / 复选框：直接用样式绘制。
-  //    先 initStyleOption 补全复选框状态（HasCheckIndicator / checkState），
-  //    否则视图传入的 option 未携带勾选信息，复选框不会绘制；
-  //    再清除文本与图标，避免与下方手动绘制重复（重影）。
-  QStyleOptionViewItem baseOpt = option;
-  initStyleOption(&baseOpt, index);
-  baseOpt.text.clear();
-  baseOpt.icon = QIcon();
+  const TreeDir *tree = qobject_cast<const TreeDir *>(parent());
   QStyle *st = option.widget ? option.widget->style() : QApplication::style();
-  st->drawControl(QStyle::CE_ItemViewItem, &baseOpt, painter, option.widget);
 
-  // 2) 字体（与普通节点一致，不加粗、字号不变）
+  // 整行矩形：覆盖整个视口宽度（左 0 → 右 viewport 右缘），
+  // 保证选中/悬停背景连左右空白区也变色（Trae IDE 风格）
+  QRect rowRect = option.rect;
+  if (tree && tree->viewport()) {
+    rowRect.setLeft(0);
+    rowRect.setRight(tree->viewport()->width() - 1);
+  }
+
+  // 1) 背景：始终填充整行（覆盖 QTreeView 自绘的分支/交替背景，避免箭头与文字重影）。
+  //    选中态 → 选中背景；悬停态 → hover 高亮；否则沿用树视图默认背景。
+  //    悬停节点由 TreeDir::viewportEvent 实时记录在 hoverItem() 中。
+  const bool hovered =
+      tree && (tree->hoverItem() == static_cast<const QTreeWidgetItem *>(index.internalPointer()));
+  QColor bgColor;
+  if (option.state & QStyle::State_Selected) {
+    bgColor = AuiStyle::listSelectionBackground();
+  } else if (hovered) {
+    bgColor = AuiStyle::listHoverBackground();
+  } else {
+    bgColor = option.palette.color(QPalette::Base);  // 与树视图默认背景一致
+  }
+  painter->fillRect(rowRect, bgColor);
+
+  // 2) 展开/收起三角（分支指示符）：背景覆盖了 QTreeView 的分支，需在此自绘。
+  //    注意：option.rect 是缩进后的内容区（x = indent*(level+1)），箭头左边缘应
+  //    在缩进区域的最内层，即 option.rect.x() - indent + 1，不能从内容区起点算起，
+  //    否则箭头会偏右画到图标/文本区域造成重影。
+  if (index.model() && index.model()->hasChildren(index)) {
+    const int indent = tree ? tree->indentation() : 16;
+    const auto *item = static_cast<const QTreeWidgetItem *>(index.internalPointer());
+    QStyleOptionViewItem branchOpt = option;
+    branchOpt.rect = QRect(option.rect.x() - indent + 1, option.rect.y(), indent,
+                           option.rect.height());
+    branchOpt.state |= QStyle::State_Item | QStyle::State_Children | QStyle::State_Enabled;
+    if (item && item->isExpanded()) branchOpt.state |= QStyle::State_Open;
+    st->drawPrimitive(QStyle::PE_IndicatorBranch, &branchOpt, painter, option.widget);
+  }
+
+  // 3) 复选框自绘：有勾选指示时用原生风格绘制三态复选框
+  QRect checkRect;
+  if (index.data(Qt::CheckStateRole).isValid()) {
+    QStyleOptionViewItem checkOpt = option;
+    initStyleOption(&checkOpt, index);
+    checkRect =
+        st->subElementRect(QStyle::SE_ItemViewItemCheckIndicator, &checkOpt, option.widget);
+    QStyleOptionButton cb;
+    cb.rect = checkRect;
+    cb.state = QStyle::State_Enabled;
+    const int cs = index.data(Qt::CheckStateRole).toInt();
+    if (cs == Qt::Checked)
+      cb.state |= QStyle::State_On;
+    else if (cs == Qt::PartiallyChecked)
+      cb.state |= QStyle::State_NoChange;  // 部分勾选：小方块
+    st->drawPrimitive(QStyle::PE_IndicatorCheckBox, &cb, painter, option.widget);
+  }
+  const int checkWidth = checkRect.isValid() ? checkRect.width() + 4 : 0;
+
+  // 4) 字体（与普通节点一致，不加粗、字号不变）
   QFont textFont = tree ? tree->font() : option.font;
   QFontMetrics fm(textFont);
 
-  // 3) 布局：复选框 → 图标 → 文本
-  int checkWidth = 0;
-  if (index.data(Qt::CheckStateRole).isValid())
-    checkWidth = tree ? tree->style()->pixelMetric(QStyle::PM_IndicatorWidth) + 4 : 20;
-
+  // 5) 布局：复选框 → 图标 → 文本
   QIcon icon = index.data(Qt::DecorationRole).value<QIcon>();
   int maxIconH = option.decorationSize.height();
   if (maxIconH <= 0) maxIconH = 16;
@@ -161,6 +205,10 @@ TreeDir::TreeDir(QWidget *parent) : QTreeWidget(parent) {
   setAnimated(false);
   setIndentation(16);
   setSortingEnabled(false);
+  // 树目录上的节点可点击展开/选中/勾选，悬停时显示手型光标
+  viewport()->setCursor(Qt::PointingHandCursor);
+  // 开启鼠标跟踪，使 viewportEvent 能实时收到 MouseMove/Leave 实现悬停整行高亮
+  viewport()->setAttribute(Qt::WA_MouseTracking, true);
 
   setItemDelegate(new ModifiedFileDelegate(this));
 
@@ -272,7 +320,7 @@ void TreeDir::onItemClicked(QTreeWidgetItem *item, int column) {
   const QString filePath = item->data(0, Qt::UserRole + 1).toString();
 
   if (filePath.isEmpty()) {
-    // 目录节点：只有点击复选框区域才切换子节点复选框
+    // 目录节点：点击复选框区域 → 级联切换子节点复选框；点击其他区域 → 展开/收起
     if (m_lastClickOnCheckbox) {
       // Qt 已自动切换了文件夹自身的复选框，此处直接读取当前状态同步给子节点
       Qt::CheckState state = item->checkState(0);
@@ -281,6 +329,11 @@ void TreeDir::onItemClicked(QTreeWidgetItem *item, int column) {
       m_bulkUpdating = false;
       updateParentCheckState(item);
       scheduleSave();
+    } else {
+      // 单击文件夹文本/图标/空白处 → 切换展开/收起（setExpanded 会触发
+      // itemExpanded/itemCollapsed，构造函数已连接切换文件夹展开图标）
+      item->setExpanded(!item->isExpanded());
+      scheduleSave();  // 保存展开状态，重启后可还原
     }
     return;
   }
@@ -316,6 +369,10 @@ static QString buildFolderPath(QTreeWidgetItem *item, const QString &rootPath);
 void TreeDir::onItemChanged(QTreeWidgetItem *item, int column) {
   Q_UNUSED(column);
   if (!item || m_bulkUpdating) return;
+
+  // 仅复选框（Qt::CheckStateRole）变化才需要级联与保存；
+  // 悬停高亮等其他自定义角色（如 kTreeHoverRole）变化不应触发副作用。
+  if (!item->data(0, Qt::CheckStateRole).isValid()) return;
 
   const QString filePath = item->data(0, Qt::UserRole + 1).toString();
 
@@ -1066,4 +1123,38 @@ void TreeDir::locateFile(const QString &filePath) {
   const QRect vr = visualItemRect(item);
   if (!vr.isValid() || !vr.intersects(viewport()->rect()))
     scrollToItem(item, QAbstractItemView::PositionAtCenter);
+}
+
+bool TreeDir::viewportEvent(QEvent *event) {
+  // 手动追踪悬停节点：Qt 纯代码 delegate 不会自动携带 State_MouseOver。
+  // QAbstractScrollArea 通过 viewport 事件过滤器链把鼠标事件转给本虚函数，
+  // 鼠标移动/离开都会到达这里（事件类型是 MouseMove/Leave），据此实时更新
+  // m_hoverItem，供 ModifiedFileDelegate 对整行（含左右空白区）做悬停高亮。
+  if (event->type() == QEvent::MouseMove) {
+    auto *me = static_cast<QMouseEvent *>(event);
+    QTreeWidgetItem *hover = itemAt(me->pos());
+    if (hover != m_hoverItem) {
+      if (m_hoverItem) repaintRow(m_hoverItem);
+      m_hoverItem = hover;
+      if (m_hoverItem) repaintRow(m_hoverItem);
+    }
+  } else if (event->type() == QEvent::Leave) {
+    if (m_hoverItem) {
+      repaintRow(m_hoverItem);
+      m_hoverItem = nullptr;
+    }
+  }
+  return QTreeWidget::viewportEvent(event);
+}
+
+/// 重绘某节点所在行的整行区域（左 0 → 视口右缘）。
+/// 只调用 update(visualItemRect) 只刷新内容窄条，左右空白区不会变色；
+/// 必须把重绘区域扩展到视口全宽，悬停/取消悬停时整行（含左右空白）才同步变色。
+void TreeDir::repaintRow(const QTreeWidgetItem *item) {
+  if (!item) return;
+  QRect r = visualItemRect(const_cast<QTreeWidgetItem *>(item));
+  if (!r.isValid()) return;
+  r.setLeft(0);
+  r.setRight(viewport()->width() - 1);
+  viewport()->update(r);
 }

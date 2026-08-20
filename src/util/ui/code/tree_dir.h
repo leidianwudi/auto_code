@@ -90,6 +90,9 @@ public:
   /// 设置可视化编辑按钮状态并保存
   void setVisualToggle(bool enabled);
 
+  /// 当前悬停的节点（由 viewportEvent 实时更新，供 delegate 整行高亮）
+  const QTreeWidgetItem *hoverItem() const { return m_hoverItem; }
+
   /// 重命名路径时更新启动项数据（m_startupFiles 和 m_selectedStartup）
   void renameStartupPath(const QString &oldPath, const QString &newPath);
 
@@ -118,6 +121,11 @@ signals:
   void renameRequested(const QString &oldPath, const QString &newName);
   /// 请求删除，携带待删除的绝对路径
   void deleteRequested(const QString &path);
+
+protected:
+  /// 重写 viewportEvent 手动追踪鼠标悬停节点（QEvent::MouseMove/Leave），
+  /// 供 ModifiedFileDelegate 整行高亮（见 tree_dir.cpp 实现）
+  bool viewportEvent(QEvent *event) override;
 
 private slots:
   /// 单击节点
@@ -185,6 +193,9 @@ private:
   /// 从设置读取目录树字体大小并应用（构造与字体设置变化时调用）
   void applyFontFromSetting();
 
+  /// 重绘某节点所在行的整行区域（左 0 → 视口右缘），悬停/取消悬停时整行变色
+  void repaintRow(const QTreeWidgetItem *item);
+
   bool m_lastClickOnCheckbox = false;  ///< 最近一次鼠标释放是否落在复选框区域
   bool m_bulkUpdating = false;         ///< 批量更新中，抑制 itemChanged 级联
 
@@ -193,6 +204,8 @@ private:
 
   QSet<QString> m_startupFiles;  ///< 被设为启动项的 .ac 文件绝对路径集合
   QString m_selectedStartup;     ///< 当前下拉框选中的启动项路径
+
+  class QTreeWidgetItem *m_hoverItem = nullptr;  ///< 当前鼠标悬停的节点（用于整行高亮）
 
   bool m_visualToggle = false;  ///< 可视化编辑按钮状态
 

@@ -34,6 +34,6 @@ main {
     basePath: basePath
   };
   generateApiMain(params);
-
+  
   printLog("--- news_api 生成结束 ---");
 }
