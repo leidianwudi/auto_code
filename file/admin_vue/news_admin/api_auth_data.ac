@@ -3,6 +3,8 @@ export class HtmlUrl {
   //    baseUrl     - HTTP 基础路径
   //    authHeader  - 请求头 Authorization（Bearer token 会经常更换）
   //    postData    - POST 请求的默认数据
+  // .jsonvue文件接口配置里点击生成时，会自动找到离他最近的api_auth_data.ac文件里的http参数，
+  //请求服务，自动填充列配置数据
   public baseUrl: String = "http://127.0.0.1:10002";
   public authHeader: String = "AdminBearer auto_code";
   public postData: String = "{\"page\":1,\"pageSize\":20}";

@@ -15,7 +15,7 @@ ${#      textareaRows, required, formSpan, editComponent,                       
 ${#      hasDefaultValue, defaultValue}]                                         }
 ${# ============================================================================}
 <script setup lang="tsx">
-//此代码为AutoCode框架生成，请勿手动修改
+//此文件为AutoCode编译器生成，请勿手动修改
 import { Form, FormSchema } from '@/components/form';
 import { useForm } from '@/hooks/web/use_form';
 import { PropType, reactive, ref, computed${if hasDefaultValues}, watch, nextTick${/if} } from 'vue';

@@ -22,6 +22,7 @@ ${#   columns       - 列配置数组 [{dataName, label, isSwitch, columnWidth, 
 ${#                    columnFixed}]                                             }
 ${# ============================================================================}
 <script setup lang="tsx">
+//此文件为AutoCode编译器生成，请勿手动修改
 import { BaseButton } from '@/components/button';
 import { FormSchema } from '@/components/form';
 import { Icon } from '@/components/icon';
