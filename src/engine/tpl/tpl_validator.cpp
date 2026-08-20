@@ -251,10 +251,37 @@ void TplValidator::checkMethods(const QString &text, QVector<ValidationResult> &
   static const QRegularExpression exprRegex(
       QStringLiteral("\\$\\{(?!(?:") + kEachName + QStringLiteral("|") + kIfName +
       QStringLiteral("|") + kElseName + QStringLiteral("(?:\\s+") + kIfName +
-      QStringLiteral(")?|") + kElseName + QStringLiteral("|/") + kEachName + QStringLiteral("|/") +
+      QStringLiteral(")?|") + kElseName + QStringLiteral("|") + kEachName + QStringLiteral("|/") +
       kIfName + QStringLiteral(")\\b)[^}]+\\}"));
 
   static const QRegularExpression identRegex(QStringLiteral(R"(^[a-zA-Z_][a-zA-Z0-9_]*$)"));
+
+  // 引号感知的点号切分：字符串字面量内的 '.' 不作为路径分隔符
+  // （否则 fileExists("a.b") 会被切成坏段，误报"无效的标识符"）
+  struct Segment {
+    QString text;
+    int pos;  // 在表达式内容中的起始偏移
+  };
+  auto splitOutsideQuotes = [](const QString &exprContent) -> QList<Segment> {
+    QList<Segment> out;
+    bool inSQuote = false, inDQuote = false;
+    int start = 0;
+    for (int i = 0; i < exprContent.length(); ++i) {
+      const QChar c = exprContent[i];
+      if (c == QLatin1Char('"') && !inSQuote)
+        inDQuote = !inDQuote;
+      else if (c == QLatin1Char('\'') && !inDQuote)
+        inSQuote = !inSQuote;
+      else if (c == QLatin1Char('.') && !inSQuote && !inDQuote) {
+        Segment seg{exprContent.mid(start, i - start), start};
+        out.append(seg);
+        start = i + 1;
+      }
+    }
+    Segment tail{exprContent.mid(start), start};
+    out.append(tail);
+    return out;
+  };
 
   auto exprIt = exprRegex.globalMatch(text);
   while (exprIt.hasNext()) {
@@ -273,14 +300,12 @@ void TplValidator::checkMethods(const QString &text, QVector<ValidationResult> &
 
     QString exprContent = exprMatch.captured().mid(2, exprMatch.capturedLength() - 3);
 
-    QStringList segments = exprContent.split(QLatin1Char('.'));
+    const QList<Segment> segments = splitOutsideQuotes(exprContent);
     if (segments.size() < 2) continue;
 
-    int segPos = exprStart;
-    segPos += segments[0].length() + 1;
-
     for (int s = 1; s < segments.size(); ++s) {
-      QString seg = segments[s].trimmed();
+      QString seg = segments[s].text.trimmed();
+      int segPos = exprStart + segments[s].pos;
 
       // 判断是否为方法调用：段内含 '(' 说明带参数列表
       int parenIdx = seg.indexOf(QLatin1Char('('));
@@ -297,8 +322,6 @@ void TplValidator::checkMethods(const QString &text, QVector<ValidationResult> &
         results.append(ValidationResult(offsetToLine(text, segPos), 0, seg.length(),
                                         QStringLiteral("无效的标识符 '%1'").arg(seg)));
       }
-
-      if (s + 1 < segments.size()) segPos += seg.length() + 1;
     }
   }
 }

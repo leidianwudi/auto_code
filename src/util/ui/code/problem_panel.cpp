@@ -5,7 +5,13 @@
 
 #include "problem_panel.h"
 
+#include <QClipboard>
+#include <QContextMenuEvent>
+#include <QGuiApplication>
 #include <QHeaderView>
+#include <QKeyEvent>
+#include <QKeySequence>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QStyle>
 #include <QStyleOption>
@@ -132,4 +138,50 @@ void ProblemPanel::mouseDoubleClickEvent(QMouseEvent *event) {
     return;
   }
   QTreeWidget::mouseDoubleClickEvent(event);
+}
+
+// ════════════════════════════════════════════════════════════
+//  复制支持（QTreeWidget 原生不支持 Ctrl+C，这里补齐）
+// ════════════════════════════════════════════════════════════
+
+void ProblemPanel::contextMenuEvent(QContextMenuEvent *event) {
+  QMenu menu(this);
+
+  // 复制选中问题行（支持多选）
+  QAction *copySelAct = menu.addAction(QStringLiteral("复制选中问题"));
+  copySelAct->setShortcut(QKeySequence::Copy);
+  copySelAct->setEnabled(!selectedItems().isEmpty());
+
+  // 复制全部问题行
+  QAction *copyAllAct = menu.addAction(QStringLiteral("复制全部问题"));
+  copyAllAct->setEnabled(topLevelItemCount() > 0);
+
+  QAction *chosen = menu.exec(event->globalPos());
+  if (!chosen) return;
+
+  if (chosen == copySelAct) {
+    QGuiApplication::clipboard()->setText(formatIssuesForCopy(selectedItems()));
+  } else if (chosen == copyAllAct) {
+    QList<QTreeWidgetItem *> all;
+    for (int i = 0; i < topLevelItemCount(); ++i) all.append(topLevelItem(i));
+    QGuiApplication::clipboard()->setText(formatIssuesForCopy(all));
+  }
+}
+
+void ProblemPanel::keyPressEvent(QKeyEvent *event) {
+  // Ctrl+C：复制选中的问题行
+  if (event->matches(QKeySequence::Copy) && !selectedItems().isEmpty()) {
+    QGuiApplication::clipboard()->setText(formatIssuesForCopy(selectedItems()));
+    return;
+  }
+  QTreeWidget::keyPressEvent(event);
+}
+
+QString ProblemPanel::formatIssuesForCopy(const QList<QTreeWidgetItem *> &items) const {
+  QStringList lines;
+  for (const QTreeWidgetItem *item : items) {
+    // 格式：消息 (文件名:行)
+    lines << QStringLiteral("%1 (%2)").arg(item->text(0), item->text(1));
+  }
+  return lines.join(QLatin1Char('\n'));
 }

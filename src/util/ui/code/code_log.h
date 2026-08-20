@@ -12,6 +12,7 @@
 
 #include <QPlainTextEdit>
 
+class QContextMenuEvent;
 class QPaintEvent;
 class QResizeEvent;
 class QWidget;
@@ -74,4 +75,5 @@ private:
 
   // QPlainTextEdit 事件重写
   void resizeEvent(QResizeEvent *event) override;
+  void contextMenuEvent(QContextMenuEvent *event) override;
 };

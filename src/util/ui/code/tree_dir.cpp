@@ -508,9 +508,8 @@ void TreeDir::saveState() {
 void TreeDir::loadState() {
   if (m_configPath.isEmpty()) return;
 
-  // 无配置时默认全部展开
+  // 无配置或配置损坏 → 不还原、也不默认全部展开，保持当前（折叠）状态
   if (!m_store.load(m_configPath)) {
-    expandAll();
     return;
   }
 
@@ -544,9 +543,6 @@ void TreeDir::loadState() {
     m_selectedStartup.clear();
   }
 
-  // 有不存在的文件被过滤掉时，更新配置文件
-  if (startupPruned) saveState();
-
   // 刷新启动项图标
   refreshStartupIcons();
 
@@ -556,10 +552,15 @@ void TreeDir::loadState() {
   // ── 恢复可视化编辑按钮状态 ──
   m_visualToggle = m_store.visualToggle;
 
-  // ── 恢复展开状态（无记录时默认全部展开）──
+  // ── 恢复展开状态 ──
   applyExpandedToTree(m_store.expandedRelPaths);
 
   m_bulkUpdating = false;
+
+  // 有不存在的启动项文件被过滤掉时，更新配置文件。
+  // 须在 applyExpandedToTree 之后执行：此时树已恢复展开状态，
+  // saveState 收集到的才是正确的展开路径，不会把 config 中的展开记录清空。
+  if (startupPruned) saveState();
 }
 
 // ============================================================================
@@ -629,8 +630,7 @@ void TreeDir::applyExpandedToTree(const QStringList &expandedRelPaths) {
   // 无需再临时关闭动画。
 
   if (expandedRelPaths.isEmpty()) {
-    // 无展开记录 → 默认全部展开
-    expandAll();
+    // 无展开记录（首次启动/配置丢失）→ 保持折叠，不默认全部展开
     return;
   }
 

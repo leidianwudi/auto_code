@@ -15,6 +15,8 @@
 
 #include "src/engine/validation_result.h"
 
+class QContextMenuEvent;
+class QKeyEvent;
 class QMouseEvent;
 
 /// 问题面板中的单个问题项（含完整文件路径，支持跨文件跳转）
@@ -45,7 +47,12 @@ signals:
 
 protected:
   void mouseDoubleClickEvent(QMouseEvent *event) override;
+  void contextMenuEvent(QContextMenuEvent *event) override;
+  void keyPressEvent(QKeyEvent *event) override;
 
 private:
   QVector<IssueItem> m_lastIssues;  ///< 最近一次问题列表（主题刷新时重绘使用）
+
+  /// 将问题条目格式化为可复制文本（每行一条："消息 (文件名:行)"）
+  QString formatIssuesForCopy(const QList<QTreeWidgetItem *> &items) const;
 };

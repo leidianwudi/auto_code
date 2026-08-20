@@ -5,8 +5,10 @@
 
 #include "main_dev_ui.h"
 
+#include <algorithm>
 #include <QApplication>
 #include <QCloseEvent>
+#include <QCollator>
 #include <QDir>
 #include <QDrag>
 #include <QDragEnterEvent>
@@ -512,6 +514,13 @@ void MainDevUi::refreshStartupCombo() {
 
   QStringList files = m_fileTree->startupFiles();
   QFileInfo selInfo(m_fileTree->selectedStartup());
+
+  // 按文件名自然排序（数字按大小、汉字按拼音），保证下拉框顺序稳定
+  QCollator collator;
+  collator.setNumericMode(true);
+  std::sort(files.begin(), files.end(), [&collator](const QString &a, const QString &b) {
+    return collator.compare(QFileInfo(a).fileName(), QFileInfo(b).fileName()) < 0;
+  });
 
   for (const QString &path : files) {
     QFileInfo fi(path);

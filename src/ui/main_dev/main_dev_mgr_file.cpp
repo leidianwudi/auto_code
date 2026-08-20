@@ -129,6 +129,9 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
   // 必须先设置 objectName（文件路径），再触发验证；
   // 否则验证时 m_filePath 为空，import 解析被跳过，导致误报 "class X has no method" 类型错误
   editor->setObjectName(filePath);
+  // 验证结果聚合到「问题」面板：每个编辑器永久连接（connectEditor 只连接当前编辑器，
+  // 拆分面板/后台标签页产生的验证结果会丢失，导致问题面板与实际编辑内容不符）
+  connect(editor, &CodeEditor::validationIssues, this, &MainDevMgr::onValidationIssues);
   editor->validate();
   // 恢复该文件持久化的断点（关闭重开后保留）：
   // 剔除超出总行数的失效行并同步更新持久存储（DebugController 内处理）

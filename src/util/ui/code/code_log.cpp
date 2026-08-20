@@ -5,8 +5,14 @@
 
 #include "code_log.h"
 
+#include <QClipboard>
+#include <QContextMenuEvent>
 #include <QFontDatabase>
+#include <QGuiApplication>
+#include <QKeySequence>
+#include <QMenu>
 #include <QPainter>
+#include <QScrollBar>
 #include <QTextBlock>
 #include <QTextBlockFormat>
 #include <QTextCursor>
@@ -79,9 +85,16 @@ void CodeLog::append(const QString &text, bool isError) {
   QTextCursor cursor(doc);
   cursor.movePosition(QTextCursor::End);
 
-  // 如果文档末尾有空的尾随段落（QPlainTextEdit 默认行为），回退到前一个块
   QTextBlock lastBlock = doc->begin();
   while (lastBlock.next().isValid()) lastBlock = lastBlock.next();
+
+  // 用户光标状态：滚动条在底部、无选区、光标位于末块时才自动跟随新日志滚动，
+  // 否则保留用户的选区与滚动位置（避免流式输出不断破坏正在进行的复制选择）
+  const bool atBottom = verticalScrollBar()->value() >= verticalScrollBar()->maximum() - 1;
+  const bool follow = atBottom && !textCursor().hasSelection() &&
+                      textCursor().block() == lastBlock;
+
+  // 如果文档末尾有空的尾随段落（QPlainTextEdit 默认行为），回退到前一个块
   if (lastBlock.text().isEmpty() && doc->blockCount() > 1) {
     cursor.movePosition(QTextCursor::PreviousBlock);
     cursor.movePosition(QTextCursor::EndOfBlock);
@@ -95,8 +108,11 @@ void CodeLog::append(const QString &text, bool isError) {
 
   cursor.insertText(cleanText, msgFmt);
 
-  setTextCursor(cursor);
-  ensureCursorVisible();
+  // 仅在"跟随"状态下抢占光标并滚动到底（保护用户选区/滚动位置）
+  if (follow) {
+    setTextCursor(cursor);
+    ensureCursorVisible();
+  }
 
   ++m_lineNumber;
   m_lineNumberArea->update();
@@ -202,4 +218,44 @@ void CodeLog::resizeEvent(QResizeEvent *event) {
   QPlainTextEdit::resizeEvent(event);
   QRect cr = contentsRect();
   m_lineNumberArea->setGeometry(QRect(cr.left(), cr.top(), lineNumberAreaWidth(), cr.height()));
+}
+
+void CodeLog::contextMenuEvent(QContextMenuEvent *event) {
+  QMenu menu(this);
+
+  // 复制选中内容（有选区时可用，Ctrl+C 为 Qt 原生快捷键）
+  QAction *copySelAct = menu.addAction(QStringLiteral("复制选中内容"));
+  copySelAct->setShortcut(QKeySequence::Copy);
+  copySelAct->setEnabled(textCursor().hasSelection());
+
+  // 复制当前行（右键点击位置所在行，不依赖选区）
+  QAction *copyLineAct = menu.addAction(QStringLiteral("复制当前行"));
+
+  // 复制全部（行号区域独立绘制，不进入复制的文本）
+  QAction *copyAllAct = menu.addAction(QStringLiteral("复制全部"));
+  copyAllAct->setEnabled(!document()->isEmpty());
+
+  menu.addSeparator();
+  QAction *selectAllAct = menu.addAction(QStringLiteral("全选"));
+  selectAllAct->setShortcut(QKeySequence::SelectAll);
+
+  menu.addSeparator();
+  QAction *clearAct = menu.addAction(QStringLiteral("清空输出"));
+
+  QAction *chosen = menu.exec(event->globalPos());
+  if (!chosen) return;
+
+  if (chosen == copySelAct) {
+    copy();
+  } else if (chosen == copyLineAct) {
+    // 取右键点击处所在行（临时光标，不移动光标、不破坏已有选区）
+    QTextCursor lineCursor = cursorForPosition(event->pos());
+    QGuiApplication::clipboard()->setText(lineCursor.block().text());
+  } else if (chosen == copyAllAct) {
+    QGuiApplication::clipboard()->setText(toPlainText());
+  } else if (chosen == selectAllAct) {
+    selectAll();
+  } else if (chosen == clearAct) {
+    clearLog();
+  }
 }

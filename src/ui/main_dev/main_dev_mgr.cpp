@@ -381,7 +381,11 @@ void MainDevMgr::onWorkspaceScanFinished() {
   int problemCount = 0;
   for (auto it = m_fileIssues.cbegin(); it != m_fileIssues.cend(); ++it)
     problemCount += it.value().size();
-  m_ui->appendOutput(QStringLiteral("工作区错误检查完成，共 %1 个问题").arg(problemCount), false);
+  m_ui->appendOutput(
+      QStringLiteral("工作区错误检查完成，共 %1 个问题（扫描时点快照；此后编辑产生的实时错误"
+                     "以「问题」面板为准）")
+          .arg(problemCount),
+      false);
 }
 
 // ──────────────────────────────────────────────────────────────

@@ -248,8 +248,15 @@ QJsonValue AcBuiltinEval::evalArrayMethod(AcInterpreter &interp, const QJsonArra
       return QJsonValue();
     }
     int start = safeJsonToInt(evalArg(0));
+    // 钳制 start 到合法范围，避免负数传给 takeAt 造成越界崩溃
+    if (start < 0) start = 0;
+    if (start > arr.size()) start = arr.size();
     int deleteCount = arr.size() - start;
-    if (args.size() >= 2) deleteCount = safeJsonToInt(evalArg(1));
+    if (args.size() >= 2) {
+      deleteCount = safeJsonToInt(evalArg(1));
+      // 负删除数无意义，按 0 处理（与 JS 语义一致）
+      if (deleteCount < 0) deleteCount = 0;
+    }
     QJsonArray newArr = arr;
     QJsonArray removed;
     for (int i = 0; i < deleteCount && start < newArr.size(); ++i) {

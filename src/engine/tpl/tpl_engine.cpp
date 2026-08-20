@@ -84,6 +84,10 @@ QString TplEngine::render(const QString &tmpl, const QJsonObject &data) const {
   // 阶段 3：渲染
   QString result = TplRenderer::render(ast, data, *this);
 
+  // 渲染中途出错（如 each 目标不是数组）时返回空串，
+  // 避免部分渲染结果被当作成功产物写入生成文件
+  if (!m_lastError.isEmpty()) return {};
+
   return result;
 }
 
@@ -105,12 +109,18 @@ QJsonValue TplEngine::resolveFuncCall(const QString &path, const QJsonObject &co
   QString argsStr = path.mid(parenPos + 1);
   argsStr.chop(1);  // 去掉尾部的 )
 
-  // 解析参数：逗号分隔，去除首尾空白
+  // 解析参数：逗号分隔，去除首尾空白（引号内的逗号不分割）
   QStringList rawArgs;
   if (!argsStr.isEmpty()) {
     int start = 0;
+    bool inSQuote = false, inDQuote = false;
     for (int i = 0; i < argsStr.length(); ++i) {
-      if (argsStr[i] == QLatin1Char(',')) {
+      const QChar c = argsStr[i];
+      if (c == QLatin1Char('"') && !inSQuote) {
+        inDQuote = !inDQuote;
+      } else if (c == QLatin1Char('\'') && !inDQuote) {
+        inSQuote = !inSQuote;
+      } else if (c == QLatin1Char(',') && !inSQuote && !inDQuote) {
         rawArgs.append(argsStr.mid(start, i - start).trimmed());
         start = i + 1;
       }

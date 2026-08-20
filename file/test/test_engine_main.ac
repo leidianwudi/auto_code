@@ -1,0 +1,457 @@
+// File: engine_test.ac
+// Description: AC 引擎 + 模板引擎回归测试套件
+//
+// 定位：与 main_test.ac 互补，聚焦解释器核心语义与模板渲染的边界行为，
+//       每个 check 都对应一个曾出过 bug 或易出错的高危路径。
+//
+// 覆盖范围：
+//   A. 循环/switch 内 return（回归：return 后循环不终止导致返回值被覆盖）
+//   B. 逻辑短路求值（回归：&& / || 不短路，右侧副作用与空值防御失效）
+//   C. splice 与数组方法全量（回归：负索引越界崩溃）
+//   D. 字符串方法全量 + split 逻辑链（回归：url 基名推导取到错误段）
+//   E. 控制流（break/continue 嵌套、复合赋值、自增自减、三元、优先级）
+//   F. 作用域（块级遮蔽、循环变量）
+//   G. foreach 语义（数组/对象/字符串）
+//   H. JSON 序列化往返
+//   I. 模板引擎 renderTpl（变量/嵌套路径/each/if/算术/函数调用/引号内逗号）
+//
+// 运行方式：目录树勾选本文件后点击运行
+// 结果判定：看日志末尾汇总行 "通过 N / 失败 M"；期望全部通过（失败 M 为 0）
+// 配套文件：engine_sample.tpl（模板渲染用例，须与本文件同目录）
+
+let g_pass: Number = 0;
+let g_fail: Number = 0;
+let g_failed: String[] = [];
+
+// 短路测试的副作用计数器
+let g_sideEffect: Number = 0;
+
+/// @brief 断言：通过计数 / 失败计数并记录失败用例名
+function check(cond: Boolean, name: String): Void {
+  if (cond) {
+    g_pass = g_pass + 1;
+  } else {
+    g_fail = g_fail + 1;
+    g_failed.push(name);
+    printError("[FAIL] " + name);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// A. 循环内 return（回归测试）
+// 旧 bug：循环体 return 后循环继续执行，后续轮次的 return 覆盖正确返回值
+// ═══════════════════════════════════════════════════════════════
+
+/// foreach 循环第一轮即 return
+function firstNonEmpty(parts: String[]): String {
+  for (let p in parts) {
+    if (p != "") { return p; }
+  }
+  return "";
+}
+
+/// 标准 for 循环中途 return
+function forReturnEarly(): Number {
+  for (let i = 0; i < 10; i = i + 1) {
+    if (i == 3) { return i; }
+  }
+  return -1;
+}
+
+/// while 循环中途 return
+function whileReturnEarly(): Number {
+  let i = 0;
+  while (i < 10) {
+    i = i + 1;
+    if (i == 2) { return i; }
+  }
+  return -1;
+}
+
+/// switch case 内 return（旧 bug：return 后继续穿透后续 case）
+function switchReturn(code: String): String {
+  switch (code) {
+    case "a": return "A";
+    case "b": return "B";
+    default: return "D";
+  }
+}
+
+/// 嵌套循环内层 return（应直接从函数返回，不继续外层）
+function nestedLoopReturn(): String {
+  for (let i = 0; i < 3; i = i + 1) {
+    for (let j = 0; j < 3; j = j + 1) {
+      if (j == 1) { return "hit"; }
+    }
+  }
+  return "none";
+}
+
+/// 循环正常结束后 return（确认修复未破坏正常路径）
+function loopReturnLast(): Number {
+  let last = 0;
+  for (let i = 0; i < 5; i = i + 1) {
+    last = i;
+  }
+  return last;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// B. 短路求值辅助（回归测试）
+// ═══════════════════════════════════════════════════════════════
+
+/// @brief 副作用函数：每次调用 g_sideEffect 加一
+function bump(): Number {
+  g_sideEffect = g_sideEffect + 1;
+  return 1;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// D. split 逻辑链（回归：与 deriveApiBaseFromUrl 相同的推导链）
+// ═══════════════════════════════════════════════════════════════
+
+/// @brief 从来源 url 推导接口基名：取第一个非空路径段
+/// 旧 bug 场景：deriveApiBase("systemtask/selectByIn") 返回 "selectByIn"
+function deriveApiBase(dataUrl: String): String {
+  if (dataUrl == null || dataUrl == "") {
+    return "";
+  }
+  let parts = dataUrl.split("/");
+  let partsLen = parts.length;
+  for (let i = 0; i < partsLen; i = i + 1) {
+    if (parts[i] != "") {
+      return parts[i];
+    }
+  }
+  return "";
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 主测试入口
+// ═══════════════════════════════════════════════════════════════
+
+main {
+  printLog("=== AC 引擎 + 模板引擎回归测试开始 ===");
+
+  // ── A. 循环内 return ─────────────────────────────────────────
+  printLog("\n--- A. 循环内 return ---");
+
+  check(firstNonEmpty(["systemtask", "selectByIn"]) == "systemtask",
+        "A1 foreach 首轮 return 不被后续轮覆盖");
+  check(firstNonEmpty(["", "b", "c"]) == "b",
+        "A2 foreach 跳过空段后 return");
+  check(firstNonEmpty([]) == "",
+        "A3 foreach 空数组走到末尾 return");
+  check(forReturnEarly() == 3, "A4 for 中途 return");
+  check(whileReturnEarly() == 2, "A5 while 中途 return");
+  check(switchReturn("a") == "A", "A6 switch 命中首个 case return");
+  check(switchReturn("b") == "B", "A7 switch 命中中间 case return");
+  check(switchReturn("zzz") == "D", "A8 switch 走 default return");
+  check(nestedLoopReturn() == "hit", "A9 嵌套循环内层 return 直接返回");
+  check(loopReturnLast() == 4, "A10 循环正常结束后 return");
+
+  // ── B. 短路求值 ─────────────────────────────────────────────
+  printLog("\n--- B. 短路求值 ---");
+
+  g_sideEffect = 0;
+  let sandResult = false && bump();
+  check(g_sideEffect == 0, "B1 false && f() 不执行右侧");
+  check(sandResult == false, "B2 false && f() 返回 false");
+
+  g_sideEffect = 0;
+  let sorResult = true || bump();
+  check(g_sideEffect == 0, "B3 true || f() 不执行右侧");
+  check(sorResult == true, "B4 true || f() 返回 true");
+
+  g_sideEffect = 0;
+  let andExec = true && bump();
+  check(g_sideEffect == 1, "B5 true && f() 执行右侧");
+  let orExec = false || bump();
+  check(g_sideEffect == 2, "B6 false || f() 执行右侧");
+
+  // 返回操作数本身（JS 语义）
+  let pickStr = "a" || "b";
+  check(pickStr == "a", "B7 逻辑或返回真值左操作数");
+  let pickNull = null || "b";
+  check(pickNull == "b", "B8 null || 'b' 返回右操作数");
+
+  // 空值防御写法（旧 bug：右侧照常求值会直接报错中断脚本）
+  let maybeNull = null;
+  let guard = maybeNull == null || maybeNull["x"] == 1;
+  check(guard == true, "B9 null 检查后短路保护右侧访问");
+
+  // ── C. splice 与数组方法 ────────────────────────────────────
+  printLog("\n--- C. 数组方法 ---");
+
+  let sp = [1, 2, 3, 4, 5];
+  let removed = sp.splice(1, 2);
+  check(removed.length == 2 && removed[0] == 2 && removed[1] == 3,
+        "C1 splice 返回被删元素");
+  check(sp.join(",") == "1,4,5", "C2 splice 删除后数组内容");
+
+  // 回归：负 start 旧实现直接传给 Qt takeAt 造成越界
+  let spNeg = [1, 2, 3];
+  let negRemoved = spNeg.splice(-1, 2);
+  check(spNeg.join(",") == "3", "C3 splice 负 start 钳制为 0 不崩溃");
+  check(negRemoved.length == 2, "C4 splice 负 start 删除数量");
+
+  // 越界 start
+  let spOver = [1, 2];
+  spOver.splice(99, 5);
+  check(spOver.length == 2, "C5 splice 越界 start 无副作用");
+
+  let arr = [];
+  arr.push("a");
+  arr.push("b");
+  let pushRet = arr.push("c");
+  check(pushRet == 3, "C6 push 返回新长度");
+  check(arr.length == 3, "C7 push 后元素数");
+
+  let popped = arr.pop();
+  check(popped == "c" && arr.length == 2, "C8 pop 弹出末尾");
+
+  let shifted = arr.shift();
+  check(shifted == "a" && arr.length == 1, "C9 shift 弹出头部");
+
+  let unshiftRet = arr.unshift("x");
+  check(unshiftRet == 2 && arr[0] == "x", "C10 unshift 头部插入");
+
+  check(arr.indexOf("b") == 1, "C11 indexOf 命中");
+  check(arr.indexOf("zz") == -1, "C12 indexOf 未命中返回 -1");
+  check(arr.includes("x") == true, "C13 includes 命中");
+  check(arr.includes("y") == false, "C14 includes 未命中");
+
+  let srcArr = [1, 2, 3, 4];
+  let sl = srcArr.slice(1, 3);
+  check(sl.length == 2 && sl[0] == 2 && sl[1] == 3, "C15 slice 半开区间");
+
+  let catSrc = [1, 2];
+  let cat = catSrc.concat([3, 4, 5]);
+  check(cat.length == 5 && cat[3] == 4 && cat[4] == 5, "C16 concat 拼接数组");
+
+  let revSrc = [1, 2, 3];
+  let rev = revSrc.reverse();
+  check(rev[0] == 3 && rev[2] == 1, "C17 reverse 反转");
+
+  let jarr = [1, 2, 3];
+  check(jarr.join("-") == "1-2-3", "C18 join 自定义分隔符");
+  check(jarr.join() == "1,2,3", "C19 join 默认逗号");
+
+  // ── D. 字符串方法与 split 逻辑链 ─────────────────────────────
+  printLog("\n--- D. 字符串方法 ---");
+
+  let s = "Hello, AutoCode";
+  check(s.toUpperCase() == "HELLO, AUTOCODE", "D1 toUpperCase");
+  check(s.toLowerCase() == "hello, autocode", "D2 toLowerCase");
+
+  let padSrc = "  pad  ";
+  check(padSrc.trim() == "pad", "D3 trim");
+
+  check(s.indexOf("Auto") == 7, "D4 indexOf 命中");
+  check(s.indexOf("zz") == -1, "D5 indexOf 未命中返回 -1");
+
+  let dashSrc = "a-b-c";
+  check(dashSrc.lastIndexOf("-") == 3, "D6 lastIndexOf");
+
+  check(s.includes("Auto") == true, "D7 includes 命中");
+  check(s.startsWith("Hello") == true, "D8 startsWith");
+  check(s.endsWith("Code") == true, "D9 endsWith");
+  check(s.substring(7, 11) == "Auto", "D10 substring(start, end)");
+  check(s.substring(7) == "AutoCode", "D11 substring(start)");
+  check(s.charAt(0) == "H", "D12 charAt");
+  check(s.charAt(999) == "", "D13 charAt 越界返回空串");
+
+  let repSrc = "ab";
+  check(repSrc.repeat(3) == "ababab", "D14 repeat");
+
+  let seven = "7";
+  check(seven.padStart(3, "0") == "007", "D15 padStart");
+  check(seven.padEnd(3, "0") == "700", "D16 padEnd");
+
+  check(s.replace("Hello", "Hi") == "Hi, AutoCode", "D17 replace");
+  check(s.length == 15, "D18 length 属性");
+
+  // split 回归（deriveApiBaseFromUrl 同款逻辑链）
+  let parts = "systemtask/selectByIn".split("/");
+  check(parts.length == 2, "D19 split 两段");
+  check(parts[0] == "systemtask" && parts[1] == "selectByIn", "D20 split 内容");
+
+  let leadSrc = "/a/b";
+  let leading = leadSrc.split("/");
+  check(leading.length == 3 && leading[0] == "", "D21 split 前导分隔符产生空段");
+
+  let noSepSrc = "abc";
+  let noSep = noSepSrc.split("-");
+  check(noSep.length == 1 && noSep[0] == "abc", "D22 split 无分隔符返回整串");
+
+  // 旧 bug 直接场景：url 基名推导返回了错误段
+  check(deriveApiBase("systemtask/selectByIn") == "systemtask",
+        "D23 deriveApiBase 主场景（回归）");
+  check(deriveApiBase("/leading/slash") == "leading", "D24 deriveApiBase 前导斜杠");
+  check(deriveApiBase("") == "", "D25 deriveApiBase 空串");
+  check(deriveApiBase("noslash") == "noslash", "D26 deriveApiBase 无斜杠");
+
+  // ── E. 控制流 ────────────────────────────────────────────────
+  printLog("\n--- E. 控制流 ---");
+
+  let cnt = 0;
+  for (let i = 0; i < 5; i = i + 1) {
+    if (i == 2) { continue; }
+    if (i == 4) { break; }
+    cnt = cnt + 1;
+  }
+  check(cnt == 3, "E1 for 内 continue/break 组合");
+
+  let pairs = 0;
+  for (let i = 0; i < 3; i = i + 1) {
+    for (let j = 0; j < 5; j = j + 1) {
+      if (j == 2) { break; }
+      pairs = pairs + 1;
+    }
+  }
+  check(pairs == 6, "E2 嵌套 break 只跳内层");
+
+  let w = 0;
+  let wsum = 0;
+  while (w < 5) {
+    w = w + 1;
+    if (w == 2) { continue; }
+    wsum = wsum + w;
+  }
+  check(wsum == 13, "E3 while 内 continue");
+
+  let v = 10;
+  v += 5;
+  v -= 3;
+  v *= 2;
+  v /= 4;
+  v %= 4;
+  check(v == 2, "E4 复合赋值链 += -= *= /= %=");
+
+  let n = 5;
+  let pre = ++n;
+  check(pre == 6 && n == 6, "E5 前置自增");
+  let post = n++;
+  check(post == 6 && n == 7, "E6 后置自增");
+  let pred = --n;
+  check(pred == 6 && n == 6, "E7 前置自减");
+  let postd = n--;
+  check(postd == 6 && n == 5, "E8 后置自减");
+
+  let tri = 5 > 3 ? "yes" : "no";
+  check(tri == "yes", "E9 三元真分支");
+  let tri2 = 5 < 3 ? "yes" : "no";
+  check(tri2 == "no", "E10 三元假分支");
+
+  check(17 % 5 == 2, "E11 取模");
+  check(7 / 2 == 3.5, "E12 浮点除法");
+  check(2 + 3 * 4 == 14, "E13 运算优先级");
+  check((2 + 3) * 4 == 20, "E14 括号优先级");
+
+  // ── F. 作用域 ────────────────────────────────────────────────
+  printLog("\n--- F. 作用域 ---");
+
+  let outer = 1;
+  if (true) {
+    let outer = 2;
+    check(outer == 2, "F1 块内遮蔽外层同名变量");
+  }
+  check(outer == 1, "F2 块作用域隔离（块内 let 不影响外层）");
+
+  let captured = "no";
+  for (let k = 0; k < 2; k = k + 1) {
+    let inLoop = "yes" + k;
+    captured = inLoop;
+  }
+  check(captured == "yes1", "F3 循环体内变量对外可见");
+
+  // ── G. foreach 语义 ──────────────────────────────────────────
+  printLog("\n--- G. foreach 语义 ---");
+
+  let keys: String[] = [];
+  let objIter: Object = { a: 1, b: 2, c: 3 };
+  for (let k in objIter) {
+    keys.push(k);
+  }
+  check(keys.length == 3, "G1 foreach 遍历对象键");
+
+  let chars: String[] = [];
+  let charSrc = "xyz";
+  for (let ch in charSrc) {
+    chars.push(ch);
+  }
+  check(chars.length == 3 && chars[0] == "x", "G2 foreach 遍历字符串字符");
+
+  // ── H. JSON 序列化往返 ───────────────────────────────────────
+  printLog("\n--- H. JSON 往返 ---");
+
+  let jsonObj = { n: 42, s: "str", arr: [1, 2, 3], nested: { x: true } };
+  let jsonStr = JSON.stringify(jsonObj);
+  let back = JSON.parse(jsonStr);
+  check(back.n == 42, "H1 JSON 往返数字");
+  check(back.s == "str", "H2 JSON 往返字符串");
+  check(back.arr.length == 3 && back.arr[1] == 2, "H3 JSON 往返数组");
+  check(back.nested.x == true, "H4 JSON 往返嵌套布尔");
+
+  // ── I. 比较运算 ──────────────────────────────────────────────
+  printLog("\n--- I. 比较运算 ---");
+
+  check("a" < "b", "I1 字符串小于比较");
+  check(3 >= 3, "I2 大于等于");
+  check(2 != 3, "I3 不等于");
+  check(true == true && false == false, "I4 布尔相等");
+  check(null == null, "I5 null 相等");
+
+  // ── J. 模板引擎 renderTpl ────────────────────────────────────
+  printLog("\n--- J. 模板引擎 ---");
+
+  let tplData: Object = {
+    name: "AutoCode",
+    count: 3,
+    meta: { dataUrl: "systemtask/selectByIn", nested: { key: "deepVal" } },
+    items: [ { name: "alpha", val: 1 }, { name: "beta", val: 2 } ],
+    flag: true,
+    empty: "",
+    a: 10,
+    b: 32,
+    s: "a,b,c"
+  };
+
+  let out = renderTpl("engine_sample.tpl", tplData);
+
+  check(out != "", "J1 模板渲染返回非空");
+  check(out.includes("name=AutoCode"), "J2 变量替换");
+  check(out.includes("count=3"), "J3 数字替换");
+  check(out.includes("url=systemtask/selectByIn"), "J4 嵌套路径 a.b");
+  check(out.includes("deep=deepVal"), "J5 三层路径 a.b.c");
+  check(out.includes("0:alpha;1:beta;"), "J6 each 循环与 _index 元变量");
+  check(out.includes("FLAG_ON"), "J7 if 真分支");
+  check(out.includes("EMPTY"), "J8 空串 falsy 走 else");
+  check(out.includes("NAME_EQ"), "J9 == 相等比较");
+  check(out.includes("NAME_NE"), "J10 != 不等比较");
+  check(out.includes("sum=42"), "J11 加法表达式");
+  check(out.includes("prod=322"), "J12 乘法与优先级");
+  check(out.includes("upper=AUTOCODE"), "J13 str.toUpperCase 函数调用");
+  // "a,b,c" 替换 "a,b"→"X"：吃掉前3字符(a,逗号,b)，剩 ",c"，结果 "X,c"
+  check(out.includes("repl=X,c"), "J14 引号内逗号参数不误切（回归）");
+  check(out.includes("notexist=false"), "J15 fileExists 假值");
+  // 隔离验证：A=变量+无逗号参数；B=全字面量含逗号参数（若引号内逗号误切，B 不会得 X,c）
+  check(out.includes("diagA=Z,b,c"), "J16 变量参数+引号参数(无逗号)");
+  check(out.includes("diagB=X,c"), "J17 全字面量参数(含逗号)");
+
+  // ── 汇总 ────────────────────────────────────────────────────
+  printLog("\n========================================");
+  printLog("=== 引擎回归测试汇总 ===");
+  printLog("通过: " + g_pass + "  失败: " + g_fail);
+  printLog("========================================");
+
+  if (g_fail > 0) {
+    printError("失败用例列表:");
+    for (let m in g_failed) {
+      printError("  - " + m);
+    }
+    printError("存在失败用例，请排查引擎实现！");
+  } else {
+    printLog("全部用例通过");
+  }
+}

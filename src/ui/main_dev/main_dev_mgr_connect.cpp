@@ -29,8 +29,6 @@ void MainDevMgr::connectEditor(CodeEditor *editor) {
                &MainDevMgr::updateCursorPosition);
     disconnect(m_model->connectedEditor, &CodeEditor::validationMessage, this,
                &MainDevMgr::onValidationMessage);
-    disconnect(m_model->connectedEditor, &CodeEditor::validationIssues, this,
-               &MainDevMgr::onValidationIssues);
     disconnect(m_model->connectedEditor, &CodeEditor::requestGoToLine, this,
                &MainDevMgr::onGoToLine);
     disconnect(m_model->connectedEditor, &CodeEditor::aboutToNavigate, this,
@@ -49,7 +47,6 @@ void MainDevMgr::connectEditor(CodeEditor *editor) {
     connect(editor, &QPlainTextEdit::cursorPositionChanged, this,
             &MainDevMgr::updateCursorPosition);
     connect(editor, &CodeEditor::validationMessage, this, &MainDevMgr::onValidationMessage);
-    connect(editor, &CodeEditor::validationIssues, this, &MainDevMgr::onValidationIssues);
     // 跨文件跳转信号
     connect(editor, &CodeEditor::requestGoToLine, this, &MainDevMgr::onGoToLine);
     // 即将导航信号（用于记录历史）

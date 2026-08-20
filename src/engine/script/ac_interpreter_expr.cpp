@@ -386,6 +386,18 @@ QJsonValue AcInterpreter::evalExprWithThis(const Expr &expr, const QJsonObject &
 // ═════════════════════════════════════════════════════════════════════════════
 
 QJsonValue AcInterpreter::evalBinary(const Expr &expr) {
+  // 逻辑与/或必须短路求值：左侧已能决定结果时不再求值右侧，
+  // 否则 a != null && a.b 之类防御写法在 a 为空时右侧仍会触发求值错误
+  if (expr.binOp == Expr::kOr || expr.binOp == Expr::kAnd) {
+    QJsonValue l = evalExpr(*expr.left);
+    if (expr.binOp == Expr::kOr) {
+      if (isTruthy(l)) return l;
+    } else {
+      if (!isTruthy(l)) return l;
+    }
+    return evalExpr(*expr.right);
+  }
+
   QJsonValue l = evalExpr(*expr.left);
   QJsonValue r = evalExpr(*expr.right);
 
@@ -415,10 +427,6 @@ QJsonValue AcInterpreter::evalBinary(const Expr &expr) {
         return QJsonValue();
       }
       return QJsonValue(fmod(l.toDouble(), r.toDouble()));
-    case Expr::kOr:
-      return isTruthy(l) ? l : r;
-    case Expr::kAnd:
-      return isTruthy(l) ? r : l;
     case Expr::kEq:
       return compareValues(l, r) == 0;
     case Expr::kNeq:

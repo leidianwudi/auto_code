@@ -182,6 +182,7 @@
   meta: {
     dataMethod: 'POST',
     dataUrl: 'sportcoach/selectByIn',
+    description: '教练管理',
     noDelete: false,
     noDetail: false,
     noEdit: false,

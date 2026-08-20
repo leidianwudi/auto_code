@@ -440,9 +440,9 @@ class Container {
 // 第五部分：跨文件引用（Import/Export）
 // ═══════════════════════════════════════════════════════════════
 
-import { add as mathAdd, multiply as mathMul } from "./lib/math_utils.ac";
-import { DB, readJson, writeFile, renderTpl } from "./lib/database.ac";
-import { Logger, LogLevel } from "./lib/logger.ac";
+import { add as mathAdd, multiply as mathMul } from "../demo/lib/math_utils.ac";
+import { DB, readJson, writeFile, renderTpl } from "../demo/lib/database.ac";
+import { Logger, LogLevel } from "../demo/lib/logger.ac";
 
 export function testImportFunction(): Number {
   let sum: Number = mathAdd(100, 200);

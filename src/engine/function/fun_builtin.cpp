@@ -80,7 +80,13 @@ QJsonValue FunBuiltin::renderTpl(const QJsonArray &args) {
     return QJsonValue();
   }
 
-  return QJsonValue(engine.render(tplContent, args[1].toObject()));
+  QString result = engine.render(tplContent, args[1].toObject());
+  // 渲染错误必须传播到 FunMgr，否则脚本层只收到空串而看不到失败原因
+  if (!engine.lastError().isEmpty()) {
+    FunMgr::setError(engine.lastError());
+    return QJsonValue();
+  }
+  return QJsonValue(result);
 }
 
 // ============================================================================
@@ -206,9 +212,12 @@ QJsonValue FunBuiltin::getCheckedFiles(const QJsonArray &args) {
         QString normBase = basePath;
         normBase.replace(QLatin1Char('\\'), QLatin1Char('/'));
         if (!normBase.endsWith(QLatin1Char('/'))) normBase += QLatin1Char('/');
+        // 基准目录本身的精确匹配形式（不带尾部分隔符）
+        QString normBaseExact = normBase;
+        normBaseExact.chop(1);
         QString normAbs = absPath;
         normAbs.replace(QLatin1Char('\\'), QLatin1Char('/'));
-        if (normAbs != basePath && !normAbs.startsWith(normBase)) {
+        if (normAbs != normBaseExact && !normAbs.startsWith(normBase)) {
           continue;
         }
       }
