@@ -19,7 +19,7 @@ ${# ============================================================================
 //此文件为AutoCode编译器生成，请勿手动修改
 import request from '@/axios';
 
-// ==================== ${commentTitle}（${pageName}）====================
+// ==================== ${commentTitle}（${pageName}）api ====================
 // 查询 ${commentTitle}列表（分页）
 export const ${queryApi} = (params: any) => {
   return request.post({

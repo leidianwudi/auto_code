@@ -152,11 +152,31 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
   // modificationChanged，导致 tab 修改圆点不显示。
   editor->document()->setModified(false);
 
-  // ── 修改标记：内容变化时标签页和树节点绘制红色 "*" ──
+  // ── 修改标记：内容变化时标签页和树节点绘制红色 "*"（普通文件与 jsonvue 统一）──
+  connectModifiedTracking(tabs, editor, filePath);
+
+  // ── JsonVueWidget：可视化编辑器内容变化时也触发修改标记 ──
+  if (jvw) connectJsonVueContentTracking(jvw, editor);
+
+  // ── 打开文件后保存当前打开列表，供下次启动还原 ──
+  saveOpenFilesToSettings();
+
+  return editor;
+}
+
+// ──────────────────────────────────────────────────────────────
+//  修改标记统一连接（普通文件与 jsonvue 同一实现）
+// ──────────────────────────────────────────────────────────────
+
+void MainDevMgr::connectModifiedTracking(QTabWidget *tabs, CodeEditor *editor,
+                                         const QString &filePath) {
+  if (!editor || filePath.isEmpty()) return;
   connect(editor->document(), &QTextDocument::modificationChanged, this,
-          [this, tabs, editor, filePath, tabWidget](bool changed) {
+          [this, tabs, editor, filePath](bool changed) {
             for (int i = 0; i < tabs->count(); ++i) {
-              if (tabs->widget(i) == tabWidget) {
+              QWidget *w = tabs->widget(i);
+              // 普通文件 tab 即 editor；jsonvue 的 tab 是 JsonVueWidget（editor 的父控件）
+              if (w == editor || w == editor->parentWidget()) {
                 auto *bar = qobject_cast<DraggableTabBar *>(tabs->tabBar());
                 if (bar) bar->setTabModified(i, changed);
                 break;
@@ -167,17 +187,15 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
             // 更新保存按钮可用状态
             updateSaveButtonState();
           });
+}
 
-  // ── JsonVueWidget：可视化编辑器内容变化时也触发修改标记 ──
-  if (jvw) {
-    connect(jvw, &JsonVueWidget::contentChanged, this,
-            [jvw, editor]() { editor->document()->setModified(true); });
-  }
-
-  // ── 打开文件后保存当前打开列表，供下次启动还原 ──
-  saveOpenFilesToSettings();
-
-  return editor;
+void MainDevMgr::connectJsonVueContentTracking(JsonVueWidget *jvw, CodeEditor *editor) {
+  if (!jvw || !editor) return;
+  // 可视化编辑器内容变化 → 标记文档已修改（驱动 tab 圆点）
+  connect(jvw, &JsonVueWidget::contentChanged, this, [this, editor]() {
+    editor->document()->setModified(true);
+    updateSaveButtonState();
+  });
 }
 
 // ──────────────────────────────────────────────────────────────

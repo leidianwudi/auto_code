@@ -292,11 +292,8 @@ void MainDevMgr::onSplitRight() {
       if (!filePath.isEmpty()) editor->setObjectName(filePath);
       // 注：拆分编辑器不调用 registerFile，避免覆盖 openFiles 中原编辑器的记录。
 
-      // 连接 contentChanged 信号
-      connect(jvw, &JsonVueWidget::contentChanged, this, [jvw, editor, this]() {
-        editor->document()->setModified(true);
-        updateSaveButtonState();
-      });
+      // 连接 contentChanged 信号（与打开文件路径同一实现）
+      connectJsonVueContentTracking(jvw, editor);
     } else {
       auto *editor = createEditorForFile(filePath);
       editor->setPlainText(current->toPlainText());
@@ -307,7 +304,7 @@ void MainDevMgr::onSplitRight() {
       // 注：拆分编辑器不调用 registerFile，避免覆盖 openFiles 中原编辑器的记录。
     }
 
-    // 连接修改标记信号（拆分副本也需要红点提示）
+    // 连接修改标记信号（拆分副本也需要红点提示；与打开文件路径同一实现）
     {
       QWidget *w = newPanel->widget(newPanel->currentIndex());
       CodeEditor *editor = qobject_cast<CodeEditor *>(w);
@@ -316,20 +313,7 @@ void MainDevMgr::onSplitRight() {
         if (jvw) editor = jvw->codeEditor();
       }
       if (editor && !filePath.isEmpty()) {
-        connect(editor->document(), &QTextDocument::modificationChanged, this,
-                [this, tabs = newPanel, editor, filePath](bool changed) {
-                  for (int i = 0; i < tabs->count(); ++i) {
-                    if (tabs->widget(i) == editor->parentWidget() || tabs->widget(i) == editor) {
-                      auto *bar = qobject_cast<DraggableTabBar *>(tabs->tabBar());
-                      if (bar) bar->setTabModified(i, changed);
-                      break;
-                    }
-                  }
-                  // 更新树形目录对应文件的修改状态
-                  m_ui->fileTree()->setFileModified(filePath, changed);
-                  // 更新保存按钮可用状态
-                  updateSaveButtonState();
-                });
+        connectModifiedTracking(newPanel, editor, filePath);
         // 恢复当前编辑器的修改状态（拆分副本可能已有修改）
         if (editor->document()->isModified()) {
           auto *bar = qobject_cast<DraggableTabBar *>(newPanel->tabBar());
