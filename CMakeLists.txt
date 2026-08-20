@@ -98,8 +98,6 @@ qt_add_executable(auto_code
     src/util/ui/code/bracket_matcher.cpp
     src/util/ui/code/indent_guide.h
     src/util/ui/code/indent_guide.cpp
-    src/util/ui/code/code_validator.h
-    src/util/ui/code/code_validator.cpp
     src/util/ui/code/code_editor.h
     src/util/ui/code/code_editor.cpp
     src/util/ui/code/code_editor_navigate.cpp
@@ -139,6 +137,8 @@ qt_add_executable(auto_code
     src/util/ui/component/aui_tree.cpp
     src/util/ui/component/aui_combo_box.h
     src/util/ui/component/aui_combo_box.cpp
+    src/util/ui/component/aui_combo_delete.h
+    src/util/ui/component/aui_combo_delete.cpp
     src/util/ui/aui_window.h
     src/util/ui/aui_window.cpp
     src/util/ui/rename_dialog.h

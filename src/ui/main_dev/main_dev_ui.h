@@ -22,6 +22,7 @@ class QVBoxLayout;
 
 #include "debug_panel.h"
 #include "main_dev_ui_ext.h"
+#include "src/util/ui/component/aui_combo_delete.h"
 #include "src/util/ui/code/code_log.h"
 #include "src/util/ui/code/problem_panel.h"
 #include "src/util/ui/code/tree_dir.h"
@@ -126,7 +127,7 @@ public:
   QPushButton *buildBtn() const { return m_buildBtn; }
   QPushButton *stopBtn() const { return m_stopBtn; }
   QPushButton *debugBtn() const { return m_debugBtn; }
-  QComboBox *startupCombo() const { return m_startupCombo; }
+  AuiComboDelete *startupCombo() const { return m_startupCombo; }
   QPushButton *saveBtn() const { return m_saveBtn; }
   QPushButton *saveAllBtn() const { return m_saveAllBtn; }
   QPushButton *visualToggleBtn() const { return m_visualToggleBtn; }
@@ -183,7 +184,7 @@ private:
   QPushButton *m_buildBtn = nullptr;
   QPushButton *m_stopBtn = nullptr;   ///< 停止脚本执行按钮
   QPushButton *m_debugBtn = nullptr;  ///< 调试按钮（启动/继续调试）
-  QComboBox *m_startupCombo = nullptr;
+  AuiComboDelete *m_startupCombo = nullptr;
   QPushButton *m_saveBtn = nullptr;
   QPushButton *m_saveAllBtn = nullptr;
 

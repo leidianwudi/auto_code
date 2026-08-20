@@ -75,7 +75,6 @@ public:
 private:
   // ── 执行 ──
   void execBlock(const Block &block);
-  void execBlockWithThis(const Block &block, const QJsonObject &thisObj, QJsonValue &returnVal);
   void execStmt(const Block::Stmt &stmt);
   void execIfStmt(const IfStmt &ifStmt);
   QJsonValue evalExpr(const Expr &expr);

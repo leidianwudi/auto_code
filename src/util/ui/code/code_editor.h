@@ -32,7 +32,6 @@
 #include <QVector>
 
 #include "bracket_matcher.h"
-#include "code_validator.h"
 #include "indent_guide.h"
 #include "src/engine/schema_validator.h"
 #include "src/engine/script/ac_debugger.h"
@@ -244,7 +243,6 @@ private:
 
   // 专职模块（组合模式）
   BracketMatcher m_bracketMatcher;    ///< 括号匹配器
-  CodeValidator m_codeValidator;      ///< 代码验证器
   IndentGuide m_indentGuide;          ///< 缩进参考线
   SymbolNavigator m_symbolNavigator;  ///< 符号导航器
 

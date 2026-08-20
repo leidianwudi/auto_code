@@ -547,15 +547,6 @@ void AcInterpreter::execBlock(const Block &block) {
   }
 }
 
-void AcInterpreter::execBlockWithThis(const Block &block, const QJsonObject &thisObj,
-                                      QJsonValue &returnVal) {
-  QJsonObject oldThis = m_currentThis;
-  m_currentThis = thisObj;
-  execBlock(block);
-  if (m_hasReturned) returnVal = m_returnValue;
-  m_currentThis = oldThis;
-}
-
 void AcInterpreter::execIfStmt(const IfStmt &ifStmt) {
   if (isTruthy(evalExpr(ifStmt.condition))) {
     pushScope();

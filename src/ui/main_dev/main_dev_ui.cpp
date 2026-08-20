@@ -50,6 +50,7 @@
 #include "src/util/ui/code/code_log.h"
 #include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_combo_box.h"
+#include "src/util/ui/component/aui_combo_delete.h"
 #include "src/util/ui/component/aui_style.h"
 
 //  构造
@@ -164,7 +165,7 @@ void MainDevUi::setupTitleBar() {
   tb.contentInsertIndex++;
 
   // ── 启动项下拉框 ──
-  m_startupCombo = AuiComboBox::create();
+  m_startupCombo = AuiComboDelete::create();
   m_startupCombo->setMinimumWidth(120);
   m_startupCombo->setToolTip(QStringLiteral("选择启动项"));
   titleLayout->insertWidget(tb.contentInsertIndex, m_startupCombo);
@@ -224,6 +225,13 @@ void MainDevUi::setupEditorArea() {
           [this](int /*idx*/) {
             QString path = m_startupCombo->currentData().toString();
             if (!path.isEmpty()) m_fileTree->setSelectedStartup(path);
+          });
+
+  // 删除按钮：从启动项集合中移除该项
+  connect(m_startupCombo, &AuiComboDelete::itemDeleteRequested, this,
+          [this](int index) {
+            const QString path = m_startupCombo->itemData(index).toString();
+            if (!path.isEmpty()) m_fileTree->removeStartup(path);
           });
 
   // ── 右侧编辑器分割器 ──
@@ -509,7 +517,6 @@ void MainDevUi::refreshStartupCombo() {
   if (!m_startupCombo || !m_fileTree) return;
 
   m_startupCombo->blockSignals(true);
-  QString prev = m_startupCombo->currentData().toString();
   m_startupCombo->clear();
 
   QStringList files = m_fileTree->startupFiles();

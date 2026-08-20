@@ -82,6 +82,9 @@ public:
   /// 设置当前选中的启动项（由外部下拉框联动）
   void setSelectedStartup(const QString &path);
 
+  /// 移除某个启动项（下拉框删除按钮调用）；若为当前选中项则同步清除选中
+  void removeStartup(const QString &filePath);
+
   /// 获取可视化编辑按钮状态
   bool visualToggle() const { return m_visualToggle; }
   /// 设置可视化编辑按钮状态并保存

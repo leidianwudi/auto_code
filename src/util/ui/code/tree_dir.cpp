@@ -815,6 +815,16 @@ void TreeDir::setSelectedStartup(const QString &path) {
   }
 }
 
+void TreeDir::removeStartup(const QString &filePath) {
+  if (!m_startupFiles.remove(filePath)) return;  // 不在启动项集合中，无需处理
+
+  if (m_selectedStartup == filePath) m_selectedStartup.clear();
+
+  refreshStartupIcons();
+  saveState();
+  emit startupItemsChanged();
+}
+
 void TreeDir::setVisualToggle(bool enabled) {
   if (m_visualToggle != enabled) {
     m_visualToggle = enabled;
