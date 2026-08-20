@@ -78,13 +78,14 @@ void ModifiedFileDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
 
   // 2) 展开/收起三角（分支指示符）：背景覆盖了 QTreeView 的分支，需在此自绘。
   //    注意：option.rect 是缩进后的内容区（x = indent*(level+1)），箭头左边缘应
-  //    在缩进区域的最内层，即 option.rect.x() - indent + 1，不能从内容区起点算起，
+  //    在缩进区域的最内层（option.rect.x() - indent + 4），不能从内容区起点算起，
   //    否则箭头会偏右画到图标/文本区域造成重影。
   if (index.model() && index.model()->hasChildren(index)) {
     const int indent = tree ? tree->indentation() : 16;
     const auto *item = static_cast<const QTreeWidgetItem *>(index.internalPointer());
     QStyleOptionViewItem branchOpt = option;
-    branchOpt.rect = QRect(option.rect.x() - indent + 1, option.rect.y(), indent,
+    // 箭头矩形位于该行缩进区域的最内层；右移 3px 收窄与右侧复选框的间隔
+    branchOpt.rect = QRect(option.rect.x() - indent + 4, option.rect.y(), indent,
                            option.rect.height());
     branchOpt.state |= QStyle::State_Item | QStyle::State_Children | QStyle::State_Enabled;
     if (item && item->isExpanded()) branchOpt.state |= QStyle::State_Open;
@@ -101,20 +102,31 @@ void ModifiedFileDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
     QStyleOptionButton cb;
     cb.rect = checkRect;
     cb.state = QStyle::State_Enabled;
-    const int cs = index.data(Qt::CheckStateRole).toInt();
+    // 文件节点（非文件夹）只应二态（勾选/不勾选），不应出现"部分选中"小方块。
+    // 正常逻辑下 PartiallyChecked 只设到文件夹（聚合子文件状态），这里防御性处理，
+    // 即使数据异常也强制文件节点按未勾选绘制，避免 jsonvue 等文件显示三态。
+    int cs = index.data(Qt::CheckStateRole).toInt();
+    const bool nodeIsFolder = index.data(Qt::UserRole + 1).toString().isEmpty();
+    if (!nodeIsFolder && cs == Qt::PartiallyChecked) cs = Qt::Unchecked;
     if (cs == Qt::Checked)
       cb.state |= QStyle::State_On;
     else if (cs == Qt::PartiallyChecked)
       cb.state |= QStyle::State_NoChange;  // 部分勾选：小方块
     st->drawPrimitive(QStyle::PE_IndicatorCheckBox, &cb, painter, option.widget);
   }
-  const int checkWidth = checkRect.isValid() ? checkRect.width() + 4 : 0;
+  // 复选框右缘到图标左缘的间隔（px）：文件夹与 json 文件保持一致。
+  // json 文件图标是居中字母（左侧有透明留白），视觉上比文件夹图形显得更远，
+  // 因此 json 文件额外收紧一点，使"复选框→图标"的视觉间隔与文件夹一致
+  static constexpr int kCheckToIconGap = 4;
+  const int checkWidth = checkRect.isValid() ? checkRect.width() + kCheckToIconGap : 0;
 
   // 4) 字体（与普通节点一致，不加粗、字号不变）
   QFont textFont = tree ? tree->font() : option.font;
   QFontMetrics fm(textFont);
 
   // 5) 布局：复选框 → 图标 → 文本
+  // 文件夹节点 UserRole+1 为空，文件节点非空（图标/文本间距、图标偏移据此区分）
+  const bool isFolder = index.data(Qt::UserRole + 1).toString().isEmpty();
   QIcon icon = index.data(Qt::DecorationRole).value<QIcon>();
   int maxIconH = option.decorationSize.height();
   if (maxIconH <= 0) maxIconH = 16;
@@ -122,7 +134,8 @@ void ModifiedFileDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
   QSize actual = icon.isNull() ? QSize(0, 0) : icon.actualSize(QSize(64, maxIconH));
   int decoW = actual.width() > 0 ? actual.width() : option.decorationSize.width();
   int decoH = actual.height() > 0 ? qMin(actual.height(), maxIconH) : maxIconH;
-  int iconX = option.rect.left() + checkWidth;
+  // 文件夹图形占满图标左侧，字母图标左侧留白多 → json 等字母图标额外左移 2px 对齐视觉间隔
+  int iconX = option.rect.left() + checkWidth + (isFolder ? 0 : -2);
   int iconY = option.rect.top() + (option.rect.height() - decoH) / 2;
   QRect iconRect(iconX, iconY, decoW, decoH);
 
@@ -148,8 +161,8 @@ void ModifiedFileDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
     icon.paint(painter, iconRect, Qt::AlignCenter, mode);
   }
 
-  // 文本起始：图标右侧 1px（原默认约 4px，缩小 3px）
-  int textX = iconRect.right() + 1;
+  // 文本起始：文件夹与名称间距加大（更易辨认），文件与名称间距更紧凑
+  int textX = iconRect.right() + (isFolder ? 3 : -1);
   int textBaseline = option.rect.top() + (option.rect.height() - fm.height()) / 2 + fm.ascent();
 
   painter->save();
@@ -203,7 +216,8 @@ TreeDir::TreeDir(QWidget *parent) : QTreeWidget(parent) {
   setMinimumWidth(kMinWidth);
   // 不设最大宽度，允许用户拖动分隔条自由加宽目录树
   setAnimated(false);
-  setIndentation(16);
+  // 每层缩进 12px（原 16 偏大），顶层三角箭头左边空白与层级缩进同时收窄
+  setIndentation(12);
   setSortingEnabled(false);
   // 树目录上的节点可点击展开/选中/勾选，悬停时显示手型光标
   viewport()->setCursor(Qt::PointingHandCursor);

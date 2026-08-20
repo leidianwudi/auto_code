@@ -146,6 +146,12 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
           [this]() { debugController()->refreshBreakpointList(); });
   debugController()->refreshBreakpointList();
 
+  // ── 打开后文档统一视为「未修改」──
+  // 必须在 modificationChanged 连接之前执行：jsonvue 包装器的初始化可能提前改动过
+  // document（modified 已是 true），若在连接建立前就为 true，后续编辑不会再触发
+  // modificationChanged，导致 tab 修改圆点不显示。
+  editor->document()->setModified(false);
+
   // ── 修改标记：内容变化时标签页和树节点绘制红色 "*" ──
   connect(editor->document(), &QTextDocument::modificationChanged, this,
           [this, tabs, editor, filePath, tabWidget](bool changed) {

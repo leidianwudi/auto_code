@@ -35,7 +35,7 @@ class TemplateConfig {
 export function generateApiMain(params: Object): Void {
   // ── 1. 数据库连接配置 ──────────────────────────────────────────────
   let db = new DB(params["dbConfig"]);
-  
+ 
   // ── 2. 输出文件的根目录（所有代码文件都写到这个目录下）──────────
   let basePath: String = params["basePath"];
 
