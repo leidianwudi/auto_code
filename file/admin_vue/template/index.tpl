@@ -2,7 +2,7 @@ ${# ============================================================================
 ${# index.tpl — Vue3 后台管理列表页模板                                          }
 ${# ----------------------------------------------------------------------------}
 ${# 作用：                                                                       }
-${#   根据 .jsonvue 配置生成 Vue3 列表页（index.vue），包含：                    }
+${#   根据 .jsonvue 配置生成 Vue3 列表页（与 jsonvue 同名的 .vue），包含：          }
 ${#   - 搜索表单（searchSchema）                                                 }
 ${#   - 表格列定义（tableColumns，支持文本/开关样式）                            }
 ${#   - CRUD 逻辑（通过 uiCrudLogic Hook）                                      }
@@ -33,8 +33,7 @@ import { Search } from '@/components/search';
 import { ContentWrap } from '@/components/content_wrap';
 import Write from './components/write.vue';
 import { Dialog } from '@/components/dialog';
-import { ${apiImports} } from '@/api/${apiModule}';
-
+import { ${apiImports} } from '@/api/${apiModule}/${pageName}';
 import { uiCrudLogic } from '@/utils/ui_crud_logic';
 ${if hasLinkButtons}import { useRouter } from 'vue-router';${/if}
 

@@ -589,7 +589,24 @@ export function buildApiImports(queryApi: String, deleteApi: String, updateApi: 
 //       file   - 配置文件绝对路径
 // 输出：完整 tplData 对象（含页面路径、API 导入、列、查询字段、按钮及各派生标记）
 // ============================================================================
-export function buildAdminTplData(json: Object, file: String): Object {
+
+// 从来源 URL 推导接口基名：取 URL 第一个路径段。
+// 例如 "systemtask/selectByIn" → "systemtask"
+export function deriveApiBaseFromUrl(dataUrl: String): String {
+  if (dataUrl == null || dataUrl == "") {
+    return "";
+  }
+  let parts = dataUrl.split("/");
+  let partsLen = parts.length;
+  for (let i = 0; i < partsLen; i = i + 1) {
+    if (parts[i] != "") {
+      return parts[i];
+    }
+  }
+  return "";
+}
+
+export function buildAdminTplData(json: Object, file: String, suffixes: Object): Object {
   // ── meta 与原始数据 ──────────────────────────────────────────────
   let meta: Object = json.meta;
   let rawColumns: Object[] = json.columns;
@@ -607,12 +624,31 @@ export function buildAdminTplData(json: Object, file: String): Object {
   let page = derivePage(file);
 
   // ── API 配置 ────────────────────────────────────────────────────
+  // 接口函数名直接取自 meta（jsonvue 中显式配置，可靠）
+  // 备选：meta 为空时由来源 URL 推导（"systemtask/selectByIn" → systemtaskSelect）
+  let apiBase = deriveApiBaseFromUrl(meta.dataUrl);
   let queryApi: String = meta.queryApi;
-  let deleteApi: String = meta.deleteApi;
   let updateApi: String = meta.updateApi;
+  let deleteApi: String = meta.deleteApi;
+  if (queryApi == "" || queryApi == null) { queryApi = apiBase + "Select"; }
+  if (updateApi == "" || updateApi == null) { updateApi = apiBase + "Update"; }
+  if (deleteApi == "" || deleteApi == null) { deleteApi = apiBase + "Delete"; }
   let noDelete: Bool = meta.noDelete;
   let noEdit: Bool = meta.noEdit;
   let noDetail: Bool = meta.noDetail;
+  // API 请求地址（供 api.tpl 生成 .ts 使用）："/" + 接口基名 + "/" + 请求后缀
+  // 请求后缀由 main_admin.ac 传入（apiSelect/apiUpdate/apiDelete），缺省为默认值
+  let selSuffix: String = "selectByIn";
+  let updSuffix: String = "update";
+  let delSuffix: String = "delete";
+  if (suffixes != null) {
+    if (suffixes["select"] != "" && suffixes["select"] != null) { selSuffix = suffixes["select"]; }
+    if (suffixes["update"] != "" && suffixes["update"] != null) { updSuffix = suffixes["update"]; }
+    if (suffixes["delete"] != "" && suffixes["delete"] != null) { delSuffix = suffixes["delete"]; }
+  }
+  let selectUrl = "/" + apiBase + "/" + selSuffix;
+  let updateUrl = "/" + apiBase + "/" + updSuffix;
+  let deleteUrl = "/" + apiBase + "/" + delSuffix;
 
   // ── 数据加工 ────────────────────────────────────────────────────
   let btnResult = processButtons(rawButtons);
@@ -691,14 +727,26 @@ export function buildAdminTplData(json: Object, file: String): Object {
   let hasHiddenFields = false;
   let hasDisabledFields = (disabledFieldsStr != "");
 
+  // ── 注解标题：优先用界面说明（description），为空则回退到页面文件名 ──
+  let commentTitle: String = page["pageName"];
+  if (meta.description != "" && meta.description != null) {
+    commentTitle = meta.description;
+  }
+
   // ── 组装 tplData（模板中的所有 ${变量名} 从这里取值）────────────
   let tplData: Object = {};
   tplData["pagePath"] = page["pagePath"];          // ${pagePath} 输出路径占位
   tplData["apiModule"] = page["apiModule"];        // ${apiModule} API 模块路径
+  tplData["pageName"] = page["pageName"];          // ${pageName} jsonvue 文件名（不含扩展名）
   tplData["apiImports"] = apiImports;              // ${apiImports} API 导入列表
   tplData["queryApi"] = queryApi;                  // ${queryApi} 查询接口名
   tplData["deleteApi"] = deleteApi;                // ${deleteApi} 删除接口名
   tplData["updateApi"] = updateApi;                // ${updateApi} 修改接口名
+  tplData["apiBase"] = apiBase;                    // ${apiBase} 来源 URL 接口基名
+  tplData["selectUrl"] = selectUrl;                // ${selectUrl} 查询请求地址
+  tplData["updateUrl"] = updateUrl;                // ${updateUrl} 更新请求地址
+  tplData["deleteUrl"] = deleteUrl;                // ${deleteUrl} 删除请求地址
+  tplData["commentTitle"] = commentTitle;            // ${commentTitle} 注解标题
   tplData["noDelete"] = noDelete;                  // ${if !noDelete} 不可删除
   tplData["noEdit"] = noEdit;                      // ${if !noEdit} 不可编辑
   tplData["noDetail"] = noDetail;                  // ${if !noDetail} 不可查看详情

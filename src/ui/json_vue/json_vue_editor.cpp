@@ -79,22 +79,16 @@ void JsonVueEditor::setupUI() {
 
 void JsonVueEditor::connectStaticControlSignals() {
   // 接口配置区的输入控件
+  connect(m_descEdit, &QLineEdit::textChanged, this, [this]() {
+    if (!m_loading) emit configChanged();
+  });
   connect(m_methodCombo, &QComboBox::currentTextChanged, this, [this]() {
     if (!m_loading) emit configChanged();
   });
   connect(m_dataUrlEdit, &QLineEdit::textChanged, this, [this]() {
     if (!m_loading) emit configChanged();
   });
-  connect(m_queryApiEdit, &QLineEdit::textChanged, this, [this]() {
-    if (!m_loading) emit configChanged();
-  });
-  connect(m_deleteApiEdit, &QLineEdit::textChanged, this, [this]() {
-    if (!m_loading) emit configChanged();
-  });
   connect(m_noDeleteCheck, &QCheckBox::stateChanged, this, [this]() {
-    if (!m_loading) emit configChanged();
-  });
-  connect(m_updateApiEdit, &QLineEdit::textChanged, this, [this]() {
     if (!m_loading) emit configChanged();
   });
   connect(m_noEditCheck, &QCheckBox::stateChanged, this, [this]() {
@@ -125,62 +119,53 @@ QWidget *JsonVueEditor::buildMetaSection() {
   layout->setSpacing(2);
   layout->setContentsMargins(4, 2, 4, 2);  // 内边距
 
-  // 第1行：生成数据 URL（方法下拉框 + URL 输入框 + 生成按钮）
-  auto *row1 = new QHBoxLayout;
-  row1->addWidget(new QLabel(QStringLiteral("生成数据URL:")));
+  // 接口配置区使用 2 列网格排版：
+  //   第1行：界面说明 | 生成数据
+  //   第2行：三个复选框（不可编辑 / 不可删除 / 不可查看详情）
+  auto *grid = new QGridLayout;
+  grid->setSpacing(2);
 
+  // ── 第1行：界面说明 | 生成数据 ──
+  // 界面说明
+  auto *descCell = new QHBoxLayout;
+  descCell->addWidget(new QLabel(QStringLiteral("说明:")));
+  m_descEdit = new QLineEdit(this);
+  m_descEdit->setPlaceholderText(QStringLiteral("请输入界面说明"));
+  descCell->addWidget(m_descEdit, 1);
+
+  // 生成数据（方法下拉框 + URL 输入框 + 生成按钮）
+  auto *genCell = new QHBoxLayout;
+  genCell->addWidget(new QLabel(QStringLiteral("来源:")));
   m_methodCombo = new QComboBox(this);
   m_methodCombo->addItems(
       {QString::fromLatin1(JsonVueHttp::kGet), QString::fromLatin1(JsonVueHttp::kPost),
        QString::fromLatin1(JsonVueHttp::kPut), QString::fromLatin1(JsonVueHttp::kDelete)});
-  m_methodCombo->setFixedWidth(80);
-  row1->addWidget(m_methodCombo);
-
+  m_methodCombo->setFixedWidth(50);
+  genCell->addWidget(m_methodCombo);
   m_dataUrlEdit = new QLineEdit(this);
-  m_dataUrlEdit->setPlaceholderText(QStringLiteral("/api/xxx/getList"));
-  row1->addWidget(m_dataUrlEdit, 1);
-
+  m_dataUrlEdit->setPlaceholderText(QStringLiteral("例如 config/selectByIn"));
+  genCell->addWidget(m_dataUrlEdit, 1);
   m_generateBtn = new QPushButton(QStringLiteral("生成"), this);
-  row1->addWidget(m_generateBtn);
-  layout->addLayout(row1);
+  genCell->addWidget(m_generateBtn);
 
-  // 第2行：查询接口
-  auto *row2 = new QHBoxLayout;
-  row2->addWidget(new QLabel(QStringLiteral("查询接口:")));
-  m_queryApiEdit = new QLineEdit(this);
-  m_queryApiEdit->setPlaceholderText(QStringLiteral("例如 getConfigGListApi"));
-  row2->addWidget(m_queryApiEdit, 1);
-  layout->addLayout(row2);
+  // 放入网格：第1行
+  grid->addLayout(descCell, 0, 0);
+  grid->addLayout(genCell, 0, 1);
+  grid->setColumnStretch(0, 1);
+  grid->setColumnStretch(1, 1);
+  layout->addLayout(grid);
 
-  // 第3行：删除接口 + 不可删除复选框
-  auto *row3 = new QHBoxLayout;
-  row3->addWidget(new QLabel(QStringLiteral("删除接口:")));
-  m_deleteApiEdit = new QLineEdit(this);
-  m_deleteApiEdit->setPlaceholderText(QStringLiteral("例如 delConfigGListApi"));
-  row3->addWidget(m_deleteApiEdit, 1);
-  m_noDeleteCheck = new QCheckBox(QStringLiteral("不可删除"), this);
-  row3->addWidget(m_noDeleteCheck);
-  layout->addLayout(row3);
-
-  // 第4行：修改接口 + 不可编辑复选框
-  auto *row4 = new QHBoxLayout;
-  row4->addWidget(new QLabel(QStringLiteral("修改接口:")));
-  m_updateApiEdit = new QLineEdit(this);
-  m_updateApiEdit->setPlaceholderText(QStringLiteral("例如 updConfigGListApi"));
-  row4->addWidget(m_updateApiEdit, 1);
+  // ── 第2行：三个复选框 ──
+  //   不可编辑（修改接口）、不可删除（删除接口）、不可查看详情（详情接口）
+  auto *checkRow = new QHBoxLayout;
   m_noEditCheck = new QCheckBox(QStringLiteral("不可编辑"), this);
-  row4->addWidget(m_noEditCheck);
-  layout->addLayout(row4);
-
-  // 第5行：详情接口 + 不可查看详情复选框
-  auto *row5 = new QHBoxLayout;
-  row5->addWidget(new QLabel(QStringLiteral("详情接口:")));
-  // 详情复用查询接口，这里只是提示
-  auto *detailLabel = new QLabel(QStringLiteral("（复用编辑表单，只读模式）"), this);
-  row5->addWidget(detailLabel, 1);
+  m_noDeleteCheck = new QCheckBox(QStringLiteral("不可删除"), this);
   m_noDetailCheck = new QCheckBox(QStringLiteral("不可查看详情"), this);
-  row5->addWidget(m_noDetailCheck);
-  layout->addLayout(row5);
+  checkRow->addWidget(m_noEditCheck);
+  checkRow->addWidget(m_noDeleteCheck);
+  checkRow->addWidget(m_noDetailCheck);
+  checkRow->addStretch();
+  layout->addLayout(checkRow);
 
   connect(m_generateBtn, &QPushButton::clicked, this, &JsonVueEditor::onGenerate);
   return group;
@@ -362,12 +347,11 @@ void JsonVueEditor::loadConfig(const JsonVueConfig &config) {
   m_loading = true;  // 加载期间抑制 configChanged 信号
 
   // 接口配置
+  m_loadedMeta = config.meta;  // 保留界面不再编辑的接口名，避免保存时丢失
+  m_descEdit->setText(config.meta.description);
   m_methodCombo->setCurrentText(config.meta.dataMethod);
   m_dataUrlEdit->setText(config.meta.dataUrl);
-  m_queryApiEdit->setText(config.meta.queryApi);
-  m_deleteApiEdit->setText(config.meta.deleteApi);
   m_noDeleteCheck->setChecked(config.meta.noDelete);
-  m_updateApiEdit->setText(config.meta.updateApi);
   m_noEditCheck->setChecked(config.meta.noEdit);
   m_noDetailCheck->setChecked(config.meta.noDetail);
 
@@ -474,12 +458,14 @@ JsonVueConfig JsonVueEditor::collectConfig() const {
   JsonVueConfig cfg;
 
   // 接口配置
+  cfg.meta.description = m_descEdit->text().trimmed();
   cfg.meta.dataMethod = m_methodCombo->currentText();
   cfg.meta.dataUrl = m_dataUrlEdit->text().trimmed();
-  cfg.meta.queryApi = m_queryApiEdit->text().trimmed();
-  cfg.meta.deleteApi = m_deleteApiEdit->text().trimmed();
+  // 接口名保留加载时的值（界面不再编辑，生成时由来源 URL 自动推导）
+  cfg.meta.queryApi = m_loadedMeta.queryApi;
+  cfg.meta.deleteApi = m_loadedMeta.deleteApi;
+  cfg.meta.updateApi = m_loadedMeta.updateApi;
   cfg.meta.noDelete = m_noDeleteCheck->isChecked();
-  cfg.meta.updateApi = m_updateApiEdit->text().trimmed();
   cfg.meta.noEdit = m_noEditCheck->isChecked();
   cfg.meta.noDetail = m_noDetailCheck->isChecked();
 

@@ -44,10 +44,15 @@ export function generateAdminMain(params: Object): Void {
   let templates: TemplateConfig[] = params["templates"];
   if (templates == null) {
     templates = [
-      { tpl: "../template/index.tpl",  out: "{basePath}/{pagePath}/index.vue" },
-      { tpl: "../template/write.tpl", out: "{basePath}/{pagePath}/components/write.vue" },
+      { tpl: "../template/index.tpl",  out: "{basePath}/src/views/{pagePath}/{pageName}.vue" },
+      { tpl: "../template/write.tpl", out: "{basePath}/src/views/{pagePath}/components/write.vue" },
+      { tpl: "../template/api.tpl", out: "{basePath}/src/api/{apiModule}/{pageName}.ts" },
     ];
   }
+  
+  let apiSelectSuffix: String = "selectByIn"; //查询api的后缀
+  let apiUpdateSuffix: String = "update"; //修改api的后缀
+  let apiDeleteSuffix: String = "delete"; //删除api的后缀
 
   // ── 3. 读取所有打勾的 .jsonvue 配置文件 ──────────────────────────
   //    传入 scriptDir() 确保只处理本项目下的勾选文件，
@@ -69,17 +74,23 @@ export function generateAdminMain(params: Object): Void {
     //        buttons 及分组      - 自定义按钮及行为分组
     //        各派生标记          - 排序、默认值、隐藏/只读字段等
     let json = readJson(file);
-    let tplData = buildAdminTplData(json, file);
+    let tplData = buildAdminTplData(json, file, {
+      "select": apiSelectSuffix,
+      "update": apiUpdateSuffix,
+      "delete": apiDeleteSuffix
+    });
     let pagePath: String = tplData["pagePath"];
 
     // ── 4.2 遍历模板配置，逐个渲染并写入文件 ─────────────────────
     for (cfg in templates) {
       printLog("tpl path: " + cfg.tpl);
 
-      // 用 formatPath 替换 {basePath}/{pagePath} 等占位符，得到输出文件路径
+      // 用 formatPath 替换 {basePath}/{pagePath}/{apiModule}/{pageName} 等占位符，得到输出文件路径
       let outPath = formatPath(cfg.out, {
         basePath: basePath,
-        pagePath: pagePath
+        pagePath: pagePath,
+        apiModule: tplData["apiModule"],
+        pageName: tplData["pageName"]
       });
       tplData["outputPath"] = outPath;  // 供模板内的 fileExists(outputPath) 守卫使用
 

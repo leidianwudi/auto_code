@@ -242,6 +242,7 @@ QJsonObject JsonVueMeta::toJson() const {
   obj[JsonVueKey::kUpdateApi] = updateApi;
   obj[JsonVueKey::kNoEdit] = noEdit;
   obj[JsonVueKey::kNoDetail] = noDetail;
+  obj[JsonVueKey::kDescription] = description;
   return obj;
 }
 
@@ -255,6 +256,7 @@ JsonVueMeta JsonVueMeta::fromJson(const QJsonObject &obj) {
   m.updateApi = obj.value(JsonVueKey::kUpdateApi).toString();
   m.noEdit = obj.value(JsonVueKey::kNoEdit).toBool(false);
   m.noDetail = obj.value(JsonVueKey::kNoDetail).toBool(false);
+  m.description = obj.value(JsonVueKey::kDescription).toString();
   return m;
 }
 

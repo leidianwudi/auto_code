@@ -342,7 +342,9 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
             popScope();
             return;
           }
-          if (m_hasBreak) {
+          // 循环体内 return 后必须立即退出循环，
+          // 否则后续轮次的 return 会覆盖正确的返回值
+          if (m_hasBreak || m_hasReturned) {
             m_hasBreak = false;
             break;
           }
@@ -376,7 +378,9 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
           execBlock(stmt.forStmt.body);
           popScope();
           if (!m_error.isEmpty()) return;
-          if (m_hasBreak) {
+          // 循环体内 return 后必须立即退出循环，
+          // 否则后续轮次的 return 会覆盖正确的返回值
+          if (m_hasBreak || m_hasReturned) {
             m_hasBreak = false;
             break;
           }
@@ -398,7 +402,9 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
           popScope();
           return;
         }
-        if (m_hasBreak) {
+        // 循环体内 return 后必须立即退出循环，
+        // 否则后续轮次的 return 会覆盖正确的返回值
+        if (m_hasBreak || m_hasReturned) {
           m_hasBreak = false;
           break;
         }
@@ -428,7 +434,9 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
           execBlock(sc.body);
           popScope();
           if (!m_error.isEmpty()) return;
-          if (m_hasBreak) {
+          // case 内 return 后必须立即停止遍历后续 case，
+          // 否则后续 case 的 return 会覆盖正确的返回值
+          if (m_hasBreak || m_hasReturned) {
             m_hasBreak = false;
             matched = false;
             fellThrough = false;

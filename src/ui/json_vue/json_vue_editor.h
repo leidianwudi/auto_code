@@ -122,15 +122,13 @@ private:
   void showColumnConfigMenu(int row, const QPoint &globalPos);
 
   // ── 接口配置区控件 ──
+  QLineEdit *m_descEdit = nullptr;       ///< 脚本说明
   QComboBox *m_methodCombo = nullptr;    ///< 生成数据 URL 的 HTTP 方法
   QLineEdit *m_dataUrlEdit = nullptr;    ///< 生成数据 URL
   QPushButton *m_generateBtn = nullptr;  ///< 生成按钮
-  QLineEdit *m_queryApiEdit = nullptr;   ///< 查询接口
-  QLineEdit *m_deleteApiEdit = nullptr;  ///< 删除接口
-  QCheckBox *m_noDeleteCheck = nullptr;  ///< 不可删除
-  QLineEdit *m_updateApiEdit = nullptr;  ///< 修改接口
-  QCheckBox *m_noEditCheck = nullptr;    ///< 不可编辑
-  QCheckBox *m_noDetailCheck = nullptr;  ///< 不可查看详情
+  QCheckBox *m_noEditCheck = nullptr;    ///< 不可编辑（修改接口）
+  QCheckBox *m_noDeleteCheck = nullptr;  ///< 不可删除（删除接口）
+  QCheckBox *m_noDetailCheck = nullptr;  ///< 不可查看详情（详情接口）
 
   // ── 列配置表格 ──
   QTableWidget *m_columnTable = nullptr;  ///< 列配置表格
@@ -156,6 +154,9 @@ private:
   QString m_postData;          ///< POST 请求的默认数据（JSON 字符串）
   QString m_acConfigFilePath;  ///< 最近一次加载 HTTP 配置的 AC 文件路径（用于点击"生成"时重读）
   bool m_loading = false;      ///< 加载配置时抑制 configChanged 信号
+
+  /// 最近加载的 meta（用于保留界面不再编辑的接口名，避免保存时丢失）
+  JsonVueMeta m_loadedMeta;
 
   /// 已复制的列配置（用于"粘贴配置"到其它行）
   ColumnConfig m_copiedColumnConfig;

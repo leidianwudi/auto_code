@@ -39,6 +39,7 @@ inline constexpr const char *kNoDelete = "noDelete";
 inline constexpr const char *kUpdateApi = "updateApi";
 inline constexpr const char *kNoEdit = "noEdit";
 inline constexpr const char *kNoDetail = "noDetail";
+inline constexpr const char *kDescription = "description";
 
 // 列 / 查询字段 / 对话框字段 通用键
 inline constexpr const char *kDataName = "dataName";
@@ -179,6 +180,8 @@ struct JsonVueMeta {
   bool noEdit = false;
   /// 不可查看详情（打勾后不生成详情按钮）
   bool noDetail = false;
+  /// 脚本说明（接口配置的说明文字）
+  QString description;
 
   /// 序列化为 JSON
   QJsonObject toJson() const;
