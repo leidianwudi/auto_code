@@ -72,9 +72,15 @@ void AuiStyle::drawFoldArrow(QPainter &p, const QPointF &tip, bool downward,
     a = QPointF(tip.x() - lx, tip.y() - ly);
     b = QPointF(tip.x() + lx, tip.y() - ly);
   } else {
-    // 向右「▸」：尖端在右侧，两臂向左张开（对称轴水平，指向右）
-    a = QPointF(tip.x() - lx, tip.y() - ly);
-    b = QPointF(tip.x() - lx, tip.y() + ly);
+    // 向右「▸」：尖端在右侧，两臂向左张开（对称轴水平，指向右）。
+    // 两臂以 tip 为中心左右对称（尖端相应右移 lx/2），
+    // 使 ▸ 与 v 的视觉中心对齐（否则两臂全在左侧，图标显得偏左）
+    const QPointF base(tip.x() + lx / 2.0, tip.y());
+    a = QPointF(base.x() - lx, base.y() - ly);
+    b = QPointF(base.x() - lx, base.y() + ly);
+    p.drawLine(base, a);
+    p.drawLine(base, b);
+    return;
   }
   p.drawLine(tip, a);
   p.drawLine(tip, b);

@@ -272,7 +272,8 @@ QJsonObject ColumnConfig::toJson() const {
   obj[JsonVueKey::kQueryStyle] = listStyleToString(queryStyle);
   obj[JsonVueKey::kSwitchEditable] = switchEditable;
   obj[JsonVueKey::kEditVisible] = editVisible;
-  obj[JsonVueKey::kEditName] = editName;
+  // 列标签已归一：只需输出 queryName（editName 交由生成侧从 queryName 推导），
+  // 避免同一个标签在配置里重复出现两个字段
   obj[JsonVueKey::kEditStyle] = editStyleToString(editStyle);
   obj[JsonVueKey::kEditEditable] = editEditable;
   // 下拉框配置（仅 Select 时序列化）
@@ -338,6 +339,10 @@ ColumnConfig ColumnConfig::fromJson(const QJsonObject &obj) {
   c.switchEditable = obj.value(JsonVueKey::kSwitchEditable).toBool(false);
   c.editVisible = obj.value(JsonVueKey::kEditVisible).toBool(true);
   c.editName = obj.value(JsonVueKey::kEditName).toString();
+  // 列标签归一：查询标签(queryName) 与编辑标签(editName) 合并为同一个值。
+  // 配置里只要任一个即可（生成侧由 admin_data.ac 从 queryName 推导 editName）；
+  // 读取时 queryName 为空则用 editName 补齐，保证内部只用 queryName。
+  if (c.queryName.isEmpty()) c.queryName = c.editName;
   c.editStyle = stringToEditStyle(obj.value(JsonVueKey::kEditStyle).toString(JsonVueStyle::kText));
   c.editEditable = obj.value(JsonVueKey::kEditEditable).toBool(true);
   // 兼容旧字段名 comboboxUrl/comboboxValueField/comboboxLabelField

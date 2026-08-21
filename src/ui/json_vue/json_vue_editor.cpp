@@ -481,12 +481,11 @@ JsonVueConfig JsonVueEditor::collectConfig() const {
     if (qVis) col.queryVisible = qVis->isChecked();
     auto *eVis = qobject_cast<QCheckBox *>(m_columnTable->cellWidget(row, ColEditVisible));
     if (eVis) col.editVisible = eVis->isChecked();
-    // 标题（合并后的单列）同时写回 queryName 和 editName
+    // 标题（合并后的单列）写回查询标签 queryName（唯一列标签字段；
+    // editName 由生成侧 admin_data.ac 自动推导）——实现“配置只要一个标签”
     auto *titleItem = m_columnTable->item(row, ColTitle);
     if (titleItem) {
-      QString title = titleItem->text().trimmed();
-      col.queryName = title;
-      col.editName = title;
+      col.queryName = titleItem->text().trimmed();
     }
     // 读取所有配置（含 editStyle/editEditable/switchEditable/displayType 等）
     auto *configBtn = qobject_cast<QPushButton *>(m_columnTable->cellWidget(row, ColConfig));
@@ -594,9 +593,19 @@ QJsonObject JsonVueEditor::collectMergedObject() const {
                 m_preserved.value(JsonVueKey::kMeta).toObject());
 
   // 各业务数组：字段级补齐 + 空数组防清空
-  root[JsonVueKey::kColumns] = mergeArrayByKey(
+  QJsonArray columns = mergeArrayByKey(
       root.value(JsonVueKey::kColumns).toArray(),
       m_preserved.value(JsonVueKey::kColumns).toArray(), JsonVueKey::kDataName);
+  // 列标签已归一为 queryName：清除保真合并可能从原文带回来的旧 editName，
+  // 保证写盘后的配置只含一个标签字段
+  for (int i = 0; i < columns.size(); ++i) {
+    if (columns[i].isObject()) {
+      QJsonObject col = columns[i].toObject();
+      col.remove(JsonVueKey::kEditName);
+      columns[i] = col;
+    }
+  }
+  root[JsonVueKey::kColumns] = columns;
   root[JsonVueKey::kQueryFields] = mergeArrayByKey(
       root.value(JsonVueKey::kQueryFields).toArray(),
       m_preserved.value(JsonVueKey::kQueryFields).toArray(), JsonVueKey::kDataName);

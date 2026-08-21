@@ -339,24 +339,28 @@ QPushButton *AuiButton::createDebugStepButton(int kind) {
 
 QPushButton *AuiButton::createSaveButton(int size) {
   auto *btn = new QPushButton;
-  // 绘制软盘图标（随主题 / 颜色变化自动重绘）
+  // 绘制软盘图标（随主题 / 颜色变化自动重绘；禁用时使用灰色图标，与启用状态明显区分）
   bindThemeAwareIcon(btn, [size]() {
-    QPixmap px(size, size);
-    px.fill(Qt::transparent);
-    QPainter p(&px);
-    p.setRenderHint(QPainter::Antialiasing);
-    p.setPen(QPen(AuiStyle::textColor(), 1.2));
-
-    int m = 2;  // margin
-    // 软盘外框
-    p.drawRect(m, m, size - 2 * m, size - 2 * m);
-    // 软盘标签（上部小矩形）
-    p.drawRect(m + 3, m, size - 2 * m - 6, size / 3);
-    // 底部横线
-    p.drawLine(m + 2, size - m - 4, size - m - 2, size - m - 4);
-
-    p.end();
-    return px;
+    auto drawDisk = [size](const QColor &color) {
+      QPixmap px(size, size);
+      px.fill(Qt::transparent);
+      QPainter p(&px);
+      p.setRenderHint(QPainter::Antialiasing);
+      p.setPen(QPen(color, 1.2));
+      int m = 2;  // margin
+      // 软盘外框
+      p.drawRect(m, m, size - 2 * m, size - 2 * m);
+      // 软盘标签（上部小矩形）
+      p.drawRect(m + 3, m, size - 2 * m - 6, size / 3);
+      // 底部横线
+      p.drawLine(m + 2, size - m - 4, size - m - 2, size - m - 4);
+      p.end();
+      return px;
+    };
+    QIcon icon;
+    icon.addPixmap(drawDisk(AuiStyle::textColor()), QIcon::Normal, QIcon::Off);
+    icon.addPixmap(drawDisk(AuiStyle::inactiveTabColor()), QIcon::Disabled, QIcon::Off);
+    return icon;
   });
   btn->setIconSize(QSize(size, size));
   btn->setCursor(Qt::PointingHandCursor);
@@ -373,20 +377,11 @@ QPushButton *AuiButton::createSaveButton(int size) {
 
 QPushButton *AuiButton::createSaveAllButton(int size) {
   auto *btn = new QPushButton;
-  // 绘制双层软盘图标（随主题 / 颜色变化自动重绘）
+  // 绘制双层软盘图标（随主题 / 颜色变化自动重绘；禁用时使用灰色图标，与启用状态明显区分）
   bindThemeAwareIcon(btn, [size]() {
-    QPixmap px(size, size);
-    px.fill(Qt::transparent);
-    QPainter p(&px);
-    p.setRenderHint(QPainter::Antialiasing);
-
-    QColor fg = AuiStyle::textColor();
-    QColor bg = AuiStyle::saveAllButtonBgColor();
-    int d = 2;
-
-    // 绘制软盘图标（与 createSaveButton 相同样式）
-    auto drawDisk = [&](int ox, int oy, const QColor &color) {
+    auto drawDisk = [size](QPainter &p, int ox, int oy, const QColor &color) {
       p.setPen(QPen(color, 1.2));
+      int d = 2;
       int m = 1 + d;  // 留出偏移空间
       int x = m + ox;
       int y = m + oy;
@@ -396,14 +391,25 @@ QPushButton *AuiButton::createSaveAllButton(int size) {
       p.drawRect(x + 3, y, w - 6, h / 3);
       p.drawLine(x + 2, y + h - 4, x + w - 2, y + h - 4);
     };
-
-    // 背景层 左上偏移
-    drawDisk(-d, -d, bg);
-    // 前景层 右下偏移
-    drawDisk(+d, +d, fg);
-
-    p.end();
-    return px;
+    auto build = [&](const QColor &fg, const QColor &bg) {
+      QPixmap px(size, size);
+      px.fill(Qt::transparent);
+      QPainter p(&px);
+      p.setRenderHint(QPainter::Antialiasing);
+      int d = 2;
+      // 背景层 左上偏移
+      drawDisk(p, -d, -d, bg);
+      // 前景层 右下偏移
+      drawDisk(p, +d, +d, fg);
+      p.end();
+      return px;
+    };
+    QIcon icon;
+    icon.addPixmap(build(AuiStyle::textColor(), AuiStyle::saveAllButtonBgColor()),
+                   QIcon::Normal, QIcon::Off);
+    icon.addPixmap(build(AuiStyle::inactiveTabColor(), AuiStyle::inactiveTabColor()),
+                   QIcon::Disabled, QIcon::Off);
+    return icon;
   });
   btn->setIconSize(QSize(size, size));
   btn->setCursor(Qt::PointingHandCursor);

@@ -738,12 +738,12 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area)
           painter.setPen(m_foldHoverBlock == blockNumber ? AuiStyle::errorTextColor()
                                                          : AuiStyle::secondaryTextColor());
           // 未折叠向下「v」，折叠后向右「▸」。样式由 AuiStyle 统一管理。
-          // 为视觉平衡且图标足够大：v 用 100°（half50°→横向跨度≈6.4），
-          // ▸ 用 80°（half40°→纵向跨度≈6.4），两箭头轴向跨度一致、观感同样"开"。
+          // 两方向开口张角一致（均为 100°，half=50°→开口跨度≈9.6），
+          // 保证折叠/展开图标开口同样"开"，且大小一致。
           const QColor arrowColor = m_foldHoverBlock == blockNumber
                                         ? AuiStyle::errorTextColor()
                                         : AuiStyle::secondaryTextColor();
-          const qreal foldAngle = isCollapsed(blockNumber) ? 80.0 : 100.0;
+          const qreal foldAngle = 100.0;
           AuiStyle::drawFoldArrow(painter, mr.center(), !isCollapsed(blockNumber), arrowColor, 6.5, foldAngle);
           painter.restore();
         }
