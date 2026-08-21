@@ -428,6 +428,10 @@ public:
   /// 序列化为 JSON 文档字符串（紧凑格式）
   QString toJsonString() const;
 
+  /// 将给定的完整 JSON 对象序列化为 JSON 文档字符串（紧凑格式）
+  /// 供可视化编辑“保真合并”后的结果直接序列化，避免经 toJsonObject() 二次往返丢失字段
+  static QString toJsonString(const QJsonObject &root);
+
   /// 从 JSON 字符串反序列化
   static JsonVueConfig fromJsonString(const QString &jsonStr, QString *error = nullptr);
 

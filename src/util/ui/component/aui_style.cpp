@@ -62,7 +62,7 @@ void AuiStyle::drawFoldArrow(QPainter &p, const QPointF &tip, bool downward,
   const qreal lx = length * std::cos(half);
   const qreal ly = length * std::sin(half);
   QPen pen(color, 1.6);
-  pen.setCapStyle(Qt::RoundCap);
+  pen.setCapStyle(Qt::FlatCap);   // 平头：避免尖端两条线起点圆帽重叠成凸点
   pen.setJoinStyle(Qt::RoundJoin);
   p.setPen(pen);
   p.setBrush(Qt::NoBrush);

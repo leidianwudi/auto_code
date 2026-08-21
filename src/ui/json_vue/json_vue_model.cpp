@@ -577,6 +577,12 @@ QString JsonVueConfig::toJsonString() const {
   return jsonObjectToJson5(toJsonObject(), 0) + "\n";
 }
 
+QString JsonVueConfig::toJsonString(const QJsonObject &root) {
+  // 直接序列化调用方构造好的完整对象（可能含可视化未表达的保留字段），
+  // 不再二次经 toJsonObject()，保证字段/键不被丢弃
+  return jsonObjectToJson5(root, 0) + "\n";
+}
+
 JsonVueConfig JsonVueConfig::fromJson(const QJsonObject &obj) {
   JsonVueConfig cfg;
   cfg.meta = JsonVueMeta::fromJson(obj.value(JsonVueKey::kMeta).toObject());

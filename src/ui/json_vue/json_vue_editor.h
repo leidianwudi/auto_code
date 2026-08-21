@@ -41,6 +41,13 @@ public:
   /// 从界面收集配置
   JsonVueConfig collectConfig() const;
 
+  /// 缓存磁盘上的原始 .jsonvue 内容（用于可视化写回时做字段级保真合并，避免数据被清空/精简）
+  void setPreservedSource(const QString &src);
+
+  /// 以界面当前配置为主、磁盘原文为底做保真合并，返回可写回磁盘的完整 JSON 对象
+  /// （同一 dataName/actionKey 元素从小从原文补齐未在界面表达的字段；界面未加载时空数组不会清空原文）
+  QJsonObject collectMergedObject() const;
+
   /// 设置 baseUrl（用于 HTTP 请求拼接）
   void setBaseUrl(const QString &baseUrl) { m_baseUrl = baseUrl; }
 
@@ -157,6 +164,9 @@ private:
 
   /// 最近加载的 meta（用于保留界面不再编辑的接口名，避免保存时丢失）
   JsonVueMeta m_loadedMeta;
+
+  /// 磁盘原文解析结果（保真合并的底）；为空表示无原文可参考（如新建文件）
+  QJsonObject m_preserved;
 
   /// 已复制的列配置（用于"粘贴配置"到其它行）
   ColumnConfig m_copiedColumnConfig;

@@ -88,6 +88,8 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
     jvw = new JsonVueWidget;
     editor = jvw->codeEditor();
     editor->setPlainText(content);
+    // 缓存磁盘原文：可视化写回时以它为底做保真合并，防止未加载时保存把 dataName 数据清空
+    jvw->setPreservedSource(content);
     tabWidget = jvw;
     // 优先从 .jsonvue 文件向上查找最近的 api_auth_data.ac 加载 HTTP 配置；
     // 找不到时回落到启动项 AC 脚本（向后兼容）

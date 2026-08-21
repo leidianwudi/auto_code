@@ -23,6 +23,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QScrollBar>
 #include <QShortcut>
 #include <QStandardPaths>
 #include <QStringList>
@@ -438,6 +439,25 @@ void MainDevMgr::saveOpenFilesToSettings() {
   QSettings s(sessionSettingsPath(), QSettings::IniFormat);
   s.setValue(QStringLiteral("session/editorPanels"), QVariant(groups));
   s.setValue(QStringLiteral("session/activeIndexes"), QVariant(activeIdxes));
+
+  // ── 采集每个打开文件的光标/滚动/折叠状态，供重启后还原现场（类似 VSCode） ──
+  QJsonObject states;
+  forEachEditor(m_ui, [&states](CodeEditor *editor) {
+    const QString fp = editor->objectName();
+    if (fp.isEmpty()) return true;
+    QJsonObject st;
+    st.insert(QStringLiteral("scrollY"), editor->verticalScrollBar()->value());
+    st.insert(QStringLiteral("scrollX"), editor->horizontalScrollBar()->value());
+    st.insert(QStringLiteral("cursorPos"), editor->textCursor().position());
+    QJsonArray foldArr;
+    for (int b : editor->collapsedFoldBlocks()) foldArr.append(b);
+    st.insert(QStringLiteral("foldBlocks"), foldArr);
+    states.insert(fp, st);
+    return true;
+  });
+  // 用 JSON 字符串而非 QVariantMap 存储，避免文件路径（含冒号/斜杠）作为 Ini 键被转义
+  s.setValue(QStringLiteral("session/editorStates"),
+             QString::fromUtf8(QJsonDocument(states).toJson(QJsonDocument::Compact)));
 }
 
 void MainDevMgr::restoreOpenFilesFromSettings() {
@@ -449,11 +469,42 @@ void MainDevMgr::restoreOpenFilesFromSettings() {
   const QList<QVariant> groups = s.value(QStringLiteral("session/editorPanels")).toList();
   const QList<QVariant> activeIdxes = s.value(QStringLiteral("session/activeIndexes")).toList();
 
+  // ── 读取已保存的编辑器现场（光标/滚动/折叠），打开文件后按路径还原 ──
+  QJsonObject states;
+  {
+    const QString raw = s.value(QStringLiteral("session/editorStates")).toString();
+    if (!raw.isEmpty()) {
+      const QJsonDocument doc = QJsonDocument::fromJson(raw.toUtf8());
+      if (doc.isObject()) states = doc.object();
+    }
+  }
+
+  // 还原单个编辑器的折叠 → 滚动 → 光标（顺序固定：折叠影响滚动范围，故先折叠）
+  auto restoreOne = [](CodeEditor *editor, const QJsonObject &st) {
+    if (!editor || st.isEmpty()) return;
+    QSet<int> collapsed;
+    const QJsonArray foldArr = st.value(QStringLiteral("foldBlocks")).toArray();
+    for (const auto &v : foldArr) collapsed.insert(v.toInt());
+    editor->restoreFoldState(collapsed);
+    auto *vs = editor->verticalScrollBar();
+    auto *hs = editor->horizontalScrollBar();
+    vs->setValue(qBound(vs->minimum(), st.value(QStringLiteral("scrollY")).toInt(0), vs->maximum()));
+    hs->setValue(qBound(hs->minimum(), st.value(QStringLiteral("scrollX")).toInt(0), hs->maximum()));
+    const int cursorPos =
+        qBound(0, st.value(QStringLiteral("cursorPos")).toInt(0), editor->document()->characterCount());
+    QTextCursor c = editor->textCursor();
+    c.setPosition(cursorPos);
+    editor->setTextCursor(c);
+  };
+
   QTabWidget *target = nullptr;  // nullptr → 打开到默认（第一个）面板
   for (int gi = 0; gi < groups.size(); ++gi) {
     const QStringList files = groups[gi].toStringList();
     for (const QString &fp : files) {
-      if (QFileInfo::exists(fp)) openFileInEditor(fp, target);
+      if (QFileInfo::exists(fp)) {
+        CodeEditor *editor = openFileInEditor(fp, target);
+        restoreOne(editor, states.value(fp).toObject());
+      }
     }
     // 恢复该面板的当前（激活）标签，停留在关闭前正在编辑的文件
     int active = (gi < activeIdxes.size()) ? activeIdxes[gi].toInt() : files.size() - 1;

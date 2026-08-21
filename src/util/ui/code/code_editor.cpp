@@ -107,6 +107,12 @@ CodeEditor::CodeEditor(QWidget *parent) : QPlainTextEdit(parent) {
   m_fixedLineHeightLayout = new FixedLineHeightLayout(document());
   document()->setDocumentLayout(m_fixedLineHeightLayout);
 
+  // 去掉文档默认左边距（默认 4px），使代码文本紧贴行号区右缘，不与行号区留缝隙
+  document()->setDocumentMargin(0);
+  // 强制整篇重排，确保 setDocumentMargin(0) 后的块几何与坐标换算立即同步，
+  // 避免点击空拍换算到错误字符（如跳到行尾）
+  document()->markContentsDirty(0, document()->characterCount());
+
   // 使用常量配置
   applyFontFromSetting();
 
@@ -152,7 +158,22 @@ CodeEditor::CodeEditor(QWidget *parent) : QPlainTextEdit(parent) {
   connect(document(), &QTextDocument::contentsChange, this, [this]() {
     m_foldValid = false;  // 标记折叠区间过期，延后重建
     m_foldRebuildTimer->start();
+
+    // 整篇重载（setPlainText）会重置所有块格式，使文本布局层失去统一行高，
+    // 导致「点击行间空隙 → cursorForPosition 定位到行尾」。检测首块已丢失统一行高
+    // 时延后重应用；打字/删除产生的子块会继承前块格式，无需整篇处理。
+    if (m_fixedBlockLineHeight > 0 &&
+        !qFuzzyCompare(document()->firstBlock().blockFormat().lineHeight(),
+                       m_fixedBlockLineHeight)) {
+      m_lineHeightTimer->start();
+    }
   });
+
+  // 文档整篇重载后延后重应用统一行高（与折叠重建类似的 0ms 单次定时器）
+  m_lineHeightTimer = new QTimer(this);
+  m_lineHeightTimer->setSingleShot(true);
+  m_lineHeightTimer->setInterval(0);
+  connect(m_lineHeightTimer, &QTimer::timeout, this, &CodeEditor::applyFixedBlockLineHeight);
 
   // 初始化查找/替换栏（嵌入编辑器上方，默认隐藏）
   m_findBar = new CodeFindBar(this, this);
@@ -200,8 +221,39 @@ void CodeEditor::updateFixedLineHeight(const QFont &font) {
   probe.setDocumentLayout(pl);  // probe 接管所有权
   pl->documentSize();           // 强制布局
   // 自然行高 + 额外间距，保证任何行不被裁剪且行不显得拥挤
-  m_fixedLineHeightLayout->setFixedLineHeight(pl->blockBoundingRect(probe.firstBlock()).height() +
-                                              CodeConstants::Editor::kLineHeightExtraSpacing);
+  const qreal lineH = pl->blockBoundingRect(probe.firstBlock()).height() +
+                      CodeConstants::Editor::kLineHeightExtraSpacing;
+  m_fixedLineHeightLayout->setFixedLineHeight(lineH);
+
+  // 关键：把统一行高同时写入文本布局层（块的 QTextBlockFormat）。
+  // 只改绘制层（blockBoundingRect）会导致「点击行间空隙 → cursorForPosition 定位到行尾」，
+  // 因为布局层的文本行仍是自然行高、顶部对齐，块底部留白被吸附成行尾。
+  // 在文本层用 FixedHeight 绝对像素值，保证每条文本行均为 lineH，实现真正的统一行高。
+  m_fixedBlockLineHeight = qRound(lineH);
+  applyFixedBlockLineHeight();
+}
+
+// ──────────────────────────────────────────────────────────────
+//  applyFixedBlockLineHeight — 把所有块重写为统一行高
+// ──────────────────────────────────────────────────────────────
+
+void CodeEditor::applyFixedBlockLineHeight() {
+  if (m_fixedBlockLineHeight <= 0) return;
+  // 逐块重写文本布局层行高。打字/删除产生的子块会继承前块格式，因此正常编辑无需处理；
+  // 仅整篇 setPlainText 会重置全部块格式，需在此恢复统一行高。
+  // 注意：setBlockFormat 会把 QTextDocument 的 modified 置为 true（被当作"内容已改"，
+  // 表现为 tab 圆点/目录树文件名变黄）。行高只是显示层布局，不该改变"已保存"语义，
+  // 因此调整前后保持原 modified 状态，当用户真正编辑时仍能正确标记未保存。
+  const bool wasModified = document()->isModified();
+  QTextBlockFormat fixedBf;
+  fixedBf.setLineHeight(qRound(m_fixedBlockLineHeight), QTextBlockFormat::FixedHeight);
+  QTextBlock block = document()->firstBlock();
+  for (; block.isValid(); block = block.next()) {
+    QTextCursor c(block);
+    c.setBlockFormat(fixedBf);
+  }
+  document()->setModified(wasModified);
+  document()->markContentsDirty(0, document()->characterCount());
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -453,9 +505,10 @@ int CodeEditor::lineNumberAreaWidth() const {
     ++digits;
   }
 
-  // 加 12px 余量（左右各 6px）
-  int space = 12 + fontMetrics().horizontalAdvance(QLatin1Char('9')) * digits;
+  // 左侧预留断点圆点 gutter；行号右对齐后仍需 6px 尾随空隙，避免与折叠标记相碰
   // 行号区右侧预留折叠标记 gutter，避免折叠图标与行号重叠
+  int space = kBreakpointGutterWidth + fontMetrics().horizontalAdvance(QLatin1Char('9')) * digits;
+  space += 6;
   space += kFoldMarkerWidth;
   return space;
 }
@@ -584,6 +637,15 @@ void CodeEditor::rebuildFold() {
   applyFoldVisibility();
 }
 
+void CodeEditor::restoreFoldState(const QSet<int> &blocks) {
+  // 供会话还原调用：先按当前文本重算可折叠区间（光标/折叠生效前提），
+  // 再覆盖持久化的折叠块号并应用。若验证模式为 NoValidation（如 .jsonvue 的
+  // codeEditor），computeFoldRanges 不会产生折叠区间，这里自然无折叠，符合预期。
+  computeFoldRanges();
+  m_collapsedStarts = blocks;
+  applyFoldVisibility();
+}
+
 bool CodeEditor::isFoldStart(int block) const { return m_foldRanges.contains(block); }
 
 void CodeEditor::toggleFold(int block) {
@@ -603,7 +665,7 @@ QRect CodeEditor::foldMarkerRect(int block) const {
   QRectF g = blockBoundingGeometry(b).translated(contentOffset());
   if (g.height() <= 0) return QRect();
   const int w = m_lineNumberArea ? m_lineNumberArea->width() : 0;
-  const int x = qMax(0, w - kFoldMarkerWidth - 4);  // 紧贴行号区右缘（代码左侧）
+  const int x = qMax(0, w - kFoldMarkerWidth);  // 紧贴行号区右缘（代码左侧），减少右缘留白、图标更靠近代码
   return QRect(x, qRound(g.top()), kFoldMarkerWidth, qRound(g.height()));
 }
 
@@ -643,13 +705,14 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area)
         painter.setPen(AuiStyle::lineNumberTextColor());
       }
 
-      painter.drawText(0, top, m_lineNumberArea->width() - kFoldMarkerWidth - 6, fontMetrics().height(),
-                       Qt::AlignRight, number);
+      painter.drawText(kBreakpointGutterWidth, top,
+                       m_lineNumberArea->width() - kFoldMarkerWidth - kBreakpointGutterWidth,
+                       fontMetrics().height(), Qt::AlignRight, number);
 
-      // 绘制断点圆点（生效=实心红圆，失效=空心红圆，位于行号左侧）
+      // 绘制断点圆点（生效=实心红圆，失效=空心红圆，位于行号左侧的专属 gutter）
       if (m_breakpoints.contains(line)) {
         int dotR = 5;
-        int cx = 5;
+        int cx = kBreakpointGutterWidth / 2;
         int cy = top + fontMetrics().height() / 2;
         QColor red(0xf4, 0x47, 0x47);
         if (m_breakpoints.value(line)) {
@@ -681,7 +744,7 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area)
                                         ? AuiStyle::errorTextColor()
                                         : AuiStyle::secondaryTextColor();
           const qreal foldAngle = isCollapsed(blockNumber) ? 80.0 : 100.0;
-          AuiStyle::drawFoldArrow(painter, mr.center(), !isCollapsed(blockNumber), arrowColor, 5.0, foldAngle);
+          AuiStyle::drawFoldArrow(painter, mr.center(), !isCollapsed(blockNumber), arrowColor, 6.5, foldAngle);
           painter.restore();
         }
       }
@@ -1523,6 +1586,46 @@ void CodeEditor::mouseMoveEvent(QMouseEvent *event) {
     m_hoverTimer->stop();
     QToolTip::hideText();
   }
+}
+
+// ──────────────────────────────────────────────────────────────
+//  点击坐标校正 — 消除自定义统一行高造成的「点击行尾吸附」
+// ──────────────────────────────────────────────────────────────
+// FixedLineHeightLayout 将块的绘制高度固定为统一行高（m_h），但
+// cursorForPosition 在块内做行命中时仍按"块内文本行实际高度"计算。
+// 当点击落在块内文本底部以下的空隙（如纯 ASCII 行比中英混排行矮）时，
+// 内部映射会退化为“吸附到行尾”。这里把点击点纵向修正到文本行的中心，
+// 保证它命中正确的行，从而得到正确的列。
+
+QPointF CodeEditor::snapClickToText(const QPointF &pos) const {
+  // 用基类映射取块：块级纵向判定是正确的，错的只是块内列
+  const QTextBlock block = cursorForPosition(pos.toPoint()).block();
+  if (!block.isValid()) return pos;
+  const QTextLayout *tl = block.layout();
+  if (!tl || tl->lineCount() == 0) return pos;
+  const qreal lineH = tl->lineAt(0).height();
+  // 块的视口坐标 = 文档坐标 + contentOffset
+  const QPointF blockViewTop = blockBoundingGeometry(block).topLeft() + contentOffset();
+  // 仅修正纵向到文本行中心，横向保留原点击 x
+  return QPointF(pos.x(), blockViewTop.y() + lineH * 0.5);
+}
+
+void CodeEditor::mousePressEvent(QMouseEvent *event) {
+  // 仅对“普通左键单击”做纵向校正（不处理 Ctrl/Shift/中指等，避免干扰其他能力）
+  const bool plainClick =
+      event->button() == Qt::LeftButton &&
+      (event->modifiers() &
+       (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier)) == 0;
+  if (plainClick) {
+    const QPointF corrected = snapClickToText(event->position());
+    QMouseEvent me(event->type(), corrected, corrected, event->globalPosition(),
+                   event->button(), event->buttons(), event->modifiers(),
+                   event->pointingDevice());
+    QPlainTextEdit::mousePressEvent(&me);
+    event->accept();
+    return;
+  }
+  QPlainTextEdit::mousePressEvent(event);
 }
 
 void CodeEditor::mouseReleaseEvent(QMouseEvent *event) {

@@ -168,8 +168,7 @@ SettingStore::SettingStore() : QObject(nullptr) {
   registerColor(QString::fromLatin1(kEd_Text), QStringLiteral("编辑器文字"),
                 QStringLiteral("编辑器"), QColor(Qt::black), QColor(0xd4, 0xd4, 0xd4));
   registerColor(QString::fromLatin1(kEd_LineNumBg), QStringLiteral("行号背景"),
-                QStringLiteral("编辑器"), QColor(Qt::lightGray).lighter(110),
-                QColor(0x1e, 0x1e, 0x1e));
+                QStringLiteral("编辑器"), QColor(Qt::white), QColor(0x1e, 0x1e, 0x1e));
   registerColor(QString::fromLatin1(kEd_LineNumText), QStringLiteral("行号文字"),
                 QStringLiteral("编辑器"), QColor(0x99, 0x99, 0x99), QColor(0x85, 0x85, 0x85));
   registerColor(QString::fromLatin1(kEd_CurrentLine), QStringLiteral("当前行高亮"),

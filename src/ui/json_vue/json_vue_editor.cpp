@@ -16,6 +16,8 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
@@ -28,6 +30,7 @@
 
 #include "json_vue_editor_helpers.h"
 #include "src/util/common/code_constants.h"
+#include "src/util/common/util_json.h"
 #include "src/util/ui/component/aui_style.h"
 
 // ════════════════════════════════════════════════════════════
@@ -521,6 +524,91 @@ JsonVueConfig JsonVueEditor::collectConfig() const {
   cfg.buttons = m_buttons;
 
   return cfg;
+}
+
+namespace {
+/// 合并 meta：以新 meta 为主，把磁盘原文中界面未表达的 key 补齐（保留界面不再编辑的字段）
+QJsonObject mergeMeta(const QJsonObject &newMeta, const QJsonObject &oldMeta) {
+  QJsonObject out = newMeta;
+  for (auto it = oldMeta.begin(); it != oldMeta.end(); ++it) {
+    if (!out.contains(it.key())) out.insert(it.key(), it.value());
+  }
+  return out;
+}
+
+/// 按 key 匹配的数组级保真合并：
+/// - 新数组非空：以新数组为准（顺序/数量），每个元素同 key 元素缺失的字段从原文补齐
+/// - 新数组为空且原文非空：返回原文数组（防止界面未加载时保存把数据清空）
+QJsonArray mergeArrayByKey(const QJsonArray &news, const QJsonArray &olds, const char *key) {
+  if (news.isEmpty()) return olds;
+  QJsonArray out;
+  for (const auto &nv : news) {
+    if (!nv.isObject()) {
+      out.append(nv);
+      continue;
+    }
+    QJsonObject ne = nv.toObject();
+    const QString neKey = ne.value(QString::fromLatin1(key)).toString();
+    for (const auto &ov : olds) {
+      if (!ov.isObject()) continue;
+      const QJsonObject oe = ov.toObject();
+      if (oe.value(QString::fromLatin1(key)).toString() != neKey) continue;
+      // 补齐界面未表达的字段（保留原文里用户没改过的配置）
+      for (auto it = oe.begin(); it != oe.end(); ++it) {
+        if (!ne.contains(it.key())) ne.insert(it.key(), it.value());
+      }
+      break;
+    }
+    out.append(ne);
+  }
+  return out;
+}
+}  // namespace
+
+void JsonVueEditor::setPreservedSource(const QString &src) {
+  // 记录磁盘原文（JSON5 也支持），作为可视化写回时的保真合并底
+  if (src.trimmed().isEmpty()) {
+    m_preserved = QJsonObject();
+    return;
+  }
+  QJsonParseError perr;
+  QJsonDocument doc = UtilJson::fromJson(src, &perr);
+  if (perr.error == QJsonParseError::NoError && doc.isObject()) {
+    m_preserved = doc.object();
+  } else {
+    m_preserved = QJsonObject();
+  }
+}
+
+QJsonObject JsonVueEditor::collectMergedObject() const {
+  // 界面当前配置（强类型，含最新编辑值）
+  JsonVueConfig cfg = collectConfig();
+  QJsonObject root = cfg.toJsonObject();
+
+  // 无原文（新建文件）或原文解析失败时，直接使用界面即时结果，行为与之前一致
+  if (m_preserved.isEmpty()) return root;
+
+  // meta：补齐界面未表达的字段
+  root[JsonVueKey::kMeta] =
+      mergeMeta(root.value(JsonVueKey::kMeta).toObject(),
+                m_preserved.value(JsonVueKey::kMeta).toObject());
+
+  // 各业务数组：字段级补齐 + 空数组防清空
+  root[JsonVueKey::kColumns] = mergeArrayByKey(
+      root.value(JsonVueKey::kColumns).toArray(),
+      m_preserved.value(JsonVueKey::kColumns).toArray(), JsonVueKey::kDataName);
+  root[JsonVueKey::kQueryFields] = mergeArrayByKey(
+      root.value(JsonVueKey::kQueryFields).toArray(),
+      m_preserved.value(JsonVueKey::kQueryFields).toArray(), JsonVueKey::kDataName);
+  root[JsonVueKey::kButtons] = mergeArrayByKey(
+      root.value(JsonVueKey::kButtons).toArray(),
+      m_preserved.value(JsonVueKey::kButtons).toArray(), JsonVueKey::kActionKey);
+
+  // 顶层还有保留其它键（界面未表达的结构），一并保留避免丢失
+  for (auto it = m_preserved.begin(); it != m_preserved.end(); ++it) {
+    if (!root.contains(it.key())) root.insert(it.key(), it.value());
+  }
+  return root;
 }
 
 // ════════════════════════════════════════════════════════════

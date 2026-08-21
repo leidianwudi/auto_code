@@ -60,6 +60,9 @@ public:
   /// 从可视化编辑器内容写回代码编辑器
   void syncVisualToCode();
 
+  /// 缓存磁盘原始 .jsonvue 内容，供可视化写回时保真合并（避免数据被清空/精简）
+  void setPreservedSource(const QString &src);
+
   /// 设置 baseUrl（透传给可视化编辑器）
   void setBaseUrl(const QString &baseUrl);
 

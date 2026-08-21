@@ -106,6 +106,8 @@ public:
   void toggleFold(int block);
   /// 折叠标记宽度（px）：绘制在行号区右侧（紧贴代码）
   static constexpr int kFoldMarkerWidth = 16;
+  /// 断点圆点 gutter 宽度（px）：绘制在行号区左侧，预留空间避免与行号数字重叠
+  static constexpr int kBreakpointGutterWidth = 18;
   /// 折叠标记是否常显（折叠态）或需悬停（未折叠）- 由调用方据 m_collapsedStarts 判断
   bool isCollapsed(int block) const { return m_collapsedStarts.contains(block); }
   /// 鼠标是否位于行号区（灰色区）：true 时显示全部可折叠图标
@@ -120,6 +122,10 @@ public:
   QRect foldMarkerRect(int block) const;
   /// 重建折叠区间并重算 visible（文本/折叠状态变化时调用）
   void rebuildFold();
+  /// 获取当前处于折叠态的起始 block 号集合（供会话持久化，重启后还原）
+  QSet<int> collapsedFoldBlocks() const { return m_collapsedStarts; }
+  /// 恢复折叠态（供会话还原）：覆盖折叠块集合并按当前文本重算折叠区间后应用
+  void restoreFoldState(const QSet<int> &blocks);
 
   // ── 性能优化：文本缓存 ──
 
@@ -179,6 +185,12 @@ public:
   /// 根据字体测量并设置统一行高（消除中英文混排时的行高抖动）
   void updateFixedLineHeight(const QFont &font);
 
+  /// 把所有块重写为统一行高（整篇重载 setPlainText 后恢复文本布局层行高用）
+  void applyFixedBlockLineHeight();
+
+  /// 把点击点纵向修正到文本行中心，规避统一行高造成的「点击行尾吸附」
+  QPointF snapClickToText(const QPointF &pos) const;
+
 signals:
   void validationMessage(const QString &message, int errorCount = 0);
   /// 结构化验证结果（文件路径 + 问题列表），供底部“问题”面板展示与双击跳转
@@ -200,6 +212,7 @@ protected:
   bool viewportEvent(QEvent *event) override;
   void keyPressEvent(QKeyEvent *event) override;
   void contextMenuEvent(QContextMenuEvent *event) override;
+  void mousePressEvent(QMouseEvent *event) override;
   void mouseMoveEvent(QMouseEvent *event) override;
   void mouseReleaseEvent(QMouseEvent *event) override;
 
@@ -315,6 +328,8 @@ private:
 
   // 统一行高布局（消除中英文混排时行高随内容抖动）
   FixedLineHeightLayout *m_fixedLineHeightLayout = nullptr;
+  qreal m_fixedBlockLineHeight = 0;  ///< 文本布局层统一行高（px），整篇重载后重应用依据
+  QTimer *m_lineHeightTimer = nullptr;  ///< 整篇重载后延后重应用块统一行高
 
   // 代码折叠（VSCode 风格）
   QHash<int, int> m_foldRanges;   ///< 可折叠起始 block → 结束 block（含），折叠区域内的块被折叠
