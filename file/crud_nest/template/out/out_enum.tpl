@@ -24,7 +24,8 @@ ${each enum in apiEnums}
  * ${tableName}.${enum.columnName} 的枚举输出列表
  */
 export const ${enum.recordsName}: ${enum.outEnumType}[] = [
-${each item in enum.items}  { key: ${enum.enumName}.${item.key}, value: "${item.label}" }${if !item_last},${/if}
+${each item in enum.items}
+  { key: ${enum.enumName}.${item.key}, value: "${item.label}" }${if !item_last},${/if}
 ${/each}];
 ${/each}
 ${/if}

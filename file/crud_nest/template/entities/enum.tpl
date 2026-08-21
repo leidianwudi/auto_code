@@ -31,7 +31,8 @@ ${each enum in enums}
  * @see ${entityClass}#${enum.columnName} ${enum.columnComment}
  */
 export enum ${enum.enumName} {
-${each item in enum.items}  /* ${item.label} */
+${each item in enum.items}
+  /* ${item.label} */
   ${item.key} = ${item.valueStr}${if !item_last},${/if}
 ${/each}}
 

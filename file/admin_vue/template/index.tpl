@@ -315,24 +315,28 @@ ${if hasCustomButtons}
 // ── 自定义按钮动作处理 ──
 // row 为 null 表示工具栏按钮触发，有值表示行操作列按钮触发
 const onCustomAction = (row: any, actionKey: string) => {
-${each btn in ajaxButtons}  if (actionKey === '${btn.key}') {
+${each btn in ajaxButtons}
+  if (actionKey === '${btn.key}') {
     ${btn.apiName}(row ? row.id : undefined);
     return;
   }
 ${/each}
-${each btn in confirmButtons}  if (actionKey === '${btn.key}') {
+${each btn in confirmButtons}
+  if (actionKey === '${btn.key}') {
     ElMessageBox.confirm('${btn.confirmText}', '提示', { type: 'warning' })
       .then(() => ${btn.apiName}(row ? row.id : undefined));
     return;
   }
 ${/each}
-${each btn in dialogButtons}  if (actionKey === '${btn.key}') {
+${each btn in dialogButtons}
+  if (actionKey === '${btn.key}') {
     ${btn.key}Visible.value = true;
     ${btn.key}Row.value = row;
     return;
   }
 ${/each}
-${each btn in linkButtons}  if (actionKey === '${btn.key}') {
+${each btn in linkButtons}
+  if (actionKey === '${btn.key}') {
     push('${btn.linkPath}');
     return;
   }
@@ -345,14 +349,16 @@ ${each btn in dialogButtons}
 const ${btn.key}Visible = ref(false);
 const ${btn.key}Row = ref<any>(null);
 const ${btn.key}Form = reactive({
-${each f in btn.dialogFields}  ${f.fieldName}: '',
+${each f in btn.dialogFields}
+  ${f.fieldName}: '',
 ${/each}});
 const ${btn.key}FormRef = ref();
 const ${btn.key}FormRegister = (form: any) => {
   ${btn.key}FormRef.value = form;
 };
 const ${btn.key}Schema = reactive<FormSchema[]>([
-${each f in btn.dialogFields}  {
+${each f in btn.dialogFields}
+  {
     field: '${f.fieldName}',
     label: '${f.label}',
     component: '${f.component}'${if f.hasProps},
@@ -363,7 +369,8 @@ ${/each}
 
 // 自定义对话框提交
 const onCustomDialogSubmit = async (actionKey: string) => {
-${each btn in dialogButtons}  if (actionKey === '${btn.key}') {
+${each btn in dialogButtons}
+  if (actionKey === '${btn.key}') {
     await ${btn.dialogApi}({ id: ${btn.key}Row.value?.id, ...${btn.key}Form });
     ${btn.key}Visible.value = false;
     Object.keys(${btn.key}Form).forEach((k: string) => (${btn.key}Form as any)[k] = '');

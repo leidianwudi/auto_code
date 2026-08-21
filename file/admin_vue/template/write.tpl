@@ -61,7 +61,8 @@ ${else if col.isTagSwitch}
     component: 'Select',
     componentProps: {
       options: [
-${each t in col.tagItems}        { label: '${t.textEsc}', value: '${t.valueEsc}' },
+${each t in col.tagItems}
+        { label: '${t.textEsc}', value: '${t.valueEsc}' },
 ${/each}      ]
     }${if col.hasFormSpan},
     colProps: { span: ${col.formSpan} }${/if}
@@ -85,7 +86,8 @@ ${else if col.isTagEdit}
     component: 'Select',
     componentProps: {
       options: [
-${each t in col.tagItems}        { label: '${t.textEsc}', value: '${t.valueEsc}' },
+${each t in col.tagItems}
+        { label: '${t.textEsc}', value: '${t.valueEsc}' },
 ${/each}      ]
     }${if col.hasFormSpan},
     colProps: { span: ${col.formSpan} }${/if}
