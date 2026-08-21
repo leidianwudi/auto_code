@@ -5,7 +5,7 @@ ${# 作用：                                                                   
 ${#   生成分页查询的输出类型，继承 OutBasePage<EnXxx>。                           }
 ${#   用于 API 返回分页数据时的类型定义。                                        }
 ${# ============================================================================}
-//此代码为AutoCode框架生成，请勿手动修改
+//此代码为AutoCode编译器生成，请勿手动修改
 import { ApiProperty } from '@nestjs/swagger';
 import { OutBasePage } from 'src/common/interface/out_base_page';
 import { ${entityClass} } from '../entities/${entityClassFile}';

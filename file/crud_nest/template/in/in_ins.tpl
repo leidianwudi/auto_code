@@ -9,7 +9,7 @@ ${#   - constructor(data?: EnXxx)：从实体构造 InIns                       
 ${#   - toEntity()：InIns 转回实体                                               }
 ${# ============================================================================}
 ${# ── 头部：注释和静态 import ──────────────────────────────────────────────   }
-//此代码为AutoCode框架生成，请勿手动修改
+//此代码为AutoCode编译器生成，请勿手动修改
 ${# Swagger API 文档：@ApiProperty 用于生成接口字段说明                          }
 import { ApiProperty } from '@nestjs/swagger';
 ${# 引用对应的实体类                                                             }

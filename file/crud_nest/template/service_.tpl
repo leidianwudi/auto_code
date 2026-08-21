@@ -8,7 +8,7 @@ ${#   - selectByIn 分页查询                                                 
 ${#   - selectById 单条查询                                                      }
 ${#   - insert / update / delete 增删改                                          }
 ${# ============================================================================}
-// 此代码为AutoCode框架生成，请勿手动修改
+// 此代码为AutoCode编译器生成，请勿手动修改
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, InsertResult, UpdateResult, Like, FindOptionsWhere, Between, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';

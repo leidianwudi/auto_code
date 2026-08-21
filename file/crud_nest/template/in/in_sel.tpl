@@ -8,7 +8,7 @@ ${#   - @ApiProperty + @IsOptional + @IsXxx 验证装饰器                     
 ${#   - 固定的 sort 字段（可排序字段列表）                                        }
 ${# ============================================================================}
 ${# ── 头部：注释和静态 import ──────────────────────────────────────────────   }
-//此代码为AutoCode框架生成，请勿手动修改
+//此代码为AutoCode编译器生成，请勿手动修改
 ${# 分页基类 }
 import { In_BasePage } from 'src/common/interface/in_base_page';
 ${# class-validator：请求参数验证装饰器（查询参数均可空，仅保留 IsOptional）      }

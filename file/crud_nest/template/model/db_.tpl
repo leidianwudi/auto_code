@@ -10,7 +10,7 @@ ${#   - getOrderByKey/getOrderByIn 排序逻辑                                 
 ${#   - selectById/insert/update/delete 基本 CRUD                                }
 ${# ============================================================================}
 ${# ── 头部：注释和静态 import ──────────────────────────────────────────────   }
-//此代码为AutoCode框架生成，请勿手动修改
+//此代码为AutoCode编译器生成，请勿手动修改
 ${# Repository 基类封装 }
 import { RepositorySuper } from "src/common/tool/repository_super";
 ${# TypeORM 核心类型 }

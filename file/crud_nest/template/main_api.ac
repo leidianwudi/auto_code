@@ -394,6 +394,7 @@ export function generateApiMain(params: Object): Void {
     tplData["controllerBaseClassFile"] = param.tableName + ".controller_"; // ${controllerBaseClassFile} 如 user.controller_
     tplData["controllerClassFile"]     = param.tableName + ".controller";  // ${controllerClassFile} 如 user.controller
     tplData["modelBaseName"]       = modelBaseName;  // ${modelBaseName} 如 User（供 ApiTags/Module 使用）
+    tplData["controllerPath"]      = modelBaseName.toLowerCase(); // ${controllerPath} 控制器路由，如 user / sportscoretype（表名去下划线）
     // Module 类名
     tplData["moduleClassFile"]     = param.tableName + ".module"; // ${moduleClassFile} 如 user.module
 

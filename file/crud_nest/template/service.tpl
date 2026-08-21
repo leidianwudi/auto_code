@@ -7,7 +7,7 @@ ${#   开发者可在此类中添加自定义业务方法，不会被框架覆�
 ${# ============================================================================}
 ${# 安全保护：只有当输出文件不存在时才生成，防止开发者已修改的代码被覆盖           }
 ${if !fileExists(outputPath)}
-// 此代码为AutoCode框架生成，需要扩展时，可以手动修改
+// 此代码为AutoCode编译器生成，需要扩展时，可以手动修改
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';

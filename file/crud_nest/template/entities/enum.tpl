@@ -22,7 +22,7 @@ ${#     enumDesc   - JSDoc 描述行（已预计算，含表名和列名大写�
 ${#     valueStr   - 枚举值字面量（crud_api_enum 带引号，tableEnum 不带）       }
 ${# ============================================================================}
 ${if hasEnums}
-// 此代码为AutoCode框架生成，请勿手动修改
+// 此代码为AutoCode编译器生成，请勿手动修改
 import { ${entityClass} } from './${entityClassFile}'
 
 ${each enum in enums}

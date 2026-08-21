@@ -13,7 +13,7 @@ ${#   apiEnums    - 枚举定义数组（仅 crud_api_enum 来源，不含 table
 ${#     [{enumName, recordsName, columnName, items: [{key, value, label}]}]     }
 ${# ============================================================================}
 ${if hasApiEnums}
-// 此代码为AutoCode框架生成，请勿手动修改
+// 此代码为AutoCode编译器生成，请勿手动修改
 import {
   ${enumNames}
 } from "../entities/enum_${tableName}";
