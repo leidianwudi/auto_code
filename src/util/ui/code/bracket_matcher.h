@@ -43,6 +43,16 @@ public:
     bool isValid() const { return openPos >= 0 && closePos >= 0; }
   };
 
+  /// 模板控制标签成对匹配结果（${each}/${/each}、${if}/${/if}）
+  struct TemplateTagMatch {
+    int openStart = -1;   ///< 开标签 ${ 起始位置（0-based）
+    int openEnd = -1;     ///< 开标签 } 后的位置（范围 [openStart, openEnd)）
+    int closeStart = -1;  ///< 闭标签 ${ 起始位置
+    int closeEnd = -1;    ///< 闭标签 } 后的位置（范围 [closeStart, closeEnd)）
+    bool isEach = false;  ///< true=each 块，false=if 块
+    bool isValid() const { return openStart >= 0 && closeStart >= 0; }
+  };
+
   /**
    * @brief 查找光标位置的括号匹配
    * @param pos 光标位置（1-based，用于 findMatchingBracket 兼容）
@@ -82,6 +92,15 @@ public:
    * @return true 如果在字符串或注释中
    */
   static bool isInStringOrComment(int pos, const QString &text, QHash<int, bool> &cache);
+
+  /**
+   * @brief 查找包含光标位置（或光标落在标签上）的最内层模板控制块
+   * （${each}/${/each}、${if}/${/if} 成对）。仅模板文件使用。
+   * @param pos 光标位置（0-based）
+   * @param text 文本内容
+   * @return 最内层成对标签范围；无匹配则返回 invalid
+   */
+  static TemplateTagMatch findEnclosingTemplateTag(int pos, const QString &text);
 
 private:
   /// 根据括号字符获取对应的闭合括号

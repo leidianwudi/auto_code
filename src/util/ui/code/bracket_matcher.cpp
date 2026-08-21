@@ -5,8 +5,11 @@
 
 #include "bracket_matcher.h"
 
+#include <QRegularExpression>
 #include <QTextBlock>
 #include <QTextDocument>
+
+#include "src/engine/ac_language.h"
 
 // ──────────────────────────────────────────────────────────────
 //  静态常量定义
@@ -223,4 +226,76 @@ BracketMatcher::MatchResult BracketMatcher::findEnclosingBrackets(int pos, const
   }
 
   return bestResult;
+}
+
+// ──────────────────────────────────────────────────────────────
+//  模板控制标签成对匹配（${each}/${/each}、${if}/${/if}）
+// ──────────────────────────────────────────────────────────────
+
+BracketMatcher::TemplateTagMatch BracketMatcher::findEnclosingTemplateTag(int pos,
+                                                                          const QString &text) {
+  TemplateTagMatch result;
+  if (pos < 0 || pos > text.size()) return result;
+
+  // 收集所有模板控制标签：开标签 "${each...}"/"${if...}"，闭标签 "${/each}"/"${/if}"
+  static const QRegularExpression tagRe(QStringLiteral("\\$\\{/(each|if)\\}|\\$\\{(each|if)\\b[^}]*\\}"));
+  struct Tag {
+    int start = -1;  ///< 标签起始位置
+    int end = -1;    ///< 标签结束位置（} 之后）
+    bool isEach = false;
+    bool isClose = false;
+  };
+  QVector<Tag> tags;
+
+  auto mit = tagRe.globalMatch(text);
+  while (mit.hasNext()) {
+    auto m = mit.next();
+    Tag t;
+    t.start = m.capturedStart();
+    t.end = m.capturedEnd();
+    t.isClose = !m.captured(1).isEmpty();
+    t.isEach = (t.isClose ? m.captured(1) : m.captured(2)) == QLatin1String("each");
+    tags.append(t);
+  }
+  if (tags.isEmpty()) return result;
+
+  // 按类型独立配对（each 对 each、if 对 if），光标落在块范围内时记录候选，
+  // 最终选范围最小（最内层）的块。
+  QVector<int> eachStack;  // 存开标签在 tags 中的下标
+  QVector<int> ifStack;
+
+  int bestOpen = -1, bestClose = -1;
+  int bestSpan = -1;
+  bool bestIsEach = false;
+
+  for (int i = 0; i < tags.size(); ++i) {
+    const Tag &t = tags[i];
+    QVector<int> *stack = t.isEach ? &eachStack : &ifStack;
+    if (!t.isClose) {
+      stack->append(i);
+      continue;
+    }
+    if (stack->isEmpty()) continue;
+    int oi = stack->takeLast();
+    const Tag &o = tags[oi];
+    // 块范围 [open.start, close.end)，光标落在其中（含落在开/闭标签上）即视为命中
+    if (t.end > o.start && o.end <= pos && pos <= t.end) {
+      int span = t.end - o.start;
+      if (bestSpan < 0 || span < bestSpan) {
+        bestSpan = span;
+        bestOpen = oi;
+        bestClose = i;
+        bestIsEach = o.isEach;
+      }
+    }
+  }
+
+  if (bestOpen >= 0 && bestClose >= 0) {
+    result.isEach = bestIsEach;
+    result.openStart = tags[bestOpen].start;
+    result.openEnd = tags[bestOpen].end;
+    result.closeStart = tags[bestClose].start;
+    result.closeEnd = tags[bestClose].end;
+  }
+  return result;
 }

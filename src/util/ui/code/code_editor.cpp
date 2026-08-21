@@ -820,6 +820,31 @@ void CodeEditor::highlightCurrentLine() {
     int pos = cursor.position();
     const QString &text = cachedText();
 
+    // 模板文件：识别 ${each}/${/each}、${if}/${/if} 成对控制标签并高亮。
+    // 命中后不 return，与下方括号匹配/错误/调试等高亮叠加，
+    // 保证光标在 ${...} 块内时，普通括号 ()[]{} 的高亮不丢失。
+    if (m_validationMode == TemplateValidation) {
+      auto tagMatch = BracketMatcher::findEnclosingTemplateTag(pos, text);
+      if (tagMatch.isValid()) {
+        QColor color = AuiStyle::templateTagColor();
+        QTextEdit::ExtraSelection sel1;
+        sel1.cursor = cursor;
+        sel1.cursor.setPosition(tagMatch.openStart);
+        sel1.cursor.setPosition(tagMatch.openEnd, QTextCursor::KeepAnchor);
+        sel1.format.setBackground(color);
+        sel1.format.setFontWeight(QFont::Bold);
+        extra.append(sel1);
+
+        QTextEdit::ExtraSelection sel2;
+        sel2.cursor = cursor;
+        sel2.cursor.setPosition(tagMatch.closeStart);
+        sel2.cursor.setPosition(tagMatch.closeEnd, QTextCursor::KeepAnchor);
+        sel2.format.setBackground(color);
+        sel2.format.setFontWeight(QFont::Bold);
+        extra.append(sel2);
+      }
+    }
+
     // 使用 BracketMatcher 进行括号匹配
     auto directMatch = BracketMatcher::findMatchAtCursor(pos, text);
     auto enclosingMatch =

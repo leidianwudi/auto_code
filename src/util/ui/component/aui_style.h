@@ -245,6 +245,14 @@ public:
     return SettingStore::ins().color(QStringLiteral("editor.bracketMatch"));
   }
 
+  /// 模板控制标签（${each}/${/each}、${if}/${/if}）成对高亮色。
+  /// 不沿用 bracketMatch（浅色主题下过浅），改用主题适配、对比度更高的深色，
+  /// 深色主题用深灰蓝、浅色主题用深灰蓝(较深)，保证两种主题下都足够醒目。
+  static QColor templateTagColor() {
+    const bool dark = (SettingStore::ins().theme() == SettingStore::ThemeDark);
+    return dark ? QColor(0x53, 0x70, 0xb5) : QColor(0x9d, 0xb6, 0xf2);
+  }
+
   /// 圆括号 () 匹配高亮色（珊瑚红）
   static QColor bracketParenColor() {
     return SettingStore::ins().color(QStringLiteral("editor.bracketParen"));
