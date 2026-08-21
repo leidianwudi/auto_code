@@ -5,6 +5,9 @@
 
 #include "aui_style.h"
 
+#include <QtMath>
+#include <cmath>
+
 #include <QApplication>
 #include <QFontDatabase>
 #include <QLabel>
@@ -50,6 +53,31 @@ void AuiStyle::drawErrorUnderline(QPainter &p, int x1, int x2, int y, const QCol
     x += w;
     up = !up;
   }
+}
+
+void AuiStyle::drawFoldArrow(QPainter &p, const QPointF &tip, bool downward,
+                             const QColor &color, qreal length, qreal openAngleDeg) {
+  // 半张角：两臂关于对称轴的夹角一半。两方向共用同一张角，保证开口角度一致。
+  const qreal half = qDegreesToRadians(qBound<qreal>(20.0, openAngleDeg, 170.0) / 2.0);
+  const qreal lx = length * std::cos(half);
+  const qreal ly = length * std::sin(half);
+  QPen pen(color, 1.6);
+  pen.setCapStyle(Qt::RoundCap);
+  pen.setJoinStyle(Qt::RoundJoin);
+  p.setPen(pen);
+  p.setBrush(Qt::NoBrush);
+  QPointF a, b;
+  if (downward) {
+    // 向下「v」：尖端在最低点，两臂朝左上/右上张开（开口朝上）
+    a = QPointF(tip.x() - lx, tip.y() - ly);
+    b = QPointF(tip.x() + lx, tip.y() - ly);
+  } else {
+    // 向右「▸」：尖端在右侧，两臂向左张开（对称轴水平，指向右）
+    a = QPointF(tip.x() - lx, tip.y() - ly);
+    b = QPointF(tip.x() - lx, tip.y() + ly);
+  }
+  p.drawLine(tip, a);
+  p.drawLine(tip, b);
 }
 
 // ════════════════════════════════════════════════════════════

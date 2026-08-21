@@ -299,3 +299,64 @@ BracketMatcher::TemplateTagMatch BracketMatcher::findEnclosingTemplateTag(int po
   }
   return result;
 }
+
+// ──────────────────────────────────────────────────────────────
+//  彩虹括号 — 收集全文括号及嵌套深度
+// ──────────────────────────────────────────────────────────────
+
+QVector<BracketMatcher::BracketInfo> BracketMatcher::collectBrackets(const QString &text,
+                                                                      QHash<int, bool> *cache) {
+  QVector<BracketInfo> result;
+
+  QHash<int, bool> tempCache;
+  QHash<int, bool> &cacheRef = cache ? *cache : tempCache;
+
+  // 栈元素：括号字符与其嵌套深度
+  struct OpenBracket {
+    QChar ch;
+    int depth;
+  };
+  QVector<OpenBracket> stack;
+
+  static const QString openers = QStringLiteral("([{");
+  static const QString closers = QStringLiteral(")]}");
+
+  for (int i = 0; i < text.size(); ++i) {
+    if (isInStringOrComment(i, text, cacheRef)) continue;
+    const QChar &ch = text[i];
+    int oi = openers.indexOf(ch);
+    if (oi >= 0) {
+      // 开括号：深度 = 压栈后栈大小
+      int depth = stack.size() + 1;
+      stack.append({ch, depth});
+      BracketInfo b;
+      b.pos = i;
+      b.ch = ch;
+      b.depth = depth;
+      result.append(b);
+    } else {
+      int ci = closers.indexOf(ch);
+      if (ci >= 0 && !stack.isEmpty()) {
+        OpenBracket top = stack.last();
+        // 仅当闭括号与栈顶开括号同类型时才配对
+        if (getMatchingBracket(top.ch) == ch) {
+          stack.removeLast();
+          BracketInfo b;
+          b.pos = i;
+          b.ch = ch;
+          b.depth = top.depth;
+          result.append(b);
+        }
+      } else if (ci >= 0) {
+        // 孤立的闭括号：赋予 0 深度（不参与彩虹配色，防越界）
+        BracketInfo b;
+        b.pos = i;
+        b.ch = ch;
+        b.depth = 0;
+        result.append(b);
+      }
+    }
+  }
+
+  return result;
+}

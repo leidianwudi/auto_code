@@ -53,6 +53,14 @@ public:
     bool isValid() const { return openStart >= 0 && closeStart >= 0; }
   };
 
+  /// 单个括号在文档中的位置与嵌套深度（供彩虹括号着色）
+  struct BracketInfo {
+    int pos = -1;       ///< 括号字符位置（0-based）
+    QChar ch;           ///< 括号字符
+    int depth = 0;      ///< 嵌套深度（1-based，最外层=1）
+    bool isValid() const { return pos >= 0; }
+  };
+
   /**
    * @brief 查找光标位置的括号匹配
    * @param pos 光标位置（1-based，用于 findMatchingBracket 兼容）
@@ -101,6 +109,14 @@ public:
    * @return 最内层成对标签范围；无匹配则返回 invalid
    */
   static TemplateTagMatch findEnclosingTemplateTag(int pos, const QString &text);
+
+  /**
+   * @brief 收集全文所有括号（()、[]、{}）及其嵌套深度，供彩虹括号着色。
+   * @param text 文本内容
+   * @param cache 字符串/注释缓存（可选，避免重复计算）
+   * @return 所有括号的位置、字符、深度
+   */
+  static QVector<BracketInfo> collectBrackets(const QString &text, QHash<int, bool> *cache = nullptr);
 
 private:
   /// 根据括号字符获取对应的闭合括号

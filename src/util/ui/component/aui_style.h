@@ -11,6 +11,7 @@
 #include <QFont>
 #include <QFontMetrics>
 #include <QMargins>
+#include <QPointF>
 #include <QSize>
 #include <QString>
 #include <QStringList>
@@ -253,6 +254,20 @@ public:
     return dark ? QColor(0x53, 0x70, 0xb5) : QColor(0x9d, 0xb6, 0xf2);
   }
 
+  /// 彩虹括号配色：按嵌套深度取色，相邻深度错开、深浅主题均可见。
+  /// 返回 null 颜色表示深度超出配色范围（用默认括号色兜底）。
+  static QColor rainbowBracketColor(int depth) {
+    static const QColor light[6] = {QColor(0xc8, 0x4b, 0x4b), QColor(0xc0, 0x8a, 0x2e),
+                                    QColor(0x6c, 0x9c, 0x35), QColor(0x2f, 0x8f, 0x8f),
+                                    QColor(0x4a, 0x6d, 0xc8), QColor(0x8b, 0x5c, 0xb0)};
+    static const QColor dark[6] = {QColor(0xf0, 0x8a, 0x8a), QColor(0xf0, 0xc6, 0x6e),
+                                   QColor(0xa8, 0xd4, 0x6a), QColor(0x6f, 0xd9, 0xd9),
+                                   QColor(0x8a, 0xab, 0xf2), QColor(0xc0, 0x9a, 0xe8)};
+    if (depth <= 0 || depth > 6) return QColor();  // 无效/超界返回空色
+    const bool isDark = (SettingStore::ins().theme() == SettingStore::ThemeDark);
+    return isDark ? dark[depth - 1] : light[depth - 1];
+  }
+
   /// 圆括号 () 匹配高亮色（珊瑚红）
   static QColor bracketParenColor() {
     return SettingStore::ins().color(QStringLiteral("editor.bracketParen"));
@@ -282,6 +297,18 @@ public:
   /// 沿 x1..x2 在基线 y 上绘制上下交替的半椭圆弧，细线(1.2px) + 平头端点，
   /// 波纹半宽 4px、振幅 2px；颜色由调用方传入。
   static void drawErrorUnderline(QPainter &p, int x1, int x2, int y, const QColor &color);
+
+  /// @brief 绘制代码折叠箭头（v 形），用于行号区折叠标记。
+  /// @param p    画笔
+  /// @param centerOrTip 箭头顶点（向右时为开口左侧的折点；向下时为顶部折点）
+  /// @param downward false=向右「>」（顶点朝左、开口朝右），true=向下「v」
+  /// @param color 箭头颜色
+  /// @param length 单臂长度（px）
+  /// @param openAngleDeg 开口张角（两臂夹角，右上箭头与向下箭头一致，可调大）
+  /// 自绘而非用文字「>/v」，以保证两个方向的开口角度完全一致且可调。
+  static void drawFoldArrow(QPainter &p, const QPointF &centerOrTip, bool downward,
+                            const QColor &color, qreal length = 5.0,
+                            qreal openAngleDeg = 100.0);
 
   /// 错误行背景色（浅红，类似 VS Code 的 #f2dede）
   static QColor errorLineBackground() {

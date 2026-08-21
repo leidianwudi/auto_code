@@ -18,9 +18,11 @@
 #include <QJsonParseError>
 #include <QMenu>
 #include <QPainter>
+#include <QPolygon>
 #include <QRegularExpression>
 #include <QScrollBar>
 #include <QShortcut>
+#include <QWheelEvent>
 #include <QStringListModel>
 #include <QToolTip>
 #include <QVBoxLayout>
@@ -66,6 +68,10 @@ public:
   }
 
   QRectF blockBoundingRect(const QTextBlock &block) const override {
+    // 被折叠隐藏的块返回 0 高度，实现"整行消失"效果（配合 QTextBlock::setVisible(false)）
+    if (!block.isVisible()) {
+      return QRectF(0, 0, 0, 0);
+    }
     QRectF r = QPlainTextDocumentLayout::blockBoundingRect(block);
     if (m_h > 0) {
       r.setHeight(m_h);
@@ -87,6 +93,8 @@ CodeEditor::CodeEditor(QWidget *parent) : QPlainTextEdit(parent) {
   setMouseTracking(true);
 
   m_lineNumberArea = new LineNumberArea(this);
+  // 行号区开启鼠标跟踪：未按下也能收到移动事件，用于折叠标记悬停高亮
+  m_lineNumberArea->setMouseTracking(true);
 
   connect(this, &QPlainTextEdit::blockCountChanged, this, &CodeEditor::updateLineNumberAreaWidth);
   connect(this, &QPlainTextEdit::updateRequest, this, &CodeEditor::updateLineNumberArea);
@@ -134,6 +142,17 @@ CodeEditor::CodeEditor(QWidget *parent) : QPlainTextEdit(parent) {
   // 不再依赖 keyPressEvent 手动触发（避免个别输入路径漏触发导致“输入不提示”）；
   // 0ms 防抖保证输入后立即验证（实测验证 <1ms），同事件循环内多次变化合并为一次验证。
   connect(document(), &QTextDocument::contentsChange, this, &CodeEditor::scheduleValidation);
+
+  // 文档结构变化后重建折叠区间（contentsChange 触发时 doc 仍处于变化过程中，
+  // 用 0ms 单次定时器延后到变化完成后重建，避免读取到中间态）
+  m_foldRebuildTimer = new QTimer(this);
+  m_foldRebuildTimer->setSingleShot(true);
+  m_foldRebuildTimer->setInterval(0);
+  connect(m_foldRebuildTimer, &QTimer::timeout, this, &CodeEditor::rebuildFold);
+  connect(document(), &QTextDocument::contentsChange, this, [this]() {
+    m_foldValid = false;  // 标记折叠区间过期，延后重建
+    m_foldRebuildTimer->start();
+  });
 
   // 初始化查找/替换栏（嵌入编辑器上方，默认隐藏）
   m_findBar = new CodeFindBar(this, this);
@@ -219,6 +238,9 @@ void CodeEditor::setValidationMode(ValidationMode mode) {
   performValidation();
   // 初始化对应的代码补全器
   initCompleter(mode);
+  // 折叠区间依赖验证模式（NoValidation 不生成）；模式确定后立即重建，避免图标缺失
+  if (m_foldValid) m_foldValid = false;
+  QTimer::singleShot(0, this, &CodeEditor::rebuildFold);
 }
 
 void CodeEditor::validate() { performValidation(); }
@@ -433,7 +455,171 @@ int CodeEditor::lineNumberAreaWidth() const {
 
   // 加 12px 余量（左右各 6px）
   int space = 12 + fontMetrics().horizontalAdvance(QLatin1Char('9')) * digits;
+  // 行号区右侧预留折叠标记 gutter，避免折叠图标与行号重叠
+  space += kFoldMarkerWidth;
   return space;
+}
+
+// ════════════════════════════════════════════════════════════
+//  代码折叠（VSCode 风格）
+// ════════════════════════════════════════════════════════════
+
+/// 计算一行缩进量（空格/制表，制表按 tabWidth 计）
+static int countIndent(const QString &line, int tabWidth) {
+  int indent = 0;
+  for (int i = 0; i < line.size(); ++i) {
+    const QChar &c = line[i];
+    if (c == QLatin1Char(' '))
+      ++indent;
+    else if (c == QLatin1Char('\t'))
+      indent += tabWidth;
+    else
+      break;
+  }
+  return indent;
+}
+
+void CodeEditor::computeFoldRanges() {
+  m_foldRanges.clear();
+  m_foldValid = true;
+  if (m_validationMode == NoValidation) return;
+
+  QStringList lines = cachedText().split(QLatin1Char('\n'));
+  const int count = lines.size();
+  if (count < 2) return;
+
+  const int tabWidth =
+      qMax(1, qRound(tabStopDistance() / fontMetrics().horizontalAdvance(QLatin1Char(' '))));
+
+  // 计算每行缩进；空行/纯空白行标记为 -1（折叠计算时跳过，不改变层级、不作为回退点）
+  QVector<int> indent(count);
+  for (int i = 0; i < count; ++i) {
+    if (lines[i].trimmed().isEmpty())
+      indent[i] = -1;
+    else
+      indent[i] = countIndent(lines[i], tabWidth);
+  }
+
+  // 折叠起始块 = 「块头」行（如 function / if / 开 `{`）：其下一个非空行缩进更深。
+  // 折叠区间从块头延伸到「第一个缩进 <= 块头缩进的非空行」之前结束。
+  // 关键：回退判定用 <=（父级/同级都终止），空行跳过不结束块，
+  // 避免内层块错误地把后面的所有代码一并收起。
+  for (int i = 0; i < count - 1; ++i) {
+    if (indent[i] < 0) continue;
+    // 找下一个非空行作为「块头是否有更深子级」的依据
+    int j = i + 1;
+    while (j < count && indent[j] < 0) ++j;
+    if (j >= count) continue;
+    if (indent[j] > indent[i]) {
+      const int base = indent[i];
+      int end = i;  // 折叠结束（隐藏 i+1..end）
+      for (int m = j; m < count; ++m) {
+        if (indent[m] < 0) continue;   // 空行不结束块
+        if (indent[m] <= base) break;  // 回到父级/同级缩进 → 块结束
+        end = m;
+      }
+      if (end > i) m_foldRanges.insert(i, end);
+    }
+  }
+}
+
+void CodeEditor::applyFoldVisibility() {
+  if (m_applyingFold) return;  // 防重入：visible 变化再触 contentsChange → timer → 再进来
+  m_applyingFold = true;
+
+  // 锚块定位：记录折叠前「视口顶部可见块」在文档坐标系中的 top 及其滚动值。
+  // 折叠后重新计算滚动值，使该块仍停留在屏幕同一位置——这样即使滚到最底部，
+  // 被点击/折叠的标记行也不会相对鼠标位置上蹿下跳（类似 Trae IDE）。
+  const double s0 = verticalScrollBar()->value();
+  int anchorBlock = -1;
+  double docTop0 = 0;
+  {
+    QTextBlock tb = firstVisibleBlock();
+    if (tb.isValid()) {
+      anchorBlock = tb.blockNumber();
+      docTop0 = blockBoundingGeometry(tb).top();
+    }
+  }
+
+  // 先全部恢复可见，再按折叠态隐藏
+  QTextBlock block = document()->firstBlock();
+  for (int n = 0; block.isValid(); ++n, block = block.next()) {
+    bool hidden = false;
+    for (auto it = m_collapsedStarts.begin(); it != m_collapsedStarts.end(); ++it) {
+      if (n > *it && n <= m_foldRanges.value(*it, *it)) {
+        hidden = true;
+        break;
+      }
+    }
+    if (block.isVisible() == hidden) block.setVisible(!hidden);
+  }
+  m_applyingFold = false;
+
+  // 触发布局重算（高度 0 + 位置重新排布）
+  document()->markContentsDirty(0, document()->characterCount());
+
+  // 折叠后目标滚动值；默认退回仅夹取原滚动值
+  int targetScroll = qBound(verticalScrollBar()->minimum(), qRound(s0),
+                            verticalScrollBar()->maximum());
+  // 锚块回到屏幕原位置：scroll1 = scroll0 + (docTop1 - docTop0)
+  if (anchorBlock >= 0) {
+    QTextBlock t1 = document()->findBlockByNumber(anchorBlock);
+    // 若锚块因折叠被隐藏，向上找最近的可见块作为新锚
+    while (t1.isValid() && !t1.isVisible()) t1 = t1.previous();
+    if (t1.isValid()) {
+      const double docTop1 = blockBoundingGeometry(t1).top();
+      targetScroll = qRound(s0 + (docTop1 - docTop0));
+      targetScroll = qBound(verticalScrollBar()->minimum(), targetScroll,
+                            verticalScrollBar()->maximum());
+    }
+  }
+  verticalScrollBar()->setValue(targetScroll);
+  viewport()->update();
+  m_lineNumberArea->update();
+}
+
+void CodeEditor::rebuildFold() {
+  // 重新按当前文本计算可折叠区间，并应用已有折叠态
+  computeFoldRanges();
+  applyFoldVisibility();
+}
+
+bool CodeEditor::isFoldStart(int block) const { return m_foldRanges.contains(block); }
+
+void CodeEditor::toggleFold(int block) {
+  if (!m_foldRanges.contains(block)) return;
+  if (m_collapsedStarts.contains(block))
+    m_collapsedStarts.remove(block);
+  else
+    m_collapsedStarts.insert(block);
+  applyFoldVisibility();
+}
+
+QRect CodeEditor::foldMarkerRect(int block) const {
+  // 折叠标记位于行号区右侧（紧贴代码左侧）。坐标用行号区局部坐标系，
+  // y 取该 block 在视口中的 top（行号区与视口同高、同步滚动，y 一致）。
+  QTextBlock b = document()->findBlockByNumber(block);
+  if (!b.isValid() || !b.isVisible()) return QRect();
+  QRectF g = blockBoundingGeometry(b).translated(contentOffset());
+  if (g.height() <= 0) return QRect();
+  const int w = m_lineNumberArea ? m_lineNumberArea->width() : 0;
+  const int x = qMax(0, w - kFoldMarkerWidth - 4);  // 紧贴行号区右缘（代码左侧）
+  return QRect(x, qRound(g.top()), kFoldMarkerWidth, qRound(g.height()));
+}
+
+void CodeEditor::setFoldHoverBlock(int block) {
+  if (m_foldHoverBlock == block) return;
+  m_foldHoverBlock = block;
+  // 整段重绘行号区，刷新折叠标记的悬停高亮
+  if (m_lineNumberArea) m_lineNumberArea->update();
+}
+
+void CodeEditor::setFoldAreaActive(bool active) {
+  if (m_foldShowAll == active) return;
+  m_foldShowAll = active;
+  m_foldHoverBlock = -1;  // 清除悬停高亮
+  // 整段重绘行号区，使所有可折叠标记随灰色区进入/离开显示或隐藏
+  if (m_lineNumberArea) m_lineNumberArea->update();
 }
 
 void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area) {
@@ -457,7 +643,7 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area)
         painter.setPen(AuiStyle::lineNumberTextColor());
       }
 
-      painter.drawText(0, top, m_lineNumberArea->width() - 6, fontMetrics().height(),
+      painter.drawText(0, top, m_lineNumberArea->width() - kFoldMarkerWidth - 6, fontMetrics().height(),
                        Qt::AlignRight, number);
 
       // 绘制断点圆点（生效=实心红圆，失效=空心红圆，位于行号左侧）
@@ -478,6 +664,27 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area)
           painter.drawEllipse(QPoint(cx, cy), dotR, dotR);
         }
       }
+
+      // ── 折叠标记 `>`：位于行号区右侧（紧贴代码）。折叠态常显；未折叠时鼠标悬停该行，或在灰色行号区（任意行）时才显示全部 ──
+      if (isFoldStart(blockNumber) &&
+          (isCollapsed(blockNumber) || m_foldShowAll || m_foldHoverBlock == blockNumber)) {
+        QRect mr = foldMarkerRect(blockNumber);
+        if (mr.isValid()) {
+          // 自绘 v 形箭头（非文字），save/restore 隔离画笔状态
+          painter.save();
+          painter.setPen(m_foldHoverBlock == blockNumber ? AuiStyle::errorTextColor()
+                                                         : AuiStyle::secondaryTextColor());
+          // 未折叠向下「v」，折叠后向右「▸」。样式由 AuiStyle 统一管理。
+          // 为视觉平衡且图标足够大：v 用 100°（half50°→横向跨度≈6.4），
+          // ▸ 用 80°（half40°→纵向跨度≈6.4），两箭头轴向跨度一致、观感同样"开"。
+          const QColor arrowColor = m_foldHoverBlock == blockNumber
+                                        ? AuiStyle::errorTextColor()
+                                        : AuiStyle::secondaryTextColor();
+          const qreal foldAngle = isCollapsed(blockNumber) ? 80.0 : 100.0;
+          AuiStyle::drawFoldArrow(painter, mr.center(), !isCollapsed(blockNumber), arrowColor, 5.0, foldAngle);
+          painter.restore();
+        }
+      }
     }
 
     block = block.next();
@@ -487,14 +694,46 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area)
   }
 }
 
-// ── 行号区点击：切换断点 ──
+// ── 行号区点击：切换断点（折叠标记已移入代码区右缘，行号区不再处理折叠）──
 void LineNumberArea::mousePressEvent(QMouseEvent *event) {
   if (event->button() == Qt::LeftButton) {
+    // 折叠标记（行号区右侧）优先：命中该行的 `>` 图标则折叠/展开
+    const int line = m_codeEditor->lineAtY(event->pos().y());
+    const int block = line - 1;
+    if (line > 0 && m_codeEditor->isFoldStart(block) &&
+        m_codeEditor->foldMarkerRect(block).contains(event->pos())) {
+      m_codeEditor->toggleFold(block);
+      event->accept();
+      return;
+    }
     m_codeEditor->toggleBreakpointAtY(event->pos().y());
     event->accept();
     return;
   }
   QWidget::mousePressEvent(event);
+}
+
+// ── 行号区鼠标移动：更新折叠标记悬停高亮 ──
+void LineNumberArea::mouseMoveEvent(QMouseEvent *event) {
+  QWidget::mouseMoveEvent(event);
+  // 鼠标进入灰色行号区：显示全部可折叠图标
+  m_codeEditor->setFoldAreaActive(true);
+  const int line = m_codeEditor->lineAtY(event->pos().y());
+  const int block = line - 1;
+  // 鼠标在该灰色区域任意列，只要所在行可折叠就显示图标
+  m_codeEditor->setFoldHoverBlock((line > 0 && m_codeEditor->isFoldStart(block)) ? block : -1);
+}
+
+void LineNumberArea::leaveEvent(QEvent *event) {
+  QWidget::leaveEvent(event);
+  m_codeEditor->setFoldAreaActive(false);
+  m_codeEditor->setFoldHoverBlock(-1);
+}
+
+// ── 行号区滚轮：转发到编辑器视口，让鼠标在行号区也能滚动代码 ──
+void LineNumberArea::wheelEvent(QWheelEvent *event) {
+  QCoreApplication::sendEvent(m_codeEditor->viewport(), event);
+  event->accept();
 }
 
 // ── 根据行号区 y 坐标返回所在行（1-based），无命中返回 0 ──
@@ -813,6 +1052,22 @@ void CodeEditor::highlightCurrentLine() {
     selection.cursor = textCursor();
     selection.cursor.clearSelection();
     extra.append(selection);
+  }
+
+  // ── 彩虹括号：全文括号按嵌套深度着前景色（VSCode 风格），ac/json/tpl 通用 ──
+  {
+    const QString &text = cachedText();
+    const auto brackets = BracketMatcher::collectBrackets(text, nullptr);
+    for (const auto &b : brackets) {
+      QColor color = AuiStyle::rainbowBracketColor(b.depth);
+      if (!color.isValid()) continue;
+      QTextEdit::ExtraSelection sel;
+      sel.cursor = textCursor();
+      sel.cursor.setPosition(b.pos);
+      sel.cursor.setPosition(b.pos + 1, QTextCursor::KeepAnchor);
+      sel.format.setForeground(color);
+      extra.append(sel);
+    }
   }
 
   QTextCursor cursor = textCursor();

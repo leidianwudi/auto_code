@@ -98,6 +98,29 @@ public:
   void lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area);
   int lineNumberAreaWidth() const;
 
+  // ── 接口：代码折叠（类似 VSCode，标记位于代码行右缘）──
+
+  /// 指定 block 是否为可折叠区间的起始行
+  bool isFoldStart(int block) const;
+  /// 切换指定起始 block 的折叠状态
+  void toggleFold(int block);
+  /// 折叠标记宽度（px）：绘制在行号区右侧（紧贴代码）
+  static constexpr int kFoldMarkerWidth = 16;
+  /// 折叠标记是否常显（折叠态）或需悬停（未折叠）- 由调用方据 m_collapsedStarts 判断
+  bool isCollapsed(int block) const { return m_collapsedStarts.contains(block); }
+  /// 鼠标是否位于行号区（灰色区）：true 时显示全部可折叠图标
+  bool foldShowAll() const { return m_foldShowAll; }
+  /// 设置鼠标是否在行号区（进入/离开灰色区时更新）
+  void setFoldAreaActive(bool active);
+  /// 当前悬停的可折叠起始行（-1=无），供绘制的当前行高亮
+  int foldHoverBlock() const { return m_foldHoverBlock; }
+  /// 设置折叠标记悬停行（行号区鼠标移动时调用，-1 清除）
+  void setFoldHoverBlock(int block);
+  /// 返回折叠标记矩形（行号区坐标，x 紧贴代码左侧），供绘制与命中检测
+  QRect foldMarkerRect(int block) const;
+  /// 重建折叠区间并重算 visible（文本/折叠状态变化时调用）
+  void rebuildFold();
+
   // ── 性能优化：文本缓存 ──
 
   /**
@@ -223,6 +246,12 @@ private:
   void jumpToMatchingBracket();
   void selectBetweenBrackets();
 
+  // ── 代码折叠内部辅助 ──
+  /// 根据 m_collapsedStarts 设置各块的 visible，并触发布局重算
+  void applyFoldVisibility();
+  /// 由文本/打开文件时调用：按缩进计算可折叠区间并应用折叠态
+  void computeFoldRanges();
+
   // ── 符号高亮（用于查找引用）──
   void highlightSymbolReferences(const QString &name);
 
@@ -287,6 +316,15 @@ private:
   // 统一行高布局（消除中英文混排时行高随内容抖动）
   FixedLineHeightLayout *m_fixedLineHeightLayout = nullptr;
 
+  // 代码折叠（VSCode 风格）
+  QHash<int, int> m_foldRanges;   ///< 可折叠起始 block → 结束 block（含），折叠区域内的块被折叠
+  QSet<int> m_collapsedStarts;    ///< 当前处于折叠态的起始 block 号集合
+  int m_foldHoverBlock = -1;      ///< 行号区悬停的折叠起始 block（-1=无），仅供高亮
+  bool m_foldShowAll = false;     ///< 鼠标位于行号区（灰色区）：显示全部可折叠图标
+  bool m_foldValid = false;       ///< m_foldRanges 是否已随文档重建
+  QTimer *m_foldRebuildTimer = nullptr;  ///< 文档变化后延后重建折叠区间
+  bool m_applyingFold = false;           ///< 折叠 visible 应用中的防重入标志
+
   struct ErrorRange {
     int start;
     int length;
@@ -313,6 +351,9 @@ protected:
   }
 
   void mousePressEvent(QMouseEvent *event) override;
+  void mouseMoveEvent(QMouseEvent *event) override;
+  void leaveEvent(QEvent *event) override;
+  void wheelEvent(QWheelEvent *event) override;
   void contextMenuEvent(QContextMenuEvent *event) override;
 
 private:
