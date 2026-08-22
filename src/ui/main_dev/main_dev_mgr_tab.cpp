@@ -14,6 +14,7 @@
 #include "src/ui/json_vue/json_vue_widget.h"
 #include "src/util/ui/code/code_editor.h"
 #include "src/util/ui/code/code_find_bar.h"
+#include "src/util/ui/component/aui_message_box.h"
 
 // ──────────────────────────────────────────────────────────────
 //  当前编辑器 / 面板组查找
@@ -173,6 +174,21 @@ void MainDevMgr::closeTab(QTabWidget *tabs, int index) {
 void MainDevMgr::onTabCloseRequested(int index) {
   auto *tabs = qobject_cast<QTabWidget *>(sender());
   if (!tabs) return;
+
+  // 代码未保存时弹出确认框：确定才关闭，取消则不关闭（防止误关丢失修改）
+  if (QWidget *w = tabs->widget(index)) {
+    CodeEditor *editor = qobject_cast<CodeEditor *>(w);
+    if (!editor) {
+      if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) editor = jvw->codeEditor();
+    }
+    if (editor && editor->document() && editor->document()->isModified()) {
+      if (!AuiMessageBox::confirm(m_ui, QStringLiteral("提示"),
+                                  QStringLiteral("代码未保存，您确定关闭吗？"))) {
+        return;
+      }
+    }
+  }
+
   closeTab(tabs, index);
 }
 
