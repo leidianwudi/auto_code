@@ -24,7 +24,7 @@ import request from '@/axios';
 export const ${queryApi} = (params: any) => {
   return request.post({
     url: '${selectUrl}',
-    data: { params }
+    data: { ...params }
   });
 };
 

@@ -1,0 +1,16 @@
+{
+  $schema: "/crud_nest/template/tool/param.schema.json",
+  tables: [
+    {
+      modelName: "base\\base_weather",//模块名，包含路径
+      tableName: "base_weather",//表名
+      selCols: [ "city_code"],// 精确查询
+      //like查询
+      selColsLike: ["day"],
+      //排序
+      selColsSort: {
+        city_code: "ASC", day: "ASC"
+      }
+    }
+  ]
+}

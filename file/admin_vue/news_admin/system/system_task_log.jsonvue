@@ -94,6 +94,7 @@
     dataMethod: 'POST',
     dataUrl: 'systemtasklog/selectByIn',
     deleteApi: 'deleteSysTaskLogApi',
+    description: '任务记录',
     noDelete: false,
     noDetail: false,
     noEdit: false,

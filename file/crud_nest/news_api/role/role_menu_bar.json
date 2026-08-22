@@ -12,7 +12,7 @@
         "table"
       ],
       "selColsSort": {
-        "id": "DESC"
+        "sort": "ASC"
       },
       "joinTable": [
         {
