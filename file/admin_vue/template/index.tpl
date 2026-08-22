@@ -281,7 +281,8 @@ ${/each}
         const row = data.row;
         return (
           <>
-            ${if !noDetail}<ElTooltip content="详情" placement="top">
+            ${if !noDetail}
+            <ElTooltip content="详情" placement="top">
               <BaseButton size="small" onClick={() => rowAction(row, 'detail')}>
                 <Icon icon="vi-mingcute:eye-line" />
               </BaseButton>
@@ -297,7 +298,8 @@ ${/each}
                 <Icon icon="vi-mingcute:delete-2-line" />
               </BaseButton>
             </ElTooltip>
-            ${each btn in rowButtons}<ElTooltip content="${btn.label}" placement="top">
+            ${each btn in rowButtons}
+            <ElTooltip content="${btn.label}" placement="top">
               <BaseButton size="small"${if btn.hasType} type="${btn.type}"${/if}
                 onClick={() => onCustomAction(row, '${btn.key}')}>
                 ${if btn.hasIcon}<Icon icon="${btn.icon}" />${/if}
@@ -395,7 +397,8 @@ function closeDialog() {
     <div class="mb-10px">
       <BaseButton type="primary" @click="addAction">{{ '新增' }}</BaseButton>
       <BaseButton :loading="crudState.delLoading" type="danger" @click="delData()">删除</BaseButton>
-      ${each btn in toolbarButtons}<BaseButton${if btn.hasType} type="${btn.type}"${/if}
+      ${each btn in toolbarButtons}
+      <BaseButton${if btn.hasType} type="${btn.type}"${/if}
         @click="onCustomAction(null, '${btn.key}')">
         ${if btn.hasIcon}<Icon icon="${btn.icon}" />${/if}
         {{ '${btn.label}' }}
