@@ -18,6 +18,7 @@
 #include <QPainterPath>
 #include <QPixmap>
 #include <QPushButton>
+#include <QSet>
 #include <QSizeGrip>
 #include <QStyle>
 #include <QVBoxLayout>
@@ -37,6 +38,14 @@
 // ════════════════════════════════════════════════════════════
 
 namespace {
+
+/// 已被某个模态对话框遮罩覆盖的顶层窗口集合。
+/// 用于避免嵌套模态对话框时对同一窗口重复叠加遮罩，导致背景越来越暗：
+/// 每当一个窗口已被遮罩，后续模态对话框不再给它新加一层，复用既有遮罩。
+static QSet<QWidget *> &maskedTargetWindows() {
+  static QSet<QWidget *> s_targets;
+  return s_targets;
+}
 
 /// 模态遮罩事件过滤器 — 在对话框显示时自动安装遮罩，隐藏时自动移除
 ///
@@ -459,6 +468,7 @@ public:
 
   ~OverlayGroup() {
     for (auto *overlay : m_overlays) {
+      maskedTargetWindows().remove(overlay->targetWindow());
       delete overlay;
     }
   }
@@ -482,12 +492,17 @@ QWidget *AuiWindow::installModalOverlay(QDialog *dialog) {
 
   auto *group = new OverlayGroup(dialog);
 
-  // 为应用程序的每个可见顶层窗口创建遮罩（不跳过 QDialog，支持嵌套模态对话框）
+  // 为应用程序的每个可见顶层窗口创建遮罩（不跳过 QDialog，支持嵌套模态对话框）。
+  // 但若某窗口已处于另一个模态对话框的遮罩之下，则不再新增遮罩，避免嵌套时背景叠加变暗。
+  // 遮罩窗口（WindowOverlay 自身）也不能再被遮罩，否则已有遮罩会被不断叠加，导致背景越变越暗。
   const auto topLevels = QApplication::topLevelWidgets();
   for (auto *widget : topLevels) {
     if (widget == dialog) continue;
     if (!widget->isVisible()) continue;
+    if (dynamic_cast<WindowOverlay *>(widget)) continue;
+    if (maskedTargetWindows().contains(widget)) continue;
     group->addWindowOverlay(widget, widget->frameGeometry());
+    maskedTargetWindows().insert(widget);
   }
 
 #ifdef Q_OS_WIN

@@ -281,6 +281,16 @@ QJsonObject ColumnConfig::toJson() const {
     obj[JsonVueKey::kSelectUrl] = selectUrl;
     obj[JsonVueKey::kSelectValueField] = selectValueField;
     obj[JsonVueKey::kSelectLabelField] = selectLabelField;
+    // 查询分页配置（仅启用分页时输出，保持普通下拉框配置干净）
+    if (selectPaged) {
+      obj[JsonVueKey::kSelectPaged] = true;
+      obj[JsonVueKey::kSelectPageKey] = selectPageKey;
+      obj[JsonVueKey::kSelectPageSizeKey] = selectPageSizeKey;
+      obj[JsonVueKey::kSelectPageSize] = selectPageSize;
+      obj[JsonVueKey::kSelectSearchTitle] = selectSearchTitle;
+      obj[JsonVueKey::kSelectSearchField] = selectSearchField;
+      obj[JsonVueKey::kSelectMethod] = selectMethod;
+    }
   }
   // 样式特定配置
   if (editStyle == EditStyle::Text) {
@@ -352,6 +362,13 @@ ColumnConfig ColumnConfig::fromJson(const QJsonObject &obj) {
                            .toString(obj.value(QStringLiteral("comboboxValueField")).toString());
   c.selectLabelField = obj.value(JsonVueKey::kSelectLabelField)
                            .toString(obj.value(QStringLiteral("comboboxLabelField")).toString());
+  c.selectPaged = obj.value(JsonVueKey::kSelectPaged).toBool(false);
+  c.selectPageKey = obj.value(JsonVueKey::kSelectPageKey).toString(QStringLiteral("page"));
+  c.selectPageSizeKey = obj.value(JsonVueKey::kSelectPageSizeKey).toString(QStringLiteral("pageSize"));
+  c.selectPageSize = obj.value(JsonVueKey::kSelectPageSize).toInt(20);
+  c.selectSearchTitle = obj.value(JsonVueKey::kSelectSearchTitle).toString();
+  c.selectSearchField = obj.value(JsonVueKey::kSelectSearchField).toString();
+  c.selectMethod = obj.value(JsonVueKey::kSelectMethod).toString(QString::fromLatin1(JsonVueHttp::kPost));
   // 样式特定配置
   c.placeholder = obj.value(JsonVueKey::kPlaceholder).toString();
   c.maxlength = obj.value(JsonVueKey::kMaxlength).toInt(0);
@@ -421,6 +438,16 @@ QJsonObject QueryFieldConfig::toJson() const {
     obj[JsonVueKey::kSelectUrl] = selectUrl;
     obj[JsonVueKey::kSelectValueField] = selectValueField;
     obj[JsonVueKey::kSelectLabelField] = selectLabelField;
+    // 查询分页配置（仅启用分页时输出）
+    if (selectPaged) {
+      obj[JsonVueKey::kSelectPaged] = true;
+      obj[JsonVueKey::kSelectPageKey] = selectPageKey;
+      obj[JsonVueKey::kSelectPageSizeKey] = selectPageSizeKey;
+      obj[JsonVueKey::kSelectPageSize] = selectPageSize;
+      obj[JsonVueKey::kSelectSearchTitle] = selectSearchTitle;
+      obj[JsonVueKey::kSelectSearchField] = selectSearchField;
+      obj[JsonVueKey::kSelectMethod] = selectMethod;
+    }
   }
   if (inputStyle == QueryInputStyle::Text) {
     obj[JsonVueKey::kPlaceholder] = placeholder;
@@ -442,6 +469,13 @@ QueryFieldConfig QueryFieldConfig::fromJson(const QJsonObject &obj) {
   q.selectUrl = obj.value(JsonVueKey::kSelectUrl).toString();
   q.selectValueField = obj.value(JsonVueKey::kSelectValueField).toString();
   q.selectLabelField = obj.value(JsonVueKey::kSelectLabelField).toString();
+  q.selectPaged = obj.value(JsonVueKey::kSelectPaged).toBool(false);
+  q.selectPageKey = obj.value(JsonVueKey::kSelectPageKey).toString(QStringLiteral("page"));
+  q.selectPageSizeKey = obj.value(JsonVueKey::kSelectPageSizeKey).toString(QStringLiteral("pageSize"));
+  q.selectPageSize = obj.value(JsonVueKey::kSelectPageSize).toInt(20);
+  q.selectSearchTitle = obj.value(JsonVueKey::kSelectSearchTitle).toString();
+  q.selectSearchField = obj.value(JsonVueKey::kSelectSearchField).toString();
+  q.selectMethod = obj.value(JsonVueKey::kSelectMethod).toString(QString::fromLatin1(JsonVueHttp::kPost));
   q.placeholder = obj.value(JsonVueKey::kPlaceholder).toString();
   q.dateFormat = obj.value(JsonVueKey::kDateFormat).toString();
   return q;
@@ -462,6 +496,16 @@ QJsonObject DialogFieldConfig::toJson() const {
     obj[JsonVueKey::kSelectUrl] = selectUrl;
     obj[JsonVueKey::kSelectValueField] = selectValueField;
     obj[JsonVueKey::kSelectLabelField] = selectLabelField;
+    // 查询分页配置（仅启用分页时输出）
+    if (selectPaged) {
+      obj[JsonVueKey::kSelectPaged] = true;
+      obj[JsonVueKey::kSelectPageKey] = selectPageKey;
+      obj[JsonVueKey::kSelectPageSizeKey] = selectPageSizeKey;
+      obj[JsonVueKey::kSelectPageSize] = selectPageSize;
+      obj[JsonVueKey::kSelectSearchTitle] = selectSearchTitle;
+      obj[JsonVueKey::kSelectSearchField] = selectSearchField;
+      obj[JsonVueKey::kSelectMethod] = selectMethod;
+    }
   }
   if (editStyle == EditStyle::Text) {
     obj[JsonVueKey::kPlaceholder] = placeholder;
@@ -500,6 +544,13 @@ DialogFieldConfig DialogFieldConfig::fromJson(const QJsonObject &obj) {
   f.selectUrl = obj.value(JsonVueKey::kSelectUrl).toString();
   f.selectValueField = obj.value(JsonVueKey::kSelectValueField).toString();
   f.selectLabelField = obj.value(JsonVueKey::kSelectLabelField).toString();
+  f.selectPaged = obj.value(JsonVueKey::kSelectPaged).toBool(false);
+  f.selectPageKey = obj.value(JsonVueKey::kSelectPageKey).toString(QStringLiteral("page"));
+  f.selectPageSizeKey = obj.value(JsonVueKey::kSelectPageSizeKey).toString(QStringLiteral("pageSize"));
+  f.selectPageSize = obj.value(JsonVueKey::kSelectPageSize).toInt(20);
+  f.selectSearchTitle = obj.value(JsonVueKey::kSelectSearchTitle).toString();
+  f.selectSearchField = obj.value(JsonVueKey::kSelectSearchField).toString();
+  f.selectMethod = obj.value(JsonVueKey::kSelectMethod).toString(QString::fromLatin1(JsonVueHttp::kPost));
   return f;
 }
 

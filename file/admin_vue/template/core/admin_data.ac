@@ -158,6 +158,14 @@ export function processColumns(rawColumns: Object[]): Object[] {
     col["selectUrl"] = rawCol.selectUrl;
     col["selectValueField"] = rawCol.selectValueField;
     col["selectLabelField"] = rawCol.selectLabelField;
+    // 查询分页加载配置（仅 select 样式有意义）
+    col["selectPaged"] = (rawCol.selectPaged == true);
+    col["selectPageKey"] = isNotEmpty(rawCol.selectPageKey) ? rawCol.selectPageKey : "page";
+    col["selectPageSizeKey"] = isNotEmpty(rawCol.selectPageSizeKey) ? rawCol.selectPageSizeKey : "pageSize";
+    col["selectPageSize"] = (rawCol.selectPageSize != null) ? rawCol.selectPageSize : 20;
+    col["selectSearchTitle"] = rawCol.selectSearchTitle || "";
+    col["selectSearchField"] = rawCol.selectSearchField || "";
+    col["selectMethod"] = isNotEmpty(rawCol.selectMethod) ? rawCol.selectMethod : "POST";
 
     // 根据 editStyle 决定编辑界面 Vue 组件名（字典映射，避免深层 if/else 嵌套）
     let editCompMap: Object = {
@@ -310,6 +318,14 @@ export function processQueryFields(rawQueryFields: Object[]): Object[] {
     qf["selectUrl"] = rawQf.selectUrl;
     qf["selectValueField"] = rawQf.selectValueField;
     qf["selectLabelField"] = rawQf.selectLabelField;
+    // 查询分页加载配置（仅 select 样式有意义）
+    qf["selectPaged"] = (rawQf.selectPaged == true);
+    qf["selectPageKey"] = isNotEmpty(rawQf.selectPageKey) ? rawQf.selectPageKey : "page";
+    qf["selectPageSizeKey"] = isNotEmpty(rawQf.selectPageSizeKey) ? rawQf.selectPageSizeKey : "pageSize";
+    qf["selectPageSize"] = (rawQf.selectPageSize != null) ? rawQf.selectPageSize : 20;
+    qf["selectSearchTitle"] = rawQf.selectSearchTitle || "";
+    qf["selectSearchField"] = rawQf.selectSearchField || "";
+    qf["selectMethod"] = isNotEmpty(rawQf.selectMethod) ? rawQf.selectMethod : "POST";
 
     let comp = "Input";
     if (isSelect) {
@@ -427,6 +443,14 @@ export function processButtons(rawButtons: Object[]): Object {
       f["selectUrl"] = rawF.selectUrl;
       f["selectValueField"] = rawF.selectValueField;
       f["selectLabelField"] = rawF.selectLabelField;
+      // 查询分页加载配置（仅 select 样式有意义）
+      f["selectPaged"] = (rawF.selectPaged == true);
+      f["selectPageKey"] = isNotEmpty(rawF.selectPageKey) ? rawF.selectPageKey : "page";
+      f["selectPageSizeKey"] = isNotEmpty(rawF.selectPageSizeKey) ? rawF.selectPageSizeKey : "pageSize";
+      f["selectPageSize"] = (rawF.selectPageSize != null) ? rawF.selectPageSize : 20;
+      f["selectSearchTitle"] = rawF.selectSearchTitle || "";
+      f["selectSearchField"] = rawF.selectSearchField || "";
+      f["selectMethod"] = isNotEmpty(rawF.selectMethod) ? rawF.selectMethod : "POST";
       // 预计算布尔标记（避免模板中做字符串/数值比较）
       f["hasPlaceholder"] = (rawF.placeholder != "");
       f["hasMaxlength"] = (rawF.maxlength > 0);
@@ -454,7 +478,19 @@ export function processButtons(rawButtons: Object[]): Object {
       let propsStr = "";
       if (f["isSelect"]) {
         propsStr = "url: '" + f["selectUrl"] + "', valueField: '" +
-                   f["selectValueField"] + "', labelField: '" + f["selectLabelField"] + "'";
+                   f["selectValueField"] + "', labelField: '" + f["selectLabelField"] +
+                   "', method: '" + f["selectMethod"] + "'";
+        // 查询分页加载：追加页码/页大小参数
+        if (f["selectPaged"]) {
+          propsStr += ", pageKey: '" + f["selectPageKey"] + "', pageSizeKey: '" +
+                      f["selectPageSizeKey"] + "', pageSize: " + f["selectPageSize"];
+          if (f["selectSearchTitle"]) {
+            propsStr += ", searchTitle: '" + f["selectSearchTitle"] + "'";
+          }
+          if (f["selectSearchField"]) {
+            propsStr += ", searchField: '" + f["selectSearchField"] + "'";
+          }
+        }
       }
       if (f["isDate"]) {
         if (f["hasDateFormat"]) {

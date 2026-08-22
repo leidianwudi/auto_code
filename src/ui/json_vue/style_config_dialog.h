@@ -67,6 +67,27 @@ public:
   QString selectValueField() const;
   void setSelectLabelField(const QString &v);
   QString selectLabelField() const;
+  /// 下拉框是否查询分页加载
+  void setSelectPaged(bool v);
+  bool selectPaged() const;
+  /// 页码参数名（查询分页时使用）
+  void setSelectPageKey(const QString &v);
+  QString selectPageKey() const;
+  /// 页大小参数名（查询分页时使用）
+  void setSelectPageSizeKey(const QString &v);
+  QString selectPageSizeKey() const;
+  /// 默认页大小（查询分页时使用）
+  void setSelectPageSize(int v);
+  int selectPageSize() const;
+  /// 查询标题（查询分页搜索框提示）
+  void setSelectSearchTitle(const QString &v);
+  QString selectSearchTitle() const;
+  /// 字段名（查询分页搜索参数 key）
+  void setSelectSearchField(const QString &v);
+  QString selectSearchField() const;
+  /// 查询请求方式（GET/POST）
+  void setSelectMethod(const QString &v);
+  QString selectMethod() const;
   /// 设置 HTTP 配置（供下拉框数据源测试按钮使用）
   void setHttpConfig(const QString &baseUrl, const QString &authHeader, const QString &postData);
 
@@ -209,6 +230,13 @@ private:
   QString m_cachedSelectUrl;
   QString m_cachedSelectValueField;
   QString m_cachedSelectLabelField;
+  bool m_cachedSelectPaged = false;
+  QString m_cachedSelectPageKey = QStringLiteral("page");
+  QString m_cachedSelectPageSizeKey = QStringLiteral("pageSize");
+  int m_cachedSelectPageSize = 20;
+  QString m_cachedSelectSearchTitle;
+  QString m_cachedSelectSearchField;
+  QString m_cachedSelectMethod = QString::fromLatin1(JsonVueHttp::kPost);
   // HTTP 配置（供下拉框数据源测试按钮使用）
   QString m_baseUrl;
   QString m_authHeader;

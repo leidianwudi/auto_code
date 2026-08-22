@@ -209,7 +209,23 @@ QPushButton *AuiButton::createVisualToggleButton() {
 }
 
 QPushButton *AuiButton::createMinButton() {
-  auto *btn = new QPushButton(QStringLiteral("\u2014"));  // em dash
+  auto *btn = new QPushButton;
+  // 自绘 "-" 图标（取代文字字形；粗细/视觉尺寸与最大化按钮一致，随主题色自动重绘）
+  bindThemeAwareIcon(btn, []() {
+    const int s = 14;
+    const qreal m = 2.0;  // 横线端距图标边缘的内边距（与最大化/关闭按钮一致）
+    QPixmap px(s, s);
+    px.fill(Qt::transparent);
+    QPainter p(&px);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(QPen(AuiStyle::textColor(), 1.2));
+    p.setBrush(Qt::NoBrush);
+    const qreal y = s / 2.0;  // 垂直居中
+    p.drawLine(QPointF(m, y), QPointF(s - m, y));
+    p.end();
+    return px;
+  });
+  btn->setIconSize(QSize(14, 14));
   applyCommonStyle(btn);
   return btn;
 }
@@ -222,7 +238,23 @@ QPushButton *AuiButton::createMaxButton() {
 }
 
 QPushButton *AuiButton::createCloseButton() {
-  auto *btn = new QPushButton(QStringLiteral("\u2715"));  // multiplication sign
+  auto *btn = new QPushButton;
+  // 自绘 X 图标（取代原本的 "✕" 文字；粗细/视觉尺寸与最大化按钮一致，随主题色自动重绘）
+  bindThemeAwareIcon(btn, []() {
+    const int s = 14;
+    const qreal m = 2.0;  // X 端点距图标边缘的内边距（与最大化/最小化按钮一致）
+    QPixmap px(s, s);
+    px.fill(Qt::transparent);
+    QPainter p(&px);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(QPen(AuiStyle::textColor(), 1.2));
+    p.setBrush(Qt::NoBrush);
+    p.drawLine(QPointF(m, m), QPointF(s - m, s - m));
+    p.drawLine(QPointF(s - m, m), QPointF(m, s - m));
+    p.end();
+    return px;
+  });
+  btn->setIconSize(QSize(14, 14));
   applyCommonStyle(btn);
   return btn;
 }

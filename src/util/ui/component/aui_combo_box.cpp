@@ -11,6 +11,7 @@
 #include <QGuiApplication>
 #include <QPainter>
 #include <QScreen>
+#include <QStyle>
 #include <QStyleOption>
 #include <QStylePainter>
 #include <QTimer>
@@ -158,6 +159,27 @@ void AuiComboBox::applyStyle(QComboBox *combo) {
   // 颜色统一由 app 级 mainStyleSheet 动态管理（含背景/边框/文字/下拉列表），
   // 不在控件上单独 setStyleSheet，避免切换主题时文字固化旧色导致深色下看不清
   combo->setProperty("auiNoSheet", true);
+  combo->update();
+}
+
+void AuiComboBox::hideArrow(QComboBox *combo) {
+  if (!combo) return;
+  // 配合全局样式表规则 QComboBox[auiNoArrow="true"]::drop-down { width: 0 }，
+  // 移除右侧预留的箭头区域，让文字占满整个下拉框宽度，避免文字被截断。
+  combo->setProperty("auiNoArrow", true);
+
+  // 弹出列表仅按当前下拉框宽度（固定的小宽度）受限时会把较长项用省略号截断，
+  // 这里把弹层加宽到能容纳最宽的项，保证下拉时文字完整显示。
+  if (QAbstractItemView *view = combo->view()) {
+    const int content = view->sizeHintForColumn(0);
+    if (content > 0) {
+      const int scrollbar = combo->style()->pixelMetric(QStyle::PM_ScrollBarExtent);
+      view->setMinimumWidth(content + scrollbar + 20);
+    }
+  }
+
+  combo->style()->unpolish(combo);
+  combo->style()->polish(combo);
   combo->update();
 }
 

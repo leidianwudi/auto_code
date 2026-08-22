@@ -122,6 +122,10 @@ QString AuiStyle::mainStyleSheet() {
              "QComboBox:hover { border: 1px solid %4; }"
              "QComboBox::drop-down { border: none; width: 20px; }"
              "QComboBox::down-arrow { image: none; border: none; width: 0; height: 0; }"
+             // 隐藏箭头的下拉框（如 GET/POST 方法选择）：不预留 dropdown 区域，
+             // 让文字占满整个宽度，避免文字被截断。
+             "QComboBox[auiNoArrow=\"true\"]::drop-down { border: none; width: 0; }"
+             "QComboBox[auiNoArrow=\"true\"] { padding-right: 4px; }"
              "QComboBox QAbstractItemView { background: %6; color: %2; border: 1px solid %5; "
              "outline: 0; selection-background-color: %3; selection-color: %2; }"
              "QComboBox QAbstractItemView::item { padding: 4px 8px; }"

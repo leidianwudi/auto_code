@@ -19,6 +19,7 @@
 class QComboBox;
 class QLineEdit;
 class QPushButton;
+class QSpinBox;
 class QTableWidget;
 class QLabel;
 
@@ -42,10 +43,28 @@ public:
   /// 设置初始配置
   void setConfig(const QString &url, const QString &valueField, const QString &labelField);
 
+  /// 设置初始配置（含查询分页）
+  void setPagedConfig(bool paged, const QString &pageKey, const QString &pageSizeKey, int pageSize,
+                      const QString &searchTitle, const QString &searchField, const QString &method);
+
   /// 获取配置结果
   QString url() const;
   QString valueField() const;
   QString labelField() const;
+  /// 是否启用查询分页加载
+  bool paged() const;
+  /// 页码参数名
+  QString pageKey() const;
+  /// 页大小参数名
+  QString pageSizeKey() const;
+  /// 默认页大小
+  int pageSize() const;
+  /// 查询标题（搜索框提示）
+  QString searchTitle() const;
+  /// 字段名（搜索参数 key）
+  QString searchField() const;
+  /// 查询请求方式（GET/POST）
+  QString method() const;
 
   /// 设置 HTTP 请求参数（baseUrl、authHeader、postData）
   void setHttpConfig(const QString &baseUrl, const QString &authHeader, const QString &postData);
@@ -69,6 +88,16 @@ private:
   QComboBox *m_valueCombo = nullptr;    ///< Value 字段下拉框
   QComboBox *m_labelCombo = nullptr;    ///< Label 字段下拉框
   QLabel *m_statusLabel = nullptr;      ///< 状态提示标签
+  /// 加载方式下拉框（0=普通，1=查询分页）
+  QComboBox *m_typeCombo = nullptr;
+  /// 查询分页配置区域
+  QWidget *m_pagedGroup = nullptr;
+  QLineEdit *m_pageKeyEdit = nullptr;     ///< 页码参数名
+  QLineEdit *m_pageSizeKeyEdit = nullptr; ///< 页大小参数名
+  QSpinBox *m_pageSizeSpin = nullptr;     ///< 默认页大小
+  QLineEdit *m_searchTitleEdit = nullptr; ///< 查询标题（搜索框提示）
+  QLineEdit *m_searchFieldEdit = nullptr; ///< 字段名（搜索参数 key）
+  QComboBox *m_methodCombo = nullptr;     ///< 查询请求方式（GET/POST）
 
   // ── HTTP 配置 ──
   QString m_baseUrl;     ///< baseUrl

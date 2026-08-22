@@ -112,7 +112,13 @@ ${else if q.isSelect}  {
     componentProps: {
       url: '${q.selectUrl}',
       valueField: '${q.selectValueField}',
-      labelField: '${q.selectLabelField}'
+      labelField: '${q.selectLabelField}',
+      method: '${q.selectMethod}'${if q.selectPaged},
+      pageKey: '${q.selectPageKey}',
+      pageSizeKey: '${q.selectPageSizeKey}',
+      pageSize: ${q.selectPageSize}${if q.selectSearchTitle},
+      searchTitle: '${q.selectSearchTitle}'${/if}${if q.selectSearchField},
+      searchField: '${q.selectSearchField}'${/if}${/if}
     }
   },
 ${else if q.isDate}  {

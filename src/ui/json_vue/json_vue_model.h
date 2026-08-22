@@ -57,6 +57,13 @@ inline constexpr const char *kRelation = "relation";
 inline constexpr const char *kSelectUrl = "selectUrl";
 inline constexpr const char *kSelectValueField = "selectValueField";
 inline constexpr const char *kSelectLabelField = "selectLabelField";
+inline constexpr const char *kSelectPaged = "selectPaged";            ///< 下拉框是否查询分页加载
+inline constexpr const char *kSelectPageKey = "selectPageKey";        ///< 页码参数名（默认 page）
+inline constexpr const char *kSelectPageSizeKey = "selectPageSizeKey";  ///< 页大小参数名（默认 pageSize）
+inline constexpr const char *kSelectPageSize = "selectPageSize";      ///< 默认页大小
+inline constexpr const char *kSelectSearchTitle = "selectSearchTitle";  ///< 查询标题（搜索框提示）
+inline constexpr const char *kSelectSearchField = "selectSearchField";  ///< 字段名（搜索参数key）
+inline constexpr const char *kSelectMethod = "selectMethod";            ///< 查询请求方式（GET/POST）
 inline constexpr const char *kPlaceholder = "placeholder";
 inline constexpr const char *kMaxlength = "maxlength";
 inline constexpr const char *kMinValue = "minValue";
@@ -165,7 +172,7 @@ struct TagItem {
  */
 struct JsonVueMeta {
   /// 生成数据 URL 的 HTTP 方法 ("GET" / "POST" 等)
-  QString dataMethod = QString::fromLatin1(JsonVueHttp::kGet);
+  QString dataMethod = QString::fromLatin1(JsonVueHttp::kPost);
   /// 生成数据 URL（相对路径，会拼接 baseUrl）
   QString dataUrl;
   /// 查询接口名称，例如 "getConfigGListApi"
@@ -251,6 +258,20 @@ struct ColumnConfig {
   QString selectValueField;
   /// 下拉框 Label 字段名（显示文本，仅 editStyle == Select 时使用）
   QString selectLabelField;
+  /// 是否查询分页加载（仅 editStyle == Select 时使用）
+  bool selectPaged = false;
+  /// 页码参数名（查询分页时使用，默认 "page"）
+  QString selectPageKey;
+  /// 页大小参数名（查询分页时使用，默认 "pageSize"）
+  QString selectPageSizeKey;
+  /// 默认页大小（查询分页时使用，默认 20）
+  int selectPageSize = 20;
+  /// 查询标题（查询分页时搜索框提示文字）
+  QString selectSearchTitle;
+  /// 字段名（查询分页时搜索参数 key）
+  QString selectSearchField;
+  /// 查询请求方式（GET/POST，查询分页时使用）
+  QString selectMethod = QString::fromLatin1(JsonVueHttp::kPost);
 
   // ── 样式特定配置（仅对应 editStyle 时使用）──
   QString placeholder;   ///< text/textarea: 占位提示文字
@@ -317,6 +338,20 @@ struct QueryFieldConfig {
   QString selectValueField;
   /// 下拉框 Label 字段名（显示文本，仅 inputStyle == Select 时使用）
   QString selectLabelField;
+  /// 是否查询分页加载（仅 inputStyle == Select 时使用）
+  bool selectPaged = false;
+  /// 页码参数名（查询分页时使用，默认 "page"）
+  QString selectPageKey;
+  /// 页大小参数名（查询分页时使用，默认 "pageSize"）
+  QString selectPageSizeKey;
+  /// 默认页大小（查询分页时使用，默认 20）
+  int selectPageSize = 20;
+  /// 查询标题（查询分页时搜索框提示文字）
+  QString selectSearchTitle;
+  /// 字段名（查询分页时搜索参数 key）
+  QString selectSearchField;
+  /// 查询请求方式（GET/POST，查询分页时使用）
+  QString selectMethod = QString::fromLatin1(JsonVueHttp::kPost);
 
   // ── 样式特定配置 ──
   QString placeholder;  ///< text: 占位提示文字
@@ -361,6 +396,13 @@ struct DialogFieldConfig {
   QString selectUrl;                      ///< 下拉框数据源 URL（select）
   QString selectValueField;               ///< 下拉框 Value 字段名（select）
   QString selectLabelField;               ///< 下拉框 Label 字段名（select）
+  bool selectPaged = false;               ///< 是否查询分页加载（select）
+  QString selectPageKey;                  ///< 页码参数名（select，默认 "page"）
+  QString selectPageSizeKey;              ///< 页大小参数名（select，默认 "pageSize"）
+  int selectPageSize = 20;                ///< 默认页大小（select）
+  QString selectSearchTitle;              ///< 查询标题（select，查询分页时搜索框提示）
+  QString selectSearchField;              ///< 字段名（select，查询分页时搜索参数 key）
+  QString selectMethod = QString::fromLatin1(JsonVueHttp::kPost);  ///< 查询请求方式（GET/POST）
 
   /// 序列化为 JSON
   QJsonObject toJson() const;

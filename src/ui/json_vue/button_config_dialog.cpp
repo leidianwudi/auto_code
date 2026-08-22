@@ -412,10 +412,23 @@ void ButtonConfigDialog::onConfigureFieldStyle(int row) {
     ComboboxConfigDialog dlg(this);
     dlg.setConfig(m_dialogFieldsData[row].selectUrl, m_dialogFieldsData[row].selectValueField,
                   m_dialogFieldsData[row].selectLabelField);
+    dlg.setPagedConfig(m_dialogFieldsData[row].selectPaged, m_dialogFieldsData[row].selectPageKey,
+                   m_dialogFieldsData[row].selectPageSizeKey,
+                   m_dialogFieldsData[row].selectPageSize,
+                   m_dialogFieldsData[row].selectSearchTitle,
+                   m_dialogFieldsData[row].selectSearchField,
+                   m_dialogFieldsData[row].selectMethod);
     if (dlg.exec() == QDialog::Accepted) {
       m_dialogFieldsData[row].selectUrl = dlg.url();
       m_dialogFieldsData[row].selectValueField = dlg.valueField();
       m_dialogFieldsData[row].selectLabelField = dlg.labelField();
+      m_dialogFieldsData[row].selectPaged = dlg.paged();
+      m_dialogFieldsData[row].selectPageKey = dlg.pageKey();
+      m_dialogFieldsData[row].selectPageSizeKey = dlg.pageSizeKey();
+      m_dialogFieldsData[row].selectPageSize = dlg.pageSize();
+      m_dialogFieldsData[row].selectSearchTitle = dlg.searchTitle();
+      m_dialogFieldsData[row].selectSearchField = dlg.searchField();
+      m_dialogFieldsData[row].selectMethod = dlg.method();
     }
   }
   // 其他样式暂时不提供额外配置 UI（用默认值）

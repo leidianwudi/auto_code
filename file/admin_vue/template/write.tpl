@@ -75,7 +75,13 @@ ${else if col.isSelect}
     componentProps: {
       url: '${col.selectUrl}',
       valueField: '${col.selectValueField}',
-      labelField: '${col.selectLabelField}'
+      labelField: '${col.selectLabelField}',
+      method: '${col.selectMethod}'${if col.selectPaged},
+      pageKey: '${col.selectPageKey}',
+      pageSizeKey: '${col.selectPageSizeKey}',
+      pageSize: ${col.selectPageSize}${if col.selectSearchTitle},
+      searchTitle: '${col.selectSearchTitle}'${/if}${if col.selectSearchField},
+      searchField: '${col.selectSearchField}'${/if}${/if}
     }${if col.hasFormSpan},
     colProps: { span: ${col.formSpan} }${/if}
   },

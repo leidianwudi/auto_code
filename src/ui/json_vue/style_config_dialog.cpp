@@ -16,7 +16,6 @@
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
-#include <QMessageBox>
 #include <QPushButton>
 #include <QTableWidget>
 #include <QTableWidgetItem>
@@ -26,6 +25,7 @@
 #include "combobox_config_dialog.h"
 #include "config_dialog_common.h"
 #include "src/util/common/code_constants.h"
+#include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/component/aui_style.h"
 
 // ════════════════════════════════════════════════════════════
@@ -573,11 +573,21 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
       connect(m_selectSourceBtn, &QPushButton::clicked, this, [this]() {
         ComboboxConfigDialog dlg(this);
         dlg.setConfig(m_cachedSelectUrl, m_cachedSelectValueField, m_cachedSelectLabelField);
+        dlg.setPagedConfig(m_cachedSelectPaged, m_cachedSelectPageKey, m_cachedSelectPageSizeKey,
+                       m_cachedSelectPageSize, m_cachedSelectSearchTitle, m_cachedSelectSearchField,
+                       m_cachedSelectMethod);
         dlg.setHttpConfig(m_baseUrl, m_authHeader, m_postData);
         if (dlg.exec() == QDialog::Accepted) {
           m_cachedSelectUrl = dlg.url();
           m_cachedSelectValueField = dlg.valueField();
           m_cachedSelectLabelField = dlg.labelField();
+          m_cachedSelectPaged = dlg.paged();
+          m_cachedSelectPageKey = dlg.pageKey();
+          m_cachedSelectPageSizeKey = dlg.pageSizeKey();
+          m_cachedSelectPageSize = dlg.pageSize();
+          m_cachedSelectSearchTitle = dlg.searchTitle();
+          m_cachedSelectSearchField = dlg.searchField();
+          m_cachedSelectMethod = dlg.method();
         }
       });
       break;
@@ -810,6 +820,34 @@ void ColumnStyleDialog::setSelectLabelField(const QString &v) { m_cachedSelectLa
 
 QString ColumnStyleDialog::selectLabelField() const { return m_cachedSelectLabelField; }
 
+void ColumnStyleDialog::setSelectPaged(bool v) { m_cachedSelectPaged = v; }
+
+bool ColumnStyleDialog::selectPaged() const { return m_cachedSelectPaged; }
+
+void ColumnStyleDialog::setSelectPageKey(const QString &v) { m_cachedSelectPageKey = v; }
+
+QString ColumnStyleDialog::selectPageKey() const { return m_cachedSelectPageKey; }
+
+void ColumnStyleDialog::setSelectPageSizeKey(const QString &v) { m_cachedSelectPageSizeKey = v; }
+
+QString ColumnStyleDialog::selectPageSizeKey() const { return m_cachedSelectPageSizeKey; }
+
+void ColumnStyleDialog::setSelectPageSize(int v) { m_cachedSelectPageSize = v; }
+
+int ColumnStyleDialog::selectPageSize() const { return m_cachedSelectPageSize; }
+
+void ColumnStyleDialog::setSelectSearchTitle(const QString &v) { m_cachedSelectSearchTitle = v; }
+
+QString ColumnStyleDialog::selectSearchTitle() const { return m_cachedSelectSearchTitle; }
+
+void ColumnStyleDialog::setSelectSearchField(const QString &v) { m_cachedSelectSearchField = v; }
+
+QString ColumnStyleDialog::selectSearchField() const { return m_cachedSelectSearchField; }
+
+void ColumnStyleDialog::setSelectMethod(const QString &v) { m_cachedSelectMethod = v; }
+
+QString ColumnStyleDialog::selectMethod() const { return m_cachedSelectMethod; }
+
 void ColumnStyleDialog::setHttpConfig(const QString &baseUrl, const QString &authHeader,
                                       const QString &postData) {
   m_baseUrl = baseUrl;
@@ -866,7 +904,7 @@ void ColumnStyleDialog::accept() {
   if (dtype == JsonVueStyle::kTag && m_tagItemsTable) {
     QString error;
     if (!validateTagItems(&error)) {
-      QMessageBox::warning(this, QStringLiteral("数据验证失败"), error);
+      AuiMessageBox::show(this, QStringLiteral("数据验证失败"), error);
       return;
     }
   }

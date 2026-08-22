@@ -71,6 +71,13 @@ inline void storeColumnConfig(QPushButton *btn, const ColumnConfig &col) {
   btn->setProperty(JsonVueKey::kSelectUrl, col.selectUrl);
   btn->setProperty(JsonVueKey::kSelectValueField, col.selectValueField);
   btn->setProperty(JsonVueKey::kSelectLabelField, col.selectLabelField);
+  btn->setProperty(JsonVueKey::kSelectPaged, col.selectPaged);
+  btn->setProperty(JsonVueKey::kSelectPageKey, col.selectPageKey);
+  btn->setProperty(JsonVueKey::kSelectPageSizeKey, col.selectPageSizeKey);
+  btn->setProperty(JsonVueKey::kSelectPageSize, col.selectPageSize);
+  btn->setProperty(JsonVueKey::kSelectSearchTitle, col.selectSearchTitle);
+  btn->setProperty(JsonVueKey::kSelectSearchField, col.selectSearchField);
+  btn->setProperty(JsonVueKey::kSelectMethod, col.selectMethod);
   btn->setProperty(JsonVueKey::kPlaceholder, col.placeholder);
   btn->setProperty(JsonVueKey::kMaxlength, col.maxlength);
   btn->setProperty(JsonVueKey::kMinValue, col.minValue);
@@ -109,6 +116,13 @@ inline void readColumnConfig(QPushButton *btn, ColumnConfig &col) {
   col.selectUrl = btn->property(JsonVueKey::kSelectUrl).toString();
   col.selectValueField = btn->property(JsonVueKey::kSelectValueField).toString();
   col.selectLabelField = btn->property(JsonVueKey::kSelectLabelField).toString();
+  col.selectPaged = btn->property(JsonVueKey::kSelectPaged).toBool();
+  col.selectPageKey = btn->property(JsonVueKey::kSelectPageKey).toString();
+  col.selectPageSizeKey = btn->property(JsonVueKey::kSelectPageSizeKey).toString();
+  col.selectPageSize = btn->property(JsonVueKey::kSelectPageSize).toInt();
+  col.selectSearchTitle = btn->property(JsonVueKey::kSelectSearchTitle).toString();
+  col.selectSearchField = btn->property(JsonVueKey::kSelectSearchField).toString();
+  col.selectMethod = btn->property(JsonVueKey::kSelectMethod).toString();
   col.placeholder = btn->property(JsonVueKey::kPlaceholder).toString();
   col.maxlength = btn->property(JsonVueKey::kMaxlength).toInt();
   col.minValue = btn->property(JsonVueKey::kMinValue).toDouble();
@@ -241,6 +255,13 @@ inline void storeQueryConfig(QPushButton *btn, const QueryFieldConfig &q) {
   btn->setProperty(JsonVueKey::kSelectUrl, q.selectUrl);
   btn->setProperty(JsonVueKey::kSelectValueField, q.selectValueField);
   btn->setProperty(JsonVueKey::kSelectLabelField, q.selectLabelField);
+  btn->setProperty(JsonVueKey::kSelectPaged, q.selectPaged);
+  btn->setProperty(JsonVueKey::kSelectPageKey, q.selectPageKey);
+  btn->setProperty(JsonVueKey::kSelectPageSizeKey, q.selectPageSizeKey);
+  btn->setProperty(JsonVueKey::kSelectPageSize, q.selectPageSize);
+  btn->setProperty(JsonVueKey::kSelectSearchTitle, q.selectSearchTitle);
+  btn->setProperty(JsonVueKey::kSelectSearchField, q.selectSearchField);
+  btn->setProperty(JsonVueKey::kSelectMethod, q.selectMethod);
   btn->setProperty(JsonVueKey::kPlaceholder, q.placeholder);
   btn->setProperty(JsonVueKey::kDateFormat, q.dateFormat);
 }
@@ -250,6 +271,13 @@ inline void readQueryConfig(QPushButton *btn, QueryFieldConfig &q) {
   q.selectUrl = btn->property(JsonVueKey::kSelectUrl).toString();
   q.selectValueField = btn->property(JsonVueKey::kSelectValueField).toString();
   q.selectLabelField = btn->property(JsonVueKey::kSelectLabelField).toString();
+  q.selectPaged = btn->property(JsonVueKey::kSelectPaged).toBool();
+  q.selectPageKey = btn->property(JsonVueKey::kSelectPageKey).toString();
+  q.selectPageSizeKey = btn->property(JsonVueKey::kSelectPageSizeKey).toString();
+  q.selectPageSize = btn->property(JsonVueKey::kSelectPageSize).toInt();
+  q.selectSearchTitle = btn->property(JsonVueKey::kSelectSearchTitle).toString();
+  q.selectSearchField = btn->property(JsonVueKey::kSelectSearchField).toString();
+  q.selectMethod = btn->property(JsonVueKey::kSelectMethod).toString();
   q.placeholder = btn->property(JsonVueKey::kPlaceholder).toString();
   q.dateFormat = btn->property(JsonVueKey::kDateFormat).toString();
 }

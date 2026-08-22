@@ -5,7 +5,6 @@
 
 #include <QApplication>
 #include <QFileInfo>
-#include <QInputDialog>
 #include <QLineEdit>
 #include <QMouseEvent>
 #include <QRegularExpression>
@@ -18,6 +17,7 @@
 #include "main_dev_ui_ext.h"
 #include "src/ui/json_vue/json_vue_widget.h"
 #include "src/util/ui/code/code_editor.h"
+#include "src/util/ui/component/aui_input_dialog.h"
 
 // ──────────────────────────────────────────────────────────────
 //  编辑器信号连接
@@ -78,11 +78,9 @@ void MainDevMgr::connectEditor(CodeEditor *editor) {
     });
     // 工作区符号搜索 (Ctrl+T)
     connect(editor, &CodeEditor::requestWorkspaceSymbols, this, [this]() {
-      bool ok = false;
-      QString query =
-          QInputDialog::getText(m_ui, QStringLiteral("工作区符号搜索"),
-                                QStringLiteral("输入符号名:"), QLineEdit::Normal, QString(), &ok);
-      if (!ok || query.isEmpty()) return;
+      QString query = AuiInputDialog::getText(m_ui, QStringLiteral("工作区符号搜索"),
+                                              QStringLiteral("输入符号名:"));
+      if (query.isEmpty()) return;
 
       m_ui->clearOutput();
       m_ui->appendOutput(QStringLiteral("符号搜索: ") + query, false);

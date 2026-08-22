@@ -13,16 +13,19 @@
 #include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
-#include <QMessageBox>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
 
+#include "config_dialog_common.h"
 #include "src/util/common/code_constants.h"
 #include "src/util/common/http_client.h"
 #include "src/util/common/util_json.h"
 #include "src/util/ui/component/aui_button.h"
+#include "src/util/ui/component/aui_combo_box.h"
+#include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/component/aui_style.h"
 
 // ════════════════════════════════════════════════════════════
@@ -36,32 +39,107 @@ ComboboxConfigDialog::ComboboxConfigDialog(QWidget *parent) : QDialog(parent) { 
 // ════════════════════════════════════════════════════════════
 
 void ComboboxConfigDialog::setupUI() {
-  setWindowTitle(QStringLiteral("下拉框数据源配置"));
-  setMinimumSize(500, 400);
+  ConfigDialogFrame frame =
+      beginConfigDialog(this, QStringLiteral("下拉框数据源配置"), QMargins(12, 10, 12, 10), 6);
+  auto *layout = frame.contentLayout;
 
-  auto *layout = new QVBoxLayout(this);
-  layout->setContentsMargins(8, 8, 8, 8);
-  layout->setSpacing(6);
-
-  // ── URL 输入行 ──
+  // ── URL 输入行（含请求方式，普通/查询分页均需要）──
   auto *urlRow = new QHBoxLayout;
   urlRow->addWidget(new QLabel(QStringLiteral("请求URL:")));
-  m_urlEdit = new QLineEdit(this);
+  // 方法下拉框（GET/POST，隐藏三角箭头使文字完整显示），置于 URL 输入框之前
+  m_methodCombo = new QComboBox(frame.contentWidget);
+  m_methodCombo->addItems(
+      {QString::fromLatin1(JsonVueHttp::kPost), QString::fromLatin1(JsonVueHttp::kGet)});
+  m_methodCombo->setCurrentIndex(0);  // 默认 POST
+  m_methodCombo->setFixedWidth(60);
+  AuiComboBox::hideArrow(m_methodCombo);
+  urlRow->addWidget(m_methodCombo);
+  urlRow->addSpacing(10);
+  m_urlEdit = new QLineEdit(frame.contentWidget);
   m_urlEdit->setPlaceholderText(QStringLiteral("/api/xxx/list"));
   urlRow->addWidget(m_urlEdit, 1);
-  m_testBtn = new QPushButton(QStringLiteral("测试"), this);
+  m_testBtn = new QPushButton(QStringLiteral("测试"), frame.contentWidget);
   urlRow->addWidget(m_testBtn);
+  // 让方法下拉框与 URL 输入框高度一致，避免并排时错位
+  m_methodCombo->setFixedHeight(m_urlEdit->sizeHint().height());
   layout->addLayout(urlRow);
 
+  // ── 加载方式行（普通 / 查询分页）──
+  auto *typeRow = new QHBoxLayout;
+  typeRow->addWidget(new QLabel(QStringLiteral("加载方式:")));
+  m_typeCombo = new QComboBox(frame.contentWidget);
+  m_typeCombo->addItem(QStringLiteral("普通加载(一次性)"), false);
+  m_typeCombo->addItem(QStringLiteral("查询分页加载"), true);
+  m_typeCombo->setMinimumWidth(180);
+  typeRow->addWidget(m_typeCombo);
+  typeRow->addStretch();
+  layout->addLayout(typeRow);
+
+  // ── 查询分页配置区域（仅在"查询分页加载"时显示）──
+  m_pagedGroup = new QWidget(frame.contentWidget);
+  auto *pagedCol = new QVBoxLayout(m_pagedGroup);
+  pagedCol->setContentsMargins(0, 0, 0, 0);
+  pagedCol->setSpacing(6);
+
+  // 行1：页码参数 / 页大小参数 / 默认页大小
+  auto *pagedRow1 = new QHBoxLayout;
+  pagedRow1->setSpacing(6);
+  pagedRow1->addWidget(new QLabel(QStringLiteral("页码参数:")));
+  m_pageKeyEdit = new QLineEdit(m_pagedGroup);
+  m_pageKeyEdit->setText(QStringLiteral("page"));
+  m_pageKeyEdit->setMaximumWidth(90);
+  pagedRow1->addWidget(m_pageKeyEdit);
+  pagedRow1->addSpacing(12);
+  pagedRow1->addWidget(new QLabel(QStringLiteral("页大小参数:")));
+  m_pageSizeKeyEdit = new QLineEdit(m_pagedGroup);
+  m_pageSizeKeyEdit->setText(QStringLiteral("pageSize"));
+  m_pageSizeKeyEdit->setMaximumWidth(90);
+  pagedRow1->addWidget(m_pageSizeKeyEdit);
+  pagedRow1->addSpacing(12);
+  pagedRow1->addWidget(new QLabel(QStringLiteral("默认页大小:")));
+  m_pageSizeSpin = new QSpinBox(m_pagedGroup);
+  m_pageSizeSpin->setRange(1, 500);
+  m_pageSizeSpin->setValue(20);
+  pagedRow1->addWidget(m_pageSizeSpin);
+  pagedRow1->addStretch();
+  pagedCol->addLayout(pagedRow1);
+
+  // 行2：提示（搜索框提示）/ 字段名（搜索参数 key）
+  auto *pagedRow2 = new QHBoxLayout;
+  pagedRow2->setSpacing(6);
+  pagedRow2->addWidget(new QLabel(QStringLiteral("提示:")));
+  m_searchTitleEdit = new QLineEdit(m_pagedGroup);
+  m_searchTitleEdit->setPlaceholderText(QStringLiteral("搜索框提示文字"));
+  m_searchTitleEdit->setMaximumWidth(120);
+  pagedRow2->addWidget(m_searchTitleEdit);
+  pagedRow2->addSpacing(12);
+  pagedRow2->addWidget(new QLabel(QStringLiteral("字段名:")));
+  m_searchFieldEdit = new QLineEdit(m_pagedGroup);
+  m_searchFieldEdit->setPlaceholderText(QStringLiteral("搜索参数key，如 name"));
+  m_searchFieldEdit->setMaximumWidth(120);
+  pagedRow2->addWidget(m_searchFieldEdit);
+  pagedRow2->addStretch();
+  pagedCol->addLayout(pagedRow2);
+
+  layout->addWidget(m_pagedGroup);
+
+  // ── 加载方式切换：显示/隐藏分页配置区 ──
+  auto applyType = [this](int index) {
+    const bool paged = (index >= 0) && m_typeCombo->itemData(index).toBool();
+    m_pagedGroup->setVisible(paged);
+  };
+  connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, applyType);
+  applyType(m_typeCombo->currentIndex());
+
   // ── 状态标签 ──
-  m_statusLabel = new QLabel(this);
+  m_statusLabel = new QLabel(frame.contentWidget);
   m_statusLabel->setStyleSheet(
       QStringLiteral("color: %1; font-size: 12px;").arg(AuiStyle::mutedTextColor().name()));
   layout->addWidget(m_statusLabel);
 
   // ── 数据预览表格 ──
   layout->addWidget(new QLabel(QStringLiteral("返回数据示例:")));
-  m_previewTable = new QTableWidget(this);
+  m_previewTable = new QTableWidget(frame.contentWidget);
   m_previewTable->setSelectionBehavior(QAbstractItemView::SelectRows);
   m_previewTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
   m_previewTable->horizontalHeader()->setStretchLastSection(true);
@@ -70,36 +148,27 @@ void ComboboxConfigDialog::setupUI() {
   // ── 字段选择行 ──
   auto *fieldRow = new QHBoxLayout;
 
-  fieldRow->addWidget(new QLabel(QStringLiteral("Value字段(实际值):")));
-  m_valueCombo = new QComboBox(this);
-  m_valueCombo->setMinimumWidth(120);
-  fieldRow->addWidget(m_valueCombo);
+  fieldRow->addWidget(new QLabel(QStringLiteral("Label字段(显示文本):")));
+  m_labelCombo = new QComboBox(frame.contentWidget);
+  m_labelCombo->setMinimumWidth(120);
+  fieldRow->addWidget(m_labelCombo);
 
   fieldRow->addSpacing(20);
 
-  fieldRow->addWidget(new QLabel(QStringLiteral("Label字段(显示文本):")));
-  m_labelCombo = new QComboBox(this);
-  m_labelCombo->setMinimumWidth(120);
-  fieldRow->addWidget(m_labelCombo);
+  fieldRow->addWidget(new QLabel(QStringLiteral("Value字段(实际值):")));
+  m_valueCombo = new QComboBox(frame.contentWidget);
+  m_valueCombo->setMinimumWidth(120);
+  fieldRow->addWidget(m_valueCombo);
 
   fieldRow->addStretch();
   layout->addLayout(fieldRow);
 
-  // ── 按钮行 ──
-  auto *btnRow = new QHBoxLayout;
-  btnRow->addStretch();
-  auto *okBtn = new QPushButton(QString::fromUtf8(CodeConstants::UiText::kConfirm), this);
-  auto *cancelBtn = new QPushButton(QStringLiteral("取消"), this);
-  AuiButton::applyDialogButtonStyle(okBtn);
-  AuiButton::applyDialogButtonStyle(cancelBtn);
-  btnRow->addWidget(okBtn);
-  btnRow->addSpacing(8);
-  btnRow->addWidget(cancelBtn);
-  layout->addLayout(btnRow);
+  // 确定/取消按钮由 finishConfigDialog 统一添加（复用通用样式）
+  finishConfigDialog(this, frame);
+
+  setMinimumSize(500, 400);
 
   connect(m_testBtn, &QPushButton::clicked, this, &ComboboxConfigDialog::onTest);
-  connect(okBtn, &QPushButton::clicked, this, &QDialog::accept);
-  connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -116,11 +185,57 @@ void ComboboxConfigDialog::setConfig(const QString &url, const QString &valueFie
   m_labelCombo->setCurrentText(labelField);
 }
 
+void ComboboxConfigDialog::setPagedConfig(bool paged, const QString &pageKey,
+                                          const QString &pageSizeKey, int pageSize,
+                                          const QString &searchTitle, const QString &searchField,
+                                          const QString &method) {
+  const int idx = (paged ? 1 : 0);
+  if (idx < m_typeCombo->count()) m_typeCombo->setCurrentIndex(idx);
+  if (!pageKey.isEmpty()) m_pageKeyEdit->setText(pageKey);
+  if (!pageSizeKey.isEmpty()) m_pageSizeKeyEdit->setText(pageSizeKey);
+  if (pageSize > 0) m_pageSizeSpin->setValue(pageSize);
+  if (!searchTitle.isEmpty()) m_searchTitleEdit->setText(searchTitle);
+  if (!searchField.isEmpty()) m_searchFieldEdit->setText(searchField);
+  if (!method.isEmpty()) m_methodCombo->setCurrentText(method);
+  m_pagedGroup->setVisible(paged);
+}
+
 QString ComboboxConfigDialog::url() const { return m_urlEdit->text().trimmed(); }
 
 QString ComboboxConfigDialog::valueField() const { return m_valueCombo->currentText(); }
 
 QString ComboboxConfigDialog::labelField() const { return m_labelCombo->currentText(); }
+
+bool ComboboxConfigDialog::paged() const {
+  return m_typeCombo->currentIndex() >= 1 &&
+         (m_typeCombo->itemData(m_typeCombo->currentIndex()).toBool());
+}
+
+QString ComboboxConfigDialog::pageKey() const {
+  const QString v = m_pageKeyEdit->text().trimmed();
+  return v.isEmpty() ? QStringLiteral("page") : v;
+}
+
+QString ComboboxConfigDialog::pageSizeKey() const {
+  const QString v = m_pageSizeKeyEdit->text().trimmed();
+  return v.isEmpty() ? QStringLiteral("pageSize") : v;
+}
+
+int ComboboxConfigDialog::pageSize() const {
+  return m_pageSizeSpin ? m_pageSizeSpin->value() : 20;
+}
+
+QString ComboboxConfigDialog::searchTitle() const {
+  return m_searchTitleEdit ? m_searchTitleEdit->text().trimmed() : QString();
+}
+
+QString ComboboxConfigDialog::searchField() const {
+  return m_searchFieldEdit ? m_searchFieldEdit->text().trimmed() : QString();
+}
+
+QString ComboboxConfigDialog::method() const {
+  return m_methodCombo ? m_methodCombo->currentText() : QString::fromLatin1(JsonVueHttp::kPost);
+}
 
 void ComboboxConfigDialog::setHttpConfig(const QString &baseUrl, const QString &authHeader,
                                          const QString &postData) {
@@ -136,7 +251,7 @@ void ComboboxConfigDialog::setHttpConfig(const QString &baseUrl, const QString &
 void ComboboxConfigDialog::onTest() {
   QString url = m_urlEdit->text().trimmed();
   if (url.isEmpty()) {
-    QMessageBox::warning(this, QStringLiteral("提示"), QStringLiteral("请输入请求URL"));
+    AuiMessageBox::show(this, QStringLiteral("提示"), QStringLiteral("请输入请求URL"));
     return;
   }
 

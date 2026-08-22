@@ -58,6 +58,13 @@ void JsonVueEditor::onConfigureCombobox() {
   dialog.setSelectUrl(col.selectUrl);
   dialog.setSelectValueField(col.selectValueField);
   dialog.setSelectLabelField(col.selectLabelField);
+  dialog.setSelectPaged(col.selectPaged);
+  dialog.setSelectPageKey(col.selectPageKey);
+  dialog.setSelectPageSizeKey(col.selectPageSizeKey);
+  dialog.setSelectPageSize(col.selectPageSize);
+  dialog.setSelectSearchTitle(col.selectSearchTitle);
+  dialog.setSelectSearchField(col.selectSearchField);
+  dialog.setSelectMethod(col.selectMethod);
   dialog.setDefaultValue(col.defaultValue);
   dialog.setDefaultSort(col.defaultSort);
   if (dialog.exec() == QDialog::Accepted) {
@@ -84,6 +91,13 @@ void JsonVueEditor::onConfigureCombobox() {
     col.selectUrl = dialog.selectUrl();
     col.selectValueField = dialog.selectValueField();
     col.selectLabelField = dialog.selectLabelField();
+    col.selectPaged = dialog.selectPaged();
+    col.selectPageKey = dialog.selectPageKey();
+    col.selectPageSizeKey = dialog.selectPageSizeKey();
+    col.selectPageSize = dialog.selectPageSize();
+    col.selectSearchTitle = dialog.selectSearchTitle();
+    col.selectSearchField = dialog.selectSearchField();
+    col.selectMethod = dialog.selectMethod();
     col.defaultValue = dialog.defaultValue();
     col.defaultSort = dialog.defaultSort();
     storeColumnConfig(configBtn, col);
@@ -113,11 +127,20 @@ void JsonVueEditor::onConfigureQuerySelect() {
     // select 样式使用 ComboboxConfigDialog
     ComboboxConfigDialog dialog(this);
     dialog.setConfig(q.selectUrl, q.selectValueField, q.selectLabelField);
+    dialog.setPagedConfig(q.selectPaged, q.selectPageKey, q.selectPageSizeKey, q.selectPageSize,
+                      q.selectSearchTitle, q.selectSearchField, q.selectMethod);
     dialog.setHttpConfig(m_baseUrl, m_authHeader, m_postData);
     if (dialog.exec() == QDialog::Accepted) {
       q.selectUrl = dialog.url();
       q.selectValueField = dialog.valueField();
       q.selectLabelField = dialog.labelField();
+      q.selectPaged = dialog.paged();
+      q.selectPageKey = dialog.pageKey();
+      q.selectPageSizeKey = dialog.pageSizeKey();
+      q.selectPageSize = dialog.pageSize();
+      q.selectSearchTitle = dialog.searchTitle();
+      q.selectSearchField = dialog.searchField();
+      q.selectMethod = dialog.method();
       storeQueryConfig(configBtn, q);
       configBtn->setText(queryConfigSummary(q));
       emit configChanged();

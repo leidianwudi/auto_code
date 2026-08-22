@@ -150,6 +150,8 @@ qt_add_executable(auto_code
     src/util/ui/component/aui_error_tool_tip.cpp
     src/util/ui/component/aui_message_box.h
     src/util/ui/component/aui_message_box.cpp
+    src/util/ui/component/aui_input_dialog.h
+    src/util/ui/component/aui_input_dialog.cpp
     src/util/ui/code/format_code.h
     src/util/ui/code/format_code.cpp
     src/util/ui/code/guess_code.h

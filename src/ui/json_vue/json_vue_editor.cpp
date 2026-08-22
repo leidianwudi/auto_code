@@ -32,6 +32,7 @@
 #include "json_vue_editor_helpers.h"
 #include "src/util/common/code_constants.h"
 #include "src/util/common/util_json.h"
+#include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_style.h"
 
 // ════════════════════════════════════════════════════════════
@@ -144,11 +145,14 @@ QWidget *JsonVueEditor::buildMetaSection() {
   m_methodCombo->addItems(
       {QString::fromLatin1(JsonVueHttp::kGet), QString::fromLatin1(JsonVueHttp::kPost),
        QString::fromLatin1(JsonVueHttp::kPut), QString::fromLatin1(JsonVueHttp::kDelete)});
-  m_methodCombo->setFixedWidth(50);
+  m_methodCombo->setFixedWidth(56);
+  AuiComboBox::hideArrow(m_methodCombo);
   genCell->addWidget(m_methodCombo);
   m_dataUrlEdit = new QLineEdit(this);
   m_dataUrlEdit->setPlaceholderText(QStringLiteral("例如 config/selectByIn"));
   genCell->addWidget(m_dataUrlEdit, 1);
+  // 让方法下拉框与 URL 输入框高度一致，避免并排时错位
+  m_methodCombo->setFixedHeight(m_dataUrlEdit->sizeHint().height());
   m_generateBtn = new QPushButton(QStringLiteral("生成"), this);
   genCell->addWidget(m_generateBtn);
 
