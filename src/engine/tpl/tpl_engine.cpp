@@ -22,6 +22,19 @@
 #include "tpl_parser.h"
 #include "tpl_renderer.h"
 
+namespace {
+// 函数调用 / 变量路径解析使用的字符常量（避免魔法字符散落各处）
+const QLatin1Char kOpenParen('(');     ///< 函数调用左括号
+const QLatin1Char kCloseParen(')');    ///< 函数调用右括号
+const QLatin1Char kArgSeparator(',');  ///< 参数分隔符
+const QLatin1Char kDoubleQuote('"');   ///< 字符串字面量双引号
+const QLatin1Char kSingleQuote('\'');  ///< 字符串字面量单引号
+const QLatin1Char kDot('.');           ///< 类名 / 属性路径分隔符
+
+// 错误消息格式
+constexpr const char *kInvalidFuncCallFormat = "invalid function call format: %1";
+}  // namespace
+
 // 静态成员定义
 
 const SchemaValidator *TplEngine::sm_validator = nullptr;
@@ -94,8 +107,8 @@ QString TplEngine::render(const QString &tmpl, const QJsonObject &data) const {
 // resolvePath — 路径解析入口（函数调用 / 变量路径分发）
 
 QJsonValue TplEngine::resolvePath(const QString &path, const QJsonObject &context) const {
-  int parenPos = path.indexOf(QLatin1Char('('));
-  if (parenPos != -1 && path.endsWith(QLatin1Char(')'))) {
+  int parenPos = path.indexOf(kOpenParen);
+  if (parenPos != -1 && path.endsWith(kCloseParen)) {
     return resolveFuncCall(path, context);
   }
   return resolveVarPath(path, context);
@@ -104,7 +117,7 @@ QJsonValue TplEngine::resolvePath(const QString &path, const QJsonObject &contex
 // resolveFuncCall — 函数调用解析（类名.函数名(参数)）
 
 QJsonValue TplEngine::resolveFuncCall(const QString &path, const QJsonObject &context) const {
-  int parenPos = path.indexOf(QLatin1Char('('));
+  int parenPos = path.indexOf(kOpenParen);
   QString fullFunc = path.left(parenPos);
   QString argsStr = path.mid(parenPos + 1);
   argsStr.chop(1);  // 去掉尾部的 )
@@ -116,11 +129,11 @@ QJsonValue TplEngine::resolveFuncCall(const QString &path, const QJsonObject &co
     bool inSQuote = false, inDQuote = false;
     for (int i = 0; i < argsStr.length(); ++i) {
       const QChar c = argsStr[i];
-      if (c == QLatin1Char('"') && !inSQuote) {
+      if (c == kDoubleQuote && !inSQuote) {
         inDQuote = !inDQuote;
-      } else if (c == QLatin1Char('\'') && !inDQuote) {
+      } else if (c == kSingleQuote && !inDQuote) {
         inSQuote = !inSQuote;
-      } else if (c == QLatin1Char(',') && !inSQuote && !inDQuote) {
+      } else if (c == kArgSeparator && !inSQuote && !inDQuote) {
         rawArgs.append(argsStr.mid(start, i - start).trimmed());
         start = i + 1;
       }
@@ -135,8 +148,8 @@ QJsonValue TplEngine::resolveFuncCall(const QString &path, const QJsonObject &co
     double num = raw.toDouble(&ok);
     if (ok) {
       evalArgs.append(num);
-    } else if ((raw.startsWith(QStringLiteral("\"")) && raw.endsWith(QStringLiteral("\""))) ||
-               (raw.startsWith(QStringLiteral("'")) && raw.endsWith(QStringLiteral("'")))) {
+    } else if ((raw.startsWith(kDoubleQuote) && raw.endsWith(kDoubleQuote)) ||
+               (raw.startsWith(kSingleQuote) && raw.endsWith(kSingleQuote))) {
       evalArgs.append(raw.mid(1, raw.length() - 2));
     } else {
       evalArgs.append(resolvePath(raw, context));
@@ -144,7 +157,7 @@ QJsonValue TplEngine::resolveFuncCall(const QString &path, const QJsonObject &co
   }
 
   // 解析函数名：类名.函数名
-  int dotPos = fullFunc.indexOf(QLatin1Char('.'));
+  int dotPos = fullFunc.indexOf(kDot);
   if (dotPos != -1) {
     QString clsName = fullFunc.left(dotPos);
     QString funcName = fullFunc.mid(dotPos + 1);
@@ -156,14 +169,14 @@ QJsonValue TplEngine::resolveFuncCall(const QString &path, const QJsonObject &co
     return FunMgr::ins().call(QString::fromLatin1(AcRuntime::kBuiltinClass), fullFunc, evalArgs);
   }
 
-  m_lastError = QStringLiteral("invalid function call format: %1").arg(path);
+  m_lastError = QString::fromUtf8(kInvalidFuncCallFormat).arg(path);
   return QJsonValue();
 }
 
 // resolveVarPath — 嵌套属性路径解析（按点号逐层查找）
 
 QJsonValue TplEngine::resolveVarPath(const QString &path, const QJsonObject &context) const {
-  QStringList parts = path.split(QStringLiteral("."));
+  QStringList parts = path.split(kDot);
   QJsonValue value = QJsonValue(context);
 
   for (const QString &part : parts) {

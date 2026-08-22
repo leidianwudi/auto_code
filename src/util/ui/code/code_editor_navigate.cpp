@@ -12,10 +12,12 @@
  * - 括号导航（jumpToMatchingBracket / selectBetweenBrackets）
  */
 
+#include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QRegularExpression>
 #include <QToolTip>
 
 #include "code_editor.h"
@@ -734,4 +736,77 @@ void CodeEditor::selectBetweenBrackets() {
     cursor.setPosition(end + 1, QTextCursor::KeepAnchor);
     setTextCursor(cursor);
   }
+}
+
+// ──────────────────────────────────────────────────────────────
+//  统一的导航目标判定（悬停手形与 Ctrl+点击跳转共用）
+// ──────────────────────────────────────────────────────────────
+
+bool CodeEditor::navigationTargetAt(int pos) const {
+  switch (m_validationMode) {
+    case JsonValidation: {
+      // 与鼠标点击跳转完全一致：路径非空 + schema 中可解析到属性
+      if (!m_schemaLoaded) return false;
+      QString path = m_schema.propertyPathAt(cachedText(), pos);
+      QString className, propName;
+      return !path.isEmpty() && m_schema.propertyContext(path, &className, &propName) &&
+             !propName.isEmpty();
+    }
+    case AcValidation: {
+      // 与 AC 现状一致：任意标识符均可提示/尝试跳转
+      int start = 0, end = 0;
+      return !identifierAtCursor(pos, &start, &end).isEmpty();
+    }
+    default:
+      return false;
+  }
+}
+
+// ── JSON 属性悬停提示（基于 $schema）──
+void CodeEditor::showJsonPropertyHover(const QString &jsonPath, const QPoint &gpos) {
+  if (m_validationMode != JsonValidation || !m_schemaLoaded) return;
+  QString desc = m_schema.propertyDescription(jsonPath);
+  if (desc.isEmpty()) {
+    QToolTip::hideText();
+    return;
+  }
+  QToolTip::showText(gpos, desc, this);
+}
+
+// ── 在 schema 文件中定位 className 类下 propName 属性的行号 ──
+int CodeEditor::findSchemaPropertyLine(const QString &className, const QString &propName) const {
+  QString text;
+  {
+    QFile f(m_schemaPath);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return 1;
+    text = QString::fromUtf8(f.readAll());
+  }
+
+  // 先定位类定义块
+  QRegularExpression classRe(
+      QStringLiteral("[\"']?%1[\"']?\\s*:").arg(QRegularExpression::escape(className)));
+  auto cm = classRe.match(text);
+  if (!cm.hasMatch()) return 1;
+  int searchFrom = cm.capturedStart();
+
+  // 类块内优先定位 properties 块，再在其中找属性
+  int propsIdx = text.indexOf(QStringLiteral("properties"), searchFrom);
+  if (propsIdx >= 0 && (propsIdx - searchFrom) < 2000) searchFrom = propsIdx;
+
+  QRegularExpression propRe(
+      QStringLiteral("[\"']?%1[\"']?\\s*:").arg(QRegularExpression::escape(propName)));
+  auto pm = propRe.match(text, searchFrom);
+  if (!pm.hasMatch()) return 1;
+
+  int matchPos = pm.capturedStart();
+  int line = 1;
+  for (int i = 0; i < matchPos && i < text.size(); ++i) {
+    if (text[i] == QLatin1Char('\n')) ++line;
+  }
+  return line;
+}
+
+void CodeEditor::setSymbolTable(const QHash<QString, AcSymbolEntry> &symbols) {
+  m_symbolTable = symbols;
+  m_symbolNavigator.setSymbolTable(symbols);
 }

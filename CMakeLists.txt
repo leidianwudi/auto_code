@@ -100,6 +100,9 @@ qt_add_executable(auto_code
     src/util/ui/code/indent_guide.cpp
     src/util/ui/code/code_editor.h
     src/util/ui/code/code_editor.cpp
+    src/util/ui/code/code_editor_debug.cpp
+    src/util/ui/code/code_editor_fold.cpp
+    src/util/ui/code/code_editor_validate.cpp
     src/util/ui/code/code_editor_navigate.cpp
     src/util/ui/code/code_editor_complete.cpp
     src/util/ui/code/code_find_bar.h
@@ -166,6 +169,8 @@ qt_add_executable(auto_code
     src/ui/main_dev/main_dev_mgr_tab.cpp
     src/ui/main_dev/main_dev_mgr_connect.cpp
     src/ui/main_dev/main_dev_mgr_navigate.cpp
+    src/ui/main_dev/main_dev_mgr_session.cpp
+    src/ui/main_dev/main_dev_mgr_theme.cpp
     src/ui/main_dev/main_dev_model.h
     src/ui/main_dev/main_dev_model.cpp
     src/ui/demo/demo_ui.h

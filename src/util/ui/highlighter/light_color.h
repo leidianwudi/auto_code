@@ -29,71 +29,73 @@
  * - operator_   : 算术运算符
  * - type        : 类型标注
  * - decorator   : 装饰器
+ *
+ * 颜色 key 统一使用 SettingStore::kHL_* 常量，与注册处保持一致。
  */
 namespace LightColor {
 
 /// @brief 关键字 — main, for, ${each}, JSON 键名
-inline QColor keyword() { return SettingStore::ins().color(QStringLiteral("hl.keyword")); }
+inline QColor keyword() { return SettingStore::ins().color(SettingStore::kHL_Keyword); }
 
 /// @brief 注释
-inline QColor comment() { return SettingStore::ins().color(QStringLiteral("hl.comment")); }
+inline QColor comment() { return SettingStore::ins().color(SettingStore::kHL_Comment); }
 
 /// @brief 块注释
 inline QColor commentBlock() {
-  return SettingStore::ins().color(QStringLiteral("hl.commentBlock"));
+  return SettingStore::ins().color(SettingStore::kHL_CommentBlock);
 }
 
 /// @brief 字符串
-inline QColor string_() { return SettingStore::ins().color(QStringLiteral("hl.string")); }
+inline QColor string_() { return SettingStore::ins().color(SettingStore::kHL_String); }
 
 /// @brief 模板字符串
 inline QColor stringTemplate() {
-  return SettingStore::ins().color(QStringLiteral("hl.stringTemplate"));
+  return SettingStore::ins().color(SettingStore::kHL_StringTemplate);
 }
 
 /// @brief 数字
-inline QColor number() { return SettingStore::ins().color(QStringLiteral("hl.number")); }
+inline QColor number() { return SettingStore::ins().color(SettingStore::kHL_Number); }
 
 /// @brief 布尔值
-inline QColor boolean_() { return SettingStore::ins().color(QStringLiteral("hl.boolean")); }
+inline QColor boolean_() { return SettingStore::ins().color(SettingStore::kHL_Boolean); }
 
 /// @brief 空值 null/undefined
-inline QColor null_() { return SettingStore::ins().color(QStringLiteral("hl.null")); }
+inline QColor null_() { return SettingStore::ins().color(SettingStore::kHL_Null); }
 
 /// @brief 内置变量 this/self/super
-inline QColor special() { return SettingStore::ins().color(QStringLiteral("hl.special")); }
+inline QColor special() { return SettingStore::ins().color(SettingStore::kHL_Special); }
 
 /// @brief 内置函数 / null
-inline QColor builtin() { return SettingStore::ins().color(QStringLiteral("hl.builtin")); }
+inline QColor builtin() { return SettingStore::ins().color(SettingStore::kHL_Builtin); }
 
 /// @brief 函数调用 — render(), write(), readJson() 等
-inline QColor call() { return SettingStore::ins().color(QStringLiteral("hl.call")); }
+inline QColor call() { return SettingStore::ins().color(SettingStore::kHL_Call); }
 
 /// @brief 变量 / JSON 字符串值
-inline QColor variable() { return SettingStore::ins().color(QStringLiteral("hl.variable")); }
+inline QColor variable() { return SettingStore::ins().color(SettingStore::kHL_Variable); }
 
 /// @brief 常量
-inline QColor constant() { return SettingStore::ins().color(QStringLiteral("hl.constant")); }
+inline QColor constant() { return SettingStore::ins().color(SettingStore::kHL_Constant); }
 
 /// @brief 算术运算符
-inline QColor operator_() { return SettingStore::ins().color(QStringLiteral("hl.operator")); }
+inline QColor operator_() { return SettingStore::ins().color(SettingStore::kHL_Operator); }
 
 /// @brief 标点符号
-inline QColor punctuation() { return SettingStore::ins().color(QStringLiteral("hl.punctuation")); }
+inline QColor punctuation() { return SettingStore::ins().color(SettingStore::kHL_Punctuation); }
 
 /// @brief 类型标注
-inline QColor type() { return SettingStore::ins().color(QStringLiteral("hl.type")); }
+inline QColor type() { return SettingStore::ins().color(SettingStore::kHL_Type); }
 
 /// @brief 装饰器
-inline QColor decorator() { return SettingStore::ins().color(QStringLiteral("hl.decorator")); }
+inline QColor decorator() { return SettingStore::ins().color(SettingStore::kHL_Decorator); }
 
 /// @brief 类/接口/枚举声明名
-inline QColor className() { return SettingStore::ins().color(QStringLiteral("hl.classname")); }
+inline QColor className() { return SettingStore::ins().color(SettingStore::kHL_ClassName); }
 
 /// @brief 函数声明名
-inline QColor funcDecl() { return SettingStore::ins().color(QStringLiteral("hl.funcdecl")); }
+inline QColor funcDecl() { return SettingStore::ins().color(SettingStore::kHL_FuncDecl); }
 
 /// @brief 导入模块名
-inline QColor import_() { return SettingStore::ins().color(QStringLiteral("hl.import")); }
+inline QColor import_() { return SettingStore::ins().color(SettingStore::kHL_Import); }
 
 }  // namespace LightColor

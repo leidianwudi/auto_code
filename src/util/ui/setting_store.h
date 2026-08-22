@@ -40,6 +40,51 @@ public:
   /// 主题类型
   enum Theme { ThemeLight, ThemeDark, ThemeCustom };
 
+  // ── 高亮颜色 key 常量 ──
+  // 与 setting_store.cpp 中的 registerColor 注册、LightColor 读取保持一致，
+  // 避免各处硬编码字符串造成键名不一致。
+
+  /// 关键字
+  static inline const char *kHL_Keyword = "hl.keyword";
+  /// 单行注释
+  static inline const char *kHL_Comment = "hl.comment";
+  /// 块注释
+  static inline const char *kHL_CommentBlock = "hl.commentBlock";
+  /// 字符串
+  static inline const char *kHL_String = "hl.string";
+  /// 模板字符串
+  static inline const char *kHL_StringTemplate = "hl.stringTemplate";
+  /// 数字
+  static inline const char *kHL_Number = "hl.number";
+  /// 布尔值
+  static inline const char *kHL_Boolean = "hl.boolean";
+  /// 空值 null/undefined
+  static inline const char *kHL_Null = "hl.null";
+  /// 内置变量 this/self/super
+  static inline const char *kHL_Special = "hl.special";
+  /// 内置函数
+  static inline const char *kHL_Builtin = "hl.builtin";
+  /// 函数调用
+  static inline const char *kHL_Call = "hl.call";
+  /// 变量
+  static inline const char *kHL_Variable = "hl.variable";
+  /// 常量
+  static inline const char *kHL_Constant = "hl.constant";
+  /// 运算符
+  static inline const char *kHL_Operator = "hl.operator";
+  /// 标点符号
+  static inline const char *kHL_Punctuation = "hl.punctuation";
+  /// 类型标注
+  static inline const char *kHL_Type = "hl.type";
+  /// 装饰器
+  static inline const char *kHL_Decorator = "hl.decorator";
+  /// 类/接口/枚举声明名
+  static inline const char *kHL_ClassName = "hl.classname";
+  /// 函数声明名
+  static inline const char *kHL_FuncDecl = "hl.funcdecl";
+  /// 导入模块名
+  static inline const char *kHL_Import = "hl.import";
+
   SettingStore();
   ~SettingStore() override = default;
 

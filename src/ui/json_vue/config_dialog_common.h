@@ -13,8 +13,12 @@
 
 #pragma once
 
+#include <QAbstractItemView>
+#include <QHeaderView>
 #include <QMargins>
+#include <QString>
 #include <QVariant>
+#include <initializer_list>
 
 class QComboBox;
 class QDialog;
@@ -63,3 +67,23 @@ QPushButton *makeTableDeleteButton(QTableWidget *table, int column, QWidget *par
 
 /// 创建紧凑小按钮（适合表格单元格内使用，主题色随 AuiStyle 变化）
 QPushButton *makeCompactButton(const QString &text, QWidget *parent = nullptr);
+
+/// 配置表格单列定义（供 makeConfigTable 批量设置列头 / 列宽模式 / 固定宽度）
+struct ConfigTableColumn {
+  QString header;                                        ///< 列头文本
+  QHeaderView::ResizeMode mode = QHeaderView::Interactive;  ///< 列宽模式
+  int width = 0;                                         ///< 固定宽度（>0 时设置，并将模式视为 Interactive）
+};
+
+/**
+ * @brief 创建统一风格的「字段配置表格」公共构建器
+ *
+ * 消除各配置对话框重复的表格样板（新建 + 列头 + 列宽 + 行号隐藏 + 行选择）：
+ *   - 默认隐藏行号、按列规格设置列头 / resize 模式 / 固定宽度
+ *   - 统一最小/最大高度与行选择行为（默认 SelectItems，保持 Qt 原生语义）
+ * 特殊行为（事件过滤器、NoEditTriggers 等）由调用方在返回后自行设置。
+ */
+QTableWidget *makeConfigTable(const std::initializer_list<ConfigTableColumn> &columns,
+                              QWidget *parent = nullptr, int minHeight = 60, int maxHeight = 0,
+                              QAbstractItemView::SelectionBehavior selection =
+                                  QAbstractItemView::SelectItems);

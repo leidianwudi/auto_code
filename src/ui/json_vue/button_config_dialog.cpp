@@ -199,19 +199,14 @@ void ButtonConfigDialog::setupUI() {
   auto *fieldsLabel = new QLabel(QStringLiteral("表单字段:"));
   dialogLayout->addWidget(fieldsLabel);
 
-  m_dialogFieldsTable = new QTableWidget(0, 6);
-  m_dialogFieldsTable->setHorizontalHeaderLabels(
-      {QStringLiteral("标签"), QStringLiteral("字段名"), QStringLiteral("样式"),
-       QString::fromUtf8(CodeConstants::UiText::kRequired), QStringLiteral("配置"),
-       QString::fromUtf8(CodeConstants::UiText::kDelete)});
-  m_dialogFieldsTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-  m_dialogFieldsTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
-  m_dialogFieldsTable->setColumnWidth(2, 90);  // 样式
-  m_dialogFieldsTable->setColumnWidth(3, 50);  // 必填
-  m_dialogFieldsTable->setColumnWidth(4, 70);  // 配置
-  m_dialogFieldsTable->setColumnWidth(5, 60);  // 删除
-  m_dialogFieldsTable->verticalHeader()->setVisible(false);
-  m_dialogFieldsTable->setMinimumHeight(120);
+  m_dialogFieldsTable = makeConfigTable(
+      {{QStringLiteral("标签"), QHeaderView::Stretch, 0},
+       {QStringLiteral("字段名"), QHeaderView::Stretch, 0},
+       {QStringLiteral("样式"), QHeaderView::Interactive, 90},
+       {QString::fromUtf8(CodeConstants::UiText::kRequired), QHeaderView::Interactive, 50},
+       {QStringLiteral("配置"), QHeaderView::Interactive, 70},
+       {QString::fromUtf8(CodeConstants::UiText::kDelete), QHeaderView::Interactive, 60}},
+      this, 120);
   dialogLayout->addWidget(m_dialogFieldsTable);
 
   m_addFieldBtn = new QPushButton(QStringLiteral("+ 添加字段"));

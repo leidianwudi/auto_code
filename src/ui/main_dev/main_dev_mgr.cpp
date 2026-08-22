@@ -4,10 +4,12 @@
  *
  * 本文件只包含核心方法：窗口创建、信号初始化、文件树加载、保存逻辑。
  * 其他方法拆分到：
- *   - main_dev_mgr_file.cpp    文件操作（打开/创建/重命名/删除）
- *   - main_dev_mgr_tab.cpp     标签页管理（关闭/拆分/切换）
- *   - main_dev_mgr_connect.cpp 编辑器信号连接与事件过滤
+ *   - main_dev_mgr_file.cpp     文件操作（打开/创建/重命名/删除）
+ *   - main_dev_mgr_tab.cpp      标签页管理（关闭/拆分/切换）
+ *   - main_dev_mgr_connect.cpp  编辑器信号连接与事件过滤
  *   - main_dev_mgr_navigate.cpp 导航历史
+ *   - main_dev_mgr_session.cpp  会话管理（文件列表/编辑器现场保存与还原）
+ *   - main_dev_mgr_theme.cpp    主题/字体刷新
  */
 
 #include "main_dev_mgr.h"
@@ -15,22 +17,13 @@
 #include <QAction>
 #include <QApplication>
 #include <QDebug>
-#include <QDialog>
 #include <QDir>
-#include <QFile>
 #include <QFileDialog>
-#include <QFileInfo>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QScrollBar>
 #include <QShortcut>
-#include <QStandardPaths>
 #include <QStringList>
 #include <QTabWidget>
 #include <QTextBlock>
 #include <QTextCursor>
-#include <QToolButton>
 #include <QtConcurrent/QtConcurrent>
 
 #include "debug_controller.h"
@@ -408,225 +401,10 @@ void MainDevMgr::updateSaveButtonState() {
   m_ui->saveAllBtn()->setEnabled(anyModified);
 }
 
-/// @brief 会话状态存储文件（记录上次打开的文件列表）
-static QString sessionSettingsPath() {
-  QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-  if (dir.isEmpty())
-    dir = QDir::homePath() + QString::fromUtf8(CodeConstants::Paths::kAppDataDirName);
-  QDir().mkpath(dir);
-  return dir + QStringLiteral("/session.ini");
-}
-
-void MainDevMgr::saveOpenFilesToSettings() {
-  // 按编辑器面板分组保存（还原拆分数量与每个面板的文件）
-  QList<QVariant> groups;
-  QList<QVariant> activeIdxes;
-  for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
-    auto *tabs = m_ui->editorPanelAt(pi);
-    if (!tabs) continue;
-    QStringList files;
-    for (int ti = 0; ti < tabs->count(); ++ti) {
-      CodeEditor *editor = editorFromWidget(tabs->widget(ti));
-      if (!editor) continue;
-      const QString fp = editor->objectName();
-      if (!fp.isEmpty()) files.append(fp);
-    }
-    if (files.isEmpty()) continue;  // 跳过空面板
-    groups << QVariant(files);
-    // 保存当前激活标签页，保证重启后仍停留在关闭前正在编辑的文件
-    activeIdxes << tabs->currentIndex();
-  }
-  QSettings s(sessionSettingsPath(), QSettings::IniFormat);
-  s.setValue(QStringLiteral("session/editorPanels"), QVariant(groups));
-  s.setValue(QStringLiteral("session/activeIndexes"), QVariant(activeIdxes));
-
-  // ── 采集每个打开文件的光标/滚动/折叠状态，供重启后还原现场（类似 VSCode） ──
-  QJsonObject states;
-  forEachEditor(m_ui, [&states](CodeEditor *editor) {
-    const QString fp = editor->objectName();
-    if (fp.isEmpty()) return true;
-    QJsonObject st;
-    st.insert(QStringLiteral("scrollY"), editor->verticalScrollBar()->value());
-    st.insert(QStringLiteral("scrollX"), editor->horizontalScrollBar()->value());
-    st.insert(QStringLiteral("cursorPos"), editor->textCursor().position());
-    QJsonArray foldArr;
-    for (int b : editor->collapsedFoldBlocks()) foldArr.append(b);
-    st.insert(QStringLiteral("foldBlocks"), foldArr);
-    states.insert(fp, st);
-    return true;
-  });
-  // 用 JSON 字符串而非 QVariantMap 存储，避免文件路径（含冒号/斜杠）作为 Ini 键被转义
-  s.setValue(QStringLiteral("session/editorStates"),
-             QString::fromUtf8(QJsonDocument(states).toJson(QJsonDocument::Compact)));
-}
-
-void MainDevMgr::restoreOpenFilesFromSettings() {
-  // 还原期间抑制目录树定位：打开文件会触发 setCurrentIndex/焦点变化，
-  // 进而 locateFile 自动展开并滚动目录树，破坏保存的展开状态
-  m_restoringSession = true;
-
-  QSettings s(sessionSettingsPath(), QSettings::IniFormat);
-  const QList<QVariant> groups = s.value(QStringLiteral("session/editorPanels")).toList();
-  const QList<QVariant> activeIdxes = s.value(QStringLiteral("session/activeIndexes")).toList();
-
-  // ── 读取已保存的编辑器现场（光标/滚动/折叠），打开文件后按路径还原 ──
-  QJsonObject states;
-  {
-    const QString raw = s.value(QStringLiteral("session/editorStates")).toString();
-    if (!raw.isEmpty()) {
-      const QJsonDocument doc = QJsonDocument::fromJson(raw.toUtf8());
-      if (doc.isObject()) states = doc.object();
-    }
-  }
-
-  // 还原单个编辑器的折叠 → 滚动 → 光标（顺序固定：折叠影响滚动范围，故先折叠）
-  auto restoreOne = [](CodeEditor *editor, const QJsonObject &st) {
-    if (!editor || st.isEmpty()) return;
-    QSet<int> collapsed;
-    const QJsonArray foldArr = st.value(QStringLiteral("foldBlocks")).toArray();
-    for (const auto &v : foldArr) collapsed.insert(v.toInt());
-    editor->restoreFoldState(collapsed);
-    auto *vs = editor->verticalScrollBar();
-    auto *hs = editor->horizontalScrollBar();
-    vs->setValue(qBound(vs->minimum(), st.value(QStringLiteral("scrollY")).toInt(0), vs->maximum()));
-    hs->setValue(qBound(hs->minimum(), st.value(QStringLiteral("scrollX")).toInt(0), hs->maximum()));
-    const int cursorPos =
-        qBound(0, st.value(QStringLiteral("cursorPos")).toInt(0), editor->document()->characterCount());
-    QTextCursor c = editor->textCursor();
-    c.setPosition(cursorPos);
-    editor->setTextCursor(c);
-  };
-
-  QTabWidget *target = nullptr;  // nullptr → 打开到默认（第一个）面板
-  for (int gi = 0; gi < groups.size(); ++gi) {
-    const QStringList files = groups[gi].toStringList();
-    for (const QString &fp : files) {
-      if (QFileInfo::exists(fp)) {
-        CodeEditor *editor = openFileInEditor(fp, target);
-        restoreOne(editor, states.value(fp).toObject());
-      }
-    }
-    // 恢复该面板的当前（激活）标签，停留在关闭前正在编辑的文件
-    int active = (gi < activeIdxes.size()) ? activeIdxes[gi].toInt() : files.size() - 1;
-    QTabWidget *panel = target ? target : currentTabWidget();
-    if (panel && active >= 0 && active < panel->count()) panel->setCurrentIndex(active);
-    // 下一组文件应放到新建的编辑器面板中，还原拆分数量
-    if (gi < groups.size() - 1) {
-      auto *panel2 = m_ui->createEditorPanel();
-      m_ui->addEditorPanel(panel2);
-      connectEditorPanel(panel2);  // 连接关闭/切换等信号，否则标签关闭按钮无效
-      target = panel2;
-    }
-  }
-
-  // 清理还原过程中产生的空面板（其文件已不存在），避免在编辑器区出现空白条
-  for (int pi = m_ui->editorPanelCount() - 1; pi >= 0; --pi) {
-    if (m_ui->editorPanelCount() <= 1) break;  // 至少保留一个编辑面板
-    auto *panel = m_ui->editorPanelAt(pi);
-    if (panel && panel->count() == 0) m_ui->removeEditorPanelAt(pi);
-  }
-
-  m_restoringSession = false;
-}
-
 void MainDevMgr::syncJsonVueBeforeSave() {
   auto *tabs = currentTabWidget();
   if (!tabs) return;
   auto *w = tabs->currentWidget();
   auto *jvw = qobject_cast<JsonVueWidget *>(w);
   if (jvw) jvw->syncVisualToCode();
-}
-
-/// 应用设置后刷新全局样式与编辑器高亮
-void MainDevMgr::refreshTheme() {
-  if (!m_ui) return;
-
-  // 全局 Fusion 风格 + 调色板（原生控件菜单/下拉/表格/滚动条等随主题变化）
-  SettingStore::ins().applyGlobalStyle();
-
-  // 重新应用主窗口全局样式表（背景、边框等随主题变化）
-  m_ui->setStyleSheet(AuiStyle::mainStyleSheet());
-
-  // 刷新标题栏及菜单按钮颜色（标题栏背景、文件/视图按钮文字等）
-  m_ui->refreshTitleBarStyle();
-
-  // 刷新主窗口 log 输出面板（背景/文字色随主题更新）
-  if (m_ui->outputPanel()) m_ui->outputPanel()->reloadStyle();
-
-  // 刷新问题面板（背景/文字/条目颜色随主题重建）
-  if (m_ui->problemPanel()) m_ui->problemPanel()->reloadStyle();
-
-  // 刷新调试面板（调用栈/变量/断点页签栏与列表的颜色随主题重建）
-  if (m_ui->debugPanel()) m_ui->debugPanel()->refreshStyle();
-
-  // 刷新所有已打开编辑器的高亮颜色（语法高亮 / 行号 / 当前行等），
-  // 以及 .jsonvue 的代码编辑器与可视化编辑器样式
-  for (int p = 0; p < m_ui->editorPanelCount(); ++p) {
-    QTabWidget *tabs = m_ui->editorPanelAt(p);
-    if (!tabs) continue;
-    for (int i = 0; i < tabs->count(); ++i) {
-      QWidget *w = tabs->widget(i);
-      if (auto *ed = qobject_cast<CodeEditor *>(w)) {
-        ed->reloadColors();
-      } else if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) {
-        if (jvw->codeEditor()) jvw->codeEditor()->reloadColors();
-        if (jvw->visualEditor()) jvw->visualEditor()->reloadStyle();
-      }
-    }
-  }
-
-  // ── 刷新所有打开的顶层窗口（主窗口 + 对话框），保证文字随主题变色 ──
-  // 背景色由全局调色板自动变化，但文字控件（QLabel/QPushButton）若持有创建时
-  // 固化的样式表，深色下仍是浅色主题的深色文字而看不清，这里统一用当前文字色重建。
-  const QWidgetList toplevels = qApp->topLevelWidgets();
-  for (QWidget *w : toplevels) {
-    // 对话框重建窗口级样式表与标题栏
-    if (auto *dlg = qobject_cast<QDialog *>(w)) {
-      dlg->setStyleSheet(AuiStyle::mainStyleSheet() + AuiStyle::dialogStyleSheet());
-      const auto bars = dlg->findChildren<QWidget *>(QStringLiteral("AuiTitleBar"));
-      for (QWidget *tb : bars) {
-        AuiStyle::applyTitleBarStyle(tb);
-        tb->update();
-        for (QWidget *child : tb->findChildren<QWidget *>()) child->update();
-      }
-      // 刷新标题文字（如「设置」）颜色
-      if (QLabel *tl = dlg->findChild<QLabel *>(QStringLiteral("AuiTitleLabel")))
-        AuiStyle::applyTitleLabelStyle(tl);
-      // 重建对话框标准按钮样式 + 标题栏控制按钮图标
-      AuiButton::refreshThemedButtons(dlg);
-    }
-    // 重建无专门样式表的普通 QLabel 文字色（标题文字与有自定义样式的标签除外），
-    // 用 auiAutoLabel 属性标记，使每次切换主题都用当前文字色重建、不固化旧色
-    for (QLabel *l : w->findChildren<QLabel *>()) {
-      if (l->objectName() == QStringLiteral("AuiTitleLabel")) continue;
-      if (l->styleSheet().isEmpty() || l->property("auiAutoLabel").toBool()) {
-        l->setProperty("auiAutoLabel", true);
-        l->setStyleSheet(QStringLiteral("color: %1;").arg(AuiStyle::textColor().name()));
-      }
-    }
-    // 强制 repolish，确保已存在子控件（含 QToolButton/QPushButton/QLabel/QMenu 等）重新解析
-    // 新的样式表颜色。只 repolish 顶层窗口不够，子控件的 QSS 颜色需各自 unpolish/polish 才会重算。
-    auto repolish = [](QWidget *root) {
-      QList<QWidget *> all;
-      all.reserve(64);
-      all << root;
-      all << root->findChildren<QWidget *>();
-      for (QWidget *c : all) {
-        c->style()->unpolish(c);
-        c->style()->polish(c);
-        c->update();
-      }
-    };
-    repolish(w);
-  }
-}
-
-/// 窗口字体变化后的轻量刷新（区别于 refreshTheme 的重活）
-void MainDevMgr::refreshWindowFont() {
-  if (!m_ui) return;
-  // 窗口字体已由 SettingStore::applyWindowFont 应用到 qApp 与所有窗口，
-  // 并已触发全部子控件重排 + 重绘（见 AuiStyle::applyAppFont）。
-  // 这里只需重建标题栏文字样式：标题字号随窗口字号缩放，
-  // 且标题字号是固化在样式表里的，必须重建才能生效。
-  m_ui->refreshTitleBarStyle();
 }

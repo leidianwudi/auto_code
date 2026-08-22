@@ -8,6 +8,7 @@
 #include <QJsonParseError>
 #include <QTextBlock>
 
+#include "src/util/common/code_constants.h"
 #include "src/util/common/util_json.h"
 
 // 将 UTF-8 字节偏移量转换为 QString 字符索引
@@ -67,7 +68,8 @@ QVector<ValidationResult> JsonValidator::validate(const QString &source) {
   }
 
   results.append(ValidationResult(
-      line, col, 1, QStringLiteral("JSON 解析错误: %1").arg(parseError.errorString())));
+      line, col, 1,
+      QString::fromUtf8(CodeConstants::UiText::kJsonParseError).arg(parseError.errorString())));
 
   return results;
 }

@@ -28,6 +28,7 @@
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
 
+#include "config_dialog_common.h"
 #include "json_vue_editor_helpers.h"
 #include "src/util/common/code_constants.h"
 #include "src/util/common/util_json.h"
@@ -194,18 +195,13 @@ QWidget *JsonVueEditor::buildColumnsSection() {
   layout->addLayout(btnRow);
 
   // 列配置表格
-  m_columnTable = new QTableWidget(0, ColCount, this);
-  m_columnTable->setHorizontalHeaderLabels(
-      {QStringLiteral("字段名"), QStringLiteral("标题"), QStringLiteral("列表页显示"),
-       QStringLiteral("编辑页显示"), QString::fromUtf8(CodeConstants::UiText::kConfig)});
-  m_columnTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
-  m_columnTable->horizontalHeader()->setSectionResizeMode(ColConfig, QHeaderView::Stretch);
-  m_columnTable->setColumnWidth(ColDataName, 120);
-  m_columnTable->setColumnWidth(ColTitle, 120);
-  m_columnTable->setColumnWidth(ColQueryVisible, 100);
-  m_columnTable->setColumnWidth(ColEditVisible, 100);
-  m_columnTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-  m_columnTable->setMinimumHeight(60);
+  m_columnTable = makeConfigTable(
+      {{QStringLiteral("字段名"), QHeaderView::Interactive, 120},
+       {QStringLiteral("标题"), QHeaderView::Interactive, 120},
+       {QStringLiteral("列表页显示"), QHeaderView::Interactive, 100},
+       {QStringLiteral("编辑页显示"), QHeaderView::Interactive, 100},
+       {QString::fromUtf8(CodeConstants::UiText::kConfig), QHeaderView::Stretch, 0}},
+      this, 60, 0, QAbstractItemView::SelectRows);
   m_columnTable->installEventFilter(this);  // 拦截空格键：仅进入编辑，不输入空格
   layout->addWidget(m_columnTable);
 
@@ -231,18 +227,13 @@ QWidget *JsonVueEditor::buildQueryFieldsSection() {
   btnRow->addStretch();
   layout->addLayout(btnRow);
 
-  m_queryTable = new QTableWidget(0, QColCount, this);
-  m_queryTable->setHorizontalHeaderLabels({QStringLiteral("字段名"), QStringLiteral("标签名"),
-                                           QStringLiteral("输入框样式"), QStringLiteral("查询关系"),
-                                           QString::fromUtf8(CodeConstants::UiText::kConfig)});
-  m_queryTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
-  m_queryTable->horizontalHeader()->setSectionResizeMode(QColConfig, QHeaderView::Stretch);
-  m_queryTable->setColumnWidth(QColDataName, 120);
-  m_queryTable->setColumnWidth(QColDisplayName, 120);
-  m_queryTable->setColumnWidth(QColInputStyle, 100);
-  m_queryTable->setColumnWidth(QColRelation, 80);
-  m_queryTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-  m_queryTable->setMinimumHeight(60);
+  m_queryTable = makeConfigTable(
+      {{QStringLiteral("字段名"), QHeaderView::Interactive, 120},
+       {QStringLiteral("标签名"), QHeaderView::Interactive, 120},
+       {QStringLiteral("输入框样式"), QHeaderView::Interactive, 100},
+       {QStringLiteral("查询关系"), QHeaderView::Interactive, 80},
+       {QString::fromUtf8(CodeConstants::UiText::kConfig), QHeaderView::Stretch, 0}},
+      this, 60, 0, QAbstractItemView::SelectRows);
   layout->addWidget(m_queryTable);
 
   connect(m_addQueryBtn, &QPushButton::clicked, this, &JsonVueEditor::onAddQueryField);
@@ -265,18 +256,13 @@ QWidget *JsonVueEditor::buildButtonsSection() {
   btnRow->addStretch();
   layout->addLayout(btnRow);
 
-  m_buttonTable = new QTableWidget(0, BColCount, this);
-  m_buttonTable->setHorizontalHeaderLabels({QStringLiteral("按钮文字"), QStringLiteral("动作标识"),
-                                            QStringLiteral("位置"), QStringLiteral("行为类型"),
-                                            QString::fromUtf8(CodeConstants::UiText::kConfig)});
-  m_buttonTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
-  m_buttonTable->horizontalHeader()->setSectionResizeMode(BColConfig, QHeaderView::Stretch);
-  m_buttonTable->setColumnWidth(BColLabel, 120);
-  m_buttonTable->setColumnWidth(BColActionKey, 120);
-  m_buttonTable->setColumnWidth(BColPosition, 80);
-  m_buttonTable->setColumnWidth(BColActionType, 100);
-  m_buttonTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-  m_buttonTable->setMinimumHeight(60);
+  m_buttonTable = makeConfigTable(
+      {{QStringLiteral("按钮文字"), QHeaderView::Interactive, 120},
+       {QStringLiteral("动作标识"), QHeaderView::Interactive, 120},
+       {QStringLiteral("位置"), QHeaderView::Interactive, 80},
+       {QStringLiteral("行为类型"), QHeaderView::Interactive, 100},
+       {QString::fromUtf8(CodeConstants::UiText::kConfig), QHeaderView::Stretch, 0}},
+      this, 60, 0, QAbstractItemView::SelectRows);
   m_buttonTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
   layout->addWidget(m_buttonTable);
 

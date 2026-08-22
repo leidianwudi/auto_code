@@ -91,6 +91,8 @@ constexpr const char *kDateRange = "日期范围";              ///< 查询类�
 constexpr const char *kEnableBreakpoint = "启用断点";       ///< 断点右键菜单
 constexpr const char *kDisableBreakpoint = "禁用断点";      ///< 断点右键菜单
 constexpr const char *kRemoveBreakpoint = "移除断点";       ///< 断点右键菜单
+constexpr const char *kJsonParseError = "JSON 解析错误: %1";  ///< JSON 解析错误消息（%1 为解析错误说明）
+constexpr const char *kJsonParseErrorTitle = "JSON 解析错误"; ///< JSON 解析错误提示框标题
 }  // namespace UiText
 
 // ──────────────────────────────────────────────────────────────

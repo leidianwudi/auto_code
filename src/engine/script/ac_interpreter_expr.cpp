@@ -24,6 +24,12 @@
 //  表达式求值
 // ═════════════════════════════════════════════════════════════════════════════
 
+namespace {
+/// 运行时错误消息常量（多处复用，统一文案与维护）
+const QString kErrUndefinedVariable = QStringLiteral("undefined variable '%1'");
+const QString kErrUndefinedClass = QStringLiteral("undefined class '%1'");
+}  // namespace
+
 QJsonValue AcInterpreter::resolveClassAccess(const QString &className, const QString &propName) {
   if (!m_classes.contains(className)) return QJsonValue(QJsonValue::Undefined);
   const ClassDef &cd = m_classes[className];
@@ -118,7 +124,7 @@ QJsonValue AcInterpreter::evalPropertyChain(const Expr &expr) {
       if (obj.isNull()) {
         setError(QStringLiteral("variable '%1' is null").arg(expr.ident), expr.line);
       } else {
-        setError(QStringLiteral("undefined variable '%1'").arg(expr.ident), expr.line);
+        setError(kErrUndefinedVariable.arg(expr.ident), expr.line);
       }
       return QJsonValue();
     }
@@ -179,7 +185,7 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
 
     case Expr::kIdent: {
       if (!containsVar(expr.ident)) {
-        setError(QStringLiteral("undefined variable '%1'").arg(expr.ident), expr.line);
+        setError(kErrUndefinedVariable.arg(expr.ident), expr.line);
         return QJsonValue();
       }
       return resolveVar(expr.ident);
@@ -258,7 +264,7 @@ QJsonValue AcInterpreter::evalExpr(const Expr &expr) {
     case Expr::kStaticAccess: {
       QString className = expr.className;
       if (!m_classes.contains(className)) {
-        setError(QStringLiteral("undefined class '%1'").arg(className), expr.line);
+        setError(kErrUndefinedClass.arg(className), expr.line);
         return QJsonValue();
       }
       const ClassDef &cd = m_classes[className];

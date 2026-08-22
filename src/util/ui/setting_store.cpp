@@ -66,27 +66,8 @@ inline const char *kEd_IndentActive = "editor.indentGuideActive";
 inline const char *kEd_FindMatch = "editor.findMatchBackground";
 inline const char *kEd_FindCurrent = "editor.findCurrentMatchBackground";
 
-// 代码高亮颜色
-inline const char *kHL_Keyword = "hl.keyword";
-inline const char *kHL_Comment = "hl.comment";
-inline const char *kHL_CommentBlock = "hl.commentBlock";
-inline const char *kHL_String = "hl.string";
-inline const char *kHL_StringTemplate = "hl.stringTemplate";
-inline const char *kHL_Number = "hl.number";
-inline const char *kHL_Boolean = "hl.boolean";
-inline const char *kHL_Null = "hl.null";
-inline const char *kHL_Special = "hl.special";
-inline const char *kHL_Builtin = "hl.builtin";
-inline const char *kHL_Call = "hl.call";
-inline const char *kHL_Variable = "hl.variable";
-inline const char *kHL_Constant = "hl.constant";
-inline const char *kHL_Operator = "hl.operator";
-inline const char *kHL_Punctuation = "hl.punctuation";
-inline const char *kHL_Type = "hl.type";
-inline const char *kHL_Decorator = "hl.decorator";
-inline const char *kHL_ClassName = "hl.classname";
-inline const char *kHL_FuncDecl = "hl.funcdecl";
-inline const char *kHL_Import = "hl.import";
+// 代码高亮颜色 key 常量定义在 setting_store.h（SettingStore::kHL_*），
+// 供本文件 registerColor 注册与 LightColor 读取共享。
 
 // ──────────────────────────────────────────────────────────────
 //  快捷键 key 常量

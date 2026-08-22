@@ -320,17 +320,12 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
     m_displayTypeWidget->setMaximumHeight(QWIDGETSIZE_MAX);  // 恢复高度限制
     m_displayTypeWidget->setVisible(true);
     // 标签映射表（动态增删行）—— 占据全宽
-    m_tagItemsTable = new QTableWidget(0, 4, m_displayTypeWidget);
-    m_tagItemsTable->setHorizontalHeaderLabels({QStringLiteral("值"), QStringLiteral("文字"),
-                                                QString::fromUtf8(CodeConstants::UiText::kColor),
-                                                QStringLiteral("操作")});
-    m_tagItemsTable->verticalHeader()->setVisible(false);
-    m_tagItemsTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    m_tagItemsTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
-    m_tagItemsTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
-    m_tagItemsTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
-    m_tagItemsTable->setMinimumHeight(160);
-    m_tagItemsTable->setMaximumHeight(260);
+    m_tagItemsTable = makeConfigTable(
+        {{QStringLiteral("值"), QHeaderView::Stretch, 0},
+         {QStringLiteral("文字"), QHeaderView::Stretch, 0},
+         {QString::fromUtf8(CodeConstants::UiText::kColor), QHeaderView::Stretch, 0},
+         {QStringLiteral("操作"), QHeaderView::ResizeToContents, 0}},
+        m_displayTypeWidget, 160, 260);
     populateTagItems(m_cachedTagItems.isEmpty() ? defaultTagItems() : m_cachedTagItems);
     form->addRow(QStringLiteral("  标签映射:"), m_tagItemsTable);
 

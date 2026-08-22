@@ -111,3 +111,23 @@ QPushButton *makeTableDeleteButton(QTableWidget *table, int column, QWidget *par
   });
   return btn;
 }
+
+QTableWidget *makeConfigTable(const std::initializer_list<ConfigTableColumn> &columns,
+                              QWidget *parent, int minHeight, int maxHeight,
+                              QAbstractItemView::SelectionBehavior selection) {
+  auto *table = new QTableWidget(0, static_cast<int>(columns.size()), parent);
+  QStringList headers;
+  for (const auto &c : columns) headers << c.header;
+  table->setHorizontalHeaderLabels(headers);
+  table->verticalHeader()->setVisible(false);
+  table->setSelectionBehavior(selection);
+  table->setMinimumHeight(minHeight);
+  if (maxHeight > 0) table->setMaximumHeight(maxHeight);
+  int col = 0;
+  for (const auto &c : columns) {
+    table->horizontalHeader()->setSectionResizeMode(col, c.mode);
+    if (c.width > 0) table->setColumnWidth(col, c.width);
+    ++col;
+  }
+  return table;
+}
