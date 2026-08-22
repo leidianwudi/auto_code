@@ -33,6 +33,10 @@ public:
   /// 程序启动时调用一次即可（幂等）。
   static void ensureGlobalPopDown();
 
+  /// 安装全局事件过滤器：禁止鼠标滚轮悬停在下拉框上时改动选中值（防止悬停误改数据）。
+  /// 弹出列表展开时不拦截，仍可正常滚动列表项。程序启动时调用一次即可（幂等）。
+  static void ensureGlobalWheelSafe();
+
 private:
   AuiComboBox() = delete;
 };

@@ -1152,11 +1152,17 @@ bool TreeDir::viewportEvent(QEvent *event) {
       m_hoverItem = hover;
       if (m_hoverItem) repaintRow(m_hoverItem);
     }
+    // 光标随悬停区域联动：有可交互节点用手型；节点下方的空白区点击无效果，
+    // 应恢复为正常箭头，避免手型停留误导（只有当形状变化时才设置，减少无谓更新）
+    const Qt::CursorShape wanted =
+        hover ? Qt::PointingHandCursor : Qt::ArrowCursor;
+    if (viewport()->cursor().shape() != wanted) viewport()->setCursor(wanted);
   } else if (event->type() == QEvent::Leave) {
     if (m_hoverItem) {
       repaintRow(m_hoverItem);
       m_hoverItem = nullptr;
     }
+    if (viewport()->cursor().shape() != Qt::ArrowCursor) viewport()->setCursor(Qt::ArrowCursor);
   }
   return QTreeWidget::viewportEvent(event);
 }

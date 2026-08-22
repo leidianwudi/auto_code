@@ -32,6 +32,8 @@ int main(int argc, char *argv[]) {
 
   // 全局生效：所有下拉框的弹出列表一律向下展开（不上弹）
   AuiComboBox::ensureGlobalPopDown();
+  // 全局生效：所有下拉框禁止滚轮悬停时改动选中值（防误改数据）
+  AuiComboBox::ensureGlobalWheelSafe();
 
   // 注册所有 C++ 函数到 FunMgr（模板引擎 ${...} 调用基础）
   FunMgr::init();

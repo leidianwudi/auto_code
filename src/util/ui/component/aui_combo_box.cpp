@@ -6,6 +6,7 @@
 #include "aui_combo_box.h"
 
 #include <QAbstractItemView>
+#include <QComboBox>
 #include <QEvent>
 #include <QGuiApplication>
 #include <QPainter>
@@ -13,6 +14,8 @@
 #include <QStyleOption>
 #include <QStylePainter>
 #include <QTimer>
+#include <QWheelEvent>
+#include <QWidget>
 
 #include "aui_style.h"
 
@@ -103,6 +106,45 @@ public:
 };
 
 // ════════════════════════════════════════════════════════════
+//  全局过滤器 — 禁止滚轮悬停时改动下拉框值
+// ════════════════════════════════════════════════════════════
+
+/**
+ * @brief 全局事件过滤器：拦截所有 QComboBox（含其编辑框子控件）的滚轮事件。
+ *
+ * 鼠标悬停在下拉框上滚动滚轮时，Qt 默认会切换当前选中项，极易误改数据；
+ * 这里在弹出列表未展开时直接把滚轮吞掉（event->ignore() 并返回 true）。
+ * 弹出列表展开时不拦截，列表项仍可正常滚动浏览。
+ *
+ * 无论下拉框是 AuiComboBox::create() 创建、直接 new QComboBox，
+ * 还是 NoBorderCombo 等子类，均自动生效，无需逐处修改调用方。
+ */
+class ComboWheelSafeFilter : public QObject {
+public:
+  using QObject::QObject;
+
+  bool eventFilter(QObject *watched, QEvent *event) override {
+    if (event->type() == QEvent::Wheel) {
+      // 从接收者向上追溯所属下拉框；滚轮可能先被可编辑下拉框的内部输入框接收
+      QWidget *w = qobject_cast<QWidget *>(watched);
+      while (w) {
+        if (auto *combo = qobject_cast<QComboBox *>(w)) {
+          // 弹出列表已展开时不拦截，让用户能滚动浏览列表项
+          const bool listOpen = combo->view() && combo->view()->window()->isVisible();
+          if (!listOpen) {
+            event->ignore();
+            return true;  // 吞掉滚轮，阻止选中值被改动
+          }
+          break;
+        }
+        w = w->parentWidget();
+      }
+    }
+    return QObject::eventFilter(watched, event);
+  }
+};
+
+// ════════════════════════════════════════════════════════════
 //  公共 API
 // ════════════════════════════════════════════════════════════
 
@@ -124,4 +166,11 @@ void AuiComboBox::ensureGlobalPopDown() {
   if (installed) return;
   installed = true;
   qApp->installEventFilter(new ComboPopDownFilter(qApp));
+}
+
+void AuiComboBox::ensureGlobalWheelSafe() {
+  static bool installed = false;
+  if (installed) return;
+  installed = true;
+  qApp->installEventFilter(new ComboWheelSafeFilter(qApp));
 }
