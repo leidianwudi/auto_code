@@ -12,6 +12,7 @@
 #pragma once
 
 #include <QComboBox>
+#include <QFileInfo>
 #include <QPainter>
 #include <QStyleOption>
 #include <QTimer>
@@ -69,6 +70,8 @@ inline QComboBox *newTableCombo() { return new NoBorderCombo; }
 /// 将 ColumnConfig 的所有配置存储到 QPushButton 的动态属性中
 inline void storeColumnConfig(QPushButton *btn, const ColumnConfig &col) {
   btn->setProperty(JsonVueKey::kSelectUrl, col.selectUrl);
+  btn->setProperty(JsonVueKey::kSelectSourceFile, col.selectSourceFile);
+  btn->setProperty(JsonVueKey::kSelectSourceId, col.selectSourceId);
   btn->setProperty(JsonVueKey::kSelectValueField, col.selectValueField);
   btn->setProperty(JsonVueKey::kSelectLabelField, col.selectLabelField);
   btn->setProperty(JsonVueKey::kSelectPaged, col.selectPaged);
@@ -103,6 +106,8 @@ inline void storeColumnConfig(QPushButton *btn, const ColumnConfig &col) {
   btn->setProperty(JsonVueKey::kTagItems, tagItemsVar);
   btn->setProperty(JsonVueKey::kBoolTrueText, col.boolTrueText);
   btn->setProperty(JsonVueKey::kBoolFalseText, col.boolFalseText);
+  btn->setProperty(JsonVueKey::kBoolSourceFile, col.boolSourceFile);
+  btn->setProperty(JsonVueKey::kBoolSourceId, col.boolSourceId);
   btn->setProperty(JsonVueKey::kDefaultValue, col.defaultValue);
   btn->setProperty(JsonVueKey::kDefaultSort, col.defaultSort);
   // 编辑样式/编辑可编辑/开关可编辑（从表格列移入对话框后，存到 property 供读取）
@@ -114,6 +119,8 @@ inline void storeColumnConfig(QPushButton *btn, const ColumnConfig &col) {
 /// 从 QPushButton 的动态属性读取 ColumnConfig 的所有配置
 inline void readColumnConfig(QPushButton *btn, ColumnConfig &col) {
   col.selectUrl = btn->property(JsonVueKey::kSelectUrl).toString();
+  col.selectSourceFile = btn->property(JsonVueKey::kSelectSourceFile).toString();
+  col.selectSourceId = btn->property(JsonVueKey::kSelectSourceId).toString();
   col.selectValueField = btn->property(JsonVueKey::kSelectValueField).toString();
   col.selectLabelField = btn->property(JsonVueKey::kSelectLabelField).toString();
   col.selectPaged = btn->property(JsonVueKey::kSelectPaged).toBool();
@@ -155,6 +162,8 @@ inline void readColumnConfig(QPushButton *btn, ColumnConfig &col) {
   }
   col.boolTrueText = btn->property(JsonVueKey::kBoolTrueText).toString();
   col.boolFalseText = btn->property(JsonVueKey::kBoolFalseText).toString();
+  col.boolSourceFile = btn->property(JsonVueKey::kBoolSourceFile).toString();
+  col.boolSourceId = btn->property(JsonVueKey::kBoolSourceId).toString();
   col.defaultValue = btn->property(JsonVueKey::kDefaultValue).toString();
   col.defaultSort = btn->property(JsonVueKey::kDefaultSort).toString();
   // 编辑样式/编辑可编辑/开关可编辑
@@ -203,7 +212,16 @@ inline void appendEditStyleSummary(QStringList &parts, const ColumnConfig &col) 
       break;
     }
     case EditStyle::Select:
-      if (!col.selectUrl.isEmpty()) {
+      if (!col.selectSourceFile.isEmpty()) {
+        // 引用 jsonsource 数据源：显示文件名 + 数据源字段映射
+        QString fileBase = QFileInfo(col.selectSourceFile).completeBaseName();
+        if (!col.selectValueField.isEmpty() && !col.selectLabelField.isEmpty()) {
+          parts << QStringLiteral("%1:%2→%3").arg(fileBase, col.selectValueField,
+                                                   col.selectLabelField);
+        } else {
+          parts << QStringLiteral("%1").arg(fileBase);
+        }
+      } else if (!col.selectUrl.isEmpty()) {
         if (!col.selectValueField.isEmpty() && !col.selectLabelField.isEmpty()) {
           parts << QStringLiteral("%1→%2").arg(col.selectValueField, col.selectLabelField);
         } else {
@@ -253,6 +271,8 @@ inline QString columnConfigSummary(const ColumnConfig &col) {
 /// 将 QueryFieldConfig 的所有配置存储到 QPushButton 的动态属性中
 inline void storeQueryConfig(QPushButton *btn, const QueryFieldConfig &q) {
   btn->setProperty(JsonVueKey::kSelectUrl, q.selectUrl);
+  btn->setProperty(JsonVueKey::kSelectSourceFile, q.selectSourceFile);
+  btn->setProperty(JsonVueKey::kSelectSourceId, q.selectSourceId);
   btn->setProperty(JsonVueKey::kSelectValueField, q.selectValueField);
   btn->setProperty(JsonVueKey::kSelectLabelField, q.selectLabelField);
   btn->setProperty(JsonVueKey::kSelectPaged, q.selectPaged);
@@ -269,6 +289,8 @@ inline void storeQueryConfig(QPushButton *btn, const QueryFieldConfig &q) {
 /// 从 QPushButton 的动态属性读取 QueryFieldConfig 的所有配置
 inline void readQueryConfig(QPushButton *btn, QueryFieldConfig &q) {
   q.selectUrl = btn->property(JsonVueKey::kSelectUrl).toString();
+  q.selectSourceFile = btn->property(JsonVueKey::kSelectSourceFile).toString();
+  q.selectSourceId = btn->property(JsonVueKey::kSelectSourceId).toString();
   q.selectValueField = btn->property(JsonVueKey::kSelectValueField).toString();
   q.selectLabelField = btn->property(JsonVueKey::kSelectLabelField).toString();
   q.selectPaged = btn->property(JsonVueKey::kSelectPaged).toBool();
@@ -304,7 +326,14 @@ inline QString queryConfigSummary(const QueryFieldConfig &q) {
       break;
     }
     case QueryInputStyle::Select:
-      if (!q.selectUrl.isEmpty()) {
+      if (!q.selectSourceFile.isEmpty()) {
+        QString fileBase = QFileInfo(q.selectSourceFile).completeBaseName();
+        if (!q.selectValueField.isEmpty() && !q.selectLabelField.isEmpty()) {
+          parts << QStringLiteral("%1:%2→%3").arg(fileBase, q.selectValueField, q.selectLabelField);
+        } else {
+          parts << QStringLiteral("%1").arg(fileBase);
+        }
+      } else if (!q.selectUrl.isEmpty()) {
         if (!q.selectValueField.isEmpty() && !q.selectLabelField.isEmpty()) {
           parts << QStringLiteral("%1→%2").arg(q.selectValueField, q.selectLabelField);
         } else {

@@ -11,15 +11,17 @@
 
 #include <functional>
 
+#include "src/ui/json_source/json_source_widget.h"
 #include "src/ui/json_vue/json_vue_widget.h"
 #include "src/ui/main_dev/main_dev_ui.h"
 #include "src/util/ui/code/code_editor.h"
 
-/// 从 tab 页 widget 解析出 CodeEditor（兼容 JsonVueWidget 包装），失败返回 nullptr
+/// 从 tab 页 widget 解析出 CodeEditor（兼容 JsonVueWidget / JsonSourceWidget 包装），失败返回 nullptr
 inline CodeEditor *editorFromWidget(QWidget *w) {
   if (!w) return nullptr;
   if (auto *editor = qobject_cast<CodeEditor *>(w)) return editor;
   if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) return jvw->codeEditor();
+  if (auto *jdw = qobject_cast<JsonSourceWidget *>(w)) return jdw->codeEditor();
   return nullptr;
 }
 

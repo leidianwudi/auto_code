@@ -281,6 +281,9 @@ QJsonObject ColumnConfig::toJson() const {
     obj[JsonVueKey::kSelectUrl] = selectUrl;
     obj[JsonVueKey::kSelectValueField] = selectValueField;
     obj[JsonVueKey::kSelectLabelField] = selectLabelField;
+    // 引用的 .jsonsource 数据源（非空时输出，供生成侧定位数据源）
+    if (!selectSourceFile.isEmpty()) obj[JsonVueKey::kSelectSourceFile] = selectSourceFile;
+    if (!selectSourceId.isEmpty()) obj[JsonVueKey::kSelectSourceId] = selectSourceId;
     // 查询分页配置（仅启用分页时输出，保持普通下拉框配置干净）
     if (selectPaged) {
       obj[JsonVueKey::kSelectPaged] = true;
@@ -332,6 +335,10 @@ QJsonObject ColumnConfig::toJson() const {
     if (displayType == JsonVueStyle::kBoolean) {
       obj[JsonVueKey::kBoolTrueText] = boolTrueText;
       obj[JsonVueKey::kBoolFalseText] = boolFalseText;
+      if (!boolSourceFile.isEmpty()) {
+        obj[JsonVueKey::kBoolSourceFile] = boolSourceFile;
+        obj[JsonVueKey::kBoolSourceId] = boolSourceId;
+      }
     }
   }
   if (!defaultValue.isEmpty()) obj[JsonVueKey::kDefaultValue] = defaultValue;
@@ -362,6 +369,8 @@ ColumnConfig ColumnConfig::fromJson(const QJsonObject &obj) {
                            .toString(obj.value(QStringLiteral("comboboxValueField")).toString());
   c.selectLabelField = obj.value(JsonVueKey::kSelectLabelField)
                            .toString(obj.value(QStringLiteral("comboboxLabelField")).toString());
+  c.selectSourceFile = obj.value(JsonVueKey::kSelectSourceFile).toString();
+  c.selectSourceId = obj.value(JsonVueKey::kSelectSourceId).toString();
   c.selectPaged = obj.value(JsonVueKey::kSelectPaged).toBool(false);
   c.selectPageKey = obj.value(JsonVueKey::kSelectPageKey).toString(QStringLiteral("page"));
   c.selectPageSizeKey = obj.value(JsonVueKey::kSelectPageSizeKey).toString(QStringLiteral("pageSize"));
@@ -417,6 +426,8 @@ ColumnConfig ColumnConfig::fromJson(const QJsonObject &obj) {
   c.boolFalseText = obj.value(JsonVueKey::kBoolFalseText).toString();
   if (c.boolFalseText.isEmpty() && c.displayType == JsonVueStyle::kBoolean)
     c.boolFalseText = QStringLiteral("否");
+  c.boolSourceFile = obj.value(JsonVueKey::kBoolSourceFile).toString();
+  c.boolSourceId = obj.value(JsonVueKey::kBoolSourceId).toString();
   // 通用配置
   c.defaultValue = obj.value(JsonVueKey::kDefaultValue).toString();
   c.defaultSort = obj.value(JsonVueKey::kDefaultSort).toString();
@@ -438,6 +449,9 @@ QJsonObject QueryFieldConfig::toJson() const {
     obj[JsonVueKey::kSelectUrl] = selectUrl;
     obj[JsonVueKey::kSelectValueField] = selectValueField;
     obj[JsonVueKey::kSelectLabelField] = selectLabelField;
+    // 引用的 .jsonsource 数据源
+    if (!selectSourceFile.isEmpty()) obj[JsonVueKey::kSelectSourceFile] = selectSourceFile;
+    if (!selectSourceId.isEmpty()) obj[JsonVueKey::kSelectSourceId] = selectSourceId;
     // 查询分页配置（仅启用分页时输出）
     if (selectPaged) {
       obj[JsonVueKey::kSelectPaged] = true;
@@ -469,6 +483,8 @@ QueryFieldConfig QueryFieldConfig::fromJson(const QJsonObject &obj) {
   q.selectUrl = obj.value(JsonVueKey::kSelectUrl).toString();
   q.selectValueField = obj.value(JsonVueKey::kSelectValueField).toString();
   q.selectLabelField = obj.value(JsonVueKey::kSelectLabelField).toString();
+  q.selectSourceFile = obj.value(JsonVueKey::kSelectSourceFile).toString();
+  q.selectSourceId = obj.value(JsonVueKey::kSelectSourceId).toString();
   q.selectPaged = obj.value(JsonVueKey::kSelectPaged).toBool(false);
   q.selectPageKey = obj.value(JsonVueKey::kSelectPageKey).toString(QStringLiteral("page"));
   q.selectPageSizeKey = obj.value(JsonVueKey::kSelectPageSizeKey).toString(QStringLiteral("pageSize"));
@@ -496,6 +512,9 @@ QJsonObject DialogFieldConfig::toJson() const {
     obj[JsonVueKey::kSelectUrl] = selectUrl;
     obj[JsonVueKey::kSelectValueField] = selectValueField;
     obj[JsonVueKey::kSelectLabelField] = selectLabelField;
+    // 引用的 .jsonsource 数据源
+    if (!selectSourceFile.isEmpty()) obj[JsonVueKey::kSelectSourceFile] = selectSourceFile;
+    if (!selectSourceId.isEmpty()) obj[JsonVueKey::kSelectSourceId] = selectSourceId;
     // 查询分页配置（仅启用分页时输出）
     if (selectPaged) {
       obj[JsonVueKey::kSelectPaged] = true;
@@ -544,6 +563,8 @@ DialogFieldConfig DialogFieldConfig::fromJson(const QJsonObject &obj) {
   f.selectUrl = obj.value(JsonVueKey::kSelectUrl).toString();
   f.selectValueField = obj.value(JsonVueKey::kSelectValueField).toString();
   f.selectLabelField = obj.value(JsonVueKey::kSelectLabelField).toString();
+  f.selectSourceFile = obj.value(JsonVueKey::kSelectSourceFile).toString();
+  f.selectSourceId = obj.value(JsonVueKey::kSelectSourceId).toString();
   f.selectPaged = obj.value(JsonVueKey::kSelectPaged).toBool(false);
   f.selectPageKey = obj.value(JsonVueKey::kSelectPageKey).toString(QStringLiteral("page"));
   f.selectPageSizeKey = obj.value(JsonVueKey::kSelectPageSizeKey).toString(QStringLiteral("pageSize"));

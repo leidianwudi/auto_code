@@ -10,7 +10,9 @@ ${# 数据来源（tplData）：                                                
 ${#   columns       - 列配置数组                                                 }
 ${#     [{dataName, editName, isSwitch, isSelect, isTextArea, isText,           }
 ${#      isInt, isFloat, isDate, selectUrl, selectValueField, selectLabelField,  }
-${#      selectApiName, selectErrorText,                                         }
+${#      selectApiName, selectErrorText, hasSourceRef（引用 .jsonsource 时       }
+${#      函数来自 source api 文件，由 sourceImportLines 导入）,                   }
+${#      hasBoolApi/boolApiName（布尔开关引用静态数据源时 optionApi 使用）,       }
 ${#      placeholder, maxlength, minValue, maxValue, precision, dateFormat,      }
 ${#      textareaRows, required, formSpan, editComponent,                        }
 ${#      hasDefaultValue, defaultValue}]                                         }
@@ -23,7 +25,9 @@ import { useForm } from '@/hooks/web/use_form';
 import { PropType, reactive, ref, computed${if hasDefaultValues}, watch, nextTick${/if} } from 'vue';
 import { useValidator } from '@/hooks/web/use_validator';
 import { uiWriteLogic } from '@/utils/ui_write_logic';
-${if hasSelectApi}import { ${selectApiImports} } from '@/api/${apiModule}/${pageName}';${/if}
+${if hasSelectApi}import { ${selectApiImports} } from '@/api/${apiModule}/${pageName}';
+${/if}${if hasSourceImports}${sourceImportLines}
+${/if}
 
 const { required } = useValidator();
 
@@ -44,7 +48,28 @@ const isDetail = computed(() => props.actionType === 'detail');
 const formSchema = ref<FormSchema[]>([
 ${each col in columns}${if col.editVisible}
 ${if col.isBooleanSwitch}
-  {
+${if col.hasBoolApi}  {
+    field: '${col.dataName}',
+    label: '${col.editName}',
+    component: 'Select',
+    componentProps: {
+      props: {
+        label: 'label',
+        value: 'value'
+      }
+    }${if col.hasFormSpan},
+    colProps: { span: ${col.formSpan} }${/if},
+    optionApi: async () => {
+      try {
+        const res = await ${col.boolApiName}();
+        return res.data?.list;
+      } catch (error) {
+        console.error('Error fetching ${col.selectErrorText} options:', error);
+        return [];
+      }
+    }
+  },
+${else}  {
     field: '${col.dataName}',
     label: '${col.editName}',
     component: 'Select',
@@ -56,6 +81,7 @@ ${if col.isBooleanSwitch}
     }${if col.hasFormSpan},
     colProps: { span: ${col.formSpan} }${/if}
   },
+${/if}
 ${else if col.isTagSwitch}
   {
     field: '${col.dataName}',

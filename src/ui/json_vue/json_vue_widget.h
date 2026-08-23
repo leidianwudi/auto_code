@@ -66,6 +66,9 @@ public:
   /// 设置 baseUrl（透传给可视化编辑器）
   void setBaseUrl(const QString &baseUrl);
 
+  /// 记录当前 .jsonvue 文件路径（透传给可视化编辑器，用于推导 jsonsource 搜索根）
+  void setSourceFilePath(const QString &path);
+
   /// 从 AC 脚本文件加载 HTTP 配置（透传给可视化编辑器）
   void loadHttpConfigFromAcFile(const QString &acFilePath);
 

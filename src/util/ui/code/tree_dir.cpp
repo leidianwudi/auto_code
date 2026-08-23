@@ -30,10 +30,11 @@
 #include "src/util/ui/rename_dialog.h"
 #include "src/util/ui/setting_store.h"
 
-/// 检查文件路径是否为 JSON 类型（.json 或 .jsonvue）
+/// 检查文件路径是否为 JSON 类型（.json / .jsonvue / .jsonsource）
 static inline bool isJsonLike(const QString &path) {
   return path.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive) ||
-         path.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive);
+         path.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive) ||
+         path.endsWith(AcFileSuffix::kJsonsource, Qt::CaseInsensitive);
 }
 
 // 静态辅助函数声明（定义在下方，供上方成员函数使用）
@@ -404,10 +405,10 @@ void TreeDir::onItemChanged(QTreeWidgetItem *item, int column) {
 void TreeDir::addDirectoryToTree(QTreeWidgetItem *parentItem, const QString &dirPath) {
   QDir dir(dirPath);
 
-  // 文件（.ac、.tpl、.json 和 .jsonvue）
+  // 文件（.ac、.tpl、.json、.jsonvue 和 .jsonsource）
   QStringList nameFilters;
   nameFilters << QStringLiteral("*.ac") << QStringLiteral("*.tpl") << QStringLiteral("*.json")
-              << QStringLiteral("*.jsonvue");
+              << QStringLiteral("*.jsonvue") << QStringLiteral("*.jsonsource");
   QFileInfoList files = dir.entryInfoList(nameFilters, QDir::Files);
 
   // 子目录
@@ -820,6 +821,7 @@ QIcon TreeDir::iconForSuffix(const QString &suffix) const {
   if (suf == QStringLiteral("ac")) return m_acIcon;
   if (suf == QStringLiteral("json")) return m_jsonIcon;
   if (suf == QStringLiteral("jsonvue")) return m_jsonVueIcon;
+  if (suf == QStringLiteral("jsonsource")) return m_jsonSourceIcon;
   return m_tplIcon;  // tpl 及未知后缀
 }
 
@@ -828,6 +830,7 @@ void TreeDir::refreshIcons() {
   m_acIcon = AuiIcon::createFileTypeIcon(QStringLiteral("ac"));
   m_jsonIcon = AuiIcon::createFileTypeIcon(QStringLiteral("json"));
   m_jsonVueIcon = AuiIcon::createFileTypeIcon(QStringLiteral("jsonvue"));
+  m_jsonSourceIcon = AuiIcon::createFileTypeIcon(QStringLiteral("jsonsource"));
   m_tplIcon = AuiIcon::createFileTypeIcon(QStringLiteral("tpl"));
   m_folderIcon = AuiIcon::createFolderIcon(false);
   m_folderOpenIcon = AuiIcon::createFolderIcon(true);

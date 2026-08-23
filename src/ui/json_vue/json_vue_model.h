@@ -57,6 +57,8 @@ inline constexpr const char *kRelation = "relation";
 inline constexpr const char *kSelectUrl = "selectUrl";
 inline constexpr const char *kSelectValueField = "selectValueField";
 inline constexpr const char *kSelectLabelField = "selectLabelField";
+inline constexpr const char *kSelectSourceFile = "selectSourceFile";  ///< 引用的 .jsonsource 文件路径
+inline constexpr const char *kSelectSourceId = "selectSourceId";      ///< 引用的数据源 id
 inline constexpr const char *kSelectPaged = "selectPaged";            ///< 下拉框是否查询分页加载
 inline constexpr const char *kSelectPageKey = "selectPageKey";        ///< 页码参数名（默认 page）
 inline constexpr const char *kSelectPageSizeKey = "selectPageSizeKey";  ///< 页大小参数名（默认 pageSize）
@@ -80,6 +82,8 @@ inline constexpr const char *kDisplayType = "displayType";
 inline constexpr const char *kTagItems = "tagItems";
 inline constexpr const char *kBoolTrueText = "boolTrueText";
 inline constexpr const char *kBoolFalseText = "boolFalseText";
+inline constexpr const char *kBoolSourceFile = "boolSourceFile";  ///< boolean 引用的静态数据源文件
+inline constexpr const char *kBoolSourceId = "boolSourceId";      ///< boolean 引用的静态数据源 id
 inline constexpr const char *kDefaultValue = "defaultValue";
 inline constexpr const char *kDefaultSort = "defaultSort";
 
@@ -254,6 +258,10 @@ struct ColumnConfig {
   bool editEditable = true;
   /// 下拉框数据源 URL（仅 editStyle == Select 时使用）
   QString selectUrl;
+  /// 引用的 .jsonsource 文件路径（可为空，表示未引用 jsonsource，直接使用 selectUrl）
+  QString selectSourceFile;
+  /// 引用的 .jsonsource 数据源 id（selectSourceFile 非空时有效）
+  QString selectSourceId;
   /// 下拉框 Value 字段名（实际值，仅 editStyle == Select 时使用）
   QString selectValueField;
   /// 下拉框 Label 字段名（显示文本，仅 editStyle == Select 时使用）
@@ -308,6 +316,10 @@ struct ColumnConfig {
   QList<TagItem> tagItems;
   QString boolTrueText;   ///< boolean: true 时显示的文字（如"显示"）
   QString boolFalseText;  ///< boolean: false 时显示的文字（如"隐藏"）
+  /// boolean 引用的静态数据源（恰好 2 项选项的静态源，如 0:禁用/1:启用）。
+  /// 引用时真假文字从数据源读取并锁定不可改；空 = 手动输入
+  QString boolSourceFile;
+  QString boolSourceId;
 
   // ── 通用配置（3-6）──
   QString defaultValue;  ///< 新增记录时的默认值（如 "1" / "0" / ""）
@@ -334,6 +346,10 @@ struct QueryFieldConfig {
   QueryRelation relation = QueryRelation::Equal;
   /// 下拉框数据源 URL（仅 inputStyle == Select 时使用）
   QString selectUrl;
+  /// 引用的 .jsonsource 文件路径（可为空）
+  QString selectSourceFile;
+  /// 引用的 .jsonsource 数据源 id（selectSourceFile 非空时有效）
+  QString selectSourceId;
   /// 下拉框 Value 字段名（实际值，仅 inputStyle == Select 时使用）
   QString selectValueField;
   /// 下拉框 Label 字段名（显示文本，仅 inputStyle == Select 时使用）
@@ -394,6 +410,8 @@ struct DialogFieldConfig {
   int precision = 2;                      ///< 小数位数（float）
   QString dateFormat;                     ///< 日期格式（date）
   QString selectUrl;                      ///< 下拉框数据源 URL（select）
+  QString selectSourceFile;               ///< 引用的 .jsonsource 文件路径（select）
+  QString selectSourceId;                 ///< 引用的 .jsonsource 数据源 id（select）
   QString selectValueField;               ///< 下拉框 Value 字段名（select）
   QString selectLabelField;               ///< 下拉框 Label 字段名（select）
   bool selectPaged = false;               ///< 是否查询分页加载（select）

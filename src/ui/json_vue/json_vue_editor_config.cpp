@@ -35,6 +35,7 @@ void JsonVueEditor::onConfigureCombobox() {
   // 列配置样式：使用 ColumnStyleDialog 配置表格列显示、编辑样式、通用配置等
   ColumnStyleDialog dialog(col.editStyle, this);
   dialog.setHttpConfig(m_baseUrl, m_authHeader, m_postData);
+  dialog.setSearchRoot(m_jsonvueDir);
   dialog.setEditStyle(col.editStyle);
   dialog.setEditEditable(col.editEditable);
   dialog.setSwitchEditable(col.switchEditable);
@@ -54,8 +55,11 @@ void JsonVueEditor::onConfigureCombobox() {
   dialog.setTagItems(col.tagItems);
   dialog.setBoolTrueText(col.boolTrueText);
   dialog.setBoolFalseText(col.boolFalseText);
+  dialog.setBoolSourceRef(col.boolSourceFile, col.boolSourceId);
   // 下拉框数据源（Select 编辑样式时在对话框内配置）
   dialog.setSelectUrl(col.selectUrl);
+  dialog.setSelectSourceFile(col.selectSourceFile);
+  dialog.setSelectSourceId(col.selectSourceId);
   dialog.setSelectValueField(col.selectValueField);
   dialog.setSelectLabelField(col.selectLabelField);
   dialog.setSelectPaged(col.selectPaged);
@@ -87,8 +91,12 @@ void JsonVueEditor::onConfigureCombobox() {
     col.tagItems = dialog.tagItems();
     col.boolTrueText = dialog.boolTrueText();
     col.boolFalseText = dialog.boolFalseText();
+    col.boolSourceFile = dialog.boolSourceFile();
+    col.boolSourceId = dialog.boolSourceId();
     // 下拉框数据源（在对话框内已配置完成）
     col.selectUrl = dialog.selectUrl();
+    col.selectSourceFile = dialog.selectSourceFile();
+    col.selectSourceId = dialog.selectSourceId();
     col.selectValueField = dialog.selectValueField();
     col.selectLabelField = dialog.selectLabelField();
     col.selectPaged = dialog.selectPaged();
@@ -126,11 +134,15 @@ void JsonVueEditor::onConfigureQuerySelect() {
   if (style == QueryInputStyle::Select) {
     // select 样式使用 ComboboxConfigDialog
     ComboboxConfigDialog dialog(this);
+    dialog.setSearchRoot(m_jsonvueDir);
+    dialog.setSourceRef(q.selectSourceFile, q.selectSourceId);
     dialog.setConfig(q.selectUrl, q.selectValueField, q.selectLabelField);
     dialog.setPagedConfig(q.selectPaged, q.selectPageKey, q.selectPageSizeKey, q.selectPageSize,
                       q.selectSearchTitle, q.selectSearchField, q.selectMethod);
     dialog.setHttpConfig(m_baseUrl, m_authHeader, m_postData);
     if (dialog.exec() == QDialog::Accepted) {
+      q.selectSourceFile = dialog.sourceFile();
+      q.selectSourceId = dialog.sourceId();
       q.selectUrl = dialog.url();
       q.selectValueField = dialog.valueField();
       q.selectLabelField = dialog.labelField();
@@ -166,6 +178,7 @@ void JsonVueEditor::onConfigureQuerySelect() {
 
 void JsonVueEditor::onAddButton() {
   ButtonConfigDialog dialog(this);
+  dialog.setSearchRoot(m_jsonvueDir);
   if (dialog.exec() == QDialog::Accepted) {
     ButtonConfig btn = dialog.getData();
     if (btn.label.isEmpty()) {
@@ -200,6 +213,7 @@ void JsonVueEditor::onEditButton(int row) {
     return;
   }
   ButtonConfigDialog dialog(m_buttons[row], this);
+  dialog.setSearchRoot(m_jsonvueDir);
   if (dialog.exec() == QDialog::Accepted) {
     ButtonConfig btn = dialog.getData();
     if (btn.label.isEmpty()) {

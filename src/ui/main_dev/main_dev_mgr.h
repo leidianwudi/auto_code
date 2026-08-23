@@ -133,8 +133,6 @@ private:
   /// 连接编辑器修改标记：tab 圆点 + 树节点圆点 + 保存按钮状态。
   /// 普通文件与 jsonvue 统一实现（都走 CodeEditor::document 的 modificationChanged）
   void connectModifiedTracking(QTabWidget *tabs, CodeEditor *editor, const QString &filePath);
-  /// 连接 JsonVueWidget 可视化内容变化 → 标记文档已修改（驱动 tab 圆点）
-  void connectJsonVueContentTracking(JsonVueWidget *jvw, CodeEditor *editor);
   /// 获取当前活跃的编辑器
   CodeEditor *currentEditor() const;
   /// 在所有编辑面板中查找已打开指定文件的编辑器（未打开则返回 nullptr）

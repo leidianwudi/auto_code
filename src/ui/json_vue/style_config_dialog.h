@@ -67,6 +67,12 @@ public:
   QString selectValueField() const;
   void setSelectLabelField(const QString &v);
   QString selectLabelField() const;
+  /// 引用的 .jsonsource 文件路径
+  void setSelectSourceFile(const QString &v);
+  QString selectSourceFile() const;
+  /// 引用的数据源 id
+  void setSelectSourceId(const QString &v);
+  QString selectSourceId() const;
   /// 下拉框是否查询分页加载
   void setSelectPaged(bool v);
   bool selectPaged() const;
@@ -90,6 +96,9 @@ public:
   QString selectMethod() const;
   /// 设置 HTTP 配置（供下拉框数据源测试按钮使用）
   void setHttpConfig(const QString &baseUrl, const QString &authHeader, const QString &postData);
+
+  /// 设置 .jsonsource 文件搜索根目录（当前编辑 jsonvue 文件所在目录，可为空）
+  void setSearchRoot(const QString &dir);
 
   // ── 编辑样式子配置 ──
   void setPlaceholder(const QString &v);
@@ -143,6 +152,11 @@ public:
 
   void setBoolFalseText(const QString &v);
   QString boolFalseText() const;
+
+  /// boolean 引用的静态数据源（恰好 2 项选项的静态源）；引用时真假文字锁定为数据源值
+  void setBoolSourceRef(const QString &file, const QString &id);
+  QString boolSourceFile() const;
+  QString boolSourceId() const;
 
   // ── 通用配置（默认值/排序）──
   void setDefaultValue(const QString &v);
@@ -202,6 +216,7 @@ private:
   QTableWidget *m_tagItemsTable = nullptr;  ///< tag 标签映射表（动态增删行）
   QLineEdit *m_boolTrueTextEdit = nullptr;
   QLineEdit *m_boolFalseTextEdit = nullptr;
+  QComboBox *m_boolSourceCombo = nullptr;  ///< boolean 真假文字的静态数据源下拉
 
   // ── 通用配置控件 ──
   QCheckBox *m_requiredCheck = nullptr;
@@ -225,9 +240,13 @@ private:
   QList<TagItem> m_cachedTagItems;  ///< tag 标签映射缓存
   QString m_cachedBoolTrueText;
   QString m_cachedBoolFalseText;
+  QString m_cachedBoolSourceFile;  ///< boolean 选中的静态数据源文件（恢复选中并锁定文字）
+  QString m_cachedBoolSourceId;    ///< boolean 选中的静态数据源 id
   bool m_cachedSwitchEditable = true;
   // 下拉框数据源缓存
   QString m_cachedSelectUrl;
+  QString m_cachedSelectSourceFile;
+  QString m_cachedSelectSourceId;
   QString m_cachedSelectValueField;
   QString m_cachedSelectLabelField;
   bool m_cachedSelectPaged = false;
@@ -241,6 +260,8 @@ private:
   QString m_baseUrl;
   QString m_authHeader;
   QString m_postData;
+  // .jsonsource 文件搜索根目录（当前编辑 jsonvue 文件所在目录）
+  QString m_searchRoot;
 };
 
 // ════════════════════════════════════════════════════════════

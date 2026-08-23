@@ -11,6 +11,8 @@
 #include <QCheckBox>
 #include <QColorDialog>
 #include <QComboBox>
+#include <QFile>
+#include <QFileInfo>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -24,6 +26,8 @@
 
 #include "combobox_config_dialog.h"
 #include "config_dialog_common.h"
+#include "src/ui/json_source/json_source_finder.h"
+#include "src/ui/json_source/json_source_model.h"
 #include "src/util/common/code_constants.h"
 #include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/component/aui_style.h"
@@ -312,6 +316,7 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
   m_tagItemsTable = nullptr;
   m_boolTrueTextEdit = nullptr;
   m_boolFalseTextEdit = nullptr;
+  m_boolSourceCombo = nullptr;
   m_switchEditableCheck = nullptr;
 
   QString dtype = m_displayTypeCombo ? m_displayTypeCombo->currentData().toString() : QString();
@@ -336,6 +341,40 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
   } else if (dtype == JsonVueStyle::kBoolean) {
     m_displayTypeWidget->setMaximumHeight(QWIDGETSIZE_MAX);  // 恢复高度限制
     m_displayTypeWidget->setVisible(true);
+
+    // 静态数据源下拉：列出所有恰好 2 项选项的静态数据源（如 0:禁用/1:启用）。
+    // 选中后真假文字从数据源实时读取并锁定不可改（数据源修改后重开对话框自动同步）；
+    // 选"手动输入"时解锁，可自由填写真假文字
+    m_boolSourceCombo = new QComboBox(m_displayTypeWidget);
+    m_boolSourceCombo->addItem(QStringLiteral("（手动输入真假文字）"), QString());
+    int restoreIdx = 0;
+    const QStringList srcFiles = findJsonsourceFiles(m_searchRoot);
+    for (const QString &sf : srcFiles) {
+      JsonSourceConfig cfg;
+      {
+        QFile f(sf);
+        if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+          cfg = JsonSourceConfig::fromJsonString(QString::fromUtf8(f.readAll()));
+          f.close();
+        }
+      }
+      for (const auto &s : cfg.sources) {
+        // 仅 2 项选项的静态数据源可选（真假文字只有两个状态）
+        if (!s.isStatic() || s.options.size() != 2) continue;
+        const auto &o0 = s.options.at(0);
+        const auto &o1 = s.options.at(1);
+        const QString remark = s.remark.isEmpty() ? QStringLiteral("(未命名)") : s.remark;
+        const QString text = QStringLiteral("%1（%2:%3 / %4:%5）- %6")
+                                 .arg(remark, o0.value, o0.label, o1.value, o1.label,
+                                      QFileInfo(sf).fileName());
+        m_boolSourceCombo->addItem(text, sf + QStringLiteral("#") + s.id);
+        if (sf == m_cachedBoolSourceFile && s.id == m_cachedBoolSourceId) {
+          restoreIdx = m_boolSourceCombo->count() - 1;
+        }
+      }
+    }
+    form->addRow(QStringLiteral("  静态数据源:"), m_boolSourceCombo);
+
     m_boolTrueTextEdit = new QLineEdit(m_displayTypeWidget);
     m_boolTrueTextEdit->setPlaceholderText(QStringLiteral("如: 显示"));
     m_boolTrueTextEdit->setText(m_cachedBoolTrueText);
@@ -345,6 +384,49 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
     m_boolFalseTextEdit->setPlaceholderText(QStringLiteral("如: 隐藏"));
     m_boolFalseTextEdit->setText(m_cachedBoolFalseText);
     form->addRow(QStringLiteral("  假值文字:"), m_boolFalseTextEdit);
+
+    // 切换数据源 → 从数据源实时填充真假文字并锁定；
+    // 切回"手动输入" → 解锁（保留当前文字继续编辑）
+    // value 映射：1/true → 真值，0/false → 假值；无法判断时按顺序（第 1 项假、第 2 项真）
+    connect(m_boolSourceCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
+      if (!m_boolSourceCombo || !m_boolTrueTextEdit || !m_boolFalseTextEdit) return;
+      m_cachedBoolSourceFile.clear();
+      m_cachedBoolSourceId.clear();
+      m_boolTrueTextEdit->setReadOnly(false);
+      m_boolFalseTextEdit->setReadOnly(false);
+      const QString ref = m_boolSourceCombo->itemData(index).toString();
+      if (ref.isEmpty()) return;
+      const int sep = ref.lastIndexOf(QLatin1Char('#'));
+      const QString filePath = ref.left(sep);
+      const QString sourceId = ref.mid(sep + 1);
+      JsonSourceConfig cfg;
+      {
+        QFile f(filePath);
+        if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+          cfg = JsonSourceConfig::fromJsonString(QString::fromUtf8(f.readAll()));
+          f.close();
+        }
+      }
+      const JsonSource *s = cfg.sourceById(sourceId);
+      if (!s || !s->isStatic() || s->options.size() != 2) return;
+      QString trueText = s->options.at(1).label;
+      QString falseText = s->options.at(0).label;
+      for (const auto &opt : s->options) {
+        const QString v = opt.value.trimmed().toLower();
+        if (v == QStringLiteral("1") || v == QStringLiteral("true")) trueText = opt.label;
+        if (v == QStringLiteral("0") || v == QStringLiteral("false")) falseText = opt.label;
+      }
+      m_boolTrueTextEdit->setText(trueText);
+      m_boolFalseTextEdit->setText(falseText);
+      m_boolTrueTextEdit->setReadOnly(true);
+      m_boolFalseTextEdit->setReadOnly(true);
+      m_cachedBoolSourceFile = filePath;
+      m_cachedBoolSourceId = sourceId;
+    });
+    // 恢复上次选中的数据源（触发上面的信号：实时填充 + 锁定）
+    if (restoreIdx > 0) {
+      m_boolSourceCombo->setCurrentIndex(restoreIdx);
+    }
 
     // 开关可编辑（仅 boolean/tag 显示）
     m_switchEditableCheck = new QCheckBox(QStringLiteral("列表页可直接切换"), m_displayTypeWidget);
@@ -572,12 +654,16 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
       form->addRow(QStringLiteral("  数据源:"), m_selectSourceBtn);
       connect(m_selectSourceBtn, &QPushButton::clicked, this, [this]() {
         ComboboxConfigDialog dlg(this);
+        dlg.setSearchRoot(m_searchRoot);
+        dlg.setSourceRef(m_cachedSelectSourceFile, m_cachedSelectSourceId);
         dlg.setConfig(m_cachedSelectUrl, m_cachedSelectValueField, m_cachedSelectLabelField);
         dlg.setPagedConfig(m_cachedSelectPaged, m_cachedSelectPageKey, m_cachedSelectPageSizeKey,
                        m_cachedSelectPageSize, m_cachedSelectSearchTitle, m_cachedSelectSearchField,
                        m_cachedSelectMethod);
         dlg.setHttpConfig(m_baseUrl, m_authHeader, m_postData);
         if (dlg.exec() == QDialog::Accepted) {
+          m_cachedSelectSourceFile = dlg.sourceFile();
+          m_cachedSelectSourceId = dlg.sourceId();
           m_cachedSelectUrl = dlg.url();
           m_cachedSelectValueField = dlg.valueField();
           m_cachedSelectLabelField = dlg.labelField();
@@ -788,6 +874,25 @@ QList<TagItem> ColumnStyleDialog::tagItems() const {
   return m_cachedTagItems;
 }
 
+void ColumnStyleDialog::setBoolSourceRef(const QString &file, const QString &id) {
+  m_cachedBoolSourceFile = file;
+  m_cachedBoolSourceId = id;
+  // 控件已存在时直接选中对应项（触发 currentIndexChanged：实时填充 + 锁定）
+  if (m_boolSourceCombo) {
+    for (int i = 0; i < m_boolSourceCombo->count(); ++i) {
+      if (m_boolSourceCombo->itemData(i).toString() ==
+          file + QStringLiteral("#") + id) {
+        m_boolSourceCombo->setCurrentIndex(i);
+        break;
+      }
+    }
+  }
+}
+
+QString ColumnStyleDialog::boolSourceFile() const { return m_cachedBoolSourceFile; }
+
+QString ColumnStyleDialog::boolSourceId() const { return m_cachedBoolSourceId; }
+
 void ColumnStyleDialog::setBoolTrueText(const QString &v) {
   m_cachedBoolTrueText = v;
   if (m_boolTrueTextEdit) m_boolTrueTextEdit->setText(v);
@@ -819,6 +924,16 @@ QString ColumnStyleDialog::selectValueField() const { return m_cachedSelectValue
 void ColumnStyleDialog::setSelectLabelField(const QString &v) { m_cachedSelectLabelField = v; }
 
 QString ColumnStyleDialog::selectLabelField() const { return m_cachedSelectLabelField; }
+
+void ColumnStyleDialog::setSelectSourceFile(const QString &v) { m_cachedSelectSourceFile = v; }
+
+QString ColumnStyleDialog::selectSourceFile() const { return m_cachedSelectSourceFile; }
+
+void ColumnStyleDialog::setSelectSourceId(const QString &v) { m_cachedSelectSourceId = v; }
+
+QString ColumnStyleDialog::selectSourceId() const { return m_cachedSelectSourceId; }
+
+void ColumnStyleDialog::setSearchRoot(const QString &dir) { m_searchRoot = dir; }
 
 void ColumnStyleDialog::setSelectPaged(bool v) { m_cachedSelectPaged = v; }
 

@@ -47,6 +47,12 @@ QString JsonVueEditor::findNearestApiAuthDataAc(const QString &jsonvueFilePath) 
 void JsonVueEditor::loadHttpConfigFromAcFile(const QString &acFilePath) {
   if (acFilePath.isEmpty()) return;
   m_acConfigFilePath = acFilePath;  // 记住路径，供点击"生成"时重读
+  loadHttpConfigFromAcFile(acFilePath, &m_baseUrl, &m_authHeader, &m_postData);
+}
+
+void JsonVueEditor::loadHttpConfigFromAcFile(const QString &acFilePath, QString *baseUrl,
+                                             QString *authHeader, QString *postData) {
+  if (acFilePath.isEmpty()) return;
   QFile f(acFilePath);
   if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return;
   QString content = QString::fromUtf8(f.readAll());
@@ -66,11 +72,11 @@ void JsonVueEditor::loadHttpConfigFromAcFile(const QString &acFilePath) {
     value.replace(QStringLiteral("\\\""), QStringLiteral("\""));
     value.replace(QStringLiteral("\\\\"), QStringLiteral("\\"));
     if (name == QStringLiteral("baseUrl")) {
-      m_baseUrl = value;
+      if (baseUrl) *baseUrl = value;
     } else if (name == QStringLiteral("authHeader")) {
-      m_authHeader = value;
+      if (authHeader) *authHeader = value;
     } else if (name == QStringLiteral("postData")) {
-      m_postData = value;
+      if (postData) *postData = value;
     }
   }
 }

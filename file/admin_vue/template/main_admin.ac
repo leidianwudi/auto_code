@@ -22,7 +22,7 @@
 ///   - templates 可选，模板配置数组（省略时使用本文件默认模板）
 /// ----------------------------------------------------------------------------
 
-import { buildAdminTplData } from "./core/admin_data.ac";
+import { buildAdminTplData, buildSourceTplData } from "./core/admin_data.ac";
 
 /// @brief 模板配置（一个模板对应一个生成的代码文件）
 class TemplateConfig {
@@ -49,7 +49,17 @@ export function generateAdminMain(params: Object): Void {
       { tpl: "../template/api.tpl", out: "{basePath}/src/api/{apiModule}/{pageName}.ts" },
     ];
   }
-  
+
+  // ── 2.1 数据源模板配置：勾选的 .jsonsource 文件 → 数据源 api 文件 ──
+  //    out 支持的占位符：{basePath}、{sourceName}（.jsonsource 文件基名）
+  //    生成的 api 供各 vue 界面下拉框引用（write.vue 的 optionApi 调用）
+  let sourceTemplates: TemplateConfig[] = params["sourceTemplates"];
+  if (sourceTemplates == null) {
+    sourceTemplates = [
+      { tpl: "../template/source.tpl", out: "{basePath}/src/api/source/{sourceName}.ts" },
+    ];
+  }
+
   let apiSelectSuffix: String = "selectByIn"; //查询api的后缀
   let apiUpdateSuffix: String = "update"; //修改api的后缀
   let apiDeleteSuffix: String = "delete"; //删除api的后缀
@@ -61,8 +71,29 @@ export function generateAdminMain(params: Object): Void {
   let filesLen = files.length;
   printLog("files count: " + filesLen);
 
-  // ── 4. 对每个 .jsonvue 文件执行一次完整的生成流程 ────────────────
+  // ── 4. 对每个勾选文件执行生成流程（.jsonvue 页面 / .jsonsource 数据源）──
   for (file in files) {
+
+    // ── 4.0 .jsonsource 数据源文件：渲染 source 模板生成数据源 api ──
+    //      每个 .jsonsource 文件生成一个 api 文件（默认 src/api/source/{sourceName}.ts），
+    //      供各 vue 界面下拉框 import 引用
+    if (file.endsWith(".jsonsource")) {
+      printLog("processing source: " + file);
+      let srcJson = readJson(file);
+      let srcData = buildSourceTplData(srcJson, file);
+      for (cfg in sourceTemplates) {
+        let outPath = formatPath(cfg.out, {
+          basePath: basePath,
+          sourceName: srcData["sourceName"]
+        });
+        let result = renderTpl(cfg.tpl, srcData);
+        if (result) {
+          writeFile(outPath, result);
+          printLog("生成文件: " + outPath);
+        }
+      }
+      continue;
+    }
 
     printLog("processing: " + file);
 

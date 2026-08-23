@@ -60,8 +60,19 @@ public:
   /// 从 AC 脚本文件加载 HTTP 配置（baseUrl、authHeader、postData）
   void loadHttpConfigFromAcFile(const QString &acFilePath);
 
+  /// 记录当前编辑的 .jsonvue 文件路径（用于推导 .jsonsource 数据源的搜索根目录）
+  void setJsonVueFilePath(const QString &path);
+
+  /// 获取当前编辑的 .jsonvue 文件所在目录（可为空）
+  QString jsonVueDir() const { return m_jsonvueDir; }
+
   /// 从 jsonvue 文件所在目录向上查找最近的 api_auth_data.ac，返回其完整路径；找不到返回空
   static QString findNearestApiAuthDataAc(const QString &jsonvueFilePath);
+
+  /// 从 AC 脚本文件读取 HTTP 配置（静态版本，供 .jsonsource 等外部编辑器复用）
+  /// 三个输出参数可为空指针；文件不存在或解析失败时保持原值
+  static void loadHttpConfigFromAcFile(const QString &acFilePath, QString *baseUrl,
+                                       QString *authHeader, QString *postData);
 
 signals:
   /// 配置发生变化时发射
@@ -160,6 +171,7 @@ private:
   QString m_authHeader;        ///< Authorization 请求头值（如 "Bearer xxx"）
   QString m_postData;          ///< POST 请求的默认数据（JSON 字符串）
   QString m_acConfigFilePath;  ///< 最近一次加载 HTTP 配置的 AC 文件路径（用于点击"生成"时重读）
+  QString m_jsonvueDir;        ///< 当前编辑的 .jsonvue 文件所在目录（jsonsource 搜索根）
   bool m_loading = false;      ///< 加载配置时抑制 configChanged 信号
 
   /// 最近加载的 meta（用于保留界面不再编辑的接口名，避免保存时丢失）

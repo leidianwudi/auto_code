@@ -20,11 +20,12 @@ class CreateModel {
 public:
   /// 文件类型枚举
   enum FileType {
-    Folder,   ///< 文件夹
-    Ac,       ///< .ac 文件
-    Tpl,      ///< .tpl 文件
-    Json,     ///< .json 文件
-    Jsonvue,  ///< .jsonvue 文件（Vue3 后台管理界面配置）
+    Folder,     ///< 文件夹
+    Ac,         ///< .ac 文件
+    Tpl,        ///< .tpl 文件
+    Json,       ///< .json 文件
+    Jsonvue,    ///< .jsonvue 文件（Vue3 后台管理界面配置）
+    Jsonsource, ///< .jsonsource 文件（下拉框数据源配置）
     FileTypeCount
   };
 

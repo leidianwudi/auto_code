@@ -219,6 +219,17 @@ qt_add_executable(auto_code
     src/ui/json_vue/icon_picker_data.cpp
     src/ui/json_vue/json_vue_widget.h
     src/ui/json_vue/json_vue_widget.cpp
+    src/ui/json_vue/select_source_panel.h
+    src/ui/json_vue/select_source_panel.cpp
+    src/ui/json_source/json_source_model.h
+    src/ui/json_source/json_source_model.cpp
+    src/ui/json_source/json_source_finder.h
+    src/ui/json_source/json_source_dialog.h
+    src/ui/json_source/json_source_dialog.cpp
+    src/ui/json_source/json_source_editor.h
+    src/ui/json_source/json_source_editor.cpp
+    src/ui/json_source/json_source_widget.h
+    src/ui/json_source/json_source_widget.cpp
     src/ui/setting/setting_model.h
     src/ui/setting/setting_model.cpp
     src/ui/setting/setting_ui.h

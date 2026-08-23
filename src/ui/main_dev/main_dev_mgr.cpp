@@ -33,6 +33,7 @@
 #include "main_dev_ui_ext.h"
 #include "src/engine/ac_language.h"
 #include "src/engine/script/ac_engine.h"
+#include "src/ui/json_source/json_source_widget.h"
 #include "src/ui/json_vue/json_vue_editor.h"
 #include "src/ui/json_vue/json_vue_widget.h"
 #include "src/ui/setting/setting_mgr.h"
@@ -215,6 +216,7 @@ void MainDevMgr::connectSaveActions() {
       for (int ti = 0; ti < tabs->count(); ++ti) {
         auto *w = tabs->widget(ti);
         auto *jvw = qobject_cast<JsonVueWidget *>(w);
+        auto *jdw = qobject_cast<JsonSourceWidget *>(w);
         CodeEditor *editor = nullptr;
         bool wasModified = false;
         if (jvw) {
@@ -222,6 +224,10 @@ void MainDevMgr::connectSaveActions() {
           // syncVisualToCode 会重置 modified 为 false，需先记录
           wasModified = editor && editor->document()->isModified();
           jvw->syncVisualToCode();
+        } else if (jdw) {
+          editor = jdw->codeEditor();
+          wasModified = editor && editor->document()->isModified();
+          jdw->syncVisualToCode();
         } else {
           editor = qobject_cast<CodeEditor *>(w);
         }
@@ -241,12 +247,11 @@ void MainDevMgr::connectVisualToggle() {
     // 作用于当前获得焦点（或最后活跃）的编辑器面板，而不是第一个可见面板
     auto *tabs = currentTabWidget();
     if (!tabs) return;
-    auto *jvw = qobject_cast<JsonVueWidget *>(tabs->currentWidget());
-    if (!jvw) return;
-    if (checked) {
-      jvw->switchToVisual();
-    } else {
-      jvw->switchToCode();
+    auto *w = tabs->currentWidget();
+    if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) {
+      checked ? jvw->switchToVisual() : jvw->switchToCode();
+    } else if (auto *jdw = qobject_cast<JsonSourceWidget *>(w)) {
+      checked ? jdw->switchToVisual() : jdw->switchToCode();
     }
   });
 }
@@ -405,6 +410,6 @@ void MainDevMgr::syncJsonVueBeforeSave() {
   auto *tabs = currentTabWidget();
   if (!tabs) return;
   auto *w = tabs->currentWidget();
-  auto *jvw = qobject_cast<JsonVueWidget *>(w);
-  if (jvw) jvw->syncVisualToCode();
+  if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) jvw->syncVisualToCode();
+  if (auto *jdw = qobject_cast<JsonSourceWidget *>(w)) jdw->syncVisualToCode();
 }

@@ -1,174 +1,258 @@
 /**
  * @file combobox_config_dialog.cpp
  * @brief 下拉框数据源配置对话框实现
+ *
+ * 顶层提供 .jsonsource 数据源文件 + 数据源选择，下层复用 SelectSourcePanel
+ * 配置动态数据源的 URL / 字段 / 分页等。选中数据源后基础配置（URL/请求方式/
+ * 加载方式/分页）完全跟随数据源并锁定，通过「使用方式」单选决定显示文本/实际值
+ * 是否可覆盖（全部使用 / 部分使用）。
  */
 
 #include "combobox_config_dialog.h"
 
+#include <QButtonGroup>
 #include <QComboBox>
+#include <QFile>
+#include <QFileInfo>
 #include <QHBoxLayout>
-#include <QHeaderView>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QLabel>
-#include <QLineEdit>
-#include <QPushButton>
-#include <QSpinBox>
-#include <QTableWidget>
-#include <QTableWidgetItem>
+#include <QRadioButton>
 #include <QVBoxLayout>
 
 #include "config_dialog_common.h"
-#include "src/util/common/code_constants.h"
-#include "src/util/common/http_client.h"
-#include "src/util/common/util_json.h"
-#include "src/util/ui/component/aui_button.h"
+#include "select_source_panel.h"
+#include "src/ui/json_source/json_source_finder.h"
+#include "src/ui/json_source/json_source_model.h"
 #include "src/util/ui/component/aui_combo_box.h"
-#include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/component/aui_style.h"
+#include "src/util/ui/component/aui_message_box.h"
 
 // ════════════════════════════════════════════════════════════
-//  构造
+//  构造 / 界面构建
 // ════════════════════════════════════════════════════════════
 
 ComboboxConfigDialog::ComboboxConfigDialog(QWidget *parent) : QDialog(parent) { setupUI(); }
 
-// ════════════════════════════════════════════════════════════
-//  界面构建
-// ════════════════════════════════════════════════════════════
-
 void ComboboxConfigDialog::setupUI() {
-  ConfigDialogFrame frame =
-      beginConfigDialog(this, QStringLiteral("下拉框数据源配置"), QMargins(12, 10, 12, 10), 6);
+  // 复用与其它 jsonvue 配置对话框一致的框架（标题栏 + 确定/取消）
+  ConfigDialogFrame frame = beginConfigDialog(this, QStringLiteral("下拉框数据源配置"),
+                                              QMargins(12, 10, 12, 10), 6);
   auto *layout = frame.contentLayout;
 
-  // ── URL 输入行（含请求方式，普通/查询分页均需要）──
-  auto *urlRow = new QHBoxLayout;
-  urlRow->addWidget(new QLabel(QStringLiteral("请求URL:")));
-  // 方法下拉框（GET/POST，隐藏三角箭头使文字完整显示），置于 URL 输入框之前
-  m_methodCombo = new QComboBox(frame.contentWidget);
-  m_methodCombo->addItems(
-      {QString::fromLatin1(JsonVueHttp::kPost), QString::fromLatin1(JsonVueHttp::kGet)});
-  m_methodCombo->setCurrentIndex(0);  // 默认 POST
-  m_methodCombo->setFixedWidth(60);
-  AuiComboBox::hideArrow(m_methodCombo);
-  urlRow->addWidget(m_methodCombo);
-  urlRow->addSpacing(10);
-  m_urlEdit = new QLineEdit(frame.contentWidget);
-  m_urlEdit->setPlaceholderText(QStringLiteral("/api/xxx/list"));
-  urlRow->addWidget(m_urlEdit, 1);
-  m_testBtn = new QPushButton(QStringLiteral("测试"), frame.contentWidget);
-  urlRow->addWidget(m_testBtn);
-  // 让方法下拉框与 URL 输入框高度一致，避免并排时错位
-  m_methodCombo->setFixedHeight(m_urlEdit->sizeHint().height());
-  layout->addLayout(urlRow);
+  // ── .jsonsource 数据源选择行 ──
+  auto *srcRow = new QHBoxLayout;
+  srcRow->addWidget(new QLabel(QStringLiteral("数据源文件:")));
+  m_fileCombo = new QComboBox(frame.contentWidget);
+  m_fileCombo->setMinimumWidth(220);
+  srcRow->addWidget(m_fileCombo, 1);
+  layout->addLayout(srcRow);
 
-  // ── 加载方式行（普通 / 查询分页）──
-  auto *typeRow = new QHBoxLayout;
-  typeRow->addWidget(new QLabel(QStringLiteral("加载方式:")));
-  m_typeCombo = new QComboBox(frame.contentWidget);
-  m_typeCombo->addItem(QStringLiteral("普通加载(一次性)"), false);
-  m_typeCombo->addItem(QStringLiteral("查询分页加载"), true);
-  m_typeCombo->setMinimumWidth(180);
-  typeRow->addWidget(m_typeCombo);
-  typeRow->addStretch();
-  layout->addLayout(typeRow);
+  auto *sourceRow = new QHBoxLayout;
+  sourceRow->addWidget(new QLabel(QStringLiteral("数据源:")));
+  m_sourceCombo = new QComboBox(frame.contentWidget);
+  m_sourceCombo->setMinimumWidth(220);
+  sourceRow->addWidget(m_sourceCombo, 1);
+  layout->addLayout(sourceRow);
 
-  // ── 查询分页配置区域（仅在"查询分页加载"时显示）──
-  m_pagedGroup = new QWidget(frame.contentWidget);
-  auto *pagedCol = new QVBoxLayout(m_pagedGroup);
-  pagedCol->setContentsMargins(0, 0, 0, 0);
-  pagedCol->setSpacing(6);
+  // ── 使用方式行（引用动态数据源时显示）──
+  m_modeWidget = new QWidget(frame.contentWidget);
+  auto *modeRow = new QHBoxLayout(m_modeWidget);
+  modeRow->setContentsMargins(0, 0, 0, 0);
+  modeRow->setSpacing(8);
+  modeRow->addWidget(new QLabel(QStringLiteral("使用方式:"), m_modeWidget));
+  m_fullRadio = new QRadioButton(QStringLiteral("全部使用数据源"), m_modeWidget);
+  m_partialRadio =
+      new QRadioButton(QStringLiteral("部分使用数据源(可改显示文本/实际值)"), m_modeWidget);
+  auto *modeGroup = new QButtonGroup(this);
+  modeGroup->addButton(m_fullRadio);
+  modeGroup->addButton(m_partialRadio);
+  m_fullRadio->setChecked(true);
+  modeRow->addWidget(m_fullRadio);
+  modeRow->addWidget(m_partialRadio);
+  modeRow->addStretch();
+  m_modeWidget->hide();
+  layout->addWidget(m_modeWidget);
 
-  // 行1：页码参数 / 页大小参数 / 默认页大小
-  auto *pagedRow1 = new QHBoxLayout;
-  pagedRow1->setSpacing(6);
-  pagedRow1->addWidget(new QLabel(QStringLiteral("页码参数:")));
-  m_pageKeyEdit = new QLineEdit(m_pagedGroup);
-  m_pageKeyEdit->setText(QStringLiteral("page"));
-  m_pageKeyEdit->setMaximumWidth(90);
-  pagedRow1->addWidget(m_pageKeyEdit);
-  pagedRow1->addSpacing(12);
-  pagedRow1->addWidget(new QLabel(QStringLiteral("页大小参数:")));
-  m_pageSizeKeyEdit = new QLineEdit(m_pagedGroup);
-  m_pageSizeKeyEdit->setText(QStringLiteral("pageSize"));
-  m_pageSizeKeyEdit->setMaximumWidth(90);
-  pagedRow1->addWidget(m_pageSizeKeyEdit);
-  pagedRow1->addSpacing(12);
-  pagedRow1->addWidget(new QLabel(QStringLiteral("默认页大小:")));
-  m_pageSizeSpin = new QSpinBox(m_pagedGroup);
-  m_pageSizeSpin->setRange(1, 500);
-  m_pageSizeSpin->setValue(20);
-  pagedRow1->addWidget(m_pageSizeSpin);
-  pagedRow1->addStretch();
-  pagedCol->addLayout(pagedRow1);
-
-  // 行2：提示（搜索框提示）/ 字段名（搜索参数 key）
-  auto *pagedRow2 = new QHBoxLayout;
-  pagedRow2->setSpacing(6);
-  pagedRow2->addWidget(new QLabel(QStringLiteral("提示:")));
-  m_searchTitleEdit = new QLineEdit(m_pagedGroup);
-  m_searchTitleEdit->setPlaceholderText(QStringLiteral("搜索框提示文字"));
-  m_searchTitleEdit->setMaximumWidth(120);
-  pagedRow2->addWidget(m_searchTitleEdit);
-  pagedRow2->addSpacing(12);
-  pagedRow2->addWidget(new QLabel(QStringLiteral("字段名:")));
-  m_searchFieldEdit = new QLineEdit(m_pagedGroup);
-  m_searchFieldEdit->setPlaceholderText(QStringLiteral("搜索参数key，如 name"));
-  m_searchFieldEdit->setMaximumWidth(120);
-  pagedRow2->addWidget(m_searchFieldEdit);
-  pagedRow2->addStretch();
-  pagedCol->addLayout(pagedRow2);
-
-  layout->addWidget(m_pagedGroup);
-
-  // ── 加载方式切换：显示/隐藏分页配置区 ──
-  auto applyType = [this](int index) {
-    const bool paged = (index >= 0) && m_typeCombo->itemData(index).toBool();
-    m_pagedGroup->setVisible(paged);
-  };
-  connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, applyType);
-  applyType(m_typeCombo->currentIndex());
-
-  // ── 状态标签 ──
-  m_statusLabel = new QLabel(frame.contentWidget);
-  m_statusLabel->setStyleSheet(
+  // ── 静态数据源提示（选中静态数据源时显示，隐藏动态配置面板）──
+  m_staticHint = new QLabel(frame.contentWidget);
+  m_staticHint->setStyleSheet(
       QStringLiteral("color: %1; font-size: 12px;").arg(AuiStyle::mutedTextColor().name()));
-  layout->addWidget(m_statusLabel);
+  m_staticHint->hide();
+  layout->addWidget(m_staticHint);
 
-  // ── 数据预览表格 ──
-  layout->addWidget(new QLabel(QStringLiteral("返回数据示例:")));
-  m_previewTable = new QTableWidget(frame.contentWidget);
-  m_previewTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-  m_previewTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-  m_previewTable->horizontalHeader()->setStretchLastSection(true);
-  layout->addWidget(m_previewTable, 1);
+  // ── 动态数据源配置面板（URL/字段/分页等）──
+  m_panel = new SelectSourcePanel(frame.contentWidget);
+  layout->addWidget(m_panel, 1);
 
-  // ── 字段选择行 ──
-  auto *fieldRow = new QHBoxLayout;
-
-  fieldRow->addWidget(new QLabel(QStringLiteral("Label字段(显示文本):")));
-  m_labelCombo = new QComboBox(frame.contentWidget);
-  m_labelCombo->setMinimumWidth(120);
-  fieldRow->addWidget(m_labelCombo);
-
-  fieldRow->addSpacing(20);
-
-  fieldRow->addWidget(new QLabel(QStringLiteral("Value字段(实际值):")));
-  m_valueCombo = new QComboBox(frame.contentWidget);
-  m_valueCombo->setMinimumWidth(120);
-  fieldRow->addWidget(m_valueCombo);
-
-  fieldRow->addStretch();
-  layout->addLayout(fieldRow);
-
-  // 确定/取消按钮由 finishConfigDialog 统一添加（复用通用样式）
   finishConfigDialog(this, frame);
+  setMinimumSize(620, 520);
 
-  setMinimumSize(500, 400);
+  // 初始化文件下拉框
+  refreshJsonsourceFiles();
 
-  connect(m_testBtn, &QPushButton::clicked, this, &ComboboxConfigDialog::onTest);
+  // 信号：文件切换 → 刷新数据源；数据源切换 → 应用到面板
+  connect(m_fileCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+          [this](int) { refreshSources(); });
+  connect(m_sourceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) {
+    if (m_loading) return;
+    // 用户手动切换数据源：清除上一数据源的覆盖值，避免误带入选中的新数据源
+    m_storedValue.clear();
+    m_storedLabel.clear();
+    applySelectedSource();
+  });
+
+  // 使用方式切换：全部使用 → 恢复数据源配置的显示文本/实际值并锁定字段
+  connect(m_fullRadio, &QRadioButton::toggled, this, [this](bool checked) {
+    if (!checked || m_loading || !m_hasDynamicSource) return;
+    const auto &s = m_appliedSource;
+    m_panel->setData(s.url, s.method, s.valueField, s.labelField, s.paged, s.pageKey, s.pageSizeKey,
+                     s.pageSize, s.searchTitle, s.searchField);
+    updatePanelLocks();
+  });
+  // 部分使用 → 仅解锁显示文本/实际值字段
+  connect(m_partialRadio, &QRadioButton::toggled, this, [this](bool checked) {
+    if (!checked || m_loading || !m_hasDynamicSource) return;
+    updatePanelLocks();
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+//  .jsonsource 文件 / 数据源下拉框
+// ════════════════════════════════════════════════════════════
+
+void ComboboxConfigDialog::refreshJsonsourceFiles() {
+  m_loading = true;
+  m_fileCombo->clear();
+  // 第 0 项：不引用 jsonsource，手动配置 URL（向后兼容）
+  m_fileCombo->addItem(QStringLiteral("（手动配置 URL，不引用数据源文件）"), QString());
+  const QStringList files = findJsonsourceFiles(m_searchRoot);
+  for (const QString &f : files) {
+    m_fileCombo->addItem(QFileInfo(f).fileName(), f);
+  }
+  m_loading = false;
+}
+
+void ComboboxConfigDialog::refreshSources() {
+  m_loading = true;
+  m_sourceCombo->clear();
+
+  const QString filePath = m_fileCombo->currentData().toString();
+  if (filePath.isEmpty()) {
+    // 手动模式：无数据源可选择，面板全部可编辑
+    m_sourceCombo->setEnabled(false);
+    m_staticHint->hide();
+    m_modeWidget->hide();
+    m_hasDynamicSource = false;
+    m_panel->setEnabled(true);
+    m_panel->setVisible(true);
+    m_loading = false;
+    updatePanelLocks();
+    return;
+  }
+
+  m_sourceCombo->setEnabled(true);
+  JsonSourceConfig cfg;
+  {
+    QFile f(filePath);
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+      cfg = JsonSourceConfig::fromJsonString(QString::fromUtf8(f.readAll()));
+      f.close();
+    }
+  }
+
+  for (const auto &s : cfg.sources) {
+    QString text = s.remark.isEmpty() ? QStringLiteral("(未命名)") : s.remark;
+    if (s.isDynamic()) {
+      text += QStringLiteral(" - %1").arg(s.url);
+    } else {
+      text += QStringLiteral(" - 静态 %1 项").arg(s.options.size());
+    }
+    m_sourceCombo->addItem(text, s.id);
+  }
+  m_loading = false;
+
+  if (m_sourceCombo->count() > 0) {
+    // 文件切换后自动选中并应用第一条数据源：
+    // addItem 期间 m_loading=true 抑制了信号，须显式应用，否则面板残留上一个文件的值
+    m_sourceCombo->setCurrentIndex(0);
+    applySelectedSource();
+  } else {
+    // 文件内无数据源：收起使用方式行并解除锁定
+    m_modeWidget->hide();
+    m_hasDynamicSource = false;
+    updatePanelLocks();
+  }
+}
+
+void ComboboxConfigDialog::applySelectedSource() {
+  if (m_loading) return;
+  const QString filePath = m_fileCombo->currentData().toString();
+  const QString sourceId = m_sourceCombo->currentData().toString();
+  if (filePath.isEmpty() || sourceId.isEmpty()) return;
+
+  JsonSourceConfig cfg;
+  {
+    QFile f(filePath);
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+      cfg = JsonSourceConfig::fromJsonString(QString::fromUtf8(f.readAll()));
+      f.close();
+    }
+  }
+  const JsonSource *s = cfg.sourceById(sourceId);
+  if (!s) return;
+
+  if (s->isStatic()) {
+    // 静态数据源：隐藏动态配置面板与使用方式行，显示提示
+    m_panel->setVisible(false);
+    m_modeWidget->hide();
+    m_hasDynamicSource = false;
+    m_staticHint->setText(QStringLiteral("该数据源为静态数据源（%1 项选项），无需 URL 配置，"
+                                         "生成时直接使用选项。")
+                              .arg(s->options.size()));
+    m_staticHint->show();
+    // 清空动态配置残留
+    m_panel->setData(QString(), QString(), QString(), QString(), false, QString(),
+                     QString(), 20, QString(), QString());
+  } else {
+    // 动态数据源：基础配置跟随数据源并锁定，显示使用方式行
+    m_staticHint->hide();
+    m_panel->setVisible(true);
+    m_modeWidget->setVisible(true);
+    m_appliedSource = *s;
+    m_hasDynamicSource = true;
+    m_panel->setData(s->url, s->method, s->valueField, s->labelField, s->paged, s->pageKey,
+                     s->pageSizeKey, s->pageSize, s->searchTitle, s->searchField);
+    reconcileOverrides();
+    updatePanelLocks();
+  }
+}
+
+void ComboboxConfigDialog::reconcileOverrides() {
+  if (!m_hasDynamicSource) return;
+  const auto &s = m_appliedSource;
+  // 已存储的字段与数据源不同 → 曾做过覆盖，恢复为部分使用；否则全部使用
+  const bool diffValue = !m_storedValue.isEmpty() && m_storedValue != s.valueField;
+  const bool diffLabel = !m_storedLabel.isEmpty() && m_storedLabel != s.labelField;
+  if (!diffValue && !diffLabel) {
+    m_fullRadio->setChecked(true);
+    return;
+  }
+  m_partialRadio->setChecked(true);
+  m_panel->setData(s.url, s.method, diffValue ? m_storedValue : s.valueField,
+                   diffLabel ? m_storedLabel : s.labelField, s.paged, s.pageKey, s.pageSizeKey,
+                   s.pageSize, s.searchTitle, s.searchField);
+}
+
+void ComboboxConfigDialog::updatePanelLocks() {
+  if (m_hasDynamicSource) {
+    // 引用动态数据源：基础配置始终锁定，字段按使用方式决定
+    m_panel->setBaseLocked(true);
+    m_panel->setFieldsLocked(m_fullRadio->isChecked());
+  } else {
+    // 手动/静态/无数据源：不锁定
+    m_panel->setBaseLocked(false);
+    m_panel->setFieldsLocked(false);
+  }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -177,64 +261,58 @@ void ComboboxConfigDialog::setupUI() {
 
 void ComboboxConfigDialog::setConfig(const QString &url, const QString &valueField,
                                      const QString &labelField) {
-  m_urlEdit->setText(url);
-  // 如果已有字段名，先添加到下拉框（等测试成功后会更新完整列表）
-  if (!valueField.isEmpty()) m_valueCombo->addItem(valueField);
-  if (!labelField.isEmpty()) m_labelCombo->addItem(labelField);
-  m_valueCombo->setCurrentText(valueField);
-  m_labelCombo->setCurrentText(labelField);
+  // 记录已存储的覆盖值：与数据源不同时恢复为「部分使用数据源」模式
+  m_storedValue = valueField;
+  m_storedLabel = labelField;
+  if (url.isEmpty() && valueField.isEmpty() && labelField.isEmpty()) return;
+  if (m_hasDynamicSource) {
+    // 引用动态数据源：URL 等基础配置跟随数据源，仅按覆盖值恢复字段
+    reconcileOverrides();
+    updatePanelLocks();
+    return;
+  }
+  // 手动模式：直接填充面板
+  m_panel->setData(url, QString(), valueField, labelField, false, QString(), QString(), 0,
+                   QString(), QString());
 }
 
 void ComboboxConfigDialog::setPagedConfig(bool paged, const QString &pageKey,
                                           const QString &pageSizeKey, int pageSize,
                                           const QString &searchTitle, const QString &searchField,
                                           const QString &method) {
-  const int idx = (paged ? 1 : 0);
-  if (idx < m_typeCombo->count()) m_typeCombo->setCurrentIndex(idx);
-  if (!pageKey.isEmpty()) m_pageKeyEdit->setText(pageKey);
-  if (!pageSizeKey.isEmpty()) m_pageSizeKeyEdit->setText(pageSizeKey);
-  if (pageSize > 0) m_pageSizeSpin->setValue(pageSize);
-  if (!searchTitle.isEmpty()) m_searchTitleEdit->setText(searchTitle);
-  if (!searchField.isEmpty()) m_searchFieldEdit->setText(searchField);
-  if (!method.isEmpty()) m_methodCombo->setCurrentText(method);
-  m_pagedGroup->setVisible(paged);
+  // 引用动态数据源：分页等基础配置跟随数据源，忽略存储值
+  if (m_hasDynamicSource) return;
+  m_panel->setData(m_panel->url(), method, m_panel->valueField(), m_panel->labelField(), paged,
+                   pageKey, pageSizeKey, pageSize, searchTitle, searchField);
 }
 
-QString ComboboxConfigDialog::url() const { return m_urlEdit->text().trimmed(); }
-
-QString ComboboxConfigDialog::valueField() const { return m_valueCombo->currentText(); }
-
-QString ComboboxConfigDialog::labelField() const { return m_labelCombo->currentText(); }
-
-bool ComboboxConfigDialog::paged() const {
-  return m_typeCombo->currentIndex() >= 1 &&
-         (m_typeCombo->itemData(m_typeCombo->currentIndex()).toBool());
+void ComboboxConfigDialog::setSourceRef(const QString &sourceFile, const QString &sourceId) {
+  if (sourceFile.isEmpty()) {
+    m_fileCombo->setCurrentIndex(0);
+    m_sourceCombo->setCurrentIndex(-1);
+    return;
+  }
+  // 查找文件在下拉框中的位置（绝对路径匹配）
+  const QString abs = QFileInfo(sourceFile).absoluteFilePath();
+  int fi = m_fileCombo->findData(abs);
+  if (fi < 0) {
+    // 文件不在搜索范围内：保留手动模式，但记录引用以便保存
+    m_fileCombo->setCurrentIndex(0);
+    return;
+  }
+  m_fileCombo->setCurrentIndex(fi);
+  int si = m_sourceCombo->findData(sourceId);
+  if (si >= 0) {
+    m_sourceCombo->setCurrentIndex(si);
+    // setCurrentIndex 不触发信号时（如目标恰为第 0 条，refreshSources 已自动选中），
+    // 显式应用数据源，否则面板不会被填充
+    applySelectedSource();
+  }
 }
 
-QString ComboboxConfigDialog::pageKey() const {
-  const QString v = m_pageKeyEdit->text().trimmed();
-  return v.isEmpty() ? QStringLiteral("page") : v;
-}
-
-QString ComboboxConfigDialog::pageSizeKey() const {
-  const QString v = m_pageSizeKeyEdit->text().trimmed();
-  return v.isEmpty() ? QStringLiteral("pageSize") : v;
-}
-
-int ComboboxConfigDialog::pageSize() const {
-  return m_pageSizeSpin ? m_pageSizeSpin->value() : 20;
-}
-
-QString ComboboxConfigDialog::searchTitle() const {
-  return m_searchTitleEdit ? m_searchTitleEdit->text().trimmed() : QString();
-}
-
-QString ComboboxConfigDialog::searchField() const {
-  return m_searchFieldEdit ? m_searchFieldEdit->text().trimmed() : QString();
-}
-
-QString ComboboxConfigDialog::method() const {
-  return m_methodCombo ? m_methodCombo->currentText() : QString::fromLatin1(JsonVueHttp::kPost);
+void ComboboxConfigDialog::setSearchRoot(const QString &dir) {
+  m_searchRoot = dir;
+  refreshJsonsourceFiles();
 }
 
 void ComboboxConfigDialog::setHttpConfig(const QString &baseUrl, const QString &authHeader,
@@ -242,123 +320,47 @@ void ComboboxConfigDialog::setHttpConfig(const QString &baseUrl, const QString &
   m_baseUrl = baseUrl;
   m_authHeader = authHeader;
   m_postData = postData;
+  if (m_panel) m_panel->setHttpConfig(baseUrl, authHeader, postData);
 }
 
-// ════════════════════════════════════════════════════════════
-//  HTTP 测试
-// ════════════════════════════════════════════════════════════
+QString ComboboxConfigDialog::url() const { return m_panel ? m_panel->url() : QString(); }
 
-void ComboboxConfigDialog::onTest() {
-  QString url = m_urlEdit->text().trimmed();
-  if (url.isEmpty()) {
-    AuiMessageBox::show(this, QStringLiteral("提示"), QStringLiteral("请输入请求URL"));
-    return;
-  }
-
-  // 拼接 baseUrl
-  QString fullUrl = url;
-  if (!m_baseUrl.isEmpty() && !url.startsWith(QStringLiteral("http"))) {
-    fullUrl = m_baseUrl + (url.startsWith('/') ? url : "/" + url);
-  }
-
-  m_statusLabel->setText(QStringLiteral("正在请求..."));
-  m_statusLabel->setStyleSheet(QStringLiteral("color: %1;").arg(AuiStyle::mutedTextColor().name()));
-
-  // 构建请求头
-  HttpClient::Headers headers;
-  if (!m_authHeader.isEmpty()) {
-    headers[QStringLiteral("Authorization")] = m_authHeader;
-  }
-
-  // 解析 POST 数据为 JSON 对象
-  QJsonObject bodyObj;
-  if (!m_postData.isEmpty()) {
-    QJsonParseError err;
-    QJsonDocument postDoc = UtilJson::fromJson(m_postData, &err);
-    if (err.error == QJsonParseError::NoError && postDoc.isObject()) {
-      bodyObj = postDoc.object();
-    }
-  }
-
-  // 使用 POST 或 GET 发送请求，只回调给本对话框绑定的回调（HttpClient 区分发起方，不广播）
-  HttpClient::Method method = bodyObj.isEmpty() ? HttpClient::Get : HttpClient::Post;
-  HttpClient::instance().request(
-      method, fullUrl, bodyObj, headers, [this](const QJsonDocument &doc) { onHttpFinished(doc); },
-      [this](const QString &errorMsg) { onHttpError(errorMsg); }, this);
+QString ComboboxConfigDialog::valueField() const {
+  return m_panel ? m_panel->valueField() : QString();
 }
 
-void ComboboxConfigDialog::onHttpFinished(const QJsonDocument &doc) {
-  // 解析返回数据，提取 data.list 数组
-  QJsonObject root = doc.object();
-  QJsonObject dataObj = root.value("data").toObject();
-
-  // 尝试 data.list 或 data 本身是数组
-  QJsonArray list;
-  if (dataObj.contains("list")) {
-    list = dataObj.value("list").toArray();
-  } else if (root.value("data").isArray()) {
-    list = root.value("data").toArray();
-  } else if (dataObj.contains("data")) {
-    // 尝试 data.data.list
-    QJsonObject innerData = dataObj.value("data").toObject();
-    if (innerData.contains("list")) {
-      list = innerData.value("list").toArray();
-    }
-  }
-
-  if (list.isEmpty()) {
-    m_statusLabel->setText(QStringLiteral("未找到 data.list 数据"));
-    m_statusLabel->setStyleSheet(
-        QStringLiteral("color: %1;").arg(AuiStyle::errorTextColor().name()));
-    return;
-  }
-
-  // 取第一行数据提取字段名
-  QJsonObject firstRow = list.at(0).toObject();
-  QStringList fieldNames = firstRow.keys();
-
-  if (fieldNames.isEmpty()) {
-    m_statusLabel->setText(QStringLiteral("返回数据无字段"));
-    m_statusLabel->setStyleSheet(
-        QStringLiteral("color: %1;").arg(AuiStyle::errorTextColor().name()));
-    return;
-  }
-
-  // 填充预览表格（显示前 5 行）
-  int displayRows = qMin(list.size(), 5);
-  m_previewTable->setRowCount(displayRows);
-  m_previewTable->setColumnCount(fieldNames.size());
-  m_previewTable->setHorizontalHeaderLabels(fieldNames);
-
-  for (int r = 0; r < displayRows; ++r) {
-    QJsonObject row = list.at(r).toObject();
-    for (int c = 0; c < fieldNames.size(); ++c) {
-      QString val = row.value(fieldNames[c]).toVariant().toString();
-      m_previewTable->setItem(r, c, new QTableWidgetItem(val));
-    }
-  }
-
-  // 保存当前选中的字段名
-  QString prevValue = m_valueCombo->currentText();
-  QString prevLabel = m_labelCombo->currentText();
-
-  // 更新字段下拉框
-  m_valueCombo->clear();
-  m_labelCombo->clear();
-  m_valueCombo->addItems(fieldNames);
-  m_labelCombo->addItems(fieldNames);
-
-  // 恢复之前的选择
-  if (!prevValue.isEmpty()) m_valueCombo->setCurrentText(prevValue);
-  if (!prevLabel.isEmpty()) m_labelCombo->setCurrentText(prevLabel);
-
-  m_statusLabel->setText(
-      QStringLiteral("成功获取 %1 条数据，%2 个字段").arg(list.size()).arg(fieldNames.size()));
-  m_statusLabel->setStyleSheet(
-      QStringLiteral("color: %1;").arg(AuiStyle::successTextColor().name()));
+QString ComboboxConfigDialog::labelField() const {
+  return m_panel ? m_panel->labelField() : QString();
 }
 
-void ComboboxConfigDialog::onHttpError(const QString &errorMsg) {
-  m_statusLabel->setText(QStringLiteral("请求失败: %1").arg(errorMsg));
-  m_statusLabel->setStyleSheet(QStringLiteral("color: %1;").arg(AuiStyle::errorTextColor().name()));
+QString ComboboxConfigDialog::sourceFile() const {
+  return m_fileCombo ? m_fileCombo->currentData().toString() : QString();
+}
+
+QString ComboboxConfigDialog::sourceId() const {
+  return m_sourceCombo ? m_sourceCombo->currentData().toString() : QString();
+}
+
+bool ComboboxConfigDialog::paged() const { return m_panel ? m_panel->paged() : false; }
+
+QString ComboboxConfigDialog::pageKey() const {
+  return m_panel ? m_panel->pageKey() : QStringLiteral("page");
+}
+
+QString ComboboxConfigDialog::pageSizeKey() const {
+  return m_panel ? m_panel->pageSizeKey() : QStringLiteral("pageSize");
+}
+
+int ComboboxConfigDialog::pageSize() const { return m_panel ? m_panel->pageSize() : 20; }
+
+QString ComboboxConfigDialog::searchTitle() const {
+  return m_panel ? m_panel->searchTitle() : QString();
+}
+
+QString ComboboxConfigDialog::searchField() const {
+  return m_panel ? m_panel->searchField() : QString();
+}
+
+QString ComboboxConfigDialog::method() const {
+  return m_panel ? m_panel->method() : QString::fromLatin1(JsonVueHttp::kPost);
 }

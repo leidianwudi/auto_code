@@ -410,6 +410,9 @@ void ButtonConfigDialog::onConfigureFieldStyle(int row) {
   // select 样式：弹出 ComboboxConfigDialog
   if (m_dialogFieldsData[row].editStyle == EditStyle::Select) {
     ComboboxConfigDialog dlg(this);
+    dlg.setSearchRoot(m_searchRoot);
+    dlg.setSourceRef(m_dialogFieldsData[row].selectSourceFile,
+                     m_dialogFieldsData[row].selectSourceId);
     dlg.setConfig(m_dialogFieldsData[row].selectUrl, m_dialogFieldsData[row].selectValueField,
                   m_dialogFieldsData[row].selectLabelField);
     dlg.setPagedConfig(m_dialogFieldsData[row].selectPaged, m_dialogFieldsData[row].selectPageKey,
@@ -419,6 +422,8 @@ void ButtonConfigDialog::onConfigureFieldStyle(int row) {
                    m_dialogFieldsData[row].selectSearchField,
                    m_dialogFieldsData[row].selectMethod);
     if (dlg.exec() == QDialog::Accepted) {
+      m_dialogFieldsData[row].selectSourceFile = dlg.sourceFile();
+      m_dialogFieldsData[row].selectSourceId = dlg.sourceId();
       m_dialogFieldsData[row].selectUrl = dlg.url();
       m_dialogFieldsData[row].selectValueField = dlg.valueField();
       m_dialogFieldsData[row].selectLabelField = dlg.labelField();
@@ -433,6 +438,12 @@ void ButtonConfigDialog::onConfigureFieldStyle(int row) {
   }
   // 其他样式暂时不提供额外配置 UI（用默认值）
 }
+
+// ════════════════════════════════════════════════════════════
+//  搜索根目录
+// ════════════════════════════════════════════════════════════
+
+void ButtonConfigDialog::setSearchRoot(const QString &dir) { m_searchRoot = dir; }
 
 // ════════════════════════════════════════════════════════════
 //  表格数据收集 / 填充

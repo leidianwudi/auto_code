@@ -38,6 +38,9 @@ public:
   /// 设置配置数据
   void setData(const ButtonConfig &config);
 
+  /// 设置 .jsonsource 文件搜索根目录（当前编辑 jsonvue 文件所在目录，可为空）
+  void setSearchRoot(const QString &dir);
+
 private:
   /// 构建界面
   void setupUI();
@@ -89,4 +92,7 @@ private:
 
   /// 临时存储 dialogFields 的样式特定配置（表格只管理基本属性）
   QVector<DialogFieldConfig> m_dialogFieldsData;
+
+  /// .jsonsource 文件搜索根目录（当前编辑 jsonvue 文件所在目录）
+  QString m_searchRoot;
 };

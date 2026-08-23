@@ -1,0 +1,1 @@
+{"sources":[{"id":"beb7bb29","labelField":"value","method":"POST","remark":"任务/时间类型","type":"dynamic","url":"vipprice/getTimeTypeRecords","valueField":"key"}]}

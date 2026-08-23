@@ -13,6 +13,8 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDir>
+#include <QFileInfo>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -335,6 +337,10 @@ void JsonVueEditor::reloadStyle() { applyStyle(); }
 // ════════════════════════════════════════════════════════════
 //  加载 / 收集配置
 // ════════════════════════════════════════════════════════════
+
+void JsonVueEditor::setJsonVueFilePath(const QString &path) {
+  m_jsonvueDir = path.isEmpty() ? QString() : QFileInfo(path).absoluteDir().absolutePath();
+}
 
 void JsonVueEditor::loadConfig(const JsonVueConfig &config) {
   m_loading = true;  // 加载期间抑制 configChanged 信号
