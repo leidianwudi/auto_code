@@ -10,6 +10,7 @@ ${# 数据来源（tplData）：                                                
 ${#   columns       - 列配置数组                                                 }
 ${#     [{dataName, editName, isSwitch, isSelect, isTextArea, isText,           }
 ${#      isInt, isFloat, isDate, selectUrl, selectValueField, selectLabelField,  }
+${#      selectApiName, selectErrorText,                                         }
 ${#      placeholder, maxlength, minValue, maxValue, precision, dateFormat,      }
 ${#      textareaRows, required, formSpan, editComponent,                        }
 ${#      hasDefaultValue, defaultValue}]                                         }
@@ -22,6 +23,7 @@ import { useForm } from '@/hooks/web/use_form';
 import { PropType, reactive, ref, computed${if hasDefaultValues}, watch, nextTick${/if} } from 'vue';
 import { useValidator } from '@/hooks/web/use_validator';
 import { uiWriteLogic } from '@/utils/ui_write_logic';
+${if hasSelectApi}import { ${selectApiImports} } from '@/api/${apiModule}/${pageName}';${/if}
 
 const { required } = useValidator();
 
@@ -71,19 +73,23 @@ ${else if col.isSelect}
   {
     field: '${col.dataName}',
     label: '${col.editName}',
-    component: 'ApiSelect',
+    component: 'Select',
     componentProps: {
-      url: '${col.selectUrl}',
-      valueField: '${col.selectValueField}',
-      labelField: '${col.selectLabelField}',
-      method: '${col.selectMethod}'${if col.selectPaged},
-      pageKey: '${col.selectPageKey}',
-      pageSizeKey: '${col.selectPageSizeKey}',
-      pageSize: ${col.selectPageSize}${if col.selectSearchTitle},
-      searchTitle: '${col.selectSearchTitle}'${/if}${if col.selectSearchField},
-      searchField: '${col.selectSearchField}'${/if}${/if}
+      props: {
+        label: '${col.selectLabelField}',
+        value: '${col.selectValueField}'
+      }
     }${if col.hasFormSpan},
-    colProps: { span: ${col.formSpan} }${/if}
+    colProps: { span: ${col.formSpan} }${/if},
+    optionApi: async () => {
+      try {
+        const res = await ${col.selectApiName}();
+        return res.data?.list;
+      } catch (error) {
+        console.error('Error fetching ${col.selectErrorText} options:', error);
+        return [];
+      }
+    }
   },
 ${else if col.isTagEdit}
   {

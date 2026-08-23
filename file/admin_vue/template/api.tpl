@@ -15,6 +15,8 @@ ${#   deleteApi    - 删除接口名                                            
 ${#   selectUrl    - 查询请求地址，如 "/systemtask/selectByIn"                    }
 ${#   updateUrl    - 更新请求地址，如 "/systemtask/update"                        }
 ${#   deleteUrl    - 删除请求地址，如 "/systemtask/delete"                        }
+${#   hasSelectApi - 是否有下拉框接口（select 样式列）                            }
+${#   selectApiStr - 下拉框接口函数字符串（追加在删除接口之后）                   }
 ${# ============================================================================}
 //此文件为AutoCode编译器生成，请勿手动修改
 import request from '@/axios';
@@ -36,4 +38,5 @@ export const ${updateApi} = (data: any) => {
 // 删除（支持批量）
 export const ${deleteApi} = (ids: string[] | number[]) => {
   return request.post({ url: '${deleteUrl}', data: { ids } });
-};
+}${if hasSelectApi};
+${selectApiStr}${else};${/if}

@@ -167,6 +167,33 @@ export function processColumns(rawColumns: Object[]): Object[] {
     col["selectSearchField"] = rawCol.selectSearchField || "";
     col["selectMethod"] = isNotEmpty(rawCol.selectMethod) ? rawCol.selectMethod : "POST";
 
+    // 下拉框接口推导：从 selectUrl 提取接口函数名与完整请求地址
+    // 例：selectUrl="vipprice/getTimeTypeRecords" →
+    //   selectApiName="getTimeTypeRecords"（取路径最后一段）
+    //   selectApiUrl="/vipprice/getTimeTypeRecords"（补前导斜杠）
+    let selectApiName = "";
+    let selectApiUrl = "";
+    if (isSelect && rawCol.selectUrl != "") {
+      let selUrlParts: String[] = rawCol.selectUrl.split("/");
+      let selUrlPartsLen: Int = selUrlParts.length;
+      for (let si = selUrlPartsLen - 1; si >= 0; si = si - 1) {
+        if (selUrlParts[si] != "") {
+          selectApiName = selUrlParts[si];
+          break;
+        }
+      }
+      if (rawCol.selectUrl.startsWith("/")) {
+        selectApiUrl = rawCol.selectUrl;
+      } else {
+        selectApiUrl = "/" + rawCol.selectUrl;
+      }
+    }
+    col["selectApiName"] = selectApiName;
+    col["selectApiUrl"] = selectApiUrl;
+    col["hasSelectApi"] = (selectApiName != "");
+    // 下拉框错误提示文本（数据名去下划线，供 optionApi 的 console.error 使用）
+    col["selectErrorText"] = rawCol.dataName;
+
     // 根据 editStyle 决定编辑界面 Vue 组件名（字典映射，避免深层 if/else 嵌套）
     let editCompMap: Object = {
       "select": "ApiSelect",
@@ -693,6 +720,34 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object):
   let columns = processColumns(rawColumns);
   let queryFields = processQueryFields(rawQueryFields);
 
+  // ── 下拉框数据接口：汇总各 select 列的接口函数字符串 ─────────────
+  // 供 api.tpl 在删除接口后追加生成（selectApiStr）；
+  // 供 write.tpl 导入接口（selectApiImports）并在 optionApi 中调用。
+  let selectApiStr = "";
+  let selectApiNameSet: Object = {};
+  let selectApiImports: String = "";
+  let selectApiCount = 0;
+  let colsSelLen = columns.length;
+  for (let i = 0; i < colsSelLen; i = i + 1) {
+    let colSel: Object = columns[i];
+    if (colSel["hasSelectApi"]) {
+      let selName: String = colSel["selectApiName"];
+      if (selectApiNameSet[selName] == null) {
+        selectApiNameSet[selName] = true;
+        selectApiCount = selectApiCount + 1;
+        if (selectApiImports != "") {
+          selectApiImports = selectApiImports + ", ";
+        }
+        selectApiImports = selectApiImports + selName;
+        // 每个接口函数一段（前导空行与删除接口分隔，供 api.tpl 追加）
+        selectApiStr = selectApiStr + "\n//查询" + colSel["editName"] +
+                       "\nexport const " + selName + " = () => {\n" +
+                       "  return request.post({ url: '" + colSel["selectApiUrl"] + "' })\n}";
+      }
+    }
+  }
+  let hasSelectApi = (selectApiCount > 0);
+
   let buttons: Object[] = btnResult["buttons"];
   let rowButtons: Object[] = btnResult["rowButtons"];
   let toolbarButtons: Object[] = btnResult["toolbarButtons"];
@@ -783,6 +838,9 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object):
   tplData["updateUrl"] = updateUrl;                // ${updateUrl} 更新请求地址
   tplData["deleteUrl"] = deleteUrl;                // ${deleteUrl} 删除请求地址
   tplData["commentTitle"] = commentTitle;            // ${commentTitle} 注解标题
+  tplData["hasSelectApi"] = hasSelectApi;          // ${if hasSelectApi} 是否有下拉框接口
+  tplData["selectApiStr"] = selectApiStr;          // ${selectApiStr} 下拉框接口函数字符串
+  tplData["selectApiImports"] = selectApiImports;  // ${selectApiImports} 下拉框接口导入列表
   tplData["noDelete"] = noDelete;                  // ${if !noDelete} 不可删除
   tplData["noEdit"] = noEdit;                      // ${if !noEdit} 不可编辑
   tplData["noDetail"] = noDetail;                  // ${if !noDetail} 不可查看详情
