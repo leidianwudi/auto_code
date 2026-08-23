@@ -14,14 +14,30 @@
 QJsonObject JsonSourceOption::toJson() const {
   QJsonObject obj;
   obj[QString::fromLatin1(JsonSourceKey::kLabel)] = label;
+  // value 始终存字符串保真；数字类型额外写 valueType 标记
   obj[QString::fromLatin1(JsonSourceKey::kValue)] = value;
+  if (valueType == QStringLiteral("number")) {
+    obj[QString::fromLatin1(JsonSourceKey::kValueType)] = valueType;
+  }
   return obj;
 }
 
 JsonSourceOption JsonSourceOption::fromJson(const QJsonObject &obj) {
   JsonSourceOption o;
   o.label = obj.value(QString::fromLatin1(JsonSourceKey::kLabel)).toString();
-  o.value = obj.value(QString::fromLatin1(JsonSourceKey::kValue)).toString();
+  const QJsonValue v = obj.value(QString::fromLatin1(JsonSourceKey::kValue));
+  // value 兼容旧数据里存数字的情况（Qt6 的 toString 不转换数值，需显式处理）
+  if (v.isDouble()) {
+    o.value = QString::number(v.toDouble());
+    o.valueType = obj.value(QString::fromLatin1(JsonSourceKey::kValueType)).toString();
+    // 旧数据 value 直接存数字 → 视为数字类型
+    if (o.valueType.isEmpty()) o.valueType = QStringLiteral("number");
+  } else if (v.isString()) {
+    o.value = v.toString();
+    o.valueType = obj.value(QString::fromLatin1(JsonSourceKey::kValueType)).toString();
+  } else {
+    o.value = v.toVariant().toString();
+  }
   return o;
 }
 
@@ -52,6 +68,8 @@ QJsonObject JsonSource::toJson() const {
     QJsonArray arr;
     for (const auto &o : options) arr.append(o.toJson());
     obj[QString::fromLatin1(JsonSourceKey::kOptions)] = arr;
+    // 静态数据源也存 url（作为生成函数名的依据，如 booleanStatic + url名）
+    if (!url.isEmpty()) obj[QString::fromLatin1(JsonSourceKey::kUrl)] = url;
   }
 
   return obj;
@@ -83,6 +101,7 @@ JsonSource JsonSource::fromJson(const QJsonObject &obj) {
     for (const auto &v : arr) {
       if (v.isObject()) s.options.append(JsonSourceOption::fromJson(v.toObject()));
     }
+    s.url = obj.value(QString::fromLatin1(JsonSourceKey::kUrl)).toString();
   }
 
   return s;

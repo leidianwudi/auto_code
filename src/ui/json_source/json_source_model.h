@@ -47,6 +47,7 @@ inline constexpr const char *kSearchField = "searchField";
 inline constexpr const char *kOptions = "options";
 inline constexpr const char *kLabel = "label";
 inline constexpr const char *kValue = "value";
+inline constexpr const char *kValueType = "valueType";  ///< 实际值类型（""=字符串 / "number"=数字）
 }  // namespace JsonSourceKey
 
 /// 数据源类型字符串常量
@@ -58,10 +59,15 @@ inline constexpr const char *kDynamic = "dynamic";
 /**
  * @struct JsonSourceOption
  * @brief 静态数据源选项（显示文本 + 实际值）
+ *
+ * valueType 标记实际值类型（""=字符串 / "number"=数字），
+ * 供代码生成时决定 value 字面量是否加引号（数字 1 vs 字符串 '1'）。
+ * value 始终以字符串保真存储，类型只做标记。
  */
 struct JsonSourceOption {
-  QString label;  ///< 显示文本
-  QString value;  ///< 实际值
+  QString label;       ///< 显示文本
+  QString value;       ///< 实际值（字符串保真存储）
+  QString valueType;   ///< 实际值类型（""=字符串 / "number"=数字）
 
   QJsonObject toJson() const;
   static JsonSourceOption fromJson(const QJsonObject &obj);

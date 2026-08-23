@@ -1,35 +1,46 @@
-﻿# 构建配置（默认 Debug；切 Release 用: .trae\build.ps1 Release）
+# Build config (default Debug; for Release use: .trae\build.ps1 Release)
 param([string]$Config = "Debug")
 
-# 清除所有 SAFE_RM_* 环境变量
+# Clear all SAFE_RM_* environment variables
 Get-ChildItem Env:SAFE_RM_* | Remove-Item -ErrorAction SilentlyContinue
 
-# 设置 VS 开发环境（如果尚未加载）
+# Setup VS dev environment (if not loaded yet)
 if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
-    $vsDevCmd = "D:\tool\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"
-    if (-not (Test-Path $vsDevCmd)) {
-        Write-Error "未找到 VsDevCmd.bat：$vsDevCmd"
+    # Locate VS install path via vswhere so the script works across machines
+    $vsDevCmd = $null
+    $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+    if (Test-Path $vswhere) {
+        $installPath = & $vswhere -latest -products * -property installationPath
+        if ($installPath) {
+            $candidate = Join-Path $installPath "Common7\Tools\VsDevCmd.bat"
+            if (Test-Path $candidate) { $vsDevCmd = $candidate }
+        }
+    }
+    if (-not $vsDevCmd) {
+        Write-Error "VsDevCmd.bat not found (vswhere: $vswhere)"
         exit 1
     }
-    # 让 VsDevCmd 仅在子进程中执行并打印其环境，再逐行写回当前进程。
-    # 不能直接 `cmd /c "... && set"` 就完事，那样环境只存在于子进程，父进程仍找不到 cmake。
+    # Run VsDevCmd in a child process, print its env, then copy back line by line.
+    # Do NOT use `cmd /c "... && set"` directly: the env would only exist in the
+    # child process and the parent still cannot find cmake.
     $envLines = cmd /c "`"$vsDevCmd`" -arch=x64 -host_arch=x64 >nul 2>&1 && set"
     foreach ($line in $envLines) {
         if ($line -match '^([^=]+)=(.*)$') {
-            # 环境变量名可能含空格（如 Program Files），拒绝这类无效名，避免污染
+            # Env var names may contain spaces (e.g. Program Files); skip invalid names
             if ($matches[1] -notmatch '\s') {
                 Set-Item -Path "Env:$($matches[1])" -Value $matches[2]
             }
         }
     }
     if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
-        Write-Error "VsDevCmd 已执行，但 cmake 仍未加入 PATH，请检查 VsDevCmd 路径或 CMake 安装。"
+        Write-Error "VsDevCmd executed but cmake is still not on PATH. Check VsDevCmd path or CMake installation."
         exit 1
     }
 }
 
-# 执行构建（$PSScriptRoot 为本脚本所在目录，..\build 即工程根下的 build，跨机器路径无关）
-# 注意：VS 生成器不指定 --target 时默认构建全部目标（ALL_BUILD），不能用 --target all（VS 里不存在 all.vcxproj）
+# Run the build ($PSScriptRoot = script dir, ..\build = build dir under project root)
+# Note: VS generator builds ALL_BUILD by default when no --target is given;
+# there is no "all" target in VS solutions.
 $buildDir = Join-Path $PSScriptRoot '..\build'
 cmake --build $buildDir --config $Config
 exit $LASTEXITCODE

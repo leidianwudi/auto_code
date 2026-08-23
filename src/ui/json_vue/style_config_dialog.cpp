@@ -60,6 +60,62 @@ static void invalidateAllLayouts(QWidget *widget) {
 }
 
 // ════════════════════════════════════════════════════════════
+//  静态数据源函数名推导（与 AC 脚本 tool_str.ac / admin_data.ac 保持一致）
+//  snakeToPascal/snakeToCamel/urlToFuncName 复刻 AC 侧逻辑，
+//  保证 jsonvue 下拉框展示的函数名与 source.tpl 生成的一致
+// ════════════════════════════════════════════════════════════
+
+/// 下划线命名 → 帕斯卡命名（"user_role" → "UserRole"）
+static QString snakeToPascal(const QString &str) {
+  QString res;
+  const QStringList segs = str.split(QLatin1Char('_'));
+  for (const QString &seg : segs) {
+    if (seg.isEmpty()) continue;
+    res += seg.at(0).toUpper() + seg.mid(1);
+  }
+  return res;
+}
+
+/// 下划线命名 → 小驼峰命名（"user_role" → "userRole"）
+static QString snakeToCamel(const QString &str) {
+  const QString pascal = snakeToPascal(str);
+  if (pascal.isEmpty()) return pascal;
+  return pascal.at(0).toLower() + pascal.mid(1);
+}
+
+/// 数据源 url → 函数名（第一段小驼峰，后续段帕斯卡拼接）
+/// "enableState" → "enableState"；"vipprice/getTime" → "vippriceGetTime"
+static QString sourceUrlToFuncName(const QString &url) {
+  QString norm = url;
+  norm.replace(QLatin1Char('\\'), QLatin1Char('/'));
+  const QStringList parts = norm.split(QLatin1Char('/'));
+  QString res;
+  bool first = true;
+  for (const QString &seg : parts) {
+    if (seg.isEmpty()) continue;
+    if (first) {
+      res = snakeToCamel(seg);
+      first = false;
+    } else {
+      res += snakeToPascal(seg);
+    }
+  }
+  return res;
+}
+
+/// 静态数据源函数名（与 admin_data.ac processSources 一致）：
+/// 文件名小驼峰 + "Static" + url名（帕斯卡），
+/// boolean.jsonsource + enableState → booleanStaticEnableState
+static QString staticSourceFuncName(const QString &sourceName, const QString &url) {
+  QString urlName = sourceUrlToFuncName(url);
+  if (!urlName.isEmpty()) {
+    urlName[0] = urlName.at(0).toUpper();  // url 名首字母大写（Pascal）
+    return snakeToCamel(sourceName) + QStringLiteral("Static") + urlName;
+  }
+  return snakeToCamel(sourceName) + QStringLiteral("Static");  // 旧数据无 url 时仅前缀
+}
+
+// ════════════════════════════════════════════════════════════
 //  ColumnStyleDialog 构造/析构
 // ════════════════════════════════════════════════════════════
 
@@ -342,9 +398,9 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
     m_displayTypeWidget->setMaximumHeight(QWIDGETSIZE_MAX);  // 恢复高度限制
     m_displayTypeWidget->setVisible(true);
 
-    // 静态数据源下拉：列出所有恰好 2 项选项的静态数据源（如 0:禁用/1:启用）。
-    // 选中后真假文字从数据源实时读取并锁定不可改（数据源修改后重开对话框自动同步）；
-    // 选"手动输入"时解锁，可自由填写真假文字
+    // 静态数据源下拉：列出所有恰好 2 项选项的静态数据源。
+    // 下拉项显示"函数名 - 说明（文件名）"，选中后真假文字从数据源实时读取并锁定
+    // 不可改（数据源修改后重开对话框自动同步）；选"手动输入"时解锁，可自由填写真假文字
     m_boolSourceCombo = new QComboBox(m_displayTypeWidget);
     m_boolSourceCombo->addItem(QStringLiteral("（手动输入真假文字）"), QString());
     int restoreIdx = 0;
@@ -361,12 +417,11 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
       for (const auto &s : cfg.sources) {
         // 仅 2 项选项的静态数据源可选（真假文字只有两个状态）
         if (!s.isStatic() || s.options.size() != 2) continue;
-        const auto &o0 = s.options.at(0);
-        const auto &o1 = s.options.at(1);
         const QString remark = s.remark.isEmpty() ? QStringLiteral("(未命名)") : s.remark;
-        const QString text = QStringLiteral("%1（%2:%3 / %4:%5）- %6")
-                                 .arg(remark, o0.value, o0.label, o1.value, o1.label,
-                                      QFileInfo(sf).fileName());
+        // 显示：函数名 - 说明（文件名），不显示 0/1 具体值
+        const QString funcName = staticSourceFuncName(QFileInfo(sf).baseName(), s.url);
+        const QString text = QStringLiteral("%1 - %2（%3）")
+                                 .arg(funcName, remark, QFileInfo(sf).fileName());
         m_boolSourceCombo->addItem(text, sf + QStringLiteral("#") + s.id);
         if (sf == m_cachedBoolSourceFile && s.id == m_cachedBoolSourceId) {
           restoreIdx = m_boolSourceCombo->count() - 1;

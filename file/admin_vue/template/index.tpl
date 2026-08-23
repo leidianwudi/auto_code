@@ -20,6 +20,9 @@ ${#                    selectUrl, selectValueField, selectLabelField,           
 ${#                    placeholder, dateFormat, component}]                       }
 ${#   columns       - 列配置数组 [{dataName, label, isSwitch, columnWidth,       }
 ${#                    columnFixed}]                                             }
+${#   hasBoolApiColumns / boolSourceImportLines - 布尔开关引用静态数据源时       }
+${#     顶部导入 source api，运行时异步加载开关文字（switchActiveTextExpr 等），  }
+${#     不写死在代码里                                                           }
 ${# ============================================================================}
 <script setup lang="tsx">
 //此文件为AutoCode编译器生成，请勿手动修改
@@ -36,7 +39,8 @@ import Write from './components/write.vue';
 import { Dialog } from '@/components/dialog';
 import { ${apiImports} } from '@/api/${apiModule}/${pageName}';
 import { uiCrudLogic } from '@/utils/ui_crud_logic';
-${if hasLinkButtons}import { useRouter } from 'vue-router';${/if}
+${if hasBoolSourceImports}${boolSourceImportLines}
+${/if}${if hasLinkButtons}import { useRouter } from 'vue-router';${/if}
 
 // 定义表单引用
 const writeRef = ref<ComponentRef<typeof Write>>();
@@ -85,6 +89,24 @@ const {
   save
 } = crudMethods;
 
+${if hasBoolApiColumns}
+// 布尔开关引用的静态数据源文字：静态源函数同步返回，setup 直接读取，
+// 渲染前数据已就绪；数据源缺项或函数抛错时在此直接暴露（不写死、不兜底）
+const boolSwitchTexts = reactive<Record<string, { active: string; inactive: string }>>({});
+
+${each col in columns}${if col.isBooleanSwitch}${if col.hasBoolApi}{
+  const boolData = ${col.boolApiName}();
+  const list = (boolData?.data?.list as Array<any>) || [];
+  const activeItem = list.find((it: any) => String(it.value) === '1');
+  const inactiveItem = list.find((it: any) => String(it.value) === '0');
+  if (!activeItem) throw new Error('数据源缺少 value=1 的选项（字段 ${col.dataName}）');
+  if (!inactiveItem) throw new Error('数据源缺少 value=0 的选项（字段 ${col.dataName}）');
+  boolSwitchTexts['${col.dataName}'] = {
+    active: String(activeItem.label),
+    inactive: String(inactiveItem.label)
+  };
+}
+${/if}${/if}${/each}${/if}
 
 
 // 搜索表单
@@ -169,8 +191,8 @@ ${/if}    slots: {
             onChange={() => {
               updateStatusAndTip(data.row);
             }}
-            activeText="${col.switchActiveText}"
-            inactiveText="${col.switchInactiveText}"
+            activeText={${col.switchActiveTextExpr}}
+            inactiveText={${col.switchInactiveTextExpr}}
             inlinePrompt={true}
             active-color="#13ce66"
             inactive-color="#ff4949"

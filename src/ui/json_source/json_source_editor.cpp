@@ -59,7 +59,7 @@ void JsonSourceEditor::setupUI() {
   m_table = makeConfigTable(
       {{QStringLiteral("说明"), QHeaderView::Interactive, 160},
        {QStringLiteral("类型"), QHeaderView::Interactive, 80},
-       {QStringLiteral("URL"), QHeaderView::Interactive, 260},
+       {QStringLiteral("URL/函数名"), QHeaderView::Interactive, 260},
        {QString::fromUtf8(CodeConstants::UiText::kConfig), QHeaderView::Interactive, 220}},
       group, 100, 0, QAbstractItemView::SelectRows);
   // 所有列均 Interactive 可拖动调整宽度，末列拉伸填满剩余空间避免右侧留白
@@ -163,7 +163,8 @@ void JsonSourceEditor::onAddSource() {
                                                        : QStringLiteral("动态"));
     typeItem->setFlags(typeItem->flags() & ~Qt::ItemIsEditable);
     m_table->setItem(row, JDColType, typeItem);
-    m_table->setItem(row, JDColUrl, new QTableWidgetItem(s.isStatic() ? QString() : s.url));
+    // URL/函数名列：动态显示请求地址，静态显示函数 URL（函数名来源）
+    m_table->setItem(row, JDColUrl, new QTableWidgetItem(s.url));
     m_table->setCellWidget(row, JDColConfig, makeConfigButton());
     refreshSummary(row);
     m_table->selectRow(row);
@@ -184,7 +185,8 @@ void JsonSourceEditor::onEditSource() {
     m_table->item(row, JDColRemark)->setText(s.remark);
     m_table->item(row, JDColType)->setText(s.isStatic() ? QStringLiteral("静态")
                                                         : QStringLiteral("动态"));
-    m_table->item(row, JDColUrl)->setText(s.isStatic() ? QString() : s.url);
+    // URL/函数名列：动态显示请求地址，静态显示函数 URL（函数名来源）
+    m_table->item(row, JDColUrl)->setText(s.url);
     refreshSummary(row);
     if (!m_loading) emit configChanged();
   }
@@ -265,7 +267,8 @@ void JsonSourceEditor::loadConfig(const JsonSourceConfig &config) {
                                                        : QStringLiteral("动态"));
     typeItem->setFlags(typeItem->flags() & ~Qt::ItemIsEditable);
     m_table->setItem(row, JDColType, typeItem);
-    m_table->setItem(row, JDColUrl, new QTableWidgetItem(s.isStatic() ? QString() : s.url));
+    // URL/函数名列：动态显示请求地址，静态显示函数 URL（函数名来源）
+    m_table->setItem(row, JDColUrl, new QTableWidgetItem(s.url));
 
     m_table->setCellWidget(row, JDColConfig, makeConfigButton());
     refreshSummary(row);

@@ -40,6 +40,10 @@ public:
   /// 获取编辑结果（调用方自行设置/保留 id）
   JsonSource source() const;
 
+protected:
+  /// 确定前校验（静态数据源必须填写函数 URL）
+  void accept() override;
+
 private slots:
   /// 类型切换：切换静态/动态配置区
   void onTypeChanged(int index);
@@ -70,7 +74,8 @@ private:
   QStackedWidget *m_stack = nullptr;  ///< 静态/动态配置区
 
   // ── 静态配置区 ──
-  QTableWidget *m_optionTable = nullptr;  ///< 选项表格（显示文本/实际值）
+  QLineEdit *m_staticUrlEdit = nullptr;   ///< 函数 URL（必填，用于生成函数名）
+  QTableWidget *m_optionTable = nullptr;  ///< 选项表格（显示文本/实际值/类型）
   QPushButton *m_addOptionBtn = nullptr;
   QPushButton *m_removeOptionBtn = nullptr;
   QPushButton *m_optionUpBtn = nullptr;

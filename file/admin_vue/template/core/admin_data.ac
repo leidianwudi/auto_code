@@ -162,6 +162,19 @@ export function processColumns(rawColumns: Object[], sourceMap: Object): Object[
     col["switchActiveText"] = escapeJsStr(switchActiveText);
     col["switchInactiveText"] = escapeJsStr(switchInactiveText);
 
+    // 开关文字表达式（index.tpl 的 ElSwitch 使用）：
+    //   引用静态数据源 → 运行时响应式变量 boolSwitchTexts['字段'].active/inactive
+    //   （index.vue 顶部异步加载数据源文字，避免写死）；
+    //   未引用 → 配置文字字面量（带双引号字符串）
+    let switchActiveTextExpr: String = "\"" + escapeJsStr(switchActiveText) + "\"";
+    let switchInactiveTextExpr: String = "\"" + escapeJsStr(switchInactiveText) + "\"";
+    if (boolApiName != "") {
+      switchActiveTextExpr = "boolSwitchTexts['" + escapeJsStr(col["dataName"]) + "'].active";
+      switchInactiveTextExpr = "boolSwitchTexts['" + escapeJsStr(col["dataName"]) + "'].inactive";
+    }
+    col["switchActiveTextExpr"] = switchActiveTextExpr;
+    col["switchInactiveTextExpr"] = switchInactiveTextExpr;
+
     // 判断是否为多行文本
     let isTextArea = false;
     if (rawCol.editStyle == "textarea") {
@@ -710,28 +723,17 @@ export function buildApiImports(queryApi: String, deleteApi: String, updateApi: 
 }
 
 // ---------------------------------------------------------------------------
-// 5-1b) 判断字符串是否为无符号整数字面量（"0"/"1"/"10"...）
-//   供 source.tpl 静态选项生成数字 value（不加引号），
-//   保持与布尔开关内联 options（value: 0/1 数字）提交类型一致；
-//   前导零（如 "01"）返回 false，保留字符串原样
+// 5-1c) 生成静态选项的 value 字面量
+//   valueType 由 .jsonsource 配置界面选择（""=字符串 / "number"=数字）：
+//     数字类型 → 数字字面量（如 1），保持与布尔开关内联 options（value: 0/1
+//     数字）提交类型一致，避免表单显示成 0/1 而非文字；
+//     字符串/未配置 → 带单引号的字符串字面量（如 '1' / 'abc'）
 // ---------------------------------------------------------------------------
-export function isUintStr(s: String): Bool {
-  if (s == null || s == "") {
-    return false;
+export function makeValueLiteral(v: Any, vt: Any): String {
+  if (vt == "number") {
+    return v;
   }
-  let chars: String[] = s.split("");
-  let clen = chars.length;
-  for (let i = 0; i < clen; i = i + 1) {
-    let c = chars[i];
-    if (c != "0" && c != "1" && c != "2" && c != "3" && c != "4" &&
-        c != "5" && c != "6" && c != "7" && c != "8" && c != "9") {
-      return false;
-    }
-  }
-  if (clen > 1 && chars[0] == "0") {
-    return false;
-  }
-  return true;
+  return "'" + escapeJsStr(v) + "'";
 }
 
 // ---------------------------------------------------------------------------
@@ -813,8 +815,7 @@ export function processSources(rawSources: Object[], sourceName: String): Object
       for (let j = 0; j < olen; j = j + 1) {
         items.push({
           labelEsc: escapeJsStr(rawOpts[j].label),
-          valueEsc: escapeJsStr(rawOpts[j].value),
-          valueIsNum: isUintStr(rawOpts[j].value)
+          valueLiteral: makeValueLiteral(rawOpts[j].value, rawOpts[j].valueType)
         });
       }
     }
@@ -823,12 +824,22 @@ export function processSources(rawSources: Object[], sourceName: String): Object
     // id 与来源文件基名（jsonvue 引用查找表使用）
     src["id"] = raw.id;
     src["sourceName"] = sourceName;
-    // 函数名：动态取 url 全路径驼峰（跨模块不冲突），
-    // 静态取 文件名驼峰 + Static + 序号；为空或重复时兜底去重
+    // 函数名：动态取 url 全路径驼峰（跨模块不冲突）；
+    // 静态取 文件名驼峰 + Static + url名（如 booleanStaticEnableState）；
+    // 为空或重复时兜底去重
     let funcName: String = "";
     if (isStatic) {
+      // 静态数据源函数名 = 文件名Static + url名（url 由配置界面必填），
+      // url 名转帕斯卡（首字母大写），如 boolean.jsonsource 的 url=enableState
+      // → booleanStaticEnableState；旧数据无 url 时退回序号（兼容）
       staticIndex = staticIndex + 1;
-      funcName = sourceCamel + "Static" + staticIndex;
+      let urlName = urlToFuncName(raw.url);
+      if (urlName != "") {
+        urlName = urlName.substring(0, 1).toUpperCase() + urlName.substring(1);
+        funcName = sourceCamel + "Static" + urlName;
+      } else {
+        funcName = sourceCamel + "Static" + staticIndex;
+      }
     } else {
       funcName = urlToFuncName(raw.url);
     }
@@ -890,7 +901,8 @@ export function deriveApiBaseFromUrl(dataUrl: String): String {
   return "";
 }
 
-export function buildAdminTplData(json: Object, file: String, suffixes: Object): Object {
+export function buildAdminTplData(json: Object, file: String, suffixes: Object,
+                                  sourceFiles: String[]): Object {
   // ── meta 与原始数据 ──────────────────────────────────────────────
   let meta: Object = json.meta;
   let rawColumns: Object[] = json.columns;
@@ -957,7 +969,21 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object):
           continue;
         }
         sourceFileSet[sfPre] = true;
-        let srcJson: Object = readJson(sfPre);
+        // 引用路径匹配：jsonvue 里存的是选择时的绝对路径，文件被移动后会过期。
+        // 勾选的 .jsonsource 文件都在脚本同父路径下，按文件名匹配真实路径；
+        // 未匹配到时退回 jsonvue 里存的路径
+        let readPath: String = sfPre;
+        if (sourceFiles != null) {
+          let sfBase: String = basename(sfPre);
+          let sfsLen = sourceFiles.length;
+          for (let m = 0; m < sfsLen; m = m + 1) {
+            if (basename(sourceFiles[m]) == sfBase) {
+              readPath = sourceFiles[m];
+              break;
+            }
+          }
+        }
+        let srcJson: Object = readJson(readPath);
         let rawSources: Object[] = [];
         if (srcJson != null && srcJson.sources != null) {
           rawSources = srcJson.sources;
@@ -989,6 +1015,11 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object):
   let sourceFileMap: Object = {};      // jsonsource 文件基名 → 函数名列表（逗号分隔）
   let sourceFileOrder: String[] = [];  // 文件出现顺序（保证 import 行稳定）
   let sourceNameSet: Object = {};      // 数据源函数名去重（多个列可引用同一数据源）
+  // 布尔开关引用（index.tpl 使用）：仅收集 isBooleanSwitch 引用的静态数据源函数
+  let boolSourceFileMap: Object = {};
+  let boolSourceFileOrder: String[] = [];
+  let boolSourceNameSet: Object = {};
+  let hasBoolApiColumns = false;       // 是否存在引用静态数据源的布尔开关列
   let colsSelLen = columns.length;
   for (let i = 0; i < colsSelLen; i = i + 1) {
     let colSel: Object = columns[i];
@@ -1000,6 +1031,7 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object):
     let selName: String = colSel["selectApiName"];
     if (isBoolRef) {
       selName = colSel["boolApiName"];
+      hasBoolApiColumns = true;
     }
     if (colSel["hasSourceRef"] || isBoolRef) {
       // 引用数据源：按文件分组收集 import（函数本体由 source.tpl 生成）
@@ -1011,6 +1043,17 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object):
           sourceFileOrder.push(refBase);
         } else {
           sourceFileMap[refBase] = sourceFileMap[refBase] + ", " + selName;
+        }
+      }
+      // 布尔引用额外收集到独立分组（index.tpl 只导入这些函数）
+      if (isBoolRef && boolSourceNameSet[selName] == null) {
+        boolSourceNameSet[selName] = true;
+        let refBase2: String = colSel["sourceRefFile"];
+        if (boolSourceFileMap[refBase2] == null) {
+          boolSourceFileMap[refBase2] = selName;
+          boolSourceFileOrder.push(refBase2);
+        } else {
+          boolSourceFileMap[refBase2] = boolSourceFileMap[refBase2] + ", " + selName;
         }
       }
     } else if (selectApiNameSet[selName] == null) {
@@ -1040,6 +1083,19 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object):
                         " } from '@/api/source/" + fb + "';";
   }
   let hasSourceImports = (sourceImportLines != "");
+
+  // 布尔开关 source api 导入行（index.tpl 使用，只含引用了静态数据源的开关函数）
+  let boolSourceImportLines = "";
+  let bsfoLen = boolSourceFileOrder.length;
+  for (let i = 0; i < bsfoLen; i = i + 1) {
+    let fb: String = boolSourceFileOrder[i];
+    if (boolSourceImportLines != "") {
+      boolSourceImportLines = boolSourceImportLines + "\n";
+    }
+    boolSourceImportLines = boolSourceImportLines + "import { " + boolSourceFileMap[fb] +
+                            " } from '@/api/source/" + fb + "';";
+  }
+  let hasBoolSourceImports = (boolSourceImportLines != "");
 
   let buttons: Object[] = btnResult["buttons"];
   let rowButtons: Object[] = btnResult["rowButtons"];
@@ -1136,6 +1192,10 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object):
   tplData["selectApiImports"] = selectApiImports;  // ${selectApiImports} 下拉框接口导入列表
   tplData["hasSourceImports"] = hasSourceImports;    // ${if hasSourceImports} 是否导入 source api
   tplData["sourceImportLines"] = sourceImportLines;  // ${sourceImportLines} source api 导入行
+  // 布尔开关引用静态数据源（index.tpl 使用）
+  tplData["hasBoolApiColumns"] = hasBoolApiColumns;  // ${if hasBoolApiColumns} 是否有布尔开关引用数据源
+  tplData["boolSourceImportLines"] = boolSourceImportLines;  // ${boolSourceImportLines} 布尔开关 source import 行
+  tplData["hasBoolSourceImports"] = hasBoolSourceImports;  // ${if hasBoolSourceImports} 是否导入布尔 source api
   tplData["noDelete"] = noDelete;                  // ${if !noDelete} 不可删除
   tplData["noEdit"] = noEdit;                      // ${if !noEdit} 不可编辑
   tplData["noDetail"] = noDetail;                  // ${if !noDetail} 不可查看详情

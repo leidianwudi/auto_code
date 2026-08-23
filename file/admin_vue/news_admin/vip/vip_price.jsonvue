@@ -55,7 +55,7 @@
       queryVisible: true,
       required: false,
       selectLabelField: 'value',
-      selectSourceFile: 'D:/work/github/auto_code/file/admin_vue/news_admin/dropurl.jsonsource',
+      selectSourceFile: 'D:/work/github/auto_code/file/admin_vue/news_admin/api/dropurl.jsonsource',
       selectSourceId: 'beb7bb29',
       selectUrl: 'vipprice/getTimeTypeRecords',
       selectValueField: 'key',

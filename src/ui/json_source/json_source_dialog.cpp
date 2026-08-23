@@ -19,6 +19,7 @@
 #include "src/ui/json_vue/config_dialog_common.h"
 #include "src/ui/json_vue/select_source_panel.h"
 #include "src/util/common/code_constants.h"
+#include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/component/aui_style.h"
 
 // ════════════════════════════════════════════════════════════
@@ -69,6 +70,19 @@ void JsonSourceDialog::setupStaticPage() {
   layout->setContentsMargins(0, 0, 0, 0);
   layout->setSpacing(6);
 
+  // 函数 URL（必填）：作为生成 api 函数名的依据（文件名Static + url名），
+  // 避免用序号命名。与动态数据源 url 类似，如 enableState
+  auto *urlRow = new QHBoxLayout;
+  auto *urlLabel = new QLabel(QStringLiteral("函数URL:"), page);
+  urlLabel->setStyleSheet(QStringLiteral("color: #d03050;"));
+  urlRow->addWidget(urlLabel);
+  m_staticUrlEdit = new QLineEdit(page);
+  m_staticUrlEdit->setPlaceholderText(
+      QStringLiteral("必填，用于生成函数名，如 enableState（生成 booleanStaticEnableState）"));
+  m_staticUrlEdit->setMinimumHeight(28);
+  urlRow->addWidget(m_staticUrlEdit, 1);
+  layout->addLayout(urlRow);
+
   auto *btnRow = new QHBoxLayout;
   m_addOptionBtn = new QPushButton(QStringLiteral("+ 添加选项"), page);
   m_removeOptionBtn = new QPushButton(QStringLiteral("- 删除选项"), page);
@@ -83,7 +97,8 @@ void JsonSourceDialog::setupStaticPage() {
 
   m_optionTable = makeConfigTable(
       {{QStringLiteral("显示文本"), QHeaderView::Stretch, 0},
-       {QStringLiteral("实际值"), QHeaderView::Stretch, 0}},
+       {QStringLiteral("实际值"), QHeaderView::Stretch, 0},
+       {QStringLiteral("类型"), QHeaderView::ResizeToContents, 0}},
       page, 100, 0, QAbstractItemView::SelectRows);
   layout->addWidget(m_optionTable, 1);
 
@@ -127,6 +142,7 @@ void JsonSourceDialog::setSource(const JsonSource &source) {
   m_typeCombo->setCurrentIndex(typeIdx);
   m_remarkEdit->setText(source.remark);
   if (source.isStatic()) {
+    m_staticUrlEdit->setText(source.url);
     populateOptions(source.options);
   } else {
     m_panel->setData(source.url, source.method, source.valueField, source.labelField,
@@ -144,12 +160,24 @@ void JsonSourceDialog::setHttpConfig(const QString &baseUrl, const QString &auth
   if (m_panel) m_panel->setHttpConfig(baseUrl, authHeader, postData);
 }
 
+void JsonSourceDialog::accept() {
+  // 静态数据源必须填写函数 URL（作为生成函数名的依据）
+  if (m_typeCombo->currentData().toString() ==
+          QString::fromLatin1(JsonSourceType::kStatic) &&
+      m_staticUrlEdit->text().trimmed().isEmpty()) {
+    AuiMessageBox::show(this, QStringLiteral("提示"), QStringLiteral("请填写函数URL"));
+    return;
+  }
+  QDialog::accept();
+}
+
 JsonSource JsonSourceDialog::source() const {
   JsonSource s;
   s.id = m_id;
   s.type = m_typeCombo->currentData().toString();
   s.remark = m_remarkEdit->text().trimmed();
   if (s.isStatic()) {
+    s.url = m_staticUrlEdit->text().trimmed();
     s.options = collectOptions();
   } else {
     s.url = m_panel->url();
@@ -175,6 +203,11 @@ void JsonSourceDialog::onAddOption() {
   m_optionTable->insertRow(row);
   m_optionTable->setItem(row, 0, new QTableWidgetItem());
   m_optionTable->setItem(row, 1, new QTableWidgetItem());
+  // 类型列：字符串（默认）/ 数字
+  auto *combo = new QComboBox(m_optionTable);
+  combo->addItem(QStringLiteral("字符串"), QString());
+  combo->addItem(QStringLiteral("数字"), QStringLiteral("number"));
+  m_optionTable->setCellWidget(row, 2, combo);
   m_optionTable->setCurrentCell(row, 0);
 }
 
@@ -199,13 +232,17 @@ void JsonSourceDialog::onOptionDown() {
 }
 
 void JsonSourceDialog::swapRows(int a, int b) {
-  // 交换两行所有单元格的 item 与 cellWidget
+  // 交换两行所有单元格的 item 与 cellWidget（类型列为 cellWidget）
   const int cols = m_optionTable->columnCount();
   for (int c = 0; c < cols; ++c) {
     QTableWidgetItem *ia = m_optionTable->takeItem(a, c);
     QTableWidgetItem *ib = m_optionTable->takeItem(b, c);
     m_optionTable->setItem(a, c, ib);
     m_optionTable->setItem(b, c, ia);
+    QWidget *wa = m_optionTable->cellWidget(a, c);
+    QWidget *wb = m_optionTable->cellWidget(b, c);
+    m_optionTable->setCellWidget(a, c, wb);
+    m_optionTable->setCellWidget(b, c, wa);
   }
 }
 
@@ -217,6 +254,10 @@ QVector<JsonSourceOption> JsonSourceDialog::collectOptions() const {
     auto *value = m_optionTable->item(r, 1);
     o.label = label ? label->text().trimmed() : QString();
     o.value = value ? value->text().trimmed() : QString();
+    // 类型列（cellWidget）：字符串（data 空）/ 数字（data="number"）
+    if (auto *combo = qobject_cast<QComboBox *>(m_optionTable->cellWidget(r, 2))) {
+      o.valueType = combo->currentData().toString();
+    }
     if (!o.label.isEmpty() || !o.value.isEmpty()) out.append(o);
   }
   return out;
@@ -229,5 +270,10 @@ void JsonSourceDialog::populateOptions(const QVector<JsonSourceOption> &options)
     m_optionTable->insertRow(row);
     m_optionTable->setItem(row, 0, new QTableWidgetItem(o.label));
     m_optionTable->setItem(row, 1, new QTableWidgetItem(o.value));
+    auto *combo = new QComboBox(m_optionTable);
+    combo->addItem(QStringLiteral("字符串"), QString());
+    combo->addItem(QStringLiteral("数字"), QStringLiteral("number"));
+    combo->setCurrentIndex(o.valueType == QStringLiteral("number") ? 1 : 0);
+    m_optionTable->setCellWidget(row, 2, combo);
   }
 }

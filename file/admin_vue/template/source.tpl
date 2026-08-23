@@ -10,7 +10,9 @@ ${# 数据来源（tplData，由 admin_data.ac 的 buildSourceTplData 加工）�
 ${#   sourceName - .jsonsource 文件名（不含扩展名），import 路径使用            }
 ${#   sources    - 数据源数组                                                   }
 ${#     [{isStatic, isDynamic, remark, funcName, methodLower, url,              }
-${#      hasItems, items: [{labelEsc, valueEsc}]}]                              }
+${#      hasItems, items: [{labelEsc, valueLiteral}]}]                           }
+${#        valueLiteral 由 makeValueLiteral 生成：纯数字 value → 数字字面量      }
+${#       （如 1），其余 → 带引号字符串字面量（如 'abc'），保持提交类型正确      }
 ${# 说明：                                                                       }
 ${#   funcName 由 urlToFuncName 统一推导（动态=URL 全路径驼峰，静态=文件名驼峰+序号），}
 ${#   jsonvue 引用数据源的列（selectSourceFile/selectSourceId）生成的           }
@@ -26,14 +28,14 @@ export const ${src.funcName} = () => {
   return request.${src.methodLower}({ url: '${src.url}' })
 };
 ${else}
-//${src.remark}（静态选项）
+//${src.remark}（静态选项，同步返回：组件 setup 可直接读取，无需异步/兜底）
 export const ${src.funcName} = () => {
-  return Promise.resolve({
+  return {
     data: {
       list: [${if src.hasItems}
-${each it in src.items}        { label: '${it.labelEsc}', value: ${if it.valueIsNum}${it.valueEsc}${else}'${it.valueEsc}'${/if} },${/each}${/if}
+${each it in src.items}        { label: '${it.labelEsc}', value: ${it.valueLiteral} },${/each}${/if}
       ]
     }
-  });
+  };
 };
 ${/if}${/each}
