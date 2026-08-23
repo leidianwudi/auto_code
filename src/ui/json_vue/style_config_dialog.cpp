@@ -236,8 +236,8 @@ void ColumnStyleDialog::setupUI() {
 
   // 表单布局
   m_formSpanCombo = new QComboBox(this);
-  m_formSpanCombo->addItem(QStringLiteral("整行"), 24);
   m_formSpanCombo->addItem(QStringLiteral("半行"), 12);
+  m_formSpanCombo->addItem(QStringLiteral("整行"), 24);
   m_formSpanCombo->addItem(QStringLiteral("三分之一"), 8);
   addRow(QStringLiteral("表单布局:"), m_formSpanCombo);
 
@@ -755,7 +755,7 @@ void ColumnStyleDialog::setFormSpan(int v) {
 }
 
 int ColumnStyleDialog::formSpan() const {
-  return m_formSpanCombo ? m_formSpanCombo->currentData().toInt() : 24;
+  return m_formSpanCombo ? m_formSpanCombo->currentData().toInt() : 12;
 }
 
 // ── 表格列显示样式 ──

@@ -318,7 +318,8 @@ export function processColumns(rawColumns: Object[]): Object[] {
     col["isFormatterDate"] = (rawCol.formatter == "date");
     col["isFormatterStatus"] = (rawCol.formatter == "status");
     col["isFormatterCurrency"] = (rawCol.formatter == "currency");
-    col["hasFormSpan"] = (rawCol.formSpan != null && rawCol.formSpan != 24);
+    // 表单栅格：整行(24)/三分之一(8) 显式输出 colProps；半行(12) 为框架默认，无需输出
+    col["hasFormSpan"] = (rawCol.formSpan != null && rawCol.formSpan != 12);
     columns.push(col);
   }
   return columns;

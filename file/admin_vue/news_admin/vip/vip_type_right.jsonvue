@@ -32,6 +32,7 @@
       editEditable: true,
       editStyle: 'text',
       editVisible: true,
+      formSpan: 12,
       maxlength: 0,
       queryName: '权限编码',
       queryStyle: 'text',

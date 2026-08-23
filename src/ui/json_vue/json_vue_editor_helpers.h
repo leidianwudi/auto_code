@@ -140,7 +140,7 @@ inline void readColumnConfig(QPushButton *btn, ColumnConfig &col) {
   col.formatter = btn->property(JsonVueKey::kFormatter).toString();
   col.formSpan = btn->property(JsonVueKey::kFormSpan).isValid()
                      ? btn->property(JsonVueKey::kFormSpan).toInt()
-                     : 24;
+                     : 12;
   col.displayType = btn->property(JsonVueKey::kDisplayType).toString();
   // tagItems 从 QVariantList 读取
   col.tagItems.clear();
@@ -242,7 +242,7 @@ inline QString columnConfigSummary(const ColumnConfig &col) {
   if (col.columnWidth > 0) parts << QStringLiteral("宽%1").arg(col.columnWidth);
   if (!col.columnFixed.isEmpty()) parts << QStringLiteral("固定%1").arg(col.columnFixed);
   if (!col.formatter.isEmpty()) parts << QStringLiteral("格式:%1").arg(col.formatter);
-  if (col.formSpan != 24) parts << QStringLiteral("span:%1").arg(col.formSpan);
+  if (col.formSpan != 12) parts << QStringLiteral("span:%1").arg(col.formSpan);
   if (!col.defaultValue.isEmpty()) parts << QStringLiteral("默认:%1").arg(col.defaultValue);
   if (!col.defaultSort.isEmpty()) parts << QStringLiteral("排序:%1").arg(col.defaultSort);
 

@@ -321,7 +321,7 @@ QJsonObject ColumnConfig::toJson() const {
   obj[JsonVueKey::kColumnWidth] = columnWidth;
   if (!columnFixed.isEmpty()) obj[JsonVueKey::kColumnFixed] = columnFixed;
   if (!formatter.isEmpty()) obj[JsonVueKey::kFormatter] = formatter;
-  if (formSpan != 24) obj[JsonVueKey::kFormSpan] = formSpan;
+  obj[JsonVueKey::kFormSpan] = formSpan;
   if (!displayType.isEmpty()) {
     obj[JsonVueKey::kDisplayType] = displayType;
     if (displayType == JsonVueStyle::kTag) {
@@ -382,7 +382,7 @@ ColumnConfig ColumnConfig::fromJson(const QJsonObject &obj) {
   c.columnWidth = obj.value(JsonVueKey::kColumnWidth).toInt(0);
   c.columnFixed = obj.value(JsonVueKey::kColumnFixed).toString();
   c.formatter = obj.value(JsonVueKey::kFormatter).toString();
-  c.formSpan = obj.value(JsonVueKey::kFormSpan).toInt(24);
+  c.formSpan = obj.value(JsonVueKey::kFormSpan).toInt(12);
   c.displayType = obj.value(JsonVueKey::kDisplayType).toString();
   // tagItems 数组读取（displayType == "tag" 时使用）
   // 兼容旧格式：若 tagItems 为空但存在 tagTrueText/tagFalseText，则转换

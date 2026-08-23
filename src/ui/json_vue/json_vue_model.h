@@ -293,7 +293,7 @@ struct ColumnConfig {
   QString formatter;  ///< 格式化类型（""/"date"/"status"/"currency"）
 
   // ── 表单布局（3-4）──
-  int formSpan = 24;  ///< 表单项占比（24=整行，12=半行，8=三分之一）
+  int formSpan = 12;  ///< 表单项占比（24=整行，12=半行，8=三分之一）
 
   // ── 表格列显示样式（3-5）──
   /// 表格列渲染方式（""/"text"/"money"/"tag"/"boolean"/"image"）
