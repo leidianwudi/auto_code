@@ -106,12 +106,14 @@ export function processColumns(rawColumns: Object[], sourceMap: Object): Object[
     col["isBooleanSwitch"] = isBooleanSwitch;
     col["isTagSwitch"] = isTagSwitch;
 
-    // ── 布尔开关引用 .jsonsource 静态数据源 ────────────────────────
-    // 显示样式 boolean 可引用恰好 2 项的静态数据源（boolSourceFile/boolSourceId），
-    // write.vue 的 Select 改用 optionApi 调用 source api 函数（函数名与
-    // source.tpl 生成一致），数据源文字修改后只需重新生成 source.ts
+    // ── 布尔列引用 .jsonsource 静态数据源 ────────────────────────
+    // 显示样式 boolean 的列（开关 switchEditable=true 或纯文本显示
+    // switchEditable=false）都可引用恰好 2 项的静态数据源（boolSourceFile/
+    // boolSourceId）：write.vue 的 Select 用 optionApi 调 source api 函数，
+    // user.vue 的开关/文字用 boolSwitchTexts 运行时读取，都不写死文字；
+    // 数据源文字修改后只需重新生成 source.ts
     let boolApiName = "";
-    if (isBooleanSwitch && sourceMap != null) {
+    if (rawCol.displayType == "boolean" && sourceMap != null) {
       let boolRefFile: String = rawCol.boolSourceFile;
       if (isNotEmpty(boolRefFile)) {
         let boolRef: Object = sourceMap[boolRefFile + "#" + rawCol.boolSourceId];
@@ -132,7 +134,7 @@ export function processColumns(rawColumns: Object[], sourceMap: Object): Object[
     let switchInactiveValue = "0";
     let switchActiveText = "启用";
     let switchInactiveText = "禁用";
-    if (isBooleanSwitch) {
+    if (rawCol.displayType == "boolean") {
       switchActiveValue = "1";
       switchInactiveValue = "0";
       if (rawCol.boolTrueText != "") {
@@ -1015,7 +1017,7 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
   let sourceFileMap: Object = {};      // jsonsource 文件基名 → 函数名列表（逗号分隔）
   let sourceFileOrder: String[] = [];  // 文件出现顺序（保证 import 行稳定）
   let sourceNameSet: Object = {};      // 数据源函数名去重（多个列可引用同一数据源）
-  // 布尔开关引用（index.tpl 使用）：仅收集 isBooleanSwitch 引用的静态数据源函数
+  // 布尔列引用（index.tpl 使用）：收集 boolean 显示列（开关或纯文本）引用的静态数据源函数
   let boolSourceFileMap: Object = {};
   let boolSourceFileOrder: String[] = [];
   let boolSourceNameSet: Object = {};

@@ -183,6 +183,7 @@ void MainDevMgr::connectFileActions() {
           [this](const QString &fp) { openFileInEditor(fp); });
 
   connect(m_ui->fileTree(), &TreeDir::renameRequested, this, &MainDevMgr::onRenameFile);
+  connect(m_ui->fileTree(), &TreeDir::moveRequested, this, &MainDevMgr::onMoveFile);
   connect(m_ui->fileTree(), &TreeDir::deleteRequested, this, &MainDevMgr::onDeleteFile);
   connect(qApp, &QApplication::focusChanged, this, &MainDevMgr::onFocusChanged);
 }

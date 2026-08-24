@@ -295,14 +295,36 @@ void MainDevMgr::onRenameFile(const QString &oldPath, const QString &newName) {
     return;
   }
 
-  bool isDir = oldInfo.isDir();
+  applyRenameOrMove(oldPath, newPath, oldInfo.isDir(), newName);
+}
 
+void MainDevMgr::onMoveFile(const QString &oldPath, const QString &targetDir) {
+  QFileInfo info(oldPath);
+  if (!info.exists()) return;
+
+  const QString newPath = QDir::cleanPath(targetDir + QStringLiteral("/") + info.fileName());
+  const QString cleanOld = QDir::cleanPath(oldPath);
+  // 目标就是源所在目录：无需移动
+  if (newPath == cleanOld) return;
+
+  if (QFileInfo::exists(newPath)) {
+    AuiMessageBox::show(m_ui, QStringLiteral("移动失败"),
+                        QStringLiteral("目标位置已存在同名文件或文件夹: %1").arg(info.fileName()));
+    return;
+  }
+
+  applyRenameOrMove(oldPath, newPath, info.isDir(), info.fileName());
+}
+
+/// @brief 重命名/移动共用：执行文件系统变更并联动更新已打开编辑器、启动项、刷新树
+void MainDevMgr::applyRenameOrMove(const QString &oldPath, const QString &newPath, bool isDir,
+                                   const QString &displayName) {
   if (isDir) {
-    // 文件夹重命名
-    QDir dir(parentDir);
-    if (!dir.rename(oldInfo.fileName(), newName)) {
-      AuiMessageBox::show(m_ui, QStringLiteral("重命名失败"),
-                          QStringLiteral("无法重命名文件夹: %1").arg(oldInfo.fileName()));
+    // 文件夹：源目录内改名为 newPath（移动 = 目标目录内同名）
+    QDir srcDir(QFileInfo(oldPath).absolutePath());
+    if (!srcDir.rename(QFileInfo(oldPath).fileName(), newPath)) {
+      AuiMessageBox::show(m_ui, QStringLiteral("操作失败"),
+                          QStringLiteral("无法移动文件夹: %1").arg(QFileInfo(oldPath).fileName()));
       return;
     }
 
@@ -336,11 +358,11 @@ void MainDevMgr::onRenameFile(const QString &oldPath, const QString &newName) {
       }
     }
   } else {
-    // 文件重命名
+    // 文件
     QFile file(oldPath);
     if (!file.rename(newPath)) {
-      AuiMessageBox::show(m_ui, QStringLiteral("重命名失败"),
-                          QStringLiteral("无法重命名文件: %1").arg(oldInfo.fileName()));
+      AuiMessageBox::show(m_ui, QStringLiteral("操作失败"),
+                          QStringLiteral("无法移动文件: %1").arg(QFileInfo(oldPath).fileName()));
       return;
     }
 
@@ -353,7 +375,7 @@ void MainDevMgr::onRenameFile(const QString &oldPath, const QString &newName) {
         if (!tabs) continue;
         for (int ti = 0; ti < tabs->count(); ++ti) {
           if (tabs->widget(ti) == editor) {
-            tabs->setTabText(ti, newName);
+            tabs->setTabText(ti, displayName);
             tabs->setTabToolTip(ti, newPath);
             break;
           }
@@ -368,7 +390,7 @@ void MainDevMgr::onRenameFile(const QString &oldPath, const QString &newName) {
     }
   }
 
-  // 更新启动项数据（文件重命名或文件夹重命名中的 .ac 文件路径）
+  // 更新启动项数据（文件夹移动/重命名中的 .ac 文件路径，或单文件）
   if (isDir) {
     QString oldDirPath = QDir::cleanPath(oldPath);
     QList<QPair<QString, QString>> renames;

@@ -9,10 +9,16 @@
 #include <QAbstractItemModel>
 #include <QContextMenuEvent>
 #include <QDir>
+#include <QDrag>
+#include <QDragEnterEvent>
+#include <QDragLeaveEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
 #include <QFileInfo>
 #include <QHeaderView>
 #include <QIcon>
 #include <QMenu>
+#include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPixmap>
@@ -63,13 +69,19 @@ void ModifiedFileDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
   }
 
   // 1) 背景：始终填充整行（覆盖 QTreeView 自绘的分支/交替背景，避免箭头与文字重影）。
-  //    选中态 → 选中背景；悬停态 → hover 高亮；否则沿用树视图默认背景。
-  //    悬停节点由 TreeDir::viewportEvent 实时记录在 hoverItem() 中。
-  const bool hovered =
-      tree && (tree->hoverItem() == static_cast<const QTreeWidgetItem *>(index.internalPointer()));
+  //    选中态 → 选中背景；拖拽可放置目标 → 绿色高亮提示目的地；悬停态 → hover 高亮；
+  //    否则沿用树视图默认背景。
+  //    悬停/拖拽目标由 TreeDir::viewportEvent / dragMoveEvent 实时记录。
+  const auto *itemPtr = static_cast<const QTreeWidgetItem *>(index.internalPointer());
+  const bool hovered = tree && (tree->hoverItem() == itemPtr);
+  // 拖拽目标角色：dragMoveEvent 用 setData 设置，触发自动重绘该行
+  const bool dropTarget = index.data(kTreeDropTargetRole).toBool();
   QColor bgColor;
   if (option.state & QStyle::State_Selected) {
     bgColor = AuiStyle::listSelectionBackground();
+  } else if (dropTarget) {
+    // 拖拽可放置目标：绿色高亮（与选中蓝色区分，清晰提示可放置位置）
+    bgColor = AuiStyle::dropTargetBackground();
   } else if (hovered) {
     bgColor = AuiStyle::listHoverBackground();
   } else {
@@ -225,6 +237,10 @@ TreeDir::TreeDir(QWidget *parent) : QTreeWidget(parent) {
   // 开启鼠标跟踪，使 viewportEvent 能实时收到 MouseMove/Leave 实现悬停整行高亮
   viewport()->setAttribute(Qt::WA_MouseTracking, true);
 
+  // ── 拖拽移动支持（手动 QDrag：拖拽源 = 按下节点，可移动文件/文件夹）──
+  setAcceptDrops(true);
+  setDropIndicatorShown(true);
+
   setItemDelegate(new ModifiedFileDelegate(this));
 
   // 保存防抖定时器：复选框频繁变化时合并写入，避免每次勾选都落盘
@@ -266,6 +282,170 @@ void TreeDir::applyFontFromSetting() {
   if (!fam.isEmpty()) f.setFamily(fam);
   f.setPointSize(SettingStore::ins().fontSize(QStringLiteral("font.tree")));
   setFont(f);
+}
+
+// ============================================================================
+// 拖拽移动 — 手动 QDrag 拖动文件/文件夹节点，drop 后发射 moveRequested
+// ============================================================================
+
+void TreeDir::mousePressEvent(QMouseEvent *event) {
+  if (event->button() == Qt::LeftButton) {
+    m_pressItem = itemAt(event->pos());
+    m_pressPos = event->pos();
+  } else {
+    m_pressItem = nullptr;
+  }
+  QTreeWidget::mousePressEvent(event);
+}
+
+void TreeDir::mouseMoveEvent(QMouseEvent *event) {
+  // 左键按住且移动超过拖拽阈值时启动文件拖拽
+  if (m_pressItem && (event->buttons() & Qt::LeftButton) &&
+      (event->pos() - m_pressPos).manhattanLength() >= QApplication::startDragDistance()) {
+    QTreeWidgetItem *item = m_pressItem;
+    m_pressItem = nullptr;
+    startFileDrag(item);
+    return;  // 拖拽期间不再交给基类
+  }
+  QTreeWidget::mouseMoveEvent(event);
+}
+
+void TreeDir::startFileDrag(QTreeWidgetItem *item) {
+  if (!item) return;
+  // 源绝对路径：文件节点取 UserRole+1；文件夹节点由相对路径拼根目录
+  QString srcPath = item->data(0, Qt::UserRole + 1).toString();
+  if (srcPath.isEmpty()) {
+    if (m_rootPath.isEmpty()) return;
+    srcPath = QDir::cleanPath(m_rootPath + QLatin1Char('/') + buildRelativePath(item));
+  }
+  if (srcPath.isEmpty() || srcPath == QDir::cleanPath(m_rootPath)) return;  // 根目录不可拖
+
+  m_dragSourcePath = srcPath;
+  auto *mime = new QMimeData;
+  mime->setText(srcPath);
+  auto *drag = new QDrag(this);
+  drag->setMimeData(mime);
+  drag->exec(Qt::MoveAction);
+  m_dragSourcePath.clear();
+}
+
+void TreeDir::dragEnterEvent(QDragEnterEvent *event) {
+  if (event->source() == this && !m_dragSourcePath.isEmpty()) {
+    // 防御：清理上一次异常中断的拖拽可能遗留的高亮
+    if (m_dropRoleItem) {
+      m_dropRoleItem->setData(0, kTreeDropTargetRole, false);
+      repaintRow(m_dropRoleItem);
+      m_dropRoleItem = nullptr;
+    }
+    event->acceptProposedAction();
+  } else {
+    event->ignore();
+  }
+}
+
+/// 拖拽事件坐标 → 视口坐标（QDropEvent::pos 相对 TreeDir，itemAt 需要视口坐标）
+static QPoint dropViewportPos(const QDropEvent *event, const QTreeWidget *view) {
+  if (!event || !view || !view->viewport()) return QPoint();
+  return view->viewport()->mapFromParent(event->pos());
+}
+
+void TreeDir::dragMoveEvent(QDragMoveEvent *event) {
+  if (event->source() != this || m_dragSourcePath.isEmpty()) {
+    event->ignore();
+    return;
+  }
+  QTreeWidgetItem *target = itemAt(dropViewportPos(event, this));
+  QString targetDir;
+  const bool valid = resolveDropTarget(m_dragSourcePath, target, targetDir);
+  // 更新拖拽目标角色：setData 触发 Qt 自动重绘该行（自绘 delegate 整行变色）。
+  // 先清除旧目标角色，再给新目标设置；可放置 → 变色，不可放置/非目标 → 清除
+  QTreeWidgetItem *newTarget = valid ? target : nullptr;
+  if (m_dropRoleItem != newTarget) {
+    // setData 会触发 itemChanged，用 bulkUpdating 抑制复选框级联/保存副作用
+    QTreeWidgetItem *oldTarget = m_dropRoleItem;
+    m_bulkUpdating = true;
+    if (oldTarget) oldTarget->setData(0, kTreeDropTargetRole, false);
+    m_dropRoleItem = newTarget;
+    if (m_dropRoleItem) m_dropRoleItem->setData(0, kTreeDropTargetRole, true);
+    m_bulkUpdating = false;
+    // 关键：dataChanged 只重绘 visualRect 窄条区域，整行（含左右空白区）变色
+    // 必须像悬停高亮一样用 repaintRow 手动扩展重绘矩形到视口全宽
+    repaintRow(oldTarget);
+    repaintRow(m_dropRoleItem);
+  }
+  if (valid) {
+    event->acceptProposedAction();
+  } else {
+    event->ignore();
+  }
+}
+
+void TreeDir::dropEvent(QDropEvent *event) {
+  if (event->source() != this || m_dragSourcePath.isEmpty()) {
+    event->ignore();
+    return;
+  }
+  QString targetDir;
+  if (!resolveDropTarget(m_dragSourcePath, itemAt(dropViewportPos(event, this)), targetDir)) {
+    event->ignore();
+    return;
+  }
+  // 清除拖拽目标角色（移动后树会刷新重建），并整行宽重绘清除高亮
+  if (m_dropRoleItem) {
+    m_dropRoleItem->setData(0, kTreeDropTargetRole, false);
+    repaintRow(m_dropRoleItem);
+    m_dropRoleItem = nullptr;
+  }
+  event->acceptProposedAction();
+  const QString srcPath = m_dragSourcePath;
+  m_dragSourcePath.clear();
+  emit moveRequested(srcPath, targetDir);
+}
+
+void TreeDir::dragLeaveEvent(QDragLeaveEvent *event) {
+  if (m_dropRoleItem) {
+    m_dropRoleItem->setData(0, kTreeDropTargetRole, false);
+    repaintRow(m_dropRoleItem);
+    m_dropRoleItem = nullptr;
+  }
+  QTreeWidget::dragLeaveEvent(event);
+}
+
+/// @brief 计算拖放目标文件夹并校验合法性
+/// @return 合法返回 true 并填 targetDir；非法（拖到自己/子目录/目标已有同名）返回 false
+bool TreeDir::resolveDropTarget(const QString &srcPath, QTreeWidgetItem *target,
+                                QString &targetDir) const {
+  const QString cleanSrc = QDir::cleanPath(srcPath);
+  const QFileInfo srcInfo(cleanSrc);
+
+  if (!target) {
+    // 拖到空白处 → 根目录
+    if (m_rootPath.isEmpty()) return false;
+    targetDir = m_rootPath;
+  } else {
+    const QString tPath = target->data(0, Qt::UserRole + 1).toString();
+    if (tPath.isEmpty()) {
+      // 目标是文件夹节点
+      if (m_rootPath.isEmpty()) return false;
+      targetDir = QDir::cleanPath(m_rootPath + QLatin1Char('/') + buildRelativePath(target));
+    } else {
+      // 目标是文件节点：移动到其所在目录
+      targetDir = QFileInfo(tPath).absolutePath();
+    }
+  }
+
+  const QString cleanTarget = QDir::cleanPath(targetDir);
+  // 目标目录即源所在目录：无意义移动
+  if (cleanTarget == srcInfo.absolutePath()) return false;
+  // 源是文件夹：目标不能在源内部（拖到自己或子目录）
+  if (srcInfo.isDir() &&
+      (cleanTarget == cleanSrc || cleanTarget.startsWith(cleanSrc + QStringLiteral("/"))))
+    return false;
+  // 目标位置已存在同名文件/文件夹
+  const QString newPath = QDir::cleanPath(cleanTarget + QStringLiteral("/") + srcInfo.fileName());
+  if (QFileInfo::exists(newPath)) return false;
+
+  return true;
 }
 
 // ============================================================================

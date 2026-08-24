@@ -144,6 +144,12 @@ public:
     return SettingStore::ins().color(QStringLiteral("ui.listSelectionBackground"));
   }
 
+  /// 目录树拖拽可放置目标的高亮背景色（绿色，与选中蓝色区分，适配浅/深主题）
+  static QColor dropTargetBackground() {
+    const bool dark = (SettingStore::ins().theme() == SettingStore::ThemeDark);
+    return dark ? QColor(0x2e, 0x5c, 0x2e) : QColor(0xd9, 0xf2, 0xcf);
+  }
+
   /// Tab 未选中背景色，对应 #e8e8e8
   static QColor tabUnselectedBackground() {
     return SettingStore::ins().color(QStringLiteral("ui.tabUnselectedBackground"));

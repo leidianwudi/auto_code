@@ -131,7 +131,28 @@ ${/each}      ]
     colProps: { span: ${col.formSpan} }${/if}
   },
 ${else if col.isBooleanEdit}
-  {
+${if col.hasBoolApi}  {
+    field: '${col.dataName}',
+    label: '${col.editName}',
+    component: 'Select',
+    componentProps: {
+      props: {
+        label: 'label',
+        value: 'value'
+      }
+    }${if col.hasFormSpan},
+    colProps: { span: ${col.formSpan} }${/if},
+    optionApi: async () => {
+      try {
+        const res = await ${col.boolApiName}();
+        return res.data?.list;
+      } catch (error) {
+        console.error('Error fetching ${col.selectErrorText} options:', error);
+        return [];
+      }
+    }
+  },
+${else}  {
     field: '${col.dataName}',
     label: '${col.editName}',
     component: 'Select',
@@ -143,6 +164,7 @@ ${else if col.isBooleanEdit}
     }${if col.hasFormSpan},
     colProps: { span: ${col.formSpan} }${/if}
   },
+${/if}
 ${else if col.isImageEdit}
   {
     field: '${col.dataName}',

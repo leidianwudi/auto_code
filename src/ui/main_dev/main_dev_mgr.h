@@ -98,6 +98,8 @@ private slots:
   void onWorkspaceScanFinished();
   /// 处理文件/文件夹重命名请求
   void onRenameFile(const QString &oldPath, const QString &newName);
+  /// 处理文件/文件夹移动请求（目录树拖拽，移动到目标文件夹）
+  void onMoveFile(const QString &oldPath, const QString &targetDir);
   /// 处理文件/文件夹删除请求
   void onDeleteFile(const QString &path);
   /// 右键菜单：关闭其它标签页
@@ -116,6 +118,9 @@ private slots:
 private:
   /// 查找并加载 file/ 目录
   void loadFiles();
+  /// 重命名/移动共用：文件系统变更 + 更新已打开编辑器 + 更新启动项 + 刷新树
+  void applyRenameOrMove(const QString &oldPath, const QString &newPath, bool isDir,
+                         const QString &displayName);
   /// 连接所有信号槽（在 onCreateWindow 中调用）
   void initUi();
   // ── initUi 子方法（按职责拆分）──

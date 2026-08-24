@@ -94,7 +94,7 @@ ${if hasBoolApiColumns}
 // 渲染前数据已就绪；数据源缺项或函数抛错时在此直接暴露（不写死、不兜底）
 const boolSwitchTexts = reactive<Record<string, { active: string; inactive: string }>>({});
 
-${each col in columns}${if col.isBooleanSwitch}${if col.hasBoolApi}{
+${each col in columns}${if col.hasBoolApi}{
   const boolData = ${col.boolApiName}();
   const list = (boolData?.data?.list as Array<any>) || [];
   const activeItem = list.find((it: any) => String(it.value) === '1');
@@ -106,7 +106,7 @@ ${each col in columns}${if col.isBooleanSwitch}${if col.hasBoolApi}{
     inactive: String(inactiveItem.label)
   };
 }
-${/if}${/if}${/each}${/if}
+${/if}${/each}${/if}
 
 
 // 搜索表单
@@ -268,7 +268,11 @@ ${else if col.isBooleanDisplay}
     fixed: '${col.columnFixed}'${/if},
     slots: {
       default: (data: any) => {
-        return data.row.${col.dataName} ? '${col.boolTrueText}' : '${col.boolFalseText}';
+        return (
+          <>
+            {data.row.${col.dataName} ? ${col.switchActiveTextExpr} : ${col.switchInactiveTextExpr}}
+          </>
+        );
       }
     }
   },

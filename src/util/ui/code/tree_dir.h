@@ -28,6 +28,9 @@ class QContextMenuEvent;
 constexpr int kTreeStartupTriWidth = 7;
 /// 启动项标记数据角色：节点是否为启动项（.ac 文件）→ bool
 constexpr int kTreeStartupRole = Qt::UserRole + 4;
+/// 拖拽可放置目标标记数据角色：节点是否为当前拖拽目标 → bool
+/// （setData 触发 Qt 自动重绘该行，自绘 delegate 据此整行变色提示目的地）
+constexpr int kTreeDropTargetRole = Qt::UserRole + 6;
 
 /// 文件树绘制代理 — 自绘复选框、图标与文本；
 /// - 已修改文件/文件夹名称以琥珀色显示（VSCode 风格，替代原来的实心圆点）
@@ -119,6 +122,8 @@ signals:
   void startupItemsChanged();
   /// 请求重命名，携带旧绝对路径和新文件名（仅文件名，不含目录）
   void renameRequested(const QString &oldPath, const QString &newName);
+  /// 请求移动（目录树拖拽），携带待移动的绝对路径和目标文件夹绝对路径
+  void moveRequested(const QString &oldPath, const QString &targetDir);
   /// 请求删除，携带待删除的绝对路径
   void deleteRequested(const QString &path);
 
@@ -126,6 +131,19 @@ protected:
   /// 重写 viewportEvent 手动追踪鼠标悬停节点（QEvent::MouseMove/Leave），
   /// 供 ModifiedFileDelegate 整行高亮（见 tree_dir.cpp 实现）
   bool viewportEvent(QEvent *event) override;
+
+  /// 记录按下节点（拖拽源）与起始位置
+  void mousePressEvent(QMouseEvent *event) override;
+  /// 拖动超过阈值时启动文件拖拽
+  void mouseMoveEvent(QMouseEvent *event) override;
+  /// 拖拽进入：仅接受本控件发起的移动拖拽
+  void dragEnterEvent(QDragEnterEvent *event) override;
+  /// 拖拽移动：根据目标合法性接受/忽略，并更新目标节点高亮
+  void dragMoveEvent(QDragMoveEvent *event) override;
+  /// 拖放：校验后发射 moveRequested
+  void dropEvent(QDropEvent *event) override;
+  /// 拖拽离开控件：清除目标高亮
+  void dragLeaveEvent(QDragLeaveEvent *event) override;
 
 private slots:
   /// 单击节点
@@ -187,6 +205,12 @@ private:
   /// 拦截鼠标释放以判断点击位置是否在复选框区域
   void mouseReleaseEvent(QMouseEvent *event) override;
 
+  /// 启动文件/文件夹拖拽（携带源绝对路径）
+  void startFileDrag(QTreeWidgetItem *item);
+  /// 计算拖放目标文件夹并校验合法性（合法返回 true 并填 targetDir）
+  bool resolveDropTarget(const QString &srcPath, QTreeWidgetItem *target,
+                         QString &targetDir) const;
+
   /// 右键菜单：文件设为/取消启动项，文件夹新建/刷新/重命名，文件重命名
   void contextMenuEvent(QContextMenuEvent *event) override;
 
@@ -199,6 +223,11 @@ private:
   bool m_lastClickOnCheckbox = false;  ///< 最近一次鼠标释放是否落在复选框区域
   bool m_bulkUpdating = false;         ///< 批量更新中，抑制 itemChanged 级联
 
+  // ── 拖拽移动状态 ──
+  QTreeWidgetItem *m_pressItem = nullptr;  ///< 按下时命中的节点（潜在拖拽源）
+  QPoint m_pressPos;                       ///< 按下位置（判定拖动阈值）
+  QString m_dragSourcePath;                ///< 正在拖拽的源绝对路径（拖拽期间有效）
+
   QString m_rootPath;    ///< 当前展示的根目录
   QString m_configPath;  ///< tree.config 完整路径
 
@@ -206,6 +235,7 @@ private:
   QString m_selectedStartup;     ///< 当前下拉框选中的启动项路径
 
   class QTreeWidgetItem *m_hoverItem = nullptr;  ///< 当前鼠标悬停的节点（用于整行高亮）
+  QTreeWidgetItem *m_dropRoleItem = nullptr;  ///< 当前设置了拖拽目标角色（kTreeDropTargetRole）的节点
 
   bool m_visualToggle = false;  ///< 可视化编辑按钮状态
 

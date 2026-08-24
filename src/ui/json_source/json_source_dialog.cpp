@@ -98,7 +98,7 @@ void JsonSourceDialog::setupStaticPage() {
   m_optionTable = makeConfigTable(
       {{QStringLiteral("显示文本"), QHeaderView::Stretch, 0},
        {QStringLiteral("实际值"), QHeaderView::Stretch, 0},
-       {QStringLiteral("类型"), QHeaderView::ResizeToContents, 0}},
+       {QStringLiteral("类型"), QHeaderView::Interactive, 100}},
       page, 100, 0, QAbstractItemView::SelectRows);
   layout->addWidget(m_optionTable, 1);
 
@@ -203,10 +203,11 @@ void JsonSourceDialog::onAddOption() {
   m_optionTable->insertRow(row);
   m_optionTable->setItem(row, 0, new QTableWidgetItem());
   m_optionTable->setItem(row, 1, new QTableWidgetItem());
-  // 类型列：字符串（默认）/ 数字
+  // 类型列：字符串（默认）/ 数字；固定最小宽度保证下拉箭头完整可点
   auto *combo = new QComboBox(m_optionTable);
   combo->addItem(QStringLiteral("字符串"), QString());
   combo->addItem(QStringLiteral("数字"), QStringLiteral("number"));
+  combo->setMinimumWidth(80);
   m_optionTable->setCellWidget(row, 2, combo);
   m_optionTable->setCurrentCell(row, 0);
 }
@@ -273,6 +274,7 @@ void JsonSourceDialog::populateOptions(const QVector<JsonSourceOption> &options)
     auto *combo = new QComboBox(m_optionTable);
     combo->addItem(QStringLiteral("字符串"), QString());
     combo->addItem(QStringLiteral("数字"), QStringLiteral("number"));
+    combo->setMinimumWidth(80);
     combo->setCurrentIndex(o.valueType == QStringLiteral("number") ? 1 : 0);
     m_optionTable->setCellWidget(row, 2, combo);
   }
