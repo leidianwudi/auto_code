@@ -48,6 +48,9 @@ inline constexpr const char *kOptions = "options";
 inline constexpr const char *kLabel = "label";
 inline constexpr const char *kValue = "value";
 inline constexpr const char *kValueType = "valueType";  ///< 实际值类型（""=字符串 / "number"=数字）
+// 列表页下拉框显示样式（值→tag样式 映射）
+inline constexpr const char *kTags = "tags";  ///< 值→tag样式 映射数组
+inline constexpr const char *kColor = "color";  ///< tag 样式（success/primary/...）
 }  // namespace JsonSourceKey
 
 /// 数据源类型字符串常量
@@ -71,6 +74,21 @@ struct JsonSourceOption {
 
   QJsonObject toJson() const;
   static JsonSourceOption fromJson(const QJsonObject &obj);
+};
+
+/**
+ * @struct JsonSourceTag
+ * @brief 列表页下拉框显示的 tag 样式（实际值 → vue3 tag 样式）
+ *
+ * 列表页 select 显示时按该值用 ElTag 带颜色渲染；未配置该值的项显示普通文本。
+ */
+struct JsonSourceTag {
+  QString value;       ///< 实际值（与 valueField/选项 value 对应）
+  QString label;       ///< 显示文本（重开窗口展示返回数据示例用）
+  QString color;       ///< tag 样式（primary/success/warning/info/danger）
+
+  QJsonObject toJson() const;
+  static JsonSourceTag fromJson(const QJsonObject &obj);
 };
 
 /**
@@ -101,6 +119,10 @@ struct JsonSource {
 
   // ── 静态数据源字段 ──
   QVector<JsonSourceOption> options;   ///< 静态选项列表
+
+  /// 列表页下拉框显示的 tag 样式映射（值 → success/primary/warning/info/danger 等），
+  /// 静态/动态数据源共用；列表页 select 显示时按该值用 ElTag 带颜色渲染
+  QVector<JsonSourceTag> tags;
 
   /// 是否为静态数据源
   bool isStatic() const { return type == QString::fromLatin1(JsonSourceType::kStatic); }

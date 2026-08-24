@@ -145,6 +145,7 @@ void ComboboxConfigDialog::refreshSources() {
     m_hasDynamicSource = false;
     m_panel->setEnabled(true);
     m_panel->setVisible(true);
+    m_panel->setTags({});  // 清空数据源 tag 残留（手动模式无数据源）
     m_loading = false;
     updatePanelLocks();
     return;
@@ -222,6 +223,8 @@ void ComboboxConfigDialog::applySelectedSource() {
     m_hasDynamicSource = true;
     m_panel->setData(s->url, s->method, s->valueField, s->labelField, s->paged, s->pageKey,
                      s->pageSizeKey, s->pageSize, s->searchTitle, s->searchField);
+    // 展示数据源配置的 tag 显示样式（全部使用数据源时只读，部分使用时可覆盖）
+    m_panel->setTags(s->tags);
     reconcileOverrides();
     updatePanelLocks();
   }
@@ -248,10 +251,13 @@ void ComboboxConfigDialog::updatePanelLocks() {
     // 引用动态数据源：基础配置始终锁定，字段按使用方式决定
     m_panel->setBaseLocked(true);
     m_panel->setFieldsLocked(m_fullRadio->isChecked());
+    // 全部使用数据源 → tag 显示样式只读展示数据源原始配置，不可自行配置
+    m_panel->setTagsLocked(m_fullRadio->isChecked());
   } else {
     // 手动/静态/无数据源：不锁定
     m_panel->setBaseLocked(false);
     m_panel->setFieldsLocked(false);
+    m_panel->setTagsLocked(false);
   }
 }
 

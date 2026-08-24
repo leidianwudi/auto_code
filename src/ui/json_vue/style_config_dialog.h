@@ -186,6 +186,7 @@ private:
   void adjustToContents();
 
   EditStyle m_editStyle = EditStyle::Text;
+  bool m_syncing = false;  ///< 显示样式/编辑样式联动同步中（防递归互触）
 
   QFormLayout *m_formLayout = nullptr;         ///< 主表单布局
   QVBoxLayout *m_displayTypeLayout = nullptr;  ///< 显示样式子控件容器布局
@@ -209,7 +210,7 @@ private:
   QComboBox *m_precisionCombo = nullptr;
   QComboBox *m_dateFormatCombo = nullptr;
   QComboBox *m_textareaRowsCombo = nullptr;
-  // 下拉框数据源配置（editStyle == Select 时显示"数据源"按钮）
+  // 下拉框数据源配置（显示样式 == select 时显示"数据源"按钮，列表/编辑/查询共享）
   QPushButton *m_selectSourceBtn = nullptr;
 
   // ── 显示样式子控件（按需创建）──

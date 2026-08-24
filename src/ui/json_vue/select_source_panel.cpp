@@ -8,6 +8,7 @@
 
 #include "select_source_panel.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -34,6 +35,22 @@
 // ════════════════════════════════════════════════════════════
 //  构造
 // ════════════════════════════════════════════════════════════
+
+/// vue3 element-plus 常用 tag 样式下拉框（(无)/primary/success/warning/info/danger）
+static QComboBox *makeTagCombo(QWidget *parent, const QString &current = QString()) {
+  auto *combo = new QComboBox(parent);
+  combo->addItem(QStringLiteral("(无)"), QString());
+  combo->addItem(QStringLiteral("primary"), QStringLiteral("primary"));
+  combo->addItem(QStringLiteral("success"), QStringLiteral("success"));
+  combo->addItem(QStringLiteral("warning"), QStringLiteral("warning"));
+  combo->addItem(QStringLiteral("info"), QStringLiteral("info"));
+  combo->addItem(QStringLiteral("danger"), QStringLiteral("danger"));
+  if (!current.isEmpty()) {
+    const int idx = combo->findData(current);
+    if (idx >= 0) combo->setCurrentIndex(idx);
+  }
+  return combo;
+}
 
 SelectSourcePanel::SelectSourcePanel(QWidget *parent) : QWidget(parent) { setupUI(); }
 
@@ -73,8 +90,17 @@ void SelectSourcePanel::setupUI() {
   m_typeCombo->addItem(QStringLiteral("查询分页加载"), true);
   m_typeCombo->setMinimumWidth(180);
   typeRow->addWidget(m_typeCombo);
+  typeRow->addSpacing(20);
+  // 配置显示样式：勾选后返回数据示例表格加一列 tag，逐行选择 vue3 常用 tag 样式
+  m_showTagCheck = new QCheckBox(QStringLiteral("配置显示样式"), this);
+  typeRow->addWidget(m_showTagCheck);
   typeRow->addStretch();
   layout->addLayout(typeRow);
+
+  connect(m_showTagCheck, &QCheckBox::toggled, this, [this](bool on) {
+    toggleTagColumn(on);
+    emit configChanged();
+  });
 
   // ── 查询分页配置区域 ──
   m_pagedGroup = new QWidget(this);
@@ -200,6 +226,108 @@ void SelectSourcePanel::setData(const QString &url, const QString &method,
   if (!searchTitle.isEmpty()) m_searchTitleEdit->setText(searchTitle);
   if (!searchField.isEmpty()) m_searchFieldEdit->setText(searchField);
   m_pagedGroup->setVisible(paged);
+}
+
+void SelectSourcePanel::setTags(const QVector<JsonSourceTag> &tags) {
+  m_cachedTags = tags;
+  if (!m_showTagCheck) return;
+  m_showTagCheck->setChecked(!tags.isEmpty());
+  if (tags.isEmpty()) return;
+  // 用已保存的 tag 数据填充返回数据示例：展示所有配置了显示样式的数据行（重开窗口无需重新测试）
+  const QString vf = m_valueCombo ? m_valueCombo->currentText() : QString();
+  const QString lf = m_labelCombo ? m_labelCombo->currentText() : QString();
+  m_previewTable->setRowCount(tags.size());
+  m_previewTable->setColumnCount(3);
+  QStringList headers;
+  headers << (vf.isEmpty() ? QStringLiteral("value") : vf)
+          << (lf.isEmpty() ? QStringLiteral("label") : lf) << QStringLiteral("tag");
+  m_previewTable->setHorizontalHeaderLabels(headers);
+  for (int r = 0; r < tags.size(); ++r) {
+    m_previewTable->setItem(r, 0, new QTableWidgetItem(tags[r].value));
+    m_previewTable->setItem(r, 1, new QTableWidgetItem(tags[r].label));
+    m_previewTable->setCellWidget(r, 2, makeTagCombo(m_previewTable, tags[r].color));
+  }
+  m_previewTable->horizontalHeader()->setStretchLastSection(true);
+}
+
+void SelectSourcePanel::setTagsLocked(bool locked) {
+  m_tagsLocked = locked;
+  if (m_showTagCheck) m_showTagCheck->setEnabled(!locked);
+  // 锁定后 tag 列下拉只读（展示数据源原始配置，不可自行修改）
+  const int cols = m_previewTable->columnCount();
+  if (cols > 0) {
+    const int tagCol = cols - 1;
+    for (int r = 0; r < m_previewTable->rowCount(); ++r) {
+      if (auto *combo = qobject_cast<QComboBox *>(m_previewTable->cellWidget(r, tagCol))) {
+        combo->setEnabled(!locked);
+      }
+    }
+  }
+}
+
+QVector<JsonSourceTag> SelectSourcePanel::tags() const {
+  QVector<JsonSourceTag> out;
+  if (!m_showTagCheck || !m_showTagCheck->isChecked()) return out;
+  const int cols = m_previewTable->columnCount();
+  if (cols == 0) return out;
+  // 最后一列为 tag 列（字段列 + 可选的 tag 列）
+  const int tagCol = cols - 1;
+  // valueField / labelField 列索引（tag 的 value/label 用对应列的值）
+  const QString vf = m_valueCombo ? m_valueCombo->currentText() : QString();
+  const QString lf = m_labelCombo ? m_labelCombo->currentText() : QString();
+  int valueCol = -1;
+  int labelCol = -1;
+  for (int c = 0; c < tagCol; ++c) {
+    const QString h = m_previewTable->horizontalHeaderItem(c)
+                          ? m_previewTable->horizontalHeaderItem(c)->text()
+                          : QString();
+    if (!vf.isEmpty() && h == vf) valueCol = c;
+    if (!lf.isEmpty() && h == lf) labelCol = c;
+  }
+  for (int r = 0; r < m_previewTable->rowCount(); ++r) {
+    auto *combo = qobject_cast<QComboBox *>(m_previewTable->cellWidget(r, tagCol));
+    if (!combo) continue;
+    const QString color = combo->currentData().toString();
+    if (color.isEmpty()) continue;
+    JsonSourceTag t;
+    t.color = color;
+    if (valueCol >= 0) {
+      if (auto *item = m_previewTable->item(r, valueCol)) t.value = item->text().trimmed();
+    }
+    if (labelCol >= 0) {
+      if (auto *item = m_previewTable->item(r, labelCol)) t.label = item->text().trimmed();
+    }
+    if (!t.value.isEmpty()) out.append(t);
+  }
+  return out;
+}
+
+/// 在 m_cachedTags 中查找某值的 tag 样式（未配置返回空）
+static QString cachedTagColor(const QVector<JsonSourceTag> &tags, const QString &value) {
+  for (const auto &t : tags) {
+    if (t.value == value) return t.color;
+  }
+  return QString();
+}
+
+void SelectSourcePanel::toggleTagColumn(bool on) {
+  const int cols = m_previewTable->columnCount();
+  if (cols == 0) return;  // 未测试，无返回数据
+  // 当前最后一列是否为 tag 列
+  const auto *lastHeader = m_previewTable->horizontalHeaderItem(cols - 1);
+  const bool hasTag = lastHeader && lastHeader->text() == QStringLiteral("tag");
+  if (on && !hasTag) {
+    m_previewTable->setColumnCount(cols + 1);
+    m_previewTable->setHorizontalHeaderItem(cols, new QTableWidgetItem(QStringLiteral("tag")));
+    for (int r = 0; r < m_previewTable->rowCount(); ++r) {
+      QString value;
+      if (const auto *item = m_previewTable->item(r, cols - 1)) value = item->text().trimmed();
+      m_previewTable->setCellWidget(
+          r, cols, makeTagCombo(m_previewTable, cachedTagColor(m_cachedTags, value)));
+    }
+  } else if (!on && hasTag) {
+    m_previewTable->setColumnCount(cols - 1);  // 移除最后一列
+  }
 }
 
 void SelectSourcePanel::setHttpConfig(const QString &baseUrl, const QString &authHeader,
@@ -345,16 +473,32 @@ void SelectSourcePanel::onHttpFinished(const QJsonDocument &doc) {
     return;
   }
 
-  int displayRows = qMin(list.size(), 5);
+  // 展示全部返回数据（配置显示样式时需要看到所有行，逐行配置 tag）
+  int displayRows = list.size();
+  const bool showTag = m_showTagCheck && m_showTagCheck->isChecked();
+  const int tagCount = showTag ? 1 : 0;
   m_previewTable->setRowCount(displayRows);
-  m_previewTable->setColumnCount(fieldNames.size());
-  m_previewTable->setHorizontalHeaderLabels(fieldNames);
+  m_previewTable->setColumnCount(fieldNames.size() + tagCount);
+  QStringList headers = fieldNames;
+  if (tagCount) headers << QStringLiteral("tag");
+  m_previewTable->setHorizontalHeaderLabels(headers);
 
   for (int r = 0; r < displayRows; ++r) {
     QJsonObject row = list.at(r).toObject();
     for (int c = 0; c < fieldNames.size(); ++c) {
       QString val = row.value(fieldNames[c]).toVariant().toString();
       m_previewTable->setItem(r, c, new QTableWidgetItem(val));
+    }
+    // tag 列：每行一个 tag 样式下拉框（按该行 valueField 的值恢复已配置样式）
+    if (tagCount) {
+      QString value;
+      const int vCol = m_valueCombo->findText(m_valueCombo->currentText());
+      if (vCol >= 0 && vCol < fieldNames.size()) {
+        value = row.value(fieldNames[vCol]).toVariant().toString();
+      }
+      m_previewTable->setCellWidget(
+          r, fieldNames.size(),
+          makeTagCombo(m_previewTable, cachedTagColor(m_cachedTags, value)));
     }
   }
 

@@ -148,6 +148,7 @@ void JsonSourceDialog::setSource(const JsonSource &source) {
     m_panel->setData(source.url, source.method, source.valueField, source.labelField,
                      source.paged, source.pageKey, source.pageSizeKey, source.pageSize,
                      source.searchTitle, source.searchField);
+    m_panel->setTags(source.tags);
   }
   onTypeChanged(typeIdx);
 }
@@ -190,6 +191,7 @@ JsonSource JsonSourceDialog::source() const {
     s.pageSize = m_panel->pageSize();
     s.searchTitle = m_panel->searchTitle();
     s.searchField = m_panel->searchField();
+    s.tags = m_panel->tags();
   }
   return s;
 }

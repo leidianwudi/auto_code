@@ -326,19 +326,11 @@ inline QString queryConfigSummary(const QueryFieldConfig &q) {
       break;
     }
     case QueryInputStyle::Select:
-      if (!q.selectSourceFile.isEmpty()) {
-        QString fileBase = QFileInfo(q.selectSourceFile).completeBaseName();
-        if (!q.selectValueField.isEmpty() && !q.selectLabelField.isEmpty()) {
-          parts << QStringLiteral("%1:%2→%3").arg(fileBase, q.selectValueField, q.selectLabelField);
-        } else {
-          parts << QStringLiteral("%1").arg(fileBase);
-        }
-      } else if (!q.selectUrl.isEmpty()) {
-        if (!q.selectValueField.isEmpty() && !q.selectLabelField.isEmpty()) {
-          parts << QStringLiteral("%1→%2").arg(q.selectValueField, q.selectLabelField);
-        } else {
-          parts << QStringLiteral("已配置");
-        }
+      // 查询字段复用列表页列的下拉框数据源（列表/编辑/查询三处共享），不单独配置
+      if (!q.selectUrl.isEmpty() || !q.selectSourceFile.isEmpty()) {
+        parts << QStringLiteral("使用列表的select");
+      } else {
+        parts << QStringLiteral("未配置");
       }
       break;
   }

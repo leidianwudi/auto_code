@@ -118,6 +118,20 @@ void JsonVueEditor::onAddQueryField() {
                         QString::fromLatin1(JsonVueStyle::kSelect)});
   m_queryTable->setCellWidget(row, QColInputStyle, inputStyle);
   connectCellWidgetSignals(inputStyle);
+  // 输入样式变化时同步刷新该行配置按钮摘要（摘要依赖 inputStyle 分支）
+  connect(inputStyle, &QComboBox::currentTextChanged, this, [this, inputStyle]() {
+    for (int r = 0; r < m_queryTable->rowCount(); ++r) {
+      if (m_queryTable->cellWidget(r, QColInputStyle) != inputStyle) continue;
+      auto *cfg = qobject_cast<QPushButton *>(m_queryTable->cellWidget(r, QColConfig));
+      if (cfg) {
+        QueryFieldConfig qq;
+        readQueryConfig(cfg, qq);
+        qq.inputStyle = stringToQueryInputStyle(inputStyle->currentText());
+        cfg->setText(queryConfigSummary(qq));
+      }
+      break;
+    }
+  });
 
   auto *relCombo = newTableCombo();
   relCombo->addItem(QStringLiteral("普通"), QStringLiteral("="));

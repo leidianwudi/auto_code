@@ -31,14 +31,15 @@ import { BaseButton } from '@/components/button';
 import { FormSchema } from '@/components/form';
 import { Icon } from '@/components/icon';
 import { Table, TableColumn } from '@/components/table';
-import { ElTooltip, ElSwitch${if hasConfirmButtons}, ElMessageBox${/if}${if hasTagColumns}, ElTag${/if}${if hasImageColumns}, ElImage${/if} } from 'element-plus';
+import { ElTooltip, ElSwitch${if hasConfirmButtons}, ElMessageBox${/if}${if needsElTag}, ElTag${/if}${if hasImageColumns}, ElImage${/if} } from 'element-plus';
 import { reactive, ref, unref } from 'vue';
 import { Search } from '@/components/search';
 import { ContentWrap } from '@/components/content_wrap';
 import Write from './components/write.vue';
 import { Dialog } from '@/components/dialog';
 import { ${apiImports} } from '@/api/${apiModule}/${pageName}';
-import { uiCrudLogic } from '@/utils/ui_crud_logic';
+${if hasSelectApi}import { ${selectApiImports} } from '@/api/${apiModule}/${pageName}';
+${/if}import { uiCrudLogic } from '@/utils/ui_crud_logic';
 ${if hasBoolSourceImports}${boolSourceImportLines}
 ${/if}${if hasLinkButtons}import { useRouter } from 'vue-router';${/if}
 
@@ -107,6 +108,30 @@ ${each col in columns}${if col.hasBoolApi}{
   };
 }
 ${/if}${/each}${/if}
+${if hasSelectApiColumns}
+// 下拉框显示列选项映射：列表单元格按数据源把值映射为文字（与编辑/查询共享数据源）；
+// tagDisplayMaps 按值映射 tag 样式（数据源 tags 配置），有样式时用 ElTag 带色显示
+const selectDisplayMaps = reactive<Record<string, Record<string, string>>>({});
+const tagDisplayMaps = reactive<Record<string, Record<string, string>>>({});
+
+${each col in columns}${if col.isSelectDisplay}{
+  const loadSelect${col.dataName} = async () => {
+    try {
+      const res = await ${col.selectApiName}();
+      const map: Record<string, string> = {};
+      (res?.data?.list || []).forEach((it: any) => {
+        map[String(it.${col.selectValueField})] = String(it.${col.selectLabelField});
+      });
+      selectDisplayMaps['${col.dataName}'] = map;
+      tagDisplayMaps['${col.dataName}'] = res?.tags || {};
+    } catch (e) {
+      selectDisplayMaps['${col.dataName}'] = {};
+      tagDisplayMaps['${col.dataName}'] = {};
+    }
+  };
+  loadSelect${col.dataName}();
+}
+${/if}${/each}${/if}
 
 
 // 搜索表单
@@ -127,22 +152,36 @@ ${each q in queryFields}${if q.isRange}  {
       ${if q.isDate}type: '${q.dateFormat}'${else}placeholder: '${q.placeholder}'${/if}
     }
   },
-${else if q.isSelect}  {
+${else if q.isSelect}
+${if q.selectApiName}  {
     field: '${q.dataName}',
     label: '${q.displayName}',
-    component: 'ApiSelect',
+    component: 'Select',
     componentProps: {
-      url: '${q.selectUrl}',
-      valueField: '${q.selectValueField}',
-      labelField: '${q.selectLabelField}',
-      method: '${q.selectMethod}'${if q.selectPaged},
-      pageKey: '${q.selectPageKey}',
-      pageSizeKey: '${q.selectPageSizeKey}',
-      pageSize: ${q.selectPageSize}${if q.selectSearchTitle},
-      searchTitle: '${q.selectSearchTitle}'${/if}${if q.selectSearchField},
-      searchField: '${q.selectSearchField}'${/if}${/if}
+      props: {
+        label: '${q.selectLabelField}',
+        value: '${q.selectValueField}'
+      }
+    },
+    optionApi: async () => {
+      try {
+        const res = await ${q.selectApiName}();
+        return res.data?.list;
+      } catch (error) {
+        console.error('Error fetching ${q.dataName} options:', error);
+        return [];
+      }
     }
   },
+${else}  {
+    field: '${q.dataName}',
+    label: '${q.displayName}',
+    component: 'Select',
+    componentProps: {
+      options: []
+    }
+  },
+${/if}
 ${else if q.isDate}  {
     field: '${q.dataName}',
     label: '${q.displayName}',
@@ -189,7 +228,7 @@ ${/if}    slots: {
             modelValue={data.row.${col.dataName} == 1}
             disabled={${col.switchDisabledStr}}
             onChange={() => {
-              updateStatusAndTip(data.row);
+              updateStatusAndTip(data.row, '${col.dataName}');
             }}
             activeText={${col.switchActiveTextExpr}}
             inactiveText={${col.switchInactiveTextExpr}}
@@ -214,7 +253,7 @@ ${/if}    slots: {
             modelValue={String(data.row.${col.dataName}) == '${col.switchActiveValue}'}
             disabled={${col.switchDisabledStr}}
             onChange={() => {
-              updateStatusAndTip(data.row);
+              updateStatusAndTip(data.row, '${col.dataName}');
             }}
             activeText="${col.switchActiveText}"
             inactiveText="${col.switchInactiveText}"
@@ -236,10 +275,10 @@ ${else if col.isMoneyDisplay}
     slots: {
       default: (data: any) => {
         const v = data.row.${col.dataName};
-        if (v == null || v === '') return '';
+        if (v == null || v === '') return <></>;
         const num = Number(v);
-        if (isNaN(num)) return v;
-        return num.toLocaleString('zh-CN', { minimumFractionDigits: ${col.precision}, maximumFractionDigits: ${col.precision} });
+        if (isNaN(num)) return <>{v}</>;
+        return <>{num.toLocaleString('zh-CN', { minimumFractionDigits: ${col.precision}, maximumFractionDigits: ${col.precision} })}</>;
       }
     }
   },
@@ -254,7 +293,7 @@ ${else if col.isTagDisplay}
       default: (data: any) => {
         const tagMap = ${col.tagItemsMapStr};
         const item = tagMap[String(data.row.${col.dataName})];
-        if (!item) return data.row.${col.dataName};
+        if (!item) return <>{data.row.${col.dataName}}</>;
         return <ElTag type={item.color}>{item.text}</ElTag>;
       }
     }
@@ -276,6 +315,27 @@ ${else if col.isBooleanDisplay}
       }
     }
   },
+${else if col.isSelectDisplay}
+  {
+    field: '${col.dataName}',
+    label: '${col.label}'${if col.hasDefaultSort},
+    sortable: true${/if}${if col.hasColumnWidth},
+    width: ${col.columnWidth}${/if}${if col.hasColumnFixed},
+    fixed: '${col.columnFixed}'${/if},
+    slots: {
+      default: (data: any) => {
+        const map = selectDisplayMaps['${col.dataName}'];
+        const tagMap = tagDisplayMaps['${col.dataName}'];
+        const label = map?.[String(data.row.${col.dataName})] ?? data.row.${col.dataName};
+        const color = tagMap?.[String(data.row.${col.dataName})];
+        return color ? (
+          <ElTag type={color as 'primary' | 'success' | 'danger' | 'warning' | 'info'}>{label}</ElTag>
+        ) : (
+          <>{label}</>
+        );
+      }
+    }
+  },
 ${else if col.isImageDisplay}
   {
     field: '${col.dataName}',
@@ -286,7 +346,7 @@ ${else if col.isImageDisplay}
     slots: {
       default: (data: any) => {
         const src = data.row.${col.dataName};
-        return src ? <ElImage src={src} fit="cover" style="width: 50px; height: 50px" preview-src-list={[src]} preview-teleported /> : '';
+        return src ? <ElImage src={src} fit="cover" style="width: 50px; height: 50px" preview-src-list={[src]} preview-teleported /> : null;
       }
     }
   },

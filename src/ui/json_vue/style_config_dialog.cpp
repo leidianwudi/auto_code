@@ -174,6 +174,8 @@ void ColumnStyleDialog::setupUI() {
                               QString::fromLatin1(JsonVueStyle::kBoolean));
   m_displayTypeCombo->addItem(QStringLiteral("图片(image)"),
                               QString::fromLatin1(JsonVueStyle::kImage));
+  m_displayTypeCombo->addItem(QStringLiteral("下拉框(select)"),
+                              QString::fromLatin1(JsonVueStyle::kSelect));
   addRow(QStringLiteral("显示样式:"), m_displayTypeCombo);
 
   // 显示样式子控件容器（全宽区域，用于显示标签映射表等）
@@ -196,6 +198,14 @@ void ColumnStyleDialog::setupUI() {
     if (m_boolTrueTextEdit) m_cachedBoolTrueText = m_boolTrueTextEdit->text().trimmed();
     if (m_boolFalseTextEdit) m_cachedBoolFalseText = m_boolFalseTextEdit->text().trimmed();
     if (m_switchEditableCheck) m_cachedSwitchEditable = m_switchEditableCheck->isChecked();
+    // 联动：显示样式选"下拉框(select)" → 编辑样式自动同步为下拉框
+    if (!m_syncing && m_displayTypeCombo->currentData().toString() ==
+                          QString::fromLatin1(JsonVueStyle::kSelect) &&
+        m_editStyle != EditStyle::Select) {
+      m_syncing = true;
+      comboSelectData(m_editStyleCombo, editStyleToString(EditStyle::Select));
+      m_syncing = false;
+    }
     rebuildDisplayTypeControls();
   });
 
@@ -278,7 +288,16 @@ void ColumnStyleDialog::setupUI() {
     if (m_dateFormatCombo) m_cachedDateFormat = m_dateFormatCombo->currentData().toString();
     if (m_textareaRowsCombo) m_cachedTextareaRows = m_textareaRowsCombo->currentData().toInt();
     // 更新 m_editStyle
-    m_editStyle = stringToEditStyle(m_editStyleCombo->currentData().toString());
+    const EditStyle newStyle = stringToEditStyle(m_editStyleCombo->currentData().toString());
+    // 联动：编辑样式选"下拉框(select)" → 显示样式自动同步为下拉框（m_syncing 防互触）
+    if (!m_syncing && newStyle == EditStyle::Select &&
+        m_displayTypeCombo->currentData().toString() !=
+            QString::fromLatin1(JsonVueStyle::kSelect)) {
+      m_syncing = true;
+      comboSelectData(m_displayTypeCombo, QString::fromLatin1(JsonVueStyle::kSelect));
+      m_syncing = false;
+    }
+    m_editStyle = newStyle;
     rebuildEditStyleControls();
   });
 
@@ -374,6 +393,7 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
   m_boolFalseTextEdit = nullptr;
   m_boolSourceCombo = nullptr;
   m_switchEditableCheck = nullptr;
+  m_selectSourceBtn = nullptr;
 
   QString dtype = m_displayTypeCombo ? m_displayTypeCombo->currentData().toString() : QString();
 
@@ -487,6 +507,42 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
     m_switchEditableCheck = new QCheckBox(QStringLiteral("列表页可直接切换"), m_displayTypeWidget);
     m_switchEditableCheck->setChecked(m_cachedSwitchEditable);
     form->addRow(QStringLiteral("  开关可编辑:"), m_switchEditableCheck);
+  } else if (dtype == JsonVueStyle::kSelect) {
+    m_displayTypeWidget->setMaximumHeight(QWIDGETSIZE_MAX);  // 恢复高度限制
+    m_displayTypeWidget->setVisible(true);
+
+    auto *hint =
+        new QLabel(QStringLiteral("  下拉框数据源同时用于列表显示、编辑页下拉与查询"),
+                   m_displayTypeWidget);
+    form->addRow(QString(), hint);
+
+    // 数据源按钮：点击弹出 ComboboxConfigDialog（列表/编辑/查询三处共享同一数据源）
+    m_selectSourceBtn = new QPushButton(QStringLiteral("配置数据源..."), m_displayTypeWidget);
+    form->addRow(QStringLiteral("  数据源:"), m_selectSourceBtn);
+    connect(m_selectSourceBtn, &QPushButton::clicked, this, [this]() {
+      ComboboxConfigDialog dlg(this);
+      dlg.setSearchRoot(m_searchRoot);
+      dlg.setSourceRef(m_cachedSelectSourceFile, m_cachedSelectSourceId);
+      dlg.setConfig(m_cachedSelectUrl, m_cachedSelectValueField, m_cachedSelectLabelField);
+      dlg.setPagedConfig(m_cachedSelectPaged, m_cachedSelectPageKey, m_cachedSelectPageSizeKey,
+                         m_cachedSelectPageSize, m_cachedSelectSearchTitle, m_cachedSelectSearchField,
+                         m_cachedSelectMethod);
+      dlg.setHttpConfig(m_baseUrl, m_authHeader, m_postData);
+      if (dlg.exec() == QDialog::Accepted) {
+        m_cachedSelectSourceFile = dlg.sourceFile();
+        m_cachedSelectSourceId = dlg.sourceId();
+        m_cachedSelectUrl = dlg.url();
+        m_cachedSelectValueField = dlg.valueField();
+        m_cachedSelectLabelField = dlg.labelField();
+        m_cachedSelectPaged = dlg.paged();
+        m_cachedSelectPageKey = dlg.pageKey();
+        m_cachedSelectPageSizeKey = dlg.pageSizeKey();
+        m_cachedSelectPageSize = dlg.pageSize();
+        m_cachedSelectSearchTitle = dlg.searchTitle();
+        m_cachedSelectSearchField = dlg.searchField();
+        m_cachedSelectMethod = dlg.method();
+      }
+    });
   } else {
     // 非标签/布尔样式时隐藏容器，避免占用空间
     m_displayTypeWidget->setVisible(false);
@@ -704,33 +760,11 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
       break;
     }
     case EditStyle::Select: {
-      // 下拉框：显示"数据源"按钮，点击弹出 ComboboxConfigDialog
-      m_selectSourceBtn = new QPushButton(QStringLiteral("配置数据源..."), m_editStyleWidget);
-      form->addRow(QStringLiteral("  数据源:"), m_selectSourceBtn);
-      connect(m_selectSourceBtn, &QPushButton::clicked, this, [this]() {
-        ComboboxConfigDialog dlg(this);
-        dlg.setSearchRoot(m_searchRoot);
-        dlg.setSourceRef(m_cachedSelectSourceFile, m_cachedSelectSourceId);
-        dlg.setConfig(m_cachedSelectUrl, m_cachedSelectValueField, m_cachedSelectLabelField);
-        dlg.setPagedConfig(m_cachedSelectPaged, m_cachedSelectPageKey, m_cachedSelectPageSizeKey,
-                       m_cachedSelectPageSize, m_cachedSelectSearchTitle, m_cachedSelectSearchField,
-                       m_cachedSelectMethod);
-        dlg.setHttpConfig(m_baseUrl, m_authHeader, m_postData);
-        if (dlg.exec() == QDialog::Accepted) {
-          m_cachedSelectSourceFile = dlg.sourceFile();
-          m_cachedSelectSourceId = dlg.sourceId();
-          m_cachedSelectUrl = dlg.url();
-          m_cachedSelectValueField = dlg.valueField();
-          m_cachedSelectLabelField = dlg.labelField();
-          m_cachedSelectPaged = dlg.paged();
-          m_cachedSelectPageKey = dlg.pageKey();
-          m_cachedSelectPageSizeKey = dlg.pageSizeKey();
-          m_cachedSelectPageSize = dlg.pageSize();
-          m_cachedSelectSearchTitle = dlg.searchTitle();
-          m_cachedSelectSearchField = dlg.searchField();
-          m_cachedSelectMethod = dlg.method();
-        }
-      });
+      // 下拉框：数据源在列表页（显示样式=下拉框）统一配置，列表/编辑/查询三处共享
+      auto *hint =
+          new QLabel(QStringLiteral("  （数据源与列表页一致，在上方显示样式配置）"),
+                     m_editStyleWidget);
+      form->addRow(QString(), hint);
       break;
     }
     case EditStyle::TextArea: {

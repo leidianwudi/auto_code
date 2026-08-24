@@ -42,6 +42,28 @@ JsonSourceOption JsonSourceOption::fromJson(const QJsonObject &obj) {
 }
 
 // ════════════════════════════════════════════════════════════
+//  JsonSourceTag
+// ════════════════════════════════════════════════════════════
+
+QJsonObject JsonSourceTag::toJson() const {
+  QJsonObject obj;
+  obj[QString::fromLatin1(JsonSourceKey::kValue)] = value;
+  if (!label.isEmpty()) obj[QString::fromLatin1(JsonSourceKey::kLabel)] = label;
+  if (!color.isEmpty()) obj[QString::fromLatin1(JsonSourceKey::kColor)] = color;
+  return obj;
+}
+
+JsonSourceTag JsonSourceTag::fromJson(const QJsonObject &obj) {
+  JsonSourceTag t;
+  const QJsonValue v = obj.value(QString::fromLatin1(JsonSourceKey::kValue));
+  t.value = v.isDouble() ? QString::number(v.toDouble())
+                         : v.toString();
+  t.label = obj.value(QString::fromLatin1(JsonSourceKey::kLabel)).toString();
+  t.color = obj.value(QString::fromLatin1(JsonSourceKey::kColor)).toString();
+  return t;
+}
+
+// ════════════════════════════════════════════════════════════
 //  JsonSource
 // ════════════════════════════════════════════════════════════
 
@@ -70,6 +92,13 @@ QJsonObject JsonSource::toJson() const {
     obj[QString::fromLatin1(JsonSourceKey::kOptions)] = arr;
     // 静态数据源也存 url（作为生成函数名的依据，如 booleanStatic + url名）
     if (!url.isEmpty()) obj[QString::fromLatin1(JsonSourceKey::kUrl)] = url;
+  }
+
+  // 列表页下拉框显示样式（值→tag样式 映射），静态/动态数据源共用
+  if (!tags.isEmpty()) {
+    QJsonArray tagArr;
+    for (const auto &t : tags) tagArr.append(t.toJson());
+    obj[QString::fromLatin1(JsonSourceKey::kTags)] = tagArr;
   }
 
   return obj;
@@ -102,6 +131,12 @@ JsonSource JsonSource::fromJson(const QJsonObject &obj) {
       if (v.isObject()) s.options.append(JsonSourceOption::fromJson(v.toObject()));
     }
     s.url = obj.value(QString::fromLatin1(JsonSourceKey::kUrl)).toString();
+  }
+
+  // 读取列表页下拉框显示样式（值→tag样式 映射）
+  const QJsonArray tagArr = obj.value(QString::fromLatin1(JsonSourceKey::kTags)).toArray();
+  for (const auto &v : tagArr) {
+    if (v.isObject()) s.tags.append(JsonSourceTag::fromJson(v.toObject()));
   }
 
   return s;

@@ -6,7 +6,9 @@
       "tableName": "user",
       "selCols": [
         "id",
-        "account"
+        "account",
+        "level",
+        "vip_status"
       ],
       "selColsLike": [
         "nick"

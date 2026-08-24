@@ -27,7 +27,8 @@ import { useValidator } from '@/hooks/web/use_validator';
 import { uiWriteLogic } from '@/utils/ui_write_logic';
 ${if hasSelectApi}import { ${selectApiImports} } from '@/api/${apiModule}/${pageName}';
 ${/if}${if hasSourceImports}${sourceImportLines}
-${/if}
+${/if}${if hasSelectFields}import { onceSelect } from '@/utils/once_select';
+${/if}import { applyFormMode } from '@/utils/form_mode';
 
 const { required } = useValidator();
 
@@ -59,15 +60,7 @@ ${if col.hasBoolApi}  {
       }
     }${if col.hasFormSpan},
     colProps: { span: ${col.formSpan} }${/if},
-    optionApi: async () => {
-      try {
-        const res = await ${col.boolApiName}();
-        return res.data?.list;
-      } catch (error) {
-        console.error('Error fetching ${col.selectErrorText} options:', error);
-        return [];
-      }
-    }
+    optionApi: onceSelect('${col.dataName}', () => Promise.resolve(${col.boolApiName}()).then((res: any) => res.data?.list))
   },
 ${else}  {
     field: '${col.dataName}',
@@ -107,15 +100,7 @@ ${else if col.isSelect}
       }
     }${if col.hasFormSpan},
     colProps: { span: ${col.formSpan} }${/if},
-    optionApi: async () => {
-      try {
-        const res = await ${col.selectApiName}();
-        return res.data?.list;
-      } catch (error) {
-        console.error('Error fetching ${col.selectErrorText} options:', error);
-        return [];
-      }
-    }
+    optionApi: onceSelect('${col.dataName}', () => Promise.resolve(${col.selectApiName}()).then((res: any) => res.data?.list))
   },
 ${else if col.isTagEdit}
   {
@@ -142,15 +127,7 @@ ${if col.hasBoolApi}  {
       }
     }${if col.hasFormSpan},
     colProps: { span: ${col.formSpan} }${/if},
-    optionApi: async () => {
-      try {
-        const res = await ${col.boolApiName}();
-        return res.data?.list;
-      } catch (error) {
-        console.error('Error fetching ${col.selectErrorText} options:', error);
-        return [];
-      }
-    }
+    optionApi: onceSelect('${col.dataName}', () => Promise.resolve(${col.boolApiName}()).then((res: any) => res.data?.list))
   },
 ${else}  {
     field: '${col.dataName}',
@@ -257,22 +234,12 @@ ${/if}
 ${/each}]);
 
 // 详情模式下将所有组件设为只读；同时处理隐藏字段和只读字段
-const formSchemaComputed = computed(() => {
-${if hasHiddenFields}  const hiddenFields = [${hiddenFieldsStr}];
-${/if}${if hasDisabledFields}  const disabledFields = [${disabledFieldsStr}];
-${/if}  return formSchema.value.map((item: any) => {
-    const result = { ...item };
-${if hasHiddenFields}    if (hiddenFields.includes(item.field)) {
-      result.ifShow = false;
-    }
-${/if}    if (isDetail.value) {
-      result.componentProps = { ...(item.componentProps || {}), disabled: true };
-    }${if hasDisabledFields} else if (disabledFields.includes(item.field)) {
-      result.componentProps = { ...(item.componentProps || {}), disabled: true };
-    }${/if}
-    return result;
-  });
-});
+const formSchemaComputed = computed(() =>
+  applyFormMode(formSchema.value, isDetail.value, {
+${if hasHiddenFields}    hiddenFields: [${hiddenFieldsStr}],
+${/if}${if hasDisabledFields}    disabledFields: [${disabledFieldsStr}],
+${/if}  })
+);
 
 // 表单验证规则（根据配置的 required 字段生成）
 const rules = reactive({

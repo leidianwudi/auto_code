@@ -15,6 +15,9 @@
 
 #include <QWidget>
 
+#include "src/ui/json_source/json_source_model.h"
+
+class QCheckBox;
 class QComboBox;
 class QLabel;
 class QLineEdit;
@@ -37,6 +40,14 @@ public:
                const QString &labelField, bool paged, const QString &pageKey,
                const QString &pageSizeKey, int pageSize, const QString &searchTitle,
                const QString &searchField);
+
+  /// 设置列表页下拉框显示的 tag 样式映射（值→success/primary/...），非空时自动勾选"配置显示样式"
+  void setTags(const QVector<JsonSourceTag> &tags);
+  /// 读取列表页下拉框显示的 tag 样式映射（勾选"配置显示样式"后按返回示例的 valueField 收集）
+  QVector<JsonSourceTag> tags() const;
+
+  /// 锁定 tag 显示样式配置（"全部使用数据源"时禁用"配置显示样式"，只读展示数据源的原始配置）
+  void setTagsLocked(bool locked);
 
   /// 设置 HTTP 请求参数（baseUrl、authHeader、postData）
   void setHttpConfig(const QString &baseUrl, const QString &authHeader, const QString &postData);
@@ -78,12 +89,15 @@ private slots:
 private:
   void setupUI();
   void applyType(int index);
+  /// 切换"配置显示样式"时增删返回数据示例的 tag 列（已有数据时生效）
+  void toggleTagColumn(bool on);
 
   // ── 控件 ──
   QComboBox *m_methodCombo = nullptr;   ///< 请求方式（GET/POST）
   QLineEdit *m_urlEdit = nullptr;       ///< 请求 URL
   QPushButton *m_testBtn = nullptr;     ///< 测试按钮
   QComboBox *m_typeCombo = nullptr;     ///< 加载方式（0=普通，1=查询分页）
+  QCheckBox *m_showTagCheck = nullptr;  ///< 配置显示样式（勾选后示例表格加 tag 列）
   QWidget *m_pagedGroup = nullptr;      ///< 查询分页配置区域
   QLineEdit *m_pageKeyEdit = nullptr;   ///< 页码参数名
   QLineEdit *m_pageSizeKeyEdit = nullptr;  ///< 页大小参数名
@@ -99,4 +113,7 @@ private:
   QString m_baseUrl;
   QString m_authHeader;
   QString m_postData;
+  /// 已配置的 tag 样式映射（值→success/primary/...），测试填表时恢复到对应行的 tag 下拉
+  QVector<JsonSourceTag> m_cachedTags;
+  bool m_tagsLocked = false;  ///< tag 显示样式是否锁定（"全部使用数据源"时只读展示数据源原始配置）
 };

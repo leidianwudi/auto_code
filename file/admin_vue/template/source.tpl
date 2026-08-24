@@ -25,7 +25,12 @@ import request from '@/axios';
 ${each src in sources}${if src.isDynamic}
 //查询${src.remark}
 export const ${src.funcName} = () => {
-  return request.${src.methodLower}({ url: '${src.url}' })
+  return request.${src.methodLower}({ url: '${src.url}' })${if src.hasTags}.then((res) => {
+    res.tags = {
+${each tag in src.tagsList}      '${tag.value}': '${tag.color}',${/each}
+    };
+    return res;
+  })${/if};
 };
 ${else}
 //${src.remark}（静态选项，同步返回：组件 setup 可直接读取，无需异步/兜底）
@@ -35,7 +40,10 @@ export const ${src.funcName} = () => {
       list: [${if src.hasItems}
 ${each it in src.items}        { label: '${it.labelEsc}', value: ${it.valueLiteral} },${/each}${/if}
       ]
-    }
+    }${if src.hasTags},
+    tags: {
+${each tag in src.tagsList}      '${tag.value}': '${tag.color}',${/each}
+    }${/if}
   };
 };
 ${/if}${/each}

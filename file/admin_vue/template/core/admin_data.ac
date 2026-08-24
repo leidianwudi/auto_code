@@ -322,18 +322,22 @@ export function processColumns(rawColumns: Object[], sourceMap: Object): Object[
     let isTagDisplay = false;
     let isBooleanDisplay = false;
     let isImageDisplay = false;
+    let isSelectDisplay = false;
     let hasDisplayType = false;
     if (!isSwitch) {
       isMoneyDisplay = (rawCol.displayType == "money");
       isTagDisplay = (rawCol.displayType == "tag");
       isBooleanDisplay = (rawCol.displayType == "boolean");
       isImageDisplay = (rawCol.displayType == "image");
+      // 下拉框显示：列表单元格按数据源把值映射为文字（数据源与编辑/查询共享）
+      isSelectDisplay = (rawCol.displayType == "select");
       hasDisplayType = isNotEmpty(rawCol.displayType);
     }
     col["isMoneyDisplay"] = isMoneyDisplay;
     col["isTagDisplay"] = isTagDisplay;
     col["isBooleanDisplay"] = isBooleanDisplay;
     col["isImageDisplay"] = isImageDisplay;
+    col["isSelectDisplay"] = isSelectDisplay;
     col["hasDisplayType"] = hasDisplayType;
 
     // tagItems 转换为模板友好的格式（数组 + 映射字符串）
@@ -406,7 +410,7 @@ export function processColumns(rawColumns: Object[], sourceMap: Object): Object[
 // ---------------------------------------------------------------------------
 // 3) 加工查询字段数据 → 模板友好查询字段数组
 // ---------------------------------------------------------------------------
-export function processQueryFields(rawQueryFields: Object[]): Object[] {
+export function processQueryFields(rawQueryFields: Object[], columnMap: Object): Object[] {
   let queryFields: Object[] = [];
   let rawQfLen = rawQueryFields.length;
   for (let i = 0; i < rawQfLen; i = i + 1) {
@@ -433,9 +437,42 @@ export function processQueryFields(rawQueryFields: Object[]): Object[] {
     qf["selectSearchField"] = rawQf.selectSearchField || "";
     qf["selectMethod"] = isNotEmpty(rawQf.selectMethod) ? rawQf.selectMethod : "POST";
 
+    // ── 下拉接口函数推导（查询字段复用列表列的数据源，三处共享）──
+    //   列已配置下拉数据源（selectApiName 非空）→ 直接复用列的函数/字段；
+    //   否则从查询字段自己的 selectUrl 推导（旧数据兼容，函数在本页 api）
+    let qfApiName: String = "";
+    let qfHasSourceRef: Bool = false;
+    let qfSourceRefFile: String = "";
+    let srcCol: Object = null;
+    if (columnMap != null) {
+      srcCol = columnMap[rawQf.dataName];
+    }
+    if (srcCol != null && srcCol["selectApiName"] != "") {
+      qfApiName = srcCol["selectApiName"];
+      qf["selectUrl"] = srcCol["selectUrl"];
+      qf["selectValueField"] = srcCol["selectValueField"];
+      qf["selectLabelField"] = srcCol["selectLabelField"];
+      qfHasSourceRef = (srcCol["hasSourceRef"] == true);
+      if (qfHasSourceRef) {
+        qfSourceRefFile = srcCol["sourceRefFile"];
+      }
+    } else if (isSelect && rawQf.selectUrl != "") {
+      let selUrlParts: String[] = rawQf.selectUrl.split("/");
+      let selUrlPartsLen: Int = selUrlParts.length;
+      for (let si = selUrlPartsLen - 1; si >= 0; si = si - 1) {
+        if (selUrlParts[si] != "") {
+          qfApiName = selUrlParts[si];
+          break;
+        }
+      }
+    }
+    qf["selectApiName"] = qfApiName;
+    qf["hasSourceRef"] = qfHasSourceRef;
+    qf["sourceRefFile"] = qfSourceRefFile;
+
     let comp = "Input";
     if (isSelect) {
-      comp = "ApiSelect";
+      comp = "Select";
     } else {
       if (rawQf.inputStyle == "date") {
         comp = "DatePicker";
@@ -823,6 +860,21 @@ export function processSources(rawSources: Object[], sourceName: String): Object
     }
     src["items"] = items;
     src["hasItems"] = (items.length > 0);
+    // 列表页下拉框显示的 tag 样式映射（值→success/primary/...）
+    let tagsList: Object[] = [];
+    if (raw.tags != null) {
+      let rawTags: Object[] = raw.tags;
+      let tlen = rawTags.length;
+      for (let tj = 0; tj < tlen; tj = tj + 1) {
+        let rawTag: Object = rawTags[tj];
+        tagsList.push({
+          value: escapeJsStr(rawTag.value),
+          color: escapeJsStr(rawTag.color)
+        });
+      }
+    }
+    src["tagsList"] = tagsList;
+    src["hasTags"] = (tagsList.length > 0);
     // id 与来源文件基名（jsonvue 引用查找表使用）
     src["id"] = raw.id;
     src["sourceName"] = sourceName;
@@ -1004,7 +1056,13 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
   let apiImports = buildApiImports(queryApi, deleteApi, updateApi, noDelete, noEdit,
                                    btnResult["extraApiList"]);
   let columns = processColumns(rawColumns, sourceMap);
-  let queryFields = processQueryFields(rawQueryFields);
+  // 列 dataName → 列 映射（查询字段复用列的下拉数据源时查表用）
+  let columnMap: Object = {};
+  let colMapLen = columns.length;
+  for (let i = 0; i < colMapLen; i = i + 1) {
+    columnMap[columns[i]["dataName"]] = columns[i];
+  }
+  let queryFields = processQueryFields(rawQueryFields, columnMap);
 
   // ── 下拉框数据接口：汇总各 select 列的接口函数 ───────────────────
   // 手动 url 列：本页 api.tpl 追加生成（selectApiStr）并导入（selectApiImports）。
@@ -1022,11 +1080,14 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
   let boolSourceFileOrder: String[] = [];
   let boolSourceNameSet: Object = {};
   let hasBoolApiColumns = false;       // 是否存在引用静态数据源的布尔开关列
+  let hasSelectApiColumns = false;     // 是否存在下拉框显示列（index.tpl 加载选项映射用）
   let colsSelLen = columns.length;
   for (let i = 0; i < colsSelLen; i = i + 1) {
     let colSel: Object = columns[i];
     // 布尔开关引用静态数据源（write.vue 的 optionApi 使用，函数来自 source api）
     let isBoolRef: Bool = (colSel["hasBoolApi"] == true);
+    // 下拉框显示列（列表单元格按数据源显示文字，与编辑/查询共享数据源）
+    let isSelectDisplayRef: Bool = (colSel["isSelectDisplay"] == true);
     if (!colSel["hasSelectApi"] && !isBoolRef) {
       continue;
     }
@@ -1034,6 +1095,9 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
     if (isBoolRef) {
       selName = colSel["boolApiName"];
       hasBoolApiColumns = true;
+    }
+    if (isSelectDisplayRef) {
+      hasSelectApiColumns = true;
     }
     if (colSel["hasSourceRef"] || isBoolRef) {
       // 引用数据源：按文件分组收集 import（函数本体由 source.tpl 生成）
@@ -1047,8 +1111,8 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
           sourceFileMap[refBase] = sourceFileMap[refBase] + ", " + selName;
         }
       }
-      // 布尔引用额外收集到独立分组（index.tpl 只导入这些函数）
-      if (isBoolRef && boolSourceNameSet[selName] == null) {
+      // 布尔/下拉显示列引用额外收集到独立分组（index.tpl 只导入这些函数）
+      if ((isBoolRef || isSelectDisplayRef) && boolSourceNameSet[selName] == null) {
         boolSourceNameSet[selName] = true;
         let refBase2: String = colSel["sourceRefFile"];
         if (boolSourceFileMap[refBase2] == null) {
@@ -1071,7 +1135,59 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
                      "  return request.post({ url: '" + colSel["selectApiUrl"] + "' })\n}";
     }
   }
+
+  // 查询字段下拉引用收集（index.tpl 的 searchSchema optionApi 使用）：
+  //   引用 source 文件 → 并入 boolSourceFileMap（index import source api）；
+  //   手动 url       → 并入 selectApiImports（index import 本页 api）
+  let qfLen2 = queryFields.length;
+  for (let i = 0; i < qfLen2; i = i + 1) {
+    let qfSel: Object = queryFields[i];
+    if (!qfSel["isSelect"] || qfSel["selectApiName"] == "") {
+      continue;
+    }
+    let qfName2: String = qfSel["selectApiName"];
+    if (qfSel["hasSourceRef"]) {
+      if (boolSourceNameSet[qfName2] == null) {
+        boolSourceNameSet[qfName2] = true;
+        let refBase3: String = qfSel["sourceRefFile"];
+        if (boolSourceFileMap[refBase3] == null) {
+          boolSourceFileMap[refBase3] = qfName2;
+          boolSourceFileOrder.push(refBase3);
+        } else {
+          boolSourceFileMap[refBase3] = boolSourceFileMap[refBase3] + ", " + qfName2;
+        }
+      }
+    } else if (selectApiNameSet[qfName2] == null) {
+      selectApiNameSet[qfName2] = true;
+      selectApiCount = selectApiCount + 1;
+      if (selectApiImports != "") {
+        selectApiImports = selectApiImports + ", ";
+      }
+      selectApiImports = selectApiImports + qfName2;
+      // 查询字段手动 url 的函数体（供 api.tpl 追加生成）
+      let qfUrl2: String = qfSel["selectUrl"];
+      if (qfUrl2 != "" && !qfUrl2.startsWith("/")) {
+        qfUrl2 = "/" + qfUrl2;
+      }
+      selectApiStr = selectApiStr + "\n//查询" + qfSel["dataName"] +
+                     "\nexport const " + qfName2 + " = () => {\n" +
+                     "  return request.post({ url: '" + qfUrl2 + "' })\n}";
+    }
+  }
   let hasSelectApi = (selectApiCount > 0);
+
+  // 是否存在使用 optionApi 的下拉字段（write.tpl 需 import onceSelect 做并发去重）
+  let hasSelectFields = false;
+  let hsfLen = columns.length;
+  for (let i = 0; i < hsfLen; i = i + 1) {
+    let hsfCol: Object = columns[i];
+    if (hsfCol["isSelect"] ||
+        (hsfCol["isBooleanSwitch"] && hsfCol["hasBoolApi"]) ||
+        (hsfCol["isBooleanEdit"] && hsfCol["hasBoolApi"])) {
+      hasSelectFields = true;
+      break;
+    }
+  }
 
   // source api 导入行（每个 .jsonsource 文件一行 import，供 write.tpl 使用）
   let sourceImportLines = "";
@@ -1086,7 +1202,7 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
   }
   let hasSourceImports = (sourceImportLines != "");
 
-  // 布尔开关 source api 导入行（index.tpl 使用，只含引用了静态数据源的开关函数）
+  // 布尔/下拉显示列 source api 导入行（index.tpl 使用，只含引用了数据源的开关/下拉显示函数）
   let boolSourceImportLines = "";
   let bsfoLen = boolSourceFileOrder.length;
   for (let i = 0; i < bsfoLen; i = i + 1) {
@@ -1130,6 +1246,8 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
       hasImageColumns = true;
     }
   }
+  // 下拉框显示列也可能按数据源 tag 样式用 ElTag 渲染（hasSelectApiColumns 时）
+  let needsElTag = (hasTagColumns || hasSelectApiColumns);
 
   // ── 表格默认排序字段（取第一个配置了 defaultSort 的列）──────────
   let defaultSortField = "";
@@ -1190,14 +1308,16 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
   tplData["deleteUrl"] = deleteUrl;                // ${deleteUrl} 删除请求地址
   tplData["commentTitle"] = commentTitle;            // ${commentTitle} 注解标题
   tplData["hasSelectApi"] = hasSelectApi;          // ${if hasSelectApi} 是否有下拉框接口
+  tplData["hasSelectFields"] = hasSelectFields;    // ${if hasSelectFields} 是否有 optionApi 下拉字段
   tplData["selectApiStr"] = selectApiStr;          // ${selectApiStr} 下拉框接口函数字符串
   tplData["selectApiImports"] = selectApiImports;  // ${selectApiImports} 下拉框接口导入列表
   tplData["hasSourceImports"] = hasSourceImports;    // ${if hasSourceImports} 是否导入 source api
   tplData["sourceImportLines"] = sourceImportLines;  // ${sourceImportLines} source api 导入行
   // 布尔开关引用静态数据源（index.tpl 使用）
   tplData["hasBoolApiColumns"] = hasBoolApiColumns;  // ${if hasBoolApiColumns} 是否有布尔开关引用数据源
-  tplData["boolSourceImportLines"] = boolSourceImportLines;  // ${boolSourceImportLines} 布尔开关 source import 行
-  tplData["hasBoolSourceImports"] = hasBoolSourceImports;  // ${if hasBoolSourceImports} 是否导入布尔 source api
+  tplData["hasSelectApiColumns"] = hasSelectApiColumns;  // ${if hasSelectApiColumns} 是否有下拉框显示列
+  tplData["boolSourceImportLines"] = boolSourceImportLines;  // ${boolSourceImportLines} 布尔/下拉显示列 source import 行
+  tplData["hasBoolSourceImports"] = hasBoolSourceImports;  // ${if hasBoolSourceImports} 是否导入 source api
   tplData["noDelete"] = noDelete;                  // ${if !noDelete} 不可删除
   tplData["noEdit"] = noEdit;                      // ${if !noEdit} 不可编辑
   tplData["noDetail"] = noDetail;                  // ${if !noDetail} 不可查看详情
@@ -1210,6 +1330,7 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
   tplData["hasDialogButtons"] = (dialogButtons.length > 0);
   tplData["hasLinkButtons"] = (linkButtons.length > 0);
   tplData["hasTagColumns"] = hasTagColumns;        // ${if hasTagColumns} 需要导入 ElTag
+  tplData["needsElTag"] = needsElTag;              // ${if needsElTag} 需要导入 ElTag（tag 显示列或下拉显示列）
   tplData["hasImageColumns"] = hasImageColumns;    // ${if hasImageColumns} 需要导入 ElImage
   tplData["rowButtons"] = rowButtons;              // ${each btn in rowButtons} 行操作列按钮
   tplData["toolbarButtons"] = toolbarButtons;      // ${each btn in toolbarButtons} 顶部工具栏按钮

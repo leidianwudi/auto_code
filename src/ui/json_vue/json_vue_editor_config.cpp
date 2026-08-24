@@ -132,31 +132,48 @@ void JsonVueEditor::onConfigureQuerySelect() {
   q.inputStyle = style;
 
   if (style == QueryInputStyle::Select) {
-    // select 样式使用 ComboboxConfigDialog
-    ComboboxConfigDialog dialog(this);
-    dialog.setSearchRoot(m_jsonvueDir);
-    dialog.setSourceRef(q.selectSourceFile, q.selectSourceId);
-    dialog.setConfig(q.selectUrl, q.selectValueField, q.selectLabelField);
-    dialog.setPagedConfig(q.selectPaged, q.selectPageKey, q.selectPageSizeKey, q.selectPageSize,
-                      q.selectSearchTitle, q.selectSearchField, q.selectMethod);
-    dialog.setHttpConfig(m_baseUrl, m_authHeader, m_postData);
-    if (dialog.exec() == QDialog::Accepted) {
-      q.selectSourceFile = dialog.sourceFile();
-      q.selectSourceId = dialog.sourceId();
-      q.selectUrl = dialog.url();
-      q.selectValueField = dialog.valueField();
-      q.selectLabelField = dialog.labelField();
-      q.selectPaged = dialog.paged();
-      q.selectPageKey = dialog.pageKey();
-      q.selectPageSizeKey = dialog.pageSizeKey();
-      q.selectPageSize = dialog.pageSize();
-      q.selectSearchTitle = dialog.searchTitle();
-      q.selectSearchField = dialog.searchField();
-      q.selectMethod = dialog.method();
-      storeQueryConfig(configBtn, q);
-      configBtn->setText(queryConfigSummary(q));
-      emit configChanged();
+    // 查询字段复用对应列表列的 select 数据源（dataName 相同，列表/编辑/查询三处共享），
+    // 不再单独配置；列未配置时提示先去列表页配置
+    auto *dataCombo = qobject_cast<QComboBox *>(m_queryTable->cellWidget(row, QColDataName));
+    const QString dataName = dataCombo ? dataCombo->currentText().trimmed() : QString();
+
+    ColumnConfig col;
+    bool colReady = false;
+    for (int r = 0; r < m_columnTable->rowCount(); ++r) {
+      auto *item = m_columnTable->item(r, ColDataName);
+      if (!item || item->text().trimmed() != dataName) continue;
+      auto *cbtn = qobject_cast<QPushButton *>(m_columnTable->cellWidget(r, ColConfig));
+      if (cbtn) {
+        readColumnConfig(cbtn, col);
+        colReady = true;
+      }
+      break;
     }
+    const bool colHasSource =
+        colReady && (!col.selectUrl.isEmpty() || !col.selectSourceFile.isEmpty());
+    if (!colHasSource) {
+      AuiMessageBox::show(
+          this, QStringLiteral("未配置数据源"),
+          QStringLiteral("字段「%1」未在列表页配置下拉框数据源，请先在列样式配置里选择「下拉框(select)」并配置数据源。")
+              .arg(dataName));
+      return;
+    }
+    // 复用列表列的数据源（与列表页/编辑页共享）
+    q.selectUrl = col.selectUrl;
+    q.selectSourceFile = col.selectSourceFile;
+    q.selectSourceId = col.selectSourceId;
+    q.selectValueField = col.selectValueField;
+    q.selectLabelField = col.selectLabelField;
+    q.selectPaged = col.selectPaged;
+    q.selectPageKey = col.selectPageKey;
+    q.selectPageSizeKey = col.selectPageSizeKey;
+    q.selectPageSize = col.selectPageSize;
+    q.selectSearchTitle = col.selectSearchTitle;
+    q.selectSearchField = col.selectSearchField;
+    q.selectMethod = col.selectMethod;
+    storeQueryConfig(configBtn, q);
+    configBtn->setText(queryConfigSummary(q));
+    emit configChanged();
   } else {
     // text/date 样式使用 QueryStyleDialog
     QueryStyleDialog dialog(style, this);
