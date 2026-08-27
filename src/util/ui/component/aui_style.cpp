@@ -61,6 +61,15 @@ void AuiStyle::drawFoldArrow(QPainter &p, const QPointF &tip, bool downward,
   const qreal half = qDegreesToRadians(qBound<qreal>(20.0, openAngleDeg, 170.0) / 2.0);
   const qreal lx = length * std::cos(half);
   const qreal ly = length * std::sin(half);
+  // 描边箭头（VSCode 折叠箭头同款）。
+  // 与代码编辑框折叠箭头渲染完全一致（编辑框即 1.6px 细线 + 关闭抗锯齿 → 像素级锐利）：
+  // 1) 保持 1.6px 细线宽（粗线在关闭 AA 后斜线会变脏/模糊）；
+  // 2) 关闭抗锯齿 → 硬渲染、无半像素模糊；
+  // 3) 尖端取整、臂偏移取整为 hw/hh，且左右臂以尖端为对称轴，保证两臂严格对称。
+  p.setRenderHint(QPainter::Antialiasing, false);
+  const QPointF t(std::round(tip.x()), std::round(tip.y()));
+  const int hw = qMax(1, qRound(lx));  // 半宽（整像素）
+  const int hh = qMax(1, qRound(ly));  // 半高（整像素）
   QPen pen(color, 1.6);
   pen.setCapStyle(Qt::FlatCap);   // 平头：避免尖端两条线起点圆帽重叠成凸点
   pen.setJoinStyle(Qt::RoundJoin);
@@ -69,21 +78,20 @@ void AuiStyle::drawFoldArrow(QPainter &p, const QPointF &tip, bool downward,
   QPointF a, b;
   if (downward) {
     // 向下「v」：尖端在最低点，两臂朝左上/右上张开（开口朝上）
-    a = QPointF(tip.x() - lx, tip.y() - ly);
-    b = QPointF(tip.x() + lx, tip.y() - ly);
+    a = QPointF(t.x() - hw, t.y() - hh);
+    b = QPointF(t.x() + hw, t.y() - hh);
   } else {
     // 向右「▸」：尖端在右侧，两臂向左张开（对称轴水平，指向右）。
-    // 两臂以 tip 为中心左右对称（尖端相应右移 lx/2），
-    // 使 ▸ 与 v 的视觉中心对齐（否则两臂全在左侧，图标显得偏左）
-    const QPointF base(tip.x() + lx / 2.0, tip.y());
-    a = QPointF(base.x() - lx, base.y() - ly);
-    b = QPointF(base.x() - lx, base.y() + ly);
+    // 尖端右移 hw/2，使 ▸ 与 v 的视觉中心对齐（否则两臂全在左侧，图标显得偏左）
+    const QPointF base(std::round(t.x() + hw / 2.0), std::round(t.y()));
+    a = QPointF(base.x() - hw, base.y() - hh);
+    b = QPointF(base.x() - hw, base.y() + hh);
     p.drawLine(base, a);
     p.drawLine(base, b);
     return;
   }
-  p.drawLine(tip, a);
-  p.drawLine(tip, b);
+  p.drawLine(t, a);
+  p.drawLine(t, b);
 }
 
 // ════════════════════════════════════════════════════════════

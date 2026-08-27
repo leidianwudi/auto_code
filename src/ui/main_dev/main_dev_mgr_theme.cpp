@@ -44,6 +44,10 @@ void MainDevMgr::refreshTheme() {
   // 刷新调试面板（调用栈/变量/断点页签栏与列表的颜色随主题重建）
   if (m_ui->debugPanel()) m_ui->debugPanel()->refreshStyle();
 
+  // 刷新查找 / 引用面板（背景、滚动条、文字色随主题重建，无需重启生效）
+  if (m_ui->findPanel()) m_ui->findPanel()->refreshStyle();
+  if (m_ui->referencePanel()) m_ui->referencePanel()->refreshStyle();
+
   // 刷新所有已打开编辑器的高亮颜色（语法高亮 / 行号 / 当前行等），
   // 以及 .jsonvue 的代码编辑器与可视化编辑器样式
   for (int p = 0; p < m_ui->editorPanelCount(); ++p) {

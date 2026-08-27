@@ -68,6 +68,9 @@ public:
   /// @param kind 0=继续 1=单步执行 2=单步进入 3=单步跳出
   static QPushButton *createDebugStepButton(int kind);
 
+  /// 创建「全部折叠」图标按钮（VSCode 风格，图标随主题变色）
+  static QPushButton *createCollapseAllButton(int size = 18);
+
   /// 创建「保存」按钮（QPushButton，软盘图标）
   static QPushButton *createSaveButton(int size = 18);
 

@@ -366,6 +366,23 @@ QPushButton *AuiButton::createDebugStepButton(int kind) {
 }
 
 // ════════════════════════════════════════════════════════════
+//  全部折叠按钮
+// ════════════════════════════════════════════════════════════
+
+QPushButton *AuiButton::createCollapseAllButton(int size) {
+  auto *btn = new QPushButton;
+  // 图标随主题 / 颜色设置变化自动重绘
+  bindThemeAwareIcon(btn, [size]() { return AuiIcon::createCollapseAllIcon(size); });
+  btn->setIconSize(QSize(size, size));
+  btn->setFixedSize(size + 6, size + 6);
+  btn->setToolTip(QStringLiteral("全部折叠"));
+  btn->setCursor(Qt::PointingHandCursor);
+  btn->setFocusPolicy(Qt::NoFocus);
+  applyIconButtonStyle(btn);
+  return btn;
+}
+
+// ════════════════════════════════════════════════════════════
 //  保存按钮
 // ════════════════════════════════════════════════════════════
 

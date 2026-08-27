@@ -11,47 +11,21 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QHBoxLayout>
-#include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMap>
-#include <QPainter>
-#include <QPixmap>
+#include <QPushButton>
 #include <QSet>
 #include <QShowEvent>
 #include <QTextStream>
-#include <QTreeWidget>
 #include <QVBoxLayout>
 
+#include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_style.h"
 
 /// 是否为标识符字符（用于"全词匹配"边界判断）
 static inline bool isWordChar(const QChar &c) {
   return c.isLetterOrNumber() || c == QLatin1Char('_');
-}
-
-/// 生成 VSCode 风格白色对勾图标（运行时用 QPainter 绘制 PNG，
-/// 写入临时目录后通过样式表 url() 引用，选中态蓝底 + 白色对勾）
-static QString vscCheckIconPath() {
-  static const QString path = []() {
-    const QString file = QDir::tempPath() + QStringLiteral("/aui_check_white_16.png");
-    if (!QFile::exists(file)) {
-      QPixmap pm(16, 16);
-      pm.fill(Qt::transparent);
-      QPainter p(&pm);
-      p.setRenderHint(QPainter::Antialiasing);
-      QPen pen(Qt::white, 2.0);
-      pen.setCapStyle(Qt::RoundCap);
-      pen.setJoinStyle(Qt::RoundJoin);
-      p.setPen(pen);
-      p.drawLine(QPointF(3.5, 8.5), QPointF(6.6, 11.6));
-      p.drawLine(QPointF(6.6, 11.6), QPointF(12.6, 4.4));
-      p.end();
-      pm.save(file, "PNG");
-    }
-    return file;
-  }();
-  return path;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -60,16 +34,18 @@ static QString vscCheckIconPath() {
 
 SearchPanel::SearchPanel(QWidget *parent) : QWidget(parent) {
   setupUI();
+  // 主题切换时刷新面板背景 / 标签文字色（结果树由 VscResultTree 自行响应）
+  connect(&SettingStore::ins(), &SettingStore::themeChanged, this, &SearchPanel::refreshStyle);
 }
 
 void SearchPanel::setupUI() {
   auto *layout = new QVBoxLayout(this);
-  layout->setContentsMargins(6, 6, 6, 6);
+  layout->setContentsMargins(0, 0, 0, 0);
   layout->setSpacing(4);
 
-  // ── 第一行：输入框 + 选项复选框 ──
+  // ── 第一行：输入框 + 选项复选框（上方控件保留合适外边距）──
   auto *searchRow = new QHBoxLayout;
-  searchRow->setContentsMargins(0, 0, 0, 0);
+  searchRow->setContentsMargins(6, 6, 6, 0);
   searchRow->setSpacing(4);
 
   m_searchEdit = new QLineEdit;
@@ -79,6 +55,7 @@ void SearchPanel::setupUI() {
   connect(m_searchEdit, &QLineEdit::returnPressed, this, &SearchPanel::onSearchTextChanged);
 
   // VSCode 风格小复选框：Aa(区分大小写) / \b(全词匹配)
+  // （复选框指示器由 AuiStyle 全局代理统一绘制，浅色/深色主题自适应）
   m_caseCheck = new QCheckBox(QStringLiteral("Aa"));
   m_caseCheck->setToolTip(QStringLiteral("区分大小写"));
   m_caseCheck->setFixedSize(36, 24);
@@ -92,40 +69,39 @@ void SearchPanel::setupUI() {
   searchRow->addWidget(m_caseCheck);
   searchRow->addWidget(m_wordCheck);
 
-  // ── 第二行：汇总标签 ──
+  // ── 第二行：汇总标签（靠左）+ 全部折叠按钮（靠右，VSCode 搜索视图）──
+  auto *summaryRow = new QHBoxLayout;
+  summaryRow->setContentsMargins(6, 0, 6, 0);
+  summaryRow->setSpacing(4);
   m_summaryLabel = new QLabel(QStringLiteral("0 个文件有 0 个结果"));
   m_summaryLabel->setStyleSheet(QStringLiteral("color: %1; font-size: 12px;")
                                     .arg(AuiStyle::mutedTextColor().name()));
+  summaryRow->addWidget(m_summaryLabel);
+  summaryRow->addStretch(1);
+  m_collapseBtn = AuiButton::createCollapseAllButton();
+  connect(m_collapseBtn, &QPushButton::clicked, this,
+          [this]() { m_resultTree->collapseAll(); });
+  summaryRow->addWidget(m_collapseBtn);
 
-  // ── 结果树：文件 → 匹配行 ──
-  m_resultTree = new QTreeWidget;
-  m_resultTree->setColumnCount(2);
-  m_resultTree->setHeaderLabels({QStringLiteral("文件"), QStringLiteral("行")});
-  m_resultTree->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-  m_resultTree->header()->setSectionResizeMode(1, QHeaderView::Stretch);
-  m_resultTree->header()->setStretchLastSection(true);
-  m_resultTree->setRootIsDecorated(true);
-  m_resultTree->setAlternatingRowColors(false);
-  m_resultTree->setUniformRowHeights(true);
+  // ── 结果树：VSCode 风格（文件分组 → 匹配行）──
+  m_resultTree = new VscResultTree;
   connect(m_resultTree, &QTreeWidget::itemClicked, this, &SearchPanel::onItemClicked);
 
   layout->addLayout(searchRow);
-  layout->addWidget(m_summaryLabel);
+  layout->addLayout(summaryRow);
   layout->addWidget(m_resultTree, 1);
 
-  setStyleSheet(
-      // VSCode 风格复选框：14px 圆角指示器，未选中灰边框白底，选中蓝底 + 白色对勾
-      QStringLiteral(
-          "QCheckBox { spacing: 3px; font-size: 11px; color: #333333; }"
-          "QCheckBox::indicator { width: 14px; height: 14px; border-radius: 3px;"
-          "  border: 1px solid #797979; background: #ffffff; }"
-          "QCheckBox::indicator:hover { border: 1px solid #4a4a4a; }"
-          "QCheckBox::indicator:checked { background: #0e639c; border: 1px solid #0e639c;"
-          "  image: url(%1); }"
-          "QCheckBox::indicator:checked:hover { background: #1177bb; border-color: #1177bb; }"
-          "QCheckBox::indicator:disabled { border: 1px solid #d0d0d0; background: #f0f0f0; }"
-          "QLineEdit { padding: 2px 4px; }")
-          .arg(vscCheckIconPath()));
+  // 面板统一样式：背景随主题（setStyleSheet 触发重新抛光，主题切换立即生效）；
+  // 复选框指示器交给 AuiStyle 全局代理绘制，不在 per-widget 样式表里覆盖
+  applyPanelStyle();
+}
+
+void SearchPanel::applyPanelStyle() {
+  setStyleSheet(QStringLiteral(
+                    "SearchPanel { background-color: %1; }"
+                    "QCheckBox { spacing: 3px; font-size: 11px; }"
+                    "QLineEdit { padding: 2px 4px; }")
+                    .arg(AuiStyle::panelBackground().name()));
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -142,6 +118,17 @@ void SearchPanel::startSearch(const QString &text) {
   m_searchEdit->setText(text);
   m_searchEdit->blockSignals(false);
   performSearch();
+}
+
+void SearchPanel::refreshStyle() {
+  // 面板背景随主题重建（setStyleSheet 触发重新抛光，立即生效）
+  applyPanelStyle();
+  // 汇总标签文字色随当前主题重建（避免固化旧主题颜色）
+  m_summaryLabel->setStyleSheet(QStringLiteral("color: %1; font-size: 12px;")
+                                    .arg(AuiStyle::mutedTextColor().name()));
+  // 结果树背景 / 滚动条 / 字体 / 图标随主题刷新
+  m_resultTree->reloadStyle();
+  update();
 }
 
 void SearchPanel::showEvent(QShowEvent *event) {
@@ -260,29 +247,23 @@ void SearchPanel::performSearch() {
     f.close();
   }
 
-  // ── 构建结果树：文件节点 → 匹配行节点 ──
+  // ── 构建结果树：文件分组节点 → 匹配行节点（VSCode 风格）──
   QMap<QString, QTreeWidgetItem *> fileItems;
   for (const SearchMatch &m : m_matches) {
     QTreeWidgetItem *fileItem = fileItems.value(m.filePath);
     if (!fileItem) {
-      fileItem = new QTreeWidgetItem(m_resultTree);
-      fileItem->setText(0, QFileInfo(m.filePath).fileName());
-      fileItem->setText(1, QString::number(0));  // 匹配数稍后更新
-      fileItem->setData(0, Qt::UserRole, m.filePath);
-      fileItem->setData(0, Qt::UserRole + 1, 0);  // 文件节点：line=0
+      QString rel = QDir(m_searchRoot).relativeFilePath(m.filePath);
+      fileItem = m_resultTree->addFileNode(m.filePath, rel.isEmpty() ? m.filePath : rel);
       fileItems.insert(m.filePath, fileItem);
     }
-    QTreeWidgetItem *lineItem = new QTreeWidgetItem(fileItem);
-    lineItem->setText(0, QString::number(m.line));
-    lineItem->setText(1, m.lineText.trimmed());
-    lineItem->setData(0, Qt::UserRole, m.filePath);
-    lineItem->setData(0, Qt::UserRole + 1, m.line);
-    lineItem->setData(0, Qt::UserRole + 2, m.column);
-    lineItem->setData(0, Qt::UserRole + 3, m.length);
+    m_resultTree->addMatchNode(fileItem, m.filePath, m.line, m.column,
+                               static_cast<int>(m.length), m.lineText.trimmed());
   }
-  // 文件节点显示匹配数
+  // 文件分组节点显示匹配数
   for (auto it2 = fileItems.begin(); it2 != fileItems.end(); ++it2) {
-    it2.value()->setText(1, QString::number(it2.value()->childCount()));
+    it2.value()->setText(0, QStringLiteral("%1 (%2)")
+                                .arg(it2.value()->text(0))
+                                .arg(it2.value()->childCount()));
   }
   m_resultTree->expandAll();
 
@@ -296,11 +277,11 @@ void SearchPanel::performSearch() {
 void SearchPanel::onItemClicked(QTreeWidgetItem *item, int column) {
   Q_UNUSED(column);
   if (!item) return;
-  // 仅结果行（有行号）触发跳转；文件节点不跳转
-  const int line = item->data(0, Qt::UserRole + 1).toInt();
+  // 仅结果行（有行号）触发跳转；文件分组节点不跳转
+  const int line = item->data(0, VscTreeRole::Line).toInt();
   if (line <= 0) return;
-  const QString filePath = item->data(0, Qt::UserRole).toString();
-  const int col = item->data(0, Qt::UserRole + 2).toInt();
-  const int len = item->data(0, Qt::UserRole + 3).toInt();
+  const QString filePath = item->data(0, VscTreeRole::FilePath).toString();
+  const int col = item->data(0, VscTreeRole::Column).toInt();
+  const int len = item->data(0, VscTreeRole::Length).toInt();
   emit openRequested(filePath, line, col, len);
 }

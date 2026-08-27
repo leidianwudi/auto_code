@@ -5,30 +5,21 @@
 
 #include "reference_panel.h"
 
-#include <QAbstractItemView>
-#include <QApplication>
 #include <QDir>
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
-#include <QFont>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMap>
-#include <QMouseEvent>
-#include <QPainter>
-#include <QPalette>
+#include <QPushButton>
 #include <QRegularExpression>
 #include <QSet>
-#include <QStyle>
-#include <QStyleOption>
-#include <QStyledItemDelegate>
 #include <QTextStream>
-#include <QToolButton>
-#include <QTreeWidget>
 #include <QVBoxLayout>
 
 #include "comment_scan.h"
+#include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_style.h"
 #include "src/util/ui/setting_store.h"
 
@@ -69,96 +60,12 @@ static QVector<RefHit> findReferencesInText(const QString &text, const QString &
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  条目绘制代理（VSCode 引用视图）
-//  - 文件节点：正文色 + 加粗（相对路径 + 数量）
-//  - 引用行：弱化色行号 + 正文内容
-//  - 整行悬停 / 选中高亮；背景覆盖后自绘展开/收起分支
-// ══════════════════════════════════════════════════════════════════════════════
-
-class ReferenceItemDelegate : public QStyledItemDelegate {
-public:
-  using QStyledItemDelegate::QStyledItemDelegate;
-
-  void paint(QPainter *p, const QStyleOptionViewItem &option,
-             const QModelIndex &index) const override {
-    const int line = index.data(Qt::UserRole + 1).toInt();
-    const bool isFile = (line <= 0);
-    const auto *item = static_cast<const QTreeWidgetItem *>(index.internalPointer());
-
-    const auto *panel = qobject_cast<const ReferencePanel *>(parent());
-    const bool hovered = panel && item && (panel->hoverItem() == item);
-
-    QStyle *st = option.widget ? option.widget->style() : QApplication::style();
-    const auto *tree = qobject_cast<const QTreeWidget *>(option.widget);
-
-    // 1) 整行背景（覆盖到视口右缘，VSCode 列表交互）
-    QRect rowRect = option.rect;
-    if (tree && tree->viewport()) {
-      rowRect.setLeft(0);
-      rowRect.setRight(tree->viewport()->width() - 1);
-    }
-    QColor bg;
-    if (option.state & QStyle::State_Selected)
-      bg = AuiStyle::listSelectionBackground();
-    else if (hovered)
-      bg = AuiStyle::listHoverBackground();
-    else
-      bg = AuiStyle::panelBackground();
-    p->fillRect(rowRect, bg);
-
-    // 2) 展开/收起分支（背景覆盖了 QTreeView 的分支，需在此自绘）
-    if (item && item->childCount() > 0 && tree) {
-      const int indent = tree->indentation();
-      QStyleOptionViewItem branchOpt = option;
-      branchOpt.rect =
-          QRect(option.rect.x() - indent + 4, option.rect.y(), indent, option.rect.height());
-      branchOpt.state |= QStyle::State_Item | QStyle::State_Children | QStyle::State_Enabled;
-      if (item->isExpanded()) branchOpt.state |= QStyle::State_Open;
-      st->drawPrimitive(QStyle::PE_IndicatorBranch, &branchOpt, p, option.widget);
-    }
-
-    // 3) 文字（垂直居中）
-    QFont textFont = option.font;
-    if (isFile) textFont.setBold(true);
-    QFontMetrics fm(textFont);
-    const int baseline =
-        option.rect.top() + (option.rect.height() - fm.height()) / 2 + fm.ascent();
-    p->setFont(textFont);
-
-    if (isFile) {
-      const QString text = index.data(Qt::DisplayRole).toString();
-      const QRect r = option.rect.adjusted(6, 0, -4, 0);
-      p->setPen(AuiStyle::textColor());
-      p->drawText(r.left(), baseline, fm.elidedText(text, Qt::ElideRight, r.width()));
-    } else {
-      // 行号（弱化色）+ 内容（正文色）
-      const QString lineStr = QString::number(line);
-      const QString content = index.data(Qt::UserRole + 4).toString();
-      const int lineW = fm.horizontalAdvance(lineStr) + 6;
-      p->setPen(AuiStyle::mutedTextColor());
-      p->drawText(option.rect.left() + 6, baseline, lineStr);
-      p->setPen(AuiStyle::textColor());
-      const QRect r = option.rect.adjusted(6 + lineW, 0, -4, 0);
-      p->drawText(r.left(), baseline, fm.elidedText(content, Qt::ElideRight, r.width()));
-    }
-  }
-
-  QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override {
-    QSize s = QStyledItemDelegate::sizeHint(option, index);
-    s.setHeight(qMax(20, option.fontMetrics.height() + 6));
-    return s;
-  }
-};
-
-// ══════════════════════════════════════════════════════════════════════════════
 //  构造 / UI
 // ══════════════════════════════════════════════════════════════════════════════
 
 ReferencePanel::ReferencePanel(QWidget *parent) : QWidget(parent) {
   setupUI();
-  // 主题 / 代码字体变化时刷新样式
-  connect(&SettingStore::ins(), &SettingStore::fontsChanged, this,
-          &ReferencePanel::reloadStyle);
+  // 主题变化时刷新头部样式（结果树样式由 VscResultTree 自行响应）
   connect(&SettingStore::ins(), &SettingStore::themeChanged, this,
           &ReferencePanel::reloadStyle);
   reloadStyle();
@@ -166,48 +73,36 @@ ReferencePanel::ReferencePanel(QWidget *parent) : QWidget(parent) {
 
 void ReferencePanel::setupUI() {
   auto *layout = new QVBoxLayout(this);
-  layout->setContentsMargins(6, 6, 6, 6);
+  layout->setContentsMargins(0, 0, 0, 0);
   layout->setSpacing(4);
 
-  // ── 第一行：符号名 + 刷新按钮（VSCode 引用视图头部）──
+  // ── 第一行：符号名 + 全部折叠按钮（VSCode 引用视图头部，保留合适外边距）──
   auto *headerRow = new QHBoxLayout;
-  headerRow->setContentsMargins(0, 0, 0, 0);
+  headerRow->setContentsMargins(6, 6, 6, 0);
   headerRow->setSpacing(4);
 
   m_symbolLabel = new QLabel;
   m_symbolLabel->setTextFormat(Qt::PlainText);
   headerRow->addWidget(m_symbolLabel, 1);
 
-  m_refreshBtn = new QToolButton;
-  m_refreshBtn->setText(QStringLiteral("\u21BB"));  // ↻ 刷新
-  m_refreshBtn->setToolTip(QStringLiteral("刷新"));
-  m_refreshBtn->setFixedSize(22, 22);
-  m_refreshBtn->setAutoRaise(true);
-  m_refreshBtn->setCursor(Qt::PointingHandCursor);
-  connect(m_refreshBtn, &QToolButton::clicked, this, &ReferencePanel::onRefresh);
-  headerRow->addWidget(m_refreshBtn);
+  m_collapseBtn = AuiButton::createCollapseAllButton();
+  connect(m_collapseBtn, &QPushButton::clicked, this,
+          [this]() { m_resultTree->collapseAll(); });
+  headerRow->addWidget(m_collapseBtn);
 
-  // ── 第二行：汇总标签 ──
+  // ── 第二行：汇总标签（保留左右外边距）──
+  auto *summaryRow = new QHBoxLayout;
+  summaryRow->setContentsMargins(6, 0, 6, 0);
   m_summaryLabel = new QLabel;
+  summaryRow->addWidget(m_summaryLabel);
+  summaryRow->addStretch(1);
 
-  // ── 结果树：单列，条目由 ReferenceItemDelegate 自绘（VSCode 引用视图）──
-  m_resultTree = new QTreeWidget;
-  m_resultTree->setColumnCount(1);
-  m_resultTree->setHeaderHidden(true);
-  m_resultTree->setRootIsDecorated(true);
-  m_resultTree->setAlternatingRowColors(false);
-  m_resultTree->setUniformRowHeights(true);
-  m_resultTree->setTextElideMode(Qt::ElideRight);
-  m_resultTree->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
-  m_resultTree->setEditTriggers(QAbstractItemView::NoEditTriggers);
-  m_resultTree->setItemDelegate(new ReferenceItemDelegate(this));
-  // 纯代码 delegate 不自带 State_MouseOver，这里手动追踪悬停并整行高亮
-  m_resultTree->viewport()->setMouseTracking(true);
-  m_resultTree->viewport()->installEventFilter(this);
+  // ── 结果树：VSCode 风格（文件分组 → 引用行），与查找面板一致 ──
+  m_resultTree = new VscResultTree;
   connect(m_resultTree, &QTreeWidget::itemClicked, this, &ReferencePanel::onItemClicked);
 
   layout->addLayout(headerRow);
-  layout->addWidget(m_summaryLabel);
+  layout->addLayout(summaryRow);
   layout->addWidget(m_resultTree, 1);
 }
 
@@ -265,27 +160,27 @@ void ReferencePanel::clear() {
   m_symbolLabel->clear();
   m_matches.clear();
   m_resultTree->clear();
-  m_hoverItem = nullptr;
   updateSummary();
 }
 
+void ReferencePanel::refreshStyle() {
+  reloadStyle();
+  // 强制重新抛光 + 重绘：主题切换后 QStyleSheetStyle 下仅靠 update() 不会
+  // 重算背景，必须 unpolish/polish 让面板重新读取新调色板
+  style()->unpolish(this);
+  style()->polish(this);
+  update();
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
-//  样式（VSCode 引用视图：主题背景 / 弱化行号 / 悬停选中高亮）
+//  样式（面板背景 / 头部标签 / 刷新按钮；结果树由 VscResultTree 统一处理）
 // ══════════════════════════════════════════════════════════════════════════════
 
 void ReferencePanel::reloadStyle() {
-  // 面板整体背景（VSCode 浅色引用视图为白色，跟随主题面板背景）
-  QPalette pal = palette();
-  pal.setColor(QPalette::Window, AuiStyle::panelBackground());
-  setAutoFillBackground(true);
-  setPalette(pal);
-
-  // 字体跟随「代码字体」设置（与问题面板一致）
-  QFont f = font();
-  const QString fam = SettingStore::ins().fontFamily(QStringLiteral("font.code"));
-  if (!fam.isEmpty()) f.setFamily(fam);
-  f.setPointSize(SettingStore::ins().fontSize(QStringLiteral("font.code")));
-  setFont(f);
+  // 面板背景用样式表：setStyleSheet 会触发重新抛光，主题切换后无需重启立即生效；
+  // 选择器限定本面板类型，不影响子控件（结果树背景由 VscResultTree 自行处理）
+  setStyleSheet(QStringLiteral("ReferencePanel { background-color: %1; }")
+                    .arg(AuiStyle::panelBackground().name()));
 
   // 符号名：中等字重正文色
   m_symbolLabel->setStyleSheet(QStringLiteral("font-weight: 600; color: %1;")
@@ -295,22 +190,6 @@ void ReferencePanel::reloadStyle() {
   m_summaryLabel->setStyleSheet(QStringLiteral("color: %1; font-size: 12px;")
                                     .arg(AuiStyle::mutedTextColor().name()));
 
-  // 刷新按钮：扁平 + 主题 hover（对齐 AuiStyle 菜单按钮风格）
-  m_refreshBtn->setStyleSheet(
-      QStringLiteral("QToolButton { color: %1; background: transparent; "
-                     "border: 1px solid transparent; border-radius: 3px; }"
-                     "QToolButton:hover { background: %2; border: 1px solid %3; }")
-          .arg(AuiStyle::textColor().name(), AuiStyle::hoverBackground().name(),
-               AuiStyle::borderColor().name()));
-
-  // 结果树：主题背景 / 文字（悬停与选中由 ReferenceItemDelegate 绘制）
-  m_resultTree->setStyleSheet(QStringLiteral("QTreeWidget { background: %1; color: %2; "
-                                             "border: none; }")
-                                  .arg(AuiStyle::panelBackground().name(),
-                                       AuiStyle::textColor().name()));
-
-  // 重建结果树以应用新主题 / 新字体下的颜色
-  if (!m_symbolName.isEmpty()) buildTree();
   update();
 }
 
@@ -320,30 +199,20 @@ void ReferencePanel::reloadStyle() {
 
 void ReferencePanel::buildTree() {
   m_resultTree->clear();
-  m_hoverItem = nullptr;
 
-  // 文件节点显示相对工作区的路径（同目录下更直观，VSCode 风格）
+  // 文件分组节点显示相对工作区的路径（同目录下更直观，VSCode 风格）
   QMap<QString, QTreeWidgetItem *> fileItems;
   for (const ReferenceMatch &m : m_matches) {
     QTreeWidgetItem *fileItem = fileItems.value(m.filePath);
     if (!fileItem) {
-      fileItem = new QTreeWidgetItem(m_resultTree);
       QString rel = QDir(m_searchRoot).relativeFilePath(m.filePath);
-      fileItem->setText(0, rel.isEmpty() ? m.filePath : rel);
-      fileItem->setData(0, Qt::UserRole, m.filePath);
-      fileItem->setData(0, Qt::UserRole + 1, 0);  // 文件节点：line=0
-      fileItem->setToolTip(0, m.filePath);
+      fileItem = m_resultTree->addFileNode(m.filePath, rel.isEmpty() ? m.filePath : rel);
       fileItems.insert(m.filePath, fileItem);
     }
-    QTreeWidgetItem *lineItem = new QTreeWidgetItem(fileItem);
-    lineItem->setText(0, QStringLiteral("%1: %2").arg(m.line).arg(m.lineText.trimmed()));
-    lineItem->setData(0, Qt::UserRole, m.filePath);
-    lineItem->setData(0, Qt::UserRole + 1, m.line);
-    lineItem->setData(0, Qt::UserRole + 2, m.column);
-    lineItem->setData(0, Qt::UserRole + 3, m.length);
-    lineItem->setData(0, Qt::UserRole + 4, m.lineText.trimmed());  // 供代理绘制内容
+    m_resultTree->addMatchNode(fileItem, m.filePath, m.line, m.column, m.length,
+                               m.lineText.trimmed());
   }
-  // 文件节点显示引用数
+  // 文件分组节点显示引用数
   for (auto it = fileItems.begin(); it != fileItems.end(); ++it) {
     it.value()->setText(0, QStringLiteral("%1 (%2)")
                                .arg(it.value()->text(0))
@@ -394,41 +263,14 @@ bool ReferencePanel::shouldScanFile(const QString &filePath) const {
 //  交互
 // ══════════════════════════════════════════════════════════════════════════════
 
-bool ReferencePanel::eventFilter(QObject *obj, QEvent *event) {
-  // 追踪鼠标悬停的条目，供条目绘制代理做整行高亮
-  if (obj == m_resultTree->viewport()) {
-    if (event->type() == QEvent::MouseMove) {
-      auto *me = static_cast<QMouseEvent *>(event);
-      QTreeWidgetItem *item = m_resultTree->itemAt(me->position().toPoint());
-      if (item != m_hoverItem) {
-        m_hoverItem = item;
-        m_resultTree->viewport()->update();
-      }
-      return false;
-    }
-    if (event->type() == QEvent::Leave) {
-      if (m_hoverItem) {
-        m_hoverItem = nullptr;
-        m_resultTree->viewport()->update();
-      }
-      return false;
-    }
-  }
-  return QWidget::eventFilter(obj, event);
-}
-
-void ReferencePanel::onRefresh() {
-  findReferences(m_symbolName);
-}
-
 void ReferencePanel::onItemClicked(QTreeWidgetItem *item, int column) {
   Q_UNUSED(column);
   if (!item) return;
-  // 仅结果行（有行号）触发跳转；文件节点不跳转
-  const int line = item->data(0, Qt::UserRole + 1).toInt();
+  // 仅结果行（有行号）触发跳转；文件分组节点不跳转
+  const int line = item->data(0, VscTreeRole::Line).toInt();
   if (line <= 0) return;
-  const QString filePath = item->data(0, Qt::UserRole).toString();
-  const int col = item->data(0, Qt::UserRole + 2).toInt();
-  const int len = item->data(0, Qt::UserRole + 3).toInt();
+  const QString filePath = item->data(0, VscTreeRole::FilePath).toString();
+  const int col = item->data(0, VscTreeRole::Column).toInt();
+  const int len = item->data(0, VscTreeRole::Length).toInt();
   emit openRequested(filePath, line, col, len);
 }

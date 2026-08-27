@@ -123,7 +123,11 @@ void AuiCodeTabBar::paintEvent(QPaintEvent *) {
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing);
 
-  const bool active = property("aui_focus_tab").toBool();
+  // 未显式设置 aui_focus_tab 的标签栏（左侧 文件/调试/查找/引用、底部 输出/问题 等）
+  // 视为始终聚焦：选中标签用醒目的 activeText；编辑器面板显式设置该属性后才启用
+  // 非聚焦面板整体压暗的 dimming 逻辑，避免选中标签文字退化为灰色难以分辨。
+  const QVariant focusProp = property("aui_focus_tab");
+  const bool active = !focusProp.isValid() || focusProp.toBool();
   const int cur = currentIndex();
   const AuiTabBar::Style st = AuiTabBar::currentStyle();
   const QPoint mousePos = mapFromGlobal(QCursor::pos());

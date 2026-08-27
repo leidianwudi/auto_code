@@ -60,6 +60,36 @@ QIcon AuiIcon::createComboBoxDownArrow(int size) {
 }
 
 // ════════════════════════════════════════════════════════════
+//  全部折叠图标（VSCode 风格：顶部横线 + 向上箭头）
+// ════════════════════════════════════════════════════════════
+
+QIcon AuiIcon::createCollapseAllIcon(int size) {
+  // 2x 超采样绘制再缩放，边缘更清晰
+  const int s = qMax(8, size * 2);
+  QPixmap pm(s, s);
+  pm.fill(Qt::transparent);
+  QPainter p(&pm);
+  p.setRenderHint(QPainter::Antialiasing);
+  QPen pen(AuiStyle::textColor(), 1.6 * 2.0);
+  pen.setCapStyle(Qt::RoundCap);
+  pen.setJoinStyle(Qt::RoundJoin);
+  p.setPen(pen);
+  p.setBrush(Qt::NoBrush);
+
+  const double u = 2.0;  // 缩放因子（s/size）
+  // 顶部横线
+  p.drawLine(QPointF(3.0 * u, 3.5 * u), QPointF(13.0 * u, 3.5 * u));
+  // 向上箭头（折叠 → 全部收起）
+  QPainterPath path;
+  path.moveTo(4.0 * u, 11.5 * u);
+  path.lineTo(8.0 * u, 7.5 * u);
+  path.lineTo(12.0 * u, 11.5 * u);
+  p.drawPath(path);
+  p.end();
+  return QIcon(pm);
+}
+
+// ════════════════════════════════════════════════════════════
 //  文件类型图标（ac / json / tpl）
 // ════════════════════════════════════════════════════════════
 

@@ -17,10 +17,10 @@
 #include <QVector>
 #include <QWidget>
 
-class QEvent;
+#include "src/util/ui/code/vsc_result_tree.h"
+
 class QLabel;
-class QToolButton;
-class QTreeWidget;
+class QPushButton;
 class QTreeWidgetItem;
 
 /// 单个引用位置
@@ -47,26 +47,20 @@ public:
   /// 清空结果与符号名
   void clear();
 
-  /// 当前鼠标悬停的条目（供条目绘制代理高亮整行）
-  QTreeWidgetItem *hoverItem() const { return m_hoverItem; }
+  /// 主题切换后刷新（面板背景 / 头部标签），供外部显式调用
+  void refreshStyle();
 
 signals:
   /// 单击结果项：请求打开文件并定位选中（column/length 为 0-based，用于选中匹配词）
   void openRequested(const QString &filePath, int line, int column, int length);
 
-protected:
-  /// 追踪鼠标悬停的条目（纯代码 delegate 不自带 State_MouseOver，需手动高亮）
-  bool eventFilter(QObject *obj, QEvent *event) override;
-
 private slots:
-  /// 刷新按钮：对当前符号重新查找引用
-  void onRefresh();
   /// 单击结果项跳转
   void onItemClicked(QTreeWidgetItem *item, int column);
 
 private:
   void setupUI();
-  /// 应用主题 / 字体样式（主题或代码字体变化时调用）
+  /// 应用主题样式（面板背景 / 头部标签）
   void reloadStyle();
   /// 重建结果树
   void buildTree();
@@ -75,11 +69,10 @@ private:
   /// 该文件是否应参与扫描（排除 build 目录、二进制等）
   bool shouldScanFile(const QString &filePath) const;
 
-  QToolButton *m_refreshBtn = nullptr;  ///< 刷新按钮
-  QLabel *m_symbolLabel = nullptr;      ///< 符号名标签
-  QLabel *m_summaryLabel = nullptr;     ///< 汇总标签（N 个文件 M 个结果）
-  QTreeWidget *m_resultTree = nullptr;
-  QTreeWidgetItem *m_hoverItem = nullptr;  ///< 鼠标悬停条目
+  QPushButton *m_collapseBtn = nullptr;  ///< 全部折叠按钮
+  QLabel *m_symbolLabel = nullptr;       ///< 符号名标签
+  QLabel *m_summaryLabel = nullptr;      ///< 汇总标签（N 个文件 M 个结果）
+  VscResultTree *m_resultTree = nullptr;
 
   QString m_searchRoot;              ///< 搜索根目录
   QString m_symbolName;              ///< 当前符号名
