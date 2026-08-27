@@ -108,6 +108,8 @@ private slots:
   void onCloseAll();
   /// 跨文件跳转（从 CodeEditor 的 requestGoToLine 信号触发）
   void onGoToLine(const QString &filePath, int line);
+  /// 搜索/引用结果跳转：打开文件、定位到行并选中匹配词（column/length 为 0-based）
+  void onOpenSearchResult(const QString &filePath, int line, int column, int length);
   /// 即将导航（记录当前位置到历史栈）
   void onAboutToNavigate(const QString &targetFilePath, int targetLine);
   /// 鼠标侧键：后退（XButton1）

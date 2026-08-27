@@ -312,6 +312,12 @@ void MainDevMgr::connectEditorPanels() {
   // 底部“问题”面板：双击错误项 → 打开对应文件并定位到出错行
   connect(m_ui->problemPanel(), &ProblemPanel::issueActivated, this, &MainDevMgr::onGoToLine);
 
+  // 跨文件搜索面板（查找）：单击结果 → 打开文件定位并选中匹配词
+  connect(m_ui->findPanel(), &SearchPanel::openRequested, this, &MainDevMgr::onOpenSearchResult);
+  // 引用面板：单击引用 → 打开文件定位并选中匹配词
+  connect(m_ui->referencePanel(), &ReferencePanel::openRequested, this,
+          &MainDevMgr::onOpenSearchResult);
+
   // 安装事件过滤器以捕获鼠标侧键（前进/后退）
   // 注意：需要在 QApplication 级别安装，因为鼠标事件可能被子控件消费
   qApp->installEventFilter(this);
@@ -339,6 +345,11 @@ void MainDevMgr::loadFiles() {
   }
 
   m_ui->fileTree()->buildTree(baseDir.absolutePath());
+
+  // 跨文件搜索面板（查找 / 引用）的搜索范围 = 文件树根目录
+  const QString root = m_ui->fileTree()->rootPath();
+  m_ui->findPanel()->setSearchRoot(root);
+  m_ui->referencePanel()->setSearchRoot(root);
 }
 
 /// 启动后台工作区全量错误扫描：收集所有可验证文件，在工作线程逐个验证，

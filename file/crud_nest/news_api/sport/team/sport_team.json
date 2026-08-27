@@ -77,7 +77,7 @@
         },
         {
           "joinEnClass": "EnSportPlayer",
-          "joinEnClass_Url": "src/sport/sport_player/entities/en_sport_player",
+          "joinEnClass_Url": "src/sport/sport_player/sport_player/entities/en_sport_player",
           "joinEnClassPro": "sportPlayers",
           "joinType": "OneToMany",
           "inverseJoinEnClassPro": "team",
@@ -149,7 +149,7 @@
         },
         {
           "joinEnClass": "EnSportPlayerTrans",
-          "joinEnClass_Url": "src/sport/trans/sport_player_trans/entities/en_sport_player_trans",
+          "joinEnClass_Url": "src/sport/sport_player/sport_player_trans/entities/en_sport_player_trans",
           "joinEnClassPro": "transferOutList",
           "joinType": "OneToMany",
           "inverseJoinEnClassPro": "teamOut",
@@ -157,7 +157,7 @@
         },
         {
           "joinEnClass": "EnSportPlayerTrans",
-          "joinEnClass_Url": "src/sport/trans/sport_player_trans/entities/en_sport_player_trans",
+          "joinEnClass_Url": "src/sport/sport_player/sport_player_trans/entities/en_sport_player_trans",
           "joinEnClassPro": "transferInList",
           "joinType": "OneToMany",
           "inverseJoinEnClassPro": "teamIn",

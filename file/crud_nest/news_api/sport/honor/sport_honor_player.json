@@ -18,7 +18,7 @@
       "joinTable": [
         {
           "joinEnClass": "EnSportPlayer",
-          "joinEnClass_Url": "src/sport/sport_player/entities/en_sport_player",
+          "joinEnClass_Url": "src/sport/sport_player/sport_player/entities/en_sport_player",
           "joinEnClassPro": "player",
           "joinType": "ManyToOne",
           "inverseJoinEnClassPro": "sportHonorPlayers",

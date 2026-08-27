@@ -25,7 +25,7 @@
       "joinTable": [
         {
           "joinEnClass": "EnSportPlayerTrans",
-          "joinEnClass_Url": "src/sport/trans/sport_player_trans/entities/en_sport_player_trans",
+          "joinEnClass_Url": "src/sport/sport_player/sport_player_trans/entities/en_sport_player_trans",
           "joinEnClassPro": "sportPlayerTranses",
           "joinType": "OneToMany",
           "inverseJoinEnClassPro": "transType",

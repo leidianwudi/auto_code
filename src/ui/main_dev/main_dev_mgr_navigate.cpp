@@ -64,6 +64,25 @@ void MainDevMgr::jumpToLocation(const QString &filePath, int line, int column) {
   }
 }
 
+void MainDevMgr::onOpenSearchResult(const QString &filePath, int line, int column, int length) {
+  CodeEditor *editor = openFileInEditor(filePath);
+  if (!editor) return;
+
+  QTextBlock block = editor->document()->findBlockByNumber(line - 1);
+  if (!block.isValid()) return;
+
+  // 定位到行首，再右移到匹配起始列，选中匹配词（长度 > 0 时）。
+  // 选中即高亮匹配词；编辑器获得焦点时选区高亮，失焦后选区回归正常（VSCode 行为）。
+  QTextCursor cursor(block);
+  cursor.movePosition(QTextCursor::StartOfBlock);
+  if (column > 0) cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, column);
+  if (length > 0) cursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor, length);
+
+  editor->setTextCursor(cursor);
+  editor->ensureCursorVisible();
+  editor->setFocus();
+}
+
 void MainDevMgr::onGoToLine(const QString &filePath, int line) {
   AC_LOG_INFO() << "onGoToLine() called:" << filePath << "line:" << line;
 

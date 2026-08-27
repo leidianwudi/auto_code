@@ -211,13 +211,18 @@ void MainDevUi::setupTitleBar() {
 // ──────────────────────────────────────────────────────────────
 
 void MainDevUi::setupEditorArea() {
-  // ── 左侧：文件树 + 调试面板 双 tab（LeftPanelTabWidget 复用 AuiCodeTabBar 自绘样式）──
+  // ── 左侧：文件树 + 调试 + 查找 + 引用 双 tab（LeftPanelTabWidget 复用 AuiCodeTabBar 自绘样式）──
   m_fileTree = new TreeDir;
   m_debugPanel = new DebugPanel;
+  m_findPanel = new SearchPanel;
+  m_referencePanel = new ReferencePanel;
 
   auto *leftTabs = new LeftPanelTabWidget;
+  m_leftTabs = leftTabs;
   leftTabs->addTab(m_fileTree, QString::fromUtf8(CodeConstants::UiText::kFile));
   leftTabs->addTab(m_debugPanel, QStringLiteral("调试"));
+  leftTabs->addTab(m_findPanel, QStringLiteral("查找"));
+  leftTabs->addTab(m_referencePanel, QStringLiteral("引用"));
 
   connect(m_fileTree, &TreeDir::startupItemsChanged, this, &MainDevUi::refreshStartupCombo);
 

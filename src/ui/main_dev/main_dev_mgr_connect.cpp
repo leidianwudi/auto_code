@@ -52,30 +52,11 @@ void MainDevMgr::connectEditor(CodeEditor *editor) {
     connect(editor, &CodeEditor::requestGoToLine, this, &MainDevMgr::onGoToLine);
     // 即将导航信号（用于记录历史）
     connect(editor, &CodeEditor::aboutToNavigate, this, &MainDevMgr::onAboutToNavigate);
-    // 跨文件查找引用
+    // 跨文件查找引用（VSCode 风格：结果在「引用」面板展示，并自动切换到引用 tab）
     connect(editor, &CodeEditor::requestFindReferencesAll, this, [this](const QString &name) {
-      m_ui->clearOutput();
-      m_ui->appendOutput(QStringLiteral("查找引用: ") + name, false);
-      int totalRefs = 0;
-      for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
-        auto *tabs = m_ui->editorPanelAt(pi);
-        if (!tabs) continue;
-        for (int ti = 0; ti < tabs->count(); ++ti) {
-          auto *ed = qobject_cast<CodeEditor *>(tabs->widget(ti));
-          if (!ed) continue;
-          QFileInfo fi(ed->objectName());
-          auto refs = ed->findSymbolReferences(name);
-          for (const auto &ref : refs) {
-            m_ui->appendOutput(QStringLiteral("  %1:%2 → %3")
-                                   .arg(fi.fileName())
-                                   .arg(ref.first)
-                                   .arg(ref.second.trimmed()),
-                               false);
-            ++totalRefs;
-          }
-        }
-      }
-      m_ui->appendOutput(QStringLiteral("共 %1 处引用").arg(totalRefs), false);
+      if (name.isEmpty()) return;
+      m_ui->referencePanel()->findReferences(name);
+      if (m_ui->leftTabs()) m_ui->leftTabs()->setCurrentWidget(m_ui->referencePanel());
     });
     // 工作区符号搜索 (Ctrl+T)
     connect(editor, &CodeEditor::requestWorkspaceSymbols, this, [this]() {

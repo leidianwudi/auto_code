@@ -113,6 +113,11 @@ qt_add_executable(auto_code
     src/util/ui/code/code_log.cpp
     src/util/ui/code/problem_panel.h
     src/util/ui/code/problem_panel.cpp
+    src/util/ui/code/search_panel.h
+    src/util/ui/code/search_panel.cpp
+    src/util/ui/code/reference_panel.h
+    src/util/ui/code/reference_panel.cpp
+    src/util/ui/code/comment_scan.h
     src/util/ui/highlighter/light_color.h
     src/util/ui/highlighter/light_tpl.h
     src/util/ui/highlighter/light_tpl.cpp
