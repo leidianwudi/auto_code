@@ -341,7 +341,7 @@ void MainDevMgr::applyRenameOrMove(const QString &oldPath, const QString &newPat
             auto *tabs = m_ui->editorPanelAt(pi);
             if (!tabs) continue;
             for (int ti = 0; ti < tabs->count(); ++ti) {
-              if (tabs->widget(ti) == editor) {
+              if (editorFromWidget(tabs->widget(ti)) == editor) {
                 tabs->setTabText(ti, QFileInfo(newFilePath).fileName());
                 tabs->setTabToolTip(ti, newFilePath);
                 break;
@@ -374,7 +374,7 @@ void MainDevMgr::applyRenameOrMove(const QString &oldPath, const QString &newPat
         auto *tabs = m_ui->editorPanelAt(pi);
         if (!tabs) continue;
         for (int ti = 0; ti < tabs->count(); ++ti) {
-          if (tabs->widget(ti) == editor) {
+          if (editorFromWidget(tabs->widget(ti)) == editor) {
             tabs->setTabText(ti, displayName);
             tabs->setTabToolTip(ti, newPath);
             break;
@@ -407,6 +407,9 @@ void MainDevMgr::applyRenameOrMove(const QString &oldPath, const QString &newPat
 
   // 刷新树
   m_ui->fileTree()->refreshTree();
+  // 同步更新持久化勾选列表中的路径（重命名/移动后勾选记录跟随新位置，
+  // 避免 getCheckedFiles() 返回失效路径）
+  m_ui->fileTree()->renameCheckedByPath(oldPath, newPath, isDir);
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -428,6 +431,33 @@ void MainDevMgr::onDeleteFile(const QString &path) {
     return;
   }
 
+  // ── 未保存修改检查（参照 VSCode）──────────────────────────────────
+  //    删除文件/文件夹会丢失其中打开编辑器的未保存修改，需额外确认。
+  //    干净文件直接删除，脏文件确认后才允许删除。
+  QStringList dirtyFiles;
+  const QString deleteAbs = QDir::cleanPath(path);
+  const QString deletePrefix = deleteAbs + QStringLiteral("/");
+  for (const QString &filePath : m_model->openFilePaths()) {
+    if (isDir) {
+      if (!filePath.startsWith(deletePrefix)) continue;
+    } else {
+      if (QDir::cleanPath(filePath) != deleteAbs) continue;
+    }
+    CodeEditor *editor = m_model->openFiles.value(filePath);
+    if (editor && editor->document() && editor->document()->isModified()) {
+      dirtyFiles.append(QFileInfo(filePath).fileName());
+    }
+  }
+  if (!dirtyFiles.isEmpty()) {
+    const QString detail = dirtyFiles.join(QStringLiteral("、"));
+    if (!AuiMessageBox::confirm(
+            m_ui, QStringLiteral("未保存的修改"),
+            QStringLiteral("以下文件有未保存的修改，删除将丢失这些修改：\n%1\n\n确定删除吗？")
+                .arg(detail))) {
+      return;
+    }
+  }
+
   if (isDir) {
     // 删除文件夹前，关闭所有以该路径开头的已打开文件
     QString dirPath = QDir::cleanPath(path);
@@ -444,7 +474,7 @@ void MainDevMgr::onDeleteFile(const QString &path) {
           auto *tabs = m_ui->editorPanelAt(pi);
           if (!tabs) continue;
           for (int ti = 0; ti < tabs->count(); ++ti) {
-            if (tabs->widget(ti) == editor) {
+            if (editorFromWidget(tabs->widget(ti)) == editor) {
               closeTab(tabs, ti);
               break;
             }
@@ -469,7 +499,7 @@ void MainDevMgr::onDeleteFile(const QString &path) {
         auto *tabs = m_ui->editorPanelAt(pi);
         if (!tabs) continue;
         for (int ti = 0; ti < tabs->count(); ++ti) {
-          if (tabs->widget(ti) == editor) {
+          if (editorFromWidget(tabs->widget(ti)) == editor) {
             closeTab(tabs, ti);
             break;
           }
@@ -489,4 +519,7 @@ void MainDevMgr::onDeleteFile(const QString &path) {
 
   // 刷新树
   m_ui->fileTree()->refreshTree();
+  // 从持久化勾选列表（tree.config checked）中移除已删除文件，
+  // 避免 getCheckedFiles() 仍返回已删除文件（脚本执行时"文件重复"误报）
+  m_ui->fileTree()->pruneCheckedByPath(path);
 }

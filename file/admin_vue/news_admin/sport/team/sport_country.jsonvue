@@ -1,0 +1,10 @@
+{
+  meta: {
+    dataMethod: 'POST',
+    dataUrl: 'sportcountry/selectByIn',
+    description: '球队/所属国家',
+    noDelete: false,
+    noDetail: false,
+    noEdit: false,
+  },
+}

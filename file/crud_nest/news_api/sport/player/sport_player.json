@@ -2,7 +2,7 @@
   "$schema": "/crud_nest/template/tool/param.schema.json",
   "tables": [
     {
-      "modelName": "sport\\sport_player",
+      "modelName": "sport/sport_player/sport_player",
       "tableName": "sport_player",
       "selCols": [
         "team_id",

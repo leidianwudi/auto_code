@@ -32,12 +32,18 @@ class TemplateConfig {
 
 /// @brief 生成后端 API 代码
 /// @param params 项目参数对象（见文件头说明）
-export function generateApiMain(params: Object): Void {
+export function generateApiMain(params: Object): Number {
+  // 统计实际写入磁盘的文件数量（writeFile 成功时 +1），返回给入口脚本汇总输出
+  let generatedFileCount = 0;
+
   // ── 1. 数据库连接配置 ──────────────────────────────────────────────
   let db = new DB(params["dbConfig"]);
  
   // ── 2. 输出文件的根目录（所有代码文件都写到这个目录下）──────────
   let basePath: String = params["basePath"];
+
+  // 统计不存在的表数量（表存在性检查失败时 +1，结束时报错汇总）
+  let missingTableCount = 0;
 
   // ── 3. 模板配置：一个模板对应一个生成的代码文件 ─────────────────
   //    字段说明：
@@ -70,6 +76,31 @@ export function generateApiMain(params: Object): Void {
   let files = getCheckedFiles(scriptDir());
   let filesLen = files.length;
   printLog("files count: " + filesLen);
+
+  // ── 4.5 检查勾选文件是否同名不同路径（文件重复）────────────────
+  //      两个 basename 相同的文件（如 user/user.json 与 vip/user.json）
+  //      同时勾选会导致生成结果互相覆盖或混淆，应报错并中止生成
+  let seenBases: String[] = [];
+  let dupFiles: String[] = [];
+  for (chk in files) {
+    let base = basename(chk);
+    let seen = false;
+    for (sb in seenBases) {
+      if (sb == base) { seen = true; }
+    }
+    if (seen) {
+      dupFiles.push(base);
+    } else {
+      seenBases.push(base);
+    }
+  }
+  if (dupFiles.length > 0) {
+    printError("错误：勾选文件存在同名不同路径（文件重复），请取消勾选其中一个后重新执行：");
+    for (d in dupFiles) {
+      printError("  - " + d);
+    }
+    return;
+  }
 
   // ── 5. 对每张表（每个 JSON 文件）执行一次完整的生成流程 ────────
   //      JSON 文件支持两种格式：
@@ -104,6 +135,16 @@ export function generateApiMain(params: Object): Void {
     //        default- 默认值
     let schema = db.tableSchema({ table: json.tableName });
     let schemaLen = schema.length;
+
+    // ── 5.2a 表存在性检查 ───────────────────────────────────────
+    //      db.tableSchema() 用 INFORMATION_SCHEMA.COLUMNS 查询列，
+    //      表不存在时返回空数组。此时继续生成会产出基于空字段的无意义
+    //      代码，应输出红色错误提示并跳过该表（多表配置不影响其它表）。
+    if (schemaLen == 0) {
+      printError("错误：表不存在或无列: '" + json.tableName + "'（配置文件: " + basename(file) + "）");
+      missingTableCount = missingTableCount + 1;
+      continue;  // 跳过这张表，继续处理下一张
+    }
     printLog("schema count: " + schemaLen);
  
     // ── 5.2b 获取表的元信息（表注释、引擎等）──────────────────────
@@ -404,7 +445,7 @@ export function generateApiMain(params: Object): Void {
     // ── 5.8 遍历模板配置，逐个渲染并写入文件 ───────────────────
     //      每个模板 cfg 的输出路径由 cfg.out 模板 + formatPath 替换得到
     for (cfg in templates) {
-      printLog("tpl path: " + cfg.tpl);
+      //printLog("tpl path: " + cfg.tpl);
 
       // 用 formatPath 替换 {basePath}/{name} 等占位符，得到输出文件路径
       let outPath = formatPath(cfg.out, {
@@ -429,12 +470,15 @@ export function generateApiMain(params: Object): Void {
       //      ${if ...} / ${each ...} 做条件判断和循环
       let result = renderTpl(cfg.tpl, tplData);
       let resultLen = result.length;
-      printLog("result length: " + resultLen);
+      //printLog("result length: " + resultLen);
 
       // 渲染成功 → 写入磁盘
       if (result) {
-        writeFile(outPath, result);
-        printLog("生成文件: " + outPath);
+        let writeOk = writeFile(outPath, result);
+        if (writeOk) {
+          generatedFileCount = generatedFileCount + 1;
+        }
+        printLog("长度:" + resultLen + "; 生成文件: " + outPath);
       }
     }
     }  // end for (json in tableConfigs)
@@ -443,5 +487,11 @@ export function generateApiMain(params: Object): Void {
   // ── 6. 收尾：断开数据库连接 ─────────────────────────────────────
   db.disconnect();
 
-  printLog("--- 代码生成结束 ---");
+  // 表存在性检查汇总：有表不存在时输出红色错误提示
+  if (missingTableCount > 0) {
+    printError("警告：共 " + missingTableCount + " 张表不存在，已跳过生成（请检查表名/数据库是否已建表）");
+  }
+
+  printLog("--- 代码生成结束，共生成 " + generatedFileCount + " 个文件 ---");
+  return generatedFileCount;  // 返回实际生成文件个数，供入口脚本自行汇总输出
 }

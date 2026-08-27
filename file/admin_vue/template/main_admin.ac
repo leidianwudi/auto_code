@@ -33,6 +33,9 @@ class TemplateConfig {
 /// @brief 生成 Vue3 后台管理界面代码
 /// @param params 项目参数对象（见文件头说明）
 export function generateAdminMain(params: Object): Void {
+  // 统计实际写入磁盘的文件数量（writeFile 成功时 +1），结束日志汇总输出
+  let generatedFileCount = 0;
+
   // ── 1. 输出文件的根目录 ──────────────────────────────────────────
   let basePath: String = params["basePath"];
 
@@ -80,6 +83,31 @@ export function generateAdminMain(params: Object): Void {
     }
   }
 
+  // ── 3.2 检查勾选文件是否同名不同路径（文件重复）────────────────
+  //      两个 basename 相同的文件（如 user/user.jsonvue 与 vip/user.jsonvue）
+  //      同时勾选会导致生成结果互相覆盖或混淆，应报错并中止生成
+  let seenBases: String[] = [];
+  let dupFiles: String[] = [];
+  for (chk in files) {
+    let base = basename(chk);
+    let seen = false;
+    for (sb in seenBases) {
+      if (sb == base) { seen = true; }
+    }
+    if (seen) {
+      dupFiles.push(base);
+    } else {
+      seenBases.push(base);
+    }
+  }
+  if (dupFiles.length > 0) {
+    printError("错误：勾选文件存在同名不同路径（文件重复），请取消勾选其中一个后重新执行：");
+    for (d in dupFiles) {
+      printError("  - " + d);
+    }
+    return;
+  }
+
   // ── 4. 对每个勾选文件执行生成流程（.jsonvue 页面 / .jsonsource 数据源）──
   for (file in files) {
 
@@ -87,7 +115,7 @@ export function generateAdminMain(params: Object): Void {
     //      每个 .jsonsource 文件生成一个 api 文件（默认 src/api/source/{sourceName}.ts），
     //      供各 vue 界面下拉框 import 引用
     if (file.endsWith(".jsonsource")) {
-      printLog("processing source: " + file);
+      //printLog("processing source: " + file);
       let srcJson = readJson(file);
       let srcData = buildSourceTplData(srcJson, file);
       for (cfg in sourceTemplates) {
@@ -97,7 +125,10 @@ export function generateAdminMain(params: Object): Void {
         });
         let result = renderTpl(cfg.tpl, srcData);
         if (result) {
-          writeFile(outPath, result);
+          let writeOk = writeFile(outPath, result);
+          if (writeOk) {
+            generatedFileCount = generatedFileCount + 1;
+          }
           printLog("生成文件: " + outPath);
         }
       }
@@ -143,11 +174,14 @@ export function generateAdminMain(params: Object): Void {
 
       // 渲染成功 → 写入磁盘
       if (result) {
-        writeFile(outPath, result);
+        let writeOk = writeFile(outPath, result);
+        if (writeOk) {
+          generatedFileCount = generatedFileCount + 1;
+        }
         printLog("生成文件: " + outPath);
       }
     }
   }
 
-  printLog("--- Vue 代码生成结束 ---");
+  printLog("--- Vue 代码生成结束，共生成 " + generatedFileCount + " 个文件 ---");
 }

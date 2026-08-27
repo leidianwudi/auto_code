@@ -72,6 +72,8 @@
     },
     {
       boolFalseText: '禁用',
+      boolSourceFile: 'D:/work/github/auto_code/file/admin_vue/news_admin/api/boolean.jsonsource',
+      boolSourceId: '7fc7e52f',
       boolTrueText: '启用',
       columnWidth: 0,
       dataName: 'enable',

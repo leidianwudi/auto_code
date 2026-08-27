@@ -3,6 +3,7 @@
     {
       columnWidth: 0,
       dataName: 'type',
+      displayType: 'select',
       editEditable: true,
       editStyle: 'select',
       editVisible: true,
@@ -12,8 +13,10 @@
       queryStyle: 'text',
       queryVisible: true,
       required: true,
-      selectLabelField: 'key',
-      selectUrl: 'infoimg/getTypeRecords',
+      selectLabelField: 'value',
+      selectSourceFile: 'D:/work/github/auto_code/file/admin_vue/news_admin/api/dropurl.jsonsource',
+      selectSourceId: 'beb7bb29',
+      selectUrl: 'vipprice/getTimeTypeRecords',
       selectValueField: 'key',
       switchEditable: false,
     },
@@ -34,8 +37,9 @@
     {
       columnWidth: 0,
       dataName: 'url_type',
+      displayType: 'tag',
       editEditable: true,
-      editStyle: 'text',
+      editStyle: 'tag',
       editVisible: true,
       formSpan: 12,
       maxlength: 0,
@@ -44,6 +48,23 @@
       queryVisible: true,
       required: false,
       switchEditable: false,
+      tagItems: [
+        {
+          color: 'info',
+          text: '站内',
+          value: '0',
+        },
+        {
+          color: 'info',
+          text: 'uni平台',
+          value: '1',
+        },
+        {
+          color: 'info',
+          text: '七牛云',
+          value: '2',
+        },
+      ],
     },
     {
       columnWidth: 0,

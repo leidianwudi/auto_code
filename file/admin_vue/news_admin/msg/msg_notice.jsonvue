@@ -57,8 +57,10 @@
       switchEditable: false,
     },
     {
-      boolFalseText: '未读',
-      boolTrueText: '已读',
+      boolFalseText: '否',
+      boolSourceFile: 'D:/work/github/auto_code/file/admin_vue/news_admin/api/boolean.jsonsource',
+      boolSourceId: 'b7addeb4',
+      boolTrueText: '是',
       columnWidth: 0,
       dataName: 'is_read',
       displayType: 'boolean',
@@ -70,8 +72,8 @@
       queryName: '是否已读',
       queryStyle: 'text',
       queryVisible: true,
-      required: true,
-      switchEditable: true,
+      required: false,
+      switchEditable: false,
     },
     {
       columnWidth: 0,

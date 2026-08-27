@@ -78,6 +78,16 @@ public:
   /// 获取当前所有勾选的 json 文件绝对路径
   QStringList checkedJsonFiles() const;
 
+  /// 删除文件/文件夹后调用：从持久化勾选列表（tree.config checked）中移除该路径，
+  /// 包含该文件自身及该目录下的所有文件，并立即保存配置。
+  /// 否则 getCheckedFiles() 仍会返回已删除文件（如脚本执行时的"文件重复"误报）。
+  void pruneCheckedByPath(const QString &path);
+
+  /// 重命名/移动后调用：同步更新持久化勾选列表（tree.config checked）中的路径，
+  /// 使勾选记录跟随文件/文件夹的新位置（isDir=true 时级联更新目录下所有文件），
+  /// 避免 getCheckedFiles() 返回失效路径
+  void renameCheckedByPath(const QString &oldPath, const QString &newPath, bool isDir);
+
   /// 获取所有被设为启动项的 .ac 文件绝对路径
   QStringList startupFiles() const;
   /// 获取当前选中的启动项绝对路径

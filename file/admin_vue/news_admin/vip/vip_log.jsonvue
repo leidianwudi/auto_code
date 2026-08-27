@@ -87,6 +87,7 @@
     {
       columnWidth: 0,
       dataName: 'auto_renew',
+      displayType: 'select',
       editEditable: true,
       editStyle: 'select',
       editVisible: true,
@@ -96,7 +97,9 @@
       queryStyle: 'text',
       queryVisible: true,
       required: true,
-      selectLabelField: 'key',
+      selectLabelField: 'value',
+      selectSourceFile: 'D:/work/github/auto_code/file/admin_vue/news_admin/api/dropurl.jsonsource',
+      selectSourceId: 'b3f05bbf',
       selectUrl: 'viplog/getAutoRenewRecords',
       selectValueField: 'key',
       switchEditable: false,

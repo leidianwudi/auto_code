@@ -122,8 +122,10 @@ void DebugController::runScript(const QString &scriptPath, const QString &rootDi
             m_ui->appendOutput(debug ? QStringLiteral("调试完成") : QStringLiteral("执行完成"),
                                false);
             const QStringList files = AcEngine::ins().generatedFiles();
-            for (const QString &f : files)
-              m_ui->appendOutput(QStringLiteral("  生成: %1").arg(f), false);
+
+            //不生成输出
+            //for (const QString &f : files)
+            //  m_ui->appendOutput(QStringLiteral("  生成: %1").arg(f), false);
           }
         },
         Qt::QueuedConnection);

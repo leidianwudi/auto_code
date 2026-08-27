@@ -22,6 +22,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPixmap>
+#include <QScrollBar>
 #include <QStyle>
 #include <QStyleOptionViewItem>
 #include <QTreeWidgetItem>
@@ -499,9 +500,15 @@ void TreeDir::buildTree(const QString &dirPath) {
 
 void TreeDir::refreshTree() {
   if (m_rootPath.isEmpty()) return;
+  // 记录当前滚动位置（拖动/重命名后刷新树时保持视口位置，避免跳到顶部）
+  const int scrollPos = verticalScrollBar() ? verticalScrollBar()->value() : 0;
   // 保存当前展开状态（包括勾选、启动项、展开节点），重建后由 loadState 恢复
   saveState();
   buildTree(m_rootPath);
+  // 恢复滚动位置（buildTree 会 clear 重建，滚动条回到顶部）
+  if (verticalScrollBar()) {
+    verticalScrollBar()->setValue(scrollPos);
+  }
 }
 
 // ============================================================================
@@ -755,6 +762,57 @@ void TreeDir::saveState() {
   m_store.expandedRelPaths = collectExpandedRelPaths();
 
   m_store.save(m_configPath);
+}
+
+void TreeDir::pruneCheckedByPath(const QString &path) {
+  if (m_configPath.isEmpty() || path.isEmpty()) return;
+
+  // 从持久化勾选列表中移除被删路径：
+  //   - 删除文件 → 移除该文件自身的勾选
+  //   - 删除文件夹 → 移除该目录下所有文件的勾选
+  // 否则 getCheckedFiles() 仍会返回已删除文件，导致脚本执行时"文件重复"等误报。
+  const QString abs = QDir::cleanPath(path);
+  QStringList remaining;
+  for (const QString &rel : m_store.checkedRelPaths) {
+    const QString absRel = QDir::cleanPath(m_rootPath + QLatin1Char('/') + rel);
+    if (absRel == abs || absRel.startsWith(abs + QLatin1Char('/'))) {
+      continue;  // 命中被删文件/目录，移除
+    }
+    remaining.append(rel);
+  }
+  if (remaining.size() != m_store.checkedRelPaths.size()) {
+    m_store.checkedRelPaths = remaining;
+    m_store.save(m_configPath);
+  }
+}
+
+void TreeDir::renameCheckedByPath(const QString &oldPath, const QString &newPath, bool isDir) {
+  if (m_configPath.isEmpty() || oldPath.isEmpty() || newPath.isEmpty()) return;
+
+  // 同步持久化勾选列表：重命名/移动后让勾选记录跟随新位置，避免 getCheckedFiles()
+  // 仍返回旧路径。isDir=true 时级联更新该目录下所有文件的勾选路径。
+  const QString oldAbs = QDir::cleanPath(oldPath);
+  const QString newAbs = QDir::cleanPath(newPath);
+  const QString oldPrefix = oldAbs + QLatin1Char('/');
+
+  QStringList updated;
+  bool changed = false;
+  for (const QString &rel : m_store.checkedRelPaths) {
+    const QString absRel = QDir::cleanPath(m_rootPath + QLatin1Char('/') + rel);
+    if (absRel == oldAbs) {
+      updated.append(toRelPath(newAbs));
+      changed = true;
+    } else if (isDir && absRel.startsWith(oldPrefix)) {
+      updated.append(toRelPath(newAbs + absRel.mid(oldAbs.length())));
+      changed = true;
+    } else {
+      updated.append(rel);
+    }
+  }
+  if (changed) {
+    m_store.checkedRelPaths = updated;
+    m_store.save(m_configPath);
+  }
 }
 
 void TreeDir::loadState() {

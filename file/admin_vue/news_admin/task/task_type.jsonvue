@@ -3,8 +3,9 @@
     {
       columnWidth: 0,
       dataName: 'code',
+      displayType: 'tag',
       editEditable: true,
-      editStyle: 'text',
+      editStyle: 'tag',
       editVisible: true,
       formSpan: 12,
       maxlength: 0,
@@ -13,6 +14,18 @@
       queryVisible: true,
       required: false,
       switchEditable: false,
+      tagItems: [
+        {
+          color: 'info',
+          text: '每日任务',
+          value: 'day',
+        },
+        {
+          color: 'info',
+          text: '唯一任务',
+          value: 'one',
+        },
+      ],
     },
     {
       columnWidth: 0,
@@ -44,6 +57,8 @@
     },
     {
       boolFalseText: '禁用',
+      boolSourceFile: 'D:/work/github/auto_code/file/admin_vue/news_admin/api/boolean.jsonsource',
+      boolSourceId: '7fc7e52f',
       boolTrueText: '启用',
       columnWidth: 0,
       dataName: 'enable',

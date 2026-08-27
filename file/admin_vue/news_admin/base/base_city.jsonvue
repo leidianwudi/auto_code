@@ -43,8 +43,10 @@
       switchEditable: false,
     },
     {
-      boolFalseText: '禁用',
-      boolTrueText: '启用',
+      boolFalseText: '否',
+      boolSourceFile: 'D:/work/github/auto_code/file/admin_vue/news_admin/api/boolean.jsonsource',
+      boolSourceId: 'b7addeb4',
+      boolTrueText: '是',
       columnWidth: 0,
       dataName: 'enable',
       displayType: 'boolean',

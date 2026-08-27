@@ -3,6 +3,7 @@
     {
       columnWidth: 0,
       dataName: 'type',
+      displayType: 'select',
       editEditable: true,
       editStyle: 'select',
       editVisible: true,
@@ -12,7 +13,9 @@
       queryStyle: 'text',
       queryVisible: true,
       required: true,
-      selectLabelField: 'key',
+      selectLabelField: 'value',
+      selectSourceFile: 'D:/work/github/auto_code/file/admin_vue/news_admin/api/dropurl.jsonsource',
+      selectSourceId: 'e3ecfd49',
       selectUrl: 'reply/getTypeRecords',
       selectValueField: 'key',
       switchEditable: false,
