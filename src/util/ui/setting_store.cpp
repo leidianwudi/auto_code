@@ -65,6 +65,7 @@ inline const char *kEd_IndentGuide = "editor.indentGuide";
 inline const char *kEd_IndentActive = "editor.indentGuideActive";
 inline const char *kEd_FindMatch = "editor.findMatchBackground";
 inline const char *kEd_FindCurrent = "editor.findCurrentMatchBackground";
+inline const char *kEd_Reference = "editor.referenceHighlight";
 
 // 代码高亮颜色 key 常量定义在 setting_store.h（SettingStore::kHL_*），
 // 供本文件 registerColor 注册与 LightColor 读取共享。
@@ -174,10 +175,13 @@ SettingStore::SettingStore() : QObject(nullptr) {
                 QStringLiteral("编辑器"), QColor(0xdd, 0xdd, 0xdd), QColor(0x33, 0x33, 0x33));
   registerColor(QString::fromLatin1(kEd_IndentActive), QStringLiteral("缩进参考线(当前)"),
                 QStringLiteral("编辑器"), QColor(0xbb, 0xbb, 0xbb), QColor(0x55, 0x55, 0x55));
+  // 查找匹配/引用高亮统一为浅红系（VSCode 风格；与「文件修改标记」同色系）
   registerColor(QString::fromLatin1(kEd_FindMatch), QStringLiteral("查找匹配"),
-                QStringLiteral("编辑器"), QColor(0xff, 0xc6, 0x6d), QColor(0x9a, 0x6d, 0x2a));
+                QStringLiteral("编辑器"), QColor(0xff, 0xb3, 0xb3), QColor(0xff, 0xd1, 0xd1));
   registerColor(QString::fromLatin1(kEd_FindCurrent), QStringLiteral("查找当前匹配"),
-                QStringLiteral("编辑器"), QColor(0xff, 0x99, 0x33), QColor(0xb0, 0x6a, 0x1e));
+                QStringLiteral("编辑器"), QColor(0xff, 0x80, 0x80), QColor(0xff, 0xb3, 0xb3));
+  registerColor(QString::fromLatin1(kEd_Reference), QStringLiteral("引用高亮"),
+                QStringLiteral("编辑器"), QColor(0xff, 0xb3, 0xb3), QColor(0xff, 0xd1, 0xd1));
 
   // ── 代码高亮颜色（浅色 / 深色，对齐 Trae ICube 主题） ──
   // 关键字（流程控制）

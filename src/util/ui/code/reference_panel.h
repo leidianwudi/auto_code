@@ -47,6 +47,9 @@ public:
   /// 清空结果与符号名
   void clear();
 
+  /// 当前符号名（供外部在切回引用面板时恢复编辑器引用高亮）
+  const QString &symbolName() const { return m_symbolName; }
+
   /// 主题切换后刷新（面板背景 / 头部标签），供外部显式调用
   void refreshStyle();
 

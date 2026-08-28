@@ -200,6 +200,18 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
   // ── 打开文件后保存当前打开列表，供下次启动还原 ──
   saveOpenFilesToSettings();
 
+  // ── 引用/查找面板可见时，新打开的文件立即应用对应高亮（VSCode 行为）──
+  if (m_ui->leftTabs()) {
+    QWidget *left = m_ui->leftTabs()->currentWidget();
+    if (left == m_ui->referencePanel()) {
+      const QString sym = m_ui->referencePanel()->symbolName();
+      if (!sym.isEmpty()) editor->highlightSymbolReferences(sym);
+    } else if (left == m_ui->findPanel()) {
+      const QString text = m_ui->findPanel()->currentText();
+      if (!text.isEmpty()) editor->highlightSearchMatches(text);
+    }
+  }
+
   return editor;
 }
 

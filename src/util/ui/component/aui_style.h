@@ -336,14 +336,19 @@ public:
     return SettingStore::ins().color(QStringLiteral("editor.indentGuideActive"));
   }
 
-  /// 查找匹配高亮背景色（所有匹配项，浅橙色）
+  /// 查找匹配高亮背景色（所有匹配项，浅红系）
   static QColor findMatchBackground() {
     return SettingStore::ins().color(QStringLiteral("editor.findMatchBackground"));
   }
 
-  /// 查找当前匹配高亮背景色（当前选中项，深橙色）
+  /// 查找当前匹配高亮背景色（当前选中项，更深一档浅红）
   static QColor findCurrentMatchBackground() {
     return SettingStore::ins().color(QStringLiteral("editor.findCurrentMatchBackground"));
+  }
+
+  /// 引用高亮背景色（「查找所有引用」后编辑器引用变色，浅红系；查找面板搜索同款）
+  static QColor referenceHighlightBackground() {
+    return SettingStore::ins().color(QStringLiteral("editor.referenceHighlight"));
   }
 
   /// 根据括号字符返回对应的高亮颜色

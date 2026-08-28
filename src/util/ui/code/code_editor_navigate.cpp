@@ -584,9 +584,10 @@ void CodeEditor::showSymbolHover(int pos, const QPoint &globalPos) {
 }
 
 void CodeEditor::highlightSymbolReferences(const QString &name) {
+  m_referenceSymbol = name;
   m_referenceSelections.clear();
 
-  if (name.isEmpty() || m_validationMode != AcValidation) {
+  if (name.isEmpty()) {
     refreshExtraSelections();
     return;
   }
@@ -616,12 +617,50 @@ void CodeEditor::highlightSymbolReferences(const QString &name) {
 
     QTextEdit::ExtraSelection sel;
     sel.cursor = cursor;
-    sel.format.setBackground(AuiStyle::modifiedColor().lighter(180));
+    sel.format.setBackground(AuiStyle::referenceHighlightBackground());
     sel.format.setForeground(AuiStyle::modifiedColor());
     m_referenceSelections.append(sel);
   }
 
   refreshExtraSelections();
+  // 强制重绘视口：后台/未聚焦编辑器的 setExtraSelections 可能不会立刻重画，
+  // 需显式 update()（否则 tpl 等文件要点击编辑器后才显示高亮）
+  viewport()->update();
+}
+
+void CodeEditor::highlightSearchMatches(const QString &text) {
+  m_searchText = text;
+  m_searchSelections.clear();
+
+  if (text.isEmpty()) {
+    refreshExtraSelections();
+    return;
+  }
+
+  // 与引用高亮同款浅红样式；查找面板是全文搜索，注释/字符串中的匹配也高亮
+  QRegularExpression re(QRegularExpression::escape(text),
+                        QRegularExpression::CaseInsensitiveOption);
+  QTextCursor cursor(document());
+  auto it = re.globalMatch(cachedText());
+  while (it.hasNext()) {
+    const auto match = it.next();
+    cursor.setPosition(match.capturedStart());
+    cursor.setPosition(match.capturedEnd(), QTextCursor::KeepAnchor);
+    QTextEdit::ExtraSelection sel;
+    sel.cursor = cursor;
+    sel.format.setBackground(AuiStyle::referenceHighlightBackground());
+    sel.format.setForeground(AuiStyle::modifiedColor());
+    m_searchSelections.append(sel);
+  }
+
+  refreshExtraSelections();
+  // 强制重绘视口（与引用高亮一致，避免 tpl 等文件要点击编辑器后才显示）
+  viewport()->update();
+}
+
+void CodeEditor::scheduleReferenceRehighlight() {
+  // 仅在启用引用/查找高亮时重算；防抖由 m_refHighlightTimer 保证（连续编辑合并为一次）
+  if (!m_referenceSymbol.isEmpty() || !m_searchText.isEmpty()) m_refHighlightTimer->start();
 }
 
 // ──────────────────────────────────────────────────────────────

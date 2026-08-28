@@ -108,14 +108,26 @@ private slots:
   void onCloseAll();
   /// 跨文件跳转（从 CodeEditor 的 requestGoToLine 信号触发）
   void onGoToLine(const QString &filePath, int line);
-  /// 搜索/引用结果跳转：打开文件、定位到行并选中匹配词（column/length 为 0-based）
-  void onOpenSearchResult(const QString &filePath, int line, int column, int length);
+  /// 查找/引用面板结果跳转：打开文件并定位到匹配处（不选中匹配词，
+  /// 避免蓝色文本选区盖住查找/引用高亮的浅红色，与 VSCode 一致）
+  void onOpenHighlightResult(const QString &filePath, int line, int column, int length);
   /// 即将导航（记录当前位置到历史栈）
   void onAboutToNavigate(const QString &targetFilePath, int targetLine);
   /// 鼠标侧键：后退（XButton1）
   void navigateBack();
   /// 鼠标侧键：前进（XButton2）
   void navigateForward();
+  /// 左侧 tab（文件/调试/查找/引用）切换：引用面板显示时恢复编辑器引用高亮，
+  /// 隐藏时清除（与 VSCode「引用面板可见则编辑器持续变色」一致）
+  void onLeftTabChanged(int index);
+  /// 对所有已打开编辑器应用引用高亮（符号名）
+  void applyReferenceHighlightToEditors(const QString &name);
+  /// 清除所有已打开编辑器的引用高亮
+  void clearReferenceHighlightFromEditors();
+  /// 对所有已打开编辑器应用查找面板搜索高亮（关键词）
+  void applySearchHighlightToEditors(const QString &text);
+  /// 清除所有已打开编辑器的查找搜索高亮
+  void clearSearchHighlightFromEditors();
 
 private:
   /// 查找并加载 file/ 目录
@@ -208,4 +220,9 @@ protected:
 
   /// 主题刷新防抖定时器：合并短时间内多次颜色变化，减少切换卡顿
   QTimer *m_themeTimer = nullptr;
+
+  /// 查找面板搜索高亮防抖定时器（合并输入时的多次搜索，减少编辑器重扫）
+  QTimer *m_searchHighlightTimer = nullptr;
+  /// 最近一次查找面板搜索关键词（用于切换回查找 tab 时恢复高亮）
+  QString m_lastSearchText;
 };

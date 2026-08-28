@@ -312,11 +312,37 @@ void MainDevMgr::connectEditorPanels() {
   // 底部“问题”面板：双击错误项 → 打开对应文件并定位到出错行
   connect(m_ui->problemPanel(), &ProblemPanel::issueActivated, this, &MainDevMgr::onGoToLine);
 
-  // 跨文件搜索面板（查找）：单击结果 → 打开文件定位并选中匹配词
-  connect(m_ui->findPanel(), &SearchPanel::openRequested, this, &MainDevMgr::onOpenSearchResult);
-  // 引用面板：单击引用 → 打开文件定位并选中匹配词
+  // 跨文件搜索面板（查找）：单击结果 → 打开文件定位（不选中，与引用一致）
+  connect(m_ui->findPanel(), &SearchPanel::openRequested, this,
+          &MainDevMgr::onOpenHighlightResult);
+  // 引用面板：单击引用 → 打开文件定位（不选中，避免蓝色选区盖住引用高亮）
   connect(m_ui->referencePanel(), &ReferencePanel::openRequested, this,
-          &MainDevMgr::onOpenSearchResult);
+          &MainDevMgr::onOpenHighlightResult);
+  // 查找面板搜索完成 → 防抖后同步编辑器查找高亮（与引用面板一致，编辑器持续变色）
+  m_searchHighlightTimer = new QTimer(this);
+  m_searchHighlightTimer->setSingleShot(true);
+  m_searchHighlightTimer->setInterval(200);
+  connect(m_searchHighlightTimer, &QTimer::timeout, this, [this]() {
+    // 触发时复核左侧 tab 仍为「查找」：防止输入后 200ms 内已切到引用/文件等
+    // 面板，定时器仍强行应用查找高亮，造成两类高亮同时残留（与引用即时应用保持一致）
+    if (!m_lastSearchText.isEmpty() && m_ui->leftTabs() &&
+        m_ui->leftTabs()->currentWidget() == m_ui->findPanel()) {
+      applySearchHighlightToEditors(m_lastSearchText);
+    }
+  });
+  connect(m_ui->findPanel(), &SearchPanel::searchPerformed, this, [this](const QString &text) {
+    m_lastSearchText = text;
+    if (text.isEmpty()) {
+      clearSearchHighlightFromEditors();
+    } else if (m_ui->leftTabs() &&
+               m_ui->leftTabs()->currentWidget() == m_ui->findPanel()) {
+      m_searchHighlightTimer->start();
+    }
+  });
+  // 左侧 tab 切换：查找/引用面板显示/隐藏时同步编辑器高亮（VSCode 行为）
+  if (auto *leftTabs = m_ui->leftTabs()) {
+    connect(leftTabs, &QTabWidget::currentChanged, this, &MainDevMgr::onLeftTabChanged);
+  }
 
   // 安装事件过滤器以捕获鼠标侧键（前进/后退）
   // 注意：需要在 QApplication 级别安装，因为鼠标事件可能被子控件消费

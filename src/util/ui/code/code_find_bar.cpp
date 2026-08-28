@@ -275,10 +275,11 @@ void CodeFindBar::onFindTextChanged() {
         cursor.setPosition(match.capturedEnd(), QTextCursor::KeepAnchor);
         QTextEdit::ExtraSelection sel;
         sel.cursor = cursor;
-        // 当前选中项用深橙色，其他用浅橙色
+        // 当前选中项用深一档浅红，其他用浅红（与引用高亮同色系）
         bool isCurrent = (match.capturedStart() == selStart && match.capturedEnd() == selEnd);
         sel.format.setBackground(isCurrent ? AuiStyle::findCurrentMatchBackground()
                                            : AuiStyle::findMatchBackground());
+        sel.format.setForeground(AuiStyle::modifiedColor());
         selections.append(sel);
       }
     } else {
@@ -288,10 +289,11 @@ void CodeFindBar::onFindTextChanged() {
         if (!cursor.isNull()) {
           QTextEdit::ExtraSelection sel;
           sel.cursor = cursor;
-          // 当前选中项用深橙色，其他用浅橙色
+          // 当前选中项用深一档浅红，其他用浅红（与引用高亮同色系）
           bool isCurrent = (cursor.selectionStart() == selStart && cursor.selectionEnd() == selEnd);
           sel.format.setBackground(isCurrent ? AuiStyle::findCurrentMatchBackground()
                                              : AuiStyle::findMatchBackground());
+          sel.format.setForeground(AuiStyle::modifiedColor());
           selections.append(sel);
         }
       }

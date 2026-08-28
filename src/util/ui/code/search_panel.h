@@ -42,6 +42,8 @@ public:
   void setSearchRoot(const QString &rootPath);
   /// 触发一次搜索（供外部如编辑器选中词调用）
   void startSearch(const QString &text);
+  /// 当前搜索关键词（空串表示未在搜索）
+  const QString &currentText() const;
 
   /// 主题 / 字体切换后刷新（标签文字色、结果树背景与滚动条），供外部显式调用
   void refreshStyle();
@@ -49,6 +51,8 @@ public:
 signals:
   /// 单击结果项：请求打开文件并定位选中（column/length 为 0-based，用于选中匹配词）
   void openRequested(const QString &filePath, int line, int column, int length);
+  /// 一次搜索完成（实时搜索每输入一次都会触发，供外部同步编辑器高亮）
+  void searchPerformed(const QString &text);
 
 protected:
   void showEvent(QShowEvent *event) override;

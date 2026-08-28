@@ -144,6 +144,22 @@ public:
    */
   QVector<QPair<int, QString>> findSymbolReferences(const QString &name) const;
 
+  // ── 接口：引用高亮（VSCode「查找所有引用」后编辑器持续变色）──
+
+  /**
+   * @brief 高亮当前文件中指定符号的所有引用位置（注释/字符串中的出现不高亮）
+   * @param name 符号名称；传入空串清除引用高亮
+   */
+  void highlightSymbolReferences(const QString &name);
+
+  // ── 接口：查找面板搜索高亮（VSCode「查找」面板搜索后编辑器持续变色）──
+
+  /**
+   * @brief 高亮当前文件中与查找关键词匹配的所有位置（与引用高亮同款浅红样式）
+   * @param text 查找关键词；传入空串清除查找高亮
+   */
+  void highlightSearchMatches(const QString &text);
+
   // ── 接口：断点调试 ──
 
   /// 切换指定行号（0-based blockNumber）的断点状态
@@ -223,6 +239,8 @@ private slots:
   void scheduleValidation();
   void performValidation();
   void insertCompletion(const QString &completion);
+  /// 文本变化后防抖重算引用高亮（编辑时保持高亮位置准确）
+  void scheduleReferenceRehighlight();
 
 private:
   // ── UI 相关 ──
@@ -265,9 +283,6 @@ private:
   /// 由文本/打开文件时调用：按缩进计算可折叠区间并应用折叠态
   void computeFoldRanges();
 
-  // ── 符号高亮（用于查找引用）──
-  void highlightSymbolReferences(const QString &name);
-
   // ── 悬停提示（使用 SymbolNavigator）──
   void showSymbolHover(int pos, const QPoint &gpos);
 
@@ -307,11 +322,15 @@ private:
 
   // 错误标记（错误波浪线统一由 paintEvent 依据 m_errorRanges 绘制，不再使用 ExtraSelection）
   QList<QTextEdit::ExtraSelection> m_referenceSelections;  ///< 引用高亮标记
+  QString m_referenceSymbol;  ///< 当前引用高亮的符号名（空串表示未启用）
+  QList<QTextEdit::ExtraSelection> m_searchSelections;  ///< 查找面板搜索高亮标记
+  QString m_searchText;       ///< 当前查找面板搜索关键词（空串表示未启用）
   QSet<int> m_errorLines;
 
   // 悬停提示相关
   QTimer *m_hoverTimer = nullptr;       ///< 悬停防抖定时器
   QTimer *m_validationTimer = nullptr;  ///< 验证防抖定时器
+  QTimer *m_refHighlightTimer = nullptr;  ///< 引用高亮重算防抖定时器
   QString m_currentHoverSymbol;         ///< 当前悬停的符号名
 
   // 查找/替换栏

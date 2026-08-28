@@ -158,7 +158,6 @@ CodeEditor::CodeEditor(QWidget *parent) : QPlainTextEdit(parent) {
   connect(document(), &QTextDocument::contentsChange, this, [this]() {
     m_foldValid = false;  // 标记折叠区间过期，延后重建
     m_foldRebuildTimer->start();
-
     // 整篇重载（setPlainText）会重置所有块格式，使文本布局层失去统一行高，
     // 导致「点击行间空隙 → cursorForPosition 定位到行尾」。检测首块已丢失统一行高
     // 时延后重应用；打字/删除产生的子块会继承前块格式，无需整篇处理。
@@ -174,6 +173,17 @@ CodeEditor::CodeEditor(QWidget *parent) : QPlainTextEdit(parent) {
   m_lineHeightTimer->setSingleShot(true);
   m_lineHeightTimer->setInterval(0);
   connect(m_lineHeightTimer, &QTimer::timeout, this, &CodeEditor::applyFixedBlockLineHeight);
+
+  // 引用/查找高亮重算：编辑/删除文本时高亮位置会漂移，防抖后按当前符号/关键词重新扫描
+  m_refHighlightTimer = new QTimer(this);
+  m_refHighlightTimer->setSingleShot(true);
+  m_refHighlightTimer->setInterval(CodeConstants::Performance::kValidationDebounceMs);
+  connect(m_refHighlightTimer, &QTimer::timeout, this, [this]() {
+    if (!m_referenceSymbol.isEmpty()) highlightSymbolReferences(m_referenceSymbol);
+    if (!m_searchText.isEmpty()) highlightSearchMatches(m_searchText);
+  });
+  connect(document(), &QTextDocument::contentsChange, this,
+          &CodeEditor::scheduleReferenceRehighlight);
 
   // 初始化查找/替换栏（嵌入编辑器上方，默认隐藏）
   m_findBar = new CodeFindBar(this, this);
@@ -586,6 +596,14 @@ void CodeEditor::highlightCurrentLine() {
   if (m_findBar && m_findBar->isFindBarVisible()) {
     extra.append(m_findSelections);
   }
+
+  // 引用高亮（「查找所有引用」后持续显示，即使点击编辑器也不清除，
+  // 与 VSCode 一致；由 highlightSymbolReferences 填充，离开引用面板时清空）
+  extra.append(m_referenceSelections);
+
+  // 查找面板搜索高亮（「查找」面板搜索后持续显示，与引用高亮同款，
+  // 由 highlightSearchMatches 填充，离开查找面板时清空）
+  extra.append(m_searchSelections);
 
   setExtraSelections(extra);
 }

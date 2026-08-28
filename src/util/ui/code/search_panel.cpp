@@ -120,6 +120,10 @@ void SearchPanel::startSearch(const QString &text) {
   performSearch();
 }
 
+const QString &SearchPanel::currentText() const {
+  return m_searchEdit->text();
+}
+
 void SearchPanel::refreshStyle() {
   // 面板背景随主题重建（setStyleSheet 触发重新抛光，立即生效）
   applyPanelStyle();
@@ -198,6 +202,8 @@ void SearchPanel::performSearch() {
   const QString needle = m_searchEdit->text();
   if (needle.isEmpty() || m_searchRoot.isEmpty()) {
     updateSummary();
+    // 通知外部（清空关键词时同步清除编辑器查找高亮）
+    emit searchPerformed(needle);
     return;
   }
 
@@ -268,6 +274,8 @@ void SearchPanel::performSearch() {
   m_resultTree->expandAll();
 
   updateSummary();
+  // 通知外部：搜索完成，同步编辑器查找高亮
+  emit searchPerformed(needle);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

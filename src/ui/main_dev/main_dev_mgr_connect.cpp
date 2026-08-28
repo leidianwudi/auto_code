@@ -10,6 +10,8 @@
 #include <QRegularExpression>
 #include <QTextCursor>
 
+#include <functional>
+
 #include "debug_controller.h"
 #include "main_dev_mgr.h"
 #include "main_dev_model.h"
@@ -57,6 +59,8 @@ void MainDevMgr::connectEditor(CodeEditor *editor) {
       if (name.isEmpty()) return;
       m_ui->referencePanel()->findReferences(name);
       if (m_ui->leftTabs()) m_ui->leftTabs()->setCurrentWidget(m_ui->referencePanel());
+      // 引用面板可见时，编辑器持续高亮所有引用（VSCode 行为）
+      applyReferenceHighlightToEditors(name);
     });
     // 工作区符号搜索 (Ctrl+T)
     connect(editor, &CodeEditor::requestWorkspaceSymbols, this, [this]() {
@@ -268,4 +272,63 @@ bool MainDevMgr::eventFilter(QObject *obj, QEvent *event) {
 
   // 其他事件交给默认处理
   return QObject::eventFilter(obj, event);
+}
+
+// ──────────────────────────────────────────────────────────────
+//  引用高亮（VSCode：引用面板可见时编辑器持续变色）
+// ──────────────────────────────────────────────────────────────
+
+/// 遍历所有已打开编辑器（含拆分面板）
+static void forEachEditor(MainDevUi *ui,
+                          const std::function<void(CodeEditor *)> &func) {
+  for (int pi = 0; pi < ui->editorPanelCount(); ++pi) {
+    auto *tabs = ui->editorPanelAt(pi);
+    if (!tabs) continue;
+    for (int ti = 0; ti < tabs->count(); ++ti) {
+      auto *ed = qobject_cast<CodeEditor *>(tabs->widget(ti));
+      if (ed) func(ed);
+    }
+  }
+}
+
+void MainDevMgr::applyReferenceHighlightToEditors(const QString &name) {
+  if (name.isEmpty()) return;
+  forEachEditor(m_ui, [&name](CodeEditor *ed) { ed->highlightSymbolReferences(name); });
+}
+
+void MainDevMgr::clearReferenceHighlightFromEditors() {
+  forEachEditor(m_ui, [](CodeEditor *ed) { ed->highlightSymbolReferences(QString()); });
+}
+
+void MainDevMgr::applySearchHighlightToEditors(const QString &text) {
+  if (text.isEmpty()) return;
+  forEachEditor(m_ui, [&text](CodeEditor *ed) { ed->highlightSearchMatches(text); });
+}
+
+void MainDevMgr::clearSearchHighlightFromEditors() {
+  forEachEditor(m_ui, [](CodeEditor *ed) { ed->highlightSearchMatches(QString()); });
+}
+
+void MainDevMgr::onLeftTabChanged(int index) {
+  auto *tabs = m_ui->leftTabs();
+  if (!tabs) return;
+  QWidget *current = tabs->widget(index);
+  if (current == m_ui->referencePanel()) {
+    // 切回引用面板：若仍有结果，恢复编辑器引用高亮（并清除查找高亮）
+    clearSearchHighlightFromEditors();
+    const QString sym = m_ui->referencePanel()->symbolName();
+    if (!sym.isEmpty()) applyReferenceHighlightToEditors(sym);
+  } else if (current == m_ui->findPanel()) {
+    // 切回查找面板：若仍有搜索关键词，恢复编辑器查找高亮（并清除引用高亮）
+    clearReferenceHighlightFromEditors();
+    const QString text = m_ui->findPanel()->currentText();
+    if (!text.isEmpty()) {
+      m_lastSearchText = text;
+      applySearchHighlightToEditors(text);
+    }
+  } else {
+    // 离开查找/引用面板：清除两类编辑器高亮（与 VSCode 一致）
+    clearSearchHighlightFromEditors();
+    clearReferenceHighlightFromEditors();
+  }
 }
