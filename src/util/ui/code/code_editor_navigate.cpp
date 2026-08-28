@@ -583,59 +583,44 @@ void CodeEditor::showSymbolHover(int pos, const QPoint &globalPos) {
   QToolTip::showText(globalPos, tipText, this);
 }
 
-void CodeEditor::highlightSymbolReferences(const QString &name) {
-  m_referenceSymbol = name;
-  m_referenceSelections.clear();
+// ══════════════════════════════════════════════════════════════════════════════
+//  统一高亮层（引用 / 查找面板 / 内嵌查找）
+//  三套持久高亮收敛为 HighlightLayer 结构：applyHighlight 设置关键词并按 filler
+//  填充选区，clearHighlight 清除，setLayerSelections 供外部（CodeFindBar）直接写入。
+// ══════════════════════════════════════════════════════════════════════════════
 
-  if (name.isEmpty()) {
-    refreshExtraSelections();
-    return;
-  }
-
-  auto refs = findSymbolReferences(name);
-  QTextCursor cursor(document());
+QList<QTextEdit::ExtraSelection> CodeEditor::buildReferenceHighlights(const QString &name) {
+  QList<QTextEdit::ExtraSelection> result;
+  if (name.isEmpty()) return result;
 
   QRegularExpression re(QStringLiteral("\\b") + QRegularExpression::escape(name) +
                         QStringLiteral("\\b"));
   const QString &text = cachedText();
   // 与 findSymbolReferences 一致：注释/字符串中的出现不高亮
   const QVector<QPair<int, int>> comments = collectNonCodeRanges(text);
+  QTextCursor cursor(document());
   int offset = 0;
-
   while (offset < text.size()) {
     auto match = re.match(text, offset);
     if (!match.hasMatch()) break;
-
     int start = match.capturedStart();
     int length = match.capturedLength();
     offset = start + length;
-
     if (posInComments(comments, start)) continue;
-
     cursor.setPosition(start);
     cursor.setPosition(start + length, QTextCursor::KeepAnchor);
-
     QTextEdit::ExtraSelection sel;
     sel.cursor = cursor;
     sel.format.setBackground(AuiStyle::referenceHighlightBackground());
     sel.format.setForeground(AuiStyle::modifiedColor());
-    m_referenceSelections.append(sel);
+    result.append(sel);
   }
-
-  refreshExtraSelections();
-  // 强制重绘视口：后台/未聚焦编辑器的 setExtraSelections 可能不会立刻重画，
-  // 需显式 update()（否则 tpl 等文件要点击编辑器后才显示高亮）
-  viewport()->update();
+  return result;
 }
 
-void CodeEditor::highlightSearchMatches(const QString &text) {
-  m_searchText = text;
-  m_searchSelections.clear();
-
-  if (text.isEmpty()) {
-    refreshExtraSelections();
-    return;
-  }
+QList<QTextEdit::ExtraSelection> CodeEditor::buildSearchHighlights(const QString &text) {
+  QList<QTextEdit::ExtraSelection> result;
+  if (text.isEmpty()) return result;
 
   // 与引用高亮同款浅红样式；查找面板是全文搜索，注释/字符串中的匹配也高亮
   QRegularExpression re(QRegularExpression::escape(text),
@@ -650,17 +635,63 @@ void CodeEditor::highlightSearchMatches(const QString &text) {
     sel.cursor = cursor;
     sel.format.setBackground(AuiStyle::referenceHighlightBackground());
     sel.format.setForeground(AuiStyle::modifiedColor());
-    m_searchSelections.append(sel);
+    result.append(sel);
   }
+  return result;
+}
 
-  refreshExtraSelections();
-  // 强制重绘视口（与引用高亮一致，避免 tpl 等文件要点击编辑器后才显示）
+void CodeEditor::applyHighlight(const QString &layerId, const QString &key) {
+  auto it = m_highlightLayers.find(layerId);
+  if (it == m_highlightLayers.end()) return;
+  it->currentKey = key;
+  it->selections = (key.isEmpty() || !it->filler)
+                       ? QList<QTextEdit::ExtraSelection>()
+                       : it->filler(key);
+  highlightCurrentLine();
+  // 强制重绘视口：后台/未聚焦编辑器的 setExtraSelections 可能不会立刻重画，
+  // 需显式 update()（否则 tpl 等文件要点击编辑器后才显示高亮）
   viewport()->update();
 }
 
+void CodeEditor::clearHighlight(const QString &layerId) {
+  applyHighlight(layerId, QString());
+}
+
+void CodeEditor::setLayerSelections(const QString &layerId,
+                                    const QList<QTextEdit::ExtraSelection> &selections) {
+  auto it = m_highlightLayers.find(layerId);
+  if (it == m_highlightLayers.end()) return;
+  it->selections = selections;
+}
+
+void CodeEditor::reapplyEnabledHighlights() {
+  // 仅重算已启用（关键词非空且有 filler）的高亮层，其余层保持不变；
+  // 一次重算后统一刷新，避免逐层重复重绘
+  for (auto &layer : m_highlightLayers) {
+    if (!layer.currentKey.isEmpty() && layer.filler) {
+      layer.selections = layer.filler(layer.currentKey);
+    }
+  }
+  highlightCurrentLine();
+  viewport()->update();
+}
+
+void CodeEditor::highlightSymbolReferences(const QString &name) {
+  applyHighlight(QStringLiteral("reference"), name);
+}
+
+void CodeEditor::highlightSearchMatches(const QString &text) {
+  applyHighlight(QStringLiteral("search"), text);
+}
+
 void CodeEditor::scheduleReferenceRehighlight() {
-  // 仅在启用引用/查找高亮时重算；防抖由 m_refHighlightTimer 保证（连续编辑合并为一次）
-  if (!m_referenceSymbol.isEmpty() || !m_searchText.isEmpty()) m_refHighlightTimer->start();
+  // 仅在存在已启用的高亮层时重算；防抖由 m_refHighlightTimer 保证（连续编辑合并为一次）
+  for (const auto &layer : m_highlightLayers) {
+    if (!layer.currentKey.isEmpty() && layer.filler) {
+      m_refHighlightTimer->start();
+      return;
+    }
+  }
 }
 
 // ──────────────────────────────────────────────────────────────

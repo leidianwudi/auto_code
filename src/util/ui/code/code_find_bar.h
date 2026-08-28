@@ -72,7 +72,7 @@ private:
   void find(int direction);
   /// 更新匹配计数标签
   void updateMatchCount();
-  /// 更新编辑器中的查找高亮（写入 CodeEditor::m_findSelections，再触发合并）
+  /// 更新编辑器中的查找高亮（写入 CodeEditor 的「find」高亮层，再触发合并）
   void applyFindHighlight(const QList<QTextEdit::ExtraSelection> &selections);
   /// 获取查找标志
   QTextDocument::FindFlags findFlags() const;

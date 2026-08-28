@@ -309,10 +309,17 @@ void MainDevMgr::clearSearchHighlightFromEditors() {
   forEachEditor(m_ui, [](CodeEditor *ed) { ed->highlightSearchMatches(QString()); });
 }
 
-void MainDevMgr::onLeftTabChanged(int index) {
-  auto *tabs = m_ui->leftTabs();
-  if (!tabs) return;
-  QWidget *current = tabs->widget(index);
+/// 根据左侧面板当前选中项统一同步两类高亮（引用/查找互斥，VSCode 行为）：
+/// - 引用面板可见 → 应用引用高亮，清除查找高亮
+/// - 查找面板可见 → 应用查找高亮，清除引用高亮
+/// - 其他面板 → 两类高亮都清除
+void MainDevMgr::resyncPanelHighlights() {
+  if (!m_ui->leftTabs()) {
+    clearSearchHighlightFromEditors();
+    clearReferenceHighlightFromEditors();
+    return;
+  }
+  QWidget *current = m_ui->leftTabs()->currentWidget();
   if (current == m_ui->referencePanel()) {
     // 切回引用面板：若仍有结果，恢复编辑器引用高亮（并清除查找高亮）
     clearSearchHighlightFromEditors();
@@ -322,13 +329,30 @@ void MainDevMgr::onLeftTabChanged(int index) {
     // 切回查找面板：若仍有搜索关键词，恢复编辑器查找高亮（并清除引用高亮）
     clearReferenceHighlightFromEditors();
     const QString text = m_ui->findPanel()->currentText();
-    if (!text.isEmpty()) {
-      m_lastSearchText = text;
-      applySearchHighlightToEditors(text);
-    }
+    m_lastSearchText = text;
+    if (!text.isEmpty()) applySearchHighlightToEditors(text);
   } else {
     // 离开查找/引用面板：清除两类编辑器高亮（与 VSCode 一致）
     clearSearchHighlightFromEditors();
     clearReferenceHighlightFromEditors();
   }
+}
+
+/// 依据左侧面板当前选中项，为单个编辑器应用对应高亮（新打开文件时调用）
+void MainDevMgr::applyPanelHighlightToEditor(CodeEditor *editor) {
+  if (!editor || !m_ui->leftTabs()) return;
+  QWidget *left = m_ui->leftTabs()->currentWidget();
+  if (left == m_ui->referencePanel()) {
+    const QString sym = m_ui->referencePanel()->symbolName();
+    if (!sym.isEmpty()) editor->highlightSymbolReferences(sym);
+  } else if (left == m_ui->findPanel()) {
+    const QString text = m_ui->findPanel()->currentText();
+    if (!text.isEmpty()) editor->highlightSearchMatches(text);
+  }
+}
+
+void MainDevMgr::onLeftTabChanged(int index) {
+  Q_UNUSED(index);
+  // 查找/引用面板显示/隐藏时统一同步编辑器高亮（VSCode 行为）
+  resyncPanelHighlights();
 }

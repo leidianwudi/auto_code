@@ -31,6 +31,8 @@
 #include <QTimer>
 #include <QVector>
 
+#include <functional>
+
 #include "bracket_matcher.h"
 #include "indent_guide.h"
 #include "src/engine/schema_validator.h"
@@ -60,7 +62,7 @@ class AuiErrorToolTip;  ///< 自定义可选中/复制的错误提示弹窗
  */
 class CodeEditor : public QPlainTextEdit {
   Q_OBJECT
-  friend class CodeFindBar;  ///< 查找栏需要访问 m_findSelections
+  friend class CodeFindBar;  ///< 查找栏需要访问 highlightCurrentLine 等内部方法
 
 public:
   /// 验证模式枚举（兼容旧接口）
@@ -160,6 +162,39 @@ public:
    */
   void highlightSearchMatches(const QString &text);
 
+  // ── 接口：统一高亮层（引用 / 查找面板 / 内嵌查找）──
+
+  /**
+   * @struct HighlightLayer
+   * @brief 持久高亮层：统一管理引用高亮、查找面板搜索高亮、内嵌查找高亮。
+   *
+   * 每层持有独立的关键词与选区，由 filler 回调依据关键词重新填充选区；
+   * 支持按层清除与防抖重算，避免三套高亮逻辑各自为政、重复实现。
+   */
+  struct HighlightLayer {
+    QString id;                                   ///< 唯一标识（"reference"/"search"/"find"）
+    QList<QTextEdit::ExtraSelection> selections;  ///< 本层当前高亮选区
+    QString currentKey;                           ///< 当前关键词（空串表示未启用）
+    /// 依据关键词填充本层选区；空回调表示由外部写入（如内嵌查找栏 CodeFindBar）
+    std::function<QList<QTextEdit::ExtraSelection>(const QString &)> filler;
+  };
+
+  /**
+   * @brief 应用高亮：设置关键词并按本层 filler 重新填充选区
+   * @param layerId 高亮层标识（"reference"/"search"/"find"）
+   * @param key 关键词；传入空串清除本层高亮
+   */
+  void applyHighlight(const QString &layerId, const QString &key);
+  /// 清除指定高亮层（关键词与选区一并清空）
+  void clearHighlight(const QString &layerId);
+  /**
+   * @brief 由外部（CodeFindBar）直接写入指定高亮层的选区
+   * @param layerId 高亮层标识（"find"）
+   * @param selections 新的高亮选区
+   */
+  void setLayerSelections(const QString &layerId,
+                          const QList<QTextEdit::ExtraSelection> &selections);
+
   // ── 接口：断点调试 ──
 
   /// 切换指定行号（0-based blockNumber）的断点状态
@@ -249,6 +284,14 @@ private:
   void hideErrorTooltip();
   int calculateNewLineIndent(const QString &linePrefix) const;
 
+  // ── 高亮层填充（由 HighlightLayer::filler 回调调用）──
+  /// 依据符号名填充引用高亮选区（注释/字符串中的出现不高亮）
+  QList<QTextEdit::ExtraSelection> buildReferenceHighlights(const QString &name);
+  /// 依据关键词填充查找面板搜索高亮选区（全文匹配，与引用同款浅红样式）
+  QList<QTextEdit::ExtraSelection> buildSearchHighlights(const QString &text);
+  /// 重算所有已启用（关键词非空且有 filler）的高亮层（防抖定时器触发）
+  void reapplyEnabledHighlights();
+
 public:
   /// 当前文件是否为可调试的 .ac 脚本（objectName 即文件路径）
   bool isDebuggableFile() const;
@@ -321,10 +364,6 @@ private:
   mutable int m_cacheVersion = -1;  ///< 文档版本号（用于失效检测）
 
   // 错误标记（错误波浪线统一由 paintEvent 依据 m_errorRanges 绘制，不再使用 ExtraSelection）
-  QList<QTextEdit::ExtraSelection> m_referenceSelections;  ///< 引用高亮标记
-  QString m_referenceSymbol;  ///< 当前引用高亮的符号名（空串表示未启用）
-  QList<QTextEdit::ExtraSelection> m_searchSelections;  ///< 查找面板搜索高亮标记
-  QString m_searchText;       ///< 当前查找面板搜索关键词（空串表示未启用）
   QSet<int> m_errorLines;
 
   // 悬停提示相关
@@ -334,8 +373,10 @@ private:
   QString m_currentHoverSymbol;         ///< 当前悬停的符号名
 
   // 查找/替换栏
-  CodeFindBar *m_findBar = nullptr;                   ///< 查找/替换栏控件
-  QList<QTextEdit::ExtraSelection> m_findSelections;  ///< 查找匹配高亮（由 CodeFindBar 写入）
+  CodeFindBar *m_findBar = nullptr;  ///< 查找/替换栏控件
+
+  // 统一高亮层：引用 / 查找面板 / 内嵌查找（filler 由构造函数注册）
+  QHash<QString, HighlightLayer> m_highlightLayers;
 
   // 断点调试
   QMap<int, bool> m_breakpoints;  ///< 断点集合（行号 → 是否生效，行号 1-based）

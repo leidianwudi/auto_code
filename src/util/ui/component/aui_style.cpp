@@ -199,6 +199,22 @@ QString AuiStyle::dialogStyleSheet() {
       .arg(background().name(), textColor().name(), fs, borderColor().name());
 }
 
+QString AuiStyle::inputBoxStyleSheet(const QString &selector) {
+  // 文件面板「过滤文件名」与查找面板「搜索框」共用：
+  // 背景/文字/边框/聚焦边框随主题（浅/深色自适应），与文件面板输入框完全一致
+  return QStringLiteral("%1 {"
+                        "  background-color: %2;"
+                        "  color: %3;"
+                        "  border: 1px solid %4;"
+                        "  border-radius: 3px;"
+                        "  padding: 2px 4px;"
+                        "  font-size: 12px;"
+                        "}"
+                        "%1:focus { border-color: %5; }")
+      .arg(selector, editorBackground().name(), textColor().name(), borderColor().name(),
+           listSelectionBackground().name());
+}
+
 QString AuiStyle::menuButtonStyleSheet() {
   // 直接设置到 QToolButton 上，优先级高于全局/窗口级样式表，
   // 确保深色主题下按钮文字色不被动继承的默认值覆盖

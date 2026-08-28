@@ -119,6 +119,8 @@ qt_add_executable(auto_code
     src/util/ui/code/reference_panel.cpp
     src/util/ui/code/vsc_result_tree.h
     src/util/ui/code/vsc_result_tree.cpp
+    src/util/ui/code/vsc_result_panel.h
+    src/util/ui/code/vsc_result_panel.cpp
     src/util/ui/code/comment_scan.h
     src/util/ui/highlighter/light_color.h
     src/util/ui/highlighter/light_tpl.h

@@ -48,8 +48,10 @@ CodeEditor *MainDevMgr::createEditorForFile(const QString &filePath) {
   return editor;
 }
 
-CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *target) {
-  // ── 查重：遍历所有面板组的所有标签页 ──
+/// 查重：在所有编辑面板中查找已打开指定文件的编辑器（未打开返回 nullptr）。
+/// 命中时可选输出所在面板组与索引（供选中/聚焦该标签）
+CodeEditor *MainDevMgr::findOpenEditor(const QString &filePath, QTabWidget **outTabs,
+                                       int *outIndex) {
   // 支持 CodeEditor 和 JsonVueWidget（包装器）两种类型
   for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
     auto *tabs = m_ui->editorPanelAt(i);
@@ -57,15 +59,85 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
     for (int j = 0; j < tabs->count(); ++j) {
       CodeEditor *editor = editorFromWidget(tabs->widget(j));
       if (editor && editor->objectName() == filePath) {
-        tabs->setCurrentIndex(j);
-        // 会话恢复阶段不主动抢焦点，让用户首次点击时触发 focusChanged → 定位目录树
-        if (!m_restoringSession) {
-          tabs->setFocus();
-          editor->setFocus();
-        }
+        if (outTabs) *outTabs = tabs;
+        if (outIndex) *outIndex = j;
         return editor;
       }
     }
+  }
+  return nullptr;
+}
+
+/// 解析 HTTP 配置 AC 脚本路径：优先最近 api_auth_data.ac，回落启动项 AC 脚本（向后兼容）
+QString MainDevMgr::resolveHttpConfigAcPath(const QString &filePath) const {
+  QString acPath = JsonVueWidget::findNearestApiAuthDataAc(filePath);
+  if (acPath.isEmpty() && m_ui->startupCombo()) {
+    acPath = m_ui->startupCombo()->currentData().toString();
+  }
+  return acPath;
+}
+
+/// 创建编辑标签页（jsonvue 可视化包装器 / jsonsource / 普通编辑器），并输出 CodeEditor。
+/// 可视化包装器附带保留磁盘原文 + 加载 HTTP 配置；可视化按钮生效时自动切到可视化模式
+QWidget *MainDevMgr::createEditorTab(const QString &filePath, const QString &content,
+                                     CodeEditor **editorOut) {
+  CodeEditor *editor = nullptr;
+  QWidget *tabWidget = nullptr;
+
+  // .jsonvue / .jsonsource 文件使用可视化包装器（CodeEditor + 可视化编辑器）
+  const bool isJsonVue = filePath.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive);
+  const bool isJsonSource = filePath.endsWith(AcFileSuffix::kJsonsource, Qt::CaseInsensitive);
+  const QString acPath = resolveHttpConfigAcPath(filePath);
+
+  if (isJsonVue) {
+    auto *jvw = new JsonVueWidget;
+    editor = jvw->codeEditor();
+    editor->setPlainText(content);
+    // 缓存磁盘原文：可视化写回时以它为底做保真合并，防止未加载时保存把 dataName 数据清空
+    jvw->setPreservedSource(content);
+    // 记录文件路径：供可视化编辑器推导 .jsonsource 数据源搜索根目录
+    jvw->setSourceFilePath(filePath);
+    tabWidget = jvw;
+    // 加载 HTTP 配置（供动态数据源"测试"按钮使用）
+    if (!acPath.isEmpty()) jvw->loadHttpConfigFromAcFile(acPath);
+    // 可视化按钮生效时，自动以可视化方式打开
+    if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) jvw->switchToVisual();
+  } else if (isJsonSource) {
+    auto *jdw = new JsonSourceWidget;
+    editor = jdw->codeEditor();
+    editor->setPlainText(content);
+    jdw->setPreservedSource(content);
+    tabWidget = jdw;
+    // 加载 HTTP 配置（供动态数据源"测试"按钮使用）
+    if (!acPath.isEmpty()) {
+      QString baseUrl, authHeader, postData;
+      JsonVueEditor::loadHttpConfigFromAcFile(acPath, &baseUrl, &authHeader, &postData);
+      jdw->setHttpConfig(baseUrl, authHeader, postData);
+    }
+    // 可视化按钮生效时，自动以可视化方式打开
+    if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) jdw->switchToVisual();
+  } else {
+    editor = createEditorForFile(filePath);
+    editor->setPlainText(content);
+    tabWidget = editor;
+  }
+
+  if (editorOut) *editorOut = editor;
+  return tabWidget;
+}
+
+CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *target) {
+  // ── 查重：已打开则选中并聚焦该标签 ──
+  QTabWidget *tabs = nullptr;
+  int index = -1;
+  if (CodeEditor *existing = findOpenEditor(filePath, &tabs, &index)) {
+    if (tabs) tabs->setCurrentIndex(index);
+    // 会话恢复阶段不主动抢焦点，让用户首次点击时触发 focusChanged → 定位目录树
+    if (!m_restoringSession) {
+      tabs->setFocus();
+      existing->setFocus();
+    }
+    return existing;
   }
 
   // ── 读取文件 ──
@@ -76,78 +148,26 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
     return nullptr;
   }
   QTextStream in(&file);
-  QString content = in.readAll();
+  const QString content = in.readAll();
   file.close();
 
-  // ── 创建编辑器 ──
-  // .jsonvue / .jsonsource 文件使用可视化包装器（CodeEditor + 可视化编辑器）
-  bool isJsonVue = filePath.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive);
-  bool isJsonSource = filePath.endsWith(AcFileSuffix::kJsonsource, Qt::CaseInsensitive);
+  // ── 创建编辑器 / 标签页（jsonvue / jsonsource / 普通）──
   CodeEditor *editor = nullptr;
-  QWidget *tabWidget = nullptr;
-  JsonVueWidget *jvw = nullptr;
-  JsonSourceWidget *jdw = nullptr;
-
-  if (isJsonVue) {
-    jvw = new JsonVueWidget;
-    editor = jvw->codeEditor();
-    editor->setPlainText(content);
-    // 缓存磁盘原文：可视化写回时以它为底做保真合并，防止未加载时保存把 dataName 数据清空
-    jvw->setPreservedSource(content);
-    // 记录文件路径：供可视化编辑器推导 .jsonsource 数据源搜索根目录
-    jvw->setSourceFilePath(filePath);
-    tabWidget = jvw;
-    // 优先从 .jsonvue 文件向上查找最近的 api_auth_data.ac 加载 HTTP 配置；
-    // 找不到时回落到启动项 AC 脚本（向后兼容）
-    QString acPath = JsonVueWidget::findNearestApiAuthDataAc(filePath);
-    if (acPath.isEmpty()) {
-      acPath = m_ui->startupCombo()->currentData().toString();
-    }
-    if (!acPath.isEmpty()) {
-      jvw->loadHttpConfigFromAcFile(acPath);
-    }
-    // 可视化按钮生效时，自动以可视化方式打开
-    if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) {
-      jvw->switchToVisual();
-    }
-  } else if (isJsonSource) {
-    jdw = new JsonSourceWidget;
-    editor = jdw->codeEditor();
-    editor->setPlainText(content);
-    jdw->setPreservedSource(content);
-    tabWidget = jdw;
-    // 加载 HTTP 配置（供动态数据源"测试"按钮使用），回落到启动项 AC 脚本
-    QString acPath = JsonVueWidget::findNearestApiAuthDataAc(filePath);
-    if (acPath.isEmpty()) {
-      acPath = m_ui->startupCombo()->currentData().toString();
-    }
-    if (!acPath.isEmpty()) {
-      QString baseUrl, authHeader, postData;
-      JsonVueEditor::loadHttpConfigFromAcFile(acPath, &baseUrl, &authHeader, &postData);
-      jdw->setHttpConfig(baseUrl, authHeader, postData);
-    }
-    // 可视化按钮生效时，自动以可视化方式打开
-    if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) {
-      jdw->switchToVisual();
-    }
-  } else {
-    editor = createEditorForFile(filePath);
-    editor->setPlainText(content);
-    tabWidget = editor;
-  }
+  QWidget *tabWidget = createEditorTab(filePath, content, &editor);
+  if (!editor || !tabWidget) return nullptr;
 
   // ── 获取 / 创建面板组 ──
-  QTabWidget *tabs = target ? target : currentTabWidget();
-  if (!tabs) {
-    tabs = m_ui->createEditorPanel();
-    m_ui->addEditorPanel(tabs);
-    connectEditorPanel(tabs);  // 连接关闭/切换等信号，否则标签关闭按钮无效
+  QTabWidget *ownerTabs = target ? target : currentTabWidget();
+  if (!ownerTabs) {
+    ownerTabs = m_ui->createEditorPanel();
+    m_ui->addEditorPanel(ownerTabs);
+    connectEditorPanel(ownerTabs);  // 连接关闭/切换等信号，否则标签关闭按钮无效
   }
 
   QFileInfo fi(filePath);
-  int idx = tabs->addTab(tabWidget, fi.fileName());
-  tabs->setTabToolTip(idx, filePath);
-  tabs->setCurrentIndex(idx);
+  int idx = ownerTabs->addTab(tabWidget, fi.fileName());
+  ownerTabs->setTabToolTip(idx, filePath);
+  ownerTabs->setCurrentIndex(idx);
 
   // ── 首次加载文件时刷新主分割器布局 ──
   if (m_model->openFiles.isEmpty()) m_ui->adjustMainSplitter();
@@ -181,16 +201,16 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
   editor->document()->setModified(false);
 
   // ── 修改标记：内容变化时标签页和树节点绘制红色 "*"（普通文件与 jsonvue 统一）──
-  connectModifiedTracking(tabs, editor, filePath);
+  connectModifiedTracking(ownerTabs, editor, filePath);
 
   // ── JsonVueWidget / JsonSourceWidget：可视化编辑器内容变化时也触发修改标记 ──
-  if (jvw) {
+  if (auto *jvw = qobject_cast<JsonVueWidget *>(tabWidget)) {
     connect(jvw, &JsonVueWidget::contentChanged, this, [this, editor]() {
       editor->document()->setModified(true);
       updateSaveButtonState();
     });
   }
-  if (jdw) {
+  if (auto *jdw = qobject_cast<JsonSourceWidget *>(tabWidget)) {
     connect(jdw, &JsonSourceWidget::contentChanged, this, [this, editor]() {
       editor->document()->setModified(true);
       updateSaveButtonState();
@@ -201,16 +221,7 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
   saveOpenFilesToSettings();
 
   // ── 引用/查找面板可见时，新打开的文件立即应用对应高亮（VSCode 行为）──
-  if (m_ui->leftTabs()) {
-    QWidget *left = m_ui->leftTabs()->currentWidget();
-    if (left == m_ui->referencePanel()) {
-      const QString sym = m_ui->referencePanel()->symbolName();
-      if (!sym.isEmpty()) editor->highlightSymbolReferences(sym);
-    } else if (left == m_ui->findPanel()) {
-      const QString text = m_ui->findPanel()->currentText();
-      if (!text.isEmpty()) editor->highlightSearchMatches(text);
-    }
-  }
+  applyPanelHighlightToEditor(editor);
 
   return editor;
 }

@@ -128,6 +128,10 @@ private slots:
   void applySearchHighlightToEditors(const QString &text);
   /// 清除所有已打开编辑器的查找搜索高亮
   void clearSearchHighlightFromEditors();
+  /// 根据左侧面板当前选中项统一同步两类高亮（引用/查找互斥，VSCode 行为）
+  void resyncPanelHighlights();
+  /// 依据左侧面板当前选中项，为单个编辑器应用对应高亮（新打开文件时调用）
+  void applyPanelHighlightToEditor(CodeEditor *editor);
 
 private:
   /// 查找并加载 file/ 目录
@@ -149,6 +153,15 @@ private:
   CodeEditor *createEditorForFile(const QString &filePath);
   /// 在编辑器中打开文件（查重 → 读取 → 创建 → 显示）
   CodeEditor *openFileInEditor(const QString &filePath, QTabWidget *target = nullptr);
+  /// 查重：在所有编辑面板中查找已打开指定文件的编辑器；未打开返回 nullptr。
+  /// 命中时可选输出所在面板组与索引（供选中/聚焦该标签）
+  CodeEditor *findOpenEditor(const QString &filePath, QTabWidget **outTabs = nullptr,
+                             int *outIndex = nullptr);
+  /// 创建编辑标签页（jsonvue 可视化包装器 / jsonsource / 普通编辑器），并输出 CodeEditor
+  QWidget *createEditorTab(const QString &filePath, const QString &content,
+                           CodeEditor **editorOut);
+  /// 解析 HTTP 配置 AC 脚本路径：优先最近 api_auth_data.ac，回落启动项 AC 脚本
+  QString resolveHttpConfigAcPath(const QString &filePath) const;
   /// 连接编辑器修改标记：tab 圆点 + 树节点圆点 + 保存按钮状态。
   /// 普通文件与 jsonvue 统一实现（都走 CodeEditor::document 的 modificationChanged）
   void connectModifiedTracking(QTabWidget *tabs, CodeEditor *editor, const QString &filePath);

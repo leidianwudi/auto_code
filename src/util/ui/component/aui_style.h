@@ -402,6 +402,12 @@ public:
   /// @brief 对话框专用样式表（QDialog + QLabel + QLineEdit + QPushButton）
   static QString dialogStyleSheet();
 
+  /// @brief 面板输入框（文件过滤 / 查找搜索框）统一样式表，浅/深色主题自适应。
+  /// @param selector QLineEdit 选择器，如 "#filePanelHeader QLineEdit"（文件面板）
+  ///                 或 "QLineEdit"（查找面板，样式表设在面板上时自动作用于子控件）
+  /// 背景=编辑器背景、文字=正文色、边框=通用边框、聚焦边框=选中背景
+  static QString inputBoxStyleSheet(const QString &selector);
+
   /// @brief 标题栏菜单按钮（QToolButton）专用样式表，直接设到按钮上
   static QString menuButtonStyleSheet();
 

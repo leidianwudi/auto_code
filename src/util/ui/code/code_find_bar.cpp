@@ -311,11 +311,11 @@ void CodeFindBar::onFindTextChanged() {
 
 void CodeFindBar::applyFindHighlight(const QList<QTextEdit::ExtraSelection> &selections) {
   if (!m_editor) return;
-  // 将查找高亮写入 CodeEditor::m_findSelections，
+  // 将查找高亮写入 CodeEditor 的「find」高亮层（统一高亮层结构），
   // 然后调用 highlightCurrentLine() 合并所有 ExtraSelection（行高亮+括号+错误+查找）
   auto *editor = static_cast<CodeEditor *>(parentWidget());
   if (editor) {
-    editor->m_findSelections = selections;
+    editor->setLayerSelections(QStringLiteral("find"), selections);
     editor->highlightCurrentLine();
   }
 }

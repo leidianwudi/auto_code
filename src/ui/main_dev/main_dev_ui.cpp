@@ -236,24 +236,12 @@ void MainDevUi::setupEditorArea() {
   connect(fileCollapseBtn, &QPushButton::clicked, m_fileTree, &QTreeWidget::collapseAll);
   fileHeaderLayout->addWidget(fileCollapseBtn);
 
-  // 头部背景 + 过滤输入框样式随主题（浅/深色自适应）
+  // 头部背景随主题；过滤输入框样式复用 AuiStyle 统一的面板输入框样式（与查找面板一致）
   auto applyFileHeaderBg = [fileHeader]() {
-    fileHeader->setStyleSheet(QStringLiteral(
-        "#filePanelHeader { background-color: %1; }"
-        "#filePanelHeader QLineEdit {"
-        "  background-color: %2;"
-        "  color: %3;"
-        "  border: 1px solid %4;"
-        "  border-radius: 3px;"
-        "  padding: 2px 4px;"
-        "  font-size: 12px;"
-        "}"
-        "#filePanelHeader QLineEdit:focus { border-color: %5; }")
-        .arg(AuiStyle::panelBackground().name())
-        .arg(AuiStyle::editorBackground().name())
-        .arg(AuiStyle::textColor().name())
-        .arg(AuiStyle::borderColor().name())
-        .arg(AuiStyle::listSelectionBackground().name()));
+    fileHeader->setStyleSheet(
+        QStringLiteral("#filePanelHeader { background-color: %1; }")
+            .arg(AuiStyle::panelBackground().name()) +
+        AuiStyle::inputBoxStyleSheet(QStringLiteral("#filePanelHeader QLineEdit")));
   };
   applyFileHeaderBg();
   connect(&SettingStore::ins(), &SettingStore::themeChanged, fileHeader, applyFileHeaderBg);

@@ -174,14 +174,25 @@ CodeEditor::CodeEditor(QWidget *parent) : QPlainTextEdit(parent) {
   m_lineHeightTimer->setInterval(0);
   connect(m_lineHeightTimer, &QTimer::timeout, this, &CodeEditor::applyFixedBlockLineHeight);
 
-  // 引用/查找高亮重算：编辑/删除文本时高亮位置会漂移，防抖后按当前符号/关键词重新扫描
+  // 统一高亮层：引用 / 查找面板 / 内嵌查找三套高亮收敛为统一结构。
+  // 引用与查找面板层由本类 filler 依据关键词填充；内嵌查找层由 CodeFindBar
+  // 通过 setLayerSelections 直接写入（无 filler）。
+  m_highlightLayers.insert(
+      QStringLiteral("reference"),
+      {QStringLiteral("reference"), {}, QString(),
+       [this](const QString &key) { return buildReferenceHighlights(key); }});
+  m_highlightLayers.insert(
+      QStringLiteral("search"),
+      {QStringLiteral("search"), {}, QString(),
+       [this](const QString &key) { return buildSearchHighlights(key); }});
+  m_highlightLayers.insert(QStringLiteral("find"),
+                           {QStringLiteral("find"), {}, QString(), nullptr});
+
+  // 高亮层重算：编辑/删除文本时高亮位置会漂移，防抖后按各层当前关键词重新扫描
   m_refHighlightTimer = new QTimer(this);
   m_refHighlightTimer->setSingleShot(true);
   m_refHighlightTimer->setInterval(CodeConstants::Performance::kValidationDebounceMs);
-  connect(m_refHighlightTimer, &QTimer::timeout, this, [this]() {
-    if (!m_referenceSymbol.isEmpty()) highlightSymbolReferences(m_referenceSymbol);
-    if (!m_searchText.isEmpty()) highlightSearchMatches(m_searchText);
-  });
+  connect(m_refHighlightTimer, &QTimer::timeout, this, &CodeEditor::reapplyEnabledHighlights);
   connect(document(), &QTextDocument::contentsChange, this,
           &CodeEditor::scheduleReferenceRehighlight);
 
@@ -592,18 +603,17 @@ void CodeEditor::highlightCurrentLine() {
     }
   }
 
-  // 查找匹配高亮（由 CodeFindBar 管理，追加到行高亮之后）
-  if (m_findBar && m_findBar->isFindBarVisible()) {
-    extra.append(m_findSelections);
+  // 统一高亮层（引用 / 查找面板 / 内嵌查找）：按层合并选区。
+  // 内嵌查找层仅在查找栏显示时可见（tab 切换暂停时隐藏，避免残留高亮）
+  for (auto it = m_highlightLayers.begin(); it != m_highlightLayers.end(); ++it) {
+    const HighlightLayer &layer = it.value();
+    if (layer.selections.isEmpty()) continue;
+    if (it.key() == QLatin1String("find") &&
+        !(m_findBar && m_findBar->isFindBarVisible())) {
+      continue;
+    }
+    extra.append(layer.selections);
   }
-
-  // 引用高亮（「查找所有引用」后持续显示，即使点击编辑器也不清除，
-  // 与 VSCode 一致；由 highlightSymbolReferences 填充，离开引用面板时清空）
-  extra.append(m_referenceSelections);
-
-  // 查找面板搜索高亮（「查找」面板搜索后持续显示，与引用高亮同款，
-  // 由 highlightSearchMatches 填充，离开查找面板时清空）
-  extra.append(m_searchSelections);
 
   setExtraSelections(extra);
 }

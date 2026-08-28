@@ -13,11 +13,10 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
-#include <QMap>
-#include <QPushButton>
 #include <QSet>
 #include <QShowEvent>
 #include <QTextStream>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include "src/util/ui/component/aui_button.h"
@@ -28,26 +27,30 @@ static inline bool isWordChar(const QChar &c) {
   return c.isLetterOrNumber() || c == QLatin1Char('_');
 }
 
+/// 搜索防抖间隔（ms）：连续输入合并为一次跨文件扫描，避免每个按键都扫全工作区导致卡顿
+static constexpr int kSearchDebounceMs = 250;
+
 // ══════════════════════════════════════════════════════════════════════════════
 //  构造 / UI
 // ══════════════════════════════════════════════════════════════════════════════
 
-SearchPanel::SearchPanel(QWidget *parent) : QWidget(parent) {
+SearchPanel::SearchPanel(QWidget *parent) : VscResultPanel(parent) {
+  // 搜索防抖定时器：输入停顿后才真正执行跨文件扫描
+  m_searchDebounceTimer = new QTimer(this);
+  m_searchDebounceTimer->setSingleShot(true);
+  m_searchDebounceTimer->setInterval(kSearchDebounceMs);
+  connect(m_searchDebounceTimer, &QTimer::timeout, this, &SearchPanel::performSearch);
+
   setupUI();
-  // 主题切换时刷新面板背景 / 标签文字色（结果树由 VscResultTree 自行响应）
+  // 主题切换时刷新面板背景 / 标签文字色（结果树由基类 refreshStyle 处理）
   connect(&SettingStore::ins(), &SettingStore::themeChanged, this, &SearchPanel::refreshStyle);
 }
 
 void SearchPanel::setupUI() {
-  auto *layout = new QVBoxLayout(this);
-  layout->setContentsMargins(0, 0, 0, 0);
-  layout->setSpacing(4);
+  // 主布局骨架：头部行 + 汇总行 + 结果树（由基类创建）
+  setupSkeleton();
 
-  // ── 第一行：输入框 + 选项复选框（上方控件保留合适外边距）──
-  auto *searchRow = new QHBoxLayout;
-  searchRow->setContentsMargins(6, 6, 6, 0);
-  searchRow->setSpacing(4);
-
+  // ── 头部行：输入框 + 选项复选框（Aa / \b）──
   m_searchEdit = new QLineEdit;
   m_searchEdit->setPlaceholderText(QStringLiteral("搜索"));
   m_searchEdit->setClearButtonEnabled(true);
@@ -65,31 +68,15 @@ void SearchPanel::setupUI() {
   connect(m_caseCheck, &QCheckBox::toggled, this, &SearchPanel::onOptionsChanged);
   connect(m_wordCheck, &QCheckBox::toggled, this, &SearchPanel::onOptionsChanged);
 
-  searchRow->addWidget(m_searchEdit, 1);
-  searchRow->addWidget(m_caseCheck);
-  searchRow->addWidget(m_wordCheck);
+  headerLayout()->addWidget(m_searchEdit, 1);
+  headerLayout()->addWidget(m_caseCheck);
+  headerLayout()->addWidget(m_wordCheck);
 
-  // ── 第二行：汇总标签（靠左）+ 全部折叠按钮（靠右，VSCode 搜索视图）──
-  auto *summaryRow = new QHBoxLayout;
-  summaryRow->setContentsMargins(6, 0, 6, 0);
-  summaryRow->setSpacing(4);
-  m_summaryLabel = new QLabel(QStringLiteral("0 个文件有 0 个结果"));
-  m_summaryLabel->setStyleSheet(QStringLiteral("color: %1; font-size: 12px;")
-                                    .arg(AuiStyle::mutedTextColor().name()));
-  summaryRow->addWidget(m_summaryLabel);
-  summaryRow->addStretch(1);
-  m_collapseBtn = AuiButton::createCollapseAllButton();
-  connect(m_collapseBtn, &QPushButton::clicked, this,
-          [this]() { m_resultTree->collapseAll(); });
-  summaryRow->addWidget(m_collapseBtn);
+  // ── 汇总行末尾：全部折叠按钮（基类已放置汇总标签 + 弹性空间）──
+  summaryLayout()->addWidget(collapseButton());
 
-  // ── 结果树：VSCode 风格（文件分组 → 匹配行）──
-  m_resultTree = new VscResultTree;
-  connect(m_resultTree, &QTreeWidget::itemClicked, this, &SearchPanel::onItemClicked);
-
-  layout->addLayout(searchRow);
-  layout->addLayout(summaryRow);
-  layout->addWidget(m_resultTree, 1);
+  // ── 结果树：itemClicked → 基类统一跳转处理（文件分组节点不跳转）──
+  connect(resultTree(), &QTreeWidget::itemClicked, this, &SearchPanel::onResultClicked);
 
   // 面板统一样式：背景随主题（setStyleSheet 触发重新抛光，主题切换立即生效）；
   // 复选框指示器交给 AuiStyle 全局代理绘制，不在 per-widget 样式表里覆盖
@@ -97,20 +84,18 @@ void SearchPanel::setupUI() {
 }
 
 void SearchPanel::applyPanelStyle() {
-  setStyleSheet(QStringLiteral(
-                    "SearchPanel { background-color: %1; }"
-                    "QCheckBox { spacing: 3px; font-size: 11px; }"
-                    "QLineEdit { padding: 2px 4px; }")
-                    .arg(AuiStyle::panelBackground().name()));
+  // 面板背景随主题；搜索输入框复用 AuiStyle 统一的面板输入框样式（与文件面板过滤框一致）
+  setStyleSheet(
+      QStringLiteral(
+          "SearchPanel { background-color: %1; }"
+          "QCheckBox { spacing: 3px; font-size: 11px; }")
+          .arg(AuiStyle::panelBackground().name()) +
+      AuiStyle::inputBoxStyleSheet(QStringLiteral("QLineEdit")));
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  对外接口
 // ══════════════════════════════════════════════════════════════════════════════
-
-void SearchPanel::setSearchRoot(const QString &rootPath) {
-  m_searchRoot = rootPath;
-}
 
 void SearchPanel::startSearch(const QString &text) {
   // 屏蔽 setText 触发的 textChanged，避免重复扫描（只执行一次搜索）
@@ -127,12 +112,8 @@ const QString &SearchPanel::currentText() const {
 void SearchPanel::refreshStyle() {
   // 面板背景随主题重建（setStyleSheet 触发重新抛光，立即生效）
   applyPanelStyle();
-  // 汇总标签文字色随当前主题重建（避免固化旧主题颜色）
-  m_summaryLabel->setStyleSheet(QStringLiteral("color: %1; font-size: 12px;")
-                                    .arg(AuiStyle::mutedTextColor().name()));
-  // 结果树背景 / 滚动条 / 字体 / 图标随主题刷新
-  m_resultTree->reloadStyle();
-  update();
+  // 汇总标签文字色 / 结果树背景 / 滚动条 / 字体 / 图标由基类统一刷新
+  VscResultPanel::refreshStyle();
 }
 
 void SearchPanel::showEvent(QShowEvent *event) {
@@ -146,61 +127,28 @@ void SearchPanel::showEvent(QShowEvent *event) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 void SearchPanel::onSearchTextChanged() {
-  performSearch();
+  // 输入防抖：连续输入合并为一次跨文件扫描（选项变化仍即时搜索）
+  m_searchDebounceTimer->start();
 }
 
 void SearchPanel::onOptionsChanged() {
   performSearch();
 }
 
-void SearchPanel::clearResults() {
-  m_resultTree->clear();
-  m_matches.clear();
-}
-
 void SearchPanel::updateSummary() {
   // 统计文件数（按文件路径去重）
   QSet<QString> files;
-  for (const SearchMatch &m : m_matches) files.insert(m.filePath);
+  for (const Match &m : m_matches) files.insert(m.filePath);
   const int fileCount = files.size();
   const int resultCount = m_matches.size();
-  m_summaryLabel->setText(QStringLiteral("%1 个文件有 %2 个结果").arg(fileCount).arg(resultCount));
-}
-
-bool SearchPanel::shouldSearchFile(const QString &filePath) const {
-  const QString rel = filePath;
-  // 排除常见构建/依赖/版本控制目录（相对路径判断）
-  static const QStringList kSkipDirs = {
-      QStringLiteral("/build/"),    QStringLiteral("/.git/"),
-      QStringLiteral("/.vs/"),      QStringLiteral("/node_modules/"),
-      QStringLiteral("/dist/"),     QStringLiteral("/out/"),
-      QStringLiteral("/bin/"),      QStringLiteral("/obj/"),
-      QStringLiteral("/.cache/"),   QStringLiteral("/cmake-build-"),
-  };
-  QString norm = rel;
-  norm.replace(QLatin1Char('\\'), QLatin1Char('/'));
-  for (const QString &d : kSkipDirs) {
-    if (norm.contains(d)) return false;
-  }
-  // 排除 tree.config（勾选状态配置，非源码）
-  if (norm.endsWith(QStringLiteral("/tree.config"))) return false;
-  // 排除二进制扩展名
-  static const QStringList kSkipExt = {
-      QStringLiteral("exe"), QStringLiteral("dll"), QStringLiteral("obj"),
-      QStringLiteral("pdb"), QStringLiteral("o"),   QStringLiteral("lib"),
-      QStringLiteral("png"), QStringLiteral("jpg"), QStringLiteral("jpeg"),
-      QStringLiteral("gif"), QStringLiteral("ico"), QStringLiteral("bmp"),
-      QStringLiteral("qm"),  QStringLiteral("qrc"), QStringLiteral("res"),
-  };
-  const QString ext = QFileInfo(filePath).suffix().toLower();
-  if (kSkipExt.contains(ext)) return false;
-  return true;
+  setSummaryText(QStringLiteral("%1 个文件有 %2 个结果").arg(fileCount).arg(resultCount));
 }
 
 void SearchPanel::performSearch() {
   clearResults();
+  m_matches.clear();
   const QString needle = m_searchEdit->text();
-  if (needle.isEmpty() || m_searchRoot.isEmpty()) {
+  if (needle.isEmpty() || searchRoot().isEmpty()) {
     updateSummary();
     // 通知外部（清空关键词时同步清除编辑器查找高亮）
     emit searchPerformed(needle);
@@ -211,12 +159,12 @@ void SearchPanel::performSearch() {
   const bool wholeWord = m_wordCheck->isChecked();
 
   // 遍历搜索根目录下所有文件
-  QDirIterator it(m_searchRoot, QDir::Files,
+  QDirIterator it(searchRoot(), QDir::Files,
                   QDirIterator::Subdirectories | QDirIterator::FollowSymlinks);
   while (it.hasNext()) {
     it.next();
     const QString filePath = it.filePath();
-    if (!shouldSearchFile(filePath)) continue;
+    if (!shouldScanFile(filePath)) continue;
 
     QFile f(filePath);
     if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) continue;
@@ -253,43 +201,10 @@ void SearchPanel::performSearch() {
     f.close();
   }
 
-  // ── 构建结果树：文件分组节点 → 匹配行节点（VSCode 风格）──
-  QMap<QString, QTreeWidgetItem *> fileItems;
-  for (const SearchMatch &m : m_matches) {
-    QTreeWidgetItem *fileItem = fileItems.value(m.filePath);
-    if (!fileItem) {
-      QString rel = QDir(m_searchRoot).relativeFilePath(m.filePath);
-      fileItem = m_resultTree->addFileNode(m.filePath, rel.isEmpty() ? m.filePath : rel);
-      fileItems.insert(m.filePath, fileItem);
-    }
-    m_resultTree->addMatchNode(fileItem, m.filePath, m.line, m.column,
-                               static_cast<int>(m.length), m.lineText.trimmed());
-  }
-  // 文件分组节点显示匹配数
-  for (auto it2 = fileItems.begin(); it2 != fileItems.end(); ++it2) {
-    it2.value()->setText(0, QStringLiteral("%1 (%2)")
-                                .arg(it2.value()->text(0))
-                                .arg(it2.value()->childCount()));
-  }
-  m_resultTree->expandAll();
+  // ── 构建结果树：文件分组节点 → 匹配行节点（基类统一实现）──
+  buildResultTree(m_matches);
 
   updateSummary();
   // 通知外部：搜索完成，同步编辑器查找高亮
   emit searchPerformed(needle);
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-//  结果点击 → 跳转
-// ══════════════════════════════════════════════════════════════════════════════
-
-void SearchPanel::onItemClicked(QTreeWidgetItem *item, int column) {
-  Q_UNUSED(column);
-  if (!item) return;
-  // 仅结果行（有行号）触发跳转；文件分组节点不跳转
-  const int line = item->data(0, VscTreeRole::Line).toInt();
-  if (line <= 0) return;
-  const QString filePath = item->data(0, VscTreeRole::FilePath).toString();
-  const int col = item->data(0, VscTreeRole::Column).toInt();
-  const int len = item->data(0, VscTreeRole::Length).toInt();
-  emit openRequested(filePath, line, col, len);
 }
