@@ -11,6 +11,7 @@
 #include <QComboBox>
 #include <QEvent>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMainWindow>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -84,6 +85,8 @@ public:
   SearchPanel *findPanel() const { return m_findPanel; }
   /// 引用面板（左侧 tab，VSCode「查找所有引用」结果视图）
   ReferencePanel *referencePanel() const { return m_referencePanel; }
+  /// 文件面板文件名过滤输入框
+  QLineEdit *fileFilterEdit() const { return m_fileFilterEdit; }
   /// 左侧面板 tab 容器（文件 / 调试 / 查找 / 引用）
   QTabWidget *leftTabs() const { return m_leftTabs; }
 
@@ -173,6 +176,7 @@ private:
   DebugPanel *m_debugPanel = nullptr;  ///< 调试面板（调用栈 + 变量）
   SearchPanel *m_findPanel = nullptr;      ///< 查找面板（左侧 tab）
   ReferencePanel *m_referencePanel = nullptr; ///< 引用面板（左侧 tab）
+  QLineEdit *m_fileFilterEdit = nullptr;   ///< 文件面板文件名过滤输入框
   QTabWidget *m_leftTabs = nullptr;        ///< 左侧面板 tab 容器
   QSplitter *m_mainSplitter = nullptr;
   QSplitter *m_editorSplitter = nullptr;

@@ -218,21 +218,42 @@ void MainDevUi::setupEditorArea() {
   m_findPanel = new SearchPanel;
   m_referencePanel = new ReferencePanel;
 
-  // 文件面板头部：全部折叠按钮（与查找/引用面板一致的 VSCode 风格，靠右）
+  // 文件面板头部：文件名过滤输入框 + 全部折叠按钮（紧凑行高，上下留白 2px）
   auto *fileHeader = new QWidget;
   fileHeader->setObjectName(QStringLiteral("filePanelHeader"));
   auto *fileHeaderLayout = new QHBoxLayout(fileHeader);
+  // 上边距与查找面板输入框一致（6px）；下方 2px 保持头部紧凑
   fileHeaderLayout->setContentsMargins(6, 6, 6, 0);
   fileHeaderLayout->setSpacing(4);
-  fileHeaderLayout->addStretch(1);
+
+  m_fileFilterEdit = new QLineEdit;
+  m_fileFilterEdit->setPlaceholderText(QStringLiteral("过滤文件名"));
+  m_fileFilterEdit->setClearButtonEnabled(true);
+  // 不设固定高度，由 padding 自然撑起，与查找面板输入框高度一致
+  connect(m_fileFilterEdit, &QLineEdit::textChanged, m_fileTree, &TreeDir::filterByText);
+  fileHeaderLayout->addWidget(m_fileFilterEdit, 1);  // 占满剩余宽度（折叠按钮前面）
   auto *fileCollapseBtn = AuiButton::createCollapseAllButton();
   connect(fileCollapseBtn, &QPushButton::clicked, m_fileTree, &QTreeWidget::collapseAll);
   fileHeaderLayout->addWidget(fileCollapseBtn);
 
-  // 头部背景随主题（与查找/引用面板一致的 panelBackground）
+  // 头部背景 + 过滤输入框样式随主题（浅/深色自适应）
   auto applyFileHeaderBg = [fileHeader]() {
-    fileHeader->setStyleSheet(QStringLiteral("#filePanelHeader { background-color: %1; }")
-                                  .arg(AuiStyle::panelBackground().name()));
+    fileHeader->setStyleSheet(QStringLiteral(
+        "#filePanelHeader { background-color: %1; }"
+        "#filePanelHeader QLineEdit {"
+        "  background-color: %2;"
+        "  color: %3;"
+        "  border: 1px solid %4;"
+        "  border-radius: 3px;"
+        "  padding: 2px 4px;"
+        "  font-size: 12px;"
+        "}"
+        "#filePanelHeader QLineEdit:focus { border-color: %5; }")
+        .arg(AuiStyle::panelBackground().name())
+        .arg(AuiStyle::editorBackground().name())
+        .arg(AuiStyle::textColor().name())
+        .arg(AuiStyle::borderColor().name())
+        .arg(AuiStyle::listSelectionBackground().name()));
   };
   applyFileHeaderBg();
   connect(&SettingStore::ins(), &SettingStore::themeChanged, fileHeader, applyFileHeaderBg);

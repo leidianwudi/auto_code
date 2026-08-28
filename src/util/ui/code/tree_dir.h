@@ -125,6 +125,10 @@ public:
   /// 定位到指定文件路径的节点（选中 + 展开父节点 + 滚动到可见）
   void locateFile(const QString &filePath);
 
+  /// 按文件名过滤：仅显示名称包含 text（不区分大小写）的文件及其父目录链，
+  /// 空串清除过滤并恢复完整树（不影响勾选/展开状态持久化）
+  void filterByText(const QString &text);
+
 signals:
   /// 双击非 json 文件时发射，携带文件绝对路径
   void fileActivated(const QString &filePath);

@@ -1380,6 +1380,32 @@ void TreeDir::locateFile(const QString &filePath) {
     scrollToItem(item, QAbstractItemView::PositionAtCenter);
 }
 
+void TreeDir::filterByText(const QString &text) {
+  const QString needle = text.trimmed();
+
+  // 递归判断节点是否应显示：自身名称匹配，或任一子节点匹配。
+  // 过滤只改隐藏标志，不影响勾选/展开等持久化状态。
+  auto apply = [&](auto &&self, QTreeWidgetItem *item) -> bool {
+    bool childMatch = false;
+    for (int i = 0; i < item->childCount(); ++i) {
+      if (self(self, item->child(i))) childMatch = true;
+    }
+    const bool selfMatch =
+        needle.isEmpty() || item->text(0).contains(needle, Qt::CaseInsensitive);
+    const bool visible = needle.isEmpty() || selfMatch || childMatch;
+    item->setHidden(!visible);
+    return visible;
+  };
+  for (int i = 0; i < topLevelItemCount(); ++i) apply(apply, topLevelItem(i));
+
+  // 过滤时展开以便看到命中文件；清除过滤时恢复持久化的展开状态（不污染配置）
+  if (needle.isEmpty()) {
+    applyExpandedToTree(m_store.expandedRelPaths);
+  } else {
+    expandAll();
+  }
+}
+
 bool TreeDir::viewportEvent(QEvent *event) {
   // 手动追踪悬停节点：Qt 纯代码 delegate 不会自动携带 State_MouseOver。
   // QAbstractScrollArea 通过 viewport 事件过滤器链把鼠标事件转给本虚函数，
