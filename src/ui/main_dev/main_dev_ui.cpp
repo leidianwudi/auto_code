@@ -52,6 +52,7 @@
 #include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_combo_delete.h"
 #include "src/util/ui/component/aui_style.h"
+#include "src/util/ui/setting_store.h"
 
 //  构造
 // ════════════════════════════════════════════════════════════
@@ -217,9 +218,36 @@ void MainDevUi::setupEditorArea() {
   m_findPanel = new SearchPanel;
   m_referencePanel = new ReferencePanel;
 
+  // 文件面板头部：全部折叠按钮（与查找/引用面板一致的 VSCode 风格，靠右）
+  auto *fileHeader = new QWidget;
+  fileHeader->setObjectName(QStringLiteral("filePanelHeader"));
+  auto *fileHeaderLayout = new QHBoxLayout(fileHeader);
+  fileHeaderLayout->setContentsMargins(6, 6, 6, 0);
+  fileHeaderLayout->setSpacing(4);
+  fileHeaderLayout->addStretch(1);
+  auto *fileCollapseBtn = AuiButton::createCollapseAllButton();
+  connect(fileCollapseBtn, &QPushButton::clicked, m_fileTree, &QTreeWidget::collapseAll);
+  fileHeaderLayout->addWidget(fileCollapseBtn);
+
+  // 头部背景随主题（与查找/引用面板一致的 panelBackground）
+  auto applyFileHeaderBg = [fileHeader]() {
+    fileHeader->setStyleSheet(QStringLiteral("#filePanelHeader { background-color: %1; }")
+                                  .arg(AuiStyle::panelBackground().name()));
+  };
+  applyFileHeaderBg();
+  connect(&SettingStore::ins(), &SettingStore::themeChanged, fileHeader, applyFileHeaderBg);
+
+  // 文件面板容器：头部 + 文件树
+  auto *filePanel = new QWidget;
+  auto *filePanelLayout = new QVBoxLayout(filePanel);
+  filePanelLayout->setContentsMargins(0, 0, 0, 0);
+  filePanelLayout->setSpacing(0);
+  filePanelLayout->addWidget(fileHeader);
+  filePanelLayout->addWidget(m_fileTree, 1);
+
   auto *leftTabs = new LeftPanelTabWidget;
   m_leftTabs = leftTabs;
-  leftTabs->addTab(m_fileTree, QString::fromUtf8(CodeConstants::UiText::kFile));
+  leftTabs->addTab(filePanel, QString::fromUtf8(CodeConstants::UiText::kFile));
   leftTabs->addTab(m_debugPanel, QStringLiteral("调试"));
   leftTabs->addTab(m_findPanel, QStringLiteral("查找"));
   leftTabs->addTab(m_referencePanel, QStringLiteral("引用"));

@@ -30,12 +30,13 @@ struct RefHit {
   QString lineText; // 整行文本
 };
 
-/// 在整段文本中查找符号的所有引用位置（跳过注释中的出现，与 VSCode 规则一致）
+/// 在整段文本中查找符号的所有引用位置。
+/// 跳过注释与字符串中的出现（VSCode 规则：注释/字符串里的标识符不算真实引用）。
 static QVector<RefHit> findReferencesInText(const QString &text, const QString &name) {
   QVector<RefHit> hits;
   if (name.isEmpty()) return hits;
 
-  const QVector<QPair<int, int>> comments = collectCommentRanges(text);
+  const QVector<QPair<int, int>> nonCode = collectNonCodeRanges(text);
   const QStringList lines = text.split(QLatin1Char('\n'));
   QRegularExpression re(QStringLiteral("\\b") + QRegularExpression::escape(name) +
                         QStringLiteral("\\b"));
@@ -47,7 +48,7 @@ static QVector<RefHit> findReferencesInText(const QString &text, const QString &
     while (it.hasNext()) {
       const auto match = it.next();
       const int absPos = lineStart + match.capturedStart();
-      if (posInComments(comments, absPos)) continue;
+      if (posInComments(nonCode, absPos)) continue;
       RefHit h;
       h.line = i + 1;
       h.column = match.capturedStart();

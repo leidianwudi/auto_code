@@ -394,9 +394,9 @@ QVector<QPair<int, QString>> CodeEditor::findSymbolReferences(const QString &nam
   QVector<QPair<int, QString>> refs;
   if (name.isEmpty()) return refs;
 
-  // 扫描全文查找标识符出现位置（跳过注释中的出现，与 VSCode 规则一致）
+  // 扫描全文查找标识符出现位置（跳过注释与字符串中的出现，与 VSCode 规则一致）
   const QString &text = cachedText();
-  const QVector<QPair<int, int>> comments = collectCommentRanges(text);
+  const QVector<QPair<int, int>> comments = collectNonCodeRanges(text);
   QStringList lines = text.split(QLatin1Char('\n'));
   QRegularExpression re(QStringLiteral("\\b") + QRegularExpression::escape(name) +
                         QStringLiteral("\\b"));
@@ -597,8 +597,8 @@ void CodeEditor::highlightSymbolReferences(const QString &name) {
   QRegularExpression re(QStringLiteral("\\b") + QRegularExpression::escape(name) +
                         QStringLiteral("\\b"));
   const QString &text = cachedText();
-  // 与 findSymbolReferences 一致：注释中的出现不高亮
-  const QVector<QPair<int, int>> comments = collectCommentRanges(text);
+  // 与 findSymbolReferences 一致：注释/字符串中的出现不高亮
+  const QVector<QPair<int, int>> comments = collectNonCodeRanges(text);
   int offset = 0;
 
   while (offset < text.size()) {
