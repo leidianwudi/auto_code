@@ -140,16 +140,24 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
     return existing;
   }
 
-  // ── 读取文件 ──
-  QFile file(filePath);
-  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-    AuiMessageBox::show(m_ui, QStringLiteral("打开失败"),
-                        QStringLiteral("无法打开文件: %1").arg(filePath));
-    return nullptr;
+  // ── 读取文件（未打开但有缓冲修改的文件，用缓冲内容而非磁盘旧内容）──
+  QString content;
+  bool hadPending = false;
+  const auto pendingIt = m_pendingFileChanges.constFind(filePath);
+  if (pendingIt != m_pendingFileChanges.constEnd()) {
+    content = pendingIt.value();
+    hadPending = true;
+  } else {
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+      AuiMessageBox::show(m_ui, QStringLiteral("打开失败"),
+                          QStringLiteral("无法打开文件: %1").arg(filePath));
+      return nullptr;
+    }
+    QTextStream in(&file);
+    content = in.readAll();
+    file.close();
   }
-  QTextStream in(&file);
-  const QString content = in.readAll();
-  file.close();
 
   // ── 创建编辑器 / 标签页（jsonvue / jsonsource / 普通）──
   CodeEditor *editor = nullptr;
@@ -177,6 +185,8 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
   // 必须先设置 objectName（文件路径），再触发验证；
   // 否则验证时 m_filePath 为空，import 解析被跳过，导致误报 "class X has no method" 类型错误
   editor->setObjectName(filePath);
+  // 一次性连接编辑器全部信号（不再随焦点/tab 切换重复连接/断开，避免累积重复触发）
+  connectEditorSignals(editor);
   // 验证结果聚合到「问题」面板：每个编辑器永久连接（connectEditor 只连接当前编辑器，
   // 拆分面板/后台标签页产生的验证结果会丢失，导致问题面板与实际编辑内容不符）
   connect(editor, &CodeEditor::validationIssues, this, &MainDevMgr::onValidationIssues);
@@ -202,6 +212,14 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
 
   // ── 修改标记：内容变化时标签页和树节点绘制红色 "*"（普通文件与 jsonvue 统一）──
   connectModifiedTracking(ownerTabs, editor, filePath);
+
+  // ── 缓冲修改的文件打开后：document 接管缓冲（清除缓冲），并保持"未保存"标记 ──
+  if (hadPending) {
+    clearPendingChange(filePath);
+    // 需在 connectModifiedTracking 之后设置，触发 modificationChanged → tab/树黄色标记
+    editor->document()->setModified(true);
+    updateSaveButtonState();
+  }
 
   // ── JsonVueWidget / JsonSourceWidget：可视化编辑器内容变化时也触发修改标记 ──
   if (auto *jvw = qobject_cast<JsonVueWidget *>(tabWidget)) {
@@ -260,6 +278,10 @@ bool MainDevMgr::saveAndSync(CodeEditor *editor) {
   if (!m_model->saveEditor(editor)) return false;
   // 保存成功后，同步其他打开同一文件的编辑器实例内容
   syncEditorsForFile(editor->objectName(), editor->toPlainText(), editor);
+  // 该文件的缓冲修改已落盘，清除缓冲
+  clearPendingChange(editor->objectName());
+  // 保存后触发工作区防抖重扫：刷新其它文件（含未打开文件）对该文件的引用错误
+  scheduleWorkspaceRescan();
   return true;
 }
 
@@ -433,6 +455,39 @@ void MainDevMgr::applyRenameOrMove(const QString &oldPath, const QString &newPat
   // 同步更新持久化勾选列表中的路径（重命名/移动后勾选记录跟随新位置，
   // 避免 getCheckedFiles() 返回失效路径）
   m_ui->fileTree()->renameCheckedByPath(oldPath, newPath, isDir);
+
+  // 重命名/移动后：缓冲修改（未保存的改名结果）跟随文件新位置，
+  // 树黄色标记同步到新节点（旧节点的黄色随刷新清除）
+  if (!m_pendingFileChanges.isEmpty()) {
+    const QString cleanOld = QDir::cleanPath(oldPath);
+    const QString prefix = cleanOld + QLatin1Char('/');
+    QHash<QString, QString> rekeyed;
+    for (auto it = m_pendingFileChanges.cbegin(); it != m_pendingFileChanges.cend(); ++it) {
+      const QString key = QDir::cleanPath(it.key());
+      if (key == cleanOld) {
+        rekeyed.insert(QDir::cleanPath(newPath), it.value());
+      } else if (key.startsWith(prefix)) {
+        rekeyed.insert(QDir::cleanPath(newPath + key.mid(cleanOld.length())), it.value());
+      }
+    }
+    if (!rekeyed.isEmpty()) {
+      // 移除旧键（先清目标可能残留的旧值，再按旧路径前缀删），写入新键并补黄色
+      for (auto it = rekeyed.cbegin(); it != rekeyed.cend(); ++it)
+        m_pendingFileChanges.remove(it.key());
+      for (auto it = m_pendingFileChanges.cbegin(); it != m_pendingFileChanges.cend();) {
+        const QString key = QDir::cleanPath(it.key());
+        if (key == cleanOld || key.startsWith(prefix))
+          it = m_pendingFileChanges.erase(it);
+        else
+          ++it;
+      }
+      for (auto it = rekeyed.cbegin(); it != rekeyed.cend(); ++it) {
+        m_pendingFileChanges.insert(it.key(), it.value());
+        m_ui->fileTree()->setFileModified(it.key(), true);
+      }
+      updateSaveButtonState();
+    }
+  }
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -470,6 +525,12 @@ void MainDevMgr::onDeleteFile(const QString &path) {
     if (editor && editor->document() && editor->document()->isModified()) {
       dirtyFiles.append(QFileInfo(filePath).fileName());
     }
+  }
+  // 未打开但有缓冲修改（未保存改名结果）的文件同样计入：删除会丢其缓冲修改
+  for (auto it = m_pendingFileChanges.cbegin(); it != m_pendingFileChanges.cend(); ++it) {
+    const QString key = QDir::cleanPath(it.key());
+    if (isDir ? key.startsWith(deletePrefix) : key == deleteAbs)
+      dirtyFiles.append(QFileInfo(it.key()).fileName());
   }
   if (!dirtyFiles.isEmpty()) {
     const QString detail = dirtyFiles.join(QStringLiteral("、"));
@@ -545,4 +606,18 @@ void MainDevMgr::onDeleteFile(const QString &path) {
   // 从持久化勾选列表（tree.config checked）中移除已删除文件，
   // 避免 getCheckedFiles() 仍返回已删除文件（脚本执行时"文件重复"误报）
   m_ui->fileTree()->pruneCheckedByPath(path);
+
+  // 清除该路径下已删除文件的缓冲修改（文件没了，缓冲/黄色标记一并清掉）
+  if (!m_pendingFileChanges.isEmpty()) {
+    const QString delAbs = QDir::cleanPath(path);
+    const QString delPrefix = delAbs + QStringLiteral("/");
+    for (auto it = m_pendingFileChanges.begin(); it != m_pendingFileChanges.end();) {
+      const QString key = QDir::cleanPath(it.key());
+      if (isDir ? key.startsWith(delPrefix) : key == delAbs)
+        it = m_pendingFileChanges.erase(it);
+      else
+        ++it;
+    }
+    updateSaveButtonState();
+  }
 }

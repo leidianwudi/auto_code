@@ -66,6 +66,10 @@ qt_add_executable(auto_code
     src/engine/validation_result.h
     src/engine/json_validator.h
     src/engine/json_validator.cpp
+    src/engine/rename/symbol_rename.h
+    src/engine/rename/symbol_rename.cpp
+    src/engine/semantic/workspace_index.h
+    src/engine/semantic/workspace_index.cpp
     src/engine/function/fun_str.h
     src/engine/function/fun_str.cpp
     src/engine/function/fun_db.h
@@ -138,6 +142,8 @@ qt_add_executable(auto_code
     src/util/ui/setting_store.cpp
     src/util/ui/component/aui_style.h
     src/util/ui/component/aui_style.cpp
+    src/util/ui/component/aui_multi_check_combo.h
+    src/util/ui/component/aui_multi_check_combo.cpp
     src/util/ui/component/aui_tab_bar.h
     src/util/ui/component/aui_tab_bar.cpp
     src/util/ui/component/aui_code_tab_bar.h
@@ -181,6 +187,7 @@ qt_add_executable(auto_code
     src/ui/main_dev/main_dev_mgr_tab.cpp
     src/ui/main_dev/main_dev_mgr_connect.cpp
     src/ui/main_dev/main_dev_mgr_navigate.cpp
+    src/ui/main_dev/main_dev_mgr_rename.cpp
     src/ui/main_dev/main_dev_mgr_session.cpp
     src/ui/main_dev/main_dev_mgr_theme.cpp
     src/ui/main_dev/main_dev_model.h

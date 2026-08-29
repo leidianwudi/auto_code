@@ -15,10 +15,14 @@
 
 #pragma once
 
+#include <QHash>
 #include <QString>
 #include <QVector>
 #include <QWidget>
 
+#include <functional>
+
+#include "src/engine/rename/symbol_rename.h"
 #include "src/util/ui/code/vsc_result_panel.h"
 
 class QLabel;
@@ -32,8 +36,18 @@ public:
 
   explicit ReferencePanel(QWidget *parent = nullptr);
 
-  /// 跨文件查找符号引用并展示（VSCode「查找所有引用」）
-  void findReferences(const QString &symbolName);
+  /// 跨文件查找符号引用并展示（VSCode「查找所有引用」），语义级（作用域 + 类型推断）
+  /// @param filePath 触发文件路径（.ac/.tpl）
+  /// @param line     触发行（1-based）
+  /// @param column   触发列（0-based）
+  void findReferences(const QString &filePath, int line, int column,
+                      const QString &symbolName);
+
+  /// 设置实时内容提供器：返回已打开编辑器 + 未打开但有缓冲修改文件的内容快照，
+  /// 供后台引用收集优先读缓冲而非磁盘（由 MainDevMgr 注册，主线程调用）。
+  void setLiveContentProvider(const std::function<QHash<QString, QString>()> &fn) {
+    m_liveContentProvider = fn;
+  }
 
   /// 清空结果与符号名
   void clear();
@@ -41,8 +55,15 @@ public:
   /// 当前符号名（供外部在切回引用面板时恢复编辑器引用高亮）
   const QString &symbolName() const { return m_symbolName; }
 
+  /// 最近一次语义收集的引用位置（供外部同步编辑器语义高亮）
+  const QVector<RenameRef> &semanticRefs() const { return m_semanticRefs; }
+
   /// 主题切换后刷新（面板背景 / 头部标签 / 汇总 / 结果树），供外部显式调用
   void refreshStyle() override;
+
+signals:
+  /// 语义收集完成（供外部应用编辑器语义高亮）
+  void referencesReady(const QVector<RenameRef> &refs);
 
 private:
   void setupUI();
@@ -52,4 +73,9 @@ private:
   QLabel *m_symbolLabel = nullptr;       ///< 符号名标签
   QString m_symbolName;                  ///< 当前符号名
   QVector<Match> m_matches;              ///< 最近一次引用结果
+  QVector<RenameRef> m_semanticRefs;     ///< 最近一次语义收集的引用位置
+  /// 递增的扫描请求序号：新一轮扫描开始即自增，过期的后台扫描结果据此丢弃
+  int m_scanRequestId = 0;
+  /// 实时内容提供器（已打开编辑器 + 缓冲文件内容快照）
+  std::function<QHash<QString, QString>()> m_liveContentProvider;
 };

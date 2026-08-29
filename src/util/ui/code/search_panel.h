@@ -14,11 +14,15 @@
 
 #pragma once
 
+#include <QHash>
 #include <QString>
 #include <QVector>
 #include <QWidget>
 
+#include <functional>
+
 #include "src/util/ui/code/vsc_result_panel.h"
+#include "src/util/ui/component/aui_multi_check_combo.h"
 
 class QCheckBox;
 class QLineEdit;
@@ -37,6 +41,12 @@ public:
   void startSearch(const QString &text);
   /// 当前搜索关键词（空串表示未在搜索）
   const QString &currentText() const;
+
+  /// 设置实时内容提供器：返回已打开编辑器 + 未打开但有缓冲修改文件的内容快照，
+  /// 供搜索优先读缓冲而非磁盘（由 MainDevMgr 注册，主线程调用）。
+  void setLiveContentProvider(const std::function<QHash<QString, QString>()> &fn) {
+    m_liveContentProvider = fn;
+  }
 
   /// 主题 / 字体切换后刷新（面板背景 + 汇总 + 结果树），供外部显式调用
   void refreshStyle() override;
@@ -68,4 +78,8 @@ private:
   QCheckBox *m_wordCheck = nullptr;
   QTimer *m_searchDebounceTimer = nullptr;  ///< 搜索防抖定时器（合并连续输入）
   QVector<Match> m_matches;  ///< 最近一次搜索结果（供汇总计数）
+  /// 实时内容提供器（已打开编辑器 + 缓冲文件内容快照）
+  std::function<QHash<QString, QString>()> m_liveContentProvider;
+  /// 文件类型过滤下拉框（复选后缀；与新建文件下拉框共用 CreateModel 来源）
+  AuiMultiCheckCombo *m_typeFilter = nullptr;
 };

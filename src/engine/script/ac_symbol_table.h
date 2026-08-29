@@ -98,6 +98,13 @@ public:
   /// @param names 需要合并的符号名列表（精确匹配 + ClassName.* 前缀匹配）
   void mergeFrom(const AcSymbolTable &other, const QStringList &names);
 
+  /// 注册别名：将 targetName 的条目以 alias 为键再插入（用于 import { A as B }，
+  /// 使 B 的悬停/跳转指向 A 的定义位置）。targetName 不存在时静默忽略。
+  void registerAlias(const QString &alias, const QString &targetName) {
+    auto it = m_symbols.find(targetName);
+    if (it != m_symbols.end()) m_symbols.insert(alias, it.value());
+  }
+
   /// 获取当前文件路径
   const QString &filePath() const { return m_filePath; }
 

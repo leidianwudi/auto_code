@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <QHash>
 #include <QStringList>
 #include <QVector>
 
@@ -25,5 +26,9 @@ struct WorkspaceFileDiag {
 /// 收集工作区内所有可验证文件（主线程调用，返回绝对路径列表）
 QStringList collectWorkspaceFiles(const QString &rootDir);
 
-/// 后台线程执行：逐个验证文件并返回诊断（每文件独立验证器实例，线程安全）
-QVector<WorkspaceFileDiag> scanWorkspaceDiagnostics(const QStringList &filePaths);
+/// 后台线程执行：逐个验证文件并返回诊断（每文件独立验证器实例，线程安全）。
+/// @param liveContents 已打开文件的实时内存内容（文件路径 → 内容）。扫描时对这些文件
+///                     使用内存内容而非磁盘快照（VSCode 行为：诊断基于当前缓冲内容，
+///                     避免重命名等操作后磁盘与内存不一致导致假报错）。空表则全部读磁盘。
+QVector<WorkspaceFileDiag> scanWorkspaceDiagnostics(
+    const QStringList &filePaths, const QHash<QString, QString> &liveContents = {});

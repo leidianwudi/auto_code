@@ -89,6 +89,9 @@ private:
 //  构造与初始化（精简后）
 // ──────────────────────────────────────────────────────────────
 
+/// 全局文件内容提供器（默认空；由主窗口注册后用于跨文件 import 解析实时缓冲）
+CodeEditor::ContentProvider CodeEditor::s_contentProvider;
+
 CodeEditor::CodeEditor(QWidget *parent) : QPlainTextEdit(parent) {
   setMouseTracking(true);
 
@@ -697,7 +700,21 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
     QTextCursor cursor = textCursor();
     QString identifier = identifierAtCursor(cursor.position());
     if (!identifier.isEmpty()) {
-      emit requestFindReferencesAll(identifier);
+      emit requestFindReferencesAll(objectName(), cursor.blockNumber() + 1,
+                                    cursor.columnNumber(), identifier);
+      event->accept();
+      return;
+    }
+  }
+
+  // F2 重命名符号（AC/TPL，语义级：作用域 + 跨文件 import）
+  if (event->key() == Qt::Key_F2 && !event->modifiers() &&
+      (m_validationMode == AcValidation || m_validationMode == TemplateValidation)) {
+    QTextCursor cursor = textCursor();
+    QString identifier = identifierAtCursor(cursor.position());
+    if (!identifier.isEmpty()) {
+      emit requestRenameSymbol(objectName(), cursor.blockNumber() + 1, cursor.columnNumber(),
+                               identifier);
       event->accept();
       return;
     }
@@ -851,10 +868,25 @@ void CodeEditor::contextMenuEvent(QContextMenuEvent *event) {
               [this, identifier]() { goToTypeDefinition(identifier); });
 
       // ── 查找所有引用（跨文件）──
-      QAction *findRefsAction = menu->addAction(QStringLiteral("查找所有引用"));
-      findRefsAction->setShortcut(QKeySequence(QStringLiteral("Shift+F12")));
-      connect(findRefsAction, &QAction::triggered, this,
-              [this, identifier]() { emit requestFindReferencesAll(identifier); });
+      // 仅代码类文件（.ac/.tpl，非 JsonValidation）提供；json/jsonvue/jsonsource
+      // 是数据定义文件，"标识符引用"语义不适用（裸 key 误报、字符串值漏报），
+      // 故不提供此菜单项，避免误导（VSCode 也不对 JSON 提供 Find All References）
+      if (m_validationMode != JsonValidation) {
+        QAction *findRefsAction = menu->addAction(QStringLiteral("查找所有引用"));
+        findRefsAction->setShortcut(QKeySequence(QStringLiteral("Shift+F12")));
+        connect(findRefsAction, &QAction::triggered, this, [this, cursor, identifier]() {
+          emit requestFindReferencesAll(objectName(), cursor.blockNumber() + 1,
+                                        cursor.columnNumber(), identifier);
+        });
+
+        // ── 重命名符号（AC/TPL 语义级：作用域 + 类型推断 + 跨文件 import）──
+        QAction *renameAction = menu->addAction(QStringLiteral("重命名符号"));
+        renameAction->setShortcut(QKeySequence(QStringLiteral("F2")));
+        connect(renameAction, &QAction::triggered, this, [this, cursor, identifier]() {
+          emit requestRenameSymbol(objectName(), cursor.blockNumber() + 1,
+                                   cursor.columnNumber(), identifier);
+        });
+      }
     }
 
     menu->addSeparator();

@@ -35,6 +35,7 @@
 
 #include "bracket_matcher.h"
 #include "indent_guide.h"
+#include "src/engine/rename/symbol_rename.h"
 #include "src/engine/schema_validator.h"
 #include "src/engine/script/ac_debugger.h"
 #include "src/engine/validation_result.h"
@@ -75,6 +76,17 @@ public:
 
   explicit CodeEditor(QWidget *parent = nullptr);
   ~CodeEditor();
+
+  // ── 全局文件内容提供器（跨文件 import 解析用实时缓冲，避免重命名后假报错）──
+
+  /// 文件内容提供器类型：输入文件绝对路径，返回其实时内存内容（空=回落磁盘读取）
+  using ContentProvider = std::function<QString(const QString &filePath)>;
+  /// 注册全局内容提供器（由主窗口在启动时设置；未注册时回落磁盘读取）
+  static void setGlobalContentProvider(const ContentProvider &provider) { s_contentProvider = provider; }
+  /// 取指定文件实时内容；无提供器或未打开该文件时返回空字符串
+  static QString provideFileContent(const QString &filePath) {
+    return s_contentProvider ? s_contentProvider(filePath) : QString();
+  }
 
   // ── 接口：验证相关 ──
 
@@ -161,6 +173,13 @@ public:
    * @param text 查找关键词；传入空串清除查找高亮
    */
   void highlightSearchMatches(const QString &text);
+
+  /**
+   * @brief 用语义收集的精确位置设置引用高亮（作用域 + 类型推断结果）。
+   * 仅取本文件（objectName）对应的引用位置；传入空列表清除。
+   * @param refs 语义引用位置列表（可能包含其他文件，本文件自动过滤）
+   */
+  void setReferenceHighlightPositions(const QVector<RenameRef> &refs);
 
   // ── 接口：统一高亮层（引用 / 查找面板 / 内嵌查找）──
 
@@ -249,7 +268,11 @@ signals:
   void requestGoToLine(const QString &filePath, int line);
   void aboutToNavigate(const QString &targetFilePath, int targetLine);
   void requestFindReferences(const QString &filePath, int line, const QString &context);
-  void requestFindReferencesAll(const QString &symbolName);  ///< 跨文件查找引用
+  /// 跨文件查找引用（带触发上下文，供语义级收集解析作用域/类型）
+  void requestFindReferencesAll(const QString &filePath, int line, int column,
+                                const QString &symbolName);
+  void requestRenameSymbol(const QString &filePath, int line, int column,
+                           const QString &name);  ///< F2 重命名符号请求（AC/TPL）
   void requestWorkspaceSymbols();                            ///< 工作区符号搜索 (Ctrl+T)
   void breakpointsChanged();                                 ///< 断点集合发生变化
   void requestDebugStart();                                  ///< F5：启动调试/继续
@@ -322,6 +345,9 @@ private:
   const AcSymbolEntry *findSymbolDefinition(const QString &name) const;
   const AcSymbolEntry *findPropertyDefinition(const QString &propName) const;
   int findSymbolLineByName(const QString &name) const;
+  /// 光标位于 import { A as B } from "path" 子句内时，跳转到源文件中 A 的定义
+  /// （避免误跳到当前文件的同名符号）；已处理返回 true
+  bool resolveImportClauseDefinition(const QString &name);
   void setSymbolTable(const QHash<QString, AcSymbolEntry> &symbols);
 
   // ── 括号导航（使用 BracketMatcher 模块）──
@@ -415,6 +441,9 @@ private:
     ErrorRange(int s, int l, const QString &t) : start(s), length(l), tooltip(t) {}
   };
   QVector<ErrorRange> m_errorRanges;
+
+  /// 全局文件内容提供器（由 MainDevMgr 启动时注册，跨文件 import 解析用实时缓冲）
+  static ContentProvider s_contentProvider;
 };
 
 /**

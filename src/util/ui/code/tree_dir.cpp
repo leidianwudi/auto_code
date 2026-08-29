@@ -44,6 +44,9 @@ static inline bool isJsonLike(const QString &path) {
          path.endsWith(AcFileSuffix::kJsonsource, Qt::CaseInsensitive);
 }
 
+/// 判断某节点子树（含自身）内是否存在已修改的文件节点（定义在 setFileModified 附近）
+static bool hasModifiedFileInSubtree(QTreeWidgetItem *item);
+
 // 静态辅助函数声明（定义在下方，供上方成员函数使用）
 static void collectCheckedRelRecursive(QTreeWidgetItem *item, const QString &rootPath,
                                        QStringList &rel);
@@ -492,6 +495,15 @@ void TreeDir::buildTree(const QString &dirPath) {
 
   // 展开状态由 loadState 恢复（无配置时默认全部展开）
   loadState();
+
+  // 重建后恢复"已修改(黄色)"标记（打开编辑器未保存 / 未打开文件有缓冲修改）
+  for (const QString &p : m_modifiedPaths) {
+    QTreeWidgetItem *item = findItemByPath(p);
+    if (!item) continue;
+    item->setData(0, Qt::UserRole + 2, true);
+    for (QTreeWidgetItem *par = item->parent(); par; par = par->parent())
+      par->setData(0, Qt::UserRole + 2, hasModifiedFileInSubtree(par));
+  }
 }
 
 // ============================================================================
@@ -1310,6 +1322,13 @@ static bool hasModifiedFileInSubtree(QTreeWidgetItem *item) {
 }
 
 void TreeDir::setFileModified(const QString &filePath, bool modified) {
+  // 记录修改状态集合，供 buildTree/refreshTree 重建后恢复黄色标记
+  const QString clean = QDir::cleanPath(filePath);
+  if (modified)
+    m_modifiedPaths.insert(clean);
+  else
+    m_modifiedPaths.remove(clean);
+
   QTreeWidgetItem *item = findItemByPath(filePath);
   if (!item) return;
   // 通过自定义数据角色存储修改状态，由 ModifiedFileDelegate 绘制实心圆点

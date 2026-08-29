@@ -77,6 +77,8 @@ void CodeEditor::performValidation() {
     case AcValidation: {
       AcValidator validator;
       validator.setFilePath(objectName());  // 设置文件路径用于解析 import
+      // 跨文件 import 解析时优先使用已打开文件的实时缓冲（避免重命名后磁盘与内存不一致假报错）
+      validator.setFileContentProvider(&CodeEditor::provideFileContent);
       validateWithValidator(&validator);
       // 验证后提取符号表数据，同步到导航器
       m_symbolTable = validator.symbolTable().allSymbols();

@@ -129,7 +129,7 @@ void MainDevMgr::closeTab(QTabWidget *tabs, int index) {
         ed->setFocus();
       }
     }
-    connectEditor(currentEditor());
+    setActiveEditor(currentEditor());
     m_ui->applyTabDimming(currentTabWidget());
     return;
   }
@@ -148,7 +148,7 @@ void MainDevMgr::closeTab(QTabWidget *tabs, int index) {
     }
   }
 
-  connectEditor(currentEditor());
+  setActiveEditor(currentEditor());
 }
 
 void MainDevMgr::onTabCloseRequested(int index) {
@@ -215,7 +215,7 @@ void MainDevMgr::onCurrentTabChanged(int index) {
     }
   }
 
-  connectEditor(currentEditor());
+  setActiveEditor(currentEditor());
   m_model->lastActivePanel = tabs;
   m_ui->applyTabDimming(tabs);
 }
@@ -333,6 +333,8 @@ void MainDevMgr::onSplitRight() {
         if (jvw) editor = jvw->codeEditor();
       }
       if (editor && !filePath.isEmpty()) {
+        // 拆分副本与主编辑器同一套信号连接（一次性，不随焦点重复连接）
+        connectEditorSignals(editor);
         connectModifiedTracking(newPanel, editor, filePath);
         // 恢复当前编辑器的修改状态（拆分副本可能已有修改）
         if (editor->document()->isModified()) {

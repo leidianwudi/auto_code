@@ -583,6 +583,7 @@ bool AcParser::parseIfStmt(IfStmt &is) {
 }
 
 bool AcParser::parseImportStmt(ImportStmt &imp) {
+  imp.line = peek().line;  // import 关键字所在行
   if (!expect(TOK_LBRACE, QStringLiteral("expected '{' after 'import'"))) return false;
   while (peek().type != TOK_RBRACE && peek().type != TOK_EOF) {
     if (peek().type != TOK_IDENT) {

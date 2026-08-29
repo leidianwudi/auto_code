@@ -19,6 +19,7 @@
 #include <QStack>
 
 #include "src/engine/validation_result.h"
+#include "src/engine/rename/symbol_rename.h"
 #include "src/ui/main_dev/main_dev_ui_ext.h"
 #include "src/util/common/workspace_diag.h"
 #include "src/util/ui/aui_mgr.h"
@@ -111,6 +112,8 @@ private slots:
   /// 查找/引用面板结果跳转：打开文件并定位到匹配处（不选中匹配词，
   /// 避免蓝色文本选区盖住查找/引用高亮的浅红色，与 VSCode 一致）
   void onOpenHighlightResult(const QString &filePath, int line, int column, int length);
+  /// F2 重命名符号：弹窗输入新名 → 后台语义收集引用 → 应用替换
+  void onRenameSymbol(const QString &filePath, int line, int column, const QString &name);
   /// 即将导航（记录当前位置到历史栈）
   void onAboutToNavigate(const QString &targetFilePath, int targetLine);
   /// 鼠标侧键：后退（XButton1）
@@ -120,8 +123,8 @@ private slots:
   /// 左侧 tab（文件/调试/查找/引用）切换：引用面板显示时恢复编辑器引用高亮，
   /// 隐藏时清除（与 VSCode「引用面板可见则编辑器持续变色」一致）
   void onLeftTabChanged(int index);
-  /// 对所有已打开编辑器应用引用高亮（符号名）
-  void applyReferenceHighlightToEditors(const QString &name);
+  /// 对所有已打开编辑器应用引用高亮（基于最近一次语义收集的位置）
+  void applyReferenceRefsToEditors();
   /// 清除所有已打开编辑器的引用高亮
   void clearReferenceHighlightFromEditors();
   /// 对所有已打开编辑器应用查找面板搜索高亮（关键词）
@@ -175,10 +178,15 @@ private:
   void restoreOpenFilesFromSettings();
   /// 获取当前活跃的面板组
   QTabWidget *currentTabWidget() const;
-  /// 连接编辑器的光标位置信号
-  void connectEditor(CodeEditor *editor);
+  /// 连接编辑器的全部信号（编辑器创建时调用一次，不重复连接/断开）
+  void connectEditorSignals(CodeEditor *editor);
+  /// 设置当前活跃编辑器（焦点/tab 切换时调用，仅更新光标状态栏）
+  void setActiveEditor(CodeEditor *editor);
   /// 重建底部「问题」面板（从 m_fileIssues 聚合全部已打开文件的问题）
   void refreshProblemPanel();
+  /// 应用单个文件的重命名替换（已打开编辑器走 document 支持撤销；未打开直接改写文件）
+  void applyRenameToFile(const QString &filePath, const QVector<RenameRef> &refs,
+                         const QString &newName);
   /// 关闭指定面板中的指定标签页（不依赖 sender()）
   void closeTab(QTabWidget *tabs, int index);
   /// 检查所有编辑器的修改状态，更新保存按钮可用性
@@ -221,11 +229,37 @@ protected:
   /// 工作区问题聚合：文件路径 → 验证结果列表（供底部「问题」面板跨文件汇总）
   QMap<QString, QVector<ValidationResult>> m_fileIssues;
 
+  /// 未打开文件的缓冲修改（重命名等操作：未打开文件先存缓冲、不写盘，树目录标黄，
+  /// 退出时提示保存——VSCode 行为）。文件路径 → 缓冲内容。
+  QHash<QString, QString> m_pendingFileChanges;
+
+  /// 保存所有已打开且被修改的编辑器（保存全部按钮 / 退出保存共用）
+  void saveAllEditors();
+  /// 把未打开文件的缓冲修改写盘并清除树目录黄色标记（保存全部 / 退出保存用）
+  void flushPendingChanges();
+  /// 清除某文件的缓冲修改（保存或打开后）
+  void clearPendingChange(const QString &filePath);
+  /// 退出确认：无未保存→true；有未保存则弹窗三选（保存/不保存/取消），取消→false
+  bool confirmExit();
+  /// 构建实时内容快照：已打开编辑器内容 + 未打开但有缓冲修改的文件内容
+  ///（供后台引用收集 / 工作区扫描优先读缓冲而非磁盘；主线程调用）
+  QHash<QString, QString> collectLiveContents() const;
+
   /// 工作区全量扫描的后台任务监视器（扫描在 Qt 全局线程池中执行，避免阻塞 UI）
   QFutureWatcher<QVector<WorkspaceFileDiag>> *m_workspaceScanWatcher = nullptr;
+  /// 当前扫描是否静默（保存后自动重扫时 true，完成时不打印"完成"提示）
+  bool m_workspaceScanSilent = false;
 
   /// 启动一次后台工作区全量错误扫描（应用启动时调用，不阻塞 UI）
-  void startWorkspaceScan();
+  /// @param silent 静默模式：不向输出面板打印"开始检查"提示（保存后自动重扫用）
+  void startWorkspaceScan(bool silent = false);
+
+  /// 保存/重命名后防抖重扫：合并连续保存，避免每次保存都全量扫描
+  void scheduleWorkspaceRescan();
+  /// 工作区重扫防抖定时器（保存/重命名后：重建语义索引 + 触发一次扫描）
+  QTimer *m_workspaceRescanTimer = nullptr;
+  /// 工作区扫描防抖定时器：合并编辑/保存/重命名产生的多次扫描请求为一次
+  QTimer *m_scanTimer = nullptr;
 
   /// 会话恢复：为 true 时抑制由打开文件触发的目录树定位，
   /// 避免启动还原上次打开的文件时自动展开/滚动目录树，破坏保存的展开状态
@@ -238,4 +272,10 @@ protected:
   QTimer *m_searchHighlightTimer = nullptr;
   /// 最近一次查找面板搜索关键词（用于切换回查找 tab 时恢复高亮）
   QString m_lastSearchText;
+
+  /// 递增的重命名请求序号：新一轮重命名开始即自增，过期的后台收集结果据此丢弃
+  int m_renameRequestId = 0;
+
+  /// 最近一次语义收集的引用位置（供切回引用面板时恢复编辑器语义高亮）
+  QVector<RenameRef> m_referenceRefs;
 };

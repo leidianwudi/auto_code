@@ -92,7 +92,7 @@ void VscResultPanel::refreshStyle() {
 //  文件扫描过滤（查找 / 引用共用）
 // ══════════════════════════════════════════════════════════════════════════════
 
-bool VscResultPanel::shouldScanFile(const QString &filePath) const {
+bool VscResultPanel::shouldScanFile(const QString &filePath) {
   // 排除常见构建/依赖/版本控制目录
   static const QStringList kSkipDirs = {
       QStringLiteral("/build/"),    QStringLiteral("/.git/"),

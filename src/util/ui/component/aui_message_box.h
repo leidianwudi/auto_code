@@ -26,6 +26,9 @@ class QWidget;
 /// 消息对话框工具类 — 替代 QMessageBox，统一项目风格
 class AuiMessageBox {
 public:
+  /// 三选对话框的选项
+  enum class Choice { kFirst, kSecond, kCancel };
+
   /// 显示消息对话框（只有"确定"按钮）
   /// @param parent  父窗口
   /// @param title   标题
@@ -38,6 +41,16 @@ public:
   /// @param text    内容
   /// @return true 表示用户点击了"确定"
   static bool confirm(QWidget *parent, const QString &title, const QString &text);
+
+  /// 显示三选对话框（首按钮 / 次按钮 / 取消）
+  /// @param parent      父窗口
+  /// @param title       标题
+  /// @param text        内容
+  /// @param firstText   首按钮文字（默认高亮）
+  /// @param secondText  次按钮文字
+  /// @return 用户点击的按钮（kFirst / kSecond / kCancel）
+  static Choice question3(QWidget *parent, const QString &title, const QString &text,
+                          const QString &firstText, const QString &secondText);
 
 private:
   AuiMessageBox() = delete;

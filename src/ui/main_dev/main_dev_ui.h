@@ -19,6 +19,8 @@
 #include <QSplitter>
 #include <QTabWidget>
 
+#include <functional>
+
 class QVBoxLayout;
 
 #include "debug_panel.h"
@@ -149,6 +151,9 @@ public:
   /// 还原上次保存的窗口几何与分割器大小（程序启动时调用）
   void restoreLayout();
 
+  /// 注册关闭前确认回调（由 MainDevMgr 提供：有未保存修改时弹窗；返回 false 阻止关闭）
+  void setCloseConfirmer(const std::function<bool()> &fn) { m_closeConfirmer = fn; }
+
 signals:
   /// 窗口关闭前发出，供 MainDevMgr 保存断点/打开文件等会话状态
   void uiClosing();
@@ -210,6 +215,9 @@ private:
   AuiComboDelete *m_startupCombo = nullptr;
   QPushButton *m_saveBtn = nullptr;
   QPushButton *m_saveAllBtn = nullptr;
+
+  /// 关闭前确认回调（有未保存修改时由 MainDevMgr 弹窗；返回 false 取消关闭）
+  std::function<bool()> m_closeConfirmer;
 
   // ── 底部输出/问题面板 ──
   QSplitter *m_contentSplitter = nullptr;

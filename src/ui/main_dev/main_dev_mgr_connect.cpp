@@ -22,91 +22,94 @@
 #include "src/util/ui/code/code_editor.h"
 #include "src/util/ui/component/aui_input_dialog.h"
 
+/// 遍历所有已打开编辑器（含拆分面板；本文件下方有同签名定义，此处先声明供上方使用）
+static void forEachEditor(MainDevUi *ui, const std::function<void(CodeEditor *)> &func);
+
 // ──────────────────────────────────────────────────────────────
 //  编辑器信号连接
 // ──────────────────────────────────────────────────────────────
 
-void MainDevMgr::connectEditor(CodeEditor *editor) {
-  if (m_model->connectedEditor) {
-    disconnect(m_model->connectedEditor, &QPlainTextEdit::cursorPositionChanged, this,
-               &MainDevMgr::updateCursorPosition);
-    disconnect(m_model->connectedEditor, &CodeEditor::validationMessage, this,
-               &MainDevMgr::onValidationMessage);
-    disconnect(m_model->connectedEditor, &CodeEditor::requestGoToLine, this,
-               &MainDevMgr::onGoToLine);
-    disconnect(m_model->connectedEditor, &CodeEditor::aboutToNavigate, this,
-               &MainDevMgr::onAboutToNavigate);
-    disconnect(m_model->connectedEditor, &CodeEditor::requestFindReferencesAll, this, nullptr);
-    disconnect(m_model->connectedEditor, &CodeEditor::requestWorkspaceSymbols, this, nullptr);
-    disconnect(m_model->connectedEditor, &CodeEditor::requestDebugStart, this, nullptr);
-    disconnect(m_model->connectedEditor, &CodeEditor::requestDebugStepOver, this, nullptr);
-    disconnect(m_model->connectedEditor, &CodeEditor::requestDebugStepInto, this, nullptr);
-    disconnect(m_model->connectedEditor, &CodeEditor::requestDebugStepOut, this, nullptr);
-  }
-
-  m_model->connectedEditor = editor;
-
-  if (editor) {
-    connect(editor, &QPlainTextEdit::cursorPositionChanged, this,
-            &MainDevMgr::updateCursorPosition);
-    connect(editor, &CodeEditor::validationMessage, this, &MainDevMgr::onValidationMessage);
-    // 跨文件跳转信号
-    connect(editor, &CodeEditor::requestGoToLine, this, &MainDevMgr::onGoToLine);
-    // 即将导航信号（用于记录历史）
-    connect(editor, &CodeEditor::aboutToNavigate, this, &MainDevMgr::onAboutToNavigate);
-    // 跨文件查找引用（VSCode 风格：结果在「引用」面板展示，并自动切换到引用 tab）
-    connect(editor, &CodeEditor::requestFindReferencesAll, this, [this](const QString &name) {
-      if (name.isEmpty()) return;
-      m_ui->referencePanel()->findReferences(name);
-      if (m_ui->leftTabs()) m_ui->leftTabs()->setCurrentWidget(m_ui->referencePanel());
-      // 引用面板可见时，编辑器持续高亮所有引用（VSCode 行为）
-      applyReferenceHighlightToEditors(name);
+void MainDevMgr::connectEditorSignals(CodeEditor *editor) {
+  if (!editor) return;
+  connect(editor, &QPlainTextEdit::cursorPositionChanged, this,
+          &MainDevMgr::updateCursorPosition);
+  connect(editor, &CodeEditor::validationMessage, this, &MainDevMgr::onValidationMessage);
+  // 任何文件内容变化后，立即重验其它已打开文件；未打开文件通过防抖合并后的扫描刷新。
+  // 当前文件由自身的防抖验证处理，这里跳过它避免重复校验。
+  connect(editor, &QPlainTextEdit::textChanged, this, [this, editor]() {
+    forEachEditor(m_ui, [editor](CodeEditor *ed) {
+      if (ed != editor) ed->validate();
+      return true;
     });
-    // 工作区符号搜索 (Ctrl+T)
-    connect(editor, &CodeEditor::requestWorkspaceSymbols, this, [this]() {
-      QString query = AuiInputDialog::getText(m_ui, QStringLiteral("工作区符号搜索"),
-                                              QStringLiteral("输入符号名:"));
-      if (query.isEmpty()) return;
+    // 扫描请求统一进防抖定时器：与保存/重命名触发共用，合并为一次，不会重复全量扫描
+    if (m_scanTimer) m_scanTimer->start();
+  });
+  // 跨文件跳转信号
+  connect(editor, &CodeEditor::requestGoToLine, this, &MainDevMgr::onGoToLine);
+  // 即将导航信号（用于记录历史）
+  connect(editor, &CodeEditor::aboutToNavigate, this, &MainDevMgr::onAboutToNavigate);
+  // 跨文件查找引用（VSCode 风格：结果在「引用」面板展示，并自动切换到引用 tab）。
+  // 语义收集（作用域 + 类型推断）在后台完成，完成后 referencesReady → 编辑器语义高亮
+  connect(editor, &CodeEditor::requestFindReferencesAll, this,
+          [this](const QString &filePath, int line, int column, const QString &name) {
+            if (name.isEmpty()) return;
+            // 先清掉上一轮引用的编辑器高亮，避免新查找期间旧颜色残留
+            m_referenceRefs.clear();
+            applyReferenceRefsToEditors();
+            m_ui->referencePanel()->findReferences(filePath, line, column, name);
+            if (m_ui->leftTabs()) m_ui->leftTabs()->setCurrentWidget(m_ui->referencePanel());
+          });
+  // F2 语义级重命名（AC/TPL）：作用域 + 跨文件 import
+  connect(editor, &CodeEditor::requestRenameSymbol, this, &MainDevMgr::onRenameSymbol);
+  // 工作区符号搜索 (Ctrl+T)
+  connect(editor, &CodeEditor::requestWorkspaceSymbols, this, [this]() {
+    QString query = AuiInputDialog::getText(m_ui, QStringLiteral("工作区符号搜索"),
+                                            QStringLiteral("输入符号名:"));
+    if (query.isEmpty()) return;
 
-      m_ui->clearOutput();
-      m_ui->appendOutput(QStringLiteral("符号搜索: ") + query, false);
-      int totalFound = 0;
-      for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
-        auto *tabs = m_ui->editorPanelAt(pi);
-        if (!tabs) continue;
-        for (int ti = 0; ti < tabs->count(); ++ti) {
-          auto *ed = qobject_cast<CodeEditor *>(tabs->widget(ti));
-          if (!ed) continue;
-          QFileInfo fi(ed->objectName());
-          // 搜索当前编辑器的符号表
-          QRegularExpression re(QStringLiteral("\\b") + QRegularExpression::escape(query),
-                                QRegularExpression::CaseInsensitiveOption);
-          const QString &text = ed->cachedText();
-          QStringList lines = text.split(QLatin1Char('\n'));
-          for (int i = 0; i < lines.size(); ++i) {
-            if (re.match(lines[i]).hasMatch()) {
-              m_ui->appendOutput(QStringLiteral("  %1:%2 → %3")
-                                     .arg(fi.fileName())
-                                     .arg(i + 1)
-                                     .arg(lines[i].trimmed()),
-                                 false);
-              ++totalFound;
-            }
+    m_ui->clearOutput();
+    m_ui->appendOutput(QStringLiteral("符号搜索: ") + query, false);
+    int totalFound = 0;
+    for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
+      auto *tabs = m_ui->editorPanelAt(pi);
+      if (!tabs) continue;
+      for (int ti = 0; ti < tabs->count(); ++ti) {
+        auto *ed = qobject_cast<CodeEditor *>(tabs->widget(ti));
+        if (!ed) continue;
+        QFileInfo fi(ed->objectName());
+        // 搜索当前编辑器的符号表
+        QRegularExpression re(QStringLiteral("\\b") + QRegularExpression::escape(query),
+                              QRegularExpression::CaseInsensitiveOption);
+        const QString &text = ed->cachedText();
+        QStringList lines = text.split(QLatin1Char('\n'));
+        for (int i = 0; i < lines.size(); ++i) {
+          if (re.match(lines[i]).hasMatch()) {
+            m_ui->appendOutput(QStringLiteral("  %1:%2 → %3")
+                                   .arg(fi.fileName())
+                                   .arg(i + 1)
+                                   .arg(lines[i].trimmed()),
+                               false);
+            ++totalFound;
           }
         }
       }
-      m_ui->appendOutput(QStringLiteral("共 %1 处匹配").arg(totalFound), false);
-    });
-    // 调试快捷键：F5 启动/继续、F10 单步执行、F11 单步进入、Shift+F11 单步跳出
-    connect(editor, &CodeEditor::requestDebugStart, debugController(),
-            &DebugController::startOrContinue);
-    connect(editor, &CodeEditor::requestDebugStepOver, debugController(),
-            &DebugController::stepOver);
-    connect(editor, &CodeEditor::requestDebugStepInto, debugController(),
-            &DebugController::stepInto);
-    connect(editor, &CodeEditor::requestDebugStepOut, debugController(), &DebugController::stepOut);
+    }
+    m_ui->appendOutput(QStringLiteral("共 %1 处匹配").arg(totalFound), false);
+  });
+  // 调试快捷键：F5 启动/继续、F10 单步执行、F11 单步进入、Shift+F11 单步跳出
+  connect(editor, &CodeEditor::requestDebugStart, debugController(),
+          &DebugController::startOrContinue);
+  connect(editor, &CodeEditor::requestDebugStepOver, debugController(),
+          &DebugController::stepOver);
+  connect(editor, &CodeEditor::requestDebugStepInto, debugController(),
+          &DebugController::stepInto);
+  connect(editor, &CodeEditor::requestDebugStepOut, debugController(), &DebugController::stepOut);
+}
+
+void MainDevMgr::setActiveEditor(CodeEditor *editor) {
+  m_model->connectedEditor = editor;
+  if (editor) {
     updateCursorPosition();
-    editor->validate();
   } else {
     m_ui->setCursorStatusText(MainDevUi::cursorDefault());
   }
@@ -144,7 +147,7 @@ void MainDevMgr::onFocusChanged(QWidget * /*oldFocus*/, QWidget *newFocus) {
 
   QString filePath;
   if (foundEditor) {
-    connectEditor(foundEditor);
+    setActiveEditor(foundEditor);
     filePath = foundEditor->objectName();
   } else if (!jsonVuePath.isEmpty()) {
     filePath = jsonVuePath;
@@ -175,6 +178,10 @@ void MainDevMgr::onFocusChanged(QWidget * /*oldFocus*/, QWidget *newFocus) {
 // ──────────────────────────────────────────────────────────────
 
 void MainDevMgr::updateCursorPosition() {
+  // 连接是一次性的：cursorPositionChanged 来自任意编辑器；仅活跃编辑器更新状态栏
+  if (auto *ed = qobject_cast<CodeEditor *>(sender())) {
+    if (ed != m_model->connectedEditor) return;
+  }
   if (!m_model->connectedEditor || !m_model->connectedEditor->isVisible()) {
     m_ui->setCursorStatusText(MainDevUi::cursorDefault());
     return;
@@ -189,34 +196,28 @@ void MainDevMgr::updateCursorPosition() {
 void MainDevMgr::onValidationMessage(const QString &msg, int errorCount) {
   // 错误文本已移至底部“问题”tab（由 onValidationIssues 填充），
   // 本槽仅维护文件树与标签栏的错误状态标记。
-
-  // 通知 TreeDir 更新文件错误状态
-  if (m_model->connectedEditor && m_ui->fileTree()) {
-    QString filePath = m_model->connectedEditor->objectName();
-    if (!filePath.isEmpty()) {
-      if (errorCount == 0) {
-        // 无错误，清除错误状态
-        m_ui->fileTree()->clearFileError(filePath);
-      } else {
-        // 有错误，传递实际错误数量
-        m_ui->fileTree()->setFileError(filePath, errorCount);
-      }
+  // 连接是一次性的：用 sender() 标记发出校验结果的编辑器自身的文件/tab 错误状态
+  auto *editor = qobject_cast<CodeEditor *>(sender());
+  if (!editor) return;
+  const QString filePath = editor->objectName();
+  if (!filePath.isEmpty() && m_ui->fileTree()) {
+    if (errorCount == 0) {
+      m_ui->fileTree()->clearFileError(filePath);
+    } else {
+      m_ui->fileTree()->setFileError(filePath, errorCount);
     }
   }
 
-  // 通知标签栏：当前编辑器所在标签的错误状态（有错误则文字红色 + 波浪线，VSCode 风格）
-  if (m_model->connectedEditor) {
-    CodeEditor *editor = m_model->connectedEditor;
-    for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
-      auto *tabs = m_ui->editorPanelAt(pi);
-      if (!tabs) continue;
-      auto *bar = qobject_cast<DraggableTabBar *>(tabs->tabBar());
-      if (!bar) continue;
-      for (int ti = 0; ti < tabs->count(); ++ti) {
-        if (tabs->widget(ti) == editor || tabs->widget(ti) == editor->parentWidget()) {
-          bar->setTabError(ti, errorCount > 0);
-          break;
-        }
+  // 通知标签栏：该编辑器所在标签的错误状态（有错误则文字红色 + 波浪线，VSCode 风格）
+  for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
+    auto *tabs = m_ui->editorPanelAt(pi);
+    if (!tabs) continue;
+    auto *bar = qobject_cast<DraggableTabBar *>(tabs->tabBar());
+    if (!bar) continue;
+    for (int ti = 0; ti < tabs->count(); ++ti) {
+      if (tabs->widget(ti) == editor || tabs->widget(ti) == editor->parentWidget()) {
+        bar->setTabError(ti, errorCount > 0);
+        break;
       }
     }
   }
@@ -291,9 +292,9 @@ static void forEachEditor(MainDevUi *ui,
   }
 }
 
-void MainDevMgr::applyReferenceHighlightToEditors(const QString &name) {
-  if (name.isEmpty()) return;
-  forEachEditor(m_ui, [&name](CodeEditor *ed) { ed->highlightSymbolReferences(name); });
+void MainDevMgr::applyReferenceRefsToEditors() {
+  // 语义位置高亮：为空时等价于清除
+  forEachEditor(m_ui, [this](CodeEditor *ed) { ed->setReferenceHighlightPositions(m_referenceRefs); });
 }
 
 void MainDevMgr::clearReferenceHighlightFromEditors() {
@@ -321,10 +322,9 @@ void MainDevMgr::resyncPanelHighlights() {
   }
   QWidget *current = m_ui->leftTabs()->currentWidget();
   if (current == m_ui->referencePanel()) {
-    // 切回引用面板：若仍有结果，恢复编辑器引用高亮（并清除查找高亮）
+    // 切回引用面板：恢复编辑器语义引用高亮（并清除查找高亮）
     clearSearchHighlightFromEditors();
-    const QString sym = m_ui->referencePanel()->symbolName();
-    if (!sym.isEmpty()) applyReferenceHighlightToEditors(sym);
+    applyReferenceRefsToEditors();
   } else if (current == m_ui->findPanel()) {
     // 切回查找面板：若仍有搜索关键词，恢复编辑器查找高亮（并清除引用高亮）
     clearReferenceHighlightFromEditors();

@@ -47,8 +47,9 @@ public:
   void setSearchRoot(const QString &rootPath);
   const QString &searchRoot() const { return m_searchRoot; }
 
-  /// 该文件是否应参与扫描（排除 build 目录、二进制、tree.config 等）
-  bool shouldScanFile(const QString &filePath) const;
+  /// 该文件是否应参与扫描（排除 build 目录、二进制、tree.config 等）。
+  /// 纯函数（不依赖实例状态），供后台线程扫描直接调用
+  static bool shouldScanFile(const QString &filePath);
 
   /// 清空结果树
   void clearResults();

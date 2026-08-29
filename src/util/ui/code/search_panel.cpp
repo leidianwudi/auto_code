@@ -14,11 +14,15 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QSet>
+#include <QSettings>
 #include <QShowEvent>
+#include <QStandardPaths>
 #include <QTextStream>
 #include <QTimer>
 #include <QVBoxLayout>
 
+#include "src/ui/create/create_model.h"
+#include "src/util/common/code_constants.h"
 #include "src/util/common/workspace_iter.h"
 #include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_style.h"
@@ -26,6 +30,31 @@
 /// 是否为标识符字符（用于"全词匹配"边界判断）
 static inline bool isWordChar(const QChar &c) {
   return c.isLetterOrNumber() || c == QLatin1Char('_');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  文件类型过滤勾选持久化（AppData/search.ini，启动时还原）
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// 查找面板状态存储路径（AppData 目录）
+static QString searchSettingsPath() {
+  QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  if (dir.isEmpty())
+    dir = QDir::homePath() + QString::fromUtf8(CodeConstants::Paths::kAppDataDirName);
+  QDir().mkpath(dir);
+  return dir + QStringLiteral("/search.ini");
+}
+
+/// 保存勾选的文件类型后缀列表
+static void saveCheckedTypes(const QStringList &checked) {
+  QSettings s(searchSettingsPath(), QSettings::IniFormat);
+  s.setValue(QStringLiteral("search/checkedTypes"), checked);
+}
+
+/// 读取勾选的文件类型后缀列表（从未保存过返回空列表 → 调用方按默认全选处理）
+static QStringList loadCheckedTypes() {
+  QSettings s(searchSettingsPath(), QSettings::IniFormat);
+  return s.value(QStringLiteral("search/checkedTypes")).toStringList();
 }
 
 /// 搜索防抖间隔（ms）：连续输入合并为一次跨文件扫描，避免每个按键都扫全工作区导致卡顿
@@ -73,7 +102,31 @@ void SearchPanel::setupUI() {
   headerLayout()->addWidget(m_caseCheck);
   headerLayout()->addWidget(m_wordCheck);
 
-  // ── 汇总行末尾：全部折叠按钮（基类已放置汇总标签 + 弹性空间）──
+  // ── 汇总行：文件类型过滤下拉框 + 全部折叠按钮（基类已放置汇总标签 + 弹性空间）──
+  // 复选文件后缀过滤搜索范围；选项来源与「新建文件」下拉框一致（CreateModel，扩展类型方便）
+  m_typeFilter = new AuiMultiCheckCombo;
+  m_typeFilter->setToolTip(QStringLiteral("按文件类型过滤搜索结果"));
+  const QVector<CreateModel::FileTypeOption> typeOpts = CreateModel::fileTypeOptions();
+  for (const CreateModel::FileTypeOption &opt : typeOpts)
+    m_typeFilter->addOption(opt.label, opt.suffix);
+  // 默认全选；若之前保存过勾选则还原（只还原仍存在的选项，全无效时回退全选）
+  m_typeFilter->setAllChecked(true);
+  const QStringList savedTypes = loadCheckedTypes();
+  if (!savedTypes.isEmpty()) {
+    m_typeFilter->setAllChecked(false);
+    for (const QString &s : savedTypes)
+      if (m_typeFilter->hasOption(s)) m_typeFilter->setChecked(s, true);
+    if (m_typeFilter->checkedData().isEmpty()) m_typeFilter->setAllChecked(true);
+  }
+  connect(m_typeFilter, &AuiMultiCheckCombo::checkedChanged, this, [this]() {
+    saveCheckedTypes(m_typeFilter->checkedData());  // 勾选变化自动保存，启动时还原
+    onOptionsChanged();
+  });
+  // 弹层展开时让搜索框失去焦点：Qt::Popup 不夺取键盘焦点，搜索框聚焦边框会一直残留，
+  // 需主动 clearFocus 立即恢复非聚焦（白）边框，避免要点击应用外部才变白
+  connect(m_typeFilter, &AuiMultiCheckCombo::popupOpened, this,
+          [this]() { m_searchEdit->clearFocus(); });
+  summaryLayout()->addWidget(m_typeFilter);
   summaryLayout()->addWidget(collapseButton());
 
   // ── 结果树：itemClicked → 基类统一跳转处理（文件分组节点不跳转）──
@@ -113,6 +166,8 @@ const QString &SearchPanel::currentText() const {
 void SearchPanel::refreshStyle() {
   // 面板背景随主题重建（setStyleSheet 触发重新抛光，立即生效）
   applyPanelStyle();
+  // 文件类型过滤下拉框（按钮 + 弹出菜单）颜色随主题刷新
+  if (m_typeFilter) m_typeFilter->refreshStyle();
   // 汇总标签文字色 / 结果树背景 / 滚动条 / 字体 / 图标由基类统一刷新
   VscResultPanel::refreshStyle();
 }
@@ -159,17 +214,40 @@ void SearchPanel::performSearch() {
   const bool caseSensitive = m_caseCheck->isChecked();
   const bool wholeWord = m_wordCheck->isChecked();
 
+  // 主线程构建实时内容快照（已打开编辑器 + 缓冲文件），搜索优先读缓冲而非磁盘旧内容
+  const QHash<QString, QString> liveContents =
+      m_liveContentProvider ? m_liveContentProvider() : QHash<QString, QString>();
+
+  // 文件类型过滤：只搜勾选的后缀（默认全选 = 全部代码类型）
+  QSet<QString> typeSet;
+  if (m_typeFilter) {
+    const QStringList checked = m_typeFilter->checkedData();
+    for (const QString &s : checked) typeSet.insert(s);
+  }
+
   // 遍历搜索根目录下所有文件（统一工作区遍历 + shouldScanFile 过滤）
   forEachWorkspaceFile(
-      searchRoot(), true, [this](const QString &p) { return shouldScanFile(p); },
+      searchRoot(), true,
+      [&typeSet, this](const QString &p) {
+        if (!shouldScanFile(p)) return false;
+        if (typeSet.isEmpty()) return false;  // 一个类型都没选 → 不搜任何文件
+        for (const QString &suf : typeSet)
+          if (p.endsWith(suf, Qt::CaseInsensitive)) return true;
+        return false;
+      },
       [&](const QString &filePath) {
-        QFile f(filePath);
-        if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return;
-        QTextStream in(&f);
-        int lineNo = 0;
-        while (!in.atEnd()) {
-          QString lineText = in.readLine();
-          ++lineNo;
+        // 优先缓冲内容，否则读磁盘
+        QString text = liveContents.value(filePath);
+        if (text.isEmpty()) {
+          QFile f(filePath);
+          if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+          QTextStream in(&f);
+          text = in.readAll();
+        }
+        const QStringList lines = text.split(QLatin1Char('\n'));
+        for (int i = 0; i < lines.size(); ++i) {
+          const QString &lineText = lines[i];
+          const int lineNo = i + 1;
           // 逐行查找所有匹配（含大小写、全词选项）
           QString hay = lineText;
           QString ndl = needle;
@@ -195,13 +273,13 @@ void SearchPanel::performSearch() {
             from = idx + nlen;
           }
         }
-        f.close();
       });
 
   // ── 构建结果树：文件分组节点 → 匹配行节点（基类统一实现）──
   buildResultTree(m_matches);
 
   updateSummary();
-  // 通知外部：搜索完成，同步编辑器查找高亮
-  emit searchPerformed(needle);
+  // 通知外部：搜索完成，同步编辑器查找高亮。
+  // 无结果时发空文本 → 外部清除编辑器高亮，避免类型过滤后残留旧变色（与 VSCode 一致）
+  emit searchPerformed(m_matches.isEmpty() ? QString() : needle);
 }

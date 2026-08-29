@@ -21,6 +21,9 @@
 
 namespace {
 
+/// 消息对话框三选结果
+enum class MsgChoice { kFirst, kSecond, kCancel };
+
 /// 消息对话框 — 私有实现，不暴露给外部
 class MessageBoxDialog : public QDialog {
 public:
@@ -28,6 +31,16 @@ public:
       : QDialog(parent), m_showCancel(showCancel) {
     setupUI(title, text);
   }
+
+  /// 三选对话框：首按钮 / 次按钮 / 取消
+  MessageBoxDialog(const QString &title, const QString &text, const QString &firstText,
+                   const QString &secondText, QWidget *parent)
+      : QDialog(parent), m_threeButtons(true), m_firstText(firstText), m_secondText(secondText) {
+    setupUI(title, text);
+  }
+
+  /// 三选结果（仅三选对话框有效；两键对话框固定为 kCancel 以外的值由 accept/reject 判定）
+  MsgChoice choice() const { return m_choice; }
 
 private:
   void setupUI(const QString &title, const QString &text) {
@@ -54,16 +67,55 @@ private:
     label->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
     contentLayout->addWidget(label);
 
-    auto btns = AuiButton::createDialogButtons(this, m_showCancel);
-    connect(btns.okBtn, &QPushButton::clicked, this, &QDialog::accept);
-    if (btns.cancelBtn) connect(btns.cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
-    contentLayout->addLayout(btns.layout);
-
-    btns.okBtn->setFocus();
+    QHBoxLayout *btnLayout = nullptr;
+    if (m_threeButtons) {
+      btnLayout = setupThreeButtons();
+    } else {
+      auto btns = AuiButton::createDialogButtons(this, m_showCancel);
+      connect(btns.okBtn, &QPushButton::clicked, this, &QDialog::accept);
+      if (btns.cancelBtn) connect(btns.cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
+      btnLayout = btns.layout;
+      btns.okBtn->setFocus();
+    }
+    contentLayout->addLayout(btnLayout);
 
     AuiWindow::applyWindowFrame(this, tb.titleBar, contentWidget);
 
-    applyAutoSize(text, label, contentLayout, tb.titleBar, btns.layout);
+    applyAutoSize(text, label, contentLayout, tb.titleBar, btnLayout);
+  }
+
+  /// 三选按钮行：首（默认高亮）/ 次 / 取消
+  QHBoxLayout *setupThreeButtons() {
+    auto *layout = new QHBoxLayout;
+    layout->addStretch();
+
+    auto *first = new QPushButton(m_firstText, this);
+    first->setMinimumWidth(80);
+    first->setDefault(true);
+    AuiButton::applyDialogButtonStyle(first);
+    connect(first, &QPushButton::clicked, this,
+            [this]() { m_choice = MsgChoice::kFirst; accept(); });
+    layout->addWidget(first);
+
+    layout->addSpacing(12);
+    auto *second = new QPushButton(m_secondText, this);
+    second->setMinimumWidth(80);
+    AuiButton::applyDialogButtonStyle(second);
+    connect(second, &QPushButton::clicked, this,
+            [this]() { m_choice = MsgChoice::kSecond; accept(); });
+    layout->addWidget(second);
+
+    layout->addSpacing(12);
+    auto *cancel = new QPushButton(QString::fromUtf8(CodeConstants::UiText::kCancel), this);
+    cancel->setMinimumWidth(80);
+    AuiButton::applyDialogButtonStyle(cancel);
+    connect(cancel, &QPushButton::clicked, this,
+            [this]() { m_choice = MsgChoice::kCancel; reject(); });
+    layout->addWidget(cancel);
+
+    layout->addStretch();
+    first->setFocus();
+    return layout;
   }
 
   /// 根据内容自动缩放窗口：内容少时缩小，避免固定大窗口留白过多；内容多时受 maxW 约束并换行。
@@ -108,7 +160,11 @@ private:
     resize(desiredW, desiredH);
   }
 
-  bool m_showCancel;
+  bool m_showCancel = false;
+  bool m_threeButtons = false;   ///< 是否为三选对话框
+  QString m_firstText;           ///< 三选：首按钮文字
+  QString m_secondText;          ///< 三选：次按钮文字
+  MsgChoice m_choice = MsgChoice::kCancel;  ///< 三选结果
 };
 
 }  // namespace
@@ -121,4 +177,19 @@ void AuiMessageBox::show(QWidget *parent, const QString &title, const QString &t
 bool AuiMessageBox::confirm(QWidget *parent, const QString &title, const QString &text) {
   MessageBoxDialog dlg(title, text, true, parent);
   return dlg.exec() == QDialog::Accepted;
+}
+
+AuiMessageBox::Choice AuiMessageBox::question3(QWidget *parent, const QString &title,
+                                               const QString &text, const QString &firstText,
+                                               const QString &secondText) {
+  MessageBoxDialog dlg(title, text, firstText, secondText, parent);
+  dlg.exec();
+  switch (dlg.choice()) {
+    case MsgChoice::kFirst:
+      return Choice::kFirst;
+    case MsgChoice::kSecond:
+      return Choice::kSecond;
+    default:
+      return Choice::kCancel;
+  }
 }

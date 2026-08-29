@@ -117,13 +117,16 @@ QStringList collectWorkspaceFiles(const QString &rootDir) {
   return out;
 }
 
-QVector<WorkspaceFileDiag> scanWorkspaceDiagnostics(const QStringList &filePaths) {
+QVector<WorkspaceFileDiag> scanWorkspaceDiagnostics(
+    const QStringList &filePaths, const QHash<QString, QString> &liveContents) {
   QVector<WorkspaceFileDiag> all;
   all.reserve(filePaths.size());
   for (const QString &fp : filePaths) {
     WorkspaceFileDiag item;
     item.filePath = fp;
-    const QString source = readFileText(fp);
+    // 已打开文件：使用实时内存内容（VSCode 行为，诊断基于当前缓冲，避免重命名后磁盘快照不一致假报错）
+    const QString source =
+        liveContents.contains(fp) ? liveContents.value(fp) : readFileText(fp);
     if (source.isEmpty()) {
       // 空文件/读取失败：不产出诊断（空文件本就没有错误）
       all.append(item);
@@ -133,6 +136,8 @@ QVector<WorkspaceFileDiag> scanWorkspaceDiagnostics(const QStringList &filePaths
     if (fp.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive)) {
       AcValidator v;
       v.setFilePath(fp);  // 用于解析 import 相对路径
+      // 跨文件 import 解析同样优先使用已打开文件的实时缓冲（与主文件一致，避免假报错）
+      v.setFileContentProvider([&liveContents](const QString &p) { return liveContents.value(p); });
       item.issues = v.validate(source);
     } else if (fp.endsWith(QStringLiteral(".tpl"), Qt::CaseInsensitive)) {
       TplValidator v;

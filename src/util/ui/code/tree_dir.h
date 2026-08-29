@@ -247,6 +247,8 @@ private:
 
   QSet<QString> m_startupFiles;  ///< 被设为启动项的 .ac 文件绝对路径集合
   QString m_selectedStartup;     ///< 当前下拉框选中的启动项路径
+  QSet<QString> m_modifiedPaths; ///< 已标记为"已修改(黄色)"的文件绝对路径集合
+                                 ///< （用于 buildTree/refreshTree 重建后恢复黄色标记）
 
   class QTreeWidgetItem *m_hoverItem = nullptr;  ///< 当前鼠标悬停的节点（用于整行高亮）
   QTreeWidgetItem *m_dropRoleItem = nullptr;  ///< 当前设置了拖拽目标角色（kTreeDropTargetRole）的节点

@@ -50,6 +50,18 @@ QString CreateModel::suffix(FileType type) {
   }
 }
 
+QVector<CreateModel::FileTypeOption> CreateModel::fileTypeOptions() {
+  QVector<FileTypeOption> opts;
+  for (int t = Ac; t < FileTypeCount; ++t) {
+    const FileType ft = static_cast<FileType>(t);
+    FileTypeOption o;
+    o.label = fileTypeLabel(ft);
+    o.suffix = suffix(ft);
+    opts.append(o);
+  }
+  return opts;
+}
+
 // ════════════════════════════════════════════════════════════
 //  fullPath — 完整路径
 // ════════════════════════════════════════════════════════════

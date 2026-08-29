@@ -491,6 +491,7 @@ struct ImportStmt {
   QStringList names;               ///< 导入的符号名列表（原始名）
   QMap<QString, QString> aliases;  ///< 别名映射：原始名 → 别名（无别名时不含该键）
   QString filePath;                ///< 源文件路径（相对或绝对）
+  int line = 0;                    ///< import 关键字所在行号（1-based，用于报错/引用定位）
 };
 
 /// @brief while 循环语句：while (condition) { body }

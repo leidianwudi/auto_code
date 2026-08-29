@@ -28,6 +28,7 @@ QVector<ValidationResult> AcValidator::validate(const QString &source) {
   // 清空类和函数表（在 import 解析之前清空，以便导入文件的类能被收集）
   m_classes.clear();
   m_functions.clear();
+  m_importErrors.clear();
 
   // ── 步骤 1+2：词法+语法分析 + AST 构建 ──
   m_declaredVars.clear();
@@ -63,6 +64,10 @@ QVector<ValidationResult> AcValidator::validate(const QString &source) {
   // 步骤 2.5b：解析 import 语句，收集跨文件符号
   if (!m_filePath.isEmpty()) {
     resolveImportedSymbols(m_program);
+    // import 的符号在目标文件中不存在 → 报错（如 import { add } 但目标文件无 add）
+    for (const QString &err : m_importErrors) {
+      if (!err.isEmpty()) results.append(parseError(err));
+    }
   }
 
   // 步骤 2.5c：收集当前文件符号（此时内置函数和 import 符号已在符号表中，类型推断可正常工作）
@@ -140,20 +145,29 @@ void AcValidator::resolveImportedSymbols(const Block &program) {
       QString absPath = PathResolver::resolveImportPath(imp.filePath, m_filePath);
 
       // 读取目标文件并收集符号
-      collectSymbolsFromFile(absPath, imp.names);
+      collectSymbolsFromFile(absPath, imp.names, imp.line);
+
+      // 注册别名（import { A as B }）：使 B 的悬停/跳转指向 A 的定义。
+      // 此时 collectSymbolsFromFile 已把原导出名合并进符号表（尚未被当前文件同名声明覆盖）
+      for (auto ait = imp.aliases.begin(); ait != imp.aliases.end(); ++ait) {
+        m_symbolTable.registerAlias(ait.value(), ait.key());
+      }
     }
   }
 }
 
-void AcValidator::collectSymbolsFromFile(const QString &filePath, const QStringList &importNames) {
+void AcValidator::collectSymbolsFromFile(const QString &filePath, const QStringList &importNames,
+                                         int importLine) {
   // 防止循环 import
   QString canonical = QFileInfo(filePath).canonicalFilePath();
   if (canonical.isEmpty()) canonical = filePath;
   if (m_visitedFiles.contains(canonical)) return;
   m_visitedFiles.insert(canonical);
 
-  // 读取文件内容
-  QString source = UtilFile::readUtf8(filePath);
+  // 读取文件内容：优先使用提供器返回的实时缓冲（已打开文件），否则读磁盘
+  QString source;
+  if (m_contentProvider) source = m_contentProvider(filePath);
+  if (source.isEmpty()) source = UtilFile::readUtf8(filePath);
   if (source.trimmed().isEmpty()) return;
 
   // ANTLR 词法+语法分析 + AST 构建
@@ -167,6 +181,42 @@ void AcValidator::collectSymbolsFromFile(const QString &filePath, const QStringL
   importedTable.setFilePath(filePath);
   for (const auto &stmt : program.stmts) {
     importedTable.collectStmt(stmt);
+  }
+
+  // 校验 import 的符号在目标文件中是否存在（精确匹配或 Class.member 前缀匹配）
+  if (!importNames.isEmpty()) {
+    // 目标文件可直接导出的顶层名字（函数/类/接口/枚举/顶层变量）；
+    // 注意：allSymbols() 不收集枚举，需直接从 AST 顶层声明补齐
+    QSet<QString> avail;
+    for (const auto &s : program.stmts) {
+      switch (s.kind) {
+        case Block::Stmt::kFuncDef: avail.insert(s.funcDef.name); break;
+        case Block::Stmt::kClassDef: avail.insert(s.classDef.name); break;
+        case Block::Stmt::kInterfaceDef: avail.insert(s.interfaceDef.name); break;
+        case Block::Stmt::kEnumDef: avail.insert(s.enumDef.name); break;
+        case Block::Stmt::kAssign:
+          if (s.assign.isDeclaration && !s.assign.name.isEmpty()) avail.insert(s.assign.name);
+          break;
+        default: break;
+      }
+    }
+    const auto &syms = importedTable.allSymbols();
+    for (const QString &name : importNames) {
+      if (avail.contains(name) || syms.contains(name)) continue;
+      const QString prefix = name + QLatin1Char('.');
+      bool found = false;
+      for (auto sit = syms.begin(); sit != syms.end(); ++sit) {
+        if (sit.key().startsWith(prefix)) {
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        m_importErrors << QStringLiteral("import 的符号「%1」在 %2 中不存在 at line %3")
+                              .arg(name, QFileInfo(filePath).fileName())
+                              .arg(importLine);
+      }
+    }
   }
 
   // 将 import 列表中指定的符号合并到主符号表

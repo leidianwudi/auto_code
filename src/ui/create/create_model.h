@@ -6,6 +6,7 @@
 #pragma once
 
 #include <QString>
+#include <QVector>
 
 #include "src/engine/ac_language.h"
 
@@ -29,6 +30,12 @@ public:
     FileTypeCount
   };
 
+  /// 文件类型选项（新建对话框与查找面板文件类型过滤共用；不含文件夹）
+  struct FileTypeOption {
+    QString label;  ///< 显示标签，如 ".ac 文件"
+    QString suffix; ///< 文件后缀，如 ".ac"
+  };
+
   CreateModel() = default;
 
   // ── Setters ──
@@ -48,6 +55,10 @@ public:
 
   /// 获取文件类型的后缀名（文件夹返回空字符串）
   static QString suffix(FileType type);
+
+  /// 所有"文件"类型选项（标签 → 后缀，按枚举顺序）。
+  /// 供新建对话框 / 查找面板文件类型过滤共用；以后扩展文件类型只需改枚举 + label/suffix。
+  static QVector<FileTypeOption> fileTypeOptions();
 
   /// 获取完整路径（父目录 + 文件名 + 后缀）
   QString fullPath() const;

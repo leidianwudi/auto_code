@@ -11,7 +11,10 @@
 #include <QHash>
 #include <QSet>
 #include <QString>
+#include <QStringList>
 #include <QVector>
+
+#include <functional>
 
 #include "../validation_result.h"
 #include "ac_symbol_table.h"
@@ -47,6 +50,13 @@ public:
   /// @brief 设置当前文件路径（用于解析 import 的相对路径）
   void setFilePath(const QString &path) { m_filePath = path; }
 
+  /// @brief 设置文件内容提供器：跨文件 import 解析时，返回指定文件的实时内容
+  /// （已打开文件用内存缓冲而非磁盘快照，避免重命名等操作后磁盘与内存不一致假报错）。
+  /// 未设置或返回空字符串时回落磁盘读取。
+  void setFileContentProvider(const std::function<QString(const QString &)> &provider) {
+    m_contentProvider = provider;
+  }
+
 private:
   /// @brief 从 AST 中提取类定义和函数定义
   void collectClassesAndFunctions(const Block &program);
@@ -58,7 +68,9 @@ private:
   /// @brief 从指定文件收集符号到符号表
   /// @param filePath 目标文件绝对路径
   /// @param importNames 需要导入的符号名列表（空表示导入全部 exported 符号）
-  void collectSymbolsFromFile(const QString &filePath, const QStringList &importNames);
+  /// @param importLine import 语句行号（1-based，用于缺失符号报错定位）
+  void collectSymbolsFromFile(const QString &filePath, const QStringList &importNames,
+                              int importLine = 0);
 
   /// @brief 将错误信息字符串转为 ValidationResult
   /// @param msg 错误信息，格式如 "undefined variable 'x' at line 5"
@@ -94,4 +106,7 @@ private:
   QStringList m_sourceLines;
   QString m_filePath;            ///< 当前文件路径（用于解析 import 相对路径）
   QSet<QString> m_visitedFiles;  ///< 已解析的文件集合（防止循环 import）
+  QStringList m_importErrors;    ///< import 缺失符号错误（collectSymbolsFromFile 填充）
+  /// 文件内容提供器（跨文件 import 解析时优先用实时缓冲内容）
+  std::function<QString(const QString &)> m_contentProvider;
 };

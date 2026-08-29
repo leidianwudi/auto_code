@@ -6,8 +6,9 @@
 #include "reference_panel.h"
 
 #include <QDir>
-#include <QDirIterator>
 #include <QFile>
+#include <QFuture>
+#include <QFutureWatcher>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QRegularExpression>
@@ -15,40 +16,52 @@
 #include <QTextStream>
 #include <QVBoxLayout>
 
+#include <QtConcurrent/QtConcurrent>
+
 #include "comment_scan.h"
 #include "src/util/common/workspace_iter.h"
 #include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_style.h"
 #include "src/util/ui/setting_store.h"
 
-/// 单个命中位置（行内匹配）
-struct RefHit {
-  int line = 0;     // 1-based 行号
-  int column = 0;   // 0-based 匹配起始列
-  QString lineText; // 整行文本
+/// 读取文件文本（UTF-8）
+static QString readFileText(const QString &path) {
+  QFile f(path);
+  if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return QString();
+  QTextStream in(&f);
+  return in.readAll();
+}
+
+/// 后台线程执行：语义收集引用（作用域 + 类型推断）+ 转为 Match（含行文本）。
+/// 纯计算，不访问 UI；供 QtConcurrent::run 调用。
+/// liveContents 由主线程构建并拷贝进工作线程（已打开编辑器 + 缓冲文件内容）。
+struct ReferenceResult {
+  QVector<RenameRef> refs;                  ///< 语义引用位置
+  QVector<ReferencePanel::Match> matches;   ///< 结果树展示用
 };
-
-/// 在整段文本中查找符号的所有引用位置。
-/// 跳过注释与字符串中的出现（VSCode 规则：注释/字符串里的标识符不算真实引用）。
-/// 复用公共标识符扫描 findIdentifierRanges，避免与编辑器内引用扫描重复。
-static QVector<RefHit> findReferencesInText(const QString &text, const QString &name) {
-  QVector<RefHit> hits;
-  if (name.isEmpty()) return hits;
-
-  const auto ranges = findIdentifierRanges(text, name);
-  for (const auto &r : ranges) {
-    // 起始偏移 → 行号 / 行内列（0-based）与整行文本
-    const int line = text.left(r.first).count(QLatin1Char('\n')) + 1;
-    const int lineStart = text.lastIndexOf(QLatin1Char('\n'), r.first) + 1;
-    int lineEnd = text.indexOf(QLatin1Char('\n'), r.first);
-    if (lineEnd < 0) lineEnd = text.size();
-    RefHit h;
-    h.line = line;
-    h.column = r.first - lineStart;
-    h.lineText = text.mid(lineStart, lineEnd - lineStart);
-    hits.append(h);
+static ReferenceResult collectReferenceMatches(const QString &root, const QString &filePath,
+                                               int line, int column, const QString &name,
+                                               QHash<QString, QString> liveContents) {
+  ReferenceResult res;
+  res.refs = collectSymbolReferencesLive(root, filePath, line, column, name, liveContents);
+  QHash<QString, QStringList> lineCache;  // 文件 → 行列表（缓存避免重复读）
+  for (const RenameRef &r : res.refs) {
+    if (!lineCache.contains(r.filePath)) {
+      // 行文本同样优先缓冲（与引用收集同一份内容，避免磁盘旧内容）
+      QString src = liveContents.value(r.filePath);
+      if (src.isEmpty()) src = readFileText(r.filePath);
+      lineCache.insert(r.filePath, src.split(QLatin1Char('\n')));
+    }
+    const QStringList &lines = lineCache.value(r.filePath);
+    ReferencePanel::Match m;
+    m.filePath = r.filePath;
+    m.line = r.line;
+    m.column = r.column;
+    m.length = r.length;
+    if (r.line >= 1 && r.line <= lines.size()) m.lineText = lines[r.line - 1];
+    res.matches.append(m);
   }
-  return hits;
+  return res;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -81,10 +94,15 @@ void ReferencePanel::setupUI() {
 //  对外接口
 // ══════════════════════════════════════════════════════════════════════════════
 
-void ReferencePanel::findReferences(const QString &symbolName) {
+void ReferencePanel::findReferences(const QString &filePath, int line, int column,
+                                    const QString &symbolName) {
   m_symbolName = symbolName;
   m_matches.clear();
+  m_semanticRefs.clear();
   m_symbolLabel->setText(symbolName);
+
+  // 新一轮扫描：递增请求序号，过期的后台扫描结果将被丢弃
+  const int requestId = ++m_scanRequestId;
 
   if (symbolName.isEmpty() || searchRoot().isEmpty()) {
     buildResultTree(m_matches);
@@ -92,33 +110,33 @@ void ReferencePanel::findReferences(const QString &symbolName) {
     return;
   }
 
-  // 遍历工作区文件，逐文件扫描符号引用（跳过注释）
-  forEachWorkspaceFile(
-      searchRoot(), true, [this](const QString &p) { return shouldScanFile(p); },
-      [&](const QString &filePath) {
-        QFile f(filePath);
-        if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return;
-        QTextStream in(&f);
-        const QString text = in.readAll();
-        f.close();
+  // 清空旧结果并提示扫描中（结果由后台线程完成后回填）
+  clearResults();
+  setSummaryText(QStringLiteral("正在查找 %1 的引用...").arg(symbolName));
 
-        const auto hits = findReferencesInText(text, symbolName);
-        for (const RefHit &h : hits) {
-          Match m;
-          m.filePath = filePath;
-          m.line = h.line;
-          m.column = h.column;
-          m.length = symbolName.size();
-          m.lineText = h.lineText;
-          m_matches.append(m);
-        }
-      });
-
-  buildResultTree(m_matches);
-  updateSummary();
+  // 后台线程语义收集（作用域 + 类型推断），完成后回主线程建树。
+  // 每次新建 watcher：QFutureWatcher 不能在旧 future 未完成时 setFuture 复用
+  // 主线程先构建实时内容快照（已打开编辑器 + 缓冲文件），拷贝进工作线程按值使用
+  const QHash<QString, QString> liveContents =
+      m_liveContentProvider ? m_liveContentProvider() : QHash<QString, QString>();
+  auto *watcher = new QFutureWatcher<ReferenceResult>(this);
+  connect(watcher, &QFutureWatcher<ReferenceResult>::finished, this,
+          [this, watcher, requestId]() {
+            watcher->deleteLater();
+            if (requestId != m_scanRequestId) return;  // 过期结果丢弃
+            const ReferenceResult res = watcher->result();
+            m_semanticRefs = res.refs;
+            m_matches = res.matches;
+            buildResultTree(m_matches);
+            updateSummary();
+            emit referencesReady(res.refs);
+          });
+  watcher->setFuture(QtConcurrent::run(collectReferenceMatches, searchRoot(), filePath, line,
+                                       column, symbolName, liveContents));
 }
 
 void ReferencePanel::clear() {
+  ++m_scanRequestId;  // 作废进行中的后台扫描，防止结果回填
   m_symbolName.clear();
   m_symbolLabel->clear();
   m_matches.clear();

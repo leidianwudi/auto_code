@@ -14,6 +14,7 @@
 
 #include <QFile>
 #include <QFileInfo>
+#include <QTextStream>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
@@ -23,12 +24,30 @@
 #include "code_editor.h"
 #include "comment_scan.h"
 #include "src/engine/ac_language.h"
+#include "src/engine/semantic/workspace_index.h"
 #include "src/engine/script/ac_symbol_table.h"
+#include "src/util/common/path_resolver.h"
 #include "src/util/ui/component/aui_style.h"
 
 // ──────────────────────────────────────────────────────────────
 //  标识符提取与符号查找
 // ──────────────────────────────────────────────────────────────
+
+/// 在任意源码文本中查找名为 name 的符号定义行号（1-based），找不到返回 0。
+/// 支持 function/class/interface/enum/let/const/var 定义，可带 export/static 前缀
+/// （如 "export function add("、"public static function foo(" 之外的顶层定义）。
+static int findDefinitionLineInSource(const QString &source, const QString &name) {
+  if (source.isEmpty() || name.isEmpty()) return 0;
+  const QStringList lines = source.split(QLatin1Char('\n'));
+  const QString nm = QRegularExpression::escape(name);
+  QRegularExpression defRe(
+      QStringLiteral("^\\s*(?:export\\s+|static\\s+|async\\s+)*(function|class|interface|enum|let|const|var)\\s+") +
+      nm + QStringLiteral("\\b"));
+  for (int i = 0; i < lines.size(); ++i) {
+    if (defRe.match(lines[i]).hasMatch()) return i + 1;
+  }
+  return 0;
+}
 
 QString CodeEditor::identifierAtCursor(int pos, int *startPos, int *endPos) const {
   const QString &text = cachedText();
@@ -175,6 +194,10 @@ const AcSymbolEntry *CodeEditor::findPropertyDefinition(const QString &propName)
 void CodeEditor::goToDefinition(const QString &name) {
   if (name.isEmpty() || !document()) return;
 
+  // 光标位于 import { A as B } from "path" 子句内 → 跳转到源文件中 A 的定义
+  // （必须在普通符号查找之前，避免误跳到当前文件的同名符号）
+  if (resolveImportClauseDefinition(name)) return;
+
   // 优先检查属性访问上下文：obj.prop → 精确查找 objType.prop
   // 必须在 findSymbolDefinition 之前，避免找到同名的其他类属性（如 Array.length vs String.length）
   const AcSymbolEntry *entry = findPropertyDefinition(name);
@@ -202,6 +225,33 @@ void CodeEditor::goToDefinition(const QString &name) {
     if (checkPos >= 2 && text.mid(checkPos - 2, 3) == QStringLiteral("new") &&
         (checkPos == 2 || !text[checkPos - 3].isLetterOrNumber())) {
       goToTypeDefinition(name);
+      return;
+    }
+  }
+
+  if (!entry) {
+    // 跨文件 import / 别名 / 成员：查询工作区语义索引（模块表 + 实时缓冲，
+    // 与重命名/引用同一套语义，未保存的缓冲修改也能正确定位）
+    const QTextCursor cur = textCursor();
+    const SemanticSymbol s = WorkspaceIndex::ins().resolveDefinition(
+        objectName(), cur.blockNumber() + 1, cur.positionInBlock(), name,
+        &CodeEditor::provideFileContent);
+    if (!s.key.isEmpty() && s.line > 0) {
+      const QString targetPath = s.filePath;
+      const int targetLine = s.line;
+      emit aboutToNavigate(targetPath, targetLine);
+      if (targetPath == objectName()) {
+        QTextCursor cursor(document());
+        QTextBlock block = document()->findBlockByNumber(targetLine - 1);
+        if (block.isValid()) {
+          cursor.setPosition(block.position());
+          setTextCursor(cursor);
+          ensureCursorVisible();
+          setFocus();
+        }
+      } else {
+        emit requestGoToLine(targetPath, targetLine);
+      }
       return;
     }
   }
@@ -238,27 +288,19 @@ void CodeEditor::goToDefinition(const QString &name) {
 }
 
 int CodeEditor::findSymbolLineByName(const QString &name) const {
+  // 优先用统一定义扫描（支持 export/static 前缀）
+  int line = findDefinitionLineInSource(cachedText(), name);
+  if (line > 0) return line;
+
   const QString &text = cachedText();
   QStringList lines = text.split(QLatin1Char('\n'));
 
-  // 搜索各种定义模式
-  QRegularExpression funcRe(QStringLiteral("^\\s*function\\s+") + QRegularExpression::escape(name) +
-                            QStringLiteral("\\b"));
-  QRegularExpression classRe(QStringLiteral("^\\s*class\\s+") + QRegularExpression::escape(name) +
-                             QStringLiteral("\\b"));
-  QRegularExpression ifaceRe(QStringLiteral("^\\s*interface\\s+") +
-                             QRegularExpression::escape(name) + QStringLiteral("\\b"));
-  // 变量声明：let name 或 let name: Type
-  QRegularExpression letRe(QStringLiteral("^\\s*let\\s+") + QRegularExpression::escape(name) +
-                           QStringLiteral("\\b"));
   // for-in 循环变量：for (name in 或 for (let name in
   QRegularExpression forInRe(QStringLiteral("\\bfor\\s*\\(\\s*(?:let\\s+)?") +
                              QRegularExpression::escape(name) + QStringLiteral("\\b"));
 
   for (int i = 0; i < lines.size(); ++i) {
-    if (funcRe.match(lines[i]).hasMatch() || classRe.match(lines[i]).hasMatch() ||
-        ifaceRe.match(lines[i]).hasMatch() || letRe.match(lines[i]).hasMatch() ||
-        forInRe.match(lines[i]).hasMatch()) {
+    if (forInRe.match(lines[i]).hasMatch()) {
       return i + 1;  // 返回 1-based 行号
     }
   }
@@ -273,6 +315,64 @@ int CodeEditor::findSymbolLineByName(const QString &name) const {
   }
 
   return 0;
+}
+
+bool CodeEditor::resolveImportClauseDefinition(const QString &name) {
+  const QString &text = cachedText();
+  if (text.isEmpty() || name.isEmpty()) return false;
+  const int pos = textCursor().position();
+  if (pos < 0 || pos > text.size()) return false;
+
+  // 匹配所有 import 语句：import { A, B as C } from "path"
+  QRegularExpression importRe(
+      QStringLiteral("\\bimport\\s*\\{([^}]*)\\}\\s*from\\s*[\"']([^\"']+)[\"']"));
+  auto mit = importRe.globalMatch(text);
+  while (mit.hasNext()) {
+    const auto m = mit.next();
+    const int clauseStart = m.capturedStart(1);
+    const int clauseEnd = m.capturedEnd(1);
+    // 光标必须落在子句内（import { ... } 中的名字区域）
+    if (pos < clauseStart || pos > clauseEnd) continue;
+
+    // 逐个解析子句项，找光标命中的项（原导出名 或 别名）
+    const QString clause = m.captured(1);
+    QString originalName;
+    QRegularExpression itemRe(
+        QStringLiteral("\\b([A-Za-z_$][\\w$]*)\\s*(?:as\\s+([A-Za-z_$][\\w$]*))?"));
+    auto iit = itemRe.globalMatch(clause);
+    while (iit.hasNext()) {
+      const auto im = iit.next();
+      const int itemStart = clauseStart + im.capturedStart(0);
+      const int itemEnd = clauseStart + im.capturedEnd(0);
+      // 光标落在该项（含 as 别名部分）内即命中
+      if (pos < itemStart || pos > itemEnd) continue;
+      originalName = im.captured(1);
+      break;
+    }
+    if (originalName.isEmpty()) return false;
+
+    // 解析 import 源文件绝对路径
+    const QString absPath = PathResolver::resolveImportPath(m.captured(2), objectName());
+    if (absPath.isEmpty()) return false;
+
+    // 读取源文件（优先已打开文件的实时缓冲，否则磁盘）
+    QString src = provideFileContent(absPath);
+    if (src.isEmpty()) {
+      QFile f(absPath);
+      if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QTextStream ts(&f);
+        src = ts.readAll();
+      }
+    }
+    const int targetLine = findDefinitionLineInSource(src, originalName);
+    if (targetLine <= 0) return false;
+
+    emit aboutToNavigate(absPath, targetLine);
+    // 跨文件跳转，发射信号让外部处理（与 goToDefinition 的跨文件路径一致）
+    emit requestGoToLine(absPath, targetLine);
+    return true;
+  }
+  return false;
 }
 
 void CodeEditor::goToTypeDefinition(const QString &name) {
@@ -639,6 +739,32 @@ void CodeEditor::setLayerSelections(const QString &layerId,
   auto it = m_highlightLayers.find(layerId);
   if (it == m_highlightLayers.end()) return;
   it->selections = selections;
+}
+
+void CodeEditor::setReferenceHighlightPositions(const QVector<RenameRef> &refs) {
+  auto it = m_highlightLayers.find(QStringLiteral("reference"));
+  if (it == m_highlightLayers.end()) return;
+  // 语义结果：不按关键词填充（currentKey 置空，编辑时不按名字重扫）
+  it->currentKey.clear();
+  QList<QTextEdit::ExtraSelection> sels;
+  QTextCursor cursor(document());
+  for (const RenameRef &r : refs) {
+    if (r.filePath != objectName()) continue;
+    QTextBlock block = document()->findBlockByNumber(r.line - 1);
+    if (!block.isValid()) continue;
+    const int pos = block.position() + r.column;
+    if (pos + r.length > block.position() + block.length() - 1) continue;
+    cursor.setPosition(pos);
+    cursor.setPosition(pos + r.length, QTextCursor::KeepAnchor);
+    QTextEdit::ExtraSelection sel;
+    sel.cursor = cursor;
+    sel.format.setBackground(AuiStyle::referenceHighlightBackground());
+    sel.format.setForeground(AuiStyle::modifiedColor());
+    sels.append(sel);
+  }
+  it->selections = sels;
+  highlightCurrentLine();
+  viewport()->update();
 }
 
 void CodeEditor::reapplyEnabledHighlights() {

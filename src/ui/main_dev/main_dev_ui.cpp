@@ -453,6 +453,11 @@ void MainDevUi::saveLayout() {
 }
 
 void MainDevUi::closeEvent(QCloseEvent *event) {
+  // 有未保存修改时先弹窗（保存/不保存/取消）；取消则阻止关闭
+  if (m_closeConfirmer && !m_closeConfirmer()) {
+    event->ignore();
+    return;
+  }
   // 关闭窗口前保存目录树状态（勾选、启动项、展开节点等），供下次启动恢复
   if (m_fileTree) m_fileTree->saveState();
   // 保存窗口几何与分割器大小
