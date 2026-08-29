@@ -284,6 +284,14 @@ private:
   void hideErrorTooltip();
   int calculateNewLineIndent(const QString &linePrefix) const;
 
+  // ── highlightCurrentLine 的各高亮来源（拆分为独立小函数，便于维护）──
+  void appendCurrentLineHighlight(QList<QTextEdit::ExtraSelection> &extra);   ///< 当前行背景
+  void appendRainbowBracketHighlights(QList<QTextEdit::ExtraSelection> &extra);  ///< 彩虹括号
+  void appendCursorContextHighlights(QList<QTextEdit::ExtraSelection> &extra);  ///< 模板标签 + 括号匹配
+  void appendErrorLineHighlights(QList<QTextEdit::ExtraSelection> &extra);      ///< 错误行背景
+  void appendDebugLineHighlight(QList<QTextEdit::ExtraSelection> &extra);       ///< 调试当前行
+  void appendLayerHighlights(QList<QTextEdit::ExtraSelection> &extra);          ///< 统一高亮层
+
   // ── 高亮层填充（由 HighlightLayer::filler 回调调用）──
   /// 依据符号名填充引用高亮选区（注释/字符串中的出现不高亮）
   QList<QTextEdit::ExtraSelection> buildReferenceHighlights(const QString &name);

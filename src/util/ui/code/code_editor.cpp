@@ -487,122 +487,134 @@ void CodeEditor::hideErrorTooltip() {
 // ──────────────────────────────────────────────────────────────
 
 void CodeEditor::highlightCurrentLine() {
+  // 合并各来源的 ExtraSelection（当前行 / 括号 / 错误 / 调试 / 持久高亮层）
   QList<QTextEdit::ExtraSelection> extra;
+  appendCurrentLineHighlight(extra);
+  appendRainbowBracketHighlights(extra);
+  appendCursorContextHighlights(extra);
+  appendErrorLineHighlights(extra);
+  appendDebugLineHighlight(extra);
+  appendLayerHighlights(extra);
+  setExtraSelections(extra);
+}
 
-  if (!isReadOnly()) {
-    QTextEdit::ExtraSelection selection;
-    selection.format.setBackground(AuiStyle::currentLineBackground());
-    selection.format.setProperty(QTextFormat::FullWidthSelection, true);
-    selection.cursor = textCursor();
-    selection.cursor.clearSelection();
-    extra.append(selection);
-  }
+void CodeEditor::appendCurrentLineHighlight(QList<QTextEdit::ExtraSelection> &extra) {
+  if (isReadOnly()) return;
+  QTextEdit::ExtraSelection selection;
+  selection.format.setBackground(AuiStyle::currentLineBackground());
+  selection.format.setProperty(QTextFormat::FullWidthSelection, true);
+  selection.cursor = textCursor();
+  selection.cursor.clearSelection();
+  extra.append(selection);
+}
 
+void CodeEditor::appendRainbowBracketHighlights(QList<QTextEdit::ExtraSelection> &extra) {
   // ── 彩虹括号：全文括号按嵌套深度着前景色（VSCode 风格），ac/json/tpl 通用 ──
-  {
-    const QString &text = cachedText();
-    const auto brackets = BracketMatcher::collectBrackets(text, nullptr);
-    for (const auto &b : brackets) {
-      QColor color = AuiStyle::rainbowBracketColor(b.depth);
-      if (!color.isValid()) continue;
-      QTextEdit::ExtraSelection sel;
-      sel.cursor = textCursor();
-      sel.cursor.setPosition(b.pos);
-      sel.cursor.setPosition(b.pos + 1, QTextCursor::KeepAnchor);
-      sel.format.setForeground(color);
-      extra.append(sel);
-    }
+  const QString &text = cachedText();
+  const auto brackets = BracketMatcher::collectBrackets(text, nullptr);
+  for (const auto &b : brackets) {
+    QColor color = AuiStyle::rainbowBracketColor(b.depth);
+    if (!color.isValid()) continue;
+    QTextEdit::ExtraSelection sel;
+    sel.cursor = textCursor();
+    sel.cursor.setPosition(b.pos);
+    sel.cursor.setPosition(b.pos + 1, QTextCursor::KeepAnchor);
+    sel.format.setForeground(color);
+    extra.append(sel);
   }
+}
 
+void CodeEditor::appendCursorContextHighlights(QList<QTextEdit::ExtraSelection> &extra) {
   QTextCursor cursor = textCursor();
-  if (!cursor.hasSelection()) {
-    int pos = cursor.position();
-    const QString &text = cachedText();
+  if (cursor.hasSelection()) return;
+  int pos = cursor.position();
+  const QString &text = cachedText();
 
-    // 模板文件：识别 ${each}/${/each}、${if}/${/if} 成对控制标签并高亮。
-    // 命中后不 return，与下方括号匹配/错误/调试等高亮叠加，
-    // 保证光标在 ${...} 块内时，普通括号 ()[]{} 的高亮不丢失。
-    if (m_validationMode == TemplateValidation) {
-      auto tagMatch = BracketMatcher::findEnclosingTemplateTag(pos, text);
-      if (tagMatch.isValid()) {
-        QColor color = AuiStyle::templateTagColor();
-        QTextEdit::ExtraSelection sel1;
-        sel1.cursor = cursor;
-        sel1.cursor.setPosition(tagMatch.openStart);
-        sel1.cursor.setPosition(tagMatch.openEnd, QTextCursor::KeepAnchor);
-        sel1.format.setBackground(color);
-        sel1.format.setFontWeight(QFont::Bold);
-        extra.append(sel1);
-
-        QTextEdit::ExtraSelection sel2;
-        sel2.cursor = cursor;
-        sel2.cursor.setPosition(tagMatch.closeStart);
-        sel2.cursor.setPosition(tagMatch.closeEnd, QTextCursor::KeepAnchor);
-        sel2.format.setBackground(color);
-        sel2.format.setFontWeight(QFont::Bold);
-        extra.append(sel2);
-      }
-    }
-
-    // 使用 BracketMatcher 进行括号匹配
-    auto directMatch = BracketMatcher::findMatchAtCursor(pos, text);
-    auto enclosingMatch =
-        (directMatch.isValid()) ? directMatch : BracketMatcher::findEnclosingBrackets(pos, text);
-
-    if (enclosingMatch.isValid()) {
-      QColor color = AuiStyle::bracketColorForChar(enclosingMatch.openChar);
-
+  // 模板文件：识别 ${each}/${/each}、${if}/${/if} 成对控制标签并高亮。
+  // 命中后不 return，与下方括号匹配/错误/调试等高亮叠加，
+  // 保证光标在 ${...} 块内时，普通括号 ()[]{} 的高亮不丢失。
+  if (m_validationMode == TemplateValidation) {
+    auto tagMatch = BracketMatcher::findEnclosingTemplateTag(pos, text);
+    if (tagMatch.isValid()) {
+      QColor color = AuiStyle::templateTagColor();
       QTextEdit::ExtraSelection sel1;
       sel1.cursor = cursor;
-      sel1.cursor.setPosition(enclosingMatch.openPos);
-      sel1.cursor.setPosition(enclosingMatch.openPos + 1, QTextCursor::KeepAnchor);
+      sel1.cursor.setPosition(tagMatch.openStart);
+      sel1.cursor.setPosition(tagMatch.openEnd, QTextCursor::KeepAnchor);
       sel1.format.setBackground(color);
       sel1.format.setFontWeight(QFont::Bold);
       extra.append(sel1);
 
       QTextEdit::ExtraSelection sel2;
       sel2.cursor = cursor;
-      sel2.cursor.setPosition(enclosingMatch.closePos);
-      sel2.cursor.setPosition(enclosingMatch.closePos + 1, QTextCursor::KeepAnchor);
+      sel2.cursor.setPosition(tagMatch.closeStart);
+      sel2.cursor.setPosition(tagMatch.closeEnd, QTextCursor::KeepAnchor);
       sel2.format.setBackground(color);
       sel2.format.setFontWeight(QFont::Bold);
       extra.append(sel2);
     }
   }
 
-  // 错误行背景色高亮
-  if (!m_errorLines.isEmpty()) {
-    QTextBlock block = document()->firstBlock();
-    while (block.isValid()) {
-      int lineNum = block.blockNumber() + 1;
-      if (m_errorLines.contains(lineNum)) {
-        QTextEdit::ExtraSelection errorSel;
-        errorSel.format.setBackground(AuiStyle::errorLineBackground());
-        errorSel.format.setProperty(QTextFormat::FullWidthSelection, true);
-        errorSel.cursor = QTextCursor(block);
-        errorSel.cursor.clearSelection();
-        extra.append(errorSel);
-      }
-      block = block.next();
-    }
-  }
+  // 使用 BracketMatcher 进行括号匹配
+  auto directMatch = BracketMatcher::findMatchAtCursor(pos, text);
+  auto enclosingMatch =
+      (directMatch.isValid()) ? directMatch : BracketMatcher::findEnclosingBrackets(pos, text);
 
+  if (enclosingMatch.isValid()) {
+    QColor color = AuiStyle::bracketColorForChar(enclosingMatch.openChar);
+
+    QTextEdit::ExtraSelection sel1;
+    sel1.cursor = cursor;
+    sel1.cursor.setPosition(enclosingMatch.openPos);
+    sel1.cursor.setPosition(enclosingMatch.openPos + 1, QTextCursor::KeepAnchor);
+    sel1.format.setBackground(color);
+    sel1.format.setFontWeight(QFont::Bold);
+    extra.append(sel1);
+
+    QTextEdit::ExtraSelection sel2;
+    sel2.cursor = cursor;
+    sel2.cursor.setPosition(enclosingMatch.closePos);
+    sel2.cursor.setPosition(enclosingMatch.closePos + 1, QTextCursor::KeepAnchor);
+    sel2.format.setBackground(color);
+    sel2.format.setFontWeight(QFont::Bold);
+    extra.append(sel2);
+  }
+}
+
+void CodeEditor::appendErrorLineHighlights(QList<QTextEdit::ExtraSelection> &extra) {
+  // 错误行背景色高亮
+  if (m_errorLines.isEmpty()) return;
+  QTextBlock block = document()->firstBlock();
+  while (block.isValid()) {
+    int lineNum = block.blockNumber() + 1;
+    if (m_errorLines.contains(lineNum)) {
+      QTextEdit::ExtraSelection errorSel;
+      errorSel.format.setBackground(AuiStyle::errorLineBackground());
+      errorSel.format.setProperty(QTextFormat::FullWidthSelection, true);
+      errorSel.cursor = QTextCursor(block);
+      errorSel.cursor.clearSelection();
+      extra.append(errorSel);
+    }
+    block = block.next();
+  }
   // 错误波浪下划线由 paintEvent 依据 m_errorRanges 统一绘制（单行、钳制行尾），
   // 不在此通过 ExtraSelection 绘制，避免与自定义绘制重叠（粗/细两条线并存）
+}
 
+void CodeEditor::appendDebugLineHighlight(QList<QTextEdit::ExtraSelection> &extra) {
   // 调试当前行高亮（黄色背景，标红箭头）
-  if (m_debugLine > 0) {
-    QTextBlock block = document()->findBlockByNumber(m_debugLine - 1);
-    if (block.isValid()) {
-      QTextEdit::ExtraSelection debugSel;
-      debugSel.format.setBackground(QColor(0xff, 0xf0, 0x8a));  // 淡黄背景
-      debugSel.format.setProperty(QTextFormat::FullWidthSelection, true);
-      debugSel.cursor = QTextCursor(block);
-      debugSel.cursor.clearSelection();
-      extra.append(debugSel);
-    }
-  }
+  if (m_debugLine <= 0) return;
+  QTextBlock block = document()->findBlockByNumber(m_debugLine - 1);
+  if (!block.isValid()) return;
+  QTextEdit::ExtraSelection debugSel;
+  debugSel.format.setBackground(QColor(0xff, 0xf0, 0x8a));  // 淡黄背景
+  debugSel.format.setProperty(QTextFormat::FullWidthSelection, true);
+  debugSel.cursor = QTextCursor(block);
+  debugSel.cursor.clearSelection();
+  extra.append(debugSel);
+}
 
+void CodeEditor::appendLayerHighlights(QList<QTextEdit::ExtraSelection> &extra) {
   // 统一高亮层（引用 / 查找面板 / 内嵌查找）：按层合并选区。
   // 内嵌查找层仅在查找栏显示时可见（tab 切换暂停时隐藏，避免残留高亮）
   for (auto it = m_highlightLayers.begin(); it != m_highlightLayers.end(); ++it) {
@@ -614,8 +626,6 @@ void CodeEditor::highlightCurrentLine() {
     }
     extra.append(layer.selections);
   }
-
-  setExtraSelections(extra);
 }
 
 void CodeEditor::refreshExtraSelections() { highlightCurrentLine(); }

@@ -394,25 +394,12 @@ QVector<QPair<int, QString>> CodeEditor::findSymbolReferences(const QString &nam
   QVector<QPair<int, QString>> refs;
   if (name.isEmpty()) return refs;
 
-  // 扫描全文查找标识符出现位置（跳过注释与字符串中的出现，与 VSCode 规则一致）
+  // 复用公共标识符扫描（跳过注释/字符串，返回所有命中），转为"行号 + 行文本"
   const QString &text = cachedText();
-  const QVector<QPair<int, int>> comments = collectNonCodeRanges(text);
-  QStringList lines = text.split(QLatin1Char('\n'));
-  QRegularExpression re(QStringLiteral("\\b") + QRegularExpression::escape(name) +
-                        QStringLiteral("\\b"));
-
-  int lineStart = 0;
-  for (int i = 0; i < lines.size(); ++i) {
-    auto match = re.match(lines[i]);
-    if (match.hasMatch()) {
-      const int absPos = lineStart + match.capturedStart();
-      if (!posInComments(comments, absPos)) {
-        refs.append(qMakePair(i + 1, lines[i].trimmed()));
-      }
-    }
-    lineStart += lines[i].size() + 1;  // +1 为行尾换行符
+  const auto ranges = findIdentifierRanges(text, name);
+  for (const auto &r : ranges) {
+    refs.append(rangeToLineInfo(text, r.first));
   }
-
   return refs;
 }
 
@@ -593,22 +580,12 @@ QList<QTextEdit::ExtraSelection> CodeEditor::buildReferenceHighlights(const QStr
   QList<QTextEdit::ExtraSelection> result;
   if (name.isEmpty()) return result;
 
-  QRegularExpression re(QStringLiteral("\\b") + QRegularExpression::escape(name) +
-                        QStringLiteral("\\b"));
-  const QString &text = cachedText();
-  // 与 findSymbolReferences 一致：注释/字符串中的出现不高亮
-  const QVector<QPair<int, int>> comments = collectNonCodeRanges(text);
+  // 复用公共标识符扫描（跳过注释/字符串，与 findSymbolReferences 一致）
+  const auto ranges = findIdentifierRanges(cachedText(), name);
   QTextCursor cursor(document());
-  int offset = 0;
-  while (offset < text.size()) {
-    auto match = re.match(text, offset);
-    if (!match.hasMatch()) break;
-    int start = match.capturedStart();
-    int length = match.capturedLength();
-    offset = start + length;
-    if (posInComments(comments, start)) continue;
-    cursor.setPosition(start);
-    cursor.setPosition(start + length, QTextCursor::KeepAnchor);
+  for (const auto &r : ranges) {
+    cursor.setPosition(r.first);
+    cursor.setPosition(r.first + r.second, QTextCursor::KeepAnchor);
     QTextEdit::ExtraSelection sel;
     sel.cursor = cursor;
     sel.format.setBackground(AuiStyle::referenceHighlightBackground());

@@ -90,6 +90,7 @@ qt_add_executable(auto_code
     src/util/common/ac_log.h
     src/util/common/workspace_diag.h
     src/util/common/workspace_diag.cpp
+    src/util/common/workspace_iter.h
     src/util/ui/code/tree_dir.h
     src/util/ui/code/tree_dir.cpp
     src/util/ui/code/tree_state_store.h

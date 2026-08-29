@@ -6,7 +6,6 @@
 #include "workspace_diag.h"
 
 #include <QDir>
-#include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -21,6 +20,7 @@
 #include "src/engine/tpl/tpl_validator.h"
 #include "src/util/common/code_constants.h"
 #include "src/util/common/util_json.h"
+#include "src/util/common/workspace_iter.h"
 
 namespace {
 
@@ -110,11 +110,10 @@ QVector<ValidationResult> validateJsonFile(const QString &filePath, const QStrin
 
 QStringList collectWorkspaceFiles(const QString &rootDir) {
   QStringList out;
-  QDirIterator it(rootDir, QDir::Files | QDir::NoSymLinks, QDirIterator::Subdirectories);
-  while (it.hasNext()) {
-    const QString p = it.next();
-    if (isVerifiableFile(p)) out.append(QDir::cleanPath(p));
-  }
+  // 统一工作区遍历（诊断扫描不跟随符号链接，安全起见）+ isVerifiableFile 过滤
+  forEachWorkspaceFile(
+      rootDir, false, [](const QString &p) { return isVerifiableFile(p); },
+      [&out](const QString &p) { out.append(QDir::cleanPath(p)); });
   return out;
 }
 

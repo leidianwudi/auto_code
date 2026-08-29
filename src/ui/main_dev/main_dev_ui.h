@@ -158,8 +158,16 @@ private:
   void setupTitleBar();
   /// 保存窗口几何与分割器大小（关闭窗口时调用）
   void saveLayout();
-  /// 构建编辑器区域（文件树 + 分割器 + 编辑器面板）
+  /// 构建编辑器区域（文件树 + 分割器 + 编辑器面板）——主工作区组装入口
   void setupEditorArea();
+  /// 左侧：文件树 + 调试 + 查找 + 引用 tab 容器 + 启动项连接
+  void setupLeftPanel();
+  /// 右侧：编辑器分割器 + 初始面板
+  void setupEditorSplitter();
+  /// 底部：输出 + 问题 tab 容器
+  void setupBottomPanel();
+  /// 组装垂直分割器（编辑器+底部）与主分割器（左+右）
+  void assembleMainSplitter();
   /// 构建底部状态栏并返回内容控件
   void setupStatusBar(QWidget *contentWidget, QVBoxLayout *contentLayout);
   // ── 窗口事件 ──

@@ -19,6 +19,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+#include "src/util/common/workspace_iter.h"
 #include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_style.h"
 
@@ -158,48 +159,44 @@ void SearchPanel::performSearch() {
   const bool caseSensitive = m_caseCheck->isChecked();
   const bool wholeWord = m_wordCheck->isChecked();
 
-  // 遍历搜索根目录下所有文件
-  QDirIterator it(searchRoot(), QDir::Files,
-                  QDirIterator::Subdirectories | QDirIterator::FollowSymlinks);
-  while (it.hasNext()) {
-    it.next();
-    const QString filePath = it.filePath();
-    if (!shouldScanFile(filePath)) continue;
-
-    QFile f(filePath);
-    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) continue;
-    QTextStream in(&f);
-    int lineNo = 0;
-    while (!in.atEnd()) {
-      QString lineText = in.readLine();
-      ++lineNo;
-      // 逐行查找所有匹配（含大小写、全词选项）
-      QString hay = lineText;
-      QString ndl = needle;
-      if (!caseSensitive) {
-        hay = hay.toLower();
-        ndl = ndl.toLower();
-      }
-      int from = 0;
-      const int nlen = static_cast<int>(ndl.size());
-      while (from <= hay.size() - nlen) {
-        const int idx = static_cast<int>(hay.indexOf(ndl, from));
-        if (idx < 0) break;
-        // 全词匹配：匹配前后都不是标识符字符
-        bool ok = true;
-        if (wholeWord) {
-          if (idx > 0 && isWordChar(lineText[idx - 1])) ok = false;
-          const int end = idx + static_cast<int>(needle.size());
-          if (ok && end < lineText.size() && isWordChar(lineText[end])) ok = false;
+  // 遍历搜索根目录下所有文件（统一工作区遍历 + shouldScanFile 过滤）
+  forEachWorkspaceFile(
+      searchRoot(), true, [this](const QString &p) { return shouldScanFile(p); },
+      [&](const QString &filePath) {
+        QFile f(filePath);
+        if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+        QTextStream in(&f);
+        int lineNo = 0;
+        while (!in.atEnd()) {
+          QString lineText = in.readLine();
+          ++lineNo;
+          // 逐行查找所有匹配（含大小写、全词选项）
+          QString hay = lineText;
+          QString ndl = needle;
+          if (!caseSensitive) {
+            hay = hay.toLower();
+            ndl = ndl.toLower();
+          }
+          int from = 0;
+          const int nlen = static_cast<int>(ndl.size());
+          while (from <= hay.size() - nlen) {
+            const int idx = static_cast<int>(hay.indexOf(ndl, from));
+            if (idx < 0) break;
+            // 全词匹配：匹配前后都不是标识符字符
+            bool ok = true;
+            if (wholeWord) {
+              if (idx > 0 && isWordChar(lineText[idx - 1])) ok = false;
+              const int end = idx + static_cast<int>(needle.size());
+              if (ok && end < lineText.size() && isWordChar(lineText[end])) ok = false;
+            }
+            if (ok) {
+              m_matches.append({filePath, lineNo, idx, static_cast<int>(needle.size()), lineText});
+            }
+            from = idx + nlen;
+          }
         }
-        if (ok) {
-          m_matches.append({filePath, lineNo, idx, static_cast<int>(needle.size()), lineText});
-        }
-        from = idx + nlen;
-      }
-    }
-    f.close();
-  }
+        f.close();
+      });
 
   // ── 构建结果树：文件分组节点 → 匹配行节点（基类统一实现）──
   buildResultTree(m_matches);

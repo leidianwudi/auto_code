@@ -11,6 +11,7 @@
 #pragma once
 
 #include <QPair>
+#include <QRegularExpression>
 #include <QString>
 #include <QVector>
 
@@ -90,4 +91,38 @@ inline bool posInComments(const QVector<QPair<int, int>> &ranges, int pos) {
     if (pos >= r.first && pos < r.first + r.second) return true;
   }
   return false;
+}
+
+/// 查找文本中标识符 name 的所有出现位置（跳过注释/字符串中的出现，VSCode 规则）。
+/// 返回 (起始偏移, 长度) 列表；name 为空或无命中时返回空列表。
+/// 供引用扫描（findSymbolReferences / buildReferenceHighlights）与引用面板共用，
+/// 消除三处重复的「\bword\b 正则 + collectNonCodeRanges + posInComments」扫描逻辑。
+inline QVector<QPair<int, int>> findIdentifierRanges(const QString &text, const QString &name) {
+  QVector<QPair<int, int>> hits;
+  if (name.isEmpty()) return hits;
+
+  const QVector<QPair<int, int>> nonCode = collectNonCodeRanges(text);
+  QRegularExpression re(QStringLiteral("\\b") + QRegularExpression::escape(name) +
+                        QStringLiteral("\\b"));
+  int offset = 0;
+  while (offset < text.size()) {
+    auto match = re.match(text, offset);
+    if (!match.hasMatch()) break;
+    const int start = match.capturedStart();
+    const int length = match.capturedLength();
+    offset = start + length;
+    if (posInComments(nonCode, start)) continue;
+    hits.append(qMakePair(start, length));
+  }
+  return hits;
+}
+
+/// 将文本内的字符偏移换算为行号（1-based）与整行文本（不含换行）。
+/// 供引用扫描把 findIdentifierRanges 的偏移结果转为"行号 + 行内容"。
+inline QPair<int, QString> rangeToLineInfo(const QString &text, int pos) {
+  const int line = text.left(pos).count(QLatin1Char('\n')) + 1;
+  const int lineStart = text.lastIndexOf(QLatin1Char('\n'), pos) + 1;
+  int lineEnd = text.indexOf(QLatin1Char('\n'), pos);
+  if (lineEnd < 0) lineEnd = text.size();
+  return qMakePair(line, text.mid(lineStart, lineEnd - lineStart).trimmed());
 }

@@ -167,7 +167,7 @@ void MainDevUi::setupTitleBar() {
 
   // ── 启动项下拉框 ──
   m_startupCombo = AuiComboDelete::create();
-  m_startupCombo->setMinimumWidth(120);
+  m_startupCombo->setMinimumWidth(150);
   m_startupCombo->setToolTip(QStringLiteral("选择启动项"));
   titleLayout->insertWidget(tb.contentInsertIndex, m_startupCombo);
   tb.contentInsertIndex++;
@@ -212,6 +212,14 @@ void MainDevUi::setupTitleBar() {
 // ──────────────────────────────────────────────────────────────
 
 void MainDevUi::setupEditorArea() {
+  // 主工作区组装：左侧面板 → 编辑器分割器 → 底部面板 → 分割器组装
+  setupLeftPanel();
+  setupEditorSplitter();
+  setupBottomPanel();
+  assembleMainSplitter();
+}
+
+void MainDevUi::setupLeftPanel() {
   // ── 左侧：文件树 + 调试 + 查找 + 引用 双 tab（LeftPanelTabWidget 复用 AuiCodeTabBar 自绘样式）──
   m_fileTree = new TreeDir;
   m_debugPanel = new DebugPanel;
@@ -275,7 +283,9 @@ void MainDevUi::setupEditorArea() {
             const QString path = m_startupCombo->itemData(index).toString();
             if (!path.isEmpty()) m_fileTree->removeStartup(path);
           });
+}
 
+void MainDevUi::setupEditorSplitter() {
   // ── 右侧编辑器分割器 ──
   m_editorSplitter = new QSplitter(Qt::Horizontal);
   m_editorSplitter->setChildrenCollapsible(false);
@@ -283,7 +293,9 @@ void MainDevUi::setupEditorArea() {
   QTabWidget *initialTabs = createEditorPanel();
   m_editorSplitter->addWidget(initialTabs);
   m_editorSplitter->setStretchFactor(0, 1);
+}
 
+void MainDevUi::setupBottomPanel() {
   // ── 输出面板 ──
   m_outputPanel = new CodeLog;
   m_outputPanel->installEventFilter(this);
@@ -298,7 +310,9 @@ void MainDevUi::setupEditorArea() {
   m_outputTabs = new BottomTabWidget;
   m_outputTabs->addTab(m_outputPanel, QStringLiteral("输出"));
   m_outputTabs->addTab(m_problemPanel, QStringLiteral("问题"));
+}
 
+void MainDevUi::assembleMainSplitter() {
   // ── 垂直分割器：编辑器 + 底部 tab 面板 ──
   m_contentSplitter = new QSplitter(Qt::Vertical);
   m_contentSplitter->addWidget(m_editorSplitter);
@@ -308,7 +322,7 @@ void MainDevUi::setupEditorArea() {
 
   // ── 主分割器：文件树(tab) + 右侧区域 ──
   m_mainSplitter = new QSplitter(Qt::Horizontal);
-  m_mainSplitter->addWidget(leftTabs);
+  m_mainSplitter->addWidget(m_leftTabs);
   m_mainSplitter->addWidget(m_contentSplitter);
   m_mainSplitter->setStretchFactor(0, 0);
   m_mainSplitter->setStretchFactor(1, 1);

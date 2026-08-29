@@ -16,6 +16,7 @@
 #include <QVBoxLayout>
 
 #include "comment_scan.h"
+#include "src/util/common/workspace_iter.h"
 #include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_style.h"
 #include "src/util/ui/setting_store.h"
@@ -29,30 +30,23 @@ struct RefHit {
 
 /// 在整段文本中查找符号的所有引用位置。
 /// 跳过注释与字符串中的出现（VSCode 规则：注释/字符串里的标识符不算真实引用）。
+/// 复用公共标识符扫描 findIdentifierRanges，避免与编辑器内引用扫描重复。
 static QVector<RefHit> findReferencesInText(const QString &text, const QString &name) {
   QVector<RefHit> hits;
   if (name.isEmpty()) return hits;
 
-  const QVector<QPair<int, int>> nonCode = collectNonCodeRanges(text);
-  const QStringList lines = text.split(QLatin1Char('\n'));
-  QRegularExpression re(QStringLiteral("\\b") + QRegularExpression::escape(name) +
-                        QStringLiteral("\\b"));
-
-  int lineStart = 0;
-  for (int i = 0; i < lines.size(); ++i) {
-    // 遍历该行所有匹配（一行可能多次引用同一符号）
-    auto it = re.globalMatch(lines[i]);
-    while (it.hasNext()) {
-      const auto match = it.next();
-      const int absPos = lineStart + match.capturedStart();
-      if (posInComments(nonCode, absPos)) continue;
-      RefHit h;
-      h.line = i + 1;
-      h.column = match.capturedStart();
-      h.lineText = lines[i];
-      hits.append(h);
-    }
-    lineStart += lines[i].size() + 1;  // +1 为行尾换行符
+  const auto ranges = findIdentifierRanges(text, name);
+  for (const auto &r : ranges) {
+    // 起始偏移 → 行号 / 行内列（0-based）与整行文本
+    const int line = text.left(r.first).count(QLatin1Char('\n')) + 1;
+    const int lineStart = text.lastIndexOf(QLatin1Char('\n'), r.first) + 1;
+    int lineEnd = text.indexOf(QLatin1Char('\n'), r.first);
+    if (lineEnd < 0) lineEnd = text.size();
+    RefHit h;
+    h.line = line;
+    h.column = r.first - lineStart;
+    h.lineText = text.mid(lineStart, lineEnd - lineStart);
+    hits.append(h);
   }
   return hits;
 }
@@ -99,30 +93,26 @@ void ReferencePanel::findReferences(const QString &symbolName) {
   }
 
   // 遍历工作区文件，逐文件扫描符号引用（跳过注释）
-  QDirIterator it(searchRoot(), QDir::Files,
-                  QDirIterator::Subdirectories | QDirIterator::FollowSymlinks);
-  while (it.hasNext()) {
-    it.next();
-    const QString filePath = it.filePath();
-    if (!shouldScanFile(filePath)) continue;
+  forEachWorkspaceFile(
+      searchRoot(), true, [this](const QString &p) { return shouldScanFile(p); },
+      [&](const QString &filePath) {
+        QFile f(filePath);
+        if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+        QTextStream in(&f);
+        const QString text = in.readAll();
+        f.close();
 
-    QFile f(filePath);
-    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) continue;
-    QTextStream in(&f);
-    const QString text = in.readAll();
-    f.close();
-
-    const auto hits = findReferencesInText(text, symbolName);
-    for (const RefHit &h : hits) {
-      Match m;
-      m.filePath = filePath;
-      m.line = h.line;
-      m.column = h.column;
-      m.length = symbolName.size();
-      m.lineText = h.lineText;
-      m_matches.append(m);
-    }
-  }
+        const auto hits = findReferencesInText(text, symbolName);
+        for (const RefHit &h : hits) {
+          Match m;
+          m.filePath = filePath;
+          m.line = h.line;
+          m.column = h.column;
+          m.length = symbolName.size();
+          m.lineText = h.lineText;
+          m_matches.append(m);
+        }
+      });
 
   buildResultTree(m_matches);
   updateSummary();
