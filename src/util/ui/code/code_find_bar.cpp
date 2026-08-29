@@ -22,6 +22,12 @@
 #include "code_editor.h"
 #include "src/util/ui/component/aui_style.h"
 
+namespace {
+/// 查找高亮防抖时间（毫秒）：输入/选项变化时合并多次扫描，
+/// 避免每键对整篇文档做两次正则扫描（大文件输入查找词时卡顿）
+constexpr int kFindBarDebounceMs = 150;
+}  // namespace
+
 // ══════════════════════════════════════════════════════════════════════════════
 //  自绘箭头图标（确保 ▶ 和 ▼ 视觉大小一致）
 // ══════════════════════════════════════════════════════════════════════════════
@@ -68,6 +74,12 @@ void CodeFindBar::setupUI() {
   mainLayout->setContentsMargins(4, 2, 4, 2);
   mainLayout->setSpacing(2);
 
+  // 查找高亮防抖：输入/选项变化合并为一次扫描（避免每键全文档正则扫描卡顿）
+  m_highlightTimer = new QTimer(this);
+  m_highlightTimer->setSingleShot(true);
+  m_highlightTimer->setInterval(kFindBarDebounceMs);
+  connect(m_highlightTimer, &QTimer::timeout, this, &CodeFindBar::onFindTextChanged);
+
   // ── 第一行：查找输入 + 导航按钮 + 选项 ──
   auto *findRow = new QHBoxLayout;
   findRow->setContentsMargins(0, 0, 0, 0);
@@ -78,7 +90,8 @@ void CodeFindBar::setupUI() {
   m_findEdit->setPlaceholderText(QStringLiteral("查找"));
   m_findEdit->setMinimumWidth(180);
   m_findEdit->setMaximumWidth(300);
-  connect(m_findEdit, &QLineEdit::textChanged, this, &CodeFindBar::onFindTextChanged);
+  connect(m_findEdit, &QLineEdit::textChanged, this,
+          [this]() { m_highlightTimer->start(); });
   connect(m_findEdit, &QLineEdit::returnPressed, this, &CodeFindBar::findNext);
 
   // 匹配计数标签
@@ -108,9 +121,12 @@ void CodeFindBar::setupUI() {
   m_regexCheck = new QCheckBox(QStringLiteral(".*"));
   m_regexCheck->setToolTip(QStringLiteral("正则表达式"));
   m_regexCheck->setFixedSize(36, 24);
-  connect(m_caseCheck, &QCheckBox::toggled, this, &CodeFindBar::onFindTextChanged);
-  connect(m_wordCheck, &QCheckBox::toggled, this, &CodeFindBar::onFindTextChanged);
-  connect(m_regexCheck, &QCheckBox::toggled, this, &CodeFindBar::onFindTextChanged);
+  connect(m_caseCheck, &QCheckBox::toggled, this,
+          [this](bool) { m_highlightTimer->start(); });
+  connect(m_wordCheck, &QCheckBox::toggled, this,
+          [this](bool) { m_highlightTimer->start(); });
+  connect(m_regexCheck, &QCheckBox::toggled, this,
+          [this](bool) { m_highlightTimer->start(); });
 
   // ── 展开/收起替换区域按钮：▶ 收起状态 / ▼ 展开状态（最左侧按钮）──
   // 使用自绘图标而非 Unicode 字符，确保两种状态下箭头大小一致

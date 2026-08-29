@@ -50,8 +50,6 @@ public:
 signals:
   /// 勾选状态变化（仅用户交互触发；程序化 setChecked/setAllChecked 不触发）
   void checkedChanged();
-  /// 弹出列表已展开（供外部让出焦点，例如清除搜索框残留的聚焦边框色）
-  void popupOpened();
 
 protected:
   void keyPressEvent(QKeyEvent *event) override;
@@ -65,6 +63,9 @@ protected:
 private:
   /// 展开 / 收起弹出列表
   void togglePopup();
+  /// 重置按钮聚焦/按下态并强制重绘：Qt::Popup 不参与键盘焦点管理，
+  /// 弹层展开/收起时若不清焦点，按钮的聚焦/按下"变色"会残留到点击应用外部才恢复
+  void resetButtonVisualState();
   /// 按内容计算并更新弹窗尺寸
   void relayoutPopup();
   void updateDisplay();

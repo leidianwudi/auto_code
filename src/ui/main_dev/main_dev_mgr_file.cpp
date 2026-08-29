@@ -143,9 +143,8 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
   // ── 读取文件（未打开但有缓冲修改的文件，用缓冲内容而非磁盘旧内容）──
   QString content;
   bool hadPending = false;
-  const auto pendingIt = m_pendingFileChanges.constFind(filePath);
-  if (pendingIt != m_pendingFileChanges.constEnd()) {
-    content = pendingIt.value();
+  if (m_pendingChanges.contains(filePath)) {
+    content = m_pendingChanges.value(filePath);
     hadPending = true;
   } else {
     QFile file(filePath);
@@ -457,36 +456,13 @@ void MainDevMgr::applyRenameOrMove(const QString &oldPath, const QString &newPat
   m_ui->fileTree()->renameCheckedByPath(oldPath, newPath, isDir);
 
   // 重命名/移动后：缓冲修改（未保存的改名结果）跟随文件新位置，
-  // 树黄色标记同步到新节点（旧节点的黄色随刷新清除）
-  if (!m_pendingFileChanges.isEmpty()) {
-    const QString cleanOld = QDir::cleanPath(oldPath);
-    const QString prefix = cleanOld + QLatin1Char('/');
-    QHash<QString, QString> rekeyed;
-    for (auto it = m_pendingFileChanges.cbegin(); it != m_pendingFileChanges.cend(); ++it) {
-      const QString key = QDir::cleanPath(it.key());
-      if (key == cleanOld) {
-        rekeyed.insert(QDir::cleanPath(newPath), it.value());
-      } else if (key.startsWith(prefix)) {
-        rekeyed.insert(QDir::cleanPath(newPath + key.mid(cleanOld.length())), it.value());
-      }
+  // 树黄色标记同步到新节点（旧节点的黄色随树刷新清除）
+  const QHash<QString, QString> rekeyed = m_pendingChanges.rekeyUnder(oldPath, newPath);
+  if (!rekeyed.isEmpty()) {
+    for (auto it = rekeyed.cbegin(); it != rekeyed.cend(); ++it) {
+      if (m_ui->fileTree()) m_ui->fileTree()->setFileModified(it.value(), true);
     }
-    if (!rekeyed.isEmpty()) {
-      // 移除旧键（先清目标可能残留的旧值，再按旧路径前缀删），写入新键并补黄色
-      for (auto it = rekeyed.cbegin(); it != rekeyed.cend(); ++it)
-        m_pendingFileChanges.remove(it.key());
-      for (auto it = m_pendingFileChanges.cbegin(); it != m_pendingFileChanges.cend();) {
-        const QString key = QDir::cleanPath(it.key());
-        if (key == cleanOld || key.startsWith(prefix))
-          it = m_pendingFileChanges.erase(it);
-        else
-          ++it;
-      }
-      for (auto it = rekeyed.cbegin(); it != rekeyed.cend(); ++it) {
-        m_pendingFileChanges.insert(it.key(), it.value());
-        m_ui->fileTree()->setFileModified(it.key(), true);
-      }
-      updateSaveButtonState();
-    }
+    updateSaveButtonState();
   }
 }
 
@@ -527,11 +503,8 @@ void MainDevMgr::onDeleteFile(const QString &path) {
     }
   }
   // 未打开但有缓冲修改（未保存改名结果）的文件同样计入：删除会丢其缓冲修改
-  for (auto it = m_pendingFileChanges.cbegin(); it != m_pendingFileChanges.cend(); ++it) {
-    const QString key = QDir::cleanPath(it.key());
-    if (isDir ? key.startsWith(deletePrefix) : key == deleteAbs)
-      dirtyFiles.append(QFileInfo(it.key()).fileName());
-  }
+  for (const QString &fp : m_pendingChanges.pathsUnder(path, isDir))
+    dirtyFiles.append(QFileInfo(fp).fileName());
   if (!dirtyFiles.isEmpty()) {
     const QString detail = dirtyFiles.join(QStringLiteral("、"));
     if (!AuiMessageBox::confirm(
@@ -608,16 +581,6 @@ void MainDevMgr::onDeleteFile(const QString &path) {
   m_ui->fileTree()->pruneCheckedByPath(path);
 
   // 清除该路径下已删除文件的缓冲修改（文件没了，缓冲/黄色标记一并清掉）
-  if (!m_pendingFileChanges.isEmpty()) {
-    const QString delAbs = QDir::cleanPath(path);
-    const QString delPrefix = delAbs + QStringLiteral("/");
-    for (auto it = m_pendingFileChanges.begin(); it != m_pendingFileChanges.end();) {
-      const QString key = QDir::cleanPath(it.key());
-      if (isDir ? key.startsWith(delPrefix) : key == delAbs)
-        it = m_pendingFileChanges.erase(it);
-      else
-        ++it;
-    }
-    updateSaveButtonState();
-  }
+  m_pendingChanges.removeUnder(path, isDir);
+  updateSaveButtonState();
 }

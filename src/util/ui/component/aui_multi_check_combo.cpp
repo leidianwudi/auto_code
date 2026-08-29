@@ -17,6 +17,15 @@
 
 #include "aui_style.h"
 
+// ══════════════════════════════════════════════════════════════════════════════
+//  按钮紧排布局参数（paintEvent 与 sizeHint 共用，集中调整）
+// ══════════════════════════════════════════════════════════════════════════════
+static constexpr qreal kArrowW = 8.0;    // 向下箭头宽（px）
+static constexpr qreal kArrowH = 4.5;    // 向下箭头高（px）
+static constexpr int kLeftPad = 2;       // 文字左边距（px）
+static constexpr int kTextArrowGap = 2;  // 文字与箭头间隔（px）
+static constexpr int kRightPad = 2;      // 箭头右边距（px）
+
 AuiMultiCheckCombo::AuiMultiCheckCombo(QWidget *parent) : QToolButton(parent) {
   // 自管理弹出列表（Qt::Popup）：点击外部自动收起，勾选复选框由我们控制、绝不收起。
   // 不用 QMenu/QComboBox 内置弹出机制（它们点击菜单项会自动收起）。
@@ -110,11 +119,8 @@ void AuiMultiCheckCombo::setAllChecked(bool all) {
 void AuiMultiCheckCombo::refreshStyle() {
   // 按钮样式：与共享菜单按钮同色，但左右内边距更小（6px → 3px），避免文字左右空白过大。
   // 不能直接改 AuiStyle::applyMenuButtonStyle（文件/视图/帮助等按钮共用），故单独设置。
-  // hover 背景：相对面板背景做轻微明暗（浅色下仅略深一点、深色下略亮）。
-  // 注意不能直接用 tabHoverBackground(#dcdcdc)——tab 栏底色是 #e8e8e8 才显浅，
-  // 下拉框在白色面板上会显得过深。
-  const QColor panel = AuiStyle::panelBackground();
-  const QColor hoverBg = panel.lightness() > 128 ? panel.darker(106) : panel.lighter(120);
+  // hover 背景用 AuiStyle::subtleHoverColor：相对面板背景轻微明暗，浅色下不显深。
+  const QColor hoverBg = AuiStyle::subtleHoverColor();
   setStyleSheet(
       QStringLiteral("QToolButton { color: %1; background: transparent; "
                      "border: 1px solid transparent; padding: 2px 3px; }"
@@ -142,32 +148,34 @@ void AuiMultiCheckCombo::refreshStyle() {
   update();
 }
 
+void AuiMultiCheckCombo::resetButtonVisualState() {
+  // 清除聚焦/按下态并强制重绘：Qt::Popup 不夺取键盘焦点，若不主动清，
+  // 按钮的聚焦/按下"变色"会一直残留（只有点应用外部才恢复）
+  clearFocus();
+  setDown(false);
+  update();
+}
+
 void AuiMultiCheckCombo::togglePopup() {
   if (!m_popup) return;
   if (m_popup->isVisible()) {
     m_popup->hide();
     return;
   }
-  // 弹层展开前先让按钮让出焦点/按下态：Qt::Popup 不夺取键盘焦点，
-  // 否则按钮的聚焦/按下变色会一直残留，只有应用失活才恢复（反复出现的问题）
-  clearFocus();
-  setDown(false);
+  // 弹层展开前先让按钮让出焦点/按下态，避免聚焦"变色"残留
+  resetButtonVisualState();
   relayoutPopup();
   m_popup->move(mapToGlobal(QPoint(0, height())));
   m_popup->show();
   m_popup->raise();
   m_list->setFocus();
-  // Qt::Popup 不夺取键盘焦点（输入框聚焦状态不自动清除），通知外部主动让出焦点
-  emit popupOpened();
 }
 
 bool AuiMultiCheckCombo::eventFilter(QObject *watched, QEvent *event) {
   // 弹窗收起（含点击外部自动收起）时，重置按钮聚焦/按下态并强制重绘，
   // 避免"只有点击应用外部按钮才恢复白色"的残留变色
   if (watched == m_popup && event->type() == QEvent::Hide) {
-    clearFocus();
-    setDown(false);
-    update();
+    resetButtonVisualState();
   }
   return QToolButton::eventFilter(watched, event);
 }
@@ -213,25 +221,16 @@ void AuiMultiCheckCombo::paintEvent(QPaintEvent *event) {
   style()->drawComplexControl(QStyle::CC_ToolButton, &opt, &p, this);
 
   // 紧排：左边距 → 文字 → 小间隔 → 向下箭头
-  constexpr int kLeftPad = 2;
-  constexpr int kTextArrowGap = 2;
-  constexpr qreal kArrowW = 8.0;   // 箭头宽
-  constexpr qreal kArrowH = 4.5;   // 箭头高
   p.setPen(AuiStyle::textColor());
   p.setFont(font());
   const QString disp = text();  // updateDisplay 已把汇总文字 setText 到按钮
   const int textW = fontMetrics().horizontalAdvance(disp);
   p.drawText(QRect(kLeftPad, 0, textW, height()), Qt::AlignVCenter | Qt::AlignLeft, disp);
 
-  p.setRenderHint(QPainter::Antialiasing);
-  p.setPen(Qt::NoPen);
-  p.setBrush(AuiStyle::textColor());
-  const qreal cx = kLeftPad + textW + kTextArrowGap + kArrowW / 2.0;
-  const qreal cy = height() / 2.0 + 0.5;
-  QPolygonF tri;
-  tri << QPointF(cx - kArrowW / 2.0, cy - kArrowH / 2.0)
-      << QPointF(cx + kArrowW / 2.0, cy - kArrowH / 2.0) << QPointF(cx, cy + kArrowH / 2.0);
-  p.drawPolygon(tri);
+  // 向下箭头紧贴文字右侧（与下拉框共用 AuiStyle::drawDownArrow）
+  const QPointF arrowCenter(kLeftPad + textW + kTextArrowGap + kArrowW / 2.0,
+                            height() / 2.0 + 0.5);
+  AuiStyle::drawDownArrow(p, arrowCenter, AuiStyle::textColor(), kArrowW, kArrowH);
 }
 
 QSize AuiMultiCheckCombo::sizeHint() const {
@@ -242,6 +241,6 @@ QSize AuiMultiCheckCombo::sizeHint() const {
   if (!m_dataOrder.isEmpty())
     widest = qMax(widest, fontMetrics().horizontalAdvance(
                               QStringLiteral("%1 种类型").arg(m_dataOrder.size())));
-  const int w = 2 + widest + 2 + 8 + 2;
+  const int w = kLeftPad + widest + kTextArrowGap + kArrowW + kRightPad;
   return QSize(qMax(w, QToolButton::sizeHint().width()), QToolButton::sizeHint().height());
 }

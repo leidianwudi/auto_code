@@ -40,7 +40,7 @@ public:
   /// 触发一次搜索（供外部如编辑器选中词调用）
   void startSearch(const QString &text);
   /// 当前搜索关键词（空串表示未在搜索）
-  const QString &currentText() const;
+  QString currentText() const;
 
   /// 设置实时内容提供器：返回已打开编辑器 + 未打开但有缓冲修改文件的内容快照，
   /// 供搜索优先读缓冲而非磁盘（由 MainDevMgr 注册，主线程调用）。

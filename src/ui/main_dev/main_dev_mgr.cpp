@@ -90,8 +90,7 @@ QWidget *MainDevMgr::onCreateWindow() {
   CodeEditor::setGlobalContentProvider([this](const QString &filePath) {
     CodeEditor *ed = findEditorForFile(filePath);
     if (ed) return ed->toPlainText();
-    auto it = m_pendingFileChanges.constFind(filePath);
-    if (it != m_pendingFileChanges.constEnd()) return it.value();
+    if (m_pendingChanges.contains(filePath)) return m_pendingChanges.value(filePath);
     return QString();
   });
 
@@ -273,8 +272,8 @@ void MainDevMgr::saveAllEditors() {
 
 /// 把未打开文件的缓冲修改写盘并清除树目录黄色标记
 void MainDevMgr::flushPendingChanges() {
-  if (m_pendingFileChanges.isEmpty()) return;
-  const QHash<QString, QString> snapshot = m_pendingFileChanges;  // 迭代中会清空，先拷贝
+  if (m_pendingChanges.isEmpty()) return;
+  const QHash<QString, QString> snapshot = m_pendingChanges.snapshot();  // 迭代中会清空，先拷贝
   for (auto it = snapshot.cbegin(); it != snapshot.cend(); ++it) {
     QFile f(it.key());
     if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
@@ -282,7 +281,7 @@ void MainDevMgr::flushPendingChanges() {
       f.close();
     }
   }
-  m_pendingFileChanges.clear();
+  m_pendingChanges.clearAll();
   for (auto it = snapshot.cbegin(); it != snapshot.cend(); ++it) {
     if (m_ui->fileTree()) m_ui->fileTree()->setFileModified(it.key(), false);
   }
@@ -291,7 +290,7 @@ void MainDevMgr::flushPendingChanges() {
 
 /// 清除某文件的缓冲修改（保存或打开后，缓冲已由编辑器 document 接管）
 void MainDevMgr::clearPendingChange(const QString &filePath) {
-  if (!filePath.isEmpty()) m_pendingFileChanges.remove(filePath);
+  m_pendingChanges.clear(filePath);
 }
 
 /// 构建实时内容快照：已打开编辑器内容 + 未打开但有缓冲修改的文件内容。
@@ -303,9 +302,8 @@ QHash<QString, QString> MainDevMgr::collectLiveContents() const {
     if (!fp.isEmpty()) live.insert(fp, editor->toPlainText());
     return true;
   });
-  for (auto it = m_pendingFileChanges.cbegin(); it != m_pendingFileChanges.cend(); ++it) {
-    live.insert(it.key(), it.value());
-  }
+  const QHash<QString, QString> pending = m_pendingChanges.snapshot();
+  for (auto it = pending.cbegin(); it != pending.cend(); ++it) live.insert(it.key(), it.value());
   return live;
 }
 
@@ -317,8 +315,7 @@ bool MainDevMgr::confirmExit() {
       dirty << QFileInfo(editor->objectName()).fileName();
     return true;
   });
-  for (auto it = m_pendingFileChanges.cbegin(); it != m_pendingFileChanges.cend(); ++it)
-    dirty << QFileInfo(it.key()).fileName();
+  for (const QString &fp : m_pendingChanges.filePaths()) dirty << QFileInfo(fp).fileName();
   dirty.removeDuplicates();
   if (dirty.isEmpty()) return true;
 
@@ -335,8 +332,8 @@ bool MainDevMgr::confirmExit() {
       return true;
     case AuiMessageBox::Choice::kSecond: {
       // 丢弃：清除未打开文件的缓冲修改与树目录黄色标记（已打开编辑器的改动随进程退出丢弃）
-      const QHash<QString, QString> snapshot = m_pendingFileChanges;
-      m_pendingFileChanges.clear();
+      const QHash<QString, QString> snapshot = m_pendingChanges.snapshot();
+      m_pendingChanges.clearAll();
       for (auto it = snapshot.cbegin(); it != snapshot.cend(); ++it) {
         if (m_ui->fileTree()) m_ui->fileTree()->setFileModified(it.key(), false);
       }
@@ -450,6 +447,25 @@ void MainDevMgr::connectEditorPanels() {
   m_scanTimer->setSingleShot(true);
   m_scanTimer->setInterval(500);
   connect(m_scanTimer, &QTimer::timeout, this, [this]() { startWorkspaceScan(true); });
+  // 已打开文件重验防抖定时器：合并同一事件循环内的多次 textChanged 为一次重验
+  //（0ms：对单次编辑无感知延迟；防止打开大文件/程序化批量变更触发 N×M 次验证风暴卡死）
+  m_revalidateTimer = new QTimer(this);
+  m_revalidateTimer->setSingleShot(true);
+  m_revalidateTimer->setInterval(0);
+  connect(m_revalidateTimer, &QTimer::timeout, this, [this]() {
+    CodeEditor *src = m_revalidateSource;
+    m_revalidateSource = nullptr;
+    forEachEditor(m_ui, [src](CodeEditor *ed) {
+      if (ed != src) ed->validate();
+      return true;
+    });
+  });
+  // 问题面板刷新防抖：同一 burst 内多个编辑器的验证结果合并为一次面板重建
+  //（防止每个验证结果都触发一次全量重建；扫描完成时仍立即刷新一次）
+  m_problemPanelTimer = new QTimer(this);
+  m_problemPanelTimer->setSingleShot(true);
+  m_problemPanelTimer->setInterval(150);
+  connect(m_problemPanelTimer, &QTimer::timeout, this, &MainDevMgr::refreshProblemPanel);
   // 保存/重命名后防抖重扫（合并连续保存，避免每次保存都全量扫描）
   m_workspaceRescanTimer = new QTimer(this);
   m_workspaceRescanTimer->setSingleShot(true);
@@ -553,6 +569,9 @@ void MainDevMgr::onWorkspaceScanFinished() {
   m_workspaceScanWatcher->deleteLater();
   m_workspaceScanWatcher = nullptr;
 
+  // 批量合并：setFileError 只更新叶子，文件夹错误汇总在循环结束后一次性重算，
+  // 避免对每个文件递归遍历整棵子树（O(文件数×子树大小)）造成卡顿
+  m_ui->fileTree()->beginBulkErrorUpdate();
   for (const WorkspaceFileDiag &diag : results) {
     // 打开中的文件已由实时验证维护 m_fileIssues（最新按键即时更新），扫描快照可能稍旧，跳过
     if (findEditorForFile(diag.filePath)) continue;
@@ -564,6 +583,7 @@ void MainDevMgr::onWorkspaceScanFinished() {
       m_ui->fileTree()->setFileError(diag.filePath, diag.issues.size());
     }
   }
+  m_ui->fileTree()->endBulkErrorUpdate();
   refreshProblemPanel();
 
   // 静默模式（保存后自动重扫）不打印"完成"提示，避免保存一次刷屏
@@ -591,7 +611,7 @@ void MainDevMgr::updateSaveButtonState() {
   CodeEditor *cur = currentEditor();
   m_ui->saveBtn()->setEnabled(cur && cur->document()->isModified());
   // 全部保存：已打开编辑器的脏文档（含拆分副本，不在 openFiles 中）+ 未打开文件的缓冲修改
-  bool anyModified = !m_pendingFileChanges.isEmpty();
+  bool anyModified = !m_pendingChanges.isEmpty();
   forEachEditor(m_ui, [&anyModified](CodeEditor *editor) {
     if (editor->document()->isModified()) {
       anyModified = true;

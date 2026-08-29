@@ -47,22 +47,14 @@ protected:
     // 只有非可编辑模式下才绘制箭头
     if (!opt.editable) {
       QPainter painter(this);
-      painter.setRenderHint(QPainter::Antialiasing);
-      painter.setPen(Qt::NoPen);
-      painter.setBrush(AuiStyle::textColor());
 
       // 获取 drop-down 按钮区域
       QRect arrowRect =
           style()->subControlRect(QStyle::CC_ComboBox, &opt, QStyle::SC_ComboBoxArrow, this);
 
       // 在 drop-down 区域中央绘制一个小尺寸倒三角（固定尺寸，避免随区域收缩变形）
-      const qreal aw = 8.0;  // 箭头宽
-      const qreal ah = 4.5;  // 箭头高
       const QPointF c(arrowRect.center().x(), arrowRect.center().y() + 0.5);
-      QPolygonF tri;
-      tri << QPointF(c.x() - aw / 2.0, c.y() - ah / 2.0)
-          << QPointF(c.x() + aw / 2.0, c.y() - ah / 2.0) << QPointF(c.x(), c.y() + ah / 2.0);
-      painter.drawPolygon(tri);
+      AuiStyle::drawDownArrow(painter, c, AuiStyle::textColor());
     }
   }
 };

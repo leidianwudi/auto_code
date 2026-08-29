@@ -159,6 +159,7 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
       return false;
     }
     stmt.usingStmt.varName = advance().text;
+    stmt.usingStmt.line = t.line;  // using 关键字所在行（引用/重命名定位用）
     if (!declareVar(stmt.usingStmt.varName, t.line)) return false;
     if (!expect(TOK_EQUALS, QStringLiteral("expected '=' after 'using varName'"))) return false;
     stmt.kind = Block::Stmt::kUsing;
@@ -590,7 +591,9 @@ bool AcParser::parseImportStmt(ImportStmt &imp) {
       m_error = QStringLiteral("expected identifier in import list at line %1").arg(peek().line);
       return false;
     }
-    QString name = advance().text;
+    const Token nameTok = advance();
+    QString name = nameTok.text;
+    imp.nameLines.insert(name, nameTok.line);
     QString alias = name;
     if (peek().type == TOK_AS) {
       advance();
@@ -598,7 +601,9 @@ bool AcParser::parseImportStmt(ImportStmt &imp) {
         m_error = QStringLiteral("expected alias after 'as' at line %1").arg(peek().line);
         return false;
       }
-      alias = advance().text;
+      const Token aliasTok = advance();
+      alias = aliasTok.text;
+      imp.aliasLines.insert(alias, aliasTok.line);
     }
     imp.names.append(name);
     if (alias != name) imp.aliases.insert(name, alias);
@@ -737,7 +742,9 @@ bool AcParser::parseClassDef(ClassDef &cd) {
       if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after 'constructor'"))) return false;
       while (peek().type == TOK_IDENT) {
         ParamDef pd;
-        pd.name = advance().text;
+        const Token nameTok = advance();
+        pd.name = nameTok.text;
+        pd.line = nameTok.line;
         if (peek().type == TOK_QUESTION) {
           advance();
           pd.isOptional = true;
@@ -817,7 +824,9 @@ bool AcParser::parseInterfaceDef(InterfaceDef &iface) {
       if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after method name"))) return false;
       while (peek().type == TOK_IDENT) {
         ParamDef pd;
-        pd.name = advance().text;
+        const Token nameTok = advance();
+        pd.name = nameTok.text;
+        pd.line = nameTok.line;
         if (peek().type == TOK_QUESTION) {
           advance();
           pd.isOptional = true;
@@ -901,7 +910,9 @@ bool AcParser::parseMethodDef(MethodDef &md) {
 
   while (peek().type == TOK_IDENT) {
     ParamDef pd;
-    pd.name = advance().text;
+    const Token nameTok = advance();
+    pd.name = nameTok.text;
+    pd.line = nameTok.line;
     if (peek().type == TOK_QUESTION) {
       advance();
       pd.isOptional = true;

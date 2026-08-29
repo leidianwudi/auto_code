@@ -11,6 +11,7 @@
 
 #include <QLineEdit>
 #include <QTextEdit>
+#include <QTimer>
 #include <QWidget>
 
 class QCheckBox;
@@ -106,6 +107,9 @@ private:
   int m_matchCount = -1;
   /// 当前匹配索引（1-based）
   int m_currentMatchIndex = 0;
+  /// 查找高亮防抖定时器：合并输入/选项变化时的多次扫描，
+  /// 避免每键对整篇文档做两次正则扫描（大文件输入查找词时卡顿）
+  QTimer *m_highlightTimer = nullptr;
   /// 用户意图：查找栏"应显示"（打开过且未主动关闭）
   bool m_intendedVisible = false;
 };

@@ -1358,6 +1358,9 @@ void TreeDir::setFileError(const QString &filePath, int errorCount) {
   if (!item) return;
   // 存储错误数量，由 ModifiedFileDelegate 绘制红色文件名和最右侧错误数量徽章
   item->setData(0, Qt::UserRole + 3, errorCount);
+  // 批量模式：跳过逐文件祖先重算（由 endBulkErrorUpdate 统一自底向上重算一次），
+  // 避免扫描结果合并时对每个文件递归遍历整棵子树 → O(文件数×子树大小) 卡顿
+  if (m_bulkErrorUpdate) return;
   // 父文件夹同步显示子文件错误次数总和
   for (QTreeWidgetItem *p = item->parent(); p; p = p->parent())
     p->setData(0, Qt::UserRole + 3, subtreeErrorCount(p));
@@ -1369,10 +1372,37 @@ void TreeDir::clearFileError(const QString &filePath) {
   if (!item) return;
   // 清除错误数量
   item->setData(0, Qt::UserRole + 3, 0);
+  // 批量模式：跳过逐文件祖先重算
+  if (m_bulkErrorUpdate) return;
   // 父文件夹同步重算错误次数总和
   for (QTreeWidgetItem *p = item->parent(); p; p = p->parent())
     p->setData(0, Qt::UserRole + 3, subtreeErrorCount(p));
   update();  // 触发重绘
+}
+
+// ════════════════════════════════════════════════════════════
+//  批量错误更新（后台扫描结果合并用）
+// ════════════════════════════════════════════════════════════
+
+/// 自底向上重算某节点错误汇总：文件节点返回自身错误数，文件夹节点汇总子节点
+static int recomputeErrorSummary(QTreeWidgetItem *item) {
+  if (!item) return 0;
+  // 文件节点（携带真实路径）：直接返回自身错误数
+  if (!item->data(0, Qt::UserRole + 1).toString().isEmpty())
+    return item->data(0, Qt::UserRole + 3).toInt();
+  int sum = 0;
+  for (int i = 0; i < item->childCount(); ++i) sum += recomputeErrorSummary(item->child(i));
+  item->setData(0, Qt::UserRole + 3, sum);
+  return sum;
+}
+
+void TreeDir::beginBulkErrorUpdate() { m_bulkErrorUpdate = true; }
+
+void TreeDir::endBulkErrorUpdate() {
+  m_bulkErrorUpdate = false;
+  // 一次性自底向上重算所有文件夹错误汇总（O(节点数)），避免逐文件递归重算
+  for (int i = 0; i < topLevelItemCount(); ++i) recomputeErrorSummary(topLevelItem(i));
+  update();
 }
 
 // ════════════════════════════════════════════════════════════

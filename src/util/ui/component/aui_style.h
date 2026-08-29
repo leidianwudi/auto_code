@@ -61,6 +61,15 @@ public:
     return SettingStore::ins().color(QStringLiteral("ui.hoverBackground"));
   }
 
+  /// 相对面板背景的轻微 hover 色：浅色下略深一点、深色下略亮一点，
+  /// 保证任意背景上都是"轻微、协调"的悬停效果。
+  /// （避免固定色（如 tabHoverBackground）在白色面板上显得过深——
+  ///   tab 栏底色是 #e8e8e8 才显浅。）
+  static QColor subtleHoverColor() {
+    const QColor panel = panelBackground();
+    return panel.lightness() > 128 ? panel.darker(106) : panel.lighter(120);
+  }
+
   /// 次要文字（分组/分区标题等，比正文弱一档）
   static QColor secondaryTextColor() {
     return SettingStore::ins().color(QStringLiteral("ui.secondaryTextColor"));
@@ -315,6 +324,14 @@ public:
   static void drawFoldArrow(QPainter &p, const QPointF &centerOrTip, bool downward,
                             const QColor &color, qreal length = 5.0,
                             qreal openAngleDeg = 100.0);
+
+  /// 绘制实心向下三角箭头（下拉框/下拉按钮的下拉指示箭头共用，避免重复绘制代码）。
+  /// @param center 箭头中心点
+  /// @param color 箭头颜色
+  /// @param width 箭头宽（px）
+  /// @param height 箭头高（px）
+  static void drawDownArrow(QPainter &p, const QPointF &center, const QColor &color,
+                            qreal width = 8.0, qreal height = 4.5);
 
   /// 错误行背景色（浅红，类似 VS Code 的 #f2dede）
   static QColor errorLineBackground() {

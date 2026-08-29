@@ -21,6 +21,7 @@
 #include "src/engine/validation_result.h"
 #include "src/engine/rename/symbol_rename.h"
 #include "src/ui/main_dev/main_dev_ui_ext.h"
+#include "src/ui/main_dev/pending_change_store.h"
 #include "src/util/common/workspace_diag.h"
 #include "src/util/ui/aui_mgr.h"
 
@@ -229,9 +230,9 @@ protected:
   /// 工作区问题聚合：文件路径 → 验证结果列表（供底部「问题」面板跨文件汇总）
   QMap<QString, QVector<ValidationResult>> m_fileIssues;
 
-  /// 未打开文件的缓冲修改（重命名等操作：未打开文件先存缓冲、不写盘，树目录标黄，
-  /// 退出时提示保存——VSCode 行为）。文件路径 → 缓冲内容。
-  QHash<QString, QString> m_pendingFileChanges;
+  /// 未打开文件的缓冲修改存储（重命名等操作：未打开文件先存缓冲、不写盘，树目录标黄，
+  /// 退出时提示保存——VSCode 行为）。集中管理写入/重键/删除/落盘。
+  PendingChangeStore m_pendingChanges;
 
   /// 保存所有已打开且被修改的编辑器（保存全部按钮 / 退出保存共用）
   void saveAllEditors();
@@ -260,6 +261,16 @@ protected:
   QTimer *m_workspaceRescanTimer = nullptr;
   /// 工作区扫描防抖定时器：合并编辑/保存/重命名产生的多次扫描请求为一次
   QTimer *m_scanTimer = nullptr;
+
+  /// 已打开文件重验防抖定时器：同一事件循环内的多次 textChanged 合并为一次重验
+  ///（0ms 单次定时器，对单次编辑无感知延迟；防止程序化批量变更触发 N×M 次全量验证风暴）
+  QTimer *m_revalidateTimer = nullptr;
+  /// 触发重验的源编辑器（重验时跳过它，避免重复校验当前文件）
+  CodeEditor *m_revalidateSource = nullptr;
+
+  /// 问题面板刷新防抖定时器：同一 burst 内多个编辑器验证结果合并为一次面板重建
+  ///（防止每个编辑器各触发一次全量重建）
+  QTimer *m_problemPanelTimer = nullptr;
 
   /// 会话恢复：为 true 时抑制由打开文件触发的目录树定位，
   /// 避免启动还原上次打开的文件时自动展开/滚动目录树，破坏保存的展开状态

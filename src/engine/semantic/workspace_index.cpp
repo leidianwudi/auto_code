@@ -177,7 +177,9 @@ public:
   }
 
   void visitUsingStmt(const UsingStmt &us) override {
-    declareCurrent(us.varName, 0);
+    // 用 using 语句所在行（us.line）：声明行必须是真实行号，
+    // 否则右键 using 变量/重命名时声明行无法被捕获 → 漏改 using X = ... 那一行
+    declareCurrent(us.varName, us.line);
     if (!us.value) return;
     visitExpr(*us.value);
   }
@@ -186,7 +188,9 @@ public:
     declareCurrent(md.name, md.line);
     ScopeGuard guard(*this);
     for (const ParamDef &p : md.params) {
-      declareCurrent(p.name, md.line);
+      // 用参数自身的行号（p.line）而非方法名行：签名跨多行时，右键参数/重命名
+      // 必须能命中参数声明行，否则声明行被记成方法名行导致漏改
+      declareCurrent(p.name, p.line);
       if (p.type.kind == AcType::kClass && !p.type.className.isEmpty()) {
         varClass[p.name] = p.type.className;
       }
@@ -232,6 +236,10 @@ public:
     declareCurrent(cd.name, 0);
     m_inClass = true;
     m_currentClass = cd.name;
+    // 保存/恢复：类可能是嵌套在方法体里的（此时外层 m_inMethodBody 为 true），
+    // 类自身的成员声明仍应按类成员处理
+    const bool savedInMethodBody = m_inMethodBody;
+    m_inMethodBody = false;
     {
       ScopeGuard guard(*this);
       AcClassInfo info;
@@ -244,18 +252,24 @@ public:
         declareCurrent(m.name, m.line);
         if (m.line > 0) info.methods.insert(m.name, m.line);
         ScopeGuard mGuard(*this);
+        // 方法体内（参数/局部 let 等）声明的名字是局部变量，不是类成员，
+        // 不能写入 m_memberDeclClass（否则右键局部变量会误判成类成员 → 走成员路径 → 0 引用）
+        m_inMethodBody = true;
         for (const ParamDef &p : m.params) {
-          declareCurrent(p.name, m.line);
+          // 同 visitFuncDef：用参数自身行号，跨行签名时保证参数声明行可被命中
+          declareCurrent(p.name, p.line);
           if (p.type.kind == AcType::kClass && !p.type.className.isEmpty()) {
             varClass[p.name] = p.type.className;
           }
         }
         visitBlock(m.body);
+        m_inMethodBody = false;
       }
       classes.insert(cd.name, info);
     }
     m_inClass = false;
     m_currentClass.clear();
+    m_inMethodBody = savedInMethodBody;
   }
 
   void visitImportStmt(const ImportStmt &imp) override {
@@ -268,8 +282,10 @@ public:
       // import 语句中的符号名也是目标符号的一次引用：
       // 重命名/查找引用必须包含 import 行（否则跨文件重命名会漏改 import 列表）
       if (n == target) {
-        recordUsage(n, imp.line);
-        importNameLines[resolved].insert(imp.line);
+        // 多行 import 时每个名字各有自己的行号，不能统一用 imp.line
+        const int ln = imp.nameLines.value(n, imp.line);
+        recordUsage(n, ln);
+        importNameLines[resolved].insert(ln);
       }
     }
     for (auto it = imp.aliases.begin(); it != imp.aliases.end(); ++it) {
@@ -278,7 +294,8 @@ public:
       classImports.insert(it.value(), resolved);
       // 别名的绑定处（import { A as B } 里的 B）也是别名符号的一次引用：
       // 否则重命名别名会漏改 import 绑定行，导致调用处改新名、import 仍绑定旧名
-      if (it.value() == target) recordUsage(it.value(), imp.line);
+      if (it.value() == target)
+        recordUsage(it.value(), imp.aliasLines.value(it.value(), imp.line));
     }
   }
 
@@ -332,7 +349,8 @@ public:
   void visitFuncExprExpr(const Expr &expr) override {
     ScopeGuard guard(*this);
     for (const ParamDef &p : expr.funcExpr.params) {
-      declareCurrent(p.name, expr.line);
+      // 同 visitFuncDef：用参数自身行号，跨行签名时保证参数声明行可被命中
+      declareCurrent(p.name, p.line);
       if (p.type.kind == AcType::kClass && !p.type.className.isEmpty()) {
         varClass[p.name] = p.type.className;
       }
@@ -351,6 +369,7 @@ private:
   int m_nextId = 0;
   int m_targetCandidate = -1;
   bool m_inClass = false;
+  bool m_inMethodBody = false;  ///< 是否处于类方法体内（方法体 let/参数为局部变量，非类成员）
   bool m_triggerMemberSeen = false;
   QVector<QPair<int, int>> m_usageRecords;  ///< (解析作用域 id, 行)
 
@@ -378,7 +397,8 @@ private:
     if (cur.isFile) {
       globalDecls.insert(name, line);
       if (name == target) globalDeclLines.insert(line);
-    } else if (m_inClass && name == target && line > 0) {
+    } else if (m_inClass && !m_inMethodBody && name == target && line > 0) {
+      // 仅在类级别的成员/属性声明时记录为类成员（方法体内的 let/参数是局部变量，不是成员）
       classMemberDeclLines.insert(line);
       if (!m_currentClass.isEmpty()) m_memberDeclClass.insert(line, m_currentClass);
     }

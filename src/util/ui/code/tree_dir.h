@@ -122,6 +122,13 @@ public:
   /// 清除文件的错误状态
   void clearFileError(const QString &filePath);
 
+  /// 批量错误更新开始：期间 setFileError/clearFileError 只更新叶子节点的错误数，
+  /// 跳过逐文件的祖先递归重算（配合后台扫描结果合并，避免 O(文件数×子树大小) 卡顿）。
+  /// 结束后必须调用 endBulkErrorUpdate() 一次性重算全部文件夹汇总。
+  void beginBulkErrorUpdate();
+  /// 批量错误更新结束：一次性自底向上重算所有文件夹错误汇总并重绘
+  void endBulkErrorUpdate();
+
   /// 定位到指定文件路径的节点（选中 + 展开父节点 + 滚动到可见）
   void locateFile(const QString &filePath);
 
@@ -236,6 +243,7 @@ private:
 
   bool m_lastClickOnCheckbox = false;  ///< 最近一次鼠标释放是否落在复选框区域
   bool m_bulkUpdating = false;         ///< 批量更新中，抑制 itemChanged 级联
+  bool m_bulkErrorUpdate = false;      ///< 批量错误更新中，跳过逐文件祖先重算
 
   // ── 拖拽移动状态 ──
   QTreeWidgetItem *m_pressItem = nullptr;  ///< 按下时命中的节点（潜在拖拽源）

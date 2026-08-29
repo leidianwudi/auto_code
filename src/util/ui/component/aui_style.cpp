@@ -94,6 +94,19 @@ void AuiStyle::drawFoldArrow(QPainter &p, const QPointF &tip, bool downward,
   p.drawLine(t, b);
 }
 
+void AuiStyle::drawDownArrow(QPainter &p, const QPointF &center, const QColor &color,
+                             qreal width, qreal height) {
+  // 实心向下三角（下拉框/下拉按钮指示箭头）：居中于 center，抗锯齿圆滑
+  p.setRenderHint(QPainter::Antialiasing);
+  p.setPen(Qt::NoPen);
+  p.setBrush(color);
+  QPolygonF tri;
+  tri << QPointF(center.x() - width / 2.0, center.y() - height / 2.0)
+      << QPointF(center.x() + width / 2.0, center.y() - height / 2.0)
+      << QPointF(center.x(), center.y() + height / 2.0);
+  p.drawPolygon(tri);
+}
+
 // ════════════════════════════════════════════════════════════
 //  全局样式表 — 所有窗口共用
 // ════════════════════════════════════════════════════════════

@@ -268,16 +268,25 @@ void CodeEditor::applyFixedBlockLineHeight() {
   // 注意：setBlockFormat 会把 QTextDocument 的 modified 置为 true（被当作"内容已改"，
   // 表现为 tab 圆点/目录树文件名变黄）。行高只是显示层布局，不该改变"已保存"语义，
   // 因此调整前后保持原 modified 状态，当用户真正编辑时仍能正确标记未保存。
+  // 关键：setBlockFormat 每次都会发出 contentsChanged → QPlainTextEdit::textChanged。
+  // 若逐块调用（未合并编辑块），打开大文件时会在同一事件循环内连发 N 次 textChanged，
+  // 主窗口的 textChanged 处理器会对每个其他编辑器各做一次全量重验 → N×M 次验证 → 打开卡死。
+  // 因此这里屏蔽文档信号（纯行高格式调整不是"内容变化"，不应触发任何重验/重排），
+  // 并跳过行高已一致的块；布局刷新由末尾的 markContentsDirty + viewport 重绘完成。
   const bool wasModified = document()->isModified();
   QTextBlockFormat fixedBf;
   fixedBf.setLineHeight(qRound(m_fixedBlockLineHeight), QTextBlockFormat::FixedHeight);
+  document()->blockSignals(true);
   QTextBlock block = document()->firstBlock();
   for (; block.isValid(); block = block.next()) {
+    if (qFuzzyCompare(block.blockFormat().lineHeight(), fixedBf.lineHeight())) continue;
     QTextCursor c(block);
     c.setBlockFormat(fixedBf);
   }
+  document()->blockSignals(false);
   document()->setModified(wasModified);
   document()->markContentsDirty(0, document()->characterCount());
+  viewport()->update();
 }
 
 // ──────────────────────────────────────────────────────────────

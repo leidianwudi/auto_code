@@ -122,10 +122,6 @@ void SearchPanel::setupUI() {
     saveCheckedTypes(m_typeFilter->checkedData());  // 勾选变化自动保存，启动时还原
     onOptionsChanged();
   });
-  // 弹层展开时让搜索框失去焦点：Qt::Popup 不夺取键盘焦点，搜索框聚焦边框会一直残留，
-  // 需主动 clearFocus 立即恢复非聚焦（白）边框，避免要点击应用外部才变白
-  connect(m_typeFilter, &AuiMultiCheckCombo::popupOpened, this,
-          [this]() { m_searchEdit->clearFocus(); });
   summaryLayout()->addWidget(m_typeFilter);
   summaryLayout()->addWidget(collapseButton());
 
@@ -159,7 +155,7 @@ void SearchPanel::startSearch(const QString &text) {
   performSearch();
 }
 
-const QString &SearchPanel::currentText() const {
+QString SearchPanel::currentText() const {
   return m_searchEdit->text();
 }
 

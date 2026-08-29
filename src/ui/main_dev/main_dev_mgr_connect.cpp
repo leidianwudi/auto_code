@@ -37,10 +37,12 @@ void MainDevMgr::connectEditorSignals(CodeEditor *editor) {
   // 任何文件内容变化后，立即重验其它已打开文件；未打开文件通过防抖合并后的扫描刷新。
   // 当前文件由自身的防抖验证处理，这里跳过它避免重复校验。
   connect(editor, &QPlainTextEdit::textChanged, this, [this, editor]() {
-    forEachEditor(m_ui, [editor](CodeEditor *ed) {
-      if (ed != editor) ed->validate();
-      return true;
-    });
+    // 合并同一事件循环内的多次触发：打开文件/程序化批量变更可能一次连发多个
+    // textChanged（如整篇行高格式批量应用），直接同步重验会造成 N×M 次全量验证
+    // 风暴卡死界面。改用 0ms 单次定时器：对单次编辑无感知延迟，仅把同一 burst
+    // 合并为一次重验，仍即时刷新其它已打开文件。
+    m_revalidateSource = editor;
+    if (m_revalidateTimer) m_revalidateTimer->start();
     // 扫描请求统一进防抖定时器：与保存/重命名触发共用，合并为一次，不会重复全量扫描
     if (m_scanTimer) m_scanTimer->start();
   });
@@ -223,7 +225,7 @@ void MainDevMgr::onValidationMessage(const QString &msg, int errorCount) {
   }
 }
 
-/// 结构化验证结果：更新工作区问题聚合并重建「问题」面板
+/// 结构化验证结果：更新工作区问题聚合，防抖合并后重建「问题」面板
 void MainDevMgr::onValidationIssues(const QString &filePath,
                                     const QVector<ValidationResult> &issues) {
   if (filePath.isEmpty()) return;
@@ -231,7 +233,8 @@ void MainDevMgr::onValidationIssues(const QString &filePath,
     m_fileIssues.remove(filePath);
   else
     m_fileIssues[filePath] = issues;
-  refreshProblemPanel();
+  // 防抖合并：同一 burst 内多个编辑器验证结果只重建一次面板（避免逐个全量重建）
+  if (m_problemPanelTimer) m_problemPanelTimer->start();
 }
 
 /// 从工作区聚合重建底部「问题」面板（跨文件汇总所有已打开文件的错误/警告）

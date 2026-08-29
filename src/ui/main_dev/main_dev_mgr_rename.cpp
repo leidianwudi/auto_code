@@ -77,7 +77,7 @@ void MainDevMgr::applyRenameToFile(const QString &filePath, const QVector<Rename
       text.replace(off, r.length, newName);
     }
 
-    m_pendingFileChanges.insert(filePath, text);
+    m_pendingChanges.set(filePath, text);
     if (m_ui->fileTree()) m_ui->fileTree()->setFileModified(filePath, true);
     updateSaveButtonState();
   }

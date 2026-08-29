@@ -520,7 +520,9 @@ bool AcParser::parsePrimary(Expr &expr) {
       if (!expect(TOK_LPAREN, QStringLiteral("expected '(' in function expression"))) return false;
       while (peek().type == TOK_IDENT) {
         ParamDef pd;
-        pd.name = advance().text;
+        const Token nameTok = advance();
+        pd.name = nameTok.text;
+        pd.line = nameTok.line;
         if (peek().type != TOK_COLON) {
           m_error =
               QStringLiteral("parameter '%1' requires a type annotation (e.g. %1: Type) at line %2")

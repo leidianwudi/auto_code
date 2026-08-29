@@ -214,6 +214,7 @@ struct ParamDef {
   QString name;             ///< 参数名
   AcType type;              ///< 类型（默认 Any，无注解时）
   bool isOptional = false;  ///< 是否为可选参数（param?: Type 语法）
+  int line = 0;             ///< 参数名所在行（1-based，引用/重命名定位用）
 };
 
 /// @brief 语句块 — 由 { } 包裹的一组语句
@@ -263,6 +264,7 @@ struct MethodCall {
 struct UsingStmt {
   QString varName;              ///< 变量名
   std::unique_ptr<Expr> value;  ///< 初始化表达式
+  int line = 0;                 ///< using 语句所在行（1-based，引用/重命名定位用）
 
   UsingStmt() = default;
   UsingStmt(const UsingStmt &other);
@@ -492,6 +494,8 @@ struct ImportStmt {
   QMap<QString, QString> aliases;  ///< 别名映射：原始名 → 别名（无别名时不含该键）
   QString filePath;                ///< 源文件路径（相对或绝对）
   int line = 0;                    ///< import 关键字所在行号（1-based，用于报错/引用定位）
+  QHash<QString, int> nameLines;   ///< 原始名 → 该名字所在行号（多行 import 时定位用）
+  QHash<QString, int> aliasLines;  ///< 别名 → 该别名所在行号（多行 import 时定位用）
 };
 
 /// @brief while 循环语句：while (condition) { body }
