@@ -265,6 +265,15 @@ public:
     return SettingStore::ins().color(QStringLiteral("editor.bracketMatch"));
   }
 
+  /// 调试「断点命中」当前行高亮背景色。
+  /// 用半透明淡色调（仅叠加底色、不改文字前景色），保证调试暂停行的代码在深浅主题下
+  /// 都可读；用温暖的琥珀/黄区分于当前行的中性淡蓝，一眼看出执行到哪一行。
+  /// 深色主题底色偏黑，用稍低透明度避免把浅色代码洗淡；浅色主题用更明显的柔和黄。
+  static QColor debugLineBackground() {
+    const bool dark = (SettingStore::ins().theme() == SettingStore::ThemeDark);
+    return dark ? QColor(0x7a, 0x66, 0x1a, 0x4d) : QColor(0xff, 0xe9, 0xa8, 0x60);
+  }
+
   /// 模板控制标签（${each}/${/each}、${if}/${/if}）成对高亮色（仅背景，不改文字前景色）。
   /// 用「半透明淡色调」降低存在感：只在编辑区底色上叠加一层淡淡的蓝洗，既提示开闭
   /// 又不抢眼；文字仍用 keyword() 原色（深色=浅紫、浅色=深紫），对比交给底色而非色块。

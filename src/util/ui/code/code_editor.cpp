@@ -675,12 +675,12 @@ void CodeEditor::appendErrorLineHighlights(QList<QTextEdit::ExtraSelection> &ext
 }
 
 void CodeEditor::appendDebugLineHighlight(QList<QTextEdit::ExtraSelection> &extra) {
-  // 调试当前行高亮（黄色背景，标红箭头）
+  // 调试当前行高亮（半透明淡色调背景，行号区标红箭头）。
   if (m_debugLine <= 0) return;
   QTextBlock block = document()->findBlockByNumber(m_debugLine - 1);
   if (!block.isValid()) return;
   QTextEdit::ExtraSelection debugSel;
-  debugSel.format.setBackground(QColor(0xff, 0xf0, 0x8a));  // 淡黄背景
+  debugSel.format.setBackground(AuiStyle::debugLineBackground());
   debugSel.format.setProperty(QTextFormat::FullWidthSelection, true);
   debugSel.cursor = QTextCursor(block);
   debugSel.cursor.clearSelection();
