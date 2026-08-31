@@ -25,6 +25,7 @@
 #include <QPointer>
 #include <QRegularExpression>
 #include <QSet>
+#include <QShowEvent>
 #include <QString>
 #include <QSyntaxHighlighter>
 #include <QTextBlock>
@@ -258,6 +259,10 @@ public:
   /// 把所有块重写为统一行高（整篇重载 setPlainText 后恢复文本布局层行高用）
   void applyFixedBlockLineHeight();
 
+  /// 合并重绘所有 ExtraSelection（当前行/括号/错误/调试/持久高亮层）
+  /// 供外部在编辑器由不可见变为可见（切换 tab）等时机触发刷新
+  void refreshExtraSelections();
+
   /// 把点击点纵向修正到文本行中心，规避统一行高造成的「点击行尾吸附」
   QPointF snapClickToText(const QPointF &pos) const;
 
@@ -283,6 +288,7 @@ signals:
 protected:
   void resizeEvent(QResizeEvent *event) override;
   void paintEvent(QPaintEvent *event) override;
+  void showEvent(QShowEvent *event) override;
   bool viewportEvent(QEvent *event) override;
   void keyPressEvent(QKeyEvent *event) override;
   void contextMenuEvent(QContextMenuEvent *event) override;
@@ -302,7 +308,6 @@ private slots:
 
 private:
   // ── UI 相关 ──
-  void refreshExtraSelections();
   void showErrorTooltip(const QPoint &pos, const QString &text);
   void hideErrorTooltip();
   int calculateNewLineIndent(const QString &linePrefix) const;
@@ -411,6 +416,26 @@ private:
 
   // 统一高亮层：引用 / 查找面板 / 内嵌查找（filler 由构造函数注册）
   QHash<QString, HighlightLayer> m_highlightLayers;
+
+  // 彩虹括号全文扫描缓存：文档 revision 未变化时复用扫描结果，
+  // 避免光标移动 / 切面板等高频 highlightCurrentLine 每次都 O(n) 重扫全文
+  QVector<BracketMatcher::BracketInfo> m_rainbowBracketCache;
+  qint64 m_rainbowBracketRev = -1;  ///< 生成缓存的文档 revision（-1=未缓存）
+
+  // ── 高亮选区缓存（切面板等高频 highlightCurrentLine 时避免无谓重扫）──
+  // 两者均以文档 revision 为首次失效依据；revision 未变时复用上次计算结果，
+  // 把每次切面板对每个可见编辑器的扫描从 O(n) 降到 O(1)。
+  // 光标上下文（括号配对 + 模板标签）选区缓存：按 (revision, 光标位置) 复用
+  qint64 m_cursorCtxRev = -1;  ///< 生成缓存的文档 revision（-1=未缓存）
+  int m_cursorCtxPos = -1;     ///< 生成缓存时的光标位置（-1=未缓存）
+  QList<QTextEdit::ExtraSelection> m_cursorCtxSels;  ///< 光标上下文选区
+  // 错误行背景选区缓存：文档变化或错误集变化（置脏）时才重建
+  qint64 m_errorLineRev = -1;                        ///< 生成缓存的文档 revision
+  QList<QTextEdit::ExtraSelection> m_errorLineSels;  ///< 错误行背景选区
+  bool m_errorLineDirty = true;  ///< 错误集变化时置位，强制重建错误行缓存
+  /// 主题/颜色变化时，本编辑器处于隐藏（后台标签页）被跳过重建语法高亮，
+  /// 置位后待 showEvent（变为可见）时补做 reloadColors
+  bool m_needsThemeReload = false;
 
   // 断点调试
   QMap<int, bool> m_breakpoints;  ///< 断点集合（行号 → 是否生效，行号 1-based）

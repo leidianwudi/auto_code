@@ -724,6 +724,10 @@ void CodeEditor::applyHighlight(const QString &layerId, const QString &key) {
   it->selections = (key.isEmpty() || !it->filler)
                        ? QList<QTextEdit::ExtraSelection>()
                        : it->filler(key);
+  // 性能优化：隐藏（藏于非当前标签页）的编辑器不绘制且无可见选区，只更新 layer
+  // 选区即可，无需立即重跑 highlightCurrentLine + update()。其整套高亮在「变为可见」
+  // 时（setActiveEditor / 切 tab 的刷新路径）统一重绘，避免切面板时对大量后台编辑器空转。
+  if (!isVisible()) return;
   highlightCurrentLine();
   // 强制重绘视口：后台/未聚焦编辑器的 setExtraSelections 可能不会立刻重画，
   // 需显式 update()（否则 tpl 等文件要点击编辑器后才显示高亮）
@@ -763,6 +767,8 @@ void CodeEditor::setReferenceHighlightPositions(const QVector<RenameRef> &refs) 
     sels.append(sel);
   }
   it->selections = sels;
+  // 与 applyHighlight 一致的隐藏编辑器优化：只更新选区，变为可见再统一重绘
+  if (!isVisible()) return;
   highlightCurrentLine();
   viewport()->update();
 }

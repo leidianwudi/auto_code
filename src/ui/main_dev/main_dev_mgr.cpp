@@ -181,6 +181,14 @@ void MainDevMgr::initUi() {
   connect(m_themeTimer, &QTimer::timeout, this, &MainDevMgr::refreshTheme);
   connect(&store, &SettingStore::themeChanged, m_themeTimer, qOverload<>(&QTimer::start));
   connect(&store, &SettingStore::colorsChanged, m_themeTimer, qOverload<>(&QTimer::start));
+  // 编辑器相关色（hl.* + 不进全局的 editor.*）变化：走更轻量的刷新（只重建编辑器语法高亮），
+  // 不重建全局 QSS / 调色板 / 面板，避免在颜色设置对话框里挑颜色时整套重刷卡顿
+  m_hlColorTimer = new QTimer(this);
+  m_hlColorTimer->setSingleShot(true);
+  m_hlColorTimer->setInterval(60);
+  connect(m_hlColorTimer, &QTimer::timeout, this, &MainDevMgr::refreshHighlightColors);
+  connect(&store, &SettingStore::highlightColorsChanged, m_hlColorTimer,
+          qOverload<>(&QTimer::start));
   // 窗口字体变化：走轻量刷新（只重建标题栏样式），不触发 refreshTheme 的重活
   // （调色板重建、重新高亮所有编辑器、重建调试面板等对字体变化毫无必要）
   connect(&store, &SettingStore::windowFontChanged, this, &MainDevMgr::refreshWindowFont);

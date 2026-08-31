@@ -116,6 +116,8 @@ void CodeEditor::validateWithValidator(IValidator *validator) {
 
 // 统一应用验证结果：标记错误 + 发出消息
 void CodeEditor::applyValidationResults(const QVector<ValidationResult> &results) {
+  // 错误集即将变化：使错误行背景选区缓存失效（下次绘制时按新错误重建）
+  m_errorLineDirty = true;
   // 收集错误信息字符串
   QStringList errors;
   for (const auto &result : results) {

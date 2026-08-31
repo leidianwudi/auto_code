@@ -29,7 +29,8 @@ void MainDevMgr::refreshTheme() {
   // 全局 Fusion 风格 + 调色板（原生控件菜单/下拉/表格/滚动条等随主题变化）
   SettingStore::ins().applyGlobalStyle();
 
-  // 重新应用主窗口全局样式表（背景、边框等随主题变化）
+  // 重新应用主窗口全局样式表：主窗口自身持有样式表，会遮蔽 QApplication 级的级联，
+  // 若不在此重设，标题栏/状态栏等由主窗口样式表着色的区域在切主题后不会自动换色。
   m_ui->setStyleSheet(AuiStyle::mainStyleSheet());
 
   // 刷新标题栏及菜单按钮颜色（标题栏背景、文件/视图按钮文字等）
@@ -95,12 +96,17 @@ void MainDevMgr::refreshTheme() {
     }
     // 强制 repolish，确保已存在子控件（含 QToolButton/QPushButton/QLabel/QMenu 等）重新解析
     // 新的样式表颜色。只 repolish 顶层窗口不够，子控件的 QSS 颜色需各自 unpolish/polish 才会重算。
+    // 性能优化：只对「自带 QSS / auiAutoLabel」的目标控件 repolish，并跳过隐藏控件。
+    // 其余继承自窗口级 QSS 的控件（编辑区/滚动条/树等）已由顶层 setStyleSheet 自动级联，
+    // 无需逐个重算，避免主题切换时对海量子控件逐一 unpolish/polish 造成卡顿。
     auto repolish = [](QWidget *root) {
       QList<QWidget *> all;
       all.reserve(64);
       all << root;
       all << root->findChildren<QWidget *>();
       for (QWidget *c : all) {
+        if (!c->isVisible()) continue;                       // 隐藏控件延后到显示时重解析
+        if (c->styleSheet().isEmpty() && !c->property("auiAutoLabel").toBool()) continue;
         c->style()->unpolish(c);
         c->style()->polish(c);
         c->update();
@@ -118,4 +124,24 @@ void MainDevMgr::refreshWindowFont() {
   // 这里只需重建标题栏文字样式：标题字号随窗口字号缩放，
   // 且标题字号是固化在样式表里的，必须重建才能生效。
   m_ui->refreshTitleBarStyle();
+}
+
+/// 仅「编辑器相关色」（hl.* 及不进全局 QSS/调色板的 editor.*）变化的轻量刷新：
+/// 只重建各编辑器的语法高亮与选区缓存。不走 refreshTheme（不重建全局 QSS/调色板/面板），
+/// 因为这类色只被编辑器读取，改它们时不会整套重刷全局造成卡顿。
+/// reloadColors 内部已对隐藏编辑器做延迟（变为可见时再重建），此处只处理可见编辑器。
+void MainDevMgr::refreshHighlightColors() {
+  if (!m_ui) return;
+  for (int p = 0; p < m_ui->editorPanelCount(); ++p) {
+    QTabWidget *tabs = m_ui->editorPanelAt(p);
+    if (!tabs) continue;
+    for (int i = 0; i < tabs->count(); ++i) {
+      QWidget *w = tabs->widget(i);
+      if (auto *ed = qobject_cast<CodeEditor *>(w)) {
+        ed->reloadColors();
+      } else if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) {
+        if (jvw->codeEditor()) jvw->codeEditor()->reloadColors();
+      }
+    }
+  }
 }

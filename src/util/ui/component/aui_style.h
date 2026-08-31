@@ -33,6 +33,10 @@ public:
   //  基础颜色常量（从 SettingStore 读取，支持主题与自定义）
   // ════════════════════════════════════════════════════════════
 
+  /// 配对括号匹配高亮背景的透明度（0-255）。集中在此便于统一微调深浅/明暗模式的醒目程度。
+  // 若还想要更显眼，可继续上调（如 0x88）；想更淡就往下调。
+  static constexpr int kBracketMatchBgAlpha = 0x80;
+
   /// 窗口背景色（状态栏、边框、对话框等）
   static QColor background() { return SettingStore::ins().color(QStringLiteral("ui.background")); }
 
@@ -261,12 +265,13 @@ public:
     return SettingStore::ins().color(QStringLiteral("editor.bracketMatch"));
   }
 
-  /// 模板控制标签（${each}/${/each}、${if}/${/if}）成对高亮色。
-  /// 不沿用 bracketMatch（浅色主题下过浅），改用主题适配、对比度更高的深色，
-  /// 深色主题用深灰蓝、浅色主题用深灰蓝(较深)，保证两种主题下都足够醒目。
+  /// 模板控制标签（${each}/${/each}、${if}/${/if}）成对高亮色（仅背景，不改文字前景色）。
+  /// 用「半透明淡色调」降低存在感：只在编辑区底色上叠加一层淡淡的蓝洗，既提示开闭
+  /// 又不抢眼；文字仍用 keyword() 原色（深色=浅紫、浅色=深紫），对比交给底色而非色块。
   static QColor templateTagColor() {
     const bool dark = (SettingStore::ins().theme() == SettingStore::ThemeDark);
-    return dark ? QColor(0x53, 0x70, 0xb5) : QColor(0x9d, 0xb6, 0xf2);
+    // 透明度较低（~33%）：够明显又柔和，深色略深、浅色略亮
+    return dark ? QColor(0x5a, 0x70, 0xb0, 0x55) : QColor(0xa6, 0xbb, 0xec, 0x60);
   }
 
   /// 彩虹括号配色：按嵌套深度取色，相邻深度错开、深浅主题均可见。
@@ -322,8 +327,7 @@ public:
   /// @param openAngleDeg 开口张角（两臂夹角，右上箭头与向下箭头一致，可调大）
   /// 自绘而非用文字「>/v」，以保证两个方向的开口角度完全一致且可调。
   static void drawFoldArrow(QPainter &p, const QPointF &centerOrTip, bool downward,
-                            const QColor &color, qreal length = 5.0,
-                            qreal openAngleDeg = 100.0);
+                            const QColor &color, qreal length = 5.0, qreal openAngleDeg = 100.0);
 
   /// 绘制实心向下三角箭头（下拉框/下拉按钮的下拉指示箭头共用，避免重复绘制代码）。
   /// @param center 箭头中心点

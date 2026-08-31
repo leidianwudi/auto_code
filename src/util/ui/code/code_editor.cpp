@@ -305,6 +305,21 @@ const QString &CodeEditor::cachedText() const {
 void CodeEditor::setSyntaxHighlighter(QSyntaxHighlighter *h) { m_highlighter = h; }
 
 void CodeEditor::reloadColors() {
+  // 模板标签/彩虹括号/错误行的背景色都随主题变化，而这几类 ExtraSelection 按 revision
+  // 缓存了已固化的 QColor，先统一作废缓存（廉价，任何可见性都要做）。
+  m_cursorCtxRev = -1;
+  m_rainbowBracketRev = -1;
+  m_errorLineDirty = true;
+
+  // 只有「可见」编辑器才立即重建语法高亮与 ExtraSelection：
+  // 语法高亮 reloadColors → rehighlight 是对整篇文档 O(n) 重新分词上色，主题切换时
+  // 若对藏在后台标签页的编辑器也全量重解析会非常卡。隐藏编辑器只置标记、待 showEvent
+  // （标签页变为当前页）时再补做；可见编辑器立即重建，保证本次刷新即看到新主题。
+  if (!isVisible()) {
+    m_needsThemeReload = true;
+    return;
+  }
+
   // 按高亮器具体类型刷新颜色（主题/自定义颜色变化时调用）
   if (auto *lj = dynamic_cast<LightJson *>(m_highlighter)) {
     lj->reloadColors();
@@ -314,6 +329,17 @@ void CodeEditor::reloadColors() {
     lt->reloadColors();
   } else if (auto *lts = dynamic_cast<LightTs *>(m_highlighter)) {
     lts->reloadColors();
+  }
+  refreshExtraSelections();
+}
+
+void CodeEditor::showEvent(QShowEvent *event) {
+  QPlainTextEdit::showEvent(event);
+  // 隐藏期间因主题切换被跳过重建：变为可见时补做语法高亮换色。
+  // （切换标签页时 QStackedLayout 会向新页面的控件发 QShowEvent，正好覆盖此场景）
+  if (m_needsThemeReload) {
+    m_needsThemeReload = false;
+    reloadColors();
   }
 }
 
@@ -522,9 +548,14 @@ void CodeEditor::appendCurrentLineHighlight(QList<QTextEdit::ExtraSelection> &ex
 
 void CodeEditor::appendRainbowBracketHighlights(QList<QTextEdit::ExtraSelection> &extra) {
   // ── 彩虹括号：全文括号按嵌套深度着前景色（VSCode 风格），ac/json/tpl 通用 ──
-  const QString &text = cachedText();
-  const auto brackets = BracketMatcher::collectBrackets(text, nullptr);
-  for (const auto &b : brackets) {
+  // 全文扫描缓存：仅当文档内容变化（revision 改变）时才重扫，光标移动 /
+  // 面板切换等高频调用直接复用结果，避免每次 O(n) 扫全文造成卡顿。
+  const qint64 rev = document()->revision();
+  if (rev != m_rainbowBracketRev) {
+    m_rainbowBracketCache = BracketMatcher::collectBrackets(cachedText(), nullptr);
+    m_rainbowBracketRev = rev;
+  }
+  for (const auto &b : m_rainbowBracketCache) {
     QColor color = AuiStyle::rainbowBracketColor(b.depth);
     if (!color.isValid()) continue;
     QTextEdit::ExtraSelection sel;
@@ -539,7 +570,20 @@ void CodeEditor::appendRainbowBracketHighlights(QList<QTextEdit::ExtraSelection>
 void CodeEditor::appendCursorContextHighlights(QList<QTextEdit::ExtraSelection> &extra) {
   QTextCursor cursor = textCursor();
   if (cursor.hasSelection()) return;
-  int pos = cursor.position();
+  if (!isVisible()) return;
+  const int pos = cursor.position();
+  const qint64 rev = document()->revision();
+
+  // 光标上下文（括号配对 + 模板标签）选区缓存：切换面板时可见编辑器的光标位置与
+  // 文档都未变，结果完全相同；命中直接复用，避免对全部 3 种括号各做一次全文扫描
+  // （最多 3×O(n)）——这是切面板卡顿的主要来源。
+  if (m_cursorCtxRev == rev && m_cursorCtxPos == pos) {
+    extra.append(m_cursorCtxSels);
+    return;
+  }
+
+  QList<QTextEdit::ExtraSelection> &out = m_cursorCtxSels;
+  out.clear();
   const QString &text = cachedText();
 
   // 模板文件：识别 ${each}/${/each}、${if}/${/if} 成对控制标签并高亮。
@@ -548,14 +592,15 @@ void CodeEditor::appendCursorContextHighlights(QList<QTextEdit::ExtraSelection> 
   if (m_validationMode == TemplateValidation) {
     auto tagMatch = BracketMatcher::findEnclosingTemplateTag(pos, text);
     if (tagMatch.isValid()) {
-      QColor color = AuiStyle::templateTagColor();
+      // 只叠加背景色，保留 ${if}/${/if} 原有的 keyword() 前景色不变
+      const QColor color = AuiStyle::templateTagColor();
       QTextEdit::ExtraSelection sel1;
       sel1.cursor = cursor;
       sel1.cursor.setPosition(tagMatch.openStart);
       sel1.cursor.setPosition(tagMatch.openEnd, QTextCursor::KeepAnchor);
       sel1.format.setBackground(color);
       sel1.format.setFontWeight(QFont::Bold);
-      extra.append(sel1);
+      out.append(sel1);
 
       QTextEdit::ExtraSelection sel2;
       sel2.cursor = cursor;
@@ -563,7 +608,7 @@ void CodeEditor::appendCursorContextHighlights(QList<QTextEdit::ExtraSelection> 
       sel2.cursor.setPosition(tagMatch.closeEnd, QTextCursor::KeepAnchor);
       sel2.format.setBackground(color);
       sel2.format.setFontWeight(QFont::Bold);
-      extra.append(sel2);
+      out.append(sel2);
     }
   }
 
@@ -574,6 +619,9 @@ void CodeEditor::appendCursorContextHighlights(QList<QTextEdit::ExtraSelection> 
 
   if (enclosingMatch.isValid()) {
     QColor color = AuiStyle::bracketColorForChar(enclosingMatch.openChar);
+    // 与模板标签同款：给配对括号背景统一加透明度，柔和、只提示配对不抢眼，
+    // 字色仍保持语法高亮的原色不变。透明度略高于模板标签，保证配对更易辨认。
+    color.setAlpha(AuiStyle::kBracketMatchBgAlpha);
 
     QTextEdit::ExtraSelection sel1;
     sel1.cursor = cursor;
@@ -581,7 +629,7 @@ void CodeEditor::appendCursorContextHighlights(QList<QTextEdit::ExtraSelection> 
     sel1.cursor.setPosition(enclosingMatch.openPos + 1, QTextCursor::KeepAnchor);
     sel1.format.setBackground(color);
     sel1.format.setFontWeight(QFont::Bold);
-    extra.append(sel1);
+    out.append(sel1);
 
     QTextEdit::ExtraSelection sel2;
     sel2.cursor = cursor;
@@ -589,26 +637,39 @@ void CodeEditor::appendCursorContextHighlights(QList<QTextEdit::ExtraSelection> 
     sel2.cursor.setPosition(enclosingMatch.closePos + 1, QTextCursor::KeepAnchor);
     sel2.format.setBackground(color);
     sel2.format.setFontWeight(QFont::Bold);
-    extra.append(sel2);
+    out.append(sel2);
   }
+
+  extra.append(out);
+  m_cursorCtxRev = rev;
+  m_cursorCtxPos = pos;
 }
 
 void CodeEditor::appendErrorLineHighlights(QList<QTextEdit::ExtraSelection> &extra) {
   // 错误行背景色高亮
   if (m_errorLines.isEmpty()) return;
-  QTextBlock block = document()->firstBlock();
-  while (block.isValid()) {
-    int lineNum = block.blockNumber() + 1;
-    if (m_errorLines.contains(lineNum)) {
-      QTextEdit::ExtraSelection errorSel;
-      errorSel.format.setBackground(AuiStyle::errorLineBackground());
-      errorSel.format.setProperty(QTextFormat::FullWidthSelection, true);
-      errorSel.cursor = QTextCursor(block);
-      errorSel.cursor.clearSelection();
-      extra.append(errorSel);
+  const qint64 rev = document()->revision();
+  // 按 revision + 错误集脏标记缓存：文档内容或错误集变化时才重建，
+  // 避免切面板等高频 highlightCurrentLine 对含错误的大文件遍历全部 block。
+  if (m_errorLineDirty || m_errorLineRev != rev) {
+    m_errorLineRev = rev;
+    m_errorLineSels.clear();
+    QTextBlock block = document()->firstBlock();
+    while (block.isValid()) {
+      int lineNum = block.blockNumber() + 1;
+      if (m_errorLines.contains(lineNum)) {
+        QTextEdit::ExtraSelection errorSel;
+        errorSel.format.setBackground(AuiStyle::errorLineBackground());
+        errorSel.format.setProperty(QTextFormat::FullWidthSelection, true);
+        errorSel.cursor = QTextCursor(block);
+        errorSel.cursor.clearSelection();
+        m_errorLineSels.append(errorSel);
+      }
+      block = block.next();
     }
-    block = block.next();
+    m_errorLineDirty = false;
   }
+  extra.append(m_errorLineSels);
   // 错误波浪下划线由 paintEvent 依据 m_errorRanges 统一绘制（单行、钳制行尾），
   // 不在此通过 ExtraSelection 绘制，避免与自定义绘制重叠（粗/细两条线并存）
 }

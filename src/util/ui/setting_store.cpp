@@ -377,6 +377,14 @@ QColor SettingStore::color(const QString &key) const {
   return (it != base.end()) ? it.value() : QColor();
 }
 
+// 是否「影响全局样式」的颜色：全局 QSS / 调色板只读取 ui.* 及 editor.background / editor.text。
+// 其余颜色（hl.* 代码高亮、editor.* 的选区/括号/错误/缩进等）仅被编辑器读取，
+// 其变化走轻量 refreshHighlightColors，避免在颜色对话框里改这些色时每 60ms 整套重建全局样式
+static bool isGlobalColorKey(const QString &key) {
+  if (key.startsWith(QStringLiteral("ui."))) return true;
+  return key == QStringLiteral("editor.background") || key == QStringLiteral("editor.text");
+}
+
 void SettingStore::setColor(const QString &key, const QColor &c) {
   if (!m_themeLight.contains(key)) return;
   if (!c.isValid()) {
@@ -385,7 +393,10 @@ void SettingStore::setColor(const QString &key, const QColor &c) {
     m_custom[key] = c;
   }
   if (m_theme != ThemeCustom) m_theme = ThemeCustom;
-  emit colorsChanged();
+  if (isGlobalColorKey(key))
+    emit colorsChanged();
+  else
+    emit highlightColorsChanged();
 }
 
 bool SettingStore::hasCustomColor(const QString &key) const { return m_custom.contains(key); }
@@ -401,7 +412,10 @@ QString SettingStore::colorCategory(const QString &key) const {
 void SettingStore::resetColor(const QString &key) {
   if (!m_custom.contains(key)) return;
   m_custom.remove(key);
-  emit colorsChanged();
+  if (isGlobalColorKey(key))
+    emit colorsChanged();
+  else
+    emit highlightColorsChanged();
 }
 
 void SettingStore::resetAllColors() {

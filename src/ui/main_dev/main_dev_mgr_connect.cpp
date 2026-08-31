@@ -9,6 +9,7 @@
 #include <QMouseEvent>
 #include <QRegularExpression>
 #include <QTextCursor>
+#include <QTimer>
 
 #include <functional>
 
@@ -109,9 +110,17 @@ void MainDevMgr::connectEditorSignals(CodeEditor *editor) {
 }
 
 void MainDevMgr::setActiveEditor(CodeEditor *editor) {
+  if (m_model->connectedEditor == editor) {
+    // 活跃编辑器未变化：无需重复刷新（避免焦点在控件间移动时反复全文重扫）
+    return;
+  }
   m_model->connectedEditor = editor;
   if (editor) {
     updateCursorPosition();
+    // 刷新让编辑器由隐藏变为可见时，其光标括号配对高亮立即出现：
+    // appendCursorContextHighlights 仅在 isVisible() 时才扫描，隐藏期间高亮是陈旧的；
+    // 这里在切 tab/获焦（setActiveEditor 的两种触发路径）时强制重绘一次（仅当前编辑器，开销小）。
+    editor->refreshExtraSelections();
   } else {
     m_ui->setCursorStatusText(MainDevUi::cursorDefault());
   }
@@ -356,6 +365,9 @@ void MainDevMgr::applyPanelHighlightToEditor(CodeEditor *editor) {
 
 void MainDevMgr::onLeftTabChanged(int index) {
   Q_UNUSED(index);
-  // 查找/引用面板显示/隐藏时统一同步编辑器高亮（VSCode 行为）
-  resyncPanelHighlights();
+  // 切页后延迟一帧同步高亮：resyncPanelHighlights 会遍历所有已打开编辑器并各自
+  // 触发 highlightCurrentLine()，其中彩虹括号为全文 O(n) 扫描 + 强制重绘，多个
+  // 编辑器时若放在 currentChanged 槽内同步执行会阻塞面板切换造成明显卡顿。
+  // 改为异步：先让新面板立即显示，高亮刷新放到下个事件循环。
+  QTimer::singleShot(0, this, [this]() { resyncPanelHighlights(); });
 }

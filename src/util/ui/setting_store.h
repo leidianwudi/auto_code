@@ -207,6 +207,10 @@ signals:
   void themeChanged();
   /// 任意颜色变化
   void colorsChanged();
+  /// 仅「编辑器相关色」变化（hl.* 代码高亮 + 不进全局 QSS/调色板的 editor.*）：
+  /// 只影响语法高亮器与编辑器，可走轻量刷新，无需重建全局 QSS / 调色板
+  /// （避免在颜色设置对话框里挑颜色时整套重刷卡顿）
+  void highlightColorsChanged();
   /// 快捷键变化
   void shortcutsChanged();
   /// 任意字体大小变化（目录树/代码等组件字体，需按各自设置即时刷新）

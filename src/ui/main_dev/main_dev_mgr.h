@@ -205,6 +205,9 @@ private:
   /// 窗口字体变化后的轻量刷新：字体已由 SettingStore 应用到所有窗口，
   /// 这里只需重建标题栏文字样式（标题字号随窗口字号缩放），避免走 refreshTheme 重活
   void refreshWindowFont();
+  /// 仅代码高亮色（hl.*）变化的轻量刷新：只重建各编辑器语法高亮与选区缓存，
+  /// 不重建全局 QSS / 调色板 / 面板，避免在颜色设置对话框里改代码色时整套重刷卡顿
+  void refreshHighlightColors();
   /// 推入导航历史记录
   void pushNavigationHistory(const QString &filePath, int line, int column = 0);
   /// 跳转到指定位置（内部使用，不推入历史）
@@ -278,6 +281,8 @@ protected:
 
   /// 主题刷新防抖定时器：合并短时间内多次颜色变化，减少切换卡顿
   QTimer *m_themeTimer = nullptr;
+  /// 代码高亮色（hl.*）刷新防抖定时器：只刷编辑器，走轻量 refreshHighlightColors
+  QTimer *m_hlColorTimer = nullptr;
 
   /// 查找面板搜索高亮防抖定时器（合并输入时的多次搜索，减少编辑器重扫）
   QTimer *m_searchHighlightTimer = nullptr;
