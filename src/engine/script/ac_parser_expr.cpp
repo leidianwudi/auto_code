@@ -641,6 +641,12 @@ bool AcParser::parseTemplateString(Expr &expr) {
 
       QVector<Token> exprTokens = AcLexer::tokenize(exprText, m_error);
       if (!m_error.isEmpty()) return false;
+      // 插值片段是独立 tokenize 的，token 行号从片段内起始（常为 1），
+      // 需偏移回源文件真实行号，否则 ${var} 里的标识符其引用/校验/报错都定位不到正确行。
+      // 片段起始行 = 模板 token 行 + 片段之前的换行数；把片段内第 1 行映射到该行。
+      const int baseLine = tok.line + raw.left(start).count(QLatin1Char('\n'));
+      const int lineOffset = baseLine - 1;
+      for (Token &epTok : exprTokens) epTok.line += lineOffset;
 
       int savedPos = m_pos;
       QVector<Token> savedTokens = m_tokens;

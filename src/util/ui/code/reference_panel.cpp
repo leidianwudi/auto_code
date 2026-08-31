@@ -5,6 +5,8 @@
 
 #include "reference_panel.h"
 
+#include <algorithm>
+
 #include <QDir>
 #include <QFile>
 #include <QFuture>
@@ -44,6 +46,14 @@ static ReferenceResult collectReferenceMatches(const QString &root, const QStrin
                                                QHash<QString, QString> liveContents) {
   ReferenceResult res;
   res.refs = collectSymbolReferencesLive(root, filePath, line, column, name, liveContents);
+  // 引用来自多个收集器（作用域/成员/全局/跨文件），拼接后同文件内不一定按行有序；
+  // 转为展示用 Match 前统一按（文件, 行, 列）排序，保证结果树每个文件组的项按行号从小到大。
+  std::sort(res.refs.begin(), res.refs.end(),
+            [](const RenameRef &a, const RenameRef &b) {
+              if (a.filePath != b.filePath) return a.filePath < b.filePath;
+              if (a.line != b.line) return a.line < b.line;
+              return a.column < b.column;
+            });
   QHash<QString, QStringList> lineCache;  // 文件 → 行列表（缓存避免重复读）
   for (const RenameRef &r : res.refs) {
     if (!lineCache.contains(r.filePath)) {

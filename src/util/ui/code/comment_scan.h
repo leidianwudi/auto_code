@@ -50,22 +50,82 @@ inline QVector<QPair<int, int>> collectNonCodeRanges(const QString &text) {
     }
     const QChar c = text.at(i);
     if (c == QLatin1Char('"') || c == QLatin1Char('\'') || c == QLatin1Char('`')) {
-      // 字符串字面量：跳过引号内内容（含转义），整体记为一个非代码区域
       const QChar quote = c;
       int j = i + 1;
-      while (j < n) {
-        if (text.at(j) == QLatin1Char('\\')) {
-          j += 2;
-          continue;
-        }
-        if (text.at(j) == quote) {
+      if (quote == QLatin1Char('`')) {
+        // 模板字符串（反引号）：${...} 插值是代码而非字符串，其中的标识符算真实引用，
+        // 只把「插值之外」的字面量文本记为非代码区域。对照 VSCode，反引号内的标识符
+        // 若不在 ${} 里仍是字符串内容、应跳过；在 ${} 插值里则是表达式、应计数。
+        int segStart = i;  // 当前字符串字面量段起点
+        while (j < n) {
+          const QChar ch = text.at(j);
+          if (ch == QLatin1Char('\\')) {
+            j += 2;
+            continue;
+          }
+          if (ch == QLatin1Char('`')) {
+            ++j;
+            break;
+          }
+          if (ch == QLatin1Char('$') && j + 1 < n && text.at(j + 1) == QLatin1Char('{')) {
+            // ${ 之前累积的纯字面量段记为非代码
+            if (segStart < j) ranges.append(qMakePair(segStart, j - segStart));
+            // 整体跳过 ${ ... } 插值（按代码处理）：处理嵌套 {} 与其内部字符串/转义
+            j += 2;
+            int depth = 1;
+            while (j < n && depth > 0) {
+              const QChar ic = text.at(j);
+              if (ic == QLatin1Char('\\')) {
+                j += 2;
+                continue;
+              }
+              if (ic == QLatin1Char('{')) {
+                ++depth;
+              } else if (ic == QLatin1Char('}')) {
+                --depth;
+              } else if (ic == QLatin1Char('"') || ic == QLatin1Char('\'') ||
+                         ic == QLatin1Char('`')) {
+                // 跳过插值内的字符串字面量
+                const QChar iq = ic;
+                ++j;
+                while (j < n) {
+                  if (text.at(j) == QLatin1Char('\\')) {
+                    j += 2;
+                    continue;
+                  }
+                  if (text.at(j) == iq) {
+                    ++j;
+                    break;
+                  }
+                  ++j;
+                }
+                continue;
+              }
+              ++j;
+            }
+            segStart = j;  // 插值结束位置继续累积字面量
+            continue;
+          }
           ++j;
-          break;
         }
-        ++j;
+        if (segStart < j) ranges.append(qMakePair(segStart, j - segStart));
+        i = j;
+      } else {
+        // 普通字符串 "..." / '...'：跳过引号内内容（含转义），整体记为一个非代码区域
+        while (j < n) {
+          if (text.at(j) == QLatin1Char('\\')) {
+            j += 2;
+            continue;
+          }
+          if (text.at(j) == quote) {
+            ++j;
+            break;
+          }
+          ++j;
+        }
+        ranges.append(qMakePair(i, j - i));
+        i = j;
       }
-      ranges.append(qMakePair(i, j - i));
-      i = j;
     } else if (text.mid(i, 2) == QStringLiteral("/*")) {
       inBlock = true;
       regionStart = i;
