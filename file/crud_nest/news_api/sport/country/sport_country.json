@@ -1,0 +1,29 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\region\\sport_country",
+      "tableName": "sport_country",
+      "selCols": [
+        "name_zh",
+        "name_en"
+      ],
+      "selColsLike": [
+      ],
+      "selColsSort": {
+        "abbr_en":"ASC",
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportCity",
+          "joinEnClass_Url": "src/sport/region/sport_city/entities/en_sport_city",
+          "joinEnClassPro": "citys",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "country",
+          "isJoinRelations": false
+        }
+      ]
+    }
+  ]
+}

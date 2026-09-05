@@ -1,4 +1,4 @@
-﻿{
+{
   // 指定 AutoCode schema，便于拆分后的单表配置校验。
   $schema: '/crud_nest/template/tool/param.schema.json',
   // 球员荣誉查询配置。
@@ -8,10 +8,10 @@
       "tableName": "soccer_player_honor",
       "selCols": [
         "player_pid",
-        "year"
       ],
       "selColsLike": [
-        "name"
+        "name",
+        "year"
       ],
       "selColsSort": {
         "year": "DESC",

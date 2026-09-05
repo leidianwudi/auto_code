@@ -8,7 +8,8 @@
       "tableName": "soccer_match_stats",
       "selCols": [
         "schedule_mid",
-        "type"
+        "type",
+        "score"
       ],
       "selColsLike": [
         "name"
