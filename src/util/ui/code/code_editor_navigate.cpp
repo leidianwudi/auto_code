@@ -375,6 +375,29 @@ bool CodeEditor::resolveImportClauseDefinition(const QString &name) {
   return false;
 }
 
+// ── 若光标位于 import ... from "path" 的路径字符串内，返回解析后的目标文件绝对路径 ──
+QString CodeEditor::importPathAt(int pos) const {
+  const QString &text = cachedText();
+  pos = qBound(0, pos, text.size());
+
+  // 覆盖两种 import 形式：
+  //   import { A } from "path"   /   import "path"
+  // 只关心路径字符串本身（不含子句内的名字），捕获其字符区间。
+  QRegularExpression fromRe(
+      QStringLiteral("\\bimport\\b(?:[^{]|\"[^\"]*\")*?from\\s*[\"']([^\"']+)[\"']"));
+  auto mit = fromRe.globalMatch(text);
+  while (mit.hasNext()) {
+    const auto m = mit.next();
+    const int valStart = m.capturedStart(1);
+    const int valEnd = m.capturedEnd(1);
+    // 路径字符串"内部"（含两端引号位置）都算命中，方便点击任意位置
+    if (pos < valStart - 1 || pos > valEnd + 1) continue;
+    const QString rel = m.captured(1);
+    return PathResolver::resolveImportPath(rel, objectName());
+  }
+  return QString();
+}
+
 void CodeEditor::goToTypeDefinition(const QString &name) {
   if (name.isEmpty() || !document()) return;
 
@@ -851,17 +874,20 @@ void CodeEditor::selectBetweenBrackets() {
 bool CodeEditor::navigationTargetAt(int pos) const {
   switch (m_validationMode) {
     case JsonValidation: {
-      // 与鼠标点击跳转完全一致：路径非空 + schema 中可解析到属性
+      // 与鼠标点击跳转完全一致：路径非空 + schema 中可解析到属性；
+      // 或光标位于 "$schema" 的路径值内（可跳转打开 schema 文件）
       if (!m_schemaLoaded) return false;
+      if (schemaRefRangeAt(pos)) return true;
       QString path = m_schema.propertyPathAt(cachedText(), pos);
       QString className, propName;
       return !path.isEmpty() && m_schema.propertyContext(path, &className, &propName) &&
              !propName.isEmpty();
     }
     case AcValidation: {
-      // 与 AC 现状一致：任意标识符均可提示/尝试跳转
+      // 与 AC 现状一致：任意标识符均可提示/尝试跳转；import 路径字符串也可跳转
       int start = 0, end = 0;
-      return !identifierAtCursor(pos, &start, &end).isEmpty();
+      if (!identifierAtCursor(pos, &start, &end).isEmpty()) return true;
+      return !importPathAt(pos).isEmpty();
     }
     default:
       return false;
@@ -910,6 +936,35 @@ int CodeEditor::findSchemaPropertyLine(const QString &className, const QString &
     if (text[i] == QLatin1Char('\n')) ++line;
   }
   return line;
+}
+
+// ── 判断光标是否位于 "$schema": "..." 的字符串值内 ──
+bool CodeEditor::schemaRefRangeAt(int pos, int *start, int *end) const {
+  const QString &text = cachedText();
+  pos = qBound(0, pos, text.size());
+
+  // 1. 扫描找到 $schema 键（支持 "..." 或 JSON5 无引号）
+  QRegularExpression keyRe(QStringLiteral("[\"']?\\$schema[\"']?\\s*:\\s*"));
+  auto km = keyRe.match(text);
+  if (!km.hasMatch()) return false;
+  int afterColon = km.capturedEnd();
+
+  // 2. 跳过空白，读取字符串值（单/双引号均可）
+  int i = afterColon;
+  while (i < text.size() && text[i].isSpace()) ++i;
+  if (i >= text.size() || (text[i] != QLatin1Char('"') && text[i] != QLatin1Char('\'')))
+    return false;
+  QChar quote = text[i];
+  ++i;  // 越过开引号
+  int valStart = i;
+  while (i < text.size() && text[i] != quote) ++i;
+  int valEnd = i;  // 闭引号位置
+
+  // 3. 光标是否落在字符串值区间内
+  if (pos < valStart || pos > valEnd) return false;
+  if (start) *start = valStart;
+  if (end) *end = valEnd;
+  return true;
 }
 
 void CodeEditor::setSymbolTable(const QHash<QString, AcSymbolEntry> &symbols) {

@@ -335,6 +335,7 @@ public:
 private:
   // ── 补全相关 ──
   void initCompleter(ValidationMode mode);
+  void scheduleCompleter();  ///< 防抖调度补全（JSON+schema 时避免每次击键全量扫描）
   void showCompleter();
 
   // ── 验证相关（委托给 CodeValidator）──
@@ -353,6 +354,8 @@ private:
   /// 光标位于 import { A as B } from "path" 子句内时，跳转到源文件中 A 的定义
   /// （避免误跳到当前文件的同名符号）；已处理返回 true
   bool resolveImportClauseDefinition(const QString &name);
+  /// 若光标 pos 位于 import ... from "path" 的路径字符串内，返回解析后的目标文件绝对路径；否则空
+  QString importPathAt(int pos) const;
   void setSymbolTable(const QHash<QString, AcSymbolEntry> &symbols);
 
   // ── 括号导航（使用 BracketMatcher 模块）──
@@ -371,6 +374,8 @@ private:
   // ── JSON 属性悬停提示与 Ctrl+点击跳转（基于 $schema）──
   void showJsonPropertyHover(const QString &jsonPath, const QPoint &gpos);
   int findSchemaPropertyLine(const QString &className, const QString &propName) const;
+  /// 判断光标 pos 是否位于 "$schema": "..." 的字符串值内，输出该值的 [start,end) 字符区间
+  bool schemaRefRangeAt(int pos, int *start = nullptr, int *end = nullptr) const;
 
   // ── 统一的导航目标判定（悬停手形光标与 Ctrl+点击跳转共用同一判定）──
   //   保证各模式下"手形 ⇔ 可跳转"，避免两套逻辑表现不一致
@@ -408,6 +413,7 @@ private:
   // 悬停提示相关
   QTimer *m_hoverTimer = nullptr;       ///< 悬停防抖定时器
   QTimer *m_validationTimer = nullptr;  ///< 验证防抖定时器
+  QTimer *m_completerTimer = nullptr;   ///< 补全防抖定时器（JSON+schema 全量扫描开销大）
   QTimer *m_refHighlightTimer = nullptr;  ///< 引用高亮重算防抖定时器
   QString m_currentHoverSymbol;         ///< 当前悬停的符号名
 

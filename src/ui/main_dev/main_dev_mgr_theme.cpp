@@ -17,6 +17,7 @@
 #include "main_dev_ui.h"
 #include "src/ui/json_vue/json_vue_editor.h"
 #include "src/ui/json_vue/json_vue_widget.h"
+#include "src/ui/schema_json/schema_json_widget.h"
 #include "src/util/ui/code/code_editor.h"
 #include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_style.h"
@@ -61,6 +62,9 @@ void MainDevMgr::refreshTheme() {
       } else if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) {
         if (jvw->codeEditor()) jvw->codeEditor()->reloadColors();
         if (jvw->visualEditor()) jvw->visualEditor()->reloadStyle();
+      } else if (auto *sjw = qobject_cast<SchemaJsonWidget *>(w)) {
+        if (sjw->codeEditor()) sjw->codeEditor()->reloadColors();
+        sjw->reloadStyle();
       }
     }
   }

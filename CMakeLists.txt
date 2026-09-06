@@ -247,6 +247,10 @@ qt_add_executable(auto_code
     src/ui/json_source/json_source_editor.cpp
     src/ui/json_source/json_source_widget.h
     src/ui/json_source/json_source_widget.cpp
+    src/ui/schema_json/schema_form_editor.h
+    src/ui/schema_json/schema_form_editor.cpp
+    src/ui/schema_json/schema_json_widget.h
+    src/ui/schema_json/schema_json_widget.cpp
     src/ui/setting/setting_model.h
     src/ui/setting/setting_model.cpp
     src/ui/setting/setting_ui.h

@@ -25,6 +25,7 @@ public:
   QString selectedStartupRel;    ///< 当前选中启动项的相对路径
   QStringList expandedRelPaths;  ///< 展开目录节点的相对路径（层级用 "/" 分隔）
   bool visualToggle = false;     ///< 可视化编辑按钮状态
+  int scrollPos = 0;             ///< 目录树垂直滚动位置
 
   /// 从配置文件加载；成功返回 true（文件不存在或解析失败返回 false）
   bool load(const QString &configPath);

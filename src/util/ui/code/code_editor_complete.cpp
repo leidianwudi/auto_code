@@ -45,6 +45,17 @@ void CodeEditor::initCompleter(ValidationMode mode) {
           &CodeEditor::insertCompletion);
 }
 
+/// 防抖调度补全：JSON+schema 模式合并连续击键，避免每次击键全量扫描文本；
+/// ac 等其他模式仍需在触发时即时显示，故它们直接用真正的 showCompleter()。
+void CodeEditor::scheduleCompleter() {
+  if (!m_completer) return;
+  if (m_validationMode == JsonValidation) {
+    if (m_completerTimer) m_completerTimer->start();
+  } else {
+    showCompleter();
+  }
+}
+
 void CodeEditor::showCompleter() {
   QTextCursor cursor = textCursor();
   int pos = cursor.position();

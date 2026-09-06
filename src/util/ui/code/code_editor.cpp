@@ -146,6 +146,13 @@ CodeEditor::CodeEditor(QWidget *parent) : QPlainTextEdit(parent) {
   m_validationTimer->setInterval(CodeConstants::Performance::kValidationDebounceMs);
   connect(m_validationTimer, &QTimer::timeout, this, &CodeEditor::performValidation);
 
+  // 补全防抖定时器：JSON+schema 的 completions 每次击键全量扫描文本，
+  // 连续击键时合并为一次，降低输入滞顿（ac 补全同步即时，不受影响）
+  m_completerTimer = new QTimer(this);
+  m_completerTimer->setSingleShot(true);
+  m_completerTimer->setInterval(120);  // 短暂防抖：合并连续击键，单次敲击几乎无感
+  connect(m_completerTimer, &QTimer::timeout, this, &CodeEditor::showCompleter);
+
   // 文本变化即触发验证：监听 QTextDocument::contentsChange，
   // 覆盖打字/删除/粘贴/撤销重做/IME 输入法/拖放等所有编辑方式。
   // 不再依赖 keyPressEvent 手动触发（避免个别输入路径漏触发导致“输入不提示”）；
@@ -854,10 +861,8 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
 
   QPlainTextEdit::keyPressEvent(event);
 
-  // 显示补全列表
-  if (m_completer) {
-    showCompleter();
-  }
+  // 显示补全列表（JSON+schema 用防抖合并连续击键，ac 即时触发）
+  scheduleCompleter();
 }
 
 int CodeEditor::calculateNewLineIndent(const QString &linePrefix) const {
@@ -1104,6 +1109,14 @@ void CodeEditor::mouseReleaseEvent(QMouseEvent *event) {
 
     // ── JSON 模式：Ctrl+点击属性 → 跳转到 schema 中对应字段 ──
     if (m_validationMode == JsonValidation && m_schemaLoaded) {
+      // Ctrl+点击 "$schema" 的路径值 → 跳转打开 schema 文件
+      if (schemaRefRangeAt(pos)) {
+        if (!m_schemaPath.isEmpty()) {
+          emit aboutToNavigate(m_schemaPath, 1);
+          emit requestGoToLine(m_schemaPath, 1);
+          return;
+        }
+      }
       QString path = m_schema.propertyPathAt(cachedText(), pos);
       QString className, propName;
       if (!path.isEmpty() && m_schema.propertyContext(path, &className, &propName) &&
@@ -1115,9 +1128,16 @@ void CodeEditor::mouseReleaseEvent(QMouseEvent *event) {
       }
     }
 
-    // ── AC 模式：Ctrl+点击标识符 → 转到定义 ──
+    // ── AC 模式：Ctrl+点击标识符 → 转到定义；点击 import 路径 → 打开该文件 ──
     //   （JSON 无 schema 时不再走标识符兜底，保证与手形判定一致）
     if (m_validationMode == AcValidation) {
+      // 优先：光标位于 import ... from "path" 的路径字符串内 → 打开目标文件
+      const QString targetPath = importPathAt(pos);
+      if (!targetPath.isEmpty()) {
+        emit aboutToNavigate(targetPath, 1);
+        emit requestGoToLine(targetPath, 1);
+        return;
+      }
       int idStart = 0, idEnd = 0;
       QString identifier = identifierAtCursor(pos, &idStart, &idEnd);
       if (!identifier.isEmpty()) {

@@ -20,6 +20,7 @@
 #include "main_dev_ui_ext.h"
 #include "src/ui/json_source/json_source_widget.h"
 #include "src/ui/json_vue/json_vue_widget.h"
+#include "src/ui/schema_json/schema_json_widget.h"
 #include "src/util/ui/code/code_editor.h"
 #include "src/util/ui/component/aui_input_dialog.h"
 
@@ -145,12 +146,14 @@ void MainDevMgr::onFocusChanged(QWidget * /*oldFocus*/, QWidget *newFocus) {
     if (!foundEditor) {
       if (auto *editor = qobject_cast<CodeEditor *>(w)) foundEditor = editor;
     }
-    // 可视化编辑器（JsonVueEditor / JsonSourceEditor）内的控件获得焦点时，向上找到所属包装器
+    // 可视化编辑器（JsonVueEditor / JsonSourceEditor / SchemaFormEditor）内的控件获得焦点时，向上找到所属包装器
     if (jsonVuePath.isEmpty()) {
       if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) {
         jsonVuePath = jvw->codeEditor()->objectName();
       } else if (auto *jdw = qobject_cast<JsonSourceWidget *>(w)) {
         jsonVuePath = jdw->codeEditor()->objectName();
+      } else if (auto *sjw = qobject_cast<SchemaJsonWidget *>(w)) {
+        jsonVuePath = sjw->codeEditor()->objectName();
       }
     }
     w = w->parentWidget();

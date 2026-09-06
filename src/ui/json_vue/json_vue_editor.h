@@ -69,6 +69,9 @@ public:
   /// 从 jsonvue 文件所在目录向上查找最近的 api_auth_data.ac，返回其完整路径；找不到返回空
   static QString findNearestApiAuthDataAc(const QString &jsonvueFilePath);
 
+  /// 从指定目录开始逐级向上查找最近的 api_auth_data.ac，返回其完整路径；找不到返回空
+  static QString findNearestApiAuthDataAcFromDir(const QString &dir);
+
   /// 从 AC 脚本文件读取 HTTP 配置（静态版本，供 .jsonsource 等外部编辑器复用）
   /// 三个输出参数可为空指针；文件不存在或解析失败时保持原值
   static void loadHttpConfigFromAcFile(const QString &acFilePath, QString *baseUrl,

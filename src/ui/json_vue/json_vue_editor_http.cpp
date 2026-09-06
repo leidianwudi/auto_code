@@ -33,13 +33,18 @@
 QString JsonVueEditor::findNearestApiAuthDataAc(const QString &jsonvueFilePath) {
   if (jsonvueFilePath.isEmpty()) return {};
   // 从 .jsonvue 文件所在目录开始，逐级向上查找 api_auth_data.ac
-  QDir dir = QFileInfo(jsonvueFilePath).absoluteDir();
+  return findNearestApiAuthDataAcFromDir(QFileInfo(jsonvueFilePath).absoluteDir().absolutePath());
+}
+
+QString JsonVueEditor::findNearestApiAuthDataAcFromDir(const QString &dir) {
+  if (dir.isEmpty()) return {};
+  QDir d = QDir(dir);
   while (true) {
-    QFileInfo candidate(dir.absoluteFilePath(kApiAuthDataAcFile));
+    QFileInfo candidate(d.absoluteFilePath(kApiAuthDataAcFile));
     if (candidate.isFile()) {
       return candidate.absoluteFilePath();
     }
-    if (!dir.cdUp()) break;  // 已到根目录
+    if (!d.cdUp()) break;  // 已到根目录
   }
   return {};
 }
@@ -82,8 +87,13 @@ void JsonVueEditor::loadHttpConfigFromAcFile(const QString &acFilePath, QString 
 }
 
 void JsonVueEditor::onGenerate() {
-  // 每次点击"生成"时重新读取 api_auth_data.ac 的 HTTP 配置（baseUrl/authHeader/postData），
-  // 保证 ac 文件被修改后无需重启程序即可生效
+  // 每次点击"生成"时重新定位 + 读取 api_auth_data.ac 的 HTTP 配置
+  // （baseUrl/authHeader/postData）。这样目录树新建/移动 api_auth_data.ac 后，
+  // 无需重启程序即可生效——因为 ac 文件路径每次都按 jsonvue 所在目录实时查找。
+  if (!m_jsonvueDir.isEmpty()) {
+    const QString ac = findNearestApiAuthDataAcFromDir(m_jsonvueDir);
+    if (!ac.isEmpty()) m_acConfigFilePath = ac;
+  }
   if (!m_acConfigFilePath.isEmpty()) {
     loadHttpConfigFromAcFile(m_acConfigFilePath);
   }

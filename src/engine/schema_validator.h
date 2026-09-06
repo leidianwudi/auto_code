@@ -47,6 +47,7 @@
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QMap>
+#include <memory>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -117,6 +118,37 @@ public:
    * @return 格式化说明文本（类型 / 枚举 / 描述），找不到返回空串
    */
   QString propertyDescription(const QString &jsonPath) const;
+
+  // ═══════════════════════════════════════════════════════════════
+  //  结构访问（供「可视化表单渲染器」读取 schema 元数据，生成编辑控件）
+  // ═══════════════════════════════════════════════════════════════
+
+  /// 单个属性的 struct schema 元数据（可视化表单渲染用）
+  struct SchemaPropInfo {
+    QString type;            ///< "int"/"string"/"double"/"bool"/"array"/"object"；空表示 any/未知
+    QString items;           ///< type=array 时，元素类名或基本类型名
+    QString className;       ///< type=object 时，嵌套类名
+    QStringList enumValues;  ///< 枚举值（string 类型）
+    QString description;     ///< 属性说明（渲染为行内副标题）
+  };
+
+  /// 一个类的完整结构（属性表 + 必填列表）
+  struct SchemaClassInfo {
+    QMap<QString, SchemaPropInfo> properties;
+    QStringList required;
+    /// 类级 additionalProperties：任意键对象（键不限定，值类型由该约束定义）
+    bool hasAdditionalProps = false;
+    std::shared_ptr<SchemaPropInfo> additionalProp;  ///< hasAdditionalProps=true 时有效
+  };
+
+  /// 取类的完整结构；不存在返回 false
+  bool classInfo(const QString &className, SchemaClassInfo *out) const;
+
+  /// 根类名（等价于 rootClass()，name 更明确的别名）
+  QString rootClassName() const { return m_rootClass; }
+
+  /// 判断某属性是否在类的必填列表内
+  static bool isRequiredProperty(const SchemaClassInfo &info, const QString &name);
 
   /**
    * @brief 根据 JSON 路径返回属性所在类名与属性名（供在 schema 文件中定位）

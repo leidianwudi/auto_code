@@ -15,6 +15,7 @@
 #include "src/ui/json_source/json_source_widget.h"
 #include "src/ui/json_vue/json_vue_editor.h"
 #include "src/ui/json_vue/json_vue_widget.h"
+#include "src/ui/schema_json/schema_json_widget.h"
 #include "src/util/ui/code/code_editor.h"
 #include "src/util/ui/code/code_find_bar.h"
 #include "src/util/ui/component/aui_message_box.h"
@@ -108,6 +109,9 @@ void MainDevMgr::closeTab(QTabWidget *tabs, int index) {
 
   // ── 关闭文件后保存当前打开列表，供下次启动还原 ──
   saveOpenFilesToSettings();
+
+  // ── 未保存直接关闭时，立即刷新目录树：清除该文件的修改圆点/错误标记，与磁盘状态同步 ──
+  m_ui->fileTree()->refreshTree();
 
   // ── 空面板且存在多个面板 → 删除面板组 ──
   if (tabs->count() == 0 && m_ui->editorPanelCount() > 1) {
@@ -214,6 +218,15 @@ void MainDevMgr::onCurrentTabChanged(int index) {
       jvw->switchToCode();
     }
   }
+  auto *sjw = qobject_cast<SchemaJsonWidget *>(curWidget);
+  if (sjw && m_ui->visualToggleBtn()) {
+    bool visualChecked = m_ui->visualToggleBtn()->isChecked();
+    if (visualChecked) {
+      sjw->switchToVisual();
+    } else {
+      sjw->switchToCode();
+    }
+  }
 
   setActiveEditor(currentEditor());
   m_model->lastActivePanel = tabs;
@@ -232,6 +245,10 @@ void MainDevMgr::onTabBarClicked(int index) {
   auto *w = tabs->widget(index);
   if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) {
     jvw->focusActiveView();
+    return;
+  }
+  if (auto *sjw = qobject_cast<SchemaJsonWidget *>(w)) {
+    sjw->focusActiveView();
     return;
   }
   auto *editor = qobject_cast<CodeEditor *>(w);

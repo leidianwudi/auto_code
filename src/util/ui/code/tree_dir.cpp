@@ -496,6 +496,12 @@ void TreeDir::buildTree(const QString &dirPath) {
   // 展开状态由 loadState 恢复（无配置时默认全部展开）
   loadState();
 
+  // 恢复持久化的垂直滚动位置（重启后目录树回到上次位置）
+  if (verticalScrollBar() && m_store.scrollPos > 0) {
+    verticalScrollBar()->setValue(
+        qBound(verticalScrollBar()->minimum(), m_store.scrollPos, verticalScrollBar()->maximum()));
+  }
+
   // 重建后恢复"已修改(黄色)"标记（打开编辑器未保存 / 未打开文件有缓冲修改）
   for (const QString &p : m_modifiedPaths) {
     QTreeWidgetItem *item = findItemByPath(p);
@@ -772,6 +778,7 @@ void TreeDir::saveState() {
   m_store.selectedStartupRel = toRelPath(m_selectedStartup);
   m_store.visualToggle = m_visualToggle;
   m_store.expandedRelPaths = collectExpandedRelPaths();
+  m_store.scrollPos = verticalScrollBar() ? verticalScrollBar()->value() : 0;
 
   m_store.save(m_configPath);
 }

@@ -92,7 +92,7 @@ export class Param {
   let insFields: FieldDef[] = [];      // 加工后的字段数组（排除自动维护的时间列，供 in_ins 模板使用）
   let imports: String[] = [];          // 额外的 import 语句字符串（用于关联表）
   let relations: RelationDef[] = [];   // 关联关系配置 (OneToMany / ManyToOne 等)
-
+ 
   // --------------------------------------------------------------------------
   // 生成 @Column 装饰器的参数字符串
   //   例如："{ type: 'varchar', default: '' }"

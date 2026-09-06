@@ -103,6 +103,37 @@ void SchemaValidator::parseClassDef(const QJsonObject &obj, ClassDef &def) const
   }
 }
 
+// 结构访问 — 供可视化表单渲染器使用
+bool SchemaValidator::classInfo(const QString &className, SchemaClassInfo *out) const {
+  auto it = m_classes.find(className);
+  if (it == m_classes.end() || !out) return false;
+  out->required = it->required;
+  out->properties.clear();
+  // 类级 additionalProperties（任意键对象）约束
+  out->hasAdditionalProps = it->hasAdditionalProp;
+  if (it->hasAdditionalProp) {
+    auto ap = std::make_shared<SchemaPropInfo>();
+    ap->type = it->additionalProp.type;
+    ap->enumValues = it->additionalProp.enumValues;
+    out->additionalProp = ap;
+  }
+  for (auto pit = it->properties.begin(); pit != it->properties.end(); ++pit) {
+    SchemaPropInfo pi;
+    const PropertyDef &pd = pit.value();
+    pi.type = pd.type;
+    pi.items = pd.items;
+    pi.className = pd.className;
+    pi.enumValues = pd.enumValues;
+    pi.description = pd.description;
+    out->properties.insert(pit.key(), pi);
+  }
+  return true;
+}
+
+bool SchemaValidator::isRequiredProperty(const SchemaClassInfo &info, const QString &name) {
+  return info.required.contains(name);
+}
+
 // validate — 校验入口（旧接口，返回第一个错误）
 QString SchemaValidator::validate(const QString &className, const QJsonObject &data) const {
   auto it = m_classes.find(className);

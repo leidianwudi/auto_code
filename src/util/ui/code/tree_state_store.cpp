@@ -21,6 +21,7 @@ const char *kStartup = "startup";
 const char *kStartupSelected = "startupSelected";
 const char *kVisualToggle = "visualToggle";
 const char *kExpanded = "expanded";
+const char *kScrollPos = "scrollPos";
 
 QJsonArray toJsonArray(const QStringList &list) {
   QJsonArray arr;
@@ -47,6 +48,7 @@ bool TreeStateStore::load(const QString &configPath) {
   selectedStartupRel = obj[kStartupSelected].toString();
   visualToggle = obj[kVisualToggle].toBool(false);
   expandedRelPaths = toStringList(obj[kExpanded].toArray());
+  scrollPos = obj[kScrollPos].toInt(0);
   return true;
 }
 
@@ -62,6 +64,7 @@ void TreeStateStore::save(const QString &configPath) const {
   if (!selectedStartupRel.isEmpty()) root[kStartupSelected] = selectedStartupRel;
   root[kVisualToggle] = visualToggle;
   root[kExpanded] = toJsonArray(expandedRelPaths);
+  root[kScrollPos] = scrollPos;
 
   QFile file(configPath);
   if (file.open(QIODevice::WriteOnly | QIODevice::Truncate))

@@ -20,7 +20,7 @@
       properties: {
         modelName: {
           type: "string",
-          description: "模块名，可以包括路径（如 user\\user）"
+          description: "模块名，可以包括路径（如 user/user）"
         },
         tableName: {
           type: "string",

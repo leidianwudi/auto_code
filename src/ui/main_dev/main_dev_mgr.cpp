@@ -39,6 +39,7 @@
 #include "src/ui/json_source/json_source_widget.h"
 #include "src/ui/json_vue/json_vue_editor.h"
 #include "src/ui/json_vue/json_vue_widget.h"
+#include "src/ui/schema_json/schema_json_widget.h"
 #include "src/ui/setting/setting_mgr.h"
 #include "src/util/common/code_constants.h"
 #include "src/util/common/path_resolver.h"
@@ -257,6 +258,7 @@ void MainDevMgr::saveAllEditors() {
       auto *w = tabs->widget(ti);
       auto *jvw = qobject_cast<JsonVueWidget *>(w);
       auto *jdw = qobject_cast<JsonSourceWidget *>(w);
+      auto *sjw = qobject_cast<SchemaJsonWidget *>(w);
       CodeEditor *editor = nullptr;
       bool wasModified = false;
       if (jvw) {
@@ -268,6 +270,10 @@ void MainDevMgr::saveAllEditors() {
         editor = jdw->codeEditor();
         wasModified = editor && editor->document()->isModified();
         jdw->syncVisualToCode();
+      } else if (sjw) {
+        editor = sjw->codeEditor();
+        wasModified = editor && editor->document()->isModified();
+        sjw->syncVisualToCode();
       } else {
         editor = qobject_cast<CodeEditor *>(w);
       }
@@ -357,14 +363,21 @@ void MainDevMgr::connectVisualToggle() {
   connect(m_ui->visualToggleBtn(), &QPushButton::toggled, this, [this](bool checked) {
     // 保存按钮状态到 tree.config
     m_ui->fileTree()->setVisualToggle(checked);
-    // 作用于当前获得焦点（或最后活跃）的编辑器面板，而不是第一个可见面板
-    auto *tabs = currentTabWidget();
-    if (!tabs) return;
-    auto *w = tabs->currentWidget();
-    if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) {
-      checked ? jvw->switchToVisual() : jvw->switchToCode();
-    } else if (auto *jdw = qobject_cast<JsonSourceWidget *>(w)) {
-      checked ? jdw->switchToVisual() : jdw->switchToCode();
+    // 全局生效：遍历所有编辑面板的所有标签，对可视化包装器（schema json / jsonvue /
+    // jsonsource）统一切换为可视化或代码视图。
+    auto apply = [checked](QWidget *w) {
+      if (auto *sjw = qobject_cast<SchemaJsonWidget *>(w)) {
+        checked ? sjw->switchToVisual() : sjw->switchToCode();
+      } else if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) {
+        checked ? jvw->switchToVisual() : jvw->switchToCode();
+      } else if (auto *jdw = qobject_cast<JsonSourceWidget *>(w)) {
+        checked ? jdw->switchToVisual() : jdw->switchToCode();
+      }
+    };
+    for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
+      auto *tabs = m_ui->editorPanelAt(pi);
+      if (!tabs) continue;
+      for (int ti = 0; ti < tabs->count(); ++ti) apply(tabs->widget(ti));
     }
   });
 }
@@ -636,4 +649,5 @@ void MainDevMgr::syncJsonVueBeforeSave() {
   auto *w = tabs->currentWidget();
   if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) jvw->syncVisualToCode();
   if (auto *jdw = qobject_cast<JsonSourceWidget *>(w)) jdw->syncVisualToCode();
+  if (auto *sjw = qobject_cast<SchemaJsonWidget *>(w)) sjw->syncVisualToCode();
 }
