@@ -49,7 +49,6 @@
 #include "src/util/ui/component/aui_style.h"
 #include "src/util/ui/setting_store.h"
 
-
 // ──────────────────────────────────────────────────────────────
 //  静态方法（通过单例转发）
 // ──────────────────────────────────────────────────────────────
@@ -96,11 +95,9 @@ QWidget *MainDevMgr::onCreateWindow() {
   });
 
   // 引用面板的后台收集：主线程构建实时内容快照（已打开编辑器 + 缓冲文件），优先读缓冲
-  m_ui->referencePanel()->setLiveContentProvider(
-      [this]() { return collectLiveContents(); });
+  m_ui->referencePanel()->setLiveContentProvider([this]() { return collectLiveContents(); });
   // 查找面板的跨文件搜索：同样优先读缓冲（已打开编辑器 + 缓冲文件）
-  m_ui->findPanel()->setLiveContentProvider(
-      [this]() { return collectLiveContents(); });
+  m_ui->findPanel()->setLiveContentProvider([this]() { return collectLiveContents(); });
 
   // ── 创建调试控制器（调试会话/脚本执行/断点管理）并注入协作回调 ──
   m_debug = new DebugController(m_ui, this);
@@ -256,24 +253,13 @@ void MainDevMgr::saveAllEditors() {
     if (!tabs) continue;
     for (int ti = 0; ti < tabs->count(); ++ti) {
       auto *w = tabs->widget(ti);
-      auto *jvw = qobject_cast<JsonVueWidget *>(w);
-      auto *jdw = qobject_cast<JsonSourceWidget *>(w);
-      auto *sjw = qobject_cast<SchemaJsonWidget *>(w);
       CodeEditor *editor = nullptr;
       bool wasModified = false;
-      if (jvw) {
-        editor = jvw->codeEditor();
+      if (auto *cv = qobject_cast<CodeVisualSyncWidget *>(w)) {
+        editor = cv->codeEditor();
         // syncVisualToCode 会重置 modified 为 false，需先记录
         wasModified = editor && editor->document()->isModified();
-        jvw->syncVisualToCode();
-      } else if (jdw) {
-        editor = jdw->codeEditor();
-        wasModified = editor && editor->document()->isModified();
-        jdw->syncVisualToCode();
-      } else if (sjw) {
-        editor = sjw->codeEditor();
-        wasModified = editor && editor->document()->isModified();
-        sjw->syncVisualToCode();
+        cv->syncVisualToCode();
       } else {
         editor = qobject_cast<CodeEditor *>(w);
       }
@@ -303,9 +289,7 @@ void MainDevMgr::flushPendingChanges() {
 }
 
 /// 清除某文件的缓冲修改（保存或打开后，缓冲已由编辑器 document 接管）
-void MainDevMgr::clearPendingChange(const QString &filePath) {
-  m_pendingChanges.clear(filePath);
-}
+void MainDevMgr::clearPendingChange(const QString &filePath) { m_pendingChanges.clear(filePath); }
 
 /// 构建实时内容快照：已打开编辑器内容 + 未打开但有缓冲修改的文件内容。
 /// 主线程调用；返回的 QHash 拷贝进后台线程按值使用（QtConcurrent），线程安全。
@@ -334,11 +318,11 @@ bool MainDevMgr::confirmExit() {
   if (dirty.isEmpty()) return true;
 
   // 统一使用封装的消息框（与项目其它提示风格一致）
-  const AuiMessageBox::Choice ch = AuiMessageBox::question3(
-      m_ui, QStringLiteral("未保存的修改"),
-      QStringLiteral("以下文件有未保存的修改：\n%1\n\n要保存这些修改吗？")
-          .arg(dirty.join(QStringLiteral("、"))),
-      QStringLiteral("保存"), QStringLiteral("不保存"));
+  const AuiMessageBox::Choice ch =
+      AuiMessageBox::question3(m_ui, QStringLiteral("未保存的修改"),
+                               QStringLiteral("以下文件有未保存的修改：\n%1\n\n要保存这些修改吗？")
+                                   .arg(dirty.join(QStringLiteral("、"))),
+                               QStringLiteral("保存"), QStringLiteral("不保存"));
   switch (ch) {
     case AuiMessageBox::Choice::kFirst:
       saveAllEditors();
@@ -366,12 +350,8 @@ void MainDevMgr::connectVisualToggle() {
     // 全局生效：遍历所有编辑面板的所有标签，对可视化包装器（schema json / jsonvue /
     // jsonsource）统一切换为可视化或代码视图。
     auto apply = [checked](QWidget *w) {
-      if (auto *sjw = qobject_cast<SchemaJsonWidget *>(w)) {
-        checked ? sjw->switchToVisual() : sjw->switchToCode();
-      } else if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) {
-        checked ? jvw->switchToVisual() : jvw->switchToCode();
-      } else if (auto *jdw = qobject_cast<JsonSourceWidget *>(w)) {
-        checked ? jdw->switchToVisual() : jdw->switchToCode();
+      if (auto *cv = qobject_cast<CodeVisualSyncWidget *>(w)) {
+        checked ? cv->switchToVisual() : cv->switchToCode();
       }
     };
     for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
@@ -438,8 +418,7 @@ void MainDevMgr::connectEditorPanels() {
   connect(m_ui->problemPanel(), &ProblemPanel::issueActivated, this, &MainDevMgr::onGoToLine);
 
   // 跨文件搜索面板（查找）：单击结果 → 打开文件定位（不选中，与引用一致）
-  connect(m_ui->findPanel(), &SearchPanel::openRequested, this,
-          &MainDevMgr::onOpenHighlightResult);
+  connect(m_ui->findPanel(), &SearchPanel::openRequested, this, &MainDevMgr::onOpenHighlightResult);
   // 引用面板：单击引用 → 打开文件定位（不选中，避免蓝色选区盖住引用高亮）
   connect(m_ui->referencePanel(), &ReferencePanel::openRequested, this,
           &MainDevMgr::onOpenHighlightResult);
@@ -469,7 +448,7 @@ void MainDevMgr::connectEditorPanels() {
   m_scanTimer->setInterval(500);
   connect(m_scanTimer, &QTimer::timeout, this, [this]() { startWorkspaceScan(true); });
   // 已打开文件重验防抖定时器：合并同一事件循环内的多次 textChanged 为一次重验
-  //（0ms：对单次编辑无感知延迟；防止打开大文件/程序化批量变更触发 N×M 次验证风暴卡死）
+  // （0ms：对单次编辑无感知延迟；防止打开大文件/程序化批量变更触发 N×M 次验证风暴卡死）
   m_revalidateTimer = new QTimer(this);
   m_revalidateTimer->setSingleShot(true);
   m_revalidateTimer->setInterval(0);
@@ -482,7 +461,7 @@ void MainDevMgr::connectEditorPanels() {
     });
   });
   // 问题面板刷新防抖：同一 burst 内多个编辑器的验证结果合并为一次面板重建
-  //（防止每个验证结果都触发一次全量重建；扫描完成时仍立即刷新一次）
+  // （防止每个验证结果都触发一次全量重建；扫描完成时仍立即刷新一次）
   m_problemPanelTimer = new QTimer(this);
   m_problemPanelTimer->setSingleShot(true);
   m_problemPanelTimer->setInterval(150);
@@ -493,8 +472,7 @@ void MainDevMgr::connectEditorPanels() {
   m_workspaceRescanTimer->setInterval(500);
   connect(m_workspaceRescanTimer, &QTimer::timeout, this, [this]() {
     // 同步重建语义索引（模块表），保证跳转定义/引用与最新磁盘内容一致
-    if (const QString root = m_ui ? m_ui->fileTree()->rootPath() : QString();
-        !root.isEmpty()) {
+    if (const QString root = m_ui ? m_ui->fileTree()->rootPath() : QString(); !root.isEmpty()) {
       WorkspaceIndex::ins().rebuild(root);
     }
     // 触发一次扫描（与编辑触发的扫描共用同一防抖，天然合并，不会扫两次）
@@ -504,8 +482,7 @@ void MainDevMgr::connectEditorPanels() {
     m_lastSearchText = text;
     if (text.isEmpty()) {
       clearSearchHighlightFromEditors();
-    } else if (m_ui->leftTabs() &&
-               m_ui->leftTabs()->currentWidget() == m_ui->findPanel()) {
+    } else if (m_ui->leftTabs() && m_ui->leftTabs()->currentWidget() == m_ui->findPanel()) {
       m_searchHighlightTimer->start();
     }
   });
@@ -573,7 +550,8 @@ void MainDevMgr::startWorkspaceScan(bool silent) {
   m_workspaceScanWatcher->setFuture(future);
   m_workspaceScanSilent = silent;  // 静默扫描完成时不打印"完成"提示（避免每次编辑刷屏）
   if (!silent) {
-    m_ui->appendOutput(QStringLiteral("开始检查工作区错误（%1 个文件）...").arg(files.size()), false);
+    m_ui->appendOutput(QStringLiteral("开始检查工作区错误（%1 个文件）...").arg(files.size()),
+                       false);
   }
 }
 
@@ -646,8 +624,7 @@ void MainDevMgr::updateSaveButtonState() {
 void MainDevMgr::syncJsonVueBeforeSave() {
   auto *tabs = currentTabWidget();
   if (!tabs) return;
-  auto *w = tabs->currentWidget();
-  if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) jvw->syncVisualToCode();
-  if (auto *jdw = qobject_cast<JsonSourceWidget *>(w)) jdw->syncVisualToCode();
-  if (auto *sjw = qobject_cast<SchemaJsonWidget *>(w)) sjw->syncVisualToCode();
+  if (auto *cv = qobject_cast<CodeVisualSyncWidget *>(tabs->currentWidget())) {
+    cv->syncVisualToCode();
+  }
 }

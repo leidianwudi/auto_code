@@ -2,63 +2,34 @@
  * @file json_vue_widget.h
  * @brief .jsonvue 编辑器包装器
  *
- * 在一个 QTabWidget 的 tab 内，提供两种视图：
- *   - 代码编辑视图（CodeEditor）
- *   - 可视化编辑视图（JsonVueEditor）
+ * 继承 CodeVisualSyncWidget（index 0 = 代码编辑器，index 1 = 可视化编辑器），
+ * 模式切换/焦点/防循环同步由基类统一处理，这里只实现 .jsonvue 的数据搬运：
+ * 代码 ↔ JsonVueConfig 双向转换，内容指纹跳过重建（反复切换不卡顿）。
  *
- * 由工具栏的"可视化/代码"切换按钮控制显示哪个视图。
- * 两个视图共享同一份配置数据，切换时自动同步。
+ * 对外保留 codeEditor()（继承所得）用于与 MainDevMgr 集成（修改标记、保存等）。
  */
 
 #pragma once
 
-#include <QStackedWidget>
+#include <QByteArray>
 #include <QString>
 
-#include "json_vue_model.h"
+#include "src/util/ui/code/code_visual_sync_widget.h"
 
-class CodeEditor;
 class JsonVueEditor;
 
 /**
  * @class JsonVueWidget
  * @brief .jsonvue 编辑器包装器
- *
- * 继承 QStackedWidget，提供代码/可视化两种视图切换。
- * 对外暴露 codeEditor() 用于与现有 MainDevMgr 集成（修改标记、保存等）。
  */
-class JsonVueWidget : public QStackedWidget {
+class JsonVueWidget : public CodeVisualSyncWidget {
   Q_OBJECT
 
 public:
   explicit JsonVueWidget(QWidget *parent = nullptr);
 
-  /// 获取内部 CodeEditor（供 MainDevMgr 集成）
-  CodeEditor *codeEditor() const { return m_editor; }
-
   /// 获取可视化编辑器
   JsonVueEditor *visualEditor() const { return m_visual; }
-
-  /// 当前是否为可视化模式
-  bool isVisualMode() const { return currentIndex() == 1; }
-
-  /// 聚焦当前显示的视图（可视化模式聚焦可视化编辑器，否则聚焦代码编辑器）
-  void focusActiveView();
-
-  /// 切换到代码模式
-  void switchToCode();
-
-  /// 切换到可视化模式
-  void switchToVisual();
-
-  /// 切换模式
-  void toggleMode();
-
-  /// 从代码编辑器内容加载到可视化编辑器
-  void syncCodeToVisual();
-
-  /// 从可视化编辑器内容写回代码编辑器
-  void syncVisualToCode();
 
   /// 缓存磁盘原始 .jsonvue 内容，供可视化写回时保真合并（避免数据被清空/精简）
   void setPreservedSource(const QString &src);
@@ -75,16 +46,12 @@ public:
   /// 从 jsonvue 文件向上查找最近的 api_auth_data.ac（透传给可视化编辑器）
   static QString findNearestApiAuthDataAc(const QString &jsonvueFilePath);
 
-signals:
-  /// 模式切换时发射
-  void modeChanged(bool visualMode);
-
-  /// 内容发生变化时发射（用于触发修改标记）
-  void contentChanged();
+protected:
+  QWidget *visualView() const override;
+  void syncCodeToVisualImpl() override;
+  void syncVisualToCodeImpl() override;
 
 private:
-  CodeEditor *m_editor = nullptr;     ///< 代码编辑器
   JsonVueEditor *m_visual = nullptr;  ///< 可视化编辑器
-  bool m_syncing = false;             ///< 同步中标志，避免循环
-  QByteArray m_lastVisualHash;        ///< 可视化页当前内容的指纹（未变化则跳过重载，避免反复切换卡顿）
+  QByteArray m_lastVisualHash;  ///< 可视化页当前内容的指纹（未变化则跳过重载，避免反复切换卡顿）
 };

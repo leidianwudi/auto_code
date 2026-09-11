@@ -3,8 +3,8 @@
  * @brief 编辑器查找辅助（MainDevMgr / DebugController 共用）
  *
  * 主窗口的编辑面板中，tab 页 widget 可能是 CodeEditor（普通文件）
- * 或 JsonVueWidget（.jsonvue 可视化包装，内部含 CodeEditor）。
- * 此前各处用重复的 qobject_cast + 回退循环解析，统一收敛到这里。
+ * 或 CodeVisualSyncWidget 派生的可视化包装器（.jsonvue / .jsonsource / .json，
+ * 内部含 CodeEditor）。此前各处用重复的 qobject_cast + 回退循环解析，统一收敛到这里。
  */
 
 #pragma once
@@ -16,14 +16,13 @@
 #include "src/ui/schema_json/schema_json_widget.h"
 #include "src/ui/main_dev/main_dev_ui.h"
 #include "src/util/ui/code/code_editor.h"
+#include "src/util/ui/code/code_visual_sync_widget.h"
 
-/// 从 tab 页 widget 解析出 CodeEditor（兼容 JsonVueWidget / JsonSourceWidget / SchemaJsonWidget 包装），失败返回 nullptr
+/// 从 tab 页 widget 解析出 CodeEditor（兼容 CodeEditor 直挂与可视化包装器两种形态），失败返回 nullptr
 inline CodeEditor *editorFromWidget(QWidget *w) {
   if (!w) return nullptr;
   if (auto *editor = qobject_cast<CodeEditor *>(w)) return editor;
-  if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) return jvw->codeEditor();
-  if (auto *jdw = qobject_cast<JsonSourceWidget *>(w)) return jdw->codeEditor();
-  if (auto *sjw = qobject_cast<SchemaJsonWidget *>(w)) return sjw->codeEditor();
+  if (auto *cv = qobject_cast<CodeVisualSyncWidget *>(w)) return cv->codeEditor();
   return nullptr;
 }
 

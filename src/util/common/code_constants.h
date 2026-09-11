@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <QString>
+
 namespace CodeConstants {
 
 // ──────────────────────────────────────────────────────────────
@@ -20,8 +22,8 @@ constexpr int kDefaultFontSize = 10;  ///< 默认字体大小（pt）
 /// 供 SettingStore 注册默认值与 AuiStyle 运行时回退共用，
 /// 避免两层模块相互依赖。
 constexpr const char *kDefaultEditorFontFamily = "Consolas";
-constexpr int kTabWidthSpaces = 2;    ///< Tab 键对应的空格数
-constexpr int kIndentSpaces = 2;      ///< 自动缩进的空格数
+constexpr int kTabWidthSpaces = 2;  ///< Tab 键对应的空格数
+constexpr int kIndentSpaces = 2;    ///< 自动缩进的空格数
 ///< 统一行高的额外间距（像素），叠加在自然行高上，避免行过于拥挤
 constexpr int kLineHeightExtraSpacing = 2;
 constexpr int kEditorTabHeight = 30;  ///< 代码编辑框 tab 头高度（px），可自行调整
@@ -54,8 +56,10 @@ constexpr int kAnimationDurationMs = 200;     ///< 动画过渡时长（毫秒�
 
 namespace Paths {
 constexpr const char *kProjectSourceDir = PROJECT_SOURCE_DIR;
-constexpr const char *kAppDataDirName = "/.auto_code";              ///< 无 AppData 时的回退数据目录
-constexpr const char *kFileDirName = "/file";                       ///< 项目源码下的 file 资源目录
+constexpr const char *kAppDataDirName = "/.auto_code";  ///< 无 AppData 时的回退数据目录
+constexpr const char *kFileDirName = "/file";           ///< 项目源码下的 file 资源目录
+/// kFileDirName 的 QString 形式（内联函数避免静态初始化顺序问题，调用点免 fromUtf8 包装）
+inline QString fileDir() { return QString::fromUtf8(kFileDirName); }
 constexpr const char *kTreeConfigFile = "/tree.config";             ///< 目录树勾选状态配置文件
 constexpr const char *kBreakpointsStoreFile = "/breakpoints.json";  ///< 断点持久化文件
 constexpr const char *kBreakpointsJsonKey = "breakpoints";          ///< 断点存储 JSON 键名
@@ -91,8 +95,9 @@ constexpr const char *kDateRange = "日期范围";              ///< 查询类�
 constexpr const char *kEnableBreakpoint = "启用断点";       ///< 断点右键菜单
 constexpr const char *kDisableBreakpoint = "禁用断点";      ///< 断点右键菜单
 constexpr const char *kRemoveBreakpoint = "移除断点";       ///< 断点右键菜单
-constexpr const char *kJsonParseError = "JSON 解析错误: %1";  ///< JSON 解析错误消息（%1 为解析错误说明）
-constexpr const char *kJsonParseErrorTitle = "JSON 解析错误"; ///< JSON 解析错误提示框标题
+constexpr const char *kJsonParseError =
+    "JSON 解析错误: %1";  ///< JSON 解析错误消息（%1 为解析错误说明）
+constexpr const char *kJsonParseErrorTitle = "JSON 解析错误";  ///< JSON 解析错误提示框标题
 }  // namespace UiText
 
 // ──────────────────────────────────────────────────────────────

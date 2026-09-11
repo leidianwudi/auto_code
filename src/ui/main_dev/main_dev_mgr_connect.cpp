@@ -148,12 +148,8 @@ void MainDevMgr::onFocusChanged(QWidget * /*oldFocus*/, QWidget *newFocus) {
     }
     // 可视化编辑器（JsonVueEditor / JsonSourceEditor / SchemaFormEditor）内的控件获得焦点时，向上找到所属包装器
     if (jsonVuePath.isEmpty()) {
-      if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) {
-        jsonVuePath = jvw->codeEditor()->objectName();
-      } else if (auto *jdw = qobject_cast<JsonSourceWidget *>(w)) {
-        jsonVuePath = jdw->codeEditor()->objectName();
-      } else if (auto *sjw = qobject_cast<SchemaJsonWidget *>(w)) {
-        jsonVuePath = sjw->codeEditor()->objectName();
+      if (auto *cv = qobject_cast<CodeVisualSyncWidget *>(w)) {
+        jsonVuePath = cv->codeEditor()->objectName();
       }
     }
     w = w->parentWidget();

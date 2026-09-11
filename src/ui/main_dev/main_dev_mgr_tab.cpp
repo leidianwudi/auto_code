@@ -90,7 +90,7 @@ void MainDevMgr::closeTab(QTabWidget *tabs, int index) {
   auto *w = tabs->widget(index);
   if (!w) return;
 
-  // 支持 CodeEditor / JsonVueWidget / JsonSourceWidget 三种类型
+  // 支持 CodeEditor 直挂与可视化包装器（CodeVisualSyncWidget 派生）两种形态
   CodeEditor *editor = editorFromWidget(w);
   if (!editor) return;
 
@@ -125,10 +125,8 @@ void MainDevMgr::closeTab(QTabWidget *tabs, int index) {
     QTabWidget *remaining = currentTabWidget();
     if (remaining && remaining->count() > 0) {
       auto *w = remaining->currentWidget();
-      if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) {
-        jvw->focusActiveView();
-      } else if (auto *jdw = qobject_cast<JsonSourceWidget *>(w)) {
-        jdw->focusActiveView();
+      if (auto *cv = qobject_cast<CodeVisualSyncWidget *>(w)) {
+        cv->focusActiveView();
       } else if (auto *ed = qobject_cast<CodeEditor *>(w)) {
         ed->setFocus();
       }
@@ -206,25 +204,11 @@ void MainDevMgr::onCurrentTabChanged(int index) {
   }
 
   // ── 同步可视化切换按钮状态 ──
-  // 按钮状态独立保持，不受非 jsonvue 文件影响
-  // 切换到 jsonvue 标签时，让 jsonvue 跟随按钮状态
-  auto *curWidget = tabs->widget(index);
-  auto *jvw = qobject_cast<JsonVueWidget *>(curWidget);
-  if (jvw && m_ui->visualToggleBtn()) {
-    bool visualChecked = m_ui->visualToggleBtn()->isChecked();
-    if (visualChecked) {
-      jvw->switchToVisual();
-    } else {
-      jvw->switchToCode();
-    }
-  }
-  auto *sjw = qobject_cast<SchemaJsonWidget *>(curWidget);
-  if (sjw && m_ui->visualToggleBtn()) {
-    bool visualChecked = m_ui->visualToggleBtn()->isChecked();
-    if (visualChecked) {
-      sjw->switchToVisual();
-    } else {
-      sjw->switchToCode();
+  // 按钮状态独立保持，不受非可视化文件影响
+  // 切换到可视化包装器标签时，让其跟随按钮状态
+  if (auto *cv = qobject_cast<CodeVisualSyncWidget *>(tabs->widget(index))) {
+    if (m_ui->visualToggleBtn()) {
+      m_ui->visualToggleBtn()->isChecked() ? cv->switchToVisual() : cv->switchToCode();
     }
   }
 
@@ -241,14 +225,10 @@ void MainDevMgr::onTabBarClicked(int index) {
   if (!tabs || index < 0 || index >= tabs->count()) return;
 
   // 将焦点设置到当前编辑器，触发 onFocusChanged 完成面板切换
-  // jsonvue 需聚焦当前显示的视图（可视化/代码），避免聚焦到隐藏页导致切换无效
+  // 可视化包装器需聚焦当前显示的视图（可视化/代码），避免聚焦到隐藏页导致切换无效
   auto *w = tabs->widget(index);
-  if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) {
-    jvw->focusActiveView();
-    return;
-  }
-  if (auto *sjw = qobject_cast<SchemaJsonWidget *>(w)) {
-    sjw->focusActiveView();
+  if (auto *cv = qobject_cast<CodeVisualSyncWidget *>(w)) {
+    cv->focusActiveView();
     return;
   }
   auto *editor = qobject_cast<CodeEditor *>(w);
@@ -343,12 +323,7 @@ void MainDevMgr::onSplitRight() {
 
     // 连接修改标记信号（拆分副本也需要红点提示；与打开文件路径同一实现）
     {
-      QWidget *w = newPanel->widget(newPanel->currentIndex());
-      CodeEditor *editor = qobject_cast<CodeEditor *>(w);
-      if (!editor) {
-        auto *jvw = qobject_cast<JsonVueWidget *>(w);
-        if (jvw) editor = jvw->codeEditor();
-      }
+      CodeEditor *editor = editorFromWidget(newPanel->widget(newPanel->currentIndex()));
       if (editor && !filePath.isEmpty()) {
         // 拆分副本与主编辑器同一套信号连接（一次性，不随焦点重复连接）
         connectEditorSignals(editor);
@@ -386,8 +361,8 @@ void MainDevMgr::onSplitRight() {
 
   if (auto *editor = qobject_cast<CodeEditor *>(newPanel->currentWidget())) {
     editor->setFocus();
-  } else if (auto *jvw = qobject_cast<JsonVueWidget *>(newPanel->currentWidget())) {
-    jvw->focusActiveView();
+  } else if (auto *cv = qobject_cast<CodeVisualSyncWidget *>(newPanel->currentWidget())) {
+    cv->focusActiveView();
   } else {
     newPanel->setFocus();
   }
@@ -494,7 +469,7 @@ void MainDevMgr::onTabSplitDropped(int fromIndex, DraggableTabBar *fromBar, Spli
 
   if (auto *editor = qobject_cast<CodeEditor *>(newPanel->currentWidget())) {
     editor->setFocus();
-  } else if (auto *jvw = qobject_cast<JsonVueWidget *>(newPanel->currentWidget())) {
-    jvw->focusActiveView();
+  } else if (auto *cv = qobject_cast<CodeVisualSyncWidget *>(newPanel->currentWidget())) {
+    cv->focusActiveView();
   }
 }

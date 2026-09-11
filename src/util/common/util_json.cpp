@@ -228,6 +228,13 @@ QString UtilJson::json5ToJson(const QString &text, QVector<int> *offsetMap) {
           numBuf += ch;
           keepCollecting = true;
         }
+        // "0x"/"-0x" 前缀：numBuf 为 "0"/"-0" 时遇到 x/X → 进入十六进制收集
+        // （此时 numBuf 尚不满足 startsWith("0x")，不特判会把数字提前截断成 "0"）
+        else if ((ch == QLatin1Char('x') || ch == QLatin1Char('X')) &&
+                 (numBuf == QStringLiteral("0") || numBuf == QStringLiteral("-0"))) {
+          numBuf += ch;
+          keepCollecting = true;
+        }
       }
 
       if (keepCollecting) continue;

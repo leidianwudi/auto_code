@@ -34,12 +34,10 @@ QStringList PathResolver::fileSearchPaths(const QString &scriptPath) {
   }
 
   // 优先使用 PROJECT_SOURCE_DIR/file（开发期源码目录）
-  addPath(QStringLiteral(PROJECT_SOURCE_DIR) +
-          QString::fromUtf8(CodeConstants::Paths::kFileDirName));
-  addPath(QCoreApplication::applicationDirPath() +
-          QString::fromUtf8(CodeConstants::Paths::kFileDirName));
+  addPath(QStringLiteral(PROJECT_SOURCE_DIR) + CodeConstants::Paths::fileDir());
+  addPath(QCoreApplication::applicationDirPath() + CodeConstants::Paths::fileDir());
   addPath(QCoreApplication::applicationDirPath() + QStringLiteral("/../../file"));
-  addPath(QDir::currentPath() + QString::fromUtf8(CodeConstants::Paths::kFileDirName));
+  addPath(QDir::currentPath() + CodeConstants::Paths::fileDir());
 
   return paths;
 }
@@ -70,8 +68,7 @@ QString PathResolver::resolveSchemaPath(const QString &jsonFilePath, const QStri
   QString schemaPath = schemaRef;
   if (schemaRef.startsWith(QLatin1Char('/'))) {
     // / 开头 → 项目源码目录 file/ 下（公共 schema，供所有 json 文件共享）
-    schemaPath = QStringLiteral(PROJECT_SOURCE_DIR) +
-                 QString::fromUtf8(CodeConstants::Paths::kFileDirName) + schemaRef;
+    schemaPath = QStringLiteral(PROJECT_SOURCE_DIR) + CodeConstants::Paths::fileDir() + schemaRef;
   } else if (QFileInfo(schemaRef).isRelative()) {
     // 相对路径 → 基于 json 文件所在目录
     schemaPath = QFileInfo(jsonFilePath).absolutePath() + QLatin1Char('/') + schemaRef;

@@ -26,7 +26,6 @@
 #include "src/util/ui/code/code_editor.h"
 #include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_style.h"
-#include "src/util/ui/highlighter/light_json.h"
 #include "src/util/ui/setting_store.h"
 
 // ──────────────────────────────────────────────────────────────
@@ -52,18 +51,12 @@ QString SchemaJsonWidget::resolveSchemaPathFor(const QString &schemaRef) const {
 //  构造
 // ════════════════════════════════════════════════════════════
 
-SchemaJsonWidget::SchemaJsonWidget(QWidget *parent) : QStackedWidget(parent) {
+SchemaJsonWidget::SchemaJsonWidget(QWidget *parent) : CodeVisualSyncWidget(parent) {
   // 最外围细边框：与代码编辑器面板边界区隔，突出可视化表单区域
   reloadStyle();
 
-  // 代码编辑器（与普通 .json 文件同一个 LightJson，保证高亮/主题一致）
-  m_editor = new CodeEditor;
-  auto *hl = new LightJson(m_editor->document());
-  m_editor->setSyntaxHighlighter(hl);
-  m_editor->setValidationMode(CodeEditor::JsonValidation);
-  addWidget(m_editor);
-
   // 可视化页：顶部「模板」选择行（标签 + 可编辑下拉）+ 表单编辑器。
+  // 代码页 index 0 由基类创建（与普通 .json 文件同一个 LightJson，保证高亮/主题一致）。
   // 空文件/无 $schema 也能进可视化：从下拉选定 .schema.json 后即可编辑
   m_visual = new SchemaFormEditor;
   auto *visualPage = new QWidget;
@@ -93,12 +86,9 @@ SchemaJsonWidget::SchemaJsonWidget(QWidget *parent) : QStackedWidget(parent) {
 
   setCurrentIndex(0);
 
-  // 可视化编辑器内容变化时，写回代码编辑器
-  connect(m_visual, &SchemaFormEditor::contentChanged, this, [this]() {
-    if (m_syncing) return;
-    syncVisualToCode();
-    emit contentChanged();
-  });
+  // 可视化编辑器内容变化时，写回代码编辑器并广播（基类统一入口）
+  connect(m_visual, &SchemaFormEditor::contentChanged, this,
+          &CodeVisualSyncWidget::onVisualContentChanged);
 
   // 下拉选定模板 → 应用（activated 仅用户点击触发，程序刷新不触发）
   connect(m_templateCombo, &QComboBox::activated, this, [this](int idx) {
@@ -165,8 +155,7 @@ void SchemaJsonWidget::refreshTemplateCombo(const QString &currentRef) {
   }
 
   // 2) 项目根 file 目录（递归），显示 /相对路径（与 $schema 的 / 前缀解析规则一致）
-  const QString fileRoot =
-      QStringLiteral(PROJECT_SOURCE_DIR) + QString::fromUtf8(CodeConstants::Paths::kFileDirName);
+  const QString fileRoot = QStringLiteral(PROJECT_SOURCE_DIR) + CodeConstants::Paths::fileDir();
   if (QDir(fileRoot).exists()) {
     QDirIterator it(fileRoot, {"*.schema.json"}, QDir::Files, QDirIterator::Subdirectories);
     while (it.hasNext()) {
@@ -221,38 +210,8 @@ void SchemaJsonWidget::setTemplateError(const QString &text) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  模式切换
+//  主题
 // ════════════════════════════════════════════════════════════
-
-void SchemaJsonWidget::focusActiveView() {
-  if (isVisualMode()) {
-    m_visual->setFocus();
-  } else {
-    m_editor->setFocus();
-  }
-}
-
-void SchemaJsonWidget::switchToCode() {
-  if (currentIndex() == 0) return;
-  syncVisualToCode();
-  setCurrentIndex(0);
-  emit modeChanged(false);
-}
-
-void SchemaJsonWidget::switchToVisual() {
-  if (currentIndex() == 1) return;
-  syncCodeToVisual();
-  setCurrentIndex(1);
-  emit modeChanged(true);
-}
-
-void SchemaJsonWidget::toggleMode() {
-  if (isVisualMode()) {
-    switchToCode();
-  } else {
-    switchToVisual();
-  }
-}
 
 void SchemaJsonWidget::reloadStyle() {
   // 边框色取当前主题的边框色，保证深浅主题下都可读（直角不加圆角）
@@ -261,11 +220,12 @@ void SchemaJsonWidget::reloadStyle() {
 }
 
 // ════════════════════════════════════════════════════════════
-//  数据同步
+//  数据同步（基类骨架回调）
 // ════════════════════════════════════════════════════════════
 
-void SchemaJsonWidget::syncCodeToVisual() {
-  m_syncing = true;
+QWidget *SchemaJsonWidget::visualView() const { return m_visual; }
+
+void SchemaJsonWidget::syncCodeToVisualImpl() {
   QByteArray data = m_editor->toPlainText().toUtf8();
   QJsonParseError err;
   // 用支持 JSON5 的解析器：文件可能是无引号键/单引号/注释/尾随逗号的 JSON5，
@@ -279,17 +239,10 @@ void SchemaJsonWidget::syncCodeToVisual() {
   QString ref = root.value(QStringLiteral("$schema")).toString();
   if (ref.isEmpty()) ref = extractSchemaRef(m_editor->toPlainText());
   reloadSchemaFor(ref);
-  m_syncing = false;
 }
 
-void SchemaJsonWidget::syncVisualToCode() {
-  // 仅当当前处于可视化模式时才把表单数据写回代码编辑器：
-  // 代码模式下用户可能直接改过代码，此时代码是权威来源，覆盖会导致修改丢失。
-  if (!isVisualMode()) return;
-  m_syncing = true;
+void SchemaJsonWidget::syncVisualToCodeImpl() {
   QByteArray data = QJsonDocument(m_visual->mergedObject()).toJson(QJsonDocument::Indented);
   const QString text = data.isEmpty() ? QStringLiteral("{}") : QString::fromUtf8(data);
-  // 内容未变时不重设文本：避免无意义的 document 变更（误标修改、触发重排）
-  if (text != m_editor->toPlainText()) m_editor->setPlainText(text);
-  m_syncing = false;
+  setPlainTextIfChanged(text);
 }

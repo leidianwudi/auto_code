@@ -177,8 +177,12 @@ bool SchemaFormEditor::nodeAt(const QJsonObject &root, const QStringList &path, 
 }
 
 void SchemaFormEditor::setNodeValue(const QStringList &path, const QJsonValue &value) {
-  if (path.isEmpty()) return;
-  m_root = writeBackRecursive(QJsonValue(m_root), path, 0, value).toObject();
+  if (path.isEmpty()) {
+    // 空路径 = 替换整个根对象（根级字段增删时 removeNodeValue 走到这里）
+    if (value.isObject()) m_root = value.toObject();
+  } else {
+    m_root = writeBackRecursive(QJsonValue(m_root), path, 0, value).toObject();
+  }
   if (!m_busy) emit contentChanged();
 }
 
@@ -271,7 +275,7 @@ QWidget *makeLabelColumn(const QString &name, const QString &desc, bool required
 /// 小型图标按钮（数组行内增删/上移下移）
 QPushButton *makeSMButton(const QString &text) {
   auto *b = new QPushButton(text);
-  b->setFixedSize(24, 24);
+  b->setFixedSize(20, 20);  // 与普通行输入框(~22px)同高量级，避免撑高数组/对象标题行
   b->setFocusPolicy(Qt::NoFocus);
   return b;
 }

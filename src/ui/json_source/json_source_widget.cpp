@@ -7,91 +7,49 @@
 
 #include "json_source_editor.h"
 #include "src/util/ui/code/code_editor.h"
-#include "src/util/ui/highlighter/light_json.h"
 
 // ════════════════════════════════════════════════════════════
 //  构造
 // ════════════════════════════════════════════════════════════
 
-JsonSourceWidget::JsonSourceWidget(QWidget *parent) : QStackedWidget(parent) {
-  m_editor = new CodeEditor;
-  auto *hl = new LightJson(m_editor->document());
-  m_editor->setSyntaxHighlighter(hl);
-  m_editor->setValidationMode(CodeEditor::JsonValidation);
-  addWidget(m_editor);
-
+JsonSourceWidget::JsonSourceWidget(QWidget *parent) : CodeVisualSyncWidget(parent) {
+  // 可视化编辑器（基类已创建代码页 index 0，高亮器与普通 .json 一致）
   m_visual = new JsonSourceEditor;
   addWidget(m_visual);
 
   setCurrentIndex(0);
 
-  // 可视化编辑器配置变化时，写回代码编辑器
-  connect(m_visual, &JsonSourceEditor::configChanged, this, [this]() {
-    if (m_syncing) return;
-    syncVisualToCode();
-    emit contentChanged();
-  });
+  // 可视化编辑器配置变化时，写回代码编辑器并广播（基类统一入口）
+  connect(m_visual, &JsonSourceEditor::configChanged, this,
+          &CodeVisualSyncWidget::onVisualContentChanged);
 }
 
 // ════════════════════════════════════════════════════════════
-//  模式切换
+//  数据同步（基类骨架回调）
 // ════════════════════════════════════════════════════════════
 
-void JsonSourceWidget::focusActiveView() {
-  if (isVisualMode()) {
-    m_visual->setFocus();
-  } else {
-    m_editor->setFocus();
-  }
-}
+QWidget *JsonSourceWidget::visualView() const { return m_visual; }
 
-void JsonSourceWidget::switchToCode() {
-  if (currentIndex() == 0) return;
-  syncVisualToCode();
-  setCurrentIndex(0);
-  emit modeChanged(false);
-}
-
-void JsonSourceWidget::switchToVisual() {
-  if (currentIndex() == 1) return;
-  syncCodeToVisual();
-  setCurrentIndex(1);
-  emit modeChanged(true);
-}
-
-void JsonSourceWidget::toggleMode() {
-  if (isVisualMode()) {
-    switchToCode();
-  } else {
-    switchToVisual();
-  }
-}
-
-// ════════════════════════════════════════════════════════════
-//  数据同步
-// ════════════════════════════════════════════════════════════
-
-void JsonSourceWidget::syncCodeToVisual() {
-  m_syncing = true;
+void JsonSourceWidget::syncCodeToVisualImpl() {
   QString jsonStr = m_editor->toPlainText();
   // 以当前代码内容刷新保真底：用户可能在代码视图删除过自定义键，
   // 若沿用打开文件时的旧快照，写回时会把这些已删除的键"复活"
   m_visual->setPreservedSource(jsonStr);
   JsonSourceConfig config = JsonSourceConfig::fromJsonString(jsonStr);
   m_visual->loadConfig(config);
-  m_syncing = false;
 }
 
-void JsonSourceWidget::syncVisualToCode() {
-  m_syncing = true;
-  QString jsonStr = JsonSourceConfig::toJsonString(m_visual->collectMergedObject());
-  m_editor->setPlainText(jsonStr);
-  m_syncing = false;
+void JsonSourceWidget::syncVisualToCodeImpl() {
+  setPlainTextIfChanged(JsonSourceConfig::toJsonString(m_visual->collectMergedObject()));
 }
+
+// ════════════════════════════════════════════════════════════
+//  透传接口
+// ════════════════════════════════════════════════════════════
 
 void JsonSourceWidget::setPreservedSource(const QString &src) { m_visual->setPreservedSource(src); }
 
 void JsonSourceWidget::setHttpConfig(const QString &baseUrl, const QString &authHeader,
-                                   const QString &postData) {
+                                     const QString &postData) {
   m_visual->setHttpConfig(baseUrl, authHeader, postData);
 }

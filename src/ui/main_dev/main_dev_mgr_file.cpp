@@ -55,7 +55,7 @@ CodeEditor *MainDevMgr::createEditorForFile(const QString &filePath) {
 /// 命中时可选输出所在面板组与索引（供选中/聚焦该标签）
 CodeEditor *MainDevMgr::findOpenEditor(const QString &filePath, QTabWidget **outTabs,
                                        int *outIndex) {
-  // 支持 CodeEditor 和 JsonVueWidget（包装器）两种类型
+  // 支持 CodeEditor 直挂与可视化包装器（CodeVisualSyncWidget 派生）两种形态
   for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
     auto *tabs = m_ui->editorPanelAt(i);
     if (!tabs) continue;
@@ -240,21 +240,9 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
     updateSaveButtonState();
   }
 
-  // ── JsonVueWidget / JsonSourceWidget：可视化编辑器内容变化时也触发修改标记 ──
-  if (auto *jvw = qobject_cast<JsonVueWidget *>(tabWidget)) {
-    connect(jvw, &JsonVueWidget::contentChanged, this, [this, editor]() {
-      editor->document()->setModified(true);
-      updateSaveButtonState();
-    });
-  }
-  if (auto *jdw = qobject_cast<JsonSourceWidget *>(tabWidget)) {
-    connect(jdw, &JsonSourceWidget::contentChanged, this, [this, editor]() {
-      editor->document()->setModified(true);
-      updateSaveButtonState();
-    });
-  }
-  if (auto *sjw = qobject_cast<SchemaJsonWidget *>(tabWidget)) {
-    connect(sjw, &SchemaJsonWidget::contentChanged, this, [this, editor]() {
+  // ── 可视化包装器（jsonvue / jsonsource / schema json）：可视化内容变化时也触发修改标记 ──
+  if (auto *cv = qobject_cast<CodeVisualSyncWidget *>(tabWidget)) {
+    connect(cv, &CodeVisualSyncWidget::contentChanged, this, [this, editor]() {
       editor->document()->setModified(true);
       updateSaveButtonState();
     });

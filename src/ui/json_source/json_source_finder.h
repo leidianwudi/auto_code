@@ -34,8 +34,7 @@ inline void collectJsonsourceRecursive(const QString &dir, QStringList &out) {
 inline QStringList findJsonsourceFiles(const QString &baseDir = QString()) {
   QStringList roots;
   if (!baseDir.isEmpty()) roots.append(baseDir);
-  roots.append(QStringLiteral(PROJECT_SOURCE_DIR) +
-               QString::fromUtf8(CodeConstants::Paths::kFileDirName));
+  roots.append(QStringLiteral(PROJECT_SOURCE_DIR) + CodeConstants::Paths::fileDir());
 
   QStringList all;
   QSet<QString> seen;
