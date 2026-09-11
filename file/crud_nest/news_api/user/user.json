@@ -121,6 +121,54 @@
           "joinType": "OneToMany",
           "inverseJoinEnClassPro": "user",
           "isJoinRelations": false
+        },
+        {
+          joinEnClass: "EnChatRoom",
+          joinEnClass_Url: "src/chat/room/chat_room/entities/en_chat_room",
+          joinEnClassPro: "ownedRoomChat",
+          joinType: "OneToMany",
+          inverseJoinEnClassPro: "roomUser",
+          isJoinRelations: false
+        },
+        {
+          joinEnClass: "EnChatRoomBlack",
+          joinEnClass_Url: "src/chat/room/chat_room_black/entities/en_chat_room_black",
+          joinEnClassPro: "blackedRoomChat",
+          joinType: "OneToMany",
+          inverseJoinEnClassPro: "roomBlackUser",
+          isJoinRelations: false
+        },
+        {
+          joinEnClass: "EnChatRoomViewers",
+          joinEnClass_Url: "src/chat/room/chat_room_viewers/entities/en_chat_room_viewers",
+          joinEnClassPro: "viewedRoomChat",
+          joinType: "OneToMany",
+          inverseJoinEnClassPro: "roomViewer",
+          isJoinRelations: false
+        },
+        {
+          joinEnClass: "EnChatRoomViewersLog",
+          joinEnClass_Url: "src/chat/room/chat_room_viewers_log/entities/en_chat_room_viewers_log",
+          joinEnClassPro: "viewedRoomChatLog",
+          joinType: "OneToMany",
+          inverseJoinEnClassPro: "roomViewers",
+          isJoinRelations: false
+        },
+        {
+          joinEnClass: "EnChatRoomMessage",
+          joinEnClass_Url: "src/chat/room/chat_room_message/entities/en_chat_room_message",
+          joinEnClassPro: "chatedRoom",
+          joinType: "OneToMany",
+          inverseJoinEnClassPro: "roomChater",
+          isJoinRelations: false
+        },
+        {
+          joinEnClass: "EnChatGroupBlack",
+          joinEnClass_Url: "src/chat/chat_group_black/entities/en_chat_group_black",
+          joinEnClassPro: "chatGroupBlack",
+          joinType: "OneToMany",
+          inverseJoinEnClassPro: "groupBlackedUser",
+          isJoinRelations: false
         }
       ]
     }

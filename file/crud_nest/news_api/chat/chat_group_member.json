@@ -14,8 +14,7 @@
         "group_nick"
       ],
       "selColsGap": [
-        "join_time",
-        "mute_until"
+        "join_time"
       ],
       "selColsSort": {
         "join_time": "DESC"

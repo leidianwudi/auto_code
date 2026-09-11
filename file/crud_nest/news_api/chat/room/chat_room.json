@@ -1,0 +1,39 @@
+{
+  $schema: "/crud_nest/template/tool/param.schema.json",
+  tables: [
+    {
+      modelName: "chat/room/chat_room",
+      tableName: "chat_room",
+      selCols: [
+        "enable",
+        "user_id"
+      ],
+      selColsSort: {
+        "hot":"DESC",
+        "create_time": "DESC"
+      },
+      joinTable: [
+        {
+          joinEnClass: "EnUser",
+          joinEnClass_Url: "src/user/user/entities/en_user",
+          joinEnClassPro: "roomUser",
+          joinType: "ManyToOne",
+          inverseJoinEnClassPro: "ownedRoomChat",
+          joinColumn: {
+            name: "user_id",
+            referencedColumnName: "id"
+          },
+          isJoinRelations: true
+        },
+        {
+          joinEnClass: "EnChatRoomLog",
+          joinEnClass_Url: "src/chat/room/chat_room_log/entities/en_chat_room_log",
+          joinEnClassPro: "chatRoomLog",
+          joinType: "OneToMany",
+          inverseJoinEnClassPro: "chatRoom",
+          isJoinRelations: false
+        }
+      ]
+    }
+  ]
+}

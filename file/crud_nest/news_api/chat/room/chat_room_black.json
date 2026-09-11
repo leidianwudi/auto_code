@@ -1,0 +1,30 @@
+{
+  $schema: "/crud_nest/template/tool/param.schema.json",
+  tables: [
+    {
+      modelName: "chat/room/chat_room_black",
+      tableName: "chat_room_black",
+      selCols: [
+        "room_id",
+        "user_id"
+      ],
+      selColsSort: {
+        "create_time": "DESC"
+      },
+      joinTable: [
+        {
+          joinEnClass: "EnUser",
+          joinEnClass_Url: "src/user/user/entities/en_user",
+          joinEnClassPro: "roomBlackUser",
+          joinType: "ManyToOne",
+          inverseJoinEnClassPro: "blackedRoomChat",
+          joinColumn: {
+            name: "user_id",
+            referencedColumnName: "id"
+          },
+          isJoinRelations: true
+        }
+      ]
+    }
+  ]
+}

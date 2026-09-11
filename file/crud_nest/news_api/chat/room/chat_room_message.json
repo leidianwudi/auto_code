@@ -1,0 +1,30 @@
+{
+  $schema: "/crud_nest/template/tool/param.schema.json",
+  tables: [
+    {
+      modelName: "chat/room/chat_room_message",
+      tableName: "chat_room_message",
+      selCols: [
+        "league_schedule_id",
+        "room_id"
+      ],
+      selColsSort: {
+        "send_time": "DESC"
+      },
+      joinTable: [
+        {
+          joinEnClass: "EnUser",
+          joinEnClass_Url: "src/user/user/entities/en_user",
+          joinEnClassPro: "roomChater",
+          joinType: "ManyToOne",
+          inverseJoinEnClassPro: "chatedRoom",
+          joinColumn: {
+            name: "sender_id",
+            referencedColumnName: "id"
+          },
+          isJoinRelations: true
+        }
+      ]
+    }
+  ]
+}
