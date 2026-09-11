@@ -14,6 +14,7 @@
 #include "src/util/common/code_constants.h"
 #include "src/util/ui/aui_window.h"
 #include "src/util/ui/component/aui_button.h"
+#include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_style.h"
 
 // ════════════════════════════════════════════════════════════
@@ -64,7 +65,7 @@ void comboSelectData(QComboBox *combo, const QVariant &data, int fallback) {
 }
 
 QComboBox *createNumericCombo(QWidget *parent, const QList<double> &presetValues, double current) {
-  auto *combo = new QComboBox(parent);
+  auto *combo = AuiComboBox::create(parent);
   combo->setEditable(true);
   for (double v : presetValues) combo->addItem(QString::number(v), v);
   int idx = combo->findData(current);

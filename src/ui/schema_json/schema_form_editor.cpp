@@ -26,6 +26,7 @@
 
 #include "src/util/common/code_constants.h"
 #include "src/util/common/util_json.h"
+#include "src/util/ui/component/aui_combo_box.h"
 
 /// 让标签文本可选中复制（QLabel 默认不可选，不便于复制字段名/说明/标题）
 static inline void makeSelectable(QLabel *l) {
@@ -298,18 +299,17 @@ void SchemaFormEditor::fillRequiredSkeleton(const QString &cls, const QStringLis
   SchemaValidator::SchemaClassInfo info;
   if (!m_schema.classInfo(cls, &info)) return;
   for (const QString &name : info.required) {
-    auto it = info.properties.find(name);
-    if (it == info.properties.end()) continue;
-    const SchemaValidator::SchemaPropInfo &p = it.value();
+    const SchemaValidator::SchemaPropInfo *p = info.findProperty(name);
+    if (!p) continue;
     QStringList childPath = path;
     childPath.append(name);
-    if (p.type == QLatin1String("object") && !p.className.isEmpty()) {
+    if (p->type == QLatin1String("object") && !p->className.isEmpty()) {
       // 嵌套对象：先建空对象占位，再继续填其必填字段
       setNodeValue(childPath, QJsonValue(QJsonObject()));
-      fillRequiredSkeleton(p.className, childPath);
+      fillRequiredSkeleton(p->className, childPath);
       continue;
     }
-    setNodeValue(childPath, defaultForType(p));
+    setNodeValue(childPath, defaultForType(*p));
   }
 }
 
@@ -378,10 +378,10 @@ QWidget *SchemaFormEditor::buildObjectForm(const QString &schemaClass, const QSt
     for (const QString &k : keys) writtenKeys.insert(k);
   }
 
-  // ── 1) 渲染已写 / 必填的 schema 属性 ──
+  // ── 1) 渲染已写 / 必填的 schema 属性（properties 已按 schema 声明顺序保存）──
   QStringList addable;  // 未写且非必填的属性名 → 放入"添加属性"下拉候选
-  for (auto it = info.properties.begin(); it != info.properties.end(); ++it) {
-    const QString &pname = it.key();
+  for (const auto &kv : info.properties) {
+    const QString &pname = kv.first;
     if (pname.startsWith(QLatin1Char('$'))) continue;  // $schema 等元键不渲染为字段
     const bool hasWritten = writtenKeys.contains(pname);
     const bool isRequired = info.required.contains(pname);
@@ -389,11 +389,11 @@ QWidget *SchemaFormEditor::buildObjectForm(const QString &schemaClass, const QSt
       addable.append(pname);  // 未写且非必填 → 通过"添加属性"补齐
       continue;
     }
-    auto *ctrl = buildPropertyControl(pname, it.value(), path, info.required);
+    auto *ctrl = buildPropertyControl(pname, kv.second, path, info.required);
     // 多行字段（array/object）：字段级移除按钮已放在标题行内（见 buildPropertyControl），
     // 此处不再包装，避免与数组行内 × 同排混淆。
     const bool multilineField =
-        (it.value().type == QLatin1String("array") || it.value().type == QLatin1String("object"));
+        (kv.second.type == QLatin1String("array") || kv.second.type == QLatin1String("object"));
     // 已写且非多行的普通字段：附加外层移除按钮
     if (hasWritten && !multilineField) {
       auto *wrapRow = new QWidget;
@@ -418,7 +418,7 @@ QWidget *SchemaFormEditor::buildObjectForm(const QString &schemaClass, const QSt
   QStringList unknownKeys;
   for (const QString &k : writtenKeys) {
     if (k.startsWith(QLatin1Char('$'))) continue;  // $ 元键省略
-    if (info.properties.contains(k)) continue;     // schema 已定义
+    if (info.hasProperty(k)) continue;             // schema 已定义
     unknownKeys.append(k);
   }
   if (!unknownKeys.isEmpty()) {
@@ -465,18 +465,17 @@ QWidget *SchemaFormEditor::buildObjectForm(const QString &schemaClass, const QSt
     af.setPixelSize(12);
     addLabel->setFont(af);
     ah->addWidget(addLabel);
-    auto *combo = new QComboBox;
+    auto *combo = AuiComboBox::create();
     combo->addItem(QStringLiteral("— 选择要添加的属性 —"));
     for (const QString &a : addable) combo->addItem(a);
     combo->setSizeAdjustPolicy(QComboBox::AdjustToContents);
     connect(combo, &QComboBox::activated, this, [this, combo, path, info](int idx) {
       if (idx <= 0) return;  // 占位项
       const QString pname = combo->itemText(idx);
-      auto it = info.properties.constFind(pname);
-      if (it == info.properties.constEnd()) return;
-      const SchemaValidator::SchemaPropInfo candidate = it.value();
+      const SchemaValidator::SchemaPropInfo *candidate = info.findProperty(pname);
+      if (!candidate) return;
       // 依据类型生成默认值后写入
-      QJsonValue def = defaultForType(candidate);
+      QJsonValue def = defaultForType(*candidate);
       setNodeValue(propertyPath(path, pname), def);
       rebuild();
     });
@@ -562,7 +561,7 @@ QWidget *SchemaFormEditor::buildPropertyControl(const QString &name,
   // 1/2) string（含 enum）
   if (t == QLatin1String("string")) {
     if (!prop.enumValues.isEmpty()) {
-      auto *combo = new QComboBox;
+      auto *combo = AuiComboBox::create();
       combo->setEditable(true);
       QString curText = cur.isString() || cur.isDouble()
                             ? cur.toString()

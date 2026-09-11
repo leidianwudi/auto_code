@@ -670,6 +670,15 @@ QJsonDocument UtilJson::loadFile(const QString &filePath, QJsonParseError *error
   return fromJson(data, error);
 }
 
+// readTextFile — 读取整个文件文本（UTF-8 解码，不解析）
+QString UtilJson::readTextFile(const QString &filePath) {
+  QFile f(filePath);
+  if (!f.open(QIODevice::ReadOnly)) return QString();
+  const QByteArray data = f.readAll();
+  f.close();
+  return QString::fromUtf8(data);
+}
+
 // fingerprint — JSON 对象内容指纹（MD5，紧凑序列化）
 QByteArray UtilJson::fingerprint(const QJsonObject &obj) {
   return QCryptographicHash::hash(QJsonDocument(obj).toJson(QJsonDocument::Compact),

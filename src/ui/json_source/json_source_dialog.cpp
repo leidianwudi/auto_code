@@ -19,6 +19,7 @@
 #include "src/ui/json_vue/config_dialog_common.h"
 #include "src/ui/json_vue/select_source_panel.h"
 #include "src/util/common/code_constants.h"
+#include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/component/aui_style.h"
 
@@ -29,18 +30,16 @@
 JsonSourceDialog::JsonSourceDialog(QWidget *parent) : QDialog(parent) { setupUI(); }
 
 void JsonSourceDialog::setupUI() {
-  ConfigDialogFrame frame = beginConfigDialog(this, QStringLiteral("数据源配置"),
-                                              QMargins(12, 10, 12, 10), 6);
+  ConfigDialogFrame frame =
+      beginConfigDialog(this, QStringLiteral("数据源配置"), QMargins(12, 10, 12, 10), 6);
   auto *layout = frame.contentLayout;
 
   // ── 类型 + 说明 ──
   auto *topRow = new QHBoxLayout;
   topRow->addWidget(new QLabel(QStringLiteral("类型:")));
-  m_typeCombo = new QComboBox(frame.contentWidget);
-  m_typeCombo->addItem(QStringLiteral("静态数据源"),
-                       QString::fromLatin1(JsonSourceType::kStatic));
-  m_typeCombo->addItem(QStringLiteral("动态数据源"),
-                       QString::fromLatin1(JsonSourceType::kDynamic));
+  m_typeCombo = AuiComboBox::create(frame.contentWidget);
+  m_typeCombo->addItem(QStringLiteral("静态数据源"), QString::fromLatin1(JsonSourceType::kStatic));
+  m_typeCombo->addItem(QStringLiteral("动态数据源"), QString::fromLatin1(JsonSourceType::kDynamic));
   m_typeCombo->setMinimumWidth(120);
   topRow->addWidget(m_typeCombo);
   topRow->addSpacing(16);
@@ -95,16 +94,14 @@ void JsonSourceDialog::setupStaticPage() {
   btnRow->addStretch();
   layout->addLayout(btnRow);
 
-  m_optionTable = makeConfigTable(
-      {{QStringLiteral("显示文本"), QHeaderView::Stretch, 0},
-       {QStringLiteral("实际值"), QHeaderView::Stretch, 0},
-       {QStringLiteral("类型"), QHeaderView::Interactive, 100}},
-      page, 100, 0, QAbstractItemView::SelectRows);
+  m_optionTable = makeConfigTable({{QStringLiteral("显示文本"), QHeaderView::Stretch, 0},
+                                   {QStringLiteral("实际值"), QHeaderView::Stretch, 0},
+                                   {QStringLiteral("类型"), QHeaderView::Interactive, 100}},
+                                  page, 100, 0, QAbstractItemView::SelectRows);
   layout->addWidget(m_optionTable, 1);
 
   connect(m_addOptionBtn, &QPushButton::clicked, this, &JsonSourceDialog::onAddOption);
-  connect(m_removeOptionBtn, &QPushButton::clicked, this,
-          &JsonSourceDialog::onRemoveOption);
+  connect(m_removeOptionBtn, &QPushButton::clicked, this, &JsonSourceDialog::onRemoveOption);
   connect(m_optionUpBtn, &QPushButton::clicked, this, &JsonSourceDialog::onOptionUp);
   connect(m_optionDownBtn, &QPushButton::clicked, this, &JsonSourceDialog::onOptionDown);
 
@@ -137,24 +134,23 @@ void JsonSourceDialog::onTypeChanged(int index) {
 
 void JsonSourceDialog::setSource(const JsonSource &source) {
   m_id = source.id;
-  const int typeIdx =
-      source.isStatic() ? 0 : 1;
+  const int typeIdx = source.isStatic() ? 0 : 1;
   m_typeCombo->setCurrentIndex(typeIdx);
   m_remarkEdit->setText(source.remark);
   if (source.isStatic()) {
     m_staticUrlEdit->setText(source.url);
     populateOptions(source.options);
   } else {
-    m_panel->setData(source.url, source.method, source.valueField, source.labelField,
-                     source.paged, source.pageKey, source.pageSizeKey, source.pageSize,
-                     source.searchTitle, source.searchField);
+    m_panel->setData(source.url, source.method, source.valueField, source.labelField, source.paged,
+                     source.pageKey, source.pageSizeKey, source.pageSize, source.searchTitle,
+                     source.searchField);
     m_panel->setTags(source.tags);
   }
   onTypeChanged(typeIdx);
 }
 
 void JsonSourceDialog::setHttpConfig(const QString &baseUrl, const QString &authHeader,
-                                         const QString &postData) {
+                                     const QString &postData) {
   m_baseUrl = baseUrl;
   m_authHeader = authHeader;
   m_postData = postData;
@@ -163,8 +159,7 @@ void JsonSourceDialog::setHttpConfig(const QString &baseUrl, const QString &auth
 
 void JsonSourceDialog::accept() {
   // 静态数据源必须填写函数 URL（作为生成函数名的依据）
-  if (m_typeCombo->currentData().toString() ==
-          QString::fromLatin1(JsonSourceType::kStatic) &&
+  if (m_typeCombo->currentData().toString() == QString::fromLatin1(JsonSourceType::kStatic) &&
       m_staticUrlEdit->text().trimmed().isEmpty()) {
     AuiMessageBox::show(this, QStringLiteral("提示"), QStringLiteral("请填写函数URL"));
     return;
@@ -206,7 +201,7 @@ void JsonSourceDialog::onAddOption() {
   m_optionTable->setItem(row, 0, new QTableWidgetItem());
   m_optionTable->setItem(row, 1, new QTableWidgetItem());
   // 类型列：字符串（默认）/ 数字；固定最小宽度保证下拉箭头完整可点
-  auto *combo = new QComboBox(m_optionTable);
+  auto *combo = AuiComboBox::create(m_optionTable);
   combo->addItem(QStringLiteral("字符串"), QString());
   combo->addItem(QStringLiteral("数字"), QStringLiteral("number"));
   combo->setMinimumWidth(80);
@@ -273,7 +268,7 @@ void JsonSourceDialog::populateOptions(const QVector<JsonSourceOption> &options)
     m_optionTable->insertRow(row);
     m_optionTable->setItem(row, 0, new QTableWidgetItem(o.label));
     m_optionTable->setItem(row, 1, new QTableWidgetItem(o.value));
-    auto *combo = new QComboBox(m_optionTable);
+    auto *combo = AuiComboBox::create(m_optionTable);
     combo->addItem(QStringLiteral("字符串"), QString());
     combo->addItem(QStringLiteral("数字"), QStringLiteral("number"));
     combo->setMinimumWidth(80);

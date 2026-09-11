@@ -143,7 +143,7 @@ QWidget *JsonVueEditor::buildMetaSection() {
   // 生成数据（方法下拉框 + URL 输入框 + 生成按钮）
   auto *genCell = new QHBoxLayout;
   genCell->addWidget(new QLabel(QStringLiteral("来源:")));
-  m_methodCombo = new QComboBox(this);
+  m_methodCombo = AuiComboBox::create(this);
   m_methodCombo->addItems(
       {QString::fromLatin1(JsonVueHttp::kGet), QString::fromLatin1(JsonVueHttp::kPost),
        QString::fromLatin1(JsonVueHttp::kPut), QString::fromLatin1(JsonVueHttp::kDelete)});

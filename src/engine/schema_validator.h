@@ -44,13 +44,15 @@
 
 #pragma once
 
+#include <QHash>
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QMap>
-#include <memory>
+#include <QPair>
 #include <QString>
 #include <QStringList>
 #include <QVector>
+#include <memory>
 
 /**
  * @class SchemaValidator
@@ -134,8 +136,20 @@ public:
 
   /// 一个类的完整结构（属性表 + 必填列表）
   struct SchemaClassInfo {
-    QMap<QString, SchemaPropInfo> properties;
+    /// 属性表（按 schema 声明顺序保存，可视化表单/智能提示按此序渲染）
+    QVector<QPair<QString, SchemaPropInfo>> properties;
     QStringList required;
+
+    /// 按名查找属性；不存在返回 nullptr
+    const SchemaPropInfo *findProperty(const QString &name) const {
+      for (const auto &kv : properties) {
+        if (kv.first == name) return &kv.second;
+      }
+      return nullptr;
+    }
+    /// 是否声明了某属性
+    bool hasProperty(const QString &name) const { return findProperty(name) != nullptr; }
+
     /// 类级 additionalProperties：任意键对象（键不限定，值类型由该约束定义）
     bool hasAdditionalProps = false;
     std::shared_ptr<SchemaPropInfo> additionalProp;  ///< hasAdditionalProps=true 时有效
@@ -180,7 +194,8 @@ private:
   };
 
   struct ClassDef {
-    QMap<QString, PropertyDef> properties;
+    /// 属性表（按 schema 声明顺序保存）
+    QVector<QPair<QString, PropertyDef>> properties;
     QStringList required;  // 必填属性名
     // additionalProperties：任意键对象（键不限定，值类型由该定义约束）
     bool hasAdditionalProp = false;
@@ -197,6 +212,9 @@ private:
   /// 解析单个类定义（properties/required/additionalProperties）
   void parseClassDef(const QJsonObject &obj, ClassDef &def) const;
 
+  /// 按 schema 文本中记录的键声明顺序重排类属性表（QJsonObject 解析会丢失声明序）
+  void applyDeclarationOrder(const QString &classPath, ClassDef &def) const;
+
   /// 在类中查找属性定义；不存在返回 nullptr
   static const PropertyDef *propertyOf(const ClassDef &def, const QString &name);
 
@@ -208,4 +226,8 @@ private:
 
   QMap<QString, ClassDef> m_classes;
   QString m_rootClass;  // 根入口类名
+
+  /// 对象键声明顺序表：对象路径（如 "definitions.TableConfig.properties"）→ 键序。
+  /// QJsonObject 按键字母排序，声明序只能从归一化文本单独扫描获得。
+  QHash<QString, QStringList> m_keyOrders;
 };

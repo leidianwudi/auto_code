@@ -22,6 +22,7 @@
 #include "icon_loader.h"
 #include "icon_picker_dialog.h"
 #include "src/util/common/code_constants.h"
+#include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_style.h"
 
 // ════════════════════════════════════════════════════════════
@@ -106,13 +107,13 @@ void ButtonConfigDialog::setupUI() {
   iconLayout->addWidget(m_iconClearBtn);
   basicForm->addRow(QStringLiteral("图标:"), iconLayout);
 
-  m_positionCombo = new QComboBox;
+  m_positionCombo = AuiComboBox::create();
   m_positionCombo->setMinimumHeight(28);
   m_positionCombo->addItem(QStringLiteral("行操作列"), static_cast<int>(ButtonPosition::Row));
   m_positionCombo->addItem(QStringLiteral("顶部工具栏"), static_cast<int>(ButtonPosition::Toolbar));
   basicForm->addRow(QStringLiteral("位置:"), m_positionCombo);
 
-  m_buttonTypeCombo = new QComboBox;
+  m_buttonTypeCombo = AuiComboBox::create();
   m_buttonTypeCombo->setMinimumHeight(28);
   m_buttonTypeCombo->addItem(QStringLiteral("默认"), QString());
   m_buttonTypeCombo->addItem(QStringLiteral("主要"), QString::fromLatin1(JsonVueColor::kPrimary));
@@ -121,7 +122,7 @@ void ButtonConfigDialog::setupUI() {
   m_buttonTypeCombo->addItem(QStringLiteral("危险"), QString::fromLatin1(JsonVueColor::kDanger));
   basicForm->addRow(QStringLiteral("按钮样式:"), m_buttonTypeCombo);
 
-  m_actionTypeCombo = new QComboBox;
+  m_actionTypeCombo = AuiComboBox::create();
   m_actionTypeCombo->setMinimumHeight(28);
   m_actionTypeCombo->addItem(QStringLiteral("Ajax（直接调 API）"),
                              static_cast<int>(ButtonActionType::Ajax));
@@ -314,7 +315,7 @@ void ButtonConfigDialog::onAddDialogField() {
   m_dialogFieldsTable->setCellWidget(row, 1, nameEdit);
 
   // 样式
-  auto *styleCombo = new QComboBox;
+  auto *styleCombo = AuiComboBox::create();
   styleCombo->addItem(QStringLiteral("文本"), QString::fromLatin1(JsonVueStyle::kText));
   styleCombo->addItem(QStringLiteral("整数"), QString::fromLatin1(JsonVueStyle::kInt));
   styleCombo->addItem(QStringLiteral("小数"), QString::fromLatin1(JsonVueStyle::kFloat));
@@ -415,12 +416,11 @@ void ButtonConfigDialog::onConfigureFieldStyle(int row) {
                      m_dialogFieldsData[row].selectSourceId);
     dlg.setConfig(m_dialogFieldsData[row].selectUrl, m_dialogFieldsData[row].selectValueField,
                   m_dialogFieldsData[row].selectLabelField);
-    dlg.setPagedConfig(m_dialogFieldsData[row].selectPaged, m_dialogFieldsData[row].selectPageKey,
-                   m_dialogFieldsData[row].selectPageSizeKey,
-                   m_dialogFieldsData[row].selectPageSize,
-                   m_dialogFieldsData[row].selectSearchTitle,
-                   m_dialogFieldsData[row].selectSearchField,
-                   m_dialogFieldsData[row].selectMethod);
+    dlg.setPagedConfig(
+        m_dialogFieldsData[row].selectPaged, m_dialogFieldsData[row].selectPageKey,
+        m_dialogFieldsData[row].selectPageSizeKey, m_dialogFieldsData[row].selectPageSize,
+        m_dialogFieldsData[row].selectSearchTitle, m_dialogFieldsData[row].selectSearchField,
+        m_dialogFieldsData[row].selectMethod);
     if (dlg.exec() == QDialog::Accepted) {
       m_dialogFieldsData[row].selectSourceFile = dlg.sourceFile();
       m_dialogFieldsData[row].selectSourceId = dlg.sourceId();

@@ -38,7 +38,7 @@
 
 /// vue3 element-plus 常用 tag 样式下拉框（(无)/primary/success/warning/info/danger）
 static QComboBox *makeTagCombo(QWidget *parent, const QString &current = QString()) {
-  auto *combo = new QComboBox(parent);
+  auto *combo = AuiComboBox::create(parent);
   combo->addItem(QStringLiteral("(无)"), QString());
   combo->addItem(QStringLiteral("primary"), QStringLiteral("primary"));
   combo->addItem(QStringLiteral("success"), QStringLiteral("success"));
@@ -66,7 +66,7 @@ void SelectSourcePanel::setupUI() {
   // ── URL 输入行（含请求方式）──
   auto *urlRow = new QHBoxLayout;
   urlRow->addWidget(new QLabel(QStringLiteral("请求URL:")));
-  m_methodCombo = new QComboBox(this);
+  m_methodCombo = AuiComboBox::create(this);
   m_methodCombo->addItems(
       {QString::fromLatin1(JsonVueHttp::kPost), QString::fromLatin1(JsonVueHttp::kGet)});
   m_methodCombo->setCurrentIndex(0);
@@ -85,7 +85,7 @@ void SelectSourcePanel::setupUI() {
   // ── 加载方式行 ──
   auto *typeRow = new QHBoxLayout;
   typeRow->addWidget(new QLabel(QStringLiteral("加载方式:")));
-  m_typeCombo = new QComboBox(this);
+  m_typeCombo = AuiComboBox::create(this);
   m_typeCombo->addItem(QStringLiteral("普通加载(一次性)"), false);
   m_typeCombo->addItem(QStringLiteral("查询分页加载"), true);
   m_typeCombo->setMinimumWidth(180);
@@ -172,12 +172,12 @@ void SelectSourcePanel::setupUI() {
   // ── 字段选择行：Label/Value 为普通下拉框，点击「测试」后列出返回示例的列，供从中选择 ──
   auto *fieldRow = new QHBoxLayout;
   fieldRow->addWidget(new QLabel(QStringLiteral("Label字段(显示文本):")));
-  m_labelCombo = new QComboBox(this);
+  m_labelCombo = AuiComboBox::create(this);
   m_labelCombo->setMinimumWidth(120);
   fieldRow->addWidget(m_labelCombo);
   fieldRow->addSpacing(20);
   fieldRow->addWidget(new QLabel(QStringLiteral("Value字段(实际值):")));
-  m_valueCombo = new QComboBox(this);
+  m_valueCombo = AuiComboBox::create(this);
   m_valueCombo->setMinimumWidth(120);
   fieldRow->addWidget(m_valueCombo);
   fieldRow->addStretch();

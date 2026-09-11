@@ -28,6 +28,7 @@
 #include "src/util/common/code_constants.h"
 #include "src/util/ui/aui_window.h"
 #include "src/util/ui/component/aui_button.h"
+#include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_style.h"
 
 // ════════════════════════════════════════════════════════════
@@ -280,7 +281,7 @@ void SettingUi::buildFontPage() {
       connect(spin, QOverload<int>::of(&QSpinBox::valueChanged), this,
               &SettingUi::onFontValueChanged);
 
-      auto *combo = new QComboBox(page);
+      auto *combo = AuiComboBox::create(page);
       combo->addItem(QStringLiteral("默认"), QString());  // 首项=跟随默认字体
       for (const QString &fam : families) combo->addItem(fam, fam);
       combo->setMinimumWidth(170);

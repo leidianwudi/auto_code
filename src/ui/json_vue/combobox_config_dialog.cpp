@@ -42,14 +42,14 @@ void ComboboxConfigDialog::setupUI() {
   // ── .jsonsource 数据源选择行 ──
   auto *srcRow = new QHBoxLayout;
   srcRow->addWidget(new QLabel(QStringLiteral("数据源文件:")));
-  m_fileCombo = new QComboBox(frame.contentWidget);
+  m_fileCombo = AuiComboBox::create(frame.contentWidget);
   m_fileCombo->setMinimumWidth(220);
   srcRow->addWidget(m_fileCombo, 1);
   layout->addLayout(srcRow);
 
   auto *sourceRow = new QHBoxLayout;
   sourceRow->addWidget(new QLabel(QStringLiteral("数据源:")));
-  m_sourceCombo = new QComboBox(frame.contentWidget);
+  m_sourceCombo = AuiComboBox::create(frame.contentWidget);
   m_sourceCombo->setMinimumWidth(220);
   sourceRow->addWidget(m_sourceCombo, 1);
   layout->addLayout(sourceRow);

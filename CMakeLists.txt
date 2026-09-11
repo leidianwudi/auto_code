@@ -105,6 +105,8 @@ qt_add_executable(auto_code
     src/util/ui/code/indent_guide.cpp
     src/util/ui/code/code_editor.h
     src/util/ui/code/code_editor.cpp
+    src/util/ui/code/code_visual_sync_widget.h
+    src/util/ui/code/code_visual_sync_widget.cpp
     src/util/ui/code/code_editor_debug.cpp
     src/util/ui/code/code_editor_fold.cpp
     src/util/ui/code/code_editor_validate.cpp
@@ -344,3 +346,19 @@ install(SCRIPT ${deploy_script})
 qt_add_executable(gen_icon EXCLUDE_FROM_ALL gen_icon.cpp)
 target_include_directories(gen_icon PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(gen_icon PRIVATE Qt::Core Qt::Widgets)
+
+# ════════════════════════════════════════════════════════════
+#  单元测试（EXCLUDE_FROM_ALL：不随主程序构建）
+#  构建：cmake --build <build-dir> --target auto_code_tests --config Debug
+#  运行：<build-dir>/Debug/auto_code_tests.exe（返回 0 = 全部通过）
+# ════════════════════════════════════════════════════════════
+add_executable(auto_code_tests EXCLUDE_FROM_ALL
+    tests/test_json_utils.cpp
+    src/util/common/util_json.cpp
+    src/util/common/path_resolver.cpp
+)
+target_include_directories(auto_code_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(auto_code_tests PRIVATE
+    PROJECT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+target_link_libraries(auto_code_tests PRIVATE Qt::Core)

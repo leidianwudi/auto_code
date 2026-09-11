@@ -29,6 +29,7 @@
 #include "src/ui/json_source/json_source_finder.h"
 #include "src/ui/json_source/json_source_model.h"
 #include "src/util/common/code_constants.h"
+#include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/component/aui_style.h"
 
@@ -165,7 +166,7 @@ void ColumnStyleDialog::setupUI() {
   m_formLayout->addRow(QString(), tableSep);
 
   // 显示样式（列表页渲染方式）—— 置于列表页配置最顶部，便于标签映射表获得更大空间
-  m_displayTypeCombo = new QComboBox(this);
+  m_displayTypeCombo = AuiComboBox::create(this);
   m_displayTypeCombo->addItem(QStringLiteral("纯文本(text)"), QStringLiteral(""));
   m_displayTypeCombo->addItem(QStringLiteral("金额(money)"),
                               QString::fromLatin1(JsonVueStyle::kMoney));
@@ -199,8 +200,9 @@ void ColumnStyleDialog::setupUI() {
     if (m_boolFalseTextEdit) m_cachedBoolFalseText = m_boolFalseTextEdit->text().trimmed();
     if (m_switchEditableCheck) m_cachedSwitchEditable = m_switchEditableCheck->isChecked();
     // 联动：显示样式选"下拉框(select)" → 编辑样式自动同步为下拉框
-    if (!m_syncing && m_displayTypeCombo->currentData().toString() ==
-                          QString::fromLatin1(JsonVueStyle::kSelect) &&
+    if (!m_syncing &&
+        m_displayTypeCombo->currentData().toString() ==
+            QString::fromLatin1(JsonVueStyle::kSelect) &&
         m_editStyle != EditStyle::Select) {
       m_syncing = true;
       comboSelectData(m_editStyleCombo, editStyleToString(EditStyle::Select));
@@ -213,7 +215,7 @@ void ColumnStyleDialog::setupUI() {
   rebuildDisplayTypeControls();
 
   // 表格列宽
-  m_columnWidthCombo = new QComboBox(this);
+  m_columnWidthCombo = AuiComboBox::create(this);
   m_columnWidthCombo->addItem(QStringLiteral("自动"), 0);
   for (int w : {60, 80, 100, 120, 150, 200, 250, 300}) {
     m_columnWidthCombo->addItem(QString::number(w), w);
@@ -221,14 +223,14 @@ void ColumnStyleDialog::setupUI() {
   addRow(QStringLiteral("表格列宽:"), m_columnWidthCombo);
 
   // 固定列
-  m_columnFixedCombo = new QComboBox(this);
+  m_columnFixedCombo = AuiComboBox::create(this);
   m_columnFixedCombo->addItem(QStringLiteral("不固定"), QString());
   m_columnFixedCombo->addItem(QStringLiteral("固定左侧"), QStringLiteral("left"));
   m_columnFixedCombo->addItem(QStringLiteral("固定右侧"), QStringLiteral("right"));
   addRow(QStringLiteral("固定列:"), m_columnFixedCombo);
 
   // 格式化类型
-  m_formatterCombo = new QComboBox(this);
+  m_formatterCombo = AuiComboBox::create(this);
   m_formatterCombo->addItem(QStringLiteral("无"), QString());
   m_formatterCombo->addItem(QStringLiteral("日期"), QString::fromLatin1(JsonVueStyle::kDate));
   m_formatterCombo->addItem(QStringLiteral("状态"), QStringLiteral("status"));
@@ -243,7 +245,7 @@ void ColumnStyleDialog::setupUI() {
   m_formLayout->addRow(QString(), editSep);
 
   // 编辑样式
-  m_editStyleCombo = new QComboBox(this);
+  m_editStyleCombo = AuiComboBox::create(this);
   m_editStyleCombo->addItem(QStringLiteral("纯文本(text)"),
                             QString::fromLatin1(JsonVueStyle::kText));
   m_editStyleCombo->addItem(QStringLiteral("整数(int)"), QString::fromLatin1(JsonVueStyle::kInt));
@@ -314,7 +316,7 @@ void ColumnStyleDialog::setupUI() {
   addRow(QStringLiteral("必填:"), m_requiredCheck);
 
   // 表单布局
-  m_formSpanCombo = new QComboBox(this);
+  m_formSpanCombo = AuiComboBox::create(this);
   m_formSpanCombo->addItem(QStringLiteral("半行"), 12);
   m_formSpanCombo->addItem(QStringLiteral("整行"), 24);
   m_formSpanCombo->addItem(QStringLiteral("三分之一"), 8);
@@ -331,7 +333,7 @@ void ColumnStyleDialog::setupUI() {
   m_defaultValueEdit->setPlaceholderText(QStringLiteral("新增记录时的默认值"));
   addRow(QStringLiteral("默认值:"), m_defaultValueEdit);
 
-  m_defaultSortCombo = new QComboBox(this);
+  m_defaultSortCombo = AuiComboBox::create(this);
   m_defaultSortCombo->addItem(QStringLiteral("无"), QString());
   m_defaultSortCombo->addItem(QStringLiteral("升序"), QStringLiteral("asc"));
   m_defaultSortCombo->addItem(QStringLiteral("降序"), QStringLiteral("desc"));
@@ -421,7 +423,7 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
     // 静态数据源下拉：列出所有恰好 2 项选项的静态数据源。
     // 下拉项显示"函数名 - 说明（文件名）"，选中后真假文字从数据源实时读取并锁定
     // 不可改（数据源修改后重开对话框自动同步）；选"手动输入"时解锁，可自由填写真假文字
-    m_boolSourceCombo = new QComboBox(m_displayTypeWidget);
+    m_boolSourceCombo = AuiComboBox::create(m_displayTypeWidget);
     m_boolSourceCombo->addItem(QStringLiteral("（手动输入真假文字）"), QString());
     int restoreIdx = 0;
     const QStringList srcFiles = findJsonsourceFiles(m_searchRoot);
@@ -440,8 +442,8 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
         const QString remark = s.remark.isEmpty() ? QStringLiteral("(未命名)") : s.remark;
         // 显示：函数名 - 说明（文件名），不显示 0/1 具体值
         const QString funcName = staticSourceFuncName(QFileInfo(sf).baseName(), s.url);
-        const QString text = QStringLiteral("%1 - %2（%3）")
-                                 .arg(funcName, remark, QFileInfo(sf).fileName());
+        const QString text =
+            QStringLiteral("%1 - %2（%3）").arg(funcName, remark, QFileInfo(sf).fileName());
         m_boolSourceCombo->addItem(text, sf + QStringLiteral("#") + s.id);
         if (sf == m_cachedBoolSourceFile && s.id == m_cachedBoolSourceId) {
           restoreIdx = m_boolSourceCombo->count() - 1;
@@ -511,9 +513,8 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
     m_displayTypeWidget->setMaximumHeight(QWIDGETSIZE_MAX);  // 恢复高度限制
     m_displayTypeWidget->setVisible(true);
 
-    auto *hint =
-        new QLabel(QStringLiteral("  下拉框数据源同时用于列表显示、编辑页下拉与查询"),
-                   m_displayTypeWidget);
+    auto *hint = new QLabel(QStringLiteral("  下拉框数据源同时用于列表显示、编辑页下拉与查询"),
+                            m_displayTypeWidget);
     form->addRow(QString(), hint);
 
     // 数据源按钮：点击弹出 ComboboxConfigDialog（列表/编辑/查询三处共享同一数据源）
@@ -525,8 +526,8 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
       dlg.setSourceRef(m_cachedSelectSourceFile, m_cachedSelectSourceId);
       dlg.setConfig(m_cachedSelectUrl, m_cachedSelectValueField, m_cachedSelectLabelField);
       dlg.setPagedConfig(m_cachedSelectPaged, m_cachedSelectPageKey, m_cachedSelectPageSizeKey,
-                         m_cachedSelectPageSize, m_cachedSelectSearchTitle, m_cachedSelectSearchField,
-                         m_cachedSelectMethod);
+                         m_cachedSelectPageSize, m_cachedSelectSearchTitle,
+                         m_cachedSelectSearchField, m_cachedSelectMethod);
       dlg.setHttpConfig(m_baseUrl, m_authHeader, m_postData);
       if (dlg.exec() == QDialog::Accepted) {
         m_cachedSelectSourceFile = dlg.sourceFile();
@@ -560,7 +561,7 @@ static const QStringList kTagColorOptions = {
 
 /// 创建颜色选择下拉框（含"自定义..."选项，支持任意十六进制颜色）
 static QComboBox *createColorCombo(QWidget *parent, const QString &currentColor) {
-  auto *combo = new QComboBox(parent);
+  auto *combo = AuiComboBox::create(parent);
   combo->addItems(kTagColorOptions);
   combo->addItem(QStringLiteral("自定义..."));
   // 检查当前颜色是否在预设中
@@ -675,7 +676,7 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
       m_placeholderEdit->setText(m_cachedPlaceholder);
       form->addRow(QStringLiteral("  占位提示:"), m_placeholderEdit);
 
-      m_maxlengthCombo = new QComboBox(m_editStyleWidget);
+      m_maxlengthCombo = AuiComboBox::create(m_editStyleWidget);
       m_maxlengthCombo->addItem(QStringLiteral("不限"), 0);
       for (int ml : {10, 20, 50, 100, 200, 500, 1000}) {
         m_maxlengthCombo->addItem(QString::number(ml), ml);
@@ -697,7 +698,7 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
       break;
     }
     case EditStyle::Float: {
-      m_precisionCombo = new QComboBox(m_editStyleWidget);
+      m_precisionCombo = AuiComboBox::create(m_editStyleWidget);
       for (int p : {0, 1, 2, 3, 4, 6}) {
         m_precisionCombo->addItem(QString::number(p), p);
       }
@@ -717,7 +718,7 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
     }
     case EditStyle::Money: {
       // 金额：小数位数（复用 precision 字段）
-      m_precisionCombo = new QComboBox(m_editStyleWidget);
+      m_precisionCombo = AuiComboBox::create(m_editStyleWidget);
       for (int p : {0, 1, 2, 3, 4, 6}) {
         m_precisionCombo->addItem(QString::number(p), p);
       }
@@ -726,7 +727,7 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
       break;
     }
     case EditStyle::Date: {
-      m_dateFormatCombo = new QComboBox(m_editStyleWidget);
+      m_dateFormatCombo = AuiComboBox::create(m_editStyleWidget);
       m_dateFormatCombo->addItem(QString::fromUtf8(CodeConstants::UiText::kDatetimeFull),
                                  QString::fromLatin1(JsonVueStyle::kDatetime));
       m_dateFormatCombo->addItem(QStringLiteral("时分秒"),
@@ -761,14 +762,13 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
     }
     case EditStyle::Select: {
       // 下拉框：数据源在列表页（显示样式=下拉框）统一配置，列表/编辑/查询三处共享
-      auto *hint =
-          new QLabel(QStringLiteral("  （数据源与列表页一致，在上方显示样式配置）"),
-                     m_editStyleWidget);
+      auto *hint = new QLabel(QStringLiteral("  （数据源与列表页一致，在上方显示样式配置）"),
+                              m_editStyleWidget);
       form->addRow(QString(), hint);
       break;
     }
     case EditStyle::TextArea: {
-      m_textareaRowsCombo = new QComboBox(m_editStyleWidget);
+      m_textareaRowsCombo = AuiComboBox::create(m_editStyleWidget);
       for (int r : {2, 3, 4, 5, 6, 8, 10}) {
         m_textareaRowsCombo->addItem(QString::number(r), r);
       }
@@ -969,8 +969,7 @@ void ColumnStyleDialog::setBoolSourceRef(const QString &file, const QString &id)
   // 控件已存在时直接选中对应项（触发 currentIndexChanged：实时填充 + 锁定）
   if (m_boolSourceCombo) {
     for (int i = 0; i < m_boolSourceCombo->count(); ++i) {
-      if (m_boolSourceCombo->itemData(i).toString() ==
-          file + QStringLiteral("#") + id) {
+      if (m_boolSourceCombo->itemData(i).toString() == file + QStringLiteral("#") + id) {
         m_boolSourceCombo->setCurrentIndex(i);
         break;
       }

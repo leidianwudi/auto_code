@@ -90,10 +90,17 @@ public:
   /**
    * @brief 从文件加载并解析 JSON（自动剥离注释）
    * @param filePath JSON 文件路径
-   * @param error 解析错误信息（可选，传入则填充）
+   * @param error 解析错误信息（可选，传入则填充，offset 已修正为原始文本位置）
    * @return 解析得到的 JSON 文档；文件打开失败返回空文档且 error 置为 NoError
    */
   static QJsonDocument loadFile(const QString &filePath, QJsonParseError *error = nullptr);
+
+  /**
+   * @brief 读取整个文件文本（UTF-8 解码；不解析）
+   * @param filePath 文件路径
+   * @return 文件全文；打开失败返回空串（与 loadFile 的失败语义一致，由调用方判断）
+   */
+  static QString readTextFile(const QString &filePath);
 
   /**
    * @brief 计算 JSON 对象的内容指纹（MD5，紧凑序列化）

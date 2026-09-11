@@ -12,6 +12,7 @@
 
 #include "config_dialog_common.h"
 #include "src/util/common/code_constants.h"
+#include "src/util/ui/component/aui_combo_box.h"
 #include "style_config_dialog.h"
 
 // ════════════════════════════════════════════════════════════
@@ -44,7 +45,7 @@ void QueryStyleDialog::setupUI() {
       break;
     }
     case QueryInputStyle::Date: {
-      m_dateFormatCombo = new QComboBox(this);
+      m_dateFormatCombo = AuiComboBox::create(this);
       m_dateFormatCombo->addItem(QString::fromUtf8(CodeConstants::UiText::kDatetimeFull),
                                  QStringLiteral("datetime"));
       m_dateFormatCombo->addItem(QStringLiteral("时分秒"), QStringLiteral("time"));
