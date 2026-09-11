@@ -10,6 +10,7 @@
 
 #include <QByteArray>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QJsonParseError>
 #include <QString>
 
@@ -93,4 +94,11 @@ public:
    * @return 解析得到的 JSON 文档；文件打开失败返回空文档且 error 置为 NoError
    */
   static QJsonDocument loadFile(const QString &filePath, QJsonParseError *error = nullptr);
+
+  /**
+   * @brief 计算 JSON 对象的内容指纹（MD5，紧凑序列化）
+   * @param obj JSON 对象
+   * @return 指纹哈希；用于判断内容是否变化（如可视化表单跳过重建）
+   */
+  static QByteArray fingerprint(const QJsonObject &obj);
 };

@@ -7,7 +7,6 @@
 
 #include <QCheckBox>
 #include <QComboBox>
-#include <QCryptographicHash>
 #include <QDoubleValidator>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -24,6 +23,9 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <algorithm>
+
+#include "src/util/common/code_constants.h"
+#include "src/util/common/util_json.h"
 
 /// 让标签文本可选中复制（QLabel 默认不可选，不便于复制字段名/说明/标题）
 static inline void makeSelectable(QLabel *l) {
@@ -52,13 +54,26 @@ SchemaFormEditor::SchemaFormEditor(QWidget *parent) : QWidget(parent) {
 void SchemaFormEditor::setSchema(const SchemaValidator &schema) {
   m_schema = schema;
   m_renderHash.clear();  // schema 变化后强制重建表单，避免命中旧哈希跳过
-  if (!m_root.isEmpty() && m_schema.hasRoot()) rebuild();
+  // 无条件重建：schema 失效（无 root）时也要清掉旧表单，显示「未找到可用的 schema」提示
+  rebuild();
+}
+
+void SchemaFormEditor::applySchema(const SchemaValidator &schema, const QString &schemaRef,
+                                   bool skeletonIfEmpty) {
+  const bool wasEmpty = m_root.isEmpty();
+  m_schema = schema;
+  m_renderHash.clear();
+  if (!schemaRef.isEmpty()) m_root[QStringLiteral("$schema")] = schemaRef;
+  // 根对象为空 → 按必填字段生成默认值骨架，让表单立即有完整结构可编辑
+  if (skeletonIfEmpty && wasEmpty && m_schema.hasRoot())
+    fillRequiredSkeleton(m_schema.rootClassName(), QStringList());
+  rebuild();
+  emit contentChanged();
 }
 
 void SchemaFormEditor::loadJson(const QJsonObject &root) {
   // 内容未变化时跳过整树重建（切换代码/可视化来回点击时避免重复构建表单）
-  const QByteArray hash = QCryptographicHash::hash(
-      QJsonDocument(root).toJson(QJsonDocument::Compact), QCryptographicHash::Md5);
+  const QByteArray hash = UtilJson::fingerprint(root);
   if (hash == m_renderHash) {
     m_root = root;
     return;
@@ -274,6 +289,26 @@ QJsonValue defaultForType(const SchemaValidator::SchemaPropInfo &prop) {
 }
 }  // namespace
 
+// 递归为类的必填字段生成默认值骨架（写入 m_root 对应路径）
+void SchemaFormEditor::fillRequiredSkeleton(const QString &cls, const QStringList &path) {
+  SchemaValidator::SchemaClassInfo info;
+  if (!m_schema.classInfo(cls, &info)) return;
+  for (const QString &name : info.required) {
+    auto it = info.properties.find(name);
+    if (it == info.properties.end()) continue;
+    const SchemaValidator::SchemaPropInfo &p = it.value();
+    QStringList childPath = path;
+    childPath.append(name);
+    if (p.type == QLatin1String("object") && !p.className.isEmpty()) {
+      // 嵌套对象：先建空对象占位，再继续填其必填字段
+      setNodeValue(childPath, QJsonValue(QJsonObject()));
+      fillRequiredSkeleton(p.className, childPath);
+      continue;
+    }
+    setNodeValue(childPath, defaultForType(p));
+  }
+}
+
 QWidget *SchemaFormEditor::buildObjectForm(const QString &schemaClass, const QStringList &path,
                                            QString *titleOut, QWidget *titleActions,
                                            bool showTitle) {
@@ -304,17 +339,12 @@ QWidget *SchemaFormEditor::buildObjectForm(const QString &schemaClass, const QSt
   v->setContentsMargins(indent, 4, 6, 6);
   v->setSpacing(6);
 
-  // 标题：根对象显示"根配置"；嵌套对象显示"类名 + 路径摘要"。
+  // 标题：嵌套对象显示"类名 + 路径摘要"；根对象不渲染标题行
+  // （顶部已有「模板」行标识整个表单，根标题行冗余）。
   // showTitle=false（单值 object 字段，如 joinColumn）时不显示嵌套第二行标题，
   // 避免与外层字段名冗余成两行。
-  if (showTitle) {
-    const bool isRoot = path.isEmpty();
-    QString summary;
-    if (isRoot) {
-      summary = QStringLiteral("根配置");
-    } else {
-      summary = schemaClass + QStringLiteral("[") + path.back() + QStringLiteral("]");
-    }
+  if (showTitle && !path.isEmpty()) {
+    const QString summary = schemaClass + QStringLiteral("[") + path.back() + QStringLiteral("]");
     auto *title = new QLabel(summary);
     makeSelectable(title);
     QFont tf = title->font();
@@ -509,13 +539,17 @@ QWidget *SchemaFormEditor::buildPropertyControl(const QString &name,
     headLay->addStretch(1);
     // 字段级移除按钮：删除整个数组/对象字段。放在标题行右侧（与数组行内 ↑↓× 垂直分离，
     // 避免像原先那样与行内按钮同排导致误判/误点）。
-    auto *fieldDel = makeSMButton(QStringLiteral("×"));
-    fieldDel->setToolTip(QStringLiteral("移除该字段"));
-    connect(fieldDel, &QPushButton::clicked, this, [this, path]() {
-      removeNodeValue(path);
-      rebuild();
-    });
-    headLay->addWidget(fieldDel);
+    // 必填字段不提供移除按钮：schema 要求该字段必须存在，移除后重建会立即重新渲染，
+    // 点击看起来毫无效果，徒增困惑；清空内容用行内 × 即可。
+    if (!req) {
+      auto *fieldDel = makeSMButton(QStringLiteral("×"));
+      fieldDel->setToolTip(QStringLiteral("移除该字段"));
+      connect(fieldDel, &QPushButton::clicked, this, [this, path]() {
+        removeNodeValue(path);
+        rebuild();
+      });
+      headLay->addWidget(fieldDel);
+    }
     placeLabelCol(head);
   } else {
     placeLabelCol(makeLabelColumn(name, prop.description, req));

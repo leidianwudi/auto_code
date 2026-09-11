@@ -41,21 +41,20 @@ protected:
     QComboBox::paintEvent(e);
 
     // ── 2. 在 drop-down 区域绘制向下三角箭头 ──
+    // 可编辑/不可编辑模式均绘制：可编辑时输入框只占编辑区，
+    // drop-down 区域仍需箭头提示「可下拉」（否则可编辑下拉框没有任何箭头）
     QStyleOptionComboBox opt;
     initStyleOption(&opt);
 
-    // 只有非可编辑模式下才绘制箭头
-    if (!opt.editable) {
-      QPainter painter(this);
+    QPainter painter(this);
 
-      // 获取 drop-down 按钮区域
-      QRect arrowRect =
-          style()->subControlRect(QStyle::CC_ComboBox, &opt, QStyle::SC_ComboBoxArrow, this);
+    // 获取 drop-down 按钮区域
+    QRect arrowRect =
+        style()->subControlRect(QStyle::CC_ComboBox, &opt, QStyle::SC_ComboBoxArrow, this);
 
-      // 在 drop-down 区域中央绘制一个小尺寸倒三角（固定尺寸，避免随区域收缩变形）
-      const QPointF c(arrowRect.center().x(), arrowRect.center().y() + 0.5);
-      AuiStyle::drawDownArrow(painter, c, AuiStyle::textColor());
-    }
+    // 在 drop-down 区域中央绘制一个小尺寸倒三角（固定尺寸，避免随区域收缩变形）
+    const QPointF c(arrowRect.center().x(), arrowRect.center().y() + 0.5);
+    AuiStyle::drawDownArrow(painter, c, AuiStyle::textColor());
   }
 };
 

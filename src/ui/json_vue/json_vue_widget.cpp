@@ -6,9 +6,11 @@
 #include "json_vue_widget.h"
 
 #include <QFile>
+#include <QJsonDocument>
 #include <QTextStream>
 
 #include "json_vue_editor.h"
+#include "src/util/common/util_json.h"
 #include "src/util/ui/code/code_editor.h"
 #include "src/util/ui/highlighter/light_json.h"
 
@@ -88,7 +90,12 @@ void JsonVueWidget::syncCodeToVisual() {
   QString jsonStr = m_editor->toPlainText();
   QString error;
   JsonVueConfig config = JsonVueConfig::fromJsonString(jsonStr, &error);
-  m_visual->loadConfig(config);
+  // 内容与可视化页当前一致时跳过整表重建：反复切换/来回点击时不卡顿
+  const QByteArray hash = UtilJson::fingerprint(config.toJsonObject());
+  if (hash != m_lastVisualHash) {
+    m_visual->loadConfig(config);
+    m_lastVisualHash = hash;
+  }
   m_syncing = false;
 }
 
@@ -96,8 +103,12 @@ void JsonVueWidget::syncVisualToCode() {
   m_syncing = true;
   // 以界面配置为主、磁盘原文为底做保真合并，再序列化写回代码编辑器：
   // 避免可视化未表达的字段被丢弃 / 界面未加载时把整份配置清空
-  QString jsonStr = JsonVueConfig::toJsonString(m_visual->collectMergedObject());
-  m_editor->setPlainText(jsonStr);
+  QJsonObject merged = m_visual->collectMergedObject();
+  QString jsonStr = JsonVueConfig::toJsonString(merged);
+  // 内容未变时不重设文本：避免无意义的 document 变更（误标修改、触发重排）
+  if (jsonStr != m_editor->toPlainText()) m_editor->setPlainText(jsonStr);
+  // 同步可视化页内容指纹（下次切回时据此跳过重载）
+  m_lastVisualHash = UtilJson::fingerprint(merged);
   m_syncing = false;
 }
 

@@ -65,3 +65,17 @@ QString PathResolver::resolveImportPath(const QString &importPath, const QString
   }
   return QDir::cleanPath(absPath);
 }
+
+QString PathResolver::resolveSchemaPath(const QString &jsonFilePath, const QString &schemaRef) {
+  QString schemaPath = schemaRef;
+  if (schemaRef.startsWith(QLatin1Char('/'))) {
+    // / 开头 → 项目源码目录 file/ 下（公共 schema，供所有 json 文件共享）
+    schemaPath = QStringLiteral(PROJECT_SOURCE_DIR) +
+                 QString::fromUtf8(CodeConstants::Paths::kFileDirName) + schemaRef;
+  } else if (QFileInfo(schemaRef).isRelative()) {
+    // 相对路径 → 基于 json 文件所在目录
+    schemaPath = QFileInfo(jsonFilePath).absolutePath() + QLatin1Char('/') + schemaRef;
+  }
+  // 其他情况为绝对路径，原样使用
+  return QDir::cleanPath(schemaPath);
+}

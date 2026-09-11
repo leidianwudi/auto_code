@@ -35,8 +35,12 @@ public:
   explicit SchemaFormEditor(QWidget *parent = nullptr);
   ~SchemaFormEditor() override = default;
 
-  /// 设置 schema 定义（拷贝；供渲染控件元数据）
+  /// 设置 schema 定义（拷贝；供渲染控件元数据），并按当前内容重建表单
   void setSchema(const SchemaValidator &schema);
+
+  /// 应用新模板：切换 schema、把 $schema 引用写入根对象；
+  /// 根对象为空时按必填字段生成默认值骨架（skeletonIfEmpty=true）
+  void applySchema(const SchemaValidator &schema, const QString &schemaRef, bool skeletonIfEmpty);
 
   /// 加载一份 JSON 对象（含 $schema、schema 认识的字段与未知字段），并重建表单
   void loadJson(const QJsonObject &root);
@@ -61,12 +65,13 @@ private:
   void moveArrayItem(const QStringList &arrayPath, int index, int delta);
 
   // —— 表单构建 ——
-  void rebuild();                                    ///< 清空并重建整棵表单（结构性变化后用）
+  void rebuild();  ///< 清空并重建整棵表单（结构性变化后用）
   QWidget *buildObjectForm(const QString &schemaClass, const QStringList &path, QString *titleOut,
                            QWidget *titleActions = nullptr, bool showTitle = true);
   QWidget *buildPropertyControl(const QString &name, const SchemaValidator::SchemaPropInfo &prop,
                                 const QStringList &parentPath, const QStringList &required);
   QWidget *makeRawJsonFallback(const QStringList &path, const QJsonValue &cur);
+  void fillRequiredSkeleton(const QString &cls, const QStringList &path);  ///< 递归生成必填字段骨架
 
   QStringList propertyPath(const QStringList &parentPath, const QString &name) const {
     QStringList p = parentPath;
@@ -75,9 +80,9 @@ private:
   }
 
 private:
-  SchemaValidator m_schema;  ///< schema 定义（渲染元数据）
-  QJsonObject m_root;        ///< 编辑中的全量 JSON
-  QWidget *m_content = nullptr;   ///< 滚动区内承载表单的内容控件
-  bool m_busy = false;            ///< 正在重建/加载，屏蔽信号
-  QByteArray m_renderHash;   ///< 已渲染表单对应的 JSON 指纹（内容未变则跳过重建）
+  SchemaValidator m_schema;      ///< schema 定义（渲染元数据）
+  QJsonObject m_root;            ///< 编辑中的全量 JSON
+  QWidget *m_content = nullptr;  ///< 滚动区内承载表单的内容控件
+  bool m_busy = false;           ///< 正在重建/加载，屏蔽信号
+  QByteArray m_renderHash;       ///< 已渲染表单对应的 JSON 指纹（内容未变则跳过重建）
 };

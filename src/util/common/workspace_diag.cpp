@@ -19,6 +19,7 @@
 #include "src/engine/script/ac_validator.h"
 #include "src/engine/tpl/tpl_validator.h"
 #include "src/util/common/code_constants.h"
+#include "src/util/common/path_resolver.h"
 #include "src/util/common/util_json.h"
 #include "src/util/common/workspace_iter.h"
 
@@ -54,20 +55,6 @@ int findSchemaKeyLine(const QString &text, const QString &key) {
   return line;
 }
 
-/// 解析 $schema 路径（与 CodeEditor 中一致）：
-/// 以 / 开头 → 基于项目根目录（PROJECT_SOURCE_DIR/file）；相对路径 → 基于文件所在目录
-QString resolveSchemaPath(const QString &filePath, const QString &schemaRef) {
-  QString schemaPath = schemaRef;
-  if (schemaRef.startsWith(QLatin1Char('/'))) {
-    schemaPath = QStringLiteral(PROJECT_SOURCE_DIR) +
-                 QString::fromUtf8(CodeConstants::Paths::kFileDirName) + schemaRef;
-  } else if (QFileInfo(schemaRef).isRelative()) {
-    QFileInfo fi(filePath);
-    schemaPath = fi.absolutePath() + QLatin1Char('/') + schemaRef;
-  }
-  return QDir::cleanPath(schemaPath);
-}
-
 /// 读取文件内容（UTF-8）
 QString readFileText(const QString &filePath) {
   QFile f(filePath);
@@ -94,7 +81,7 @@ QVector<ValidationResult> validateJsonFile(const QString &filePath, const QStrin
   if (schemaRef.isEmpty()) return results;
 
   SchemaValidator schema;
-  if (!schema.load(resolveSchemaPath(filePath, schemaRef))) return results;
+  if (!schema.load(PathResolver::resolveSchemaPath(filePath, schemaRef))) return results;
   if (!schema.hasRoot()) return results;
 
   const QVector<QString> errs = schema.validateDocument(obj);
@@ -117,16 +104,16 @@ QStringList collectWorkspaceFiles(const QString &rootDir) {
   return out;
 }
 
-QVector<WorkspaceFileDiag> scanWorkspaceDiagnostics(
-    const QStringList &filePaths, const QHash<QString, QString> &liveContents) {
+QVector<WorkspaceFileDiag> scanWorkspaceDiagnostics(const QStringList &filePaths,
+                                                    const QHash<QString, QString> &liveContents) {
   QVector<WorkspaceFileDiag> all;
   all.reserve(filePaths.size());
   for (const QString &fp : filePaths) {
     WorkspaceFileDiag item;
     item.filePath = fp;
-    // 已打开文件：使用实时内存内容（VSCode 行为，诊断基于当前缓冲，避免重命名后磁盘快照不一致假报错）
-    const QString source =
-        liveContents.contains(fp) ? liveContents.value(fp) : readFileText(fp);
+    // 已打开文件：使用实时内存内容（VSCode
+    // 行为，诊断基于当前缓冲，避免重命名后磁盘快照不一致假报错）
+    const QString source = liveContents.contains(fp) ? liveContents.value(fp) : readFileText(fp);
     if (source.isEmpty()) {
       // 空文件/读取失败：不产出诊断（空文件本就没有错误）
       all.append(item);

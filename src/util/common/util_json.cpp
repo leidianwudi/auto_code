@@ -5,6 +5,7 @@
 
 #include "util_json.h"
 
+#include <QCryptographicHash>
 #include <QFile>
 
 // ──────────────────────────────────────────────────────────────
@@ -660,4 +661,10 @@ QJsonDocument UtilJson::loadFile(const QString &filePath, QJsonParseError *error
   QByteArray data = f.readAll();
   f.close();
   return fromJson(data, error);
+}
+
+// fingerprint — JSON 对象内容指纹（MD5，紧凑序列化）
+QByteArray UtilJson::fingerprint(const QJsonObject &obj) {
+  return QCryptographicHash::hash(QJsonDocument(obj).toJson(QJsonDocument::Compact),
+                                  QCryptographicHash::Md5);
 }

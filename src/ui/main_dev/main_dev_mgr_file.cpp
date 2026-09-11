@@ -33,34 +33,6 @@
 //  创建 / 打开编辑器
 // ──────────────────────────────────────────────────────────────
 
-/// 从 JSON/JSON5 文本中解析 $schema 引用值；找不到返回空串。
-/// 兼容 `"$schema": "path"`、`$schema: 'path'`、`$schema: path` 等写法（key 可带可不带引号）。
-namespace {
-QString extractSchemaRef(const QString &content) {
-  // $schema 键前后的可选引号、冒号、值前的可选引号都允许；捕获去掉引号的值
-  QRegularExpression re(QStringLiteral("[\"']?\\$schema[\"']?\\s*:\\s*[\"']?([^\"'\\s,]+)"),
-                        QRegularExpression::CaseInsensitiveOption);
-  QRegularExpressionMatch m = re.match(content);
-  return m.hasMatch() ? m.captured(1) : QString();
-}
-
-/// 解析 $schema 路径（相对/绝对），与 CodeEditor 中一致：
-/// 以 / 开头 → 基于项目根目录（PROJECT_SOURCE_DIR/file）；相对路径 → 基于文件所在目录
-QString resolveSchemaPathFor(const QString &filePath, const QString &schemaRef) {
-  QString schemaPath = schemaRef;
-  if (schemaRef.startsWith(QLatin1Char('/'))) {
-    schemaPath = QStringLiteral(PROJECT_SOURCE_DIR) +
-                 QString::fromUtf8(CodeConstants::Paths::kFileDirName) + schemaRef;
-  } else {
-    QFileInfo fi(filePath);
-    if (fi.absoluteDir().exists()) {
-      schemaPath = fi.absolutePath() + QLatin1Char('/') + schemaRef;
-    }
-  }
-  return QDir::cleanPath(schemaPath);
-}
-}  // namespace
-
 CodeEditor *MainDevMgr::createEditorForFile(const QString &filePath) {
   auto *editor = new CodeEditor;
 
@@ -152,25 +124,20 @@ QWidget *MainDevMgr::createEditorTab(const QString &filePath, const QString &con
     plain->setPlainText(content);
     editor = plain;
 
-    // λ schema 引用的 JSON：用可切换「代码/可视化」的 SchemaJsonWidget 包装
+    // 所有 .json 统一用 SchemaJsonWidget 包装：schema 由包装器按 $schema 解析加载；
+    // 空文件/无 $schema 也可视化（表单顶部模板下拉选择 .schema.json 后编辑）
     const bool isJson = filePath.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive);
     if (isJson) {
-      const QString schemaRef = extractSchemaRef(content);
-      if (!schemaRef.isEmpty()) {
-        SchemaValidator schema;
-        if (schema.load(resolveSchemaPathFor(filePath, schemaRef)) && schema.hasRoot()) {
-          auto *sjw = new SchemaJsonWidget;
-          sjw->codeEditor()->setPlainText(content);
-          sjw->setSchema(schema);
-          editor = sjw->codeEditor();
-          tabWidget = sjw;
-          // 可视化按钮生效时，自动以可视化方式打开
-          if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) sjw->switchToVisual();
-          // 普通 editor 已被包装器内的 CodeEditor 取代，释放避免泄漏
-          delete plain;
-          plain = nullptr;
-        }
-      }
+      auto *sjw = new SchemaJsonWidget;
+      sjw->setSourceFilePath(filePath);
+      sjw->codeEditor()->setPlainText(content);
+      editor = sjw->codeEditor();
+      tabWidget = sjw;
+      // 可视化按钮生效时，自动以可视化方式打开
+      if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) sjw->switchToVisual();
+      // 普通 editor 已被包装器内的 CodeEditor 取代，释放避免泄漏
+      delete plain;
+      plain = nullptr;
     }
     if (!tabWidget) tabWidget = editor;
   }

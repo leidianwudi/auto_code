@@ -37,4 +37,16 @@ public:
   /// @param scriptPath 当前脚本路径（作为相对路径基准）
   /// @return 规范化后的绝对路径
   static QString resolveImportPath(const QString &importPath, const QString &scriptPath);
+
+  /// @brief 解析 json 文件中 $schema 引用为 schema 文件绝对路径
+  ///
+  /// 统一解析规则（CodeEditor 校验 / 工作区诊断 / 可视化编辑共用，避免各自实现漂移）：
+  ///   - 以 / 开头 → 项目源码目录 file/ 下（公共 schema，供所有 json 共享）
+  ///   - 相对路径   → 基于 json 文件所在目录
+  ///   - 其他（绝对路径）→ 原样使用
+  ///
+  /// @param jsonFilePath 引用方 json 文件路径（相对路径解析基准）
+  /// @param schemaRef $schema 引用值
+  /// @return 规范化后的 schema 文件绝对路径
+  static QString resolveSchemaPath(const QString &jsonFilePath, const QString &schemaRef);
 };

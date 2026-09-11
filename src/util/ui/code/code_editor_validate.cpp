@@ -22,6 +22,7 @@
 #include "src/engine/script/ac_validator.h"
 #include "src/engine/tpl/tpl_validator.h"
 #include "src/util/common/code_constants.h"
+#include "src/util/common/path_resolver.h"
 #include "src/util/common/util_json.h"
 #include "src/util/ui/code/format_code.h"
 
@@ -196,18 +197,11 @@ void CodeEditor::runSchemaValidation(const QJsonObject &doc, QVector<ValidationR
     return;
   }
 
-  // 解析 schema 路径：
-  //   - 以 / 开头 → 基于项目根目录（PROJECT_SOURCE_DIR/file），供所有 json 文件复制使用
+  // 解析 schema 路径（统一走 PathResolver::resolveSchemaPath）：
+  //   - 以 / 开头 → 项目根目录 file/，供所有 json 文件共享
   //   - 相对路径   → 基于当前文件所在目录
-  QString schemaPath = schemaRef;
-  if (schemaRef.startsWith(QLatin1Char('/'))) {
-    schemaPath = QStringLiteral(PROJECT_SOURCE_DIR) +
-                 QString::fromUtf8(CodeConstants::Paths::kFileDirName) + schemaRef;
-  } else if (QFileInfo(schemaRef).isRelative()) {
-    QFileInfo fi(objectName());
-    schemaPath = fi.absolutePath() + QLatin1Char('/') + schemaRef;
-  }
-  schemaPath = QDir::cleanPath(schemaPath);
+  //   - 绝对路径   → 原样使用
+  const QString schemaPath = PathResolver::resolveSchemaPath(objectName(), schemaRef);
 
   // 缓存加载：路径变化才重新加载
   if (schemaPath != m_schemaPath || !m_schemaLoaded) {

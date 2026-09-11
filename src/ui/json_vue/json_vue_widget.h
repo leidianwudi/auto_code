@@ -86,4 +86,5 @@ private:
   CodeEditor *m_editor = nullptr;     ///< 代码编辑器
   JsonVueEditor *m_visual = nullptr;  ///< 可视化编辑器
   bool m_syncing = false;             ///< 同步中标志，避免循环
+  QByteArray m_lastVisualHash;        ///< 可视化页当前内容的指纹（未变化则跳过重载，避免反复切换卡顿）
 };
