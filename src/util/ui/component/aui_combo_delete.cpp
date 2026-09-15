@@ -9,11 +9,11 @@
 #include "aui_combo_delete.h"
 
 #include <QAbstractItemView>
-#include <QFrame>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
 #include <QStyledItemDelegate>
+#include <QTimer>
 
 #include "aui_style.h"
 
@@ -29,8 +29,7 @@
  */
 class AuiComboDeleteDelegate : public QStyledItemDelegate {
 public:
-  explicit AuiComboDeleteDelegate(const AuiComboDelete *combo)
-      : m_combo(combo) {}
+  explicit AuiComboDeleteDelegate(const AuiComboDelete *combo) : m_combo(combo) {}
 
 protected:
   void paint(QPainter *p, const QStyleOptionViewItem &opt,
@@ -124,9 +123,7 @@ bool AuiComboDelete::eventFilter(QObject *watched, QEvent *event) {
       const int row = idx.isValid() ? idx.row() : -1;
       // 只有确实位于删除按钮区域内才视为悬停
       const QRect itemRect = idx.isValid() ? v->visualRect(idx) : QRect();
-      const int hover = (!itemRect.isNull() && buttonRect(itemRect).contains(me->pos()))
-                            ? row
-                            : -1;
+      const int hover = (!itemRect.isNull() && buttonRect(itemRect).contains(me->pos())) ? row : -1;
       if (hover != m_hoverRow) {
         m_hoverRow = hover;
         view()->viewport()->update();  // 重绘以刷新按钮高亮
@@ -150,12 +147,16 @@ bool AuiComboDelete::eventFilter(QObject *watched, QEvent *event) {
           // 点击删除按钮：只发信号，不改变当前选中项
           m_hoverRow = -1;
           emit itemDeleteRequested(idx.row());
-          // 保持弹层展开：Qt 的 popup 仅在 showEvent 时按项数计算高度，
-          // 删除后需手动按新项数重设弹层尺寸，否则底部残留空白。
-          if (QFrame *popup = qobject_cast<QFrame *>(view()->parentWidget())) {
-            QSize s = view()->sizeHint().expandedTo(popup->minimumSize());
-            popup->setFixedSize(s);
-          }
+          // 保持弹层展开：Qt 仅在 showPopup() 时按行数计算弹层尺寸，删除后需关闭并
+          // 重开弹层让其按新项数重算几何，否则底部残留空白。
+          // 注意：不能用 setFixedSize(view()->sizeHint()) 手动设尺寸 —— QListView 未
+          // 重写 sizeHint()，回退到 QAbstractScrollArea::sizeHint()，在默认
+          // AdjustIgnored 策略下恒返回 (256,192)，弹层会被撑大；且 setFixedSize 同时
+          // 抬高容器 minimumSize，showPopup 时 expandedTo(minimumSize) 使其无法缩回。
+          hidePopup();
+          QTimer::singleShot(0, this, [this]() {
+            if (count() > 0) showPopup();  // 项删光后不再弹出
+          });
           return true;  // 消费该事件，阻止选中该项
         }
       }
