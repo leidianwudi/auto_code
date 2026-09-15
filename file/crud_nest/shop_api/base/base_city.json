@@ -1,0 +1,15 @@
+{
+    "$schema": "/crud_nest/template/tool/param.schema.json",
+    "tables": [
+        {
+            "modelName": "base/base_city",
+            "selCols": [
+                "code",
+                "name_zh",
+                "name_en",
+                "enable"
+            ],
+            "tableName": "base_city"
+        }
+    ]
+}
