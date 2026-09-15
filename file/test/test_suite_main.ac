@@ -13,7 +13,7 @@
 // 9. 控制流（if/for/while/switch）
 // 10. 异常处理
 // 11. 闭包与高阶函数
-// 12. 类型系统（可选参数、默认值、类型推断）
+// 12. 类型系统（可选参数 ? 与 = 默认值、类型推断）
 // 13. call() 系统函数调用（str 字符串类）
 // 14. 类型系统：Int / Float / Double / Boolean
 // 15. 内置函数：路径与工具（basename/fileName/formatPath/merge/scriptDir）
@@ -101,13 +101,11 @@ function power(base: Number, exp: Number): Number {
 }
 
 // 字符串处理函数
-function greet(name: String, greeting: String): String {
-  greeting = greeting || "Hello";  // 默认值替代方案
-  return `${greeting}, ${name}! 欢迎使用 AutoCode`;
+function greet(name: String, greeting: String = "Hello"): String {
+  return `${greeting}, ${name}! 欢迎使用 AutoCode`;  // 缺省 greeting 时使用 = 默认值
 }
 
-function formatNumber(num: Number, decimals: Number): String {
-  decimals = decimals || 2;  // 默认值替代方案
+function formatNumber(num: Number, decimals: Number = 2): String {
   // 简单的数字格式化（不使用 toFixed）
   let str = "" + num;
   let dotPos = str.indexOf(".");
@@ -130,6 +128,32 @@ function formatNumber(num: Number, decimals: Number): String {
     }
   }
   return str;
+}
+
+// 参数默认值（= 字面量：数字/字符串/布尔/负数）
+function defaultValueSum(a: Number = 10, b: String = "hi", c: Boolean = true, d: Number = -2.5): Number {
+  let total: Number = a + b.length + d;
+  if (c) {
+    total = total + 1;
+  }
+  return total;
+}
+
+// 显式 = null 默认值：缺省时为 null，内部判断
+function nullDefault(x: Number = null, fallback: Number = 7): Number {
+  if (x == null) {
+    return fallback;
+  }
+  return x;
+}
+
+// 可选参数混用：? 标注与 = 默认值
+function mixOptional(name: String, prefix?: String, suffix: String = "!"): String {
+  let p: String = "Hello";
+  if (prefix != null) {
+    p = prefix;
+  }
+  return `${p}, ${name}${suffix}`;
 }
 
 function capitalize(str: String): String {
@@ -583,13 +607,45 @@ main {
   printLog("\n--- 2. 字符串处理测试 ---");
 
   let greetMsg = greet("World", "Hello");
-  printLog(`greet("World") = "${greetMsg}"`);
+  printLog(`greet("World", "Hello") = "${greetMsg}"`);
 
   let customGreet = greet("Alice", "Hi");
   printLog(`greet("Alice", "Hi") = "${customGreet}"`);
 
   let formattedNum = formatNumber(3.1415926, 4);
   printLog(`formatNumber(3.1415926, 4) = "${formattedNum}"`);
+
+  // ── 2.1 参数默认值（= 字面量）测试 ──
+  printLog("\n--- 2.1 参数默认值测试 ---");
+
+  // 缺省 greeting：使用 = "Hello" 默认值
+  let defaultGreet = greet("World");
+  printLog(`greet("World") = "${defaultGreet}"`);
+  assert(defaultGreet == "Hello, World! 欢迎使用 AutoCode", "默认值 greet 测试失败");
+
+  // 缺省 decimals：使用 = 2 默认值
+  let defaultFormat = formatNumber(3.1415926);
+  printLog(`formatNumber(3.1415926) = "${defaultFormat}"`);
+  assert(defaultFormat == "3.14", "默认值 formatNumber 测试失败");
+
+  // = 字面量默认值（数字/字符串/布尔/负数）：10 + 2 - 2.5 + 1 = 10.5
+  let sumAllDefaults = defaultValueSum();
+  printLog(`defaultValueSum() = ${sumAllDefaults}`);
+  assert(sumAllDefaults == 10.5, "参数默认值测试失败");
+
+  // 部分实参：仅传 a（1 + 2 - 2.5 + 1 = 1.5）
+  let sumOneArg = defaultValueSum(1);
+  printLog(`defaultValueSum(1) = ${sumOneArg}`);
+  assert(sumOneArg == 1.5, "参数默认值(部分实参)测试失败");
+
+  // 显式 = null 默认值：缺省时 x 为 null，走 fallback
+  assert(nullDefault() == 7, "null 默认值测试失败");
+  assert(nullDefault(3) == 3, "null 默认值(传实参)测试失败");
+
+  // ? 可选与 = 默认值混用
+  assert(mixOptional("AC") == "Hello, AC!", "可选参数混用测试失败");
+  assert(mixOptional("AC", "Hi") == "Hi, AC!", "可选参数混用测试失败");
+  assert(mixOptional("AC", "Hi", "?") == "Hi, AC?", "可选参数混用测试失败");
 
   let capitalized = capitalize("hello world");
   printLog(`capitalize("hello world") = "${capitalized}"`);

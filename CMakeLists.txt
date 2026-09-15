@@ -354,8 +354,15 @@ target_link_libraries(gen_icon PRIVATE Qt::Core Qt::Widgets)
 # ════════════════════════════════════════════════════════════
 add_executable(auto_code_tests EXCLUDE_FROM_ALL
     tests/test_json_utils.cpp
+    tests/test_ac_param_default.cpp
     src/util/common/util_json.cpp
     src/util/common/path_resolver.cpp
+    # AC 脚本解析器（参数默认值语法测试）
+    src/engine/script/ac_lexer.cpp
+    src/engine/script/ac_parser.cpp
+    src/engine/script/ac_parser_stmt.cpp
+    src/engine/script/ac_parser_expr.cpp
+    src/engine/script/ac_type.cpp
 )
 target_include_directories(auto_code_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(auto_code_tests PRIVATE

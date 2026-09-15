@@ -111,12 +111,16 @@ static void testResolveSchemaPath() {
   CHECK(abs == QStringLiteral("d:/schemas/s.schema.json"));
 }
 
+/// AC 参数默认值语法测试（tests/test_ac_param_default.cpp），返回失败数
+int runAcParamDefaultTests();
+
 int main() {
   // 所测接口均不依赖 QCoreApplication 实例，无需构造应用对象
   testJson5Parsing();
   testFingerprint();
   testResolveSchemaPath();
+  const int extraFailed = runAcParamDefaultTests();
 
-  std::printf("%d checks, %d failed\n", g_total, g_failed);
-  return g_failed == 0 ? 0 : 1;
+  std::printf("%d checks, %d failed\n", g_total, g_failed + extraFailed);
+  return (g_failed + extraFailed) == 0 ? 0 : 1;
 }

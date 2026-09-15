@@ -1,0 +1,430 @@
+/// @file app_module.ac — app.module.ts 增量更新工具
+/// ----------------------------------------------------------------------------
+/// 说明：
+///   把生成的业务模块增量注册进 NestJS 项目的 app.module.ts，使表服务生效。
+///   app.module.ts 是"生成器与开发者共用"的文件，不能整文件覆盖，
+///   采用 needle 标记 + 幂等插入（JHipster 模式）。每张表注册 2 个类：
+///
+///     实体类（EnXxx）    → TypeOrmModule.forRootAsync 的 entities: [...] 数组
+///                          （全局实体列表，缺了 TypeORM 不识别该表）
+///     模块类（XxxModule） → @Module 的 imports: [...] 数组
+///                          （模块挂载，缺了服务不生效）
+///
+///   对应三对 needle 标记（识别按子串匹配，标记行尾可带说明文字）：
+///
+///     import 区标记：  // {autocode:imports}   ... // {/autocode:imports}
+///     实体区标记：     // {autocode:entities}  ... // {/autocode:entities}
+///     模块区标记：     // {autocode:modules}   ... // {/autocode:modules}
+///
+///   生成器只把新内容插入标记之间，标记外的代码永不触碰。
+///
+///   幂等策略（全文件级，手写内容也能识别）：
+///     - import 是否已存在：整个文件找 'import 路径'（带引号匹配，路径唯一）；
+///     - 注册项是否已存在：整个文件按整行精确匹配（"类名," 独占一行）。
+///     注意：手工添加注册项时应让类名独占一行，不要与其它代码同列，
+///     否则整行匹配识别不到，会插入重复项导致编译错误。
+///
+///   文件缺少标记时自动"补种"：
+///     - import 区：最后一个 import 语句之后；
+///     - 模块区：@Module( 之后第一个 imports 数组（括号深度配对定位闭括号）；
+///     - 实体区：第一个 entities: [ 数组（可选区域；找不到只跳过实体注册，
+///       模块注册照常，不报错——项目用 forFeature 时没有全局实体数组）。
+///     数组定位采用括号深度配对（跳过字符串字面量与 // 行注释），
+///     能正确处理 forRootAsync 等嵌套数组结构。
+/// ----------------------------------------------------------------------------
+
+/// @brief 在行数组中查找包含指定子串的第一行索引
+/// @param lines 行数组
+/// @param needle 子串
+/// @return 行索引（0 起），找不到返回 -1
+export function findLineWith(lines: String[], needle: String): Number {
+  for (let i = 0; i < lines.length; i = i + 1) {
+    if (lines[i].indexOf(needle) >= 0) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/// @brief 取行首空格串（用于让插入行与现有代码缩进对齐）
+export function indentOf(line: String): String {
+  let spaces: String = "";
+  for (let i = 0; i < line.length; i = i + 1) {
+    if (line[i] != " ") {
+      return spaces;
+    }
+    spaces = spaces + " ";
+  }
+  return spaces;
+}
+
+/// @brief 括号深度配对：定位起始行 [ 数组的匹配闭括号 ] 所在行
+///        跳过 '...'/"..." 字符串字面量（含 \' 转义）与 // 行注释；
+///        不处理模板字符串与正则字面量（app.module.ts 中不会出现）
+/// @param lines 行数组
+/// @param startLine 起始行索引（该行含开括号 [，如 "imports: ["）
+/// @return 闭括号所在行索引；配对失败返回 -1
+export function findArrayCloseLine(lines: String[], startLine: Number): Number {
+  let depth: Number = 0;
+  let opened: Bool = false;
+  let inSingle: Bool = false;
+  let inDouble: Bool = false;
+  for (let i = startLine; i < lines.length; i = i + 1) {
+    let line: String = lines[i];
+    for (let j = 0; j < line.length; j = j + 1) {
+      let c: String = line[j];
+      if (inSingle) {
+        if (c == "\\") {
+          j = j + 1;  // 跳过转义字符（如 \'）
+        } else if (c == "'") {
+          inSingle = false;
+        }
+      } else if (inDouble) {
+        if (c == "\\") {
+          j = j + 1;
+        } else if (c == "\"") {
+          inDouble = false;
+        }
+      } else {
+        if (c == "'") {
+          inSingle = true;
+        } else if (c == "\"") {
+          inDouble = true;
+        } else if (c == "/" && j + 1 < line.length && line[j + 1] == "/") {
+          break;  // 行注释：剩余内容不参与配对
+        } else if (c == "[") {
+          depth = depth + 1;
+          opened = true;
+        } else if (c == "]") {
+          depth = depth - 1;
+          if (opened && depth == 0) {
+            return i;
+          }
+        }
+      }
+    }
+  }
+  return -1;
+}
+
+/// @brief 在 startIdx 行的数组内插入一对标记
+///        多行数组：括号配对找闭行，标记插在数组项位置（闭行缩进 + 2）；
+///        同行空数组（[ 与 ] 间只有空白）：展开为多行再插标记；
+///        同行非空数组：拒绝处理（返回空数组，避免拆行丢内容）
+/// @return 插入后的行数组；失败返回空数组
+export function insertNeedlesInArray(lines: String[], beginMark: String, endMark: String,
+                                     startIdx: Number): String[] {
+  let line: String = lines[startIdx];
+  let openPos: Number = line.indexOf("[");
+  if (openPos < 0) {
+    return [];
+  }
+  let closePos: Number = line.indexOf("]", openPos + 1);
+  let out: String[] = [];
+
+  // ── 情形 1：[ 与 ] 同行 ──
+  if (closePos >= 0) {
+    let inner: String = line.substring(openPos + 1, closePos).trim();
+    if (inner.length > 0) {
+      return [];  // 同行非空数组不拆行（避免丢内容），交给调用方报错
+    }
+    let ind: String = indentOf(line);
+    let prefix: String = line.substring(0, openPos + 1);  // 行首到 "["（含）
+    for (let i = 0; i < lines.length; i = i + 1) {
+      if (i == startIdx) {
+        out.push(prefix);
+        out.push(ind + "  " + beginMark);
+        out.push(ind + "  " + endMark);
+        out.push(ind + "],");
+        continue;
+      }
+      out.push(lines[i]);
+    }
+    return out;
+  }
+
+  // ── 情形 2：多行数组 → 括号配对找闭行 ──
+  let closeIdx: Number = findArrayCloseLine(lines, startIdx);
+  if (closeIdx < 0) {
+    return [];
+  }
+  // 数组项缩进 = 闭行（"]"）缩进 + 2；标记与数组项同缩进
+  let itemInd: String = indentOf(lines[closeIdx]) + "  ";
+  for (let i = 0; i < lines.length; i = i + 1) {
+    if (i == startIdx) {
+      out.push(lines[i]);
+      out.push(itemInd + beginMark);
+      continue;
+    }
+    if (i == closeIdx) {
+      out.push(itemInd + endMark);
+      out.push(lines[i]);
+      continue;
+    }
+    out.push(lines[i]);
+  }
+  return out;
+}
+
+/// @brief 为缺少 import/modules 标记的 app.module.ts 自动补种
+///        - import 区：最后一个 import 语句之后（无 import 则放最前）；
+///        - 模块区：@Module( 之后第一个 imports 数组（括号配对定位）。
+///        实体区标记由调用方按可选区域单独处理（insertNeedlesInArray）。
+/// @return 补种后的行数组；结构识别失败返回空数组（调用方据此报错）
+export function bootstrapNeedles(lines: String[], nImpBegin: String, nImpEnd: String,
+                                 nModBegin: String, nModEnd: String): String[] {
+  // 插入的标记行统一带说明文字（行尾注释不影响子串识别），提醒不要误删
+  let note: String = " ← AutoCode 增量更新（幂等收敛）占位标记，请勿删除";
+  let impBeginMark: String = nImpBegin + note;
+  let impEndMark: String = nImpEnd + note;
+  let modBeginMark: String = nModBegin + note;
+  let modEndMark: String = nModEnd + note;
+
+  // ── A. imports 标记插入点：最后一个 import 语句之后（无 import 则放最前）──
+  let lastImportIdx: Number = -1;
+  for (let i = 0; i < lines.length; i = i + 1) {
+    let t: String = lines[i].trim();
+    if (t.startsWith("import ") && t.endsWith(";")) {
+      lastImportIdx = i;
+    }
+  }
+
+  // ── B. modules 标记插入点：@Module( 之后第一个 imports 数组 ──
+  //      （嵌套的 imports（如 forRootAsync 的）都在它之后，首个命中即正确）
+  let atModuleIdx: Number = findLineWith(lines, "@Module(");
+  let modStartIdx: Number = -1;
+  if (atModuleIdx >= 0) {
+    for (let i = atModuleIdx + 1; i < lines.length; i = i + 1) {
+      let t: String = lines[i].trim();
+      if (t.startsWith("imports:") && t.indexOf("[") >= 0) {
+        modStartIdx = i;
+        break;
+      }
+    }
+  }
+  if (modStartIdx < 0) {
+    return [];  // 找不到 @Module 的 imports 数组 → 无法补种
+  }
+
+  // ── C. modules 标记插入（括号配对，支持嵌套数组）──
+  let out: String[] = insertNeedlesInArray(lines, modBeginMark, modEndMark, modStartIdx);
+  if (out.length == 0) {
+    return [];
+  }
+
+  // ── D. imports 标记插入（重建一次行数组）──
+  let out2: String[] = [];
+  for (let i = 0; i < out.length; i = i + 1) {
+    out2.push(out[i]);
+    if (i == lastImportIdx) {
+      out2.push(impBeginMark);
+      out2.push(impEndMark);
+    }
+  }
+  return out2;
+}
+
+/// @brief 把模块列表增量注册进 app.module.ts（幂等：已注册的自动跳过）
+/// @param appModulePath app.module.ts 绝对路径；空串/null 时跳过（项目无需注册）
+/// @param modules 模块信息数组，每项 {moduleClass, moduleClassFile, modelName,
+///        entityClass, entityClassFile}（entityClass/entityClassFile 可省略）
+/// @return 本次新注册的模块数量（0 = 无变化/跳过）
+export function updateAppModule(appModulePath: String, modules: Object[]): Number {
+
+  // ── 1. needle 标记常量（识别用裸标记；插入时才附加说明文字）──
+  let nImpBegin: String = "// {autocode:imports}";
+  let nImpEnd: String = "// {/autocode:imports}";
+  let nEntBegin: String = "// {autocode:entities}";
+  let nEntEnd: String = "// {/autocode:entities}";
+  let nModBegin: String = "// {autocode:modules}";
+  let nModEnd: String = "// {/autocode:modules}";
+
+  // ── 2. 参数守卫 ────────────────────────────────────────────────
+  if (appModulePath == null || appModulePath.length == 0) {
+    printLog("未配置 appModulePath，跳过 app.module.ts 模块注册");
+    return 0;
+  }
+  if (modules == null || modules.length == 0) {
+    return 0;
+  }
+
+  // ── 3. 读取 app.module.ts ─────────────────────────────────────
+  //     文件不存在时不自动创建：路径配错时静默建文件会掩盖配置错误
+  if (!fileExists(appModulePath)) {
+    printError("错误：app.module.ts 不存在，请检查 params.appModulePath 配置: " + appModulePath);
+    return 0;
+  }
+  let content: String = readFile(appModulePath);
+  if (content == null || content.length == 0) {
+    printError("错误：app.module.ts 读取失败或为空: " + appModulePath);
+    return 0;
+  }
+
+  let lines: String[] = content.split("\n");
+  let dirty: Bool = false;  // 补种过标记 → 即使无新模块也要写回固化
+
+  // ── 4. import/modules 标记检查（必需区域）─────────────────────
+  //     两对都缺 → 自动补种；只缺其一 → 标记被人为改动过，报错请人修复
+  let hasImpMark: Bool = content.indexOf(nImpEnd) >= 0;
+  let hasModMark: Bool = content.indexOf(nModEnd) >= 0;
+  if (!hasImpMark && !hasModMark) {
+    lines = bootstrapNeedles(lines, nImpBegin, nImpEnd, nModBegin, nModEnd);
+    if (lines.length == 0) {
+      printError("错误：app.module.ts 缺少 {autocode:...} 标记且无法定位 @Module 的 imports 数组，");
+      printError("      请手工添加标记后重新生成（格式参见 template/app_module.ac 文件头说明）");
+      return 0;
+    }
+    dirty = true;
+  } else if (!hasImpMark || !hasModMark) {
+    printError("错误：app.module.ts 标记不完整（缺一），请手工补齐标记后重新生成");
+    return 0;
+  }
+
+  // ── 5. entities 标记检查（可选区域）────────────────────────────
+  //     两标记均缺 → 在第一个 entities: [ 数组内补种；找不到该数组
+  //     （项目用 forFeature）→ 跳过实体注册，模块注册照常
+  let entBeginIdx: Number = findLineWith(lines, nEntBegin);
+  let entEndIdx: Number = findLineWith(lines, nEntEnd);
+  let skipEntity: Bool = false;
+  if (entBeginIdx < 0 && entEndIdx < 0) {
+    let entStart: Number = -1;
+    for (let i = 0; i < lines.length; i = i + 1) {
+      let t: String = lines[i].trim();
+      if (t.startsWith("entities:") && t.indexOf("[") >= 0) {
+        entStart = i;
+        break;
+      }
+    }
+    if (entStart >= 0) {
+      let note: String = " ← AutoCode 增量更新（幂等收敛）占位标记，请勿删除";
+      let res: String[] = insertNeedlesInArray(lines, nEntBegin + note, nEntEnd + note, entStart);
+      if (res.length > 0) {
+        lines = res;
+        dirty = true;
+      }
+    }
+    entBeginIdx = findLineWith(lines, nEntBegin);
+    entEndIdx = findLineWith(lines, nEntEnd);
+    if (entEndIdx < 0) {
+      skipEntity = true;
+      printLog("提示：未找到 entities: [...] 数组/标记，跳过实体注册（模块注册照常）");
+    }
+  } else if (entBeginIdx < 0 || entEndIdx < 0) {
+    printError("错误：app.module.ts entities 标记不完整，请补齐 {autocode:entities} 标记对");
+    return 0;
+  }
+
+  // ── 6. 定位三个区域的标记行 ────────────────────────────────────
+  let impBeginIdx: Number = findLineWith(lines, nImpBegin);
+  let impEndIdx: Number = findLineWith(lines, nImpEnd);
+  let modBeginIdx: Number = findLineWith(lines, nModBegin);
+  let modEndIdx: Number = findLineWith(lines, nModEnd);
+  if (impBeginIdx < 0 || impEndIdx < 0 || modBeginIdx < 0 || modEndIdx < 0) {
+    printError("错误：app.module.ts 标记不完整，请补齐标记后重新生成");
+    return 0;
+  }
+  let hasEntRegion: Bool = (entBeginIdx >= 0 && entEndIdx >= 0);
+  // 插入行缩进 = end 标记行缩进（补种时标记已与数组项同缩进）
+  let entIndent: String = hasEntRegion ? indentOf(lines[entEndIdx]) : "";
+  let modIndent: String = indentOf(lines[modEndIdx]);
+
+  // ── 7. 逐模块检查，收集待插入内容（全文件级幂等）───────────────
+  //     import 查重：整个文件按 '路径' 带引号匹配（路径唯一，手写的也能识别）；
+  //     注册项查重：整个文件按整行精确匹配（"类名," 独占一行）
+  let newImportLines: String[] = [];  // → imports 区（实体 import 在前，模块 import 在后）
+  let newEntityLines: String[] = [];  // → entities 区
+  let newModuleLines: String[] = [];  // → modules 区
+  let added: Number = 0;
+
+  for (m in modules) {
+    let moduleClass: String = m.moduleClass;
+    if (moduleClass == null || moduleClass.length == 0) {
+      continue;
+    }
+    let modelPath: String = "./" + m.modelName.replace("\\", "/");
+    let needAnything: Bool = false;
+
+    // ── 7.1 实体类（EnXxx）：entities 数组 + 实体 import ──
+    let entityClass: String = m.entityClass;
+    if (entityClass != null && entityClass.length > 0 && hasEntRegion && !skipEntity) {
+      let entityImportPath: String = modelPath + "/entities/" + m.entityClassFile;
+      let hasEntityImport: Bool = content.indexOf("'" + entityImportPath + "'") >= 0;
+      if (!hasEntityImport) {
+        newImportLines.push("import { " + entityClass + " } from '" + entityImportPath + "';");
+        needAnything = true;
+      }
+      let hasEntityEntry: Bool = false;
+      for (let i = 0; i < lines.length; i = i + 1) {
+        let t: String = lines[i].trim();
+        if (t == entityClass + "," || t == entityClass) {
+          hasEntityEntry = true;
+        }
+      }
+      if (!hasEntityEntry) {
+        newEntityLines.push(entIndent + entityClass + ",");
+        needAnything = true;
+      }
+    }
+
+    // ── 7.2 模块类（XxxModule）：@Module imports 数组 + 模块 import ──
+    let moduleImportPath: String = modelPath + "/" + m.moduleClassFile;
+    let hasModuleImport: Bool = content.indexOf("'" + moduleImportPath + "'") >= 0;
+    if (!hasModuleImport) {
+      newImportLines.push("import { " + moduleClass + " } from '" + moduleImportPath + "';");
+      needAnything = true;
+    }
+    let hasModuleEntry: Bool = false;
+    for (let i = 0; i < lines.length; i = i + 1) {
+      let t: String = lines[i].trim();
+      if (t == moduleClass + "," || t == moduleClass) {
+        hasModuleEntry = true;
+      }
+    }
+    if (!hasModuleEntry) {
+      newModuleLines.push(modIndent + moduleClass + ",");
+      needAnything = true;
+    }
+
+    if (needAnything) {
+      added = added + 1;
+    }
+  }
+
+  // ── 8. 写回（有新内容插到 end 标记行前；仅补种则固化标记）──────
+  if (added == 0 && !dirty) {
+    printLog("app.module.ts 无需更新（模块均已注册）");
+    return 0;
+  }
+
+  let out: String[] = [];
+  for (let i = 0; i < lines.length; i = i + 1) {
+    if (i == impEndIdx) {
+      for (s in newImportLines) {
+        out.push(s);
+      }
+    }
+    if (hasEntRegion && i == entEndIdx) {
+      for (s in newEntityLines) {
+        out.push(s);
+      }
+    }
+    if (i == modEndIdx) {
+      for (s in newModuleLines) {
+        out.push(s);
+      }
+    }
+    out.push(lines[i]);
+  }
+
+  let ok: Bool = writeFile(appModulePath, out.join("\n"));
+  if (ok) {
+    if (added > 0) {
+      printLog("app.module.ts 增量注册 " + added + " 个模块: " + appModulePath);
+    } else {
+      printLog("app.module.ts 已固化 {autocode:...} 标记（暂无新模块需要注册）");
+    }
+  } else {
+    printError("错误：app.module.ts 写入失败: " + appModulePath);
+  }
+  return added;
+}

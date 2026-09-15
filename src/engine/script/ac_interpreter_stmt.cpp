@@ -60,7 +60,14 @@ QJsonValue AcInterpreter::execCallBody(const QVector<ParamDef> &params, const QJ
   pushScope();
 
   for (int i = 0; i < params.size(); ++i) {
-    declareVar(params[i].name, i < argsArr.size() ? argsArr[i] : QJsonValue());
+    // 缺省实参时优先使用声明的默认值字面量（param: Type = 字面量），否则为 null
+    if (i < argsArr.size()) {
+      declareVar(params[i].name, argsArr[i]);
+    } else if (params[i].defaultValue.isUndefined()) {
+      declareVar(params[i].name, QJsonValue());
+    } else {
+      declareVar(params[i].name, params[i].defaultValue);
+    }
     recordVarLoc(params[i].name, frameFile, frameLine);
   }
 

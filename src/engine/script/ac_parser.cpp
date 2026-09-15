@@ -67,6 +67,11 @@ bool AcParser::isPropertyName(TokenType t) const {
          t == TOK_DISPOSE;
 }
 
+bool AcParser::isParamName(TokenType t) const {
+  // from 是关键字（import ... from），但允许用作参数名（builtin.d.ac 中 indexOf/lastIndexOf）
+  return t == TOK_IDENT || t == TOK_FROM;
+}
+
 // ── 解析入口 ──
 
 bool AcParser::parse(const QVector<Token> &tokens, Block &program, QSet<QString> &declaredVars) {

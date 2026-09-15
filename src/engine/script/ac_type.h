@@ -213,8 +213,12 @@ struct AcType {
 struct ParamDef {
   QString name;             ///< 参数名
   AcType type;              ///< 类型（默认 Any，无注解时）
-  bool isOptional = false;  ///< 是否为可选参数（param?: Type 语法）
-  int line = 0;             ///< 参数名所在行（1-based，引用/重命名定位用）
+  bool isOptional = false;  ///< 是否为可选参数（param?: Type 或 param: Type = 字面量）
+  /// 默认值字面量（param: Type = 字面量 语法；仅数字/字符串/布尔/null）。
+  /// Undefined 表示未声明默认值；Null 表示显式声明了 = null
+  /// （注意：QJsonValue 默认构造是 Null，必须显式初始化为 Undefined 才能区分两种情况）
+  QJsonValue defaultValue = QJsonValue(QJsonValue::Undefined);
+  int line = 0;  ///< 参数名所在行（1-based，引用/重命名定位用）
 };
 
 /// @brief 语句块 — 由 { } 包裹的一组语句
@@ -540,7 +544,7 @@ struct Block::Stmt {
     kUsing,
     kBlock  ///< 独立块作用域 { stmts }
   } kind = kCall;
-  int line = 0;  ///< 源码行号（1-based，用于符号导航）
+  int line = 0;      ///< 源码行号（1-based，用于符号导航）
   QString filePath;  ///< 语句所属源文件路径（import 内联后用于断点定位）
   CallStmt call;
   AssignStmt assign;

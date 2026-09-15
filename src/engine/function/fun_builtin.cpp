@@ -45,6 +45,7 @@ void FunBuiltin::init() {
           {QString::fromLatin1(AcBuiltin::kMerge), merge},
           {QString::fromLatin1(AcBuiltin::kBasename), basename},
           {QString::fromLatin1(AcBuiltin::kFileName), fileName},
+          {QString::fromLatin1(AcBuiltin::kFileExists), fileExists},
           {QString::fromLatin1(AcBuiltin::kFormatPath), formatPath},
           {QString::fromLatin1(AcBuiltin::kAssert), assertFn},
       });
@@ -277,6 +278,19 @@ QJsonValue FunBuiltin::fileName(const QJsonArray &args) {
   }
 
   return QJsonValue(QFileInfo(args[0].toString()).fileName());
+}
+
+// ============================================================================
+// fileExists — 判断文件/目录是否存在（脚本侧与模板侧同名函数语义一致）
+// ============================================================================
+
+QJsonValue FunBuiltin::fileExists(const QJsonArray &args) {
+  if (args.isEmpty() || !args[0].isString()) {
+    FunMgr::setError(QStringLiteral("fileExists() requires a file path argument"));
+    return QJsonValue();
+  }
+
+  return QJsonValue(QFileInfo::exists(args[0].toString()));
 }
 
 // ============================================================================

@@ -48,14 +48,25 @@ QJsonValue AcBuiltinEval::evalStringMethod(AcInterpreter &interp, const QString 
       error = QStringLiteral("string.indexOf() requires 1 argument at line %1").arg(line);
       return QJsonValue();
     }
-    return QJsonValue(obj.indexOf(evalArg(0).toString()));
+    // JS 语义：from 可选，默认 0；负值按 0 处理
+    int from = 0;
+    if (args.size() >= 2) {
+      from = safeJsonToInt(evalArg(1));
+      if (from < 0) from = 0;
+    }
+    return QJsonValue(obj.indexOf(evalArg(0).toString(), from));
   }
   if (method == QStringLiteral("lastIndexOf")) {
     if (args.empty()) {
       error = QStringLiteral("string.lastIndexOf() requires 1 argument at line %1").arg(line);
       return QJsonValue();
     }
-    return QJsonValue(obj.lastIndexOf(evalArg(0).toString()));
+    // JS 语义：from 可选，缺省从末尾开始反向搜索（Qt 用 -1 表示）
+    int from = -1;
+    if (args.size() >= 2) {
+      from = safeJsonToInt(evalArg(1));
+    }
+    return QJsonValue(obj.lastIndexOf(evalArg(0).toString(), from));
   }
   if (method == QStringLiteral("split")) {
     if (args.empty()) {
@@ -199,7 +210,13 @@ QJsonValue AcBuiltinEval::evalArrayMethod(AcInterpreter &interp, const QJsonArra
       return QJsonValue();
     }
     QJsonValue target = evalArg(0);
-    for (int i = 0; i < arr.size(); ++i) {
+    // JS 语义：from 可选，默认 0；负值按 0 处理
+    int from = 0;
+    if (args.size() >= 2) {
+      from = safeJsonToInt(evalArg(1));
+      if (from < 0) from = 0;
+    }
+    for (int i = from; i < arr.size(); ++i) {
       if (AcInterpreter::compareValues(arr[i], target) == 0) return QJsonValue(i);
     }
     return QJsonValue(-1);

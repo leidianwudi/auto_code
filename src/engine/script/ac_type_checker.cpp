@@ -9,6 +9,17 @@
 
 #include "../ac_language.h"
 
+/// 计算函数/方法的必填参数个数：从第一个可选参数（param?: Type）起都视为可省略。
+/// 可选参数必须声明在参数列表尾部，此约定与 JS/TS 一致。
+static int requiredParamCount(const MethodDef &func) {
+  int n = 0;
+  for (const auto &p : func.params) {
+    if (p.isOptional) break;
+    ++n;
+  }
+  return n;
+}
+
 void AcTypeChecker::check(const Block &program, const QSet<QString> &declaredVars,
                           const QHash<QString, ClassDef> &classes,
                           const QHash<QString, MethodDef> &functions, QStringList &errors) {
@@ -552,13 +563,21 @@ AcType AcTypeChecker::checkExprFuncCall(const Expr &expr, const TypeEnv &env) {
   // 检查参数类型是否匹配函数定义
   if (m_functions->contains(expr.funcCall.name)) {
     const MethodDef &func = (*m_functions)[expr.funcCall.name];
-    // 检查参数个数（允许省略尾部参数，符合 JS 语义）
+    // 检查参数个数：尾部参数仅当声明为可选（param?: Type）才允许省略
     int argCount = expr.funcCall.args.size();
     int paramCount = func.params.size();
+    int requiredCount = requiredParamCount(func);
     if (argCount > paramCount) {
       reportError(QStringLiteral("function '%1' expects at most %2 arguments but got %3")
                       .arg(expr.funcCall.name)
                       .arg(paramCount)
+                      .arg(argCount),
+                  expr.line);
+    }
+    if (argCount < requiredCount) {
+      reportError(QStringLiteral("function '%1' expects at least %2 arguments but got %3")
+                      .arg(expr.funcCall.name)
+                      .arg(requiredCount)
                       .arg(argCount),
                   expr.line);
     }
@@ -608,14 +627,23 @@ AcType AcTypeChecker::checkExprMethodCall(const Expr &expr, const TypeEnv &env) 
     const ClassDef &cd = (*m_classes)[objType.className];
     for (const auto &method : cd.methods) {
       if (method.name == expr.methodCall.methodName) {
-        // 检查参数个数（允许省略尾部参数，符合 JS 语义）
+        // 检查参数个数：尾部参数仅当声明为可选（param?: Type）才允许省略
         int argCount = expr.methodCall.args.size();
         int paramCount = method.params.size();
+        int requiredCount = requiredParamCount(method);
         if (argCount > paramCount) {
           reportError(
               QStringLiteral("method '%1' of class '%2' expects at most %3 arguments but got %4")
                   .arg(method.name, cd.name)
                   .arg(paramCount)
+                  .arg(argCount),
+              expr.line);
+        }
+        if (argCount < requiredCount) {
+          reportError(
+              QStringLiteral("method '%1' of class '%2' expects at least %3 arguments but got %4")
+                  .arg(method.name, cd.name)
+                  .arg(requiredCount)
                   .arg(argCount),
               expr.line);
         }
@@ -670,15 +698,25 @@ AcType AcTypeChecker::checkExprStaticAccess(const Expr &expr, const TypeEnv &env
       // 查找静态方法
       for (const auto &method : cd.methods) {
         if (method.isStatic && method.name == expr.prop) {
-          // 检查参数类型
+          // 检查参数类型（个数同样尊重可选参数声明）
           int argCount = expr.funcCall.args.size();
           int paramCount = method.params.size();
-          if (argCount != paramCount) {
-            reportError(QStringLiteral("static method '%1::%2' expects %3 arguments but got %4")
-                            .arg(expr.className, expr.prop)
-                            .arg(paramCount)
-                            .arg(argCount),
-                        expr.line);
+          int requiredCount = requiredParamCount(method);
+          if (argCount > paramCount) {
+            reportError(
+                QStringLiteral("static method '%1::%2' expects at most %3 arguments but got %4")
+                    .arg(expr.className, expr.prop)
+                    .arg(paramCount)
+                    .arg(argCount),
+                expr.line);
+          }
+          if (argCount < requiredCount) {
+            reportError(
+                QStringLiteral("static method '%1::%2' expects at least %3 arguments but got %4")
+                    .arg(expr.className, expr.prop)
+                    .arg(requiredCount)
+                    .arg(argCount),
+                expr.line);
           }
           for (int i = 0; i < qMin(argCount, paramCount); ++i) {
             AcType argType = checkExpr(*expr.funcCall.args[i], env);

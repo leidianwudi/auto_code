@@ -22,6 +22,7 @@
 
 import { Param } from "./core/param.ac";
 import { QueryData } from "./core/query_data.ac";
+import { updateAppModule } from "./app_module.ac";
 import { escapeJsStr, snakeToCamel, snakeToPascal, isNumericStr } from "../../tool/tool_str.ac";
 
 /// @brief 模板配置（一个模板对应一个生成的代码文件）
@@ -76,6 +77,10 @@ export function generateApiMain(params: Object): Number {
   let files = getCheckedFiles(scriptDir());
   let filesLen = files.length;
   printLog("files count: " + filesLen);
+
+  // 收集成功生成的业务模块信息，全部表生成完后增量注册进 app.module.ts
+  // （每项：{moduleClass, moduleClassFile, modelName}，见 app_module.ac）
+  let generatedModules: Object[] = [];
 
   // ── 4.5 检查勾选文件是否同名不同路径（文件重复）────────────────
   //      两个 basename 相同的文件（如 user/user.json 与 vip/user.json）
@@ -444,6 +449,7 @@ export function generateApiMain(params: Object): Number {
 
     // ── 5.8 遍历模板配置，逐个渲染并写入文件 ───────────────────
     //      每个模板 cfg 的输出路径由 cfg.out 模板 + formatPath 替换得到
+    let moduleOutPath: String = "";  // 本表 module 文件的输出路径（生成后用于 app.module.ts 注册）
     for (cfg in templates) {
       //printLog("tpl path: " + cfg.tpl);
 
@@ -466,6 +472,11 @@ export function generateApiMain(params: Object): Number {
       });
       tplData["outputPath"] = outPath;  // 供模板内的 fileExists(outputPath) 守卫使用
 
+      // 记录 module 模板的输出路径（表处理完后检查文件是否存在 → 决定是否注册）
+      if (cfg.tpl.indexOf("module.tpl") >= 0) {
+        moduleOutPath = outPath;
+      }
+
       // 核心：调用模板引擎，把 tpl 中的 ${变量名} 替换为实际值，
       //      ${if ...} / ${each ...} 做条件判断和循环
       let result = renderTpl(cfg.tpl, tplData);
@@ -481,11 +492,29 @@ export function generateApiMain(params: Object): Number {
         printLog("长度:" + resultLen + "; 生成文件: " + outPath);
       }
     }
+
+    // ── 5.9 收集本表模块（文件存在 = 新生成或此前已生成）──────────
+    //      moduleClass 命名与 module.tpl 一致：modelBaseName + "Module"；
+    //      实体类一并传递（注册进 app.module.ts 的全局 entities 数组）
+    if (moduleOutPath != "" && fileExists(moduleOutPath)) {
+      generatedModules.push({
+        moduleClass: modelBaseName + "Module",
+        moduleClassFile: tplData["moduleClassFile"],
+        modelName: json.modelName,
+        entityClass: param.entityClass,
+        entityClassFile: tplData["entityClassFile"]
+      });
+    }
     }  // end for (json in tableConfigs)
   }  // end for (file in files)
 
   // ── 6. 收尾：断开数据库连接 ─────────────────────────────────────
   db.disconnect();
+
+  // ── 6.5 app.module.ts 增量注册 ──────────────────────────────────
+  //      把本次生成的模块写入 app.module.ts 的 needle 标记区（幂等，
+  //      已注册的自动跳过）；appModulePath 未配置时内部自行跳过
+  updateAppModule(params["appModulePath"], generatedModules);
 
   // 表存在性检查汇总：有表不存在时输出红色错误提示
   if (missingTableCount > 0) {

@@ -37,6 +37,8 @@ private:
   /// @brief 期望分号；缺失时错误定位到语句所在行（stmtLine），而非下一个 token 的行
   bool expectSemi(const QString &msg, int stmtLine);
   bool isPropertyName(TokenType t) const;
+  /// @brief 判断 token 是否可作为参数名；关键字 from 可用作参数名（如 indexOf(sub, from?: Number)）
+  bool isParamName(TokenType t) const;
 
   // ── 二元运算解析辅助（模板化，消除重复代码） ──
   using ParseNextFn = bool (AcParser::*)(Expr &);
@@ -81,6 +83,9 @@ private:
   bool parseFuncCall(const QString &name, Expr &expr);
   bool parseTemplateString(Expr &expr);
   bool parseMethodDef(MethodDef &md);
+  /// @brief 解析参数默认值字面量（= 后仅允许 数字/字符串/布尔/null，支持负数）
+  /// @param[out] out 解析到的字面量值（Null 类型表示显式 = null）
+  bool parseParamDefault(QJsonValue &out);
   /// @brief 解析类属性（static let / let / ident = value），返回是否成功
   bool parseClassProperty(ClassDef &cd, AccessLevel access, bool isStatic);
 

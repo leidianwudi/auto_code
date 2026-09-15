@@ -381,6 +381,21 @@ void AcSymbolTable::mergeFrom(const AcSymbolTable &other, const QStringList &nam
 //  签名生成
 // ──────────────────────────────────────────────────────────────
 
+/// 将参数默认值字面量转为签名显示字符串（数字/字符串/布尔/null）
+static QString defaultLiteralToString(const QJsonValue &v) {
+  switch (v.type()) {
+    case QJsonValue::Double:
+      return QString::number(v.toDouble());
+    case QJsonValue::String:
+      return QStringLiteral("\"%1\"").arg(v.toString());
+    case QJsonValue::Bool:
+      return v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
+    case QJsonValue::Null:
+    default:
+      return QStringLiteral("null");
+  }
+}
+
 QString AcSymbolTable::makeFunctionSignature(const QString &name, const QVector<ParamDef> &params,
                                              const AcType &returnType) const {
   QString sig = QStringLiteral("function ");
@@ -391,6 +406,9 @@ QString AcSymbolTable::makeFunctionSignature(const QString &name, const QVector<
     sig += params[i].name;
     if (params[i].type.kind != AcType::kAny) {
       sig += QStringLiteral(": ") + acTypeToString(params[i].type);
+    }
+    if (!params[i].defaultValue.isUndefined()) {
+      sig += QStringLiteral(" = ") + defaultLiteralToString(params[i].defaultValue);
     }
   }
   sig += QLatin1Char(')');
@@ -412,6 +430,9 @@ QString AcSymbolTable::makeMethodSignature(const QString &className, const QStri
     sig += params[i].name;
     if (params[i].type.kind != AcType::kAny) {
       sig += QStringLiteral(": ") + acTypeToString(params[i].type);
+    }
+    if (!params[i].defaultValue.isUndefined()) {
+      sig += QStringLiteral(" = ") + defaultLiteralToString(params[i].defaultValue);
     }
   }
   sig += QLatin1Char(')');

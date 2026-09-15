@@ -740,7 +740,7 @@ bool AcParser::parseClassDef(ClassDef &cd) {
       MethodDef md;
       md.name = QStringLiteral("constructor");
       if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after 'constructor'"))) return false;
-      while (peek().type == TOK_IDENT) {
+      while (isParamName(peek().type)) {
         ParamDef pd;
         const Token nameTok = advance();
         pd.name = nameTok.text;
@@ -752,6 +752,12 @@ bool AcParser::parseClassDef(ClassDef &cd) {
         if (peek().type == TOK_COLON) {
           advance();
           pd.type = parseType();
+        }
+        // = 字面量 默认值（自动视为可选参数）
+        if (peek().type == TOK_EQUALS) {
+          advance();
+          if (!parseParamDefault(pd.defaultValue)) return false;
+          pd.isOptional = true;
         }
         md.params.append(pd);
         m_declaredVars->insert(pd.name);
@@ -822,7 +828,7 @@ bool AcParser::parseInterfaceDef(InterfaceDef &iface) {
       }
       im.name = advance().text;
       if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after method name"))) return false;
-      while (peek().type == TOK_IDENT) {
+      while (isParamName(peek().type)) {
         ParamDef pd;
         const Token nameTok = advance();
         pd.name = nameTok.text;
@@ -897,6 +903,50 @@ bool AcParser::parseEnumDef(EnumDef &ed) {
   return expect(TOK_RBRACE, QStringLiteral("expected '}' after enum body"));
 }
 
+bool AcParser::parseParamDefault(QJsonValue &out) {
+  const Token tok = peek();
+  switch (tok.type) {
+    case TOK_NUMBER:
+      advance();
+      out = QJsonValue(tok.text.toDouble());
+      return true;
+    case TOK_MINUS: {
+      // 负数字面量：- Number
+      advance();
+      if (peek().type != TOK_NUMBER) {
+        m_error = QStringLiteral("expected number after '-' in parameter default value at line %1")
+                      .arg(peek().line);
+        return false;
+      }
+      out = QJsonValue(-advance().text.toDouble());
+      return true;
+    }
+    case TOK_STRING:
+      advance();
+      out = QJsonValue(tok.text);
+      return true;
+    case TOK_TRUE:
+      advance();
+      out = QJsonValue(true);
+      return true;
+    case TOK_FALSE:
+      advance();
+      out = QJsonValue(false);
+      return true;
+    case TOK_NULL:
+      // 显式 = null：Null 类型（区别于 Undefined「未声明默认值」）
+      advance();
+      out = QJsonValue();
+      return true;
+    default:
+      m_error =
+          QStringLiteral(
+              "parameter default value must be a literal (number/string/bool/null) at line %1")
+              .arg(tok.line);
+      return false;
+  }
+}
+
 bool AcParser::parseMethodDef(MethodDef &md) {
   // dispose 是语言关键字（TOK_DISPOSE），但允许作为方法名使用（using/dispose 模式）
   if (peek().type != TOK_IDENT && peek().type != TOK_DISPOSE) {
@@ -908,7 +958,7 @@ bool AcParser::parseMethodDef(MethodDef &md) {
 
   if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after method name"))) return false;
 
-  while (peek().type == TOK_IDENT) {
+  while (isParamName(peek().type)) {
     ParamDef pd;
     const Token nameTok = advance();
     pd.name = nameTok.text;
@@ -926,6 +976,12 @@ bool AcParser::parseMethodDef(MethodDef &md) {
     }
     advance();
     pd.type = parseType();
+    // = 字面量 默认值（自动视为可选参数）
+    if (peek().type == TOK_EQUALS) {
+      advance();
+      if (!parseParamDefault(pd.defaultValue)) return false;
+      pd.isOptional = true;
+    }
     md.params.append(pd);
     m_declaredVars->insert(pd.name);
     if (peek().type == TOK_COMMA) advance();

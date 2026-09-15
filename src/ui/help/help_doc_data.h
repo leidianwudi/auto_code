@@ -193,6 +193,8 @@ main {
 // ============================================================
 // 函数定义：function 名称(参数: 类型): 返回类型 { }
 // 返回类型必须有明确标注；无返回值用 Void
+// 可选参数两种写法：param?: Type 或 param: Type = 默认值
+// 默认值仅支持字面量：数字 / 字符串 / 布尔 / null
 // ============================================================
 function add(a: Number, b: Number): Number {
   return a + b;
@@ -203,19 +205,26 @@ function log(msg: String): Void {
   printLog(msg);
 }
 
-// 可选参数：参数可省略，内部用 null 判断
-function greet(name: String, greeting: String): String {
-  if (greeting == null) {
-    greeting = "Hello";
-  }
+// 可选参数一：= 默认值（参数可省略，省略时使用默认值）
+function greet(name: String, greeting: String = "Hello"): String {
   return `${greeting}, ${name}!`;
+}
+
+// 可选参数二：? 标注（参数可省略，省略时为 null，内部判断）
+function farewell(name: String, suffix?: String): String {
+  if (suffix == null) {
+    suffix = "Bye";
+  }
+  return `${suffix}, ${name}!`;
 }
 
 main {
   let sum: Number = add(1, 2);
   log("sum = " + sum);
-  printLog(greet("AC"));       // Hello, AC!
-  printLog(greet("AC", "Hi")); // Hi, AC!
+  printLog(greet("AC"));                // Hello, AC!（省略 greeting，用默认值）
+  printLog(greet("AC", "Hi"));          // Hi, AC!
+  printLog(farewell("AC"));             // Bye, AC!（省略 suffix）
+  printLog(farewell("AC", "See you"));  // See you, AC!
 }
 )AC",
     },
