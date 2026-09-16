@@ -33,8 +33,8 @@
 
 #include "src/engine/ac_language.h"
 #include "src/ui/create/create_mgr.h"
-#include "src/ui/json_source/json_source_finder.h"
 #include "src/util/common/code_constants.h"
+#include "src/util/common/path_resolver.h"
 #include "src/util/common/util_file.h"
 #include "src/util/ui/component/aui_icon.h"
 #include "src/util/ui/component/aui_style.h"
@@ -1154,7 +1154,8 @@ void TreeDir::refreshProjectIcons() {
 
     const QString filePath = item->data(0, Qt::UserRole + 1).toString();
     if (filePath.isEmpty()) {  // 目录节点
-      item->setData(0, kTreeProjectRole, isProjectRootDir(buildFolderPath(item, m_rootPath)));
+      item->setData(0, kTreeProjectRole,
+                    PathResolver::isProjectRoot(buildFolderPath(item, m_rootPath)));
     }
   }
   update();  // 触发重绘显示齿轮徽章
@@ -1281,7 +1282,7 @@ void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
     QAction *deleteAct = menu.addAction(QStringLiteral("删除"));
     // 项目标记：文件夹含 project.acproj 即项目根（数据源下拉框按项目过滤的依据）
     const QString dirPath = buildFolderPath(item, m_rootPath);
-    const bool isProject = isProjectRootDir(dirPath);
+    const bool isProject = PathResolver::isProjectRoot(dirPath);
     QAction *projectAct =
         menu.addAction(isProject ? QStringLiteral("取消项目") : QStringLiteral("设为项目"));
     menu.addSeparator();
@@ -1302,19 +1303,26 @@ void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
     } else if (chosen == deleteAct) {
       emit deleteRequested(dirPath);
     } else if (chosen == projectAct) {
-      // 标记落盘在文件夹内：改名/移动天然跟随，无需 state_store；取消项目即删文件
-      const QString marker = QDir(dirPath).absoluteFilePath(QLatin1String(kProjectMarkerFileName));
+      // 标记落盘在文件夹内：改名/移动天然跟随，无需 state_store；取消项目即删文件。
+      // 仅磁盘写入成功才翻转齿轮状态，避免树上显示齿轮而磁盘无标记的不一致
+      const QString marker =
+          QDir(dirPath).absoluteFilePath(QLatin1String(PathResolver::kProjectMarkerFile));
+      bool ok = false;
       if (isProject) {
-        QFile::remove(marker);
+        ok = QFile::remove(marker);
       } else {
         QFile f(marker);
         if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
-          f.write(QJsonDocument(QJsonObject{{"name", QFileInfo(dirPath).fileName()}})
-                      .toJson(QJsonDocument::Indented));
+          const QByteArray content =
+              QJsonDocument(QJsonObject{{"name", QFileInfo(dirPath).fileName()}})
+                  .toJson(QJsonDocument::Indented);
+          ok = f.write(content) == content.size();
         }
       }
-      item->setData(0, kTreeProjectRole, !isProject);  // 触发该行重绘
-      update();
+      if (ok) {
+        item->setData(0, kTreeProjectRole, !isProject);  // 触发该行重绘
+        update();
+      }
     } else if (chosen == refreshAct) {
       refreshTree();
     }

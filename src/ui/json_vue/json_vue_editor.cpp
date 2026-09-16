@@ -147,8 +147,8 @@ QWidget *JsonVueEditor::buildMetaSection() {
   m_methodCombo->addItems(
       {QString::fromLatin1(JsonVueHttp::kGet), QString::fromLatin1(JsonVueHttp::kPost),
        QString::fromLatin1(JsonVueHttp::kPut), QString::fromLatin1(JsonVueHttp::kDelete)});
-  m_methodCombo->setFixedWidth(56);
-  AuiComboBox::hideArrow(m_methodCombo);
+  // 宽度需容纳 "delete" + 箭头区，避免文字被截断；箭头正常显示（不用 hideArrow）
+  m_methodCombo->setFixedWidth(70);
   genCell->addWidget(m_methodCombo);
   m_dataUrlEdit = new QLineEdit(this);
   m_dataUrlEdit->setPlaceholderText(QStringLiteral("例如 config/selectByIn"));

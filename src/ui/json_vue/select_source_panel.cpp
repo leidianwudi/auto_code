@@ -70,8 +70,8 @@ void SelectSourcePanel::setupUI() {
   m_methodCombo->addItems(
       {QString::fromLatin1(JsonVueHttp::kPost), QString::fromLatin1(JsonVueHttp::kGet)});
   m_methodCombo->setCurrentIndex(0);
-  m_methodCombo->setFixedWidth(60);
-  AuiComboBox::hideArrow(m_methodCombo);
+  // 宽度需容纳 "post" + 箭头区；箭头正常显示（不用 hideArrow）
+  m_methodCombo->setFixedWidth(70);
   urlRow->addWidget(m_methodCombo);
   urlRow->addSpacing(10);
   m_urlEdit = new QLineEdit(this);

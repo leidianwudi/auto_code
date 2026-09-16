@@ -173,16 +173,21 @@ void AuiComboDelete::paintEvent(QPaintEvent *event) {
   QStyleOptionComboBox opt;
   initStyleOption(&opt);
   if (!opt.editable) {
+    // SC_ComboBoxArrow 在样式表 down-arrow 压为 0 尺寸时可能返回退化/贴边矩形，
+    // 钳制圆心保证三角完整落在边框内（同 AuiComboBoxWidget::paintEvent）
+    QRect arrowRect =
+        style()->subControlRect(QStyle::CC_ComboBox, &opt, QStyle::SC_ComboBoxArrow, this);
+    const qreal halfW = 4.0;
+    const qreal cx =
+        qBound<qreal>(halfW + 2.0, qreal(arrowRect.center().x()), qreal(width()) - halfW - 2.0);
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
     painter.setPen(Qt::NoPen);
     painter.setBrush(AuiStyle::textColor());
 
-    const QRect arrowRect =
-        style()->subControlRect(QStyle::CC_ComboBox, &opt, QStyle::SC_ComboBoxArrow, this);
     const qreal aw = 8.0;
     const qreal ah = 4.5;
-    const QPointF c(arrowRect.center().x(), arrowRect.center().y() + 0.5);
+    const QPointF c(cx, height() / 2.0 + 0.5);
     QPolygonF tri;
     tri << QPointF(c.x() - aw / 2.0, c.y() - ah / 2.0)
         << QPointF(c.x() + aw / 2.0, c.y() - ah / 2.0) << QPointF(c.x(), c.y() + ah / 2.0);

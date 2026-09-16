@@ -41,20 +41,27 @@ protected:
     QComboBox::paintEvent(e);
 
     // ── 2. 在 drop-down 区域绘制向下三角箭头 ──
+    // hideArrow() 场景（auiNoArrow）：样式表已把 drop-down 区域压为 0 宽度，
+    // 箭头矩形退化到控件右缘，此时若仍补画三角会越出控件被裁掉一半 ——
+    // 这类下拉框的设计就是无箭头（文字占满宽度），直接跳过绘制
+    if (property("auiNoArrow").toBool()) return;
+
     // 可编辑/不可编辑模式均绘制：可编辑时输入框只占编辑区，
     // drop-down 区域仍需箭头提示「可下拉」（否则可编辑下拉框没有任何箭头）
     QStyleOptionComboBox opt;
     initStyleOption(&opt);
 
-    QPainter painter(this);
-
-    // 获取 drop-down 按钮区域
+    // 全局样式表已把原生 down-arrow 压为 0 尺寸（width:0 height:0），
+    // SC_ComboBoxArrow 在部分样式下会返回退化/贴边的矩形，直接取其中心会把
+    // 三角推出控件被裁掉一半 —— 这里钳制圆心，保证固定尺寸的三角完整落在边框内
     QRect arrowRect =
         style()->subControlRect(QStyle::CC_ComboBox, &opt, QStyle::SC_ComboBoxArrow, this);
-
-    // 在 drop-down 区域中央绘制一个小尺寸倒三角（固定尺寸，避免随区域收缩变形）
-    const QPointF c(arrowRect.center().x(), arrowRect.center().y() + 0.5);
-    AuiStyle::drawDownArrow(painter, c, AuiStyle::textColor());
+    const qreal halfW = 4.0;  // 三角宽 8 的一半
+    const qreal cx =
+        qBound<qreal>(halfW + 2.0, qreal(arrowRect.center().x()), qreal(width()) - halfW - 2.0);
+    const qreal cy = height() / 2.0 + 0.5;
+    QPainter painter(this);
+    AuiStyle::drawDownArrow(painter, QPointF(cx, cy), AuiStyle::textColor());
   }
 };
 
