@@ -132,3 +132,17 @@ QTableWidget *makeConfigTable(const std::initializer_list<ConfigTableColumn> &co
   }
   return table;
 }
+
+// ════════════════════════════════════════════════════════════
+//  数据源作用域帮助文案
+// ════════════════════════════════════════════════════════════
+
+QString jsonVueSourceScopeHelpText() {
+  return QStringLiteral(
+      "下拉框只列出「当前项目」下的 .jsonsource 数据源文件。\n\n"
+      "项目根的判定：从当前 .jsonvue 文件所在目录逐级向上，找到的第一个含 "
+      "project.acproj 标记文件的文件夹即为项目根。\n"
+      "（在目录树中右键文件夹「设为项目」可写入标记，取消项目即删除标记，"
+      "设为项目后文件夹图标显示为齿轮。）\n\n"
+      "未设项目时（如 template 模板目录），回退为列出工作区全部 .jsonsource 数据源。");
+}

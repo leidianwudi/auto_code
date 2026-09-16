@@ -7,8 +7,11 @@
  *
  * 使用方式：
  * @code
- *   // 纯提示
+ *   // 纯提示（正文默认居左）
  *   AuiMessageBox::show(parent, "打开失败", "无法打开文件: xxx");
+ *
+ *   // 正文居中
+ *   AuiMessageBox::show(parent, "提示", "操作完成", AuiMessageBox::TextAlign::kCenter);
  *
  *   // 确认操作
  *   if (AuiMessageBox::confirm(parent, "确认删除", "确定要删除吗？")) {
@@ -29,18 +32,25 @@ public:
   /// 三选对话框的选项
   enum class Choice { kFirst, kSecond, kCancel };
 
+  /// 正文的水平对齐方式（默认居左）
+  enum class TextAlign { kLeft, kCenter };
+
   /// 显示消息对话框（只有"确定"按钮）
   /// @param parent  父窗口
   /// @param title   标题
   /// @param text    内容
-  static void show(QWidget *parent, const QString &title, const QString &text);
+  /// @param align   正文对齐方式（默认居左）
+  static void show(QWidget *parent, const QString &title, const QString &text,
+                   TextAlign align = TextAlign::kLeft);
 
   /// 显示确认对话框（"确定"和"取消"按钮）
   /// @param parent  父窗口
   /// @param title   标题
   /// @param text    内容
+  /// @param align   正文对齐方式（默认居左）
   /// @return true 表示用户点击了"确定"
-  static bool confirm(QWidget *parent, const QString &title, const QString &text);
+  static bool confirm(QWidget *parent, const QString &title, const QString &text,
+                      TextAlign align = TextAlign::kLeft);
 
   /// 显示三选对话框（首按钮 / 次按钮 / 取消）
   /// @param parent      父窗口
@@ -48,9 +58,11 @@ public:
   /// @param text        内容
   /// @param firstText   首按钮文字（默认高亮）
   /// @param secondText  次按钮文字
+  /// @param align       正文对齐方式（默认居左）
   /// @return 用户点击的按钮（kFirst / kSecond / kCancel）
   static Choice question3(QWidget *parent, const QString &title, const QString &text,
-                          const QString &firstText, const QString &secondText);
+                          const QString &firstText, const QString &secondText,
+                          TextAlign align = TextAlign::kLeft);
 
 private:
   AuiMessageBox() = delete;

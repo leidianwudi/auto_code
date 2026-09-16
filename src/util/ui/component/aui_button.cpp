@@ -12,6 +12,7 @@
 #include <functional>
 
 #include "aui_icon.h"
+#include "aui_message_box.h"
 #include "aui_style.h"
 #include "src/util/common/code_constants.h"
 
@@ -383,6 +384,27 @@ QPushButton *AuiButton::createCollapseAllButton(int size) {
 }
 
 // ════════════════════════════════════════════════════════════
+//  帮助按钮（问号：悬停提示 + 点击弹帮助对话框）
+// ════════════════════════════════════════════════════════════
+
+QPushButton *AuiButton::createHelpButton(const QString &title, const QString &text, QWidget *parent,
+                                         int size) {
+  auto *btn = new QPushButton(parent);
+  // 图标随主题 / 颜色设置变化自动重绘
+  bindThemeAwareIcon(btn, [size]() { return AuiIcon::createHelpIcon(size); });
+  btn->setIconSize(QSize(size, size));
+  btn->setFixedSize(size + 6, size + 6);
+  btn->setToolTip(text);  // 悬停即显示帮助内容
+  btn->setCursor(Qt::PointingHandCursor);
+  btn->setFocusPolicy(Qt::NoFocus);
+  applyIconButtonStyle(btn);
+  // 点击：帮助内容以对话框形式展示（项目统一风格的 AuiMessageBox，父窗口取顶层窗口）
+  QObject::connect(btn, &QPushButton::clicked, btn,
+                   [btn, title, text]() { AuiMessageBox::show(btn->window(), title, text); });
+  return btn;
+}
+
+// ════════════════════════════════════════════════════════════
 //  保存按钮
 // ════════════════════════════════════════════════════════════
 
@@ -454,8 +476,8 @@ QPushButton *AuiButton::createSaveAllButton(int size) {
       return px;
     };
     QIcon icon;
-    icon.addPixmap(build(AuiStyle::textColor(), AuiStyle::saveAllButtonBgColor()),
-                   QIcon::Normal, QIcon::Off);
+    icon.addPixmap(build(AuiStyle::textColor(), AuiStyle::saveAllButtonBgColor()), QIcon::Normal,
+                   QIcon::Off);
     icon.addPixmap(build(AuiStyle::inactiveTabColor(), AuiStyle::inactiveTabColor()),
                    QIcon::Disabled, QIcon::Off);
     return icon;

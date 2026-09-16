@@ -23,9 +23,11 @@
 #include "select_source_panel.h"
 #include "src/ui/json_source/json_source_finder.h"
 #include "src/ui/json_source/json_source_model.h"
+#include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_combo_box.h"
-#include "src/util/ui/component/aui_style.h"
 #include "src/util/ui/component/aui_message_box.h"
+#include "src/util/ui/component/aui_style.h"
+
 
 // ════════════════════════════════════════════════════════════
 //  构造 / 界面构建
@@ -35,13 +37,17 @@ ComboboxConfigDialog::ComboboxConfigDialog(QWidget *parent) : QDialog(parent) { 
 
 void ComboboxConfigDialog::setupUI() {
   // 复用与其它 jsonvue 配置对话框一致的框架（标题栏 + 确定/取消）
-  ConfigDialogFrame frame = beginConfigDialog(this, QStringLiteral("下拉框数据源配置"),
-                                              QMargins(12, 10, 12, 10), 6);
+  ConfigDialogFrame frame =
+      beginConfigDialog(this, QStringLiteral("下拉框数据源配置"), QMargins(12, 10, 12, 10), 6);
   auto *layout = frame.contentLayout;
 
   // ── .jsonsource 数据源选择行 ──
   auto *srcRow = new QHBoxLayout;
   srcRow->addWidget(new QLabel(QStringLiteral("数据源文件:")));
+  // 问号帮助按钮：说明数据源文件列表受「右键设为项目」作用域过滤
+  srcRow->addWidget(AuiButton::createHelpButton(QStringLiteral("数据源作用域"),
+                                                jsonVueSourceScopeHelpText(), frame.contentWidget));
+  srcRow->addSpacing(2);
   m_fileCombo = AuiComboBox::create(frame.contentWidget);
   m_fileCombo->setMinimumWidth(220);
   srcRow->addWidget(m_fileCombo, 1);
@@ -212,8 +218,8 @@ void ComboboxConfigDialog::applySelectedSource() {
                               .arg(s->options.size()));
     m_staticHint->show();
     // 清空动态配置残留
-    m_panel->setData(QString(), QString(), QString(), QString(), false, QString(),
-                     QString(), 20, QString(), QString());
+    m_panel->setData(QString(), QString(), QString(), QString(), false, QString(), QString(), 20,
+                     QString(), QString());
   } else {
     // 动态数据源：基础配置跟随数据源并锁定，显示使用方式行
     m_staticHint->hide();

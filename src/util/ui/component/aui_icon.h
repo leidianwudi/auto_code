@@ -28,6 +28,10 @@ public:
   /// @param size 图标像素尺寸
   static QIcon createCollapseAllIcon(int size = 16);
 
+  /// 创建「帮助」图标（圆圈 + 问号，颜色随主题）
+  /// @param size 图标像素尺寸
+  static QIcon createHelpIcon(int size = 16);
+
   /// 创建文件类型图标（纯文字样式，无底框）：
   /// ac 蓝色「A」/ json 琥珀「J」/ jsonvue 琥珀「V」/ tpl 绿色「T」，
   /// 字号大、居中铺满，颜色随深色 / 浅色主题明暗调整。

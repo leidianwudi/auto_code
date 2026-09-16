@@ -137,9 +137,9 @@ static void testProjectScopedJsonsourceFinder() {
   f2.close();
 
   // 1) 向上找根：从子目录 sub 命中项目根 __test_proj__
-  CHECK(findProjectRootUpward(proj + QStringLiteral("/sub")) == proj);
-  CHECK(isProjectRootDir(proj));
-  CHECK(!isProjectRootDir(proj + QStringLiteral("/sub")));
+  CHECK(PathResolver::findProjectRootUpward(proj + QStringLiteral("/sub")) == proj);
+  CHECK(PathResolver::isProjectRoot(proj));
+  CHECK(!PathResolver::isProjectRoot(proj + QStringLiteral("/sub")));
 
   // 2) 项目作用域：jsonvue 所在目录（sub）向上找根后递归收集，
   //    api/ 子目录下的数据源也能找到，且不混入其它项目
@@ -149,7 +149,7 @@ static void testProjectScopedJsonsourceFinder() {
   CHECK(scoped.contains(QDir::cleanPath(proj + QStringLiteral("/sub/b.jsonsource"))));
 
   // 3) 无标记目录（file/ 根未设项目时）→ 回退全局：包含其它项目的数据源
-  if (!isProjectRootDir(fileRoot)) {
+  if (!PathResolver::isProjectRoot(fileRoot)) {
     const QStringList all = findJsonsourceFiles(fileRoot + QStringLiteral("/admin_vue/template"));
     CHECK(!all.isEmpty());
     CHECK(all.contains(QDir::cleanPath(
