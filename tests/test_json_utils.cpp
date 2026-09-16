@@ -12,12 +12,14 @@
  */
 
 #include <QDir>
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <cstdio>
 
+#include "src/ui/json_source/json_source_finder.h"
 #include "src/util/common/path_resolver.h"
 #include "src/util/common/util_json.h"
 
@@ -114,11 +116,56 @@ static void testResolveSchemaPath() {
 /// AC 参数默认值语法测试（tests/test_ac_param_default.cpp），返回失败数
 int runAcParamDefaultTests();
 
+/// .jsonsource 作用域查找：项目根（project.acproj）内严格过滤，无标记目录回退全局
+static void testProjectScopedJsonsourceFinder() {
+  const QString fileRoot =
+      QDir::cleanPath(QStringLiteral(PROJECT_SOURCE_DIR) + QStringLiteral("/file"));
+
+  // 构造临时项目：file/__test_proj__/{project.acproj, api/a.jsonsource, sub/b.jsonsource}
+  const QString proj = fileRoot + QStringLiteral("/__test_proj__");
+  QDir().mkpath(proj + QStringLiteral("/api"));
+  QDir().mkpath(proj + QStringLiteral("/sub"));
+  QFile marker(proj + QStringLiteral("/project.acproj"));
+  CHECK(marker.open(QIODevice::WriteOnly | QIODevice::Text));
+  marker.write("{}");
+  marker.close();
+  QFile f1(proj + QStringLiteral("/api/a.jsonsource"));
+  f1.open(QIODevice::WriteOnly | QIODevice::Text);
+  f1.close();
+  QFile f2(proj + QStringLiteral("/sub/b.jsonsource"));
+  f2.open(QIODevice::WriteOnly | QIODevice::Text);
+  f2.close();
+
+  // 1) 向上找根：从子目录 sub 命中项目根 __test_proj__
+  CHECK(findProjectRootUpward(proj + QStringLiteral("/sub")) == proj);
+  CHECK(isProjectRootDir(proj));
+  CHECK(!isProjectRootDir(proj + QStringLiteral("/sub")));
+
+  // 2) 项目作用域：jsonvue 所在目录（sub）向上找根后递归收集，
+  //    api/ 子目录下的数据源也能找到，且不混入其它项目
+  const QStringList scoped = findJsonsourceFiles(proj + QStringLiteral("/sub"));
+  CHECK(scoped.size() == 2);
+  CHECK(scoped.contains(QDir::cleanPath(proj + QStringLiteral("/api/a.jsonsource"))));
+  CHECK(scoped.contains(QDir::cleanPath(proj + QStringLiteral("/sub/b.jsonsource"))));
+
+  // 3) 无标记目录（file/ 根未设项目时）→ 回退全局：包含其它项目的数据源
+  if (!isProjectRootDir(fileRoot)) {
+    const QStringList all = findJsonsourceFiles(fileRoot + QStringLiteral("/admin_vue/template"));
+    CHECK(!all.isEmpty());
+    CHECK(all.contains(QDir::cleanPath(
+        fileRoot + QStringLiteral("/admin_vue/news_admin/api/boolean.jsonsource"))));
+  }
+
+  // 清理临时项目目录
+  QDir(proj).removeRecursively();
+}
+
 int main() {
   // 所测接口均不依赖 QCoreApplication 实例，无需构造应用对象
   testJson5Parsing();
   testFingerprint();
   testResolveSchemaPath();
+  testProjectScopedJsonsourceFinder();
   const int extraFailed = runAcParamDefaultTests();
 
   std::printf("%d checks, %d failed\n", g_total, g_failed + extraFailed);

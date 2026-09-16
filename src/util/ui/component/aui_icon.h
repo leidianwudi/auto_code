@@ -7,8 +7,12 @@
 
 #pragma once
 
+#include <QColor>
 #include <QIcon>
+#include <QPointF>
 #include <QString>
+
+class QPainter;
 
 class AuiIcon {
 public:
@@ -36,6 +40,12 @@ public:
   /// 为收起样式（带顶标签的矩形外框）
   /// @param size  图标像素尺寸
   static QIcon createFolderIcon(bool open, int size = 16);
+
+  /// 直接在 painter 上绘制项目齿轮（VSCode 设置齿轮风格：6 齿圆润、空心描边、中心孔）。
+  /// 用于项目根文件夹整体替代文件夹图标，颜色与文件夹图标主描边一致（主题自适应）。
+  /// @param painter 目标画笔（抗锯齿由本函数内部开启）
+  /// @param center  齿轮中心（图标像素坐标）
+  static void paintProjectGear(QPainter *painter, const QPointF &center);
 
 private:
   AuiIcon() = delete;

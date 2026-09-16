@@ -28,6 +28,8 @@ class QContextMenuEvent;
 constexpr int kTreeStartupTriWidth = 7;
 /// 启动项标记数据角色：节点是否为启动项（.ac 文件）→ bool
 constexpr int kTreeStartupRole = Qt::UserRole + 4;
+/// 项目标记数据角色：文件夹是否为项目根（含 project.acproj 标记文件）→ bool
+constexpr int kTreeProjectRole = Qt::UserRole + 8;
 /// 拖拽可放置目标标记数据角色：节点是否为当前拖拽目标 → bool
 /// （setData 触发 Qt 自动重绘该行，自绘 delegate 据此整行变色提示目的地）
 constexpr int kTreeDropTargetRole = Qt::UserRole + 6;
@@ -35,6 +37,7 @@ constexpr int kTreeDropTargetRole = Qt::UserRole + 6;
 /// 文件树绘制代理 — 自绘复选框、图标与文本；
 /// - 已修改文件/文件夹名称以琥珀色显示（VSCode 风格，替代原来的实心圆点）
 /// - 启动项 .ac 文件在图标左侧绘制绿色右向三角标记（不移动图标文字位置）
+/// - 项目根文件夹（含 project.acproj）的图标整体替换为空心齿轮（颜色与文件夹一致）
 /// - 有错误的节点以红色显示并在行最右侧绘制错误数量徽章（父文件夹显示子文件错误次数总和）
 class ModifiedFileDelegate : public QStyledItemDelegate {
   Q_OBJECT
@@ -203,6 +206,10 @@ private:
   /// 根据启动项集合更新树中所有 .ac 文件的启动标记（kTreeStartupRole）
   void refreshStartupIcons();
 
+  /// 按文件夹下 project.acproj 的存在性更新所有目录节点的项目标记（kTreeProjectRole），
+  /// 供 ModifiedFileDelegate 在项目根文件夹图标右下角绘制齿轮徽章
+  void refreshProjectIcons();
+
   /// 按绝对路径查找树节点（找不到返回 nullptr）
   QTreeWidgetItem *findItemByPath(const QString &absPath) const;
 
@@ -229,8 +236,7 @@ private:
   /// 启动文件/文件夹拖拽（携带源绝对路径）
   void startFileDrag(QTreeWidgetItem *item);
   /// 计算拖放目标文件夹并校验合法性（合法返回 true 并填 targetDir）
-  bool resolveDropTarget(const QString &srcPath, QTreeWidgetItem *target,
-                         QString &targetDir) const;
+  bool resolveDropTarget(const QString &srcPath, QTreeWidgetItem *target, QString &targetDir) const;
 
   /// 右键菜单：文件设为/取消启动项，文件夹新建/刷新/重命名，文件重命名
   void contextMenuEvent(QContextMenuEvent *event) override;
@@ -253,13 +259,14 @@ private:
   QString m_rootPath;    ///< 当前展示的根目录
   QString m_configPath;  ///< tree.config 完整路径
 
-  QSet<QString> m_startupFiles;  ///< 被设为启动项的 .ac 文件绝对路径集合
-  QString m_selectedStartup;     ///< 当前下拉框选中的启动项路径
-  QSet<QString> m_modifiedPaths; ///< 已标记为"已修改(黄色)"的文件绝对路径集合
-                                 ///< （用于 buildTree/refreshTree 重建后恢复黄色标记）
+  QSet<QString> m_startupFiles;   ///< 被设为启动项的 .ac 文件绝对路径集合
+  QString m_selectedStartup;      ///< 当前下拉框选中的启动项路径
+  QSet<QString> m_modifiedPaths;  ///< 已标记为"已修改(黄色)"的文件绝对路径集合
+                                  ///< （用于 buildTree/refreshTree 重建后恢复黄色标记）
 
   class QTreeWidgetItem *m_hoverItem = nullptr;  ///< 当前鼠标悬停的节点（用于整行高亮）
-  QTreeWidgetItem *m_dropRoleItem = nullptr;  ///< 当前设置了拖拽目标角色（kTreeDropTargetRole）的节点
+  QTreeWidgetItem *m_dropRoleItem =
+      nullptr;  ///< 当前设置了拖拽目标角色（kTreeDropTargetRole）的节点
 
   bool m_visualToggle = false;  ///< 可视化编辑按钮状态
 

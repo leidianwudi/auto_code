@@ -10,8 +10,55 @@
 #include <QPainterPath>
 #include <QPixmap>
 #include <QPolygonF>
+#include <QtMath>
 
 #include "aui_style.h"
+
+/// 极坐标取点（角度制；齿轮轮廓顶点计算用）
+static QPointF gearPolarPt(const QPointF &c, qreal deg, qreal r) {
+  const qreal rad = qDegreesToRadians(deg);
+  return QPointF(c.x() + r * qCos(rad), c.y() + r * qSin(rad));
+}
+
+/// 文件夹图标主描边色（createFolderIcon 与项目齿轮共用，保证颜色一致）
+static QColor folderStrokeColor() {
+  const bool dark = (SettingStore::ins().theme() == SettingStore::ThemeDark);
+  return dark ? QColor(0xe8, 0xe8, 0xe8) : QColor(0x2b, 0x2b, 0x2b);
+}
+
+// ════════════════════════════════════════════════════════════
+//  项目齿轮（VSCode 设置齿轮风格）
+// ════════════════════════════════════════════════════════════
+
+void AuiIcon::paintProjectGear(QPainter *painter, const QPointF &center) {
+  constexpr int kTeeth = 6;            // 齿数
+  constexpr qreal kTipR = 6;           // 齿顶半径（整图标尺寸，替代文件夹图标）
+  constexpr qreal kRootR = 4.1;        // 齿根半径（齿高 1.5，圆润厚重）
+  constexpr qreal kTipHalfDeg = 12.0;  // 齿顶半角（齿顶弧占 24°，齿谷 36°）
+  constexpr qreal kHoleR = 2.0;        // 中心孔半径
+  constexpr qreal kGearWidth = 1.0;    // 齿轮笔宽
+
+  painter->save();
+  painter->setRenderHint(QPainter::Antialiasing, true);
+  QPen pen(folderStrokeColor(), kGearWidth);  // 笔宽
+  pen.setJoinStyle(Qt::RoundJoin);            // 齿尖/齿根圆角过渡，接近 VSCode 观感
+  painter->setPen(pen);
+  painter->setBrush(Qt::NoBrush);
+
+  // 齿轮轮廓：齿顶圆弧 + 径向齿侧 + 齿谷圆弧交替（弧线按 4° 细分成短线段）
+  QPolygonF gear;
+  const qreal step = 360.0 / kTeeth;
+  for (int i = 0; i < kTeeth; ++i) {
+    const qreal a = i * step;
+    for (qreal t = -kTipHalfDeg; t <= kTipHalfDeg; t += 4.0)
+      gear << gearPolarPt(center, a + t, kTipR);  // 齿顶弧
+    for (qreal t = kTipHalfDeg; t <= step - kTipHalfDeg; t += 4.0)
+      gear << gearPolarPt(center, a + t, kRootR);  // 齿谷弧（齿侧由相邻点连线形成）
+  }
+  painter->drawPolygon(gear);                    // NoBrush → 只描边 = 空心
+  painter->drawEllipse(center, kHoleR, kHoleR);  // 中心孔（空心）
+  painter->restore();
+}
 
 // ════════════════════════════════════════════════════════════
 //  构建按钮图标
@@ -162,8 +209,7 @@ QIcon AuiIcon::createFolderIcon(bool open, int size) {
 
   // 空心描边文件夹：仅画轮廓不填充（内部透出背景），主题感知配色。
   // 收起 = 带顶标签的矩形外框；展开 = 同款外框 + 内部梯形前板（开口文件夹）
-  const QColor stroke =
-      dark ? QColor(0xe8, 0xe8, 0xe8) : QColor(0x2b, 0x2b, 0x2b);  // 主描边（前板）
+  const QColor stroke = folderStrokeColor();  // 主描边（前板）
   const QColor strokeDim =
       dark ? QColor(0xa8, 0xa8, 0xa8) : QColor(0x6e, 0x6e, 0x6e);  // 次要描边（背板）
   const qreal pw = 1.2;

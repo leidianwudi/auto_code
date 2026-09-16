@@ -5,8 +5,8 @@
 
 #include "tree_dir.h"
 
-#include <QApplication>
 #include <QAbstractItemModel>
+#include <QApplication>
 #include <QContextMenuEvent>
 #include <QDir>
 #include <QDrag>
@@ -14,9 +14,12 @@
 #include <QDragLeaveEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
+#include <QFile>
 #include <QFileInfo>
 #include <QHeaderView>
 #include <QIcon>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMenu>
 #include <QMimeData>
 #include <QMouseEvent>
@@ -30,6 +33,7 @@
 
 #include "src/engine/ac_language.h"
 #include "src/ui/create/create_mgr.h"
+#include "src/ui/json_source/json_source_finder.h"
 #include "src/util/common/code_constants.h"
 #include "src/util/common/util_file.h"
 #include "src/util/ui/component/aui_icon.h"
@@ -102,8 +106,8 @@ void ModifiedFileDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
     const auto *item = static_cast<const QTreeWidgetItem *>(index.internalPointer());
     QStyleOptionViewItem branchOpt = option;
     // 箭头矩形位于该行缩进区域的最内层；右移 3px 收窄与右侧复选框的间隔
-    branchOpt.rect = QRect(option.rect.x() - indent + 4, option.rect.y(), indent,
-                           option.rect.height());
+    branchOpt.rect =
+        QRect(option.rect.x() - indent + 4, option.rect.y(), indent, option.rect.height());
     branchOpt.state |= QStyle::State_Item | QStyle::State_Children | QStyle::State_Enabled;
     if (item && item->isExpanded()) branchOpt.state |= QStyle::State_Open;
     st->drawPrimitive(QStyle::PE_IndicatorBranch, &branchOpt, painter, option.widget);
@@ -114,8 +118,7 @@ void ModifiedFileDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
   if (index.data(Qt::CheckStateRole).isValid()) {
     QStyleOptionViewItem checkOpt = option;
     initStyleOption(&checkOpt, index);
-    checkRect =
-        st->subElementRect(QStyle::SE_ItemViewItemCheckIndicator, &checkOpt, option.widget);
+    checkRect = st->subElementRect(QStyle::SE_ItemViewItemCheckIndicator, &checkOpt, option.widget);
     QStyleOptionButton cb;
     cb.rect = checkRect;
     cb.state = QStyle::State_Enabled;
@@ -173,7 +176,13 @@ void ModifiedFileDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
     painter->restore();
   }
 
-  if (!icon.isNull()) {
+  // 项目标记：项目根文件夹的齿轮图标整体替代文件夹图标（避免重叠看不清），
+  // 齿轮颜色与文件夹图标主描边一致（绘制逻辑在 AuiIcon）。
+  // +0.5 半像素对齐：1.2px 抗锯齿描边画在整数坐标上墨迹偏向单侧像素格，
+  // 视觉重心会偏上偏左；半像素偏移让描边均匀分布，观感居中
+  if (isFolder && index.data(kTreeProjectRole).toBool()) {
+    AuiIcon::paintProjectGear(painter, iconRect.center() + QPointF(0.5, 0.5));
+  } else if (!icon.isNull()) {
     QIcon::Mode mode = (option.state & QStyle::State_Selected) ? QIcon::Selected : QIcon::Normal;
     icon.paint(painter, iconRect, Qt::AlignCenter, mode);
   }
@@ -510,6 +519,9 @@ void TreeDir::buildTree(const QString &dirPath) {
     for (QTreeWidgetItem *par = item->parent(); par; par = par->parent())
       par->setData(0, Qt::UserRole + 2, hasModifiedFileInSubtree(par));
   }
+
+  // 项目标记：按文件夹下 project.acproj 的存在性设置（齿轮徽章由 delegate 绘制）
+  refreshProjectIcons();
 }
 
 // ============================================================================
@@ -1131,6 +1143,23 @@ void TreeDir::refreshStartupIcons() {
   update();  // 触发重绘显示三角标记
 }
 
+/// @brief 按 project.acproj 的存在性更新所有目录节点的项目标记（kTreeProjectRole）。
+///        标记存在于文件系统（文件夹内的 project.acproj），无需 state_store 持久化。
+void TreeDir::refreshProjectIcons() {
+  QList<QTreeWidgetItem *> stack;
+  for (int i = 0; i < topLevelItemCount(); ++i) stack.append(topLevelItem(i));
+  while (!stack.isEmpty()) {
+    QTreeWidgetItem *item = stack.takeLast();
+    for (int i = 0; i < item->childCount(); ++i) stack.append(item->child(i));
+
+    const QString filePath = item->data(0, Qt::UserRole + 1).toString();
+    if (filePath.isEmpty()) {  // 目录节点
+      item->setData(0, kTreeProjectRole, isProjectRootDir(buildFolderPath(item, m_rootPath)));
+    }
+  }
+  update();  // 触发重绘显示齿轮徽章
+}
+
 /// @brief 获取所有启动项文件绝对路径
 QStringList TreeDir::startupFiles() const {
   QStringList result;
@@ -1243,20 +1272,24 @@ void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
   QString filePath = item->data(0, Qt::UserRole + 1).toString();
 
   if (filePath.isEmpty()) {
-    // 文件夹节点：[在文件资源管理器中显示] [新建] [重命名] [删除] [刷新]
+    // 文件夹节点：[在文件资源管理器中显示] [新建] [重命名] [删除] [设为/取消项目] [刷新]
     QMenu menu(this);
     QAction *showInExplorerAct = menu.addAction(QStringLiteral("在文件资源管理器中显示"));
     menu.addSeparator();
     QAction *newAct = menu.addAction(QString::fromUtf8(CodeConstants::UiText::kNew));
     QAction *renameAct = menu.addAction(QStringLiteral("重命名"));
     QAction *deleteAct = menu.addAction(QStringLiteral("删除"));
+    // 项目标记：文件夹含 project.acproj 即项目根（数据源下拉框按项目过滤的依据）
+    const QString dirPath = buildFolderPath(item, m_rootPath);
+    const bool isProject = isProjectRootDir(dirPath);
+    QAction *projectAct =
+        menu.addAction(isProject ? QStringLiteral("取消项目") : QStringLiteral("设为项目"));
     menu.addSeparator();
     QAction *refreshAct = menu.addAction(QStringLiteral("刷新"));
     QAction *chosen = menu.exec(event->globalPos());
     if (chosen == showInExplorerAct) {
       UtilFile::showInExplorer(buildFolderPath(item, m_rootPath));
     } else if (chosen == newAct) {
-      QString dirPath = buildFolderPath(item, m_rootPath);
       CreateMgr::createNew(dirPath, this);
       refreshTree();
     } else if (chosen == renameAct) {
@@ -1267,8 +1300,21 @@ void TreeDir::contextMenuEvent(QContextMenuEvent *event) {
         emit renameRequested(oldPath, newName);
       }
     } else if (chosen == deleteAct) {
-      QString dirPath = buildFolderPath(item, m_rootPath);
       emit deleteRequested(dirPath);
+    } else if (chosen == projectAct) {
+      // 标记落盘在文件夹内：改名/移动天然跟随，无需 state_store；取消项目即删文件
+      const QString marker = QDir(dirPath).absoluteFilePath(QLatin1String(kProjectMarkerFileName));
+      if (isProject) {
+        QFile::remove(marker);
+      } else {
+        QFile f(marker);
+        if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+          f.write(QJsonDocument(QJsonObject{{"name", QFileInfo(dirPath).fileName()}})
+                      .toJson(QJsonDocument::Indented));
+        }
+      }
+      item->setData(0, kTreeProjectRole, !isProject);  // 触发该行重绘
+      update();
     } else if (chosen == refreshAct) {
       refreshTree();
     }
@@ -1446,8 +1492,7 @@ void TreeDir::filterByText(const QString &text) {
     for (int i = 0; i < item->childCount(); ++i) {
       if (self(self, item->child(i))) childMatch = true;
     }
-    const bool selfMatch =
-        needle.isEmpty() || item->text(0).contains(needle, Qt::CaseInsensitive);
+    const bool selfMatch = needle.isEmpty() || item->text(0).contains(needle, Qt::CaseInsensitive);
     const bool visible = needle.isEmpty() || selfMatch || childMatch;
     item->setHidden(!visible);
     return visible;
@@ -1477,8 +1522,7 @@ bool TreeDir::viewportEvent(QEvent *event) {
     }
     // 光标随悬停区域联动：有可交互节点用手型；节点下方的空白区点击无效果，
     // 应恢复为正常箭头，避免手型停留误导（只有当形状变化时才设置，减少无谓更新）
-    const Qt::CursorShape wanted =
-        hover ? Qt::PointingHandCursor : Qt::ArrowCursor;
+    const Qt::CursorShape wanted = hover ? Qt::PointingHandCursor : Qt::ArrowCursor;
     if (viewport()->cursor().shape() != wanted) viewport()->setCursor(wanted);
   } else if (event->type() == QEvent::Leave) {
     if (m_hoverItem) {
