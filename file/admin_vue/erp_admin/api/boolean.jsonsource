@@ -1,0 +1,1 @@
+{"sources":[{"id":"7fc7e52f","options":[{"label":"启用","value":"1","valueType":"number"},{"label":"禁用","value":"0","valueType":"number"}],"remark":"启用/禁用","type":"static","url":"enableState"},{"id":"b7addeb4","options":[{"label":"是","value":"1","valueType":"number"},{"label":"否","value":"0","valueType":"number"}],"remark":"是/否","type":"static","url":"yesNoState"}]}
