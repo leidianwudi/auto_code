@@ -1,0 +1,22 @@
+{
+  $schema: "/crud_nest/template/tool/param.schema.json",
+  tables: [
+    {
+      modelName: "salary\\salary_apply_item",//模块名，包含路径
+      tableName: "salary_apply_item",//表名
+      selCols: [ "salary_apply_id",
+          "code",
+          "enable"],// 精确查询
+      //like查询
+      selColsLike: ["title",
+          "apply_admin_account",
+          "apply_admin_nick",
+          "audit_admin_account",
+          "audit_admin_nick"],
+      //排序
+      selColsSort: {
+         "salary_apply_id": "DESC"
+      }
+    }
+  ]
+}

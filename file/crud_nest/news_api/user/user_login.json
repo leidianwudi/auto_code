@@ -1,0 +1,12 @@
+{
+    "$schema": "/crud_nest/template/tool/param.schema.json",
+    "tables": [
+        {
+            "modelName": "user\\user_login",
+            "selCols": [
+                "uid"
+            ],
+            "tableName": "user_login"
+        }
+    ]
+}
