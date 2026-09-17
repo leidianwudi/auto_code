@@ -9,6 +9,7 @@
 #include <QComboBox>
 #include <QEvent>
 #include <QGuiApplication>
+#include <QLineEdit>
 #include <QPainter>
 #include <QScreen>
 #include <QStyle>
@@ -19,6 +20,41 @@
 #include <QWidget>
 
 #include "aui_style.h"
+
+// ════════════════════════════════════════════════════════════
+//  文字左边距与普通输入框对齐
+// ════════════════════════════════════════════════════════════
+
+/**
+ * @brief 让下拉框显示文字的左边距与同窗口的普通输入框（QLineEdit）完全一致
+ *
+ * 普通输入框的文字位置 = 内容区左边界 + QLineEdit 固定的 2px 文字边距：
+ * - 主窗口裸输入框（原生 1px 边框）：文字距控件左缘 3px
+ * - 对话框输入框（QSS padding: 4px 6px）：文字距控件左缘 9px
+ * 下拉框（非可编辑）文字直接画在 QSS 内容区原点（边框 1px + padding-left），
+ * 据此换算 padding-left 使两者文字左缘对齐；可编辑下拉框内部还有一层无边框
+ * 输入框（自带 2px 文字边距），换算时需扣除。
+ * 用同窗口的临时 QLineEdit 测量，主窗口/对话框两种上下文都能自动对齐。
+ */
+static void updateTextPadding(QComboBox *combo) {
+  QLineEdit probe(combo->window());
+  probe.ensurePolished();
+  QStyleOptionFrame opt;
+  opt.initFrom(&probe);
+  // 与 QLineEdit 私有实现一致：lineWidth 取原生边框宽度（PM_DefaultFrameWidth）
+  opt.lineWidth = probe.style()->pixelMetric(QStyle::PM_DefaultFrameWidth, &opt, &probe);
+  // 输入框内容区左边距（含边框/QSS padding，不含 QLineEdit 固定的 2px 文字边距）
+  const int inset = probe.style()->subElementRect(QStyle::SE_LineEditContents, &opt, &probe).left();
+  const int textLeft = inset + 2;  // QLineEdit 固定的 2px 文字边距
+  const int pad = qMax(0, combo->isEditable() ? textLeft - 3 : textLeft - 1);
+  // 结果没变化时不重设样式表，避免 showEvent 里反复重设触发无谓的重绘
+  if (combo->property("auiTextPad").isValid() && combo->property("auiTextPad").toInt() == pad)
+    return;
+  combo->setProperty("auiTextPad", pad);
+  // 仅覆盖 padding-left（无颜色），不影响切换主题时的文字颜色；
+  // 右侧/上下 padding 仍走全局样式表
+  combo->setStyleSheet(QStringLiteral("QComboBox { padding-left: %1px; }").arg(pad));
+}
 
 // ════════════════════════════════════════════════════════════
 //  内部控件 — 自定义绘制三角箭头
@@ -36,6 +72,12 @@ public:
   using QComboBox::QComboBox;
 
 protected:
+  void showEvent(QShowEvent *e) override {
+    QComboBox::showEvent(e);
+    // setEditable 可能发生在 applyStyle 之后，显示时按最终可编辑态校准文字左边距
+    updateTextPadding(this);
+  }
+
   void paintEvent(QPaintEvent *e) override {
     // ── 1. 让 QComboBox 自身（含样式表）完成框架渲染 ──
     QComboBox::paintEvent(e);
@@ -155,8 +197,11 @@ QComboBox *AuiComboBox::create(QWidget *parent) {
 
 void AuiComboBox::applyStyle(QComboBox *combo) {
   // 颜色统一由 app 级 mainStyleSheet 动态管理（含背景/边框/文字/下拉列表），
-  // 不在控件上单独 setStyleSheet，避免切换主题时文字固化旧色导致深色下看不清
+  // 控件样式表只覆盖 padding-left（无颜色），不会影响切换主题时的文字颜色
   combo->setProperty("auiNoSheet", true);
+  // 显示文字的左边距与同窗口的普通输入框（QLineEdit）对齐；
+  // setEditable 若发生在创建之后，由 AuiComboBoxWidget::showEvent 再次校准
+  updateTextPadding(combo);
   combo->update();
 }
 

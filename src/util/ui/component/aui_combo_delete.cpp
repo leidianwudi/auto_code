@@ -15,6 +15,7 @@
 #include <QStyledItemDelegate>
 #include <QTimer>
 
+#include "aui_combo_box.h"
 #include "aui_style.h"
 
 // ════════════════════════════════════════════════════════════
@@ -103,6 +104,8 @@ AuiComboDelete::AuiComboDelete(QWidget *parent) : QComboBox(parent) {
 
 AuiComboDelete *AuiComboDelete::create(QWidget *parent) {
   auto *combo = new AuiComboDelete(parent);
+  // 复用统一样式：显示文字的左边距与普通输入框（QLineEdit）对齐
+  AuiComboBox::applyStyle(combo);
   return combo;
 }
 
