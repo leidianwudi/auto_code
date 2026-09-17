@@ -47,6 +47,14 @@ export class ${selClass} extends In_BasePage {
   ${field.name}?: ${if field.tsType == "Coin"}string${else}${field.tsType}${/if};
 
   ${/each}
+  ${# ── i18n 语言码字段（hasI18n 时生成）─────────────────────────────   }
+  ${# 平铺当前语言文本用：不传使用 defaultLang；放在 sort 字段之前          }
+  ${if hasI18n}
+  @ApiProperty({ description: '语言码，如 zh / en，不传使用默认语言 ${i18nDefaultLang}', required: false })
+  @IsOptional()
+  lang?: string;
+
+  ${/if}
   ${# ── 固定的 sort 字段 ────────────────────────────────────────────   }
   ${# description 列出所有可排序字段，来自 JSON 配置的 selColsSort           }
   @ApiProperty({ description: '${sortDesc}', required: false })

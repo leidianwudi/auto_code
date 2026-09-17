@@ -1,0 +1,17 @@
+{
+    "$schema": "/crud_nest/template/tool/param.schema.json",
+    "tables": [
+        {
+            "modelName": "base/base_lang",
+            "selCols": [
+                "lang"
+            ],
+            "tableEnum": {
+                "comment": "name",
+                "key": "lang",
+                "value": "lang"
+            },
+            "tableName": "base_lang"
+        }
+    ]
+}

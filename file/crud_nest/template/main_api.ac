@@ -20,7 +20,7 @@
 ///   - templates 可选，模板配置数组（省略时使用本文件默认模板）
 /// ----------------------------------------------------------------------------
 
-import { Param } from "./core/param.ac";
+import { Param, FieldDef } from "./core/param.ac";
 import { QueryData } from "./core/query_data.ac";
 import { updateAppModule } from "./app_module.ac";
 import { escapeJsStr, snakeToCamel, snakeToPascal, isNumericStr } from "../../tool/tool_str.ac";
@@ -444,6 +444,150 @@ export function generateApiMain(params: Object): Number {
     // Module 类名
     tplData["moduleClassFile"]     = param.tableName + ".module"; // ${moduleClassFile} 如 user.module
 
+    // ── 5.6b i18n 多语言配置处理 ─────────────────────────────────
+    //      json 配置 i18n 节点时，生成"主表 + 翻译表"多语言 API：
+    //        - 翻译表实体单文件生成（仅 en.tpl，不生成 in/out/service/controller/module）
+    //        - 查询平铺当前语言文本（缺失回退 defaultLang），详情附全语言 map
+    //        - 写入事务内 upsert 翻译行（依赖翻译表 uk(extKey, langKey) 唯一键）
+    //      i18n 格式：{ table: 'shop0', extKey: 'ext_id', langKey: 'lang',
+    //                   fields: ['name','intro'], defaultLang: 'zh', langFrom: 'body' }
+    let hasI18n: Bool = false;
+    let i18nEntityClass: String = "";
+    let i18nEntityClassFile: String = "";
+    let i18nExtKey: String = "";
+    let i18nLangKey: String = "";
+    let i18nDefaultLang: String = "zh";
+    let i18nFlatFields: FieldDef[] = [];  // 平铺进主表返回结构的翻译字段
+    let i18nCfg: Object = json["i18n"];
+    if (i18nCfg != null) {
+      let i18nTable: String = i18nCfg["table"];
+      let i18nSchema = db.tableSchema({ table: i18nTable });
+      if (i18nSchema.length == 0) {
+        printError("错误：i18n 翻译表不存在: '" + i18nTable + "'（主表 " + json.tableName + " 的 i18n 配置被跳过）");
+      } else {
+        // 用 Param 加工翻译表 schema（复用全部字段映射逻辑，得 EnShop0 与字段/tsType）
+        let iParam = new Param();
+        let iCombined: Object = {};
+        iCombined["tableName"] = i18nTable;
+        iCombined["modelName"] = json.modelName;
+        iCombined["columns"] = i18nSchema;
+        let iTblInfo = db.tableInfo({ table: i18nTable });
+        iCombined["tableDesc"] = iTblInfo.comment;
+        iParam.setTableData(iCombined);
+        i18nEntityClass = iParam.entityClass;
+        i18nEntityClassFile = "en_" + i18nTable;
+
+        // extKey / langKey 列存在性校验（写入与查询都依赖这两列）
+        i18nExtKey = i18nCfg["extKey"];
+        i18nLangKey = i18nCfg["langKey"];
+        let extKeyOk = false;
+        let langKeyOk = false;
+        for (icol in i18nSchema) {
+          if (icol.name == i18nExtKey) { extKeyOk = true; }
+          if (icol.name == i18nLangKey) { langKeyOk = true; }
+        }
+        if (!extKeyOk || !langKeyOk) {
+          printError("错误：i18n 配置的 extKey('" + i18nExtKey + "') 或 langKey('" + i18nLangKey +
+                     "') 列在翻译表 " + i18nTable + " 中不存在，i18n 配置被跳过");
+        } else {
+          // defaultLang：语言回退目标（查询不到当前语言时用它的文本）
+          if (i18nCfg["defaultLang"] != null && i18nCfg["defaultLang"] != "") {
+            i18nDefaultLang = i18nCfg["defaultLang"];
+          }
+          // langFrom：v1 仅支持 body（语言码放请求体），配 header 时提示
+          let langFrom: String = i18nCfg["langFrom"];
+          if (langFrom == "header") {
+            printLog("提示：i18n.langFrom=header 第一版未支持，已按 body.lang 生成（语言码放请求体）");
+          }
+
+          // 平铺字段收集：fields 中每列必须在翻译表中存在，且不与主表列重名
+          //   与主表重名时平铺会覆盖主表数据 → 报错跳过 i18n
+          let fieldCfg: String[] = i18nCfg["fields"];
+          let fieldCfgLen = fieldCfg.length;
+          let i18nInvalid = false;
+          for (let fi = 0; fi < fieldCfgLen; fi = fi + 1) {
+            let fname: String = fieldCfg[fi];
+            let found: FieldDef = null;
+            for (f in iParam.fields) {
+              if (f.name == fname) { found = f; break; }
+            }
+            if (found == null) {
+              printError("错误：i18n.fields 中的列 '" + fname + "' 在翻译表 " + i18nTable + " 中不存在，i18n 配置被跳过");
+              i18nInvalid = true;
+              break;
+            }
+            for (mf in param.fields) {
+              if (mf.name == fname) {
+                printError("错误：i18n.fields 中的列 '" + fname + "' 与主表 " + json.tableName +
+                           " 的列重名，平铺会覆盖主表数据，i18n 配置被跳过");
+                i18nInvalid = true;
+                break;
+              }
+            }
+            if (i18nInvalid) { break; }
+            let ff = new FieldDef();
+            ff.name = found.name;
+            ff.comment = found.comment;
+            ff.tsType = found.tsType;
+            i18nFlatFields.append(ff);
+          }
+
+          if (!i18nInvalid) {
+            hasI18n = true;
+          }
+
+          // 翻译实体：只渲染 en.tpl（无 in/out/service/controller/module），
+          // 输出到主表模块的 entities 目录（en_{i18nTable}.ts）
+          let iTplData: Object = {};
+          iTplData["entityClass"] = iParam.entityClass;
+          iTplData["tableName"] = iParam.tableName;
+          iTplData["tableDesc"] = iCombined["tableDesc"];
+          iTplData["fields"] = iParam.fields;
+          iTplData["imports"] = iParam.imports;
+          iTplData["relations"] = iParam.relations;
+          iTplData["hasI18n"] = false;  // 翻译实体自身无 i18n 块
+          let iOutPath = formatPath("{basePath}/{modelName}/entities/en_{tableName}.ts", {
+            basePath: basePath,
+            modelName: json.modelName,
+            tableName: i18nTable
+          });
+          let iResult = renderTpl("../template/entities/en.tpl", iTplData);
+          if (iResult) {
+            let iOk = writeFile(iOutPath, iResult);
+            if (iOk) {
+              generatedFileCount = generatedFileCount + 1;
+            }
+            printLog("生成文件: " + iOutPath);
+          }
+        }
+      }
+    }
+    // i18n fields 字面量串（"'name', 'intro'"）与自定义默认语言行（与枚举默认 zh 一致时省略，
+    // 缺省回退由公共层 tool_i18n.ts 用 EnumBaseLangLang.Zh 枚举兜底）
+    let i18nFieldsStr: String = "";
+    let i18nFirstField = true;
+    for (iff in i18nFlatFields) {
+      if (i18nFirstField) {
+        i18nFirstField = false;
+      } else {
+        i18nFieldsStr = i18nFieldsStr + ", ";
+      }
+      i18nFieldsStr = i18nFieldsStr + "'" + iff.name + "'";
+    }
+    let i18nDefaultLangLine: String = "";
+    if (i18nDefaultLang != "zh") {
+      i18nDefaultLangLine = "    defaultLang: '" + i18nDefaultLang + "',\n";
+    }
+    tplData["hasI18n"]              = hasI18n;              // ${if hasI18n} 是否配置了 i18n 多语言
+    tplData["i18nEntityClass"]      = i18nEntityClass;      // ${i18nEntityClass} 翻译实体类名，如 EnShop0
+    tplData["i18nEntityClassFile"]  = i18nEntityClassFile;  // ${i18nEntityClassFile} 翻译实体文件名，如 en_shop0
+    tplData["i18nExtKey"]           = i18nExtKey;           // ${i18nExtKey} 翻译表外键列（关联主表 id）
+    tplData["i18nLangKey"]          = i18nLangKey;          // ${i18nLangKey} 翻译表语言码列
+    tplData["i18nDefaultLang"]      = i18nDefaultLang;      // ${i18nDefaultLang} 默认语言（回退目标）
+    tplData["i18nFlatFields"]       = i18nFlatFields;       // ${each f in i18nFlatFields} 平铺字段循环
+    tplData["i18nFieldsStr"]        = i18nFieldsStr;        // ${i18nFieldsStr} i18nOpt.fields 字面量串
+    tplData["i18nDefaultLangLine"]  = i18nDefaultLangLine;  // ${i18nDefaultLangLine} i18nOpt 自定义默认语言行（空 = 用枚举兜底）
+
     // ── 5.7 基础路径数据（供 formatPath 占位符替换）────────────
     let name = basename(file);
 
@@ -495,14 +639,23 @@ export function generateApiMain(params: Object): Number {
 
     // ── 5.9 收集本表模块（文件存在 = 新生成或此前已生成）──────────
     //      moduleClass 命名与 module.tpl 一致：modelBaseName + "Module"；
-    //      实体类一并传递（注册进 app.module.ts 的全局 entities 数组）
+    //      实体类一并传递（注册进 app.module.ts 的全局 entities 数组）；
+    //      extraEntities - i18n 翻译实体（如 EnShop0），随主模块一并注册
     if (moduleOutPath != "" && fileExists(moduleOutPath)) {
+      let extraEntities: Object[] = [];
+      if (hasI18n) {
+        extraEntities.push({
+          entityClass: i18nEntityClass,
+          entityClassFile: i18nEntityClassFile
+        });
+      }
       generatedModules.push({
         moduleClass: modelBaseName + "Module",
         moduleClassFile: tplData["moduleClassFile"],
         modelName: json.modelName,
         entityClass: param.entityClass,
-        entityClassFile: tplData["entityClassFile"]
+        entityClassFile: tplData["entityClassFile"],
+        extraEntities: extraEntities
       });
     }
     }  // end for (json in tableConfigs)

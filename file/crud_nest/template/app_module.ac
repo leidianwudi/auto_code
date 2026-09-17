@@ -10,6 +10,10 @@
 ///     模块类（XxxModule） → @Module 的 imports: [...] 数组
 ///                          （模块挂载，缺了服务不生效）
 ///
+///   配置了 i18n 多语言的表额外注册翻译实体（extraEntities，如 EnShop0），
+///   与主实体同样进全局 entities 数组（i18n 代码经 EntityManager 现取仓储，
+///   无需 forFeature）。
+///
 ///   对应三对 needle 标记（识别按子串匹配，标记行尾可带说明文字）：
 ///
 ///     import 区标记：  // {autocode:imports}   ... // {/autocode:imports}
@@ -345,9 +349,22 @@ export function updateAppModule(appModulePath: String, modules: Object[]): Numbe
     let needAnything: Bool = false;
 
     // ── 7.1 实体类（EnXxx）：entities 数组 + 实体 import ──
-    let entityClass: String = m.entityClass;
-    if (entityClass != null && entityClass.length > 0 && hasEntRegion && !skipEntity) {
-      let entityImportPath: String = modelPath + "/entities/" + m.entityClassFile;
+    //     主实体 + i18n 翻译实体（extraEntities，可省略键）逐个注册，幂等逻辑相同
+    let ents: Object[] = [];
+    if (m.entityClass != null && m.entityClass.length > 0) {
+      ents.push({ entityClass: m.entityClass, entityClassFile: m.entityClassFile });
+    }
+    if (m.extraEntities != null) {
+      for (ee in m.extraEntities) {
+        ents.push(ee);
+      }
+    }
+    for (ent in ents) {
+      let entityClass: String = ent.entityClass;
+      if (entityClass == null || entityClass.length == 0 || !hasEntRegion || skipEntity) {
+        continue;
+      }
+      let entityImportPath: String = modelPath + "/entities/" + ent.entityClassFile;
       let hasEntityImport: Bool = content.indexOf("'" + entityImportPath + "'") >= 0;
       if (!hasEntityImport) {
         newImportLines.push("import { " + entityClass + " } from '" + entityImportPath + "';");

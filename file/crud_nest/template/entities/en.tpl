@@ -39,6 +39,9 @@ ${# 例如：import { EnNewsCategory } from './en_news_category' }
 ${each imp in imports}
 ${imp};
 ${/each}
+${if hasI18n}
+import { ${i18nEntityClass} } from './${i18nEntityClassFile}';
+${/if}
 
 ${# ── 实体类声明 ───────────────────────────────────────────────────────────   }
 ${# @Entity('table_name') 标记这是一个数据库实体类，TypeORM 会根据它建表/建约束  }
@@ -103,6 +106,20 @@ export class ${entityClass} {
   ${/if}
 
   ${/each}
+  ${# ── i18n 多语言 transient 字段（hasI18n 时生成）─────────────────────────   }
+  ${# 非数据库列：无 @Column 装饰器，TypeORM 的 insert/update/find 均忽略；        }
+  ${# 平铺字段由 db 层查询翻译表后填入当前语言文本（缺失回退默认语言），           }
+  ${# i18n map 由 selectById 填充全语言翻译，供管理端逐语言编辑                  }
+  ${if hasI18n}
+  ${each f in i18nFlatFields}
+  @ApiProperty({ description: '${f.comment}（当前语言平铺，缺失回退 ${i18nDefaultLang}）', required: false })
+  ${f.name}?: ${f.tsType};
+
+  ${/each}
+  @ApiProperty({ description: '全语言翻译数据（key 为语言码，如 { zh: {...}, en: {...} }）', required: false })
+  i18n?: Record<string, Partial<${i18nEntityClass}>>;
+
+  ${/if}
   ${# ── 辅助方法：返回数据库表名，用于查询/联表时拼接 SQL ──────────   }
   static getTableName() {
     return '${tableName}';
