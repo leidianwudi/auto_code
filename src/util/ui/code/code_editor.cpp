@@ -944,7 +944,7 @@ void CodeEditor::contextMenuEvent(QContextMenuEvent *event) {
 
       // ── 查找所有引用（跨文件）──
       // 仅代码类文件（.ac/.tpl，非 JsonValidation）提供；json/jsonvue/jsonsource
-      // 是数据定义文件，"标识符引用"语义不适用（裸 key 误报、字符串值漏报），
+      // /jsonupload 是数据定义文件，"标识符引用"语义不适用（裸 key 误报、字符串值漏报），
       // 故不提供此菜单项，避免误导（VSCode 也不对 JSON 提供 Find All References）
       if (m_validationMode != JsonValidation) {
         QAction *findRefsAction = menu->addAction(QStringLiteral("查找所有引用"));

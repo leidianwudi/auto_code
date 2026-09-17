@@ -28,6 +28,7 @@
 #include "config_dialog_common.h"
 #include "src/ui/json_source/json_source_finder.h"
 #include "src/ui/json_source/json_source_model.h"
+#include "src/ui/json_source/json_upload_model.h"
 #include "src/util/common/code_constants.h"
 #include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_combo_box.h"
@@ -767,8 +768,44 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
       break;
     }
     case EditStyle::Image: {
-      auto *hint = new QLabel(QStringLiteral("  （图片 URL 输入）"), m_editStyleWidget);
-      form->addRow(QString(), hint);
+      // 上传预设下拉：列出工作区/项目作用域内所有 .jsonupload 上传预设。
+      // 选中后编辑页生成上传组件（图片路径随表单 JSON 提交）；
+      // 选"手动输入"保留旧行为（图片 URL 手工填写，无引用键写出）
+      m_uploadSourceCombo = AuiComboBox::create(m_editStyleWidget);
+      m_uploadSourceCombo->addItem(QStringLiteral("（不上传，手动输入图片 URL）"), QString());
+      int restoreIdx = 0;
+      const QStringList uploadFiles = findJsonuploadFiles(m_searchRoot);
+      for (const QString &uf : uploadFiles) {
+        JsonUploadConfig cfg;
+        {
+          QFile f(uf);
+          if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            cfg = JsonUploadConfig::fromJsonString(QString::fromUtf8(f.readAll()));
+            f.close();
+          }
+        }
+        for (const auto &u : cfg.uploads) {
+          const QString remark = u.remark.isEmpty() ? QStringLiteral("(未命名)") : u.remark;
+          // 显示：说明 - 上传地址（文件名）
+          const QString text =
+              QStringLiteral("%1 - %2（%3）").arg(remark, u.url, QFileInfo(uf).fileName());
+          m_uploadSourceCombo->addItem(text, uf + QStringLiteral("#") + u.id);
+          if (uf == m_cachedUploadSourceFile && u.id == m_cachedUploadSourceId) {
+            restoreIdx = m_uploadSourceCombo->count() - 1;
+          }
+        }
+      }
+      m_uploadSourceCombo->setCurrentIndex(restoreIdx);
+      // 上传预设行：标签用 QFormLayout 的 QString 形式（避免复合 widget 被压缩截断），
+      // 问号按钮放在 field 侧、下拉框之前，视觉上仍紧跟标签文字
+      auto *uploadSrcField = new QWidget(m_editStyleWidget);
+      auto *uploadSrcLay = new QHBoxLayout(uploadSrcField);
+      uploadSrcLay->setContentsMargins(0, 0, 0, 0);
+      uploadSrcLay->setSpacing(2);
+      uploadSrcLay->addWidget(AuiButton::createHelpButton(
+          QStringLiteral("上传预设作用域"), jsonVueUploadScopeHelpText(), uploadSrcField));
+      uploadSrcLay->addWidget(m_uploadSourceCombo, 1);
+      form->addRow(QStringLiteral("  上传预设:"), uploadSrcField);
       break;
     }
     case EditStyle::Select: {
@@ -991,6 +1028,35 @@ void ColumnStyleDialog::setBoolSourceRef(const QString &file, const QString &id)
 QString ColumnStyleDialog::boolSourceFile() const { return m_cachedBoolSourceFile; }
 
 QString ColumnStyleDialog::boolSourceId() const { return m_cachedBoolSourceId; }
+
+void ColumnStyleDialog::setUploadSourceRef(const QString &file, const QString &id) {
+  m_cachedUploadSourceFile = file;
+  m_cachedUploadSourceId = id;
+  // 控件已存在时直接选中对应项（无联动信号，仅改选中态）
+  if (m_uploadSourceCombo) {
+    for (int i = 0; i < m_uploadSourceCombo->count(); ++i) {
+      if (m_uploadSourceCombo->itemData(i).toString() == file + QStringLiteral("#") + id) {
+        m_uploadSourceCombo->setCurrentIndex(i);
+        break;
+      }
+    }
+  }
+}
+
+QString ColumnStyleDialog::uploadSourceFile() const {
+  // 直接解析下拉当前选中项（"文件路径#id"），无联动信号缓存
+  if (!m_uploadSourceCombo) return m_cachedUploadSourceFile;
+  const QString ref = m_uploadSourceCombo->currentData().toString();
+  if (ref.isEmpty()) return QString();
+  return ref.section(QStringLiteral("#"), 0, 0);
+}
+
+QString ColumnStyleDialog::uploadSourceId() const {
+  if (!m_uploadSourceCombo) return m_cachedUploadSourceId;
+  const QString ref = m_uploadSourceCombo->currentData().toString();
+  if (ref.isEmpty()) return QString();
+  return ref.section(QStringLiteral("#"), 1, -1);
+}
 
 void ColumnStyleDialog::setBoolTrueText(const QString &v) {
   m_cachedBoolTrueText = v;

@@ -349,4 +349,5 @@ inline constexpr const char *kTpl = ".tpl";
 inline constexpr const char *kJson = ".json";
 inline constexpr const char *kJsonvue = ".jsonvue";
 inline constexpr const char *kJsonsource = ".jsonsource";
+inline constexpr const char *kJsonupload = ".jsonupload";
 }  // namespace AcFileSuffix

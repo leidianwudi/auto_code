@@ -27,6 +27,7 @@ public:
     Json,       ///< .json 文件
     Jsonvue,    ///< .jsonvue 文件（Vue3 后台管理界面配置）
     Jsonsource, ///< .jsonsource 文件（下拉框数据源配置）
+    Jsonupload, ///< .jsonupload 文件（图片上传预设配置）
     FileTypeCount
   };
 

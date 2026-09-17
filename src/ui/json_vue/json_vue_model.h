@@ -57,15 +57,17 @@ inline constexpr const char *kRelation = "relation";
 inline constexpr const char *kSelectUrl = "selectUrl";
 inline constexpr const char *kSelectValueField = "selectValueField";
 inline constexpr const char *kSelectLabelField = "selectLabelField";
-inline constexpr const char *kSelectSourceFile = "selectSourceFile";  ///< 引用的 .jsonsource 文件路径
-inline constexpr const char *kSelectSourceId = "selectSourceId";      ///< 引用的数据源 id
-inline constexpr const char *kSelectPaged = "selectPaged";            ///< 下拉框是否查询分页加载
-inline constexpr const char *kSelectPageKey = "selectPageKey";        ///< 页码参数名（默认 page）
-inline constexpr const char *kSelectPageSizeKey = "selectPageSizeKey";  ///< 页大小参数名（默认 pageSize）
-inline constexpr const char *kSelectPageSize = "selectPageSize";      ///< 默认页大小
+inline constexpr const char *kSelectSourceFile =
+    "selectSourceFile";                                           ///< 引用的 .jsonsource 文件路径
+inline constexpr const char *kSelectSourceId = "selectSourceId";  ///< 引用的数据源 id
+inline constexpr const char *kSelectPaged = "selectPaged";        ///< 下拉框是否查询分页加载
+inline constexpr const char *kSelectPageKey = "selectPageKey";    ///< 页码参数名（默认 page）
+inline constexpr const char *kSelectPageSizeKey =
+    "selectPageSizeKey";                                          ///< 页大小参数名（默认 pageSize）
+inline constexpr const char *kSelectPageSize = "selectPageSize";  ///< 默认页大小
 inline constexpr const char *kSelectSearchTitle = "selectSearchTitle";  ///< 查询标题（搜索框提示）
 inline constexpr const char *kSelectSearchField = "selectSearchField";  ///< 字段名（搜索参数key）
-inline constexpr const char *kSelectMethod = "selectMethod";            ///< 查询请求方式（GET/POST）
+inline constexpr const char *kSelectMethod = "selectMethod";  ///< 查询请求方式（GET/POST）
 inline constexpr const char *kPlaceholder = "placeholder";
 inline constexpr const char *kMaxlength = "maxlength";
 inline constexpr const char *kMinValue = "minValue";
@@ -84,6 +86,9 @@ inline constexpr const char *kBoolTrueText = "boolTrueText";
 inline constexpr const char *kBoolFalseText = "boolFalseText";
 inline constexpr const char *kBoolSourceFile = "boolSourceFile";  ///< boolean 引用的静态数据源文件
 inline constexpr const char *kBoolSourceId = "boolSourceId";      ///< boolean 引用的静态数据源 id
+inline constexpr const char *kUploadSourceFile =
+    "uploadSourceFile";  ///< image 引用的 .jsonupload 文件路径
+inline constexpr const char *kUploadSourceId = "uploadSourceId";  ///< image 引用的上传预设 id
 inline constexpr const char *kDefaultValue = "defaultValue";
 inline constexpr const char *kDefaultSort = "defaultSort";
 
@@ -320,6 +325,11 @@ struct ColumnConfig {
   /// 引用时真假文字从数据源读取并锁定不可改；空 = 手动输入
   QString boolSourceFile;
   QString boolSourceId;
+  /// image 编辑样式引用的上传预设（.jsonupload 文件 + 预设 id）。
+  /// 引用时编辑页生成上传组件（el-upload + axios 上传），路径随表单 JSON 提交；
+  /// 空 = 保持旧行为（URL 手工输入）
+  QString uploadSourceFile;
+  QString uploadSourceId;
 
   // ── 通用配置（3-6）──
   QString defaultValue;  ///< 新增记录时的默认值（如 "1" / "0" / ""）

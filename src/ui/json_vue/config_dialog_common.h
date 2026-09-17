@@ -72,6 +72,10 @@ QPushButton *makeCompactButton(const QString &text, QWidget *parent = nullptr);
 /// 说明「右键设为项目」对数据源下拉框内容的影响：项目根过滤 + 未设项目时的回退规则
 QString jsonVueSourceScopeHelpText();
 
+/// jsonupload 上传预设作用域帮助文案（供上传预设下拉框旁的问号帮助按钮共用）。
+/// 结构与 jsonVueSourceScopeHelpText 相同，措辞针对 .jsonupload 上传预设文件
+QString jsonVueUploadScopeHelpText();
+
 /// 配置表格单列定义（供 makeConfigTable 批量设置列头 / 列宽模式 / 固定宽度）
 struct ConfigTableColumn {
   QString header;                                        ///< 列头文本

@@ -74,12 +74,15 @@ export function generateAdminMain(params: Object): Void {
   let filesLen = files.length;
   printLog("files count: " + filesLen);
 
-  // ── 3.1 收集勾选的 .jsonsource 文件真实路径 ────────────────────
+  // ── 3.1 收集勾选的 .jsonsource / .jsonupload 配置文件真实路径 ─────
   //    供 buildAdminTplData 在 jsonvue 引用路径过期（文件被移动）时按文件名匹配
   let sourceFiles: String[] = [];
+  let uploadFiles: String[] = [];
   for (file in files) {
     if (file.endsWith(".jsonsource")) {
       sourceFiles.push(file);
+    } else if (file.endsWith(".jsonupload")) {
+      uploadFiles.push(file);
     }
   }
 
@@ -146,13 +149,13 @@ export function generateAdminMain(params: Object): Void {
     //        各派生标记          - 排序、默认值、隐藏/只读字段等
     let json = readJson(file);
 
-    // 引用 .jsonsource 的路径匹配由 buildAdminTplData 内部按文件名
-    // 从 sourceFiles（勾选的 .jsonsource 真实路径）解析，无需修改 jsonvue 数据
+    // 引用 .jsonsource / .jsonupload 的路径匹配由 buildAdminTplData 内部按文件名
+    // 从 sourceFiles / uploadFiles（勾选的真实路径）解析，无需修改 jsonvue 数据
     let tplData = buildAdminTplData(json, file, {
       "select": apiSelectSuffix,
       "update": apiUpdateSuffix,
       "delete": apiDeleteSuffix
-    }, sourceFiles);
+    }, sourceFiles, uploadFiles);
     let pagePath: String = tplData["pagePath"];
 
     // ── 4.2 遍历模板配置，逐个渲染并写入文件 ─────────────────────

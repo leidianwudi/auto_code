@@ -15,7 +15,7 @@
 //     6. buildAdminTplData - 汇总以上结果，生成完整 tplData
 // ============================================================================
 
-import { escapeJsStr, snakeToPascal, snakeToCamel } from "../../../tool/tool_str.ac";
+import { escapeJsStr, snakeToPascal, snakeToCamel, isNumericStr } from "../../../tool/tool_str.ac";
 
 // ---------------------------------------------------------------------------
 // 0) 通用辅助
@@ -62,11 +62,56 @@ export function derivePage(file: String): Object {
 }
 
 // ---------------------------------------------------------------------------
+// 1.5) 图片上传预设辅助：响应提取路径 → 可选链表达式
+//    "data.url" → "res?.data?.url"；段名不合法（非 [A-Za-z0-9_]）时回退默认值，
+//    防止注入非法 JS 标识符导致生成的代码语法错误
+// ---------------------------------------------------------------------------
+export function isValidIdent(s: String): Bool {
+  if (s == null || s.length == 0) {
+    return false;
+  }
+  let n = s.length;
+  for (let i = 0; i < n; i = i + 1) {
+    let c = s[i];
+    let isDigit = (c >= "0" && c <= "9");
+    let isLower = (c >= "a" && c <= "z");
+    let isUpper = (c >= "A" && c <= "Z");
+    if (!isDigit && !isLower && !isUpper && c != "_") {
+      return false;
+    }
+  }
+  // 首字符不能是数字
+  let c0 = s[0];
+  if (c0 >= "0" && c0 <= "9") {
+    return false;
+  }
+  return true;
+}
+
+export function buildResChain(responsePath: String): String {
+  let path: String = isNotEmpty(responsePath) ? responsePath : "data.url";
+  let segs: String[] = path.split(".");
+  let chain = "res";
+  let segsLen = segs.length;
+  for (let i = 0; i < segsLen; i = i + 1) {
+    let seg = segs[i];
+    if (!isValidIdent(seg)) {
+      return "res?.data?.url";
+    }
+    chain = chain + "?." + seg;
+  }
+  return chain;
+}
+
+// ---------------------------------------------------------------------------
 // 2) 加工列配置数据 → 模板友好列数组
 //    sourceMap 为 .jsonsource 数据源引用查找表（键 "文件路径#数据源id"，
-//    值为 processSources 加工后的数据源对象），可为 null（无引用时）
+//    值为 processSources 加工后的数据源对象），可为 null（无引用时）；
+//    uploadMap 为 .jsonupload 上传预设引用查找表（键 "文件路径#预设id"，
+//    值为原始预设对象），可为 null（无引用时）
 // ---------------------------------------------------------------------------
-export function processColumns(rawColumns: Object[], sourceMap: Object): Object[] {
+export function processColumns(rawColumns: Object[], sourceMap: Object,
+                               uploadMap: Object): Object[] {
   let columns: Object[] = [];
   let rawColsLen = rawColumns.length;
   for (let i = 0; i < rawColsLen; i = i + 1) {
@@ -296,6 +341,83 @@ export function processColumns(rawColumns: Object[], sourceMap: Object): Object[
     col["isTagEdit"] = (rawCol.editStyle == "tag");
     col["isBooleanEdit"] = (rawCol.editStyle == "boolean");
     col["isImageEdit"] = (rawCol.editStyle == "image");
+    // 字段名帕斯卡形式（上传函数名后缀，如 goodsImg → GoodsImg）
+    col["dataNamePascal"] = snakeToPascal(rawCol.dataName);
+
+    // ── 图片上传预设引用 ──────────────────────────────────────────
+    // editStyle==image 且引用了 .jsonupload 上传预设（uploadSourceFile/
+    // uploadSourceId）时，编辑页生成上传组件：axios 上传（form-data）+
+    // 响应提取路径写回表单字段，路径随表单 JSON 提交；
+    // 未引用 → hasUpload=false，保持旧行为（图片 URL 手工输入）
+    let uploadRef: Object = null;
+    if (rawCol.editStyle == "image" && isNotEmpty(rawCol.uploadSourceFile) && uploadMap != null) {
+      uploadRef = uploadMap[rawCol.uploadSourceFile + "#" + rawCol.uploadSourceId];
+    }
+    let hasUpload = (uploadRef != null);
+    if (!hasUpload && rawCol.editStyle == "image" && isNotEmpty(rawCol.uploadSourceFile)) {
+      // 引用了预设但 .jsonupload 文件/预设 id 找不到（文件被移动或预设被删）→ 警告并回退
+      printError("警告：字段 '" + rawCol.dataName + "' 引用的上传预设不存在（" +
+                 rawCol.uploadSourceFile + "#" + rawCol.uploadSourceId +
+                 "），已回退为普通 URL 输入，请检查 .jsonupload 文件是否勾选");
+    }
+    col["hasUpload"] = hasUpload;
+    if (hasUpload) {
+      // 上传地址（补前导斜杠，与 selectApiUrl 归一规则一致）
+      let upUrl: String = uploadRef["url"];
+      if (isNotEmpty(upUrl) && !upUrl.startsWith("/")) {
+        upUrl = "/" + upUrl;
+      }
+      col["uploadAction"] = upUrl;
+      // form-data 文件字段名（预设未填时默认 file）
+      col["uploadFileField"] = isNotEmpty(uploadRef["fileField"]) ? uploadRef["fileField"] : "file";
+      // 最多张数（1=单图 / >1=多图）
+      let upLimit: Int = 1;
+      if (uploadRef["maxCount"] != null && uploadRef["maxCount"] > 0) {
+        upLimit = uploadRef["maxCount"];
+      }
+      col["uploadLimit"] = upLimit;
+      // 多图判定：valueType=="array" 显式声明，或未声明时按 maxCount>1 推导；
+      // valueType=="string" 显式声明单图
+      let upMulti: Bool = false;
+      if (uploadRef["valueType"] == "array") {
+        upMulti = true;
+      } else if (uploadRef["valueType"] != "string" && upLimit > 1) {
+        upMulti = true;
+      }
+      col["uploadMulti"] = upMulti;
+      // 预设说明（生成注释用）
+      col["uploadLabel"] = isNotEmpty(uploadRef["remark"]) ? uploadRef["remark"] : "";
+      col["hasUploadLabel"] = isNotEmpty(uploadRef["remark"]);
+      // remove 后写回的表达式：多图=剩余数组映射，单图=空字符串
+      if (upMulti) {
+        col["uploadRemoveValueExpr"] = rawCol.dataName + "FileList.map((f: any) => f.url)";
+      } else {
+        col["uploadRemoveValueExpr"] = "''";
+      }
+      // 附加 form 参数片段：fd.append('type', 0);（数字字面量不加引号，字符串加引号）
+      let paramsArr: Object[] = [];
+      if (uploadRef["params"] != null) {
+        paramsArr = uploadRef["params"];
+      }
+      let paramsStr = "";
+      let pLen = paramsArr.length;
+      for (let pi = 0; pi < pLen; pi = pi + 1) {
+        let p: Object = paramsArr[pi];
+        if (!isNotEmpty(p.name)) {
+          continue;
+        }
+        let lit: String = "";
+        if (p.valueType == "number" && isNumericStr(p.value)) {
+          lit = p.value;
+        } else {
+          lit = "'" + escapeJsStr(p.value) + "'";
+        }
+        paramsStr = paramsStr + "    fd.append('" + escapeJsStr(p.name) + "', " + lit + ");\n";
+      }
+      col["uploadParamsStr"] = paramsStr;
+      // 响应提取路径：点分段 → res?.data?.url 可选链（不合法段名时 buildResChain 回退默认）
+      col["uploadResChain"] = buildResChain(uploadRef["responsePath"]);
+    }
 
     // 样式特定配置值
     col["placeholder"] = rawCol.placeholder;
@@ -956,7 +1078,7 @@ export function deriveApiBaseFromUrl(dataUrl: String): String {
 }
 
 export function buildAdminTplData(json: Object, file: String, suffixes: Object,
-                                  sourceFiles: String[]): Object {
+                                  sourceFiles: String[], uploadFiles: String[]): Object {
   // ── meta 与原始数据 ──────────────────────────────────────────────
   let meta: Object = json.meta;
   let rawColumns: Object[] = json.columns;
@@ -1051,11 +1173,53 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
     }
   }
 
+  // ── 上传预设引用查找表 ──────────────────────────────────────────
+  // 收集引用 .jsonupload 上传预设的列（uploadSourceFile），读取对应文件建立
+  // "文件路径#预设id" 映射。上传预设字段以 .jsonupload 文件的最新配置为准
+  // （jsonvue 里可能保存的是旧值）
+  let uploadMap: Object = {};
+  if (rawColumns != null) {
+    let uploadFileSet: Object = {};
+    let rawColsLen2 = rawColumns.length;
+    for (let i = 0; i < rawColsLen2; i = i + 1) {
+      if (!isNotEmpty(rawColumns[i].uploadSourceFile)) {
+        continue;
+      }
+      let ufPre: String = rawColumns[i].uploadSourceFile;
+      if (uploadFileSet[ufPre] != null) {
+        continue;
+      }
+      uploadFileSet[ufPre] = true;
+      // 引用路径匹配：jsonvue 里存的是选择时的绝对路径，文件被移动后会过期。
+      // 勾选的 .jsonupload 文件都在脚本同父路径下，按文件名匹配真实路径；
+      // 未匹配到时退回 jsonvue 里存的路径
+      let upReadPath: String = ufPre;
+      if (uploadFiles != null) {
+        let ufBase: String = basename(ufPre);
+        let ufsLen = uploadFiles.length;
+        for (let m = 0; m < ufsLen; m = m + 1) {
+          if (basename(uploadFiles[m]) == ufBase) {
+            upReadPath = uploadFiles[m];
+            break;
+          }
+        }
+      }
+      let upJson: Object = readJson(upReadPath);
+      if (upJson != null && upJson.uploads != null) {
+        let rawUploads: Object[] = upJson.uploads;
+        let upLen = rawUploads.length;
+        for (let j = 0; j < upLen; j = j + 1) {
+          uploadMap[ufPre + "#" + rawUploads[j]["id"]] = rawUploads[j];
+        }
+      }
+    }
+  }
+
   // ── 数据加工 ────────────────────────────────────────────────────
   let btnResult = processButtons(rawButtons);
   let apiImports = buildApiImports(queryApi, deleteApi, updateApi, noDelete, noEdit,
                                    btnResult["extraApiList"]);
-  let columns = processColumns(rawColumns, sourceMap);
+  let columns = processColumns(rawColumns, sourceMap, uploadMap);
   // 列 dataName → 列 映射（查询字段复用列的下拉数据源时查表用）
   let columnMap: Object = {};
   let colMapLen = columns.length;
@@ -1275,6 +1439,17 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
     }
   }
 
+  // ── 是否有引用上传预设的图片字段（write.tpl 生成上传组件区）────
+  let hasUploadFields = false;
+  for (let i = 0; i < colsLen2; i = i + 1) {
+    if (columns[i]["hasUpload"] && columns[i]["editVisible"]) {
+      hasUploadFields = true;
+      break;
+    }
+  }
+  // watch 导入条件：默认值注入或上传字段回显（避免重复 import watch）
+  let hasWatch = (hasDefaultValues || hasUploadFields);
+
   // ── 编辑表单中只读的字段（editEditable=false）──
   // 注：editVisible=false 的字段已由 write.tpl 通过 ${if col.editVisible} 过滤，不再生成，
   //     因此无需 hiddenFields（隐藏字段列表）。
@@ -1345,6 +1520,9 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
   tplData["defaultSortOrder"] = defaultSortOrder;
   // 新增记录默认值
   tplData["hasDefaultValues"] = hasDefaultValues;
+  // 图片上传预设（write.tpl 上传组件区）
+  tplData["hasUploadFields"] = hasUploadFields;
+  tplData["hasWatch"] = hasWatch;
   // 编辑表单隐藏/只读字段
   tplData["hasHiddenFields"] = hasHiddenFields;
   tplData["hiddenFieldsStr"] = "";

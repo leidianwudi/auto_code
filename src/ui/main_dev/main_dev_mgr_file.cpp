@@ -19,6 +19,7 @@
 #include "src/engine/ac_language.h"
 #include "src/engine/schema_validator.h"
 #include "src/ui/json_source/json_source_widget.h"
+#include "src/ui/json_source/json_upload_widget.h"
 #include "src/ui/json_vue/json_vue_editor.h"
 #include "src/ui/json_vue/json_vue_widget.h"
 #include "src/ui/schema_json/schema_json_widget.h"
@@ -87,9 +88,10 @@ QWidget *MainDevMgr::createEditorTab(const QString &filePath, const QString &con
   CodeEditor *editor = nullptr;
   QWidget *tabWidget = nullptr;
 
-  // .jsonvue / .jsonsource 文件使用可视化包装器（CodeEditor + 可视化编辑器）
+  // .jsonvue / .jsonsource / .jsonupload 文件使用可视化包装器（CodeEditor + 可视化编辑器）
   const bool isJsonVue = filePath.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive);
   const bool isJsonSource = filePath.endsWith(AcFileSuffix::kJsonsource, Qt::CaseInsensitive);
+  const bool isJsonUpload = filePath.endsWith(AcFileSuffix::kJsonupload, Qt::CaseInsensitive);
   const QString acPath = resolveHttpConfigAcPath(filePath);
 
   if (isJsonVue) {
@@ -119,6 +121,15 @@ QWidget *MainDevMgr::createEditorTab(const QString &filePath, const QString &con
     }
     // 可视化按钮生效时，自动以可视化方式打开
     if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) jdw->switchToVisual();
+  } else if (isJsonUpload) {
+    auto *juw = new JsonUploadWidget;
+    editor = juw->codeEditor();
+    editor->setPlainText(content);
+    juw->setPreservedSource(content);
+    tabWidget = juw;
+    // 注：上传预设无"测试请求"按钮，不需要 HTTP 配置
+    // 可视化按钮生效时，自动以可视化方式打开
+    if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) juw->switchToVisual();
   } else {
     CodeEditor *plain = createEditorForFile(filePath);
     plain->setPlainText(content);

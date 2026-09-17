@@ -319,6 +319,11 @@ QJsonObject ColumnConfig::toJson() const {
     obj[JsonVueKey::kPlaceholder] = placeholder;
     obj[JsonVueKey::kTextareaRows] = textareaRows;
   }
+  // 图片上传预设引用（仅 Image 时序列化，非空才输出，供生成侧定位预设）
+  if (editStyle == EditStyle::Image) {
+    if (!uploadSourceFile.isEmpty()) obj[JsonVueKey::kUploadSourceFile] = uploadSourceFile;
+    if (!uploadSourceId.isEmpty()) obj[JsonVueKey::kUploadSourceId] = uploadSourceId;
+  }
   // 通用配置（所有样式都输出）
   obj[JsonVueKey::kRequired] = required;
   obj[JsonVueKey::kColumnWidth] = columnWidth;
@@ -373,11 +378,16 @@ ColumnConfig ColumnConfig::fromJson(const QJsonObject &obj) {
   c.selectSourceId = obj.value(JsonVueKey::kSelectSourceId).toString();
   c.selectPaged = obj.value(JsonVueKey::kSelectPaged).toBool(false);
   c.selectPageKey = obj.value(JsonVueKey::kSelectPageKey).toString(QStringLiteral("page"));
-  c.selectPageSizeKey = obj.value(JsonVueKey::kSelectPageSizeKey).toString(QStringLiteral("pageSize"));
+  c.selectPageSizeKey =
+      obj.value(JsonVueKey::kSelectPageSizeKey).toString(QStringLiteral("pageSize"));
   c.selectPageSize = obj.value(JsonVueKey::kSelectPageSize).toInt(20);
   c.selectSearchTitle = obj.value(JsonVueKey::kSelectSearchTitle).toString();
   c.selectSearchField = obj.value(JsonVueKey::kSelectSearchField).toString();
-  c.selectMethod = obj.value(JsonVueKey::kSelectMethod).toString(QString::fromLatin1(JsonVueHttp::kPost));
+  c.selectMethod =
+      obj.value(JsonVueKey::kSelectMethod).toString(QString::fromLatin1(JsonVueHttp::kPost));
+  // 图片上传预设引用（无条件读取，与 selectSourceFile 一致）
+  c.uploadSourceFile = obj.value(JsonVueKey::kUploadSourceFile).toString();
+  c.uploadSourceId = obj.value(JsonVueKey::kUploadSourceId).toString();
   // 样式特定配置
   c.placeholder = obj.value(JsonVueKey::kPlaceholder).toString();
   c.maxlength = obj.value(JsonVueKey::kMaxlength).toInt(0);
@@ -487,11 +497,13 @@ QueryFieldConfig QueryFieldConfig::fromJson(const QJsonObject &obj) {
   q.selectSourceId = obj.value(JsonVueKey::kSelectSourceId).toString();
   q.selectPaged = obj.value(JsonVueKey::kSelectPaged).toBool(false);
   q.selectPageKey = obj.value(JsonVueKey::kSelectPageKey).toString(QStringLiteral("page"));
-  q.selectPageSizeKey = obj.value(JsonVueKey::kSelectPageSizeKey).toString(QStringLiteral("pageSize"));
+  q.selectPageSizeKey =
+      obj.value(JsonVueKey::kSelectPageSizeKey).toString(QStringLiteral("pageSize"));
   q.selectPageSize = obj.value(JsonVueKey::kSelectPageSize).toInt(20);
   q.selectSearchTitle = obj.value(JsonVueKey::kSelectSearchTitle).toString();
   q.selectSearchField = obj.value(JsonVueKey::kSelectSearchField).toString();
-  q.selectMethod = obj.value(JsonVueKey::kSelectMethod).toString(QString::fromLatin1(JsonVueHttp::kPost));
+  q.selectMethod =
+      obj.value(JsonVueKey::kSelectMethod).toString(QString::fromLatin1(JsonVueHttp::kPost));
   q.placeholder = obj.value(JsonVueKey::kPlaceholder).toString();
   q.dateFormat = obj.value(JsonVueKey::kDateFormat).toString();
   return q;
@@ -567,11 +579,13 @@ DialogFieldConfig DialogFieldConfig::fromJson(const QJsonObject &obj) {
   f.selectSourceId = obj.value(JsonVueKey::kSelectSourceId).toString();
   f.selectPaged = obj.value(JsonVueKey::kSelectPaged).toBool(false);
   f.selectPageKey = obj.value(JsonVueKey::kSelectPageKey).toString(QStringLiteral("page"));
-  f.selectPageSizeKey = obj.value(JsonVueKey::kSelectPageSizeKey).toString(QStringLiteral("pageSize"));
+  f.selectPageSizeKey =
+      obj.value(JsonVueKey::kSelectPageSizeKey).toString(QStringLiteral("pageSize"));
   f.selectPageSize = obj.value(JsonVueKey::kSelectPageSize).toInt(20);
   f.selectSearchTitle = obj.value(JsonVueKey::kSelectSearchTitle).toString();
   f.selectSearchField = obj.value(JsonVueKey::kSelectSearchField).toString();
-  f.selectMethod = obj.value(JsonVueKey::kSelectMethod).toString(QString::fromLatin1(JsonVueHttp::kPost));
+  f.selectMethod =
+      obj.value(JsonVueKey::kSelectMethod).toString(QString::fromLatin1(JsonVueHttp::kPost));
   return f;
 }
 

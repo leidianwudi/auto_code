@@ -13,6 +13,7 @@
 #include "main_dev_ui_ext.h"
 #include "src/engine/ac_language.h"
 #include "src/ui/json_source/json_source_widget.h"
+#include "src/ui/json_source/json_upload_widget.h"
 #include "src/ui/json_vue/json_vue_editor.h"
 #include "src/ui/json_vue/json_vue_widget.h"
 #include "src/ui/schema_json/schema_json_widget.h"
@@ -254,6 +255,7 @@ void MainDevMgr::onSplitRight() {
     QString filePath = current->objectName();
     bool isJsonVue = filePath.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive);
     bool isJsonSource = filePath.endsWith(AcFileSuffix::kJsonsource, Qt::CaseInsensitive);
+    bool isJsonUpload = filePath.endsWith(AcFileSuffix::kJsonupload, Qt::CaseInsensitive);
     QFileInfo fi(filePath);
     QString tabLabel = filePath.isEmpty() ? QStringLiteral("拆分副本") : fi.fileName();
     int tabIdx = -1;
@@ -308,6 +310,24 @@ void MainDevMgr::onSplitRight() {
       if (!filePath.isEmpty()) editor->setObjectName(filePath);
 
       connect(jdw, &JsonSourceWidget::contentChanged, this, [this, editor]() {
+        editor->document()->setModified(true);
+        updateSaveButtonState();
+      });
+    } else if (isJsonUpload) {
+      // .jsonupload 文件拆分时创建 JsonUploadWidget，保持可视化能力
+      auto *juw = new JsonUploadWidget;
+      auto *editor = juw->codeEditor();
+      editor->setPlainText(current->toPlainText());
+      juw->setPreservedSource(current->toPlainText());
+      // 注：上传预设无"测试请求"按钮，不需要 HTTP 配置
+      if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) juw->switchToVisual();
+
+      tabIdx = newPanel->addTab(juw, tabLabel);
+      newPanel->setTabToolTip(tabIdx, filePath);
+      newPanel->setCurrentIndex(tabIdx);
+      if (!filePath.isEmpty()) editor->setObjectName(filePath);
+
+      connect(juw, &JsonUploadWidget::contentChanged, this, [this, editor]() {
         editor->document()->setModified(true);
         updateSaveButtonState();
       });

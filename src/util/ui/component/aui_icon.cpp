@@ -184,7 +184,7 @@ QIcon AuiIcon::createFileTypeIcon(const QString &suffix, int size) {
   const qreal w = size;
 
   // 无底框，纯文字标识：ac 蓝色「A」/ json 琥珀「J」/ jsonvue 琥珀「V」/
-  // jsonsource 琥珀「S」/ tpl 绿色「T」，颜色随主题明暗调整，字号大、居中铺满
+  // jsonsource 琥珀「S」/ jsonupload 紫色「U」/ tpl 绿色「T」，颜色随主题明暗调整
   QColor accent;
   QString glyph;
   int pixelSize;
@@ -204,6 +204,10 @@ QIcon AuiIcon::createFileTypeIcon(const QString &suffix, int size) {
   } else if (suf == QStringLiteral("jsonsource")) {
     accent = dark ? QColor(0xe3, 0xa5, 0x18) : QColor(0xb5, 0x7e, 0x00);
     glyph = QStringLiteral("S");
+    pixelSize = qMax(8, qRound(size * 0.78));
+  } else if (suf == QStringLiteral("jsonupload")) {
+    accent = dark ? QColor(0xb0, 0x7f, 0xe8) : QColor(0x7a, 0x4f, 0xc0);
+    glyph = QStringLiteral("U");
     pixelSize = qMax(8, qRound(size * 0.78));
   } else {  // tpl 及未知后缀
     accent = dark ? QColor(0x4c, 0xb0, 0x5e) : QColor(0x2f, 0x8a, 0x44);

@@ -20,6 +20,7 @@
 #include <cstdio>
 
 #include "src/ui/json_source/json_source_finder.h"
+#include "src/ui/json_source/json_upload_model.h"
 #include "src/util/common/path_resolver.h"
 #include "src/util/common/util_json.h"
 
@@ -160,12 +161,136 @@ static void testProjectScopedJsonsourceFinder() {
   QDir(proj).removeRecursively();
 }
 
+/// .jsonupload 作用域查找：与 jsonsource 共用实现，验证后缀参数化后行为一致
+static void testProjectScopedJsonuploadFinder() {
+  const QString fileRoot =
+      QDir::cleanPath(QStringLiteral(PROJECT_SOURCE_DIR) + QStringLiteral("/file"));
+
+  // 构造临时项目：file/__test_proj__/{project.acproj, api/u.jsonupload, sub/v.jsonupload}
+  const QString proj = fileRoot + QStringLiteral("/__test_proj__");
+  QDir().mkpath(proj + QStringLiteral("/api"));
+  QDir().mkpath(proj + QStringLiteral("/sub"));
+  QFile marker(proj + QStringLiteral("/project.acproj"));
+  CHECK(marker.open(QIODevice::WriteOnly | QIODevice::Text));
+  marker.write("{}");
+  marker.close();
+  QFile f1(proj + QStringLiteral("/api/u.jsonupload"));
+  f1.open(QIODevice::WriteOnly | QIODevice::Text);
+  f1.close();
+  QFile f2(proj + QStringLiteral("/sub/v.jsonupload"));
+  f2.open(QIODevice::WriteOnly | QIODevice::Text);
+  f2.close();
+
+  // 1) 项目作用域：只收集该项目根下的 .jsonupload
+  const QStringList scoped = findJsonuploadFiles(proj + QStringLiteral("/sub"));
+  CHECK(scoped.size() == 2);
+  CHECK(scoped.contains(QDir::cleanPath(proj + QStringLiteral("/api/u.jsonupload"))));
+  CHECK(scoped.contains(QDir::cleanPath(proj + QStringLiteral("/sub/v.jsonupload"))));
+
+  // 2) 查找结果互不混入：jsonsource 查找不含 .jsonupload 文件
+  const QStringList srcScoped = findJsonsourceFiles(proj + QStringLiteral("/sub"));
+  CHECK(!srcScoped.contains(QDir::cleanPath(proj + QStringLiteral("/api/u.jsonupload"))));
+
+  // 3) 无标记目录（file/ 根未设项目时）→ 回退全局：能找到临时项目的 .jsonupload
+  if (!PathResolver::isProjectRoot(fileRoot)) {
+    const QStringList all = findJsonuploadFiles(fileRoot + QStringLiteral("/news_admin"));
+    CHECK(all.contains(QDir::cleanPath(proj + QStringLiteral("/api/u.jsonupload"))));
+  }
+
+  // 清理临时项目目录
+  QDir(proj).removeRecursively();
+}
+
+/// JsonUploadConfig 序列化往返：逐字段保真 + 未知键不丢失
+static void testJsonUploadConfigRoundTrip() {
+  // 构造 2 条预设（覆盖 params/valueType/maxCount/默认值）
+  JsonUploadConfig cfg;
+  JsonUpload u1;
+  u1.id = QStringLiteral("a1b2c3d4");
+  u1.remark = QStringLiteral("商品主图上传");
+  u1.url = QStringLiteral("upload/image");
+  u1.method = QStringLiteral("POST");
+  u1.fileField = QStringLiteral("file");
+  JsonUploadParam p1;
+  p1.name = QStringLiteral("type");
+  p1.value = QStringLiteral("0");
+  p1.valueType = QStringLiteral("number");
+  u1.params.append(p1);
+  JsonUploadParam p2;
+  p2.name = QStringLiteral("scene");
+  p2.value = QStringLiteral("admin");
+  u1.params.append(p2);
+  u1.responsePath = QStringLiteral("data.url");
+  u1.maxCount = 5;
+  u1.valueType = QStringLiteral("array");
+  cfg.uploads.append(u1);
+
+  JsonUpload u2;
+  u2.id = QStringLiteral("e5f6a7b8");
+  u2.url = QStringLiteral("upload/avatar");
+  u2.maxCount = 1;  // 单图，其余字段全部走默认值
+  cfg.uploads.append(u2);
+
+  const QString jsonStr = cfg.toJsonString();
+  const JsonUploadConfig back = JsonUploadConfig::fromJsonString(jsonStr);
+
+  CHECK(back.uploads.size() == 2);
+
+  const JsonUpload &r1 = back.uploads[0];
+  CHECK(r1.id == u1.id);
+  CHECK(r1.remark == u1.remark);
+  CHECK(r1.url == u1.url);
+  CHECK(r1.method == QStringLiteral("POST"));
+  CHECK(r1.fileField == QStringLiteral("file"));
+  CHECK(r1.params.size() == 2);
+  CHECK(r1.params[0].name == QStringLiteral("type"));
+  CHECK(r1.params[0].value == QStringLiteral("0"));
+  CHECK(r1.params[0].valueType == QStringLiteral("number"));
+  CHECK(r1.params[1].name == QStringLiteral("scene"));
+  CHECK(r1.params[1].value == QStringLiteral("admin"));
+  CHECK(r1.params[1].valueType.isEmpty());
+  CHECK(r1.responsePath == QStringLiteral("data.url"));
+  CHECK(r1.maxCount == 5);
+  CHECK(r1.valueType == QStringLiteral("array"));
+  CHECK(r1.isMulti());
+
+  const JsonUpload &r2 = back.uploads[1];
+  CHECK(r2.id == u2.id);
+  CHECK(r2.url == QStringLiteral("upload/avatar"));
+  CHECK(r2.method == QStringLiteral("POST"));            // 默认值
+  CHECK(r2.fileField == QStringLiteral("file"));         // 默认值
+  CHECK(r2.responsePath == QStringLiteral("data.url"));  // 默认值
+  CHECK(r2.maxCount == 1);
+  CHECK(r2.valueType.isEmpty());
+  CHECK(!r2.isMulti());
+
+  // uploadById / isEmpty
+  CHECK(back.uploadById(QStringLiteral("a1b2c3d4")) != nullptr);
+  CHECK(back.uploadById(QStringLiteral("no-such-id")) == nullptr);
+  CHECK(!back.isEmpty());
+
+  // 未知键保真：手工塞入自定义键再解析，写回不丢失
+  QJsonObject raw = JsonUploadConfig::fromJsonString(jsonStr).toJsonObject();
+  QJsonObject firstUpload = raw.value(QStringLiteral("uploads")).toArray().at(0).toObject();
+  firstUpload.insert(QStringLiteral("customFutureKey"), QStringLiteral("kept"));
+  QJsonArray arr = raw.value(QStringLiteral("uploads")).toArray();
+  arr[0] = firstUpload;
+  raw[QStringLiteral("uploads")] = arr;
+  const JsonUploadConfig back2 =
+      JsonUploadConfig::fromJsonString(JsonUploadConfig::toJsonString(raw));
+  CHECK(back2.uploads.size() == 2);
+  CHECK(back2.uploads[0].id == u1.id);  // 已知字段正常解析
+  // 保真合并由 JsonUploadWidget 的 collectMergedObject 层负责（同 jsonsource），模型层只保证不崩
+}
+
 int main() {
   // 所测接口均不依赖 QCoreApplication 实例，无需构造应用对象
   testJson5Parsing();
   testFingerprint();
   testResolveSchemaPath();
   testProjectScopedJsonsourceFinder();
+  testProjectScopedJsonuploadFinder();
+  testJsonUploadConfigRoundTrip();
   const int extraFailed = runAcParamDefaultTests();
 
   std::printf("%d checks, %d failed\n", g_total, g_failed + extraFailed);

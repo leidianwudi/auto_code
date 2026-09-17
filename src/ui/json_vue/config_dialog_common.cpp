@@ -146,3 +146,15 @@ QString jsonVueSourceScopeHelpText() {
       "设为项目后文件夹图标显示为齿轮。）\n\n"
       "未设项目时（如 template 模板目录），回退为列出工作区全部 .jsonsource 数据源。");
 }
+
+QString jsonVueUploadScopeHelpText() {
+  return QStringLiteral(
+      "下拉框只列出「当前项目」下的 .jsonupload 上传预设文件。\n\n"
+      "上传预设声明了图片上传接口（地址/文件字段/附加参数/响应提取路径/张数），"
+      "在 .jsonupload 文件中集中管理（双击文件可视化编辑）。\n\n"
+      "项目根的判定：从当前 .jsonvue 文件所在目录逐级向上，找到的第一个含 "
+      "project.acproj 标记文件的文件夹即为项目根。\n"
+      "（在目录树中右键文件夹「设为项目」可写入标记，取消项目即删除标记，"
+      "设为项目后文件夹图标显示为齿轮。）\n\n"
+      "未设项目时（如 template 模板目录），回退为列出工作区全部 .jsonupload 上传预设。");
+}

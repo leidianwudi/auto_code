@@ -28,6 +28,8 @@ QString CreateModel::fileTypeLabel(FileType type) {
       return QStringLiteral(".jsonvue 文件");
     case Jsonsource:
       return QStringLiteral(".jsonsource 文件");
+    case Jsonupload:
+      return QStringLiteral(".jsonupload 文件");
     default:
       return {};
   }
@@ -45,6 +47,8 @@ QString CreateModel::suffix(FileType type) {
       return QString::fromLatin1(AcFileSuffix::kJsonvue);
     case Jsonsource:
       return QString::fromLatin1(AcFileSuffix::kJsonsource);
+    case Jsonupload:
+      return QString::fromLatin1(AcFileSuffix::kJsonupload);
     default:
       return {};
   }

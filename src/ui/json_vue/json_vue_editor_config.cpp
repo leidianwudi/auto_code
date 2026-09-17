@@ -56,6 +56,8 @@ void JsonVueEditor::onConfigureCombobox() {
   dialog.setBoolTrueText(col.boolTrueText);
   dialog.setBoolFalseText(col.boolFalseText);
   dialog.setBoolSourceRef(col.boolSourceFile, col.boolSourceId);
+  // 图片上传预设（Image 编辑样式时在对话框内配置）
+  dialog.setUploadSourceRef(col.uploadSourceFile, col.uploadSourceId);
   // 下拉框数据源（Select 编辑样式时在对话框内配置）
   dialog.setSelectUrl(col.selectUrl);
   dialog.setSelectSourceFile(col.selectSourceFile);
@@ -93,6 +95,9 @@ void JsonVueEditor::onConfigureCombobox() {
     col.boolFalseText = dialog.boolFalseText();
     col.boolSourceFile = dialog.boolSourceFile();
     col.boolSourceId = dialog.boolSourceId();
+    // 图片上传预设（在对话框内已配置完成）
+    col.uploadSourceFile = dialog.uploadSourceFile();
+    col.uploadSourceId = dialog.uploadSourceId();
     // 下拉框数据源（在对话框内已配置完成）
     col.selectUrl = dialog.selectUrl();
     col.selectSourceFile = dialog.selectSourceFile();
@@ -154,7 +159,8 @@ void JsonVueEditor::onConfigureQuerySelect() {
     if (!colHasSource) {
       AuiMessageBox::show(
           this, QStringLiteral("未配置数据源"),
-          QStringLiteral("字段「%1」未在列表页配置下拉框数据源，请先在列样式配置里选择「下拉框(select)」并配置数据源。")
+          QStringLiteral("字段「%1」未在列表页配置下拉框数据源，请先在列样式配置里选择「下拉框("
+                         "select)」并配置数据源。")
               .arg(dataName));
       return;
     }

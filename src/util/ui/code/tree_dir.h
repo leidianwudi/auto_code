@@ -274,6 +274,7 @@ private:
   QIcon m_jsonIcon;        ///< .json 文件图标（琥珀「J」）
   QIcon m_jsonVueIcon;     ///< .jsonvue 文件图标（琥珀「V」）
   QIcon m_jsonSourceIcon;  ///< .jsonsource 文件图标（琥珀「S」）
+  QIcon m_jsonUploadIcon;  ///< .jsonupload 文件图标（紫色「U」）
   QIcon m_tplIcon;         ///< .tpl 文件图标（绿色「T」）
   QIcon m_folderIcon;      ///< 文件夹收起图标
   QIcon m_folderOpenIcon;  ///< 文件夹展开图标

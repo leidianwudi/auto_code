@@ -249,6 +249,14 @@ qt_add_executable(auto_code
     src/ui/json_source/json_source_editor.cpp
     src/ui/json_source/json_source_widget.h
     src/ui/json_source/json_source_widget.cpp
+    src/ui/json_source/json_upload_model.h
+    src/ui/json_source/json_upload_model.cpp
+    src/ui/json_source/json_upload_dialog.h
+    src/ui/json_source/json_upload_dialog.cpp
+    src/ui/json_source/json_upload_editor.h
+    src/ui/json_source/json_upload_editor.cpp
+    src/ui/json_source/json_upload_widget.h
+    src/ui/json_source/json_upload_widget.cpp
     src/ui/schema_json/schema_form_editor.h
     src/ui/schema_json/schema_form_editor.cpp
     src/ui/schema_json/schema_json_widget.h
@@ -357,6 +365,7 @@ add_executable(auto_code_tests EXCLUDE_FROM_ALL
     tests/test_ac_param_default.cpp
     src/util/common/util_json.cpp
     src/util/common/path_resolver.cpp
+    src/ui/json_source/json_upload_model.cpp
     # AC 脚本解析器（参数默认值语法测试）
     src/engine/script/ac_lexer.cpp
     src/engine/script/ac_parser.cpp

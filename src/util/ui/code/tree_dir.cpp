@@ -41,11 +41,12 @@
 #include "src/util/ui/rename_dialog.h"
 #include "src/util/ui/setting_store.h"
 
-/// 检查文件路径是否为 JSON 类型（.json / .jsonvue / .jsonsource）
+/// 检查文件路径是否为 JSON 类型（.json / .jsonvue / .jsonsource / .jsonupload）
 static inline bool isJsonLike(const QString &path) {
   return path.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive) ||
          path.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive) ||
-         path.endsWith(AcFileSuffix::kJsonsource, Qt::CaseInsensitive);
+         path.endsWith(AcFileSuffix::kJsonsource, Qt::CaseInsensitive) ||
+         path.endsWith(AcFileSuffix::kJsonupload, Qt::CaseInsensitive);
 }
 
 /// 判断某节点子树（含自身）内是否存在已修改的文件节点（定义在 setFileModified 附近）
@@ -622,10 +623,11 @@ void TreeDir::onItemChanged(QTreeWidgetItem *item, int column) {
 void TreeDir::addDirectoryToTree(QTreeWidgetItem *parentItem, const QString &dirPath) {
   QDir dir(dirPath);
 
-  // 文件（.ac、.tpl、.json、.jsonvue 和 .jsonsource）
+  // 文件（.ac、.tpl、.json、.jsonvue、.jsonsource 和 .jsonupload）
   QStringList nameFilters;
   nameFilters << QStringLiteral("*.ac") << QStringLiteral("*.tpl") << QStringLiteral("*.json")
-              << QStringLiteral("*.jsonvue") << QStringLiteral("*.jsonsource");
+              << QStringLiteral("*.jsonvue") << QStringLiteral("*.jsonsource")
+              << QStringLiteral("*.jsonupload");
   QFileInfoList files = dir.entryInfoList(nameFilters, QDir::Files);
 
   // 子目录
@@ -1091,6 +1093,7 @@ QIcon TreeDir::iconForSuffix(const QString &suffix) const {
   if (suf == QStringLiteral("json")) return m_jsonIcon;
   if (suf == QStringLiteral("jsonvue")) return m_jsonVueIcon;
   if (suf == QStringLiteral("jsonsource")) return m_jsonSourceIcon;
+  if (suf == QStringLiteral("jsonupload")) return m_jsonUploadIcon;
   return m_tplIcon;  // tpl 及未知后缀
 }
 
@@ -1100,6 +1103,7 @@ void TreeDir::refreshIcons() {
   m_jsonIcon = AuiIcon::createFileTypeIcon(QStringLiteral("json"));
   m_jsonVueIcon = AuiIcon::createFileTypeIcon(QStringLiteral("jsonvue"));
   m_jsonSourceIcon = AuiIcon::createFileTypeIcon(QStringLiteral("jsonsource"));
+  m_jsonUploadIcon = AuiIcon::createFileTypeIcon(QStringLiteral("jsonupload"));
   m_tplIcon = AuiIcon::createFileTypeIcon(QStringLiteral("tpl"));
   m_folderIcon = AuiIcon::createFolderIcon(false);
   m_folderOpenIcon = AuiIcon::createFolderIcon(true);

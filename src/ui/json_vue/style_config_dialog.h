@@ -158,6 +158,11 @@ public:
   QString boolSourceFile() const;
   QString boolSourceId() const;
 
+  /// image 编辑样式引用的上传预设（.jsonupload 文件 + 预设 id）；空 = URL 手工输入
+  void setUploadSourceRef(const QString &file, const QString &id);
+  QString uploadSourceFile() const;
+  QString uploadSourceId() const;
+
   // ── 通用配置（默认值/排序）──
   void setDefaultValue(const QString &v);
   QString defaultValue() const;
@@ -217,7 +222,8 @@ private:
   QTableWidget *m_tagItemsTable = nullptr;  ///< tag 标签映射表（动态增删行）
   QLineEdit *m_boolTrueTextEdit = nullptr;
   QLineEdit *m_boolFalseTextEdit = nullptr;
-  QComboBox *m_boolSourceCombo = nullptr;  ///< boolean 真假文字的静态数据源下拉
+  QComboBox *m_boolSourceCombo = nullptr;    ///< boolean 真假文字的静态数据源下拉
+  QComboBox *m_uploadSourceCombo = nullptr;  ///< image 编辑样式的上传预设下拉（.jsonupload）
 
   // ── 通用配置控件 ──
   QCheckBox *m_requiredCheck = nullptr;
@@ -241,8 +247,10 @@ private:
   QList<TagItem> m_cachedTagItems;  ///< tag 标签映射缓存
   QString m_cachedBoolTrueText;
   QString m_cachedBoolFalseText;
-  QString m_cachedBoolSourceFile;  ///< boolean 选中的静态数据源文件（恢复选中并锁定文字）
-  QString m_cachedBoolSourceId;    ///< boolean 选中的静态数据源 id
+  QString m_cachedBoolSourceFile;    ///< boolean 选中的静态数据源文件（恢复选中并锁定文字）
+  QString m_cachedBoolSourceId;      ///< boolean 选中的静态数据源 id
+  QString m_cachedUploadSourceFile;  ///< image 选中的上传预设文件（恢复选中）
+  QString m_cachedUploadSourceId;    ///< image 选中的上传预设 id
   bool m_cachedSwitchEditable = true;
   // 下拉框数据源缓存
   QString m_cachedSelectUrl;
