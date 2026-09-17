@@ -76,3 +76,22 @@ QString PathResolver::resolveSchemaPath(const QString &jsonFilePath, const QStri
   // 其他情况为绝对路径，原样使用
   return QDir::cleanPath(schemaPath);
 }
+
+bool PathResolver::isProjectRoot(const QString &dirPath) {
+  return QFileInfo(QDir(dirPath).absoluteFilePath(QLatin1String(kProjectMarkerFile))).isFile();
+}
+
+QString PathResolver::findProjectRootUpward(const QString &path) {
+  const QString fileRoot =
+      QDir::cleanPath(QStringLiteral(PROJECT_SOURCE_DIR) + CodeConstants::Paths::fileDir());
+  const QFileInfo fi(path);
+  QDir dir = fi.isDir() ? QDir(fi.absoluteFilePath()) : QDir(fi.absolutePath());
+  while (true) {
+    const QString cur = QDir::cleanPath(dir.absolutePath());
+    if (isProjectRoot(cur)) return cur;
+    // 到达工作区根（file/）或离开工作区范围即停止
+    if (cur == fileRoot || !cur.startsWith(fileRoot + QLatin1Char('/'))) break;
+    if (!dir.cdUp()) break;
+  }
+  return QString();
+}

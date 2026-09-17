@@ -137,6 +137,37 @@ QIcon AuiIcon::createCollapseAllIcon(int size) {
 }
 
 // ════════════════════════════════════════════════════════════
+//  帮助图标（圆圈 + 问号）
+// ════════════════════════════════════════════════════════════
+
+QIcon AuiIcon::createHelpIcon(int size) {
+  // 2x 超采样绘制再缩放，边缘更清晰
+  const int s = qMax(8, size * 2);
+  QPixmap pm(s, s);
+  pm.fill(Qt::transparent);
+  QPainter p(&pm);
+  p.setRenderHint(QPainter::Antialiasing);
+
+  const double u = 2.0;  // 缩放因子（s/size），16px 逻辑坐标系
+  const QColor color = AuiStyle::textColor();
+
+  // 圆圈（描边空心，与文件夹图标风格一致）
+  p.setPen(QPen(color, 1.3 * u));
+  p.setBrush(Qt::NoBrush);
+  p.drawEllipse(QPointF(8.0 * u, 8.0 * u), 6.1 * u, 6.1 * u);
+
+  // 问号（加粗文字，居中于圆心）
+  QFont f = p.font();
+  f.setBold(true);
+  f.setPixelSize(qMax(6, qRound(9.5 * u)));
+  p.setFont(f);
+  p.setPen(QPen(color, 1.0));
+  p.drawText(QRectF(0, 0, 16.0 * u, 16.0 * u), Qt::AlignCenter, QStringLiteral("?"));
+  p.end();
+  return QIcon(pm);
+}
+
+// ════════════════════════════════════════════════════════════
 //  文件类型图标（ac / json / tpl）
 // ════════════════════════════════════════════════════════════
 

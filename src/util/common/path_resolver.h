@@ -14,6 +14,9 @@
 /// @brief 文件路径解析工具（静态工具类）
 class PathResolver {
 public:
+  /// 项目根标记文件名（文件夹含此文件即视为一个项目，由目录树「设为项目」写入）
+  static constexpr const char *kProjectMarkerFile = "project.acproj";
+
   /// @brief 构造 AC 脚本资源搜索路径列表
   ///
   /// 搜索顺序：
@@ -49,4 +52,18 @@ public:
   /// @param schemaRef $schema 引用值
   /// @return 规范化后的 schema 文件绝对路径
   static QString resolveSchemaPath(const QString &jsonFilePath, const QString &schemaRef);
+
+  /// @brief 判断目录是否为项目根（含 kProjectMarkerFile 标记文件）
+  /// @param dirPath 待检查的目录
+  static bool isProjectRoot(const QString &dirPath);
+
+  /// @brief 从 path（文件或目录）向上查找最近的项目根目录（含 kProjectMarkerFile）
+  ///
+  /// 项目作用域规则（目录树齿轮图标 / jsonsource 数据源过滤共用）：
+  /// 向上逐级检查标记文件，仅在工作区 file/ 目录范围内查找；
+  /// 找不到返回空串（如 template/ 模板目录、未设项目的文件夹）。
+  ///
+  /// @param path 文件或目录路径（向上查找的起点）
+  /// @return 最近的项目根目录绝对路径，未找到返回空串
+  static QString findProjectRootUpward(const QString &path);
 };

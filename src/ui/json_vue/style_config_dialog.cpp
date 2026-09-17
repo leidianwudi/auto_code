@@ -29,6 +29,7 @@
 #include "src/ui/json_source/json_source_finder.h"
 #include "src/ui/json_source/json_source_model.h"
 #include "src/util/common/code_constants.h"
+#include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/component/aui_style.h"
@@ -450,7 +451,17 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
         }
       }
     }
-    form->addRow(QStringLiteral("  静态数据源:"), m_boolSourceCombo);
+    // 静态数据源行：标签后带问号帮助按钮，说明数据源列表受「右键设为项目」作用域过滤。
+    // 注：标签用 QFormLayout 的 QString 形式（复合 widget 作 label 时空间不足会被压缩截断），
+    // 问号按钮放在 field 侧、下拉框之前，视觉上仍紧跟标签文字
+    auto *boolSrcField = new QWidget(m_displayTypeWidget);
+    auto *boolSrcLay = new QHBoxLayout(boolSrcField);
+    boolSrcLay->setContentsMargins(0, 0, 0, 0);
+    boolSrcLay->setSpacing(2);
+    boolSrcLay->addWidget(AuiButton::createHelpButton(QStringLiteral("数据源作用域"),
+                                                      jsonVueSourceScopeHelpText(), boolSrcField));
+    boolSrcLay->addWidget(m_boolSourceCombo, 1);
+    form->addRow(QStringLiteral("  静态数据源:"), boolSrcField);
 
     m_boolTrueTextEdit = new QLineEdit(m_displayTypeWidget);
     m_boolTrueTextEdit->setPlaceholderText(QStringLiteral("如: 显示"));

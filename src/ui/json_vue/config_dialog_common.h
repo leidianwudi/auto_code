@@ -68,6 +68,10 @@ QPushButton *makeTableDeleteButton(QTableWidget *table, int column, QWidget *par
 /// 创建紧凑小按钮（适合表格单元格内使用，主题色随 AuiStyle 变化）
 QPushButton *makeCompactButton(const QString &text, QWidget *parent = nullptr);
 
+/// jsonsource 数据源作用域帮助文案（供数据源类下拉框旁的问号帮助按钮共用）。
+/// 说明「右键设为项目」对数据源下拉框内容的影响：项目根过滤 + 未设项目时的回退规则
+QString jsonVueSourceScopeHelpText();
+
 /// 配置表格单列定义（供 makeConfigTable 批量设置列头 / 列宽模式 / 固定宽度）
 struct ConfigTableColumn {
   QString header;                                        ///< 列头文本

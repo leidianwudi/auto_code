@@ -34,6 +34,7 @@
 #include "json_vue_editor_helpers.h"
 #include "src/util/common/code_constants.h"
 #include "src/util/common/util_json.h"
+#include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_style.h"
 
@@ -126,44 +127,48 @@ QWidget *JsonVueEditor::buildMetaSection() {
   layout->setSpacing(2);
   layout->setContentsMargins(4, 2, 4, 2);  // 内边距
 
-  // 接口配置区使用 2 列网格排版：
-  //   第1行：界面说明 | 生成数据
-  //   第2行：三个复选框（不可编辑 / 不可删除 / 不可查看详情）
-  auto *grid = new QGridLayout;
-  grid->setSpacing(2);
+  // 接口配置区第 1 行：说明 | 来源 单行排布。
+  // 两个输入框使用相同 stretch（1:1）→ 实际宽度相等，且随窗口缩放同步拉伸（尽可能长）
+  constexpr int kRowSpacing = 6;
+  auto *row = new QHBoxLayout;
+  row->setSpacing(kRowSpacing);
 
-  // ── 第1行：界面说明 | 生成数据 ──
-  // 界面说明
-  auto *descCell = new QHBoxLayout;
-  descCell->addWidget(new QLabel(QStringLiteral("说明:")));
+  row->addWidget(new QLabel(QStringLiteral("说明:")));
   m_descEdit = new QLineEdit(this);
   m_descEdit->setPlaceholderText(QStringLiteral("请输入界面说明"));
-  descCell->addWidget(m_descEdit, 1);
+  row->addWidget(m_descEdit, 1);
 
-  // 生成数据（方法下拉框 + URL 输入框 + 生成按钮）
-  auto *genCell = new QHBoxLayout;
-  genCell->addWidget(new QLabel(QStringLiteral("来源:")));
+  row->addWidget(new QLabel(QStringLiteral("来源:")));
   m_methodCombo = AuiComboBox::create(this);
   m_methodCombo->addItems(
       {QString::fromLatin1(JsonVueHttp::kGet), QString::fromLatin1(JsonVueHttp::kPost),
        QString::fromLatin1(JsonVueHttp::kPut), QString::fromLatin1(JsonVueHttp::kDelete)});
-  m_methodCombo->setFixedWidth(56);
-  AuiComboBox::hideArrow(m_methodCombo);
-  genCell->addWidget(m_methodCombo);
+  // 宽度需容纳 "delete" + 箭头区，避免文字被截断；箭头正常显示（不用 hideArrow）
+  m_methodCombo->setFixedWidth(70);
+  row->addWidget(m_methodCombo);
   m_dataUrlEdit = new QLineEdit(this);
   m_dataUrlEdit->setPlaceholderText(QStringLiteral("例如 config/selectByIn"));
-  genCell->addWidget(m_dataUrlEdit, 1);
+  row->addWidget(m_dataUrlEdit, 1);
   // 让方法下拉框与 URL 输入框高度一致，避免并排时错位
   m_methodCombo->setFixedHeight(m_dataUrlEdit->sizeHint().height());
   m_generateBtn = new QPushButton(QStringLiteral("生成"), this);
-  genCell->addWidget(m_generateBtn);
+  // 生成按钮左右净间距为 0：插入 -1×行距 的负 spacer 抵消两侧各 6px 间距，
+  // 使按钮紧贴左侧 URL 输入框与右侧问号帮助按钮
+  row->addSpacing(-1 * kRowSpacing);
+  row->addWidget(m_generateBtn);
+  row->addSpacing(-1 * kRowSpacing);
+  // 问号帮助按钮：说明 URL 前缀（baseUrl）的来源（悬停提示 + 点击弹对话框）
+  row->addWidget(AuiButton::createHelpButton(
+      QStringLiteral("URL 前缀来源"),
+      QStringLiteral("URL 输入框只需填写相对路径（如 config/selectByIn）。\n"
+                     "生成请求时，URL 前缀（baseUrl）取自 api_auth_data.ac 文件：\n"
+                     "从当前 .jsonvue 文件所在目录逐级向上查找最近的 api_auth_data.ac，\n"
+                     "读取其中的 baseUrl 常量拼接为完整请求地址。\n"
+                     "该文件同时提供 authHeader（鉴权头）与 postData（POST 默认数据）。\n\n"
+                     "每次点击「生成」都会重新读取该文件，修改后无需重启程序。"),
+      this));
 
-  // 放入网格：第1行
-  grid->addLayout(descCell, 0, 0);
-  grid->addLayout(genCell, 0, 1);
-  grid->setColumnStretch(0, 1);
-  grid->setColumnStretch(1, 1);
-  layout->addLayout(grid);
+  layout->addLayout(row);
 
   // ── 第2行：三个复选框 ──
   //   不可编辑（修改接口）、不可删除（删除接口）、不可查看详情（详情接口）
@@ -598,14 +603,13 @@ QJsonObject JsonVueEditor::collectMergedObject() const {
   if (m_preserved.isEmpty()) return root;
 
   // meta：补齐界面未表达的字段
-  root[JsonVueKey::kMeta] =
-      mergeMeta(root.value(JsonVueKey::kMeta).toObject(),
-                m_preserved.value(JsonVueKey::kMeta).toObject());
+  root[JsonVueKey::kMeta] = mergeMeta(root.value(JsonVueKey::kMeta).toObject(),
+                                      m_preserved.value(JsonVueKey::kMeta).toObject());
 
   // 各业务数组：字段级补齐 + 空数组防清空
-  QJsonArray columns = mergeArrayByKey(
-      root.value(JsonVueKey::kColumns).toArray(),
-      m_preserved.value(JsonVueKey::kColumns).toArray(), JsonVueKey::kDataName);
+  QJsonArray columns =
+      mergeArrayByKey(root.value(JsonVueKey::kColumns).toArray(),
+                      m_preserved.value(JsonVueKey::kColumns).toArray(), JsonVueKey::kDataName);
   // 列标签已归一为 queryName：清除保真合并可能从原文带回来的旧 editName，
   // 保证写盘后的配置只含一个标签字段
   for (int i = 0; i < columns.size(); ++i) {
@@ -616,12 +620,12 @@ QJsonObject JsonVueEditor::collectMergedObject() const {
     }
   }
   root[JsonVueKey::kColumns] = columns;
-  root[JsonVueKey::kQueryFields] = mergeArrayByKey(
-      root.value(JsonVueKey::kQueryFields).toArray(),
-      m_preserved.value(JsonVueKey::kQueryFields).toArray(), JsonVueKey::kDataName);
-  root[JsonVueKey::kButtons] = mergeArrayByKey(
-      root.value(JsonVueKey::kButtons).toArray(),
-      m_preserved.value(JsonVueKey::kButtons).toArray(), JsonVueKey::kActionKey);
+  root[JsonVueKey::kQueryFields] =
+      mergeArrayByKey(root.value(JsonVueKey::kQueryFields).toArray(),
+                      m_preserved.value(JsonVueKey::kQueryFields).toArray(), JsonVueKey::kDataName);
+  root[JsonVueKey::kButtons] =
+      mergeArrayByKey(root.value(JsonVueKey::kButtons).toArray(),
+                      m_preserved.value(JsonVueKey::kButtons).toArray(), JsonVueKey::kActionKey);
 
   // 顶层还有保留其它键（界面未表达的结构），一并保留避免丢失
   for (auto it = m_preserved.begin(); it != m_preserved.end(); ++it) {

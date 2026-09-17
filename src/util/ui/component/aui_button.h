@@ -77,6 +77,14 @@ public:
   /// 创建「保存全部」按钮（QPushButton，软盘图标 + 全部标记）
   static QPushButton *createSaveAllButton(int size = 20);
 
+  /// 创建「帮助」小按钮（问号图标；鼠标悬停显示帮助提示，点击弹出帮助对话框）
+  /// @param title  帮助对话框标题
+  /// @param text   帮助内容（悬停 tooltip 与点击对话框共用，支持 \n 换行）
+  /// @param parent 按钮父控件
+  /// @param size   图标像素尺寸
+  static QPushButton *createHelpButton(const QString &title, const QString &text,
+                                       QWidget *parent = nullptr, int size = 16);
+
   /// 创建对话框按钮行（居中布局，确定 + 可选取消）
   /// @param parent  按钮的父控件
   /// @param showCancel  是否显示"取消"按钮
