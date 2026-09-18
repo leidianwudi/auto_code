@@ -24,6 +24,7 @@
 #include "src/util/common/path_resolver.h"
 #include "src/util/common/util_json.h"
 #include "src/util/ui/code/code_editor.h"
+#include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_style.h"
 #include "src/util/ui/setting_store.h"
@@ -79,6 +80,21 @@ SchemaJsonWidget::SchemaJsonWidget(QWidget *parent) : CodeVisualSyncWidget(paren
   m_templateHint->setFont(hf);
   headerLay->addWidget(lbl);
   headerLay->addWidget(m_templateCombo, 1);
+  // 问号帮助按钮：说明模板下拉框的候选收集与 $schema 路径解析规则（复用公共组件）
+  headerLay->addWidget(AuiButton::createHelpButton(
+      QStringLiteral("模板查找规则"),
+      QStringLiteral("下拉框候选模板（*.schema.json）按以下规则收集：\n"
+                     "1. 当前 json 文件所在目录：不递归，显示文件名；\n"
+                     "2. 项目根 file/ 目录：递归收集，显示 /相对路径。\n"
+                     "候选按绝对路径去重，当前 $schema 值固定排最前。\n\n"
+                     "$schema 路径解析规则：\n"
+                     "以 / 开头 → 相对项目根 file/ 目录；\n"
+                     "其它写法 → 相对当前 json 文件所在目录；\n"
+                     "绝对路径 → 原样使用。\n\n"
+                     "选定模板后自动更新 $schema 并重建表单，\n"
+                     "为必填字段生成带默认值的骨架；\n"
+                     "也可在输入框直接输入路径后回车应用。"),
+      header));
   headerLay->addWidget(m_templateHint);
   pageLay->addWidget(header);
   pageLay->addWidget(m_visual, 1);
