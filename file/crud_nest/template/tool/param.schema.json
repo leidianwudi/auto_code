@@ -6,107 +6,106 @@
           description: '多表配置列表，每项为一张表的生成配置',
           items: 'TableConfig',
           type: 'array',
-        },
-      },
+                },
+            },
       required: [
         'tables',
-      ],
-    },
+            ],
+        },
     JoinColumn: {
       properties: {
         name: {
           description: '主表中关联的字段名',
           type: 'string',
-        },
+                },
         referencedColumnName: {
           description: '副表中关联的字段名',
           type: 'string',
-        },
-      },
+                },
+            },
       required: [
         'name',
         'referencedColumnName',
-      ],
-    },
+            ],
+        },
     I18nConfig: {
       properties: {
         defaultLang: {
           default: 'zh',
           description: '默认语言（回退目标）：查询不到当前语言文本时使用它的翻译',
           type: 'string',
-        },
+                },
         extKey: {
           description: '翻译表中关联主表 id 的外键列名（如 ext_id）',
           type: 'string',
-        },
+                },
         fields: {
-          description: '参与多语言的翻译表文本列（如 ["name", "intro"]）；生成的接口会把当前语言文本平铺进主表返回结构，不能与主表列重名',
+          description: '参与多语言的翻译表文本列（如 [
+                        "name",
+                        "intro"
+                    ]）；生成的接口会把当前语言文本平铺进主表返回结构，不能与主表列重名',
           items: 'string',
           type: 'array',
-        },
+                },
         langFrom: {
           description: '语言码来源：body=请求体 lang 字段（第一版仅支持）；header=请求头（预留，当前按 body 生成）',
           enum: [
             'body',
             'header',
-          ],
+                    ],
           type: 'string',
-        },
+                },
         langKey: {
           description: '翻译表的语言码列名（如 lang）',
           type: 'string',
-        },
+                },
         table: {
           description: '翻译表表名（如 shop0）；翻译实体单文件生成到主表模块 entities 目录',
           type: 'string',
-        },
-      },
+                },
+            },
       required: [
         'table',
         'extKey',
         'langKey',
         'fields',
-      ],
-    },
+            ],
+        },
     JoinTable: {
       properties: {
         inverseJoinEnClassPro: {
           description: '主表在副表中的属性名',
           type: 'string',
-        },
-        isArray: {
-          description: '外部不用设置，会自动根据关联类型(JoinType)判断是否为数组关联字段',
-          type: 'bool',
-        },
+                },
         isJoinRelations: {
           description: '是否为关联关系生成sql语句',
           type: 'bool',
-        },
+                },
         joinColumn: {
           class: 'JoinColumn',
           description: '主副表关联字段配置',
           type: 'object',
-        },
+                },
         joinEnClass: {
           description: '关联的副表实体类名',
           type: 'string',
-        },
+                },
         joinEnClassPro: {
           description: '副表在主表中的属性名',
           type: 'string',
-        },
+                },
         joinEnClass_Url: {
           description: '关联的副表实体类URL',
           type: 'string',
-        },
+                },
         joinQueryMode: {
           description: '关联查询模式，默认值为LeftJoin',
           enum: [
             'leftJoin',
             'innerJoin',
-          ],
+                    ],
           type: 'string',
-        },
+                },
         joinType: {
           description: '主到副的关联类型',
           enum: [
@@ -114,106 +113,113 @@
             'ManyToOne',
             'OneToMany',
             'ManyToMany',
-          ],
+                    ],
           type: 'string',
-        },
-      },
+                },
+            },
       required: [
         'joinEnClass',
         'joinEnClass_Url',
         'joinEnClassPro',
         'joinType',
         'isJoinRelations',
-      ],
-    },
+            ],
+        },
     SortConfig: {
       additionalProperties: {
         enum: [
           'ASC',
           'DESC',
-        ],
+                ],
         type: 'string',
-      },
-    },
+            },
+        },
     TableConfig: {
       properties: {
         modelName: {
           description: '模块名，可以包括路径（如 user/user）',
           type: 'string',
-        },
+                },
         tableName: {
           description: '表名',
           type: 'string',
-        },
+                },
         selCols: {
           description: '精确查询的字段',
           items: 'string',
           type: 'array',
-        },
+                },
         selColsLike: {
           description: '模糊查询的字段',
           items: 'string',
           type: 'array',
-        },
+                },
         selColsGap: {
           description: '范围查询的字段',
           items: 'string',
           type: 'array',
-        },
+                },
         selColsSum: {
           description: '汇总查询的字段',
           items: 'string',
           type: 'array',
-        },
+                },
         selColsSort: {
-          description: '排序字段，推荐数组格式 [["字段名","ASC|DESC"],...]（保证与书写顺序一致）；兼容旧对象格式 {"字段名":"ASC|DESC"}',
+          description: '排序字段，推荐数组格式 [
+                        [
+                            "字段名",
+                            "ASC|DESC"
+                        ],...
+                    ]（保证与书写顺序一致）；兼容旧对象格式 {
+                        "字段名": "ASC|DESC"
+                    }',
           type: 'any',
-        },
+                },
         tableEnum: {
           class: 'TableEnumConfig',
           description: '整表枚举配置,把某张数据库表的全部数据行直接生成为一个枚举',
           type: 'object',
-        },
+                },
         joinTable: {
           description: '关联表配置',
           items: 'JoinTable',
           type: 'array',
-        },
+                },
         i18n: {
           class: 'I18nConfig',
           description: '多语言翻译表配置：主表 + 翻译表（如 shop + shop0），生成联合查询（当前语言平铺/回退默认语言）、事务写入（upsert 翻译行）与级联删除',
           type: 'object',
-        },
+                },
         manualUpdateTime: {
           description: 'update_time 是否由业务代码维护，默认由 TypeORM 自动更新',
           type: 'bool',
-        },
-      },
+                },
+            },
       required: [
         'modelName',
         'tableName',
-      ],
-    },
+            ],
+        },
     TableEnumConfig: {
       properties: {
         comment: {
           description: '枚举注释字段',
           type: 'string',
-        },
+                },
         key: {
           description: '枚举键字段',
           type: 'string',
-        },
+                },
         value: {
           description: '枚举值字段',
           type: 'string',
-        },
-      },
+                },
+            },
       required: [
         'key',
         'value',
-      ],
+            ],
+        },
     },
-  },
   root: 'AutoConfig',
 },
