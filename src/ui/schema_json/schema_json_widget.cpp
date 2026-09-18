@@ -20,6 +20,7 @@
 #include <QVBoxLayout>
 
 #include "schema_form_editor.h"
+#include "src/engine/ac_language.h"
 #include "src/util/common/code_constants.h"
 #include "src/util/common/path_resolver.h"
 #include "src/util/common/util_json.h"
@@ -164,7 +165,8 @@ void SchemaJsonWidget::refreshTemplateCombo(const QString &currentRef) {
   if (fi.absoluteDir().exists()) {
     const QString jsonDir = fi.absolutePath();
     QDir dir(jsonDir);
-    const QStringList names = dir.entryList({"*.schema.json"}, QDir::Files, QDir::Name);
+    const QStringList names =
+        dir.entryList({QStringLiteral("*") + AcFileSuffix::kSchemaJson}, QDir::Files, QDir::Name);
     for (const QString &name : names) {
       cands.push_back({name, QDir::cleanPath(jsonDir + QLatin1Char('/') + name)});
     }
@@ -173,7 +175,8 @@ void SchemaJsonWidget::refreshTemplateCombo(const QString &currentRef) {
   // 2) 项目根 file 目录（递归），显示 /相对路径（与 $schema 的 / 前缀解析规则一致）
   const QString fileRoot = QStringLiteral(PROJECT_SOURCE_DIR) + CodeConstants::Paths::fileDir();
   if (QDir(fileRoot).exists()) {
-    QDirIterator it(fileRoot, {"*.schema.json"}, QDir::Files, QDirIterator::Subdirectories);
+    QDirIterator it(fileRoot, {QStringLiteral("*") + AcFileSuffix::kSchemaJson}, QDir::Files,
+                    QDirIterator::Subdirectories);
     while (it.hasNext()) {
       const QString abs = QDir::cleanPath(it.next());
       cands.push_back({QLatin1Char('/') + abs.mid(fileRoot.size() + 1), abs});

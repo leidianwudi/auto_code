@@ -20,6 +20,7 @@
 #include <QSet>
 #include <QTextStream>
 
+#include "src/engine/ac_language.h"
 #include "src/engine/script/ac_lexer.h"
 #include "src/engine/script/ac_parser.h"
 #include "src/engine/script/ast_visitor.h"
@@ -98,22 +99,22 @@ struct AcClassInfo {
 /// 成员访问（obj.method / obj.prop）
 struct MemberUsage {
   int line = 0;
-  bool isThis = false;        ///< 接收者为 this
-  QString receiverBase;       ///< 接收者基础变量名（obj）
-  QString receiverClass;      ///< 静态访问的类名
-  QString usageClass;         ///< 记录时的当前类（isThis=true 时有效）
+  bool isThis = false;    ///< 接收者为 this
+  QString receiverBase;   ///< 接收者基础变量名（obj）
+  QString receiverClass;  ///< 静态访问的类名
+  QString usageClass;     ///< 记录时的当前类（isThis=true 时有效）
 };
 
 class AcRenameWalker : public AstVisitor {
 public:
-  QString target;      ///< 目标符号名
-  int triggerLine = 0; ///< 触发行（1-based）
+  QString target;       ///< 目标符号名
+  int triggerLine = 0;  ///< 触发行（1-based）
 
   // ── 模型输出（始终收集）──
-  QHash<QString, AcClassInfo> classes;       ///< 本文件类定义：类名 → 成员
-  QHash<QString, QString> classImports;      ///< 本地类名 → 来源文件规范路径
-  QHash<QString, QString> varClass;          ///< 变量 → 类名（类型推断）
-  QVector<MemberUsage> memberUsages;         ///< target 作为成员访问的所有出现
+  QHash<QString, AcClassInfo> classes;   ///< 本文件类定义：类名 → 成员
+  QHash<QString, QString> classImports;  ///< 本地类名 → 来源文件规范路径
+  QHash<QString, QString> varClass;      ///< 变量 → 类名（类型推断）
+  QVector<MemberUsage> memberUsages;     ///< target 作为成员访问的所有出现
   /// 来源文件规范路径 → import 子句中出现 target 原导出名的行号（1-based）。
   /// 用于"本地已有同名全局符号"的文件：只改 import 子句里的原导出名，不改本地符号。
   QHash<QString, QSet<int>> importNameLines;
@@ -169,7 +170,8 @@ public:
     if (!as.name.isEmpty()) {
       if (as.value.kind == Expr::kNewInstance && !as.value.className.isEmpty()) {
         varClass[as.name] = as.value.className;
-      } else if (as.typeAnnotation.kind == AcType::kClass && !as.typeAnnotation.className.isEmpty()) {
+      } else if (as.typeAnnotation.kind == AcType::kClass &&
+                 !as.typeAnnotation.className.isEmpty()) {
         varClass[as.name] = as.typeAnnotation.className;
       }
     }
@@ -294,8 +296,7 @@ public:
       classImports.insert(it.value(), resolved);
       // 别名的绑定处（import { A as B } 里的 B）也是别名符号的一次引用：
       // 否则重命名别名会漏改 import 绑定行，导致调用处改新名、import 仍绑定旧名
-      if (it.value() == target)
-        recordUsage(it.value(), imp.aliasLines.value(it.value(), imp.line));
+      if (it.value() == target) recordUsage(it.value(), imp.aliasLines.value(it.value(), imp.line));
     }
   }
 
@@ -450,7 +451,8 @@ private:
       }
       break;
     }
-    if (!mu.isThis && mu.receiverBase.isEmpty() && mu.receiverClass.isEmpty() && !objName.isEmpty()) {
+    if (!mu.isThis && mu.receiverBase.isEmpty() && mu.receiverClass.isEmpty() &&
+        !objName.isEmpty()) {
       mu.receiverBase = objName;
     }
     memberUsages.append(mu);
@@ -459,9 +461,12 @@ private:
       m_triggerMemberSeen = true;
       m_triggerIsMemberNow = true;
       QString cls;
-      if (mu.isThis) cls = mu.usageClass;
-      else if (!mu.receiverClass.isEmpty()) cls = mu.receiverClass;
-      else if (!mu.receiverBase.isEmpty()) cls = varClass.value(mu.receiverBase);
+      if (mu.isThis)
+        cls = mu.usageClass;
+      else if (!mu.receiverClass.isEmpty())
+        cls = mu.receiverClass;
+      else if (!mu.receiverBase.isEmpty())
+        cls = varClass.value(mu.receiverBase);
       m_triggerMemberClass = cls;
     }
   }
@@ -485,10 +490,10 @@ private:
     triggerClass = m_triggerMemberClass;
   }
 
-  QString m_currentClass;         ///< 当前类名（this 类型解析用）
+  QString m_currentClass;  ///< 当前类名（this 类型解析用）
   bool m_triggerIsMemberNow = false;
   QString m_triggerMemberClass;
-  int m_targetDeclLineCandidate = -1;  ///< 遍历中捕获的目标声明行（作用域在栈上时）
+  int m_targetDeclLineCandidate = -1;     ///< 遍历中捕获的目标声明行（作用域在栈上时）
   QHash<int, QString> m_memberDeclClass;  ///< 类成员声明行 → 所在类名
 };
 
@@ -615,9 +620,8 @@ void collectTplFile(QVector<RenameRef> &refs, const QString &path, const QString
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// 解析并遍历单个 .ac 文件，返回是否成功
-bool walkAcFile(const QString &path, const QString &rootDir, const QString &target,
-                int triggerLine, AcRenameWalker &walker,
-                const QHash<QString, QString> &liveContents) {
+bool walkAcFile(const QString &path, const QString &rootDir, const QString &target, int triggerLine,
+                AcRenameWalker &walker, const QHash<QString, QString> &liveContents) {
   const QString text = readSource(path, liveContents);
   if (text.isEmpty()) return false;
   QString lexErr;
@@ -645,7 +649,7 @@ QVector<RenameRef> collectAcGlobals(const QString &rootDir, const QString &origi
 
   forEachWorkspaceFile(
       rootDir, false,
-      [](const QString &p) { return p.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive); },
+      [](const QString &p) { return p.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive); },
       [&](const QString &path) {
         const QString canonical = QFileInfo(path).canonicalFilePath();
         const bool isOrigin = (canonical == originCanonical);
@@ -679,7 +683,7 @@ QVector<RenameRef> collectAcGlobals(const QString &rootDir, const QString &origi
         QSet<int> declLines;
         if (!isOrigin && hasLocalGlobal) {
           // 本地同名全局符号与 origin 的 name 是两个符号：只改 import 子句里的原导出名
-          //（它指向 origin 的 name），本地声明及使用保持不动
+          // （它指向 origin 的 name），本地声明及使用保持不动
           refLines = w.importNameLines.value(originCanonical);
         } else {
           refLines = w.globalRefLines;
@@ -717,7 +721,7 @@ QVector<RenameRef> collectAcMembers(const QString &rootDir, const QString &origi
 
   forEachWorkspaceFile(
       rootDir, false,
-      [](const QString &p) { return p.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive); },
+      [](const QString &p) { return p.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive); },
       [&](const QString &path) {
         const QString canonical = QFileInfo(path).canonicalFilePath();
         const bool isOrigin = (canonical == originCanonical);
@@ -779,8 +783,8 @@ void dedupRefs(QVector<RenameRef> &refs) {
   QVector<RenameRef> out;
   out.reserve(refs.size());
   for (const RenameRef &r : refs) {
-    const QString key = r.filePath + QLatin1Char('#') + QString::number(r.line) +
-                        QLatin1Char(':') + QString::number(r.column);
+    const QString key = r.filePath + QLatin1Char('#') + QString::number(r.line) + QLatin1Char(':') +
+                        QString::number(r.column);
     if (seen.contains(key)) continue;
     seen.insert(key);
     out.append(r);
@@ -796,13 +800,13 @@ void dedupRefs(QVector<RenameRef> &refs) {
 
 /// 单文件模块信息
 struct WorkspaceIndex::ModuleInfo {
-  QString filePath;                                  ///< 规范绝对路径
-  QHash<QString, SemanticSymbol> topSymbols;         ///< 顶层符号：名字 → 符号
+  QString filePath;                                             ///< 规范绝对路径
+  QHash<QString, SemanticSymbol> topSymbols;                    ///< 顶层符号：名字 → 符号
   QHash<QString, QHash<QString, SemanticSymbol>> classMembers;  ///< 类名 → (成员名 → 符号)
-  QVector<SemanticImport> imports;                   ///< import 绑定
-  QHash<QString, QString> importLocalToSource;       ///< localName → 来源文件
-  QHash<QString, QString> classImportToSource;       ///< 类名 → 来源文件（import 的类）
-  QSet<QString> localGlobals;                        ///< 本文件声明的顶层名字
+  QVector<SemanticImport> imports;                              ///< import 绑定
+  QHash<QString, QString> importLocalToSource;                  ///< localName → 来源文件
+  QHash<QString, QString> classImportToSource;                  ///< 类名 → 来源文件（import 的类）
+  QSet<QString> localGlobals;                                   ///< 本文件声明的顶层名字
 };
 
 /// 解析源码文本并填充模块信息（顶层符号 / 类成员 / import 绑定）。
@@ -854,8 +858,8 @@ void WorkspaceIndex::collectModuleSymbols(const QString &text, const QString &pa
           ms.line = m.line;
           ms.parentClass = cs.name;
           ms.isStatic = m.isStatic;
-          ms.key = QStringLiteral("m:") + path + QLatin1Char('#') + cs.name + QLatin1Char('#') +
-                   ms.name;
+          ms.key =
+              QStringLiteral("m:") + path + QLatin1Char('#') + cs.name + QLatin1Char('#') + ms.name;
           members.insert(ms.name, ms);
         }
         for (const ObjectEntry &prop : stmt.classDef.properties) {
@@ -866,8 +870,8 @@ void WorkspaceIndex::collectModuleSymbols(const QString &text, const QString &pa
           ps.line = prop.line;
           ps.parentClass = cs.name;
           ps.isStatic = prop.isStatic;
-          ps.key = QStringLiteral("m:") + path + QLatin1Char('#') + cs.name + QLatin1Char('#') +
-                   ps.name;
+          ps.key =
+              QStringLiteral("m:") + path + QLatin1Char('#') + cs.name + QLatin1Char('#') + ps.name;
           members.insert(ps.name, ps);
         }
         break;
@@ -953,7 +957,7 @@ void WorkspaceIndex::rebuild(const QString &rootDir) {
   // 第一遍：解析所有 .ac 文件，收集顶层符号 / 类成员 / import 绑定
   forEachWorkspaceFile(
       root, false,
-      [](const QString &p) { return p.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive); },
+      [](const QString &p) { return p.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive); },
       [&](const QString &path) {
         const QString canonical = QFileInfo(path).canonicalFilePath();
         if (canonical.isEmpty()) return;
@@ -983,9 +987,8 @@ void WorkspaceIndex::rebuild(const QString &rootDir) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 QVector<RenameRef> WorkspaceIndex::findReferences(const QString &rootDir,
-                                                  const QString &triggerFilePath,
-                                                  int triggerLine, int triggerColumn,
-                                                  const QString &name,
+                                                  const QString &triggerFilePath, int triggerLine,
+                                                  int triggerColumn, const QString &name,
                                                   const QHash<QString, QString> &liveContents) {
   // 注意：本函数可能在工作线程调用（QtConcurrent）。模块表（m_modules）由主线程在
   // 启动/保存后重建，这里只读传入的 liveContents + 磁盘、不触碰 m_modules，避免数据竞争。
@@ -995,7 +998,7 @@ QVector<RenameRef> WorkspaceIndex::findReferences(const QString &rootDir,
   if (nm.isEmpty() || rootDir.isEmpty() || triggerFilePath.isEmpty()) return refs;
 
   // ── TPL ──
-  if (triggerFilePath.endsWith(QStringLiteral(".tpl"), Qt::CaseInsensitive)) {
+  if (triggerFilePath.endsWith(AcFileSuffix::kTpl, Qt::CaseInsensitive)) {
     bool localEach = false;
     int targetScopeStart = -1;
     {
@@ -1022,14 +1025,14 @@ QVector<RenameRef> WorkspaceIndex::findReferences(const QString &rootDir,
     }
     forEachWorkspaceFile(
         rootDir, false,
-        [](const QString &p) { return p.endsWith(QStringLiteral(".tpl"), Qt::CaseInsensitive); },
+        [](const QString &p) { return p.endsWith(AcFileSuffix::kTpl, Qt::CaseInsensitive); },
         [&](const QString &path) { collectTplFile(refs, path, nm, false, -1, liveContents); });
     dedupRefs(refs);
     return refs;
   }
 
   // ── AC ──
-  if (!triggerFilePath.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive)) return refs;
+  if (!triggerFilePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive)) return refs;
 
   AcRenameWalker triggerWalker;
   if (!walkAcFile(triggerFilePath, rootDir, nm, triggerLine, triggerWalker, liveContents)) {
@@ -1151,8 +1154,8 @@ SemanticSymbol WorkspaceIndex::resolveDefinition(
           int dl = ci.methods.value(name, 0);
           if (dl <= 0) dl = ci.props.value(name, 0);
           if (dl > 0) {
-            out.key = QStringLiteral("m:") + canonical + QLatin1Char('#') + cls + QLatin1Char('#') +
-                      name;
+            out.key =
+                QStringLiteral("m:") + canonical + QLatin1Char('#') + cls + QLatin1Char('#') + name;
             out.name = name;
             out.kind = QStringLiteral("method");
             out.parentClass = cls;
@@ -1180,8 +1183,8 @@ SemanticSymbol WorkspaceIndex::resolveDefinition(
       }
       // 局部变量 / 参数：返回声明位置（key 用声明行标识）
       if (w.targetIsLocal) {
-        out.key = QStringLiteral("l:") + canonical + QLatin1Char('#') +
-                  QString::number(w.targetDeclLine);
+        out.key =
+            QStringLiteral("l:") + canonical + QLatin1Char('#') + QString::number(w.targetDeclLine);
         out.name = name;
         out.kind = QStringLiteral("variable");
         out.filePath = canonical;

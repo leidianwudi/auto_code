@@ -136,9 +136,12 @@ QWidget *MainDevMgr::createEditorTab(const QString &filePath, const QString &con
     editor = plain;
 
     // 所有 .json 统一用 SchemaJsonWidget 包装：schema 由包装器按 $schema 解析加载；
-    // 空文件/无 $schema 也可视化（表单顶部模板下拉选择 .schema.json 后编辑）
+    // 空文件/无 $schema 也可视化（表单顶部模板下拉选择 .schema.json 后编辑）。
+    // 例外：*.schema.json 本身就是模板定义，没有 $schema 概念，
+    // 套无关 schema 做表单编辑可能改写 schema 结构 —— 只保留代码模式
     const bool isJson = filePath.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive);
-    if (isJson) {
+    const bool isSchemaFile = filePath.endsWith(AcFileSuffix::kSchemaJson, Qt::CaseInsensitive);
+    if (isJson && !isSchemaFile) {
       auto *sjw = new SchemaJsonWidget;
       sjw->setSourceFilePath(filePath);
       sjw->codeEditor()->setPlainText(content);

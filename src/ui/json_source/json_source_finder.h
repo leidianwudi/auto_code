@@ -23,12 +23,10 @@
 #include "src/util/common/path_resolver.h"
 
 /// 递归收集 dir 下所有指定后缀文件的绝对路径（suffix 形如 ".jsonsource"）
-inline void collectBySuffixRecursive(const QString &dir, const QString &suffix,
-                                     QStringList &out) {
+inline void collectBySuffixRecursive(const QString &dir, const QString &suffix, QStringList &out) {
   QDir d(dir);
   if (!d.exists()) return;
-  const QFileInfoList files =
-      d.entryInfoList(QStringList() << ("*" + suffix), QDir::Files);
+  const QFileInfoList files = d.entryInfoList(QStringList() << ("*" + suffix), QDir::Files);
   for (const QFileInfo &fi : files) out.append(QDir::cleanPath(fi.absoluteFilePath()));
   const QFileInfoList dirs = d.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
   for (const QFileInfo &di : dirs) collectBySuffixRecursive(di.absoluteFilePath(), suffix, out);
@@ -73,10 +71,10 @@ inline QStringList findConfigFilesBySuffix(const QString &baseDir, const QString
 
 /// 查找工作区中的所有 .jsonsource 数据源文件（去重、排序）
 inline QStringList findJsonsourceFiles(const QString &baseDir = QString()) {
-  return findConfigFilesBySuffix(baseDir, QStringLiteral(".jsonsource"));
+  return findConfigFilesBySuffix(baseDir, AcFileSuffix::kJsonsource);
 }
 
 /// 查找工作区中的所有 .jsonupload 上传预设文件（去重、排序）
 inline QStringList findJsonuploadFiles(const QString &baseDir = QString()) {
-  return findConfigFilesBySuffix(baseDir, QStringLiteral(".jsonupload"));
+  return findConfigFilesBySuffix(baseDir, AcFileSuffix::kJsonupload);
 }

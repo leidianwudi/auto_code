@@ -14,6 +14,7 @@
 #include <QRegularExpression>
 #include <QTextStream>
 
+#include "src/engine/ac_language.h"
 #include "src/engine/json_validator.h"
 #include "src/engine/schema_validator.h"
 #include "src/engine/script/ac_validator.h"
@@ -27,10 +28,10 @@ namespace {
 
 /// 是否为可验证文件类型
 bool isVerifiableFile(const QString &path) {
-  return path.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive) ||
-         path.endsWith(QStringLiteral(".tpl"), Qt::CaseInsensitive) ||
-         path.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive) ||
-         path.endsWith(QStringLiteral(".jsonvue"), Qt::CaseInsensitive);
+  return path.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive) ||
+         path.endsWith(AcFileSuffix::kTpl, Qt::CaseInsensitive) ||
+         path.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive) ||
+         path.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive);
 }
 
 /// 从错误消息中提取出错路径（与 CodeEditor 中一致）
@@ -120,17 +121,17 @@ QVector<WorkspaceFileDiag> scanWorkspaceDiagnostics(const QStringList &filePaths
       continue;
     }
 
-    if (fp.endsWith(QStringLiteral(".ac"), Qt::CaseInsensitive)) {
+    if (fp.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive)) {
       AcValidator v;
       v.setFilePath(fp);  // 用于解析 import 相对路径
       // 跨文件 import 解析同样优先使用已打开文件的实时缓冲（与主文件一致，避免假报错）
       v.setFileContentProvider([&liveContents](const QString &p) { return liveContents.value(p); });
       item.issues = v.validate(source);
-    } else if (fp.endsWith(QStringLiteral(".tpl"), Qt::CaseInsensitive)) {
+    } else if (fp.endsWith(AcFileSuffix::kTpl, Qt::CaseInsensitive)) {
       TplValidator v;
       item.issues = v.validate(source);
-    } else if (fp.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive) ||
-               fp.endsWith(QStringLiteral(".jsonvue"), Qt::CaseInsensitive)) {
+    } else if (fp.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive) ||
+               fp.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive)) {
       item.issues = validateJsonFile(fp, source);
     }
 

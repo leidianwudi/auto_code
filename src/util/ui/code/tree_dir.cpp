@@ -625,9 +625,12 @@ void TreeDir::addDirectoryToTree(QTreeWidgetItem *parentItem, const QString &dir
 
   // 文件（.ac、.tpl、.json、.jsonvue、.jsonsource 和 .jsonupload）
   QStringList nameFilters;
-  nameFilters << QStringLiteral("*.ac") << QStringLiteral("*.tpl") << QStringLiteral("*.json")
-              << QStringLiteral("*.jsonvue") << QStringLiteral("*.jsonsource")
-              << QStringLiteral("*.jsonupload");
+  nameFilters << (QStringLiteral("*") + AcFileSuffix::kAc)
+              << (QStringLiteral("*") + AcFileSuffix::kTpl)
+              << (QStringLiteral("*") + AcFileSuffix::kJson)
+              << (QStringLiteral("*") + AcFileSuffix::kJsonvue)
+              << (QStringLiteral("*") + AcFileSuffix::kJsonsource)
+              << (QStringLiteral("*") + AcFileSuffix::kJsonupload);
   QFileInfoList files = dir.entryInfoList(nameFilters, QDir::Files);
 
   // 子目录
