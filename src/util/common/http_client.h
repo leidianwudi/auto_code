@@ -45,8 +45,10 @@ public:
   /// 自定义请求头（header name → value）
   using Headers = QHash<QString, QString>;
 
-  /// 请求成功回调（参数为返回的 JSON 文档）
-  using SuccessCallback = std::function<void(const QJsonDocument &doc)>;
+  /// 请求成功回调（doc 为解析后的 JSON；rawText 为原始响应文本。
+  /// QJsonObject 迭代按键字母序，无法还原服务端返回的属性顺序，
+  /// 需要保序的场景用 rawText 配合 UtilJson::objectKeysInOrder 提取）
+  using SuccessCallback = std::function<void(const QJsonDocument &doc, const QString &rawText)>;
   /// 请求失败回调（参数为错误信息）
   using ErrorCallback = std::function<void(const QString &errorMsg)>;
 

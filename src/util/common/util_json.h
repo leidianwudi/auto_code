@@ -88,6 +88,19 @@ public:
   static QJsonDocument fromJson(const QByteArray &data, QJsonParseError *error = nullptr);
 
   /**
+   * @brief 按原文顺序提取响应中第一个数组首元素的顶层键名列表
+   * @param jsonText 原始 JSON 响应文本（严格 JSON，无需支持注释/JSON5）
+   * @param ok 输出参数：提取成功返回 true（找不到数组/首元素非对象/无有效键返回 false）
+   * @return 键名列表（原始顺序）。QJsonObject 迭代按键字母序，无法还原服务端
+   *         返回的属性顺序（通常是数据库表结构列顺序），需要保序时用本函数
+   *
+   * 定位规则：找到第一个不在字符串内的 '['，取其后第一个 '{' 作为首行对象，
+   * 覆盖 { data: { list: [...] } }、{ data: [...] }、[...] 三种响应包裹结构；
+   * 解析失败时调用方应回退到 QJsonObject::keys()（字母序）。
+   */
+  static QStringList objectKeysInOrder(const QString &jsonText, bool *ok = nullptr);
+
+  /**
    * @brief 从文件加载并解析 JSON（自动剥离注释）
    * @param filePath JSON 文件路径
    * @param error 解析错误信息（可选，传入则填充，offset 已修正为原始文本位置）

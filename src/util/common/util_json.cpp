@@ -670,6 +670,141 @@ QJsonDocument UtilJson::loadFile(const QString &filePath, QJsonParseError *error
   return fromJson(data, error);
 }
 
+// ──────────────────────────────────────────────────────────────
+//  objectKeysInOrder 内部辅助 — 解码 JSON 字符串字面量的转义序列
+//  （仅处理键名常见的标准转义；\uXXXX 走 Unicode 码点）
+// ──────────────────────────────────────────────────────────────
+static QString unescapeJsonKey(const QString &raw) {
+  QString out;
+  out.reserve(raw.size());
+  for (int i = 0; i < raw.size(); ++i) {
+    const QChar c = raw.at(i);
+    if (c != u'\\') {
+      out += c;
+      continue;
+    }
+    ++i;
+    if (i >= raw.size()) break;
+    const QChar e = raw.at(i);
+    switch (e.unicode()) {
+      case u'"': out += u'"'; break;
+      case u'\\': out += u'\\'; break;
+      case u'/': out += u'/'; break;
+      case u'b': out += u'\b'; break;
+      case u'f': out += u'\f'; break;
+      case u'n': out += u'\n'; break;
+      case u'r': out += u'\r'; break;
+      case u't': out += u'\t'; break;
+      case u'u': {
+        // \uXXXX：4 位十六进制码点（代理对罕见，按码点直接拼接）
+        if (i + 4 < raw.size()) {
+          bool hexOk = false;
+          const uint cp = raw.mid(i + 1, 4).toUInt(&hexOk, 16);
+          if (hexOk) {
+            out += QChar(cp);
+            i += 4;
+          }
+        }
+        break;
+      }
+      default: out += e; break;  // 未知转义：保留原字符
+    }
+  }
+  return out;
+}
+
+// objectKeysInOrder — 按原文顺序提取第一个数组首对象的顶层键名
+// 详见 util_json.h 注释。字符串感知扫描（跳过字符串字面量与转义），
+// 只依赖严格 JSON 语法；失败时 *ok=false，调用方回退 QJsonObject::keys()
+QStringList UtilJson::objectKeysInOrder(const QString &text, bool *ok) {
+  if (ok) *ok = false;
+  const int n = text.size();
+
+  // ── 1. 找到第一个不在字符串内的 '['（响应包裹结构中的数组）──
+  int arrStart = -1;
+  for (int i = 0; i < n; ++i) {
+    const QChar c = text.at(i);
+    if (c == u'"') {  // 字符串字面量：整段跳过（转义感知）
+      ++i;
+      while (i < n) {
+        if (text.at(i) == u'\\') { ++i; continue; }
+        if (text.at(i) == u'"') break;
+        ++i;
+      }
+      continue;
+    }
+    if (c == u'[') { arrStart = i; break; }
+  }
+  if (arrStart < 0) return {};
+
+  // ── 2. 数组首元素应为对象：取其后第一个 '{' ──
+  int rowStart = -1;
+  for (int i = arrStart + 1; i < n; ++i) {
+    const QChar c = text.at(i);
+    if (c == u'"') {  // 字符串字面量整段跳过
+      ++i;
+      while (i < n) {
+        if (text.at(i) == u'\\') { ++i; continue; }
+        if (text.at(i) == u'"') break;
+        ++i;
+      }
+      continue;
+    }
+    if (c == u'{') { rowStart = i; break; }
+    if (c == u']') return {};  // 空数组或首元素非对象
+  }
+  if (rowStart < 0) return {};
+
+  // ── 3. 扫描行对象：按深度 1 的逗号切分键值对区间 ──
+  struct Seg { int start; int end; };
+  QVector<Seg> segs;
+  int depth = 0;
+  bool inStr = false;
+  int segStart = rowStart + 1;
+  for (int j = rowStart; j < n; ++j) {
+    const QChar c = text.at(j);
+    if (inStr) {
+      if (c == u'\\') { ++j; continue; }
+      if (c == u'"') inStr = false;
+      continue;
+    }
+    if (c == u'"') { inStr = true; continue; }
+    if (c == u'{' || c == u'[') { ++depth; continue; }
+    if (c == u'}' || c == u']') {
+      --depth;
+      if (depth == 0) {  // 行对象结束
+        if (segStart < j) segs.append({segStart, j});
+        break;
+      }
+      continue;
+    }
+    if (c == u',' && depth == 1) {  // 顶层逗号：切分段落
+      if (segStart < j) segs.append({segStart, j});
+      segStart = j + 1;
+    }
+  }
+
+  // ── 4. 每段的键 = 段内第一个字符串字面量（解码转义）──
+  QStringList keys;
+  for (const Seg &seg : segs) {
+    int k = seg.start;
+    while (k < seg.end && text.at(k).isSpace()) ++k;
+    if (k >= seg.end || text.at(k) != u'"') continue;  // 键必须带引号（严格 JSON）
+    int close = -1;
+    for (int j = k + 1; j < seg.end; ++j) {
+      const QChar c = text.at(j);
+      if (c == u'\\') { ++j; continue; }
+      if (c == u'"') { close = j; break; }
+    }
+    if (close < 0) continue;
+    keys.append(unescapeJsonKey(text.mid(k + 1, close - k - 1)));
+  }
+
+  if (keys.isEmpty()) return {};
+  if (ok) *ok = true;
+  return keys;
+}
+
 // readTextFile — 读取整个文件文本（UTF-8 解码，不解析）
 QString UtilJson::readTextFile(const QString &filePath) {
   QFile f(filePath);

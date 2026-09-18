@@ -91,7 +91,7 @@ void HttpClient::request(Method method, const QString &url, const QJsonObject &b
       if (onError) onError(QStringLiteral("JSON 解析失败: %1").arg(parseErr.errorString()));
       return;
     }
-    if (onSuccess) onSuccess(doc);
+    if (onSuccess) onSuccess(doc, QString::fromUtf8(data));
   });
 
   // 发起方销毁时自动取消本请求

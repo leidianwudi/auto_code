@@ -435,9 +435,8 @@ void SelectSourcePanel::onTest() {
 
   HttpClient::Method httpMethod = bodyObj.isEmpty() ? HttpClient::Get : HttpClient::Post;
   HttpClient::instance().request(
-      httpMethod, fullUrl, bodyObj, headers, [this](const QJsonDocument &doc) {
-        onHttpFinished(doc);
-      },
+      httpMethod, fullUrl, bodyObj, headers,
+      [this](const QJsonDocument &doc, const QString &) { onHttpFinished(doc); },
       [this](const QString &errorMsg) { onHttpError(errorMsg); }, this);
 }
 

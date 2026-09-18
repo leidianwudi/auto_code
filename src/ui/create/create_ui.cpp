@@ -56,12 +56,13 @@ void CreateUi::setupUI() {
   auto *typeLabel = new QLabel(QStringLiteral("文件类型:"), this);
   typeLabel->setFixedWidth(70);
   m_typeCombo = AuiComboBox::create(this);
+  // 首项固定为「文件夹」（索引与 CreateModel::FileType 枚举对齐，fileTypeIndex 依赖此顺序）
   m_typeCombo->addItem(CreateModel::fileTypeLabel(CreateModel::Folder));
-  m_typeCombo->addItem(CreateModel::fileTypeLabel(CreateModel::Ac));
-  m_typeCombo->addItem(CreateModel::fileTypeLabel(CreateModel::Tpl));
-  m_typeCombo->addItem(CreateModel::fileTypeLabel(CreateModel::Json));
-  m_typeCombo->addItem(CreateModel::fileTypeLabel(CreateModel::Jsonvue));
-  m_typeCombo->addItem(CreateModel::fileTypeLabel(CreateModel::Jsonsource));
+  // 文件类型选项统一取自 CreateModel::fileTypeOptions()（与查找面板类型过滤共用来源），
+  // 以后新增文件类型只需扩展 FileType 枚举 + label/suffix，此处自动跟随
+  for (const CreateModel::FileTypeOption &opt : CreateModel::fileTypeOptions()) {
+    m_typeCombo->addItem(opt.label);
+  }
   typeLayout->addWidget(typeLabel);
   typeLayout->addWidget(m_typeCombo, 1);
   contentLayout->addLayout(typeLayout);

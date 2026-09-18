@@ -41,12 +41,12 @@
 #include "src/util/ui/rename_dialog.h"
 #include "src/util/ui/setting_store.h"
 
-/// 检查文件路径是否为 JSON 类型（.json / .jsonvue / .jsonsource / .jsonupload）
+/// 检查文件路径是否为 JSON 族类型（清单统一取 AcFileSuffix::kJsonFamily）
 static inline bool isJsonLike(const QString &path) {
-  return path.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive) ||
-         path.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive) ||
-         path.endsWith(AcFileSuffix::kJsonsource, Qt::CaseInsensitive) ||
-         path.endsWith(AcFileSuffix::kJsonupload, Qt::CaseInsensitive);
+  for (const char *suf : AcFileSuffix::kJsonFamily) {
+    if (path.endsWith(suf, Qt::CaseInsensitive)) return true;
+  }
+  return false;
 }
 
 /// 判断某节点子树（含自身）内是否存在已修改的文件节点（定义在 setFileModified 附近）
@@ -623,14 +623,13 @@ void TreeDir::onItemChanged(QTreeWidgetItem *item, int column) {
 void TreeDir::addDirectoryToTree(QTreeWidgetItem *parentItem, const QString &dirPath) {
   QDir dir(dirPath);
 
-  // 文件（.ac、.tpl、.json、.jsonvue、.jsonsource 和 .jsonupload）
+  // 文件（.ac、.tpl 和 JSON 族；json 族清单统一取 kJsonFamily 派生，与 isJsonLike 同源）
   QStringList nameFilters;
   nameFilters << (QStringLiteral("*") + AcFileSuffix::kAc)
-              << (QStringLiteral("*") + AcFileSuffix::kTpl)
-              << (QStringLiteral("*") + AcFileSuffix::kJson)
-              << (QStringLiteral("*") + AcFileSuffix::kJsonvue)
-              << (QStringLiteral("*") + AcFileSuffix::kJsonsource)
-              << (QStringLiteral("*") + AcFileSuffix::kJsonupload);
+              << (QStringLiteral("*") + AcFileSuffix::kTpl);
+  for (const char *suf : AcFileSuffix::kJsonFamily) {
+    nameFilters << (QStringLiteral("*") + suf);
+  }
   QFileInfoList files = dir.entryInfoList(nameFilters, QDir::Files);
 
   // 子目录

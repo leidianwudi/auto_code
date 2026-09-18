@@ -352,4 +352,7 @@ inline constexpr const char *kSchemaJson = ".schema.json";
 inline constexpr const char *kJsonvue = ".jsonvue";
 inline constexpr const char *kJsonsource = ".jsonsource";
 inline constexpr const char *kJsonupload = ".jsonupload";
+/// JSON 族后缀清单（.json 及其派生配置类型）；新增 json 族类型只需在此追加，
+/// 消费方（目录树可见性 isJsonLike / nameFilters 等）自动跟随
+inline constexpr const char *const kJsonFamily[] = {kJson, kJsonvue, kJsonsource, kJsonupload};
 }  // namespace AcFileSuffix

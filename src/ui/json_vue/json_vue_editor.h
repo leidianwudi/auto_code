@@ -45,7 +45,8 @@ public:
   void setPreservedSource(const QString &src);
 
   /// 以界面当前配置为主、磁盘原文为底做保真合并，返回可写回磁盘的完整 JSON 对象
-  /// （同一 dataName/actionKey 元素从小从原文补齐未在界面表达的字段；界面未加载时空数组不会清空原文）
+  /// （同一 dataName/actionKey
+  /// 元素从小从原文补齐未在界面表达的字段；界面未加载时空数组不会清空原文）
   QJsonObject collectMergedObject() const;
 
   /// 设置 baseUrl（用于 HTTP 请求拼接）
@@ -85,7 +86,7 @@ private slots:
   /// 点击"生成"按钮，发起 HTTP 请求获取列名
   void onGenerate();
   /// HTTP 请求完成（仅本编辑器发起的请求触发）
-  void onHttpFinished(const class QJsonDocument &doc);
+  void onHttpFinished(const class QJsonDocument &doc, const QString &rawText);
   /// HTTP 请求失败（仅本编辑器发起的请求触发）
   void onHttpError(const QString &url, const QString &errorMsg);
 
@@ -129,9 +130,9 @@ private:
   /// 应用样式
   void applyStyle();
 
-  /// 从 HTTP 返回数据中提取列名，填充到列表
+  /// 从 HTTP 返回数据中提取列名，填充到列表（rawText 为原始响应文本，用于保序列名）
   /// @return 新增列的数量；-1 表示解析/校验失败（错误提示已弹出）
-  int populateColumnsFromHttp(const QJsonDocument &doc);
+  int populateColumnsFromHttp(const QJsonDocument &doc, const QString &rawText);
 
   /// 获取列配置表格中的数据列名列表（供查询字段下拉框使用）
   QStringList columnDataNames() const;

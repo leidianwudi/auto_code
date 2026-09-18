@@ -157,15 +157,16 @@ void JsonVueEditor::onGenerate() {
 
   // 只回调给本编辑器绑定的回调（HttpClient 区分发起方，不广播）
   HttpClient::instance().request(
-      method, fullUrl, bodyObj, headers, [this](const QJsonDocument &doc) { onHttpFinished(doc); },
+      method, fullUrl, bodyObj, headers,
+      [this](const QJsonDocument &doc, const QString &rawText) { onHttpFinished(doc, rawText); },
       [this, fullUrl](const QString &errorMsg) { onHttpError(fullUrl, errorMsg); }, this);
 }
 
-void JsonVueEditor::onHttpFinished(const QJsonDocument &doc) {
+void JsonVueEditor::onHttpFinished(const QJsonDocument &doc, const QString &rawText) {
   m_generateBtn->setEnabled(true);
   m_generateBtn->setText(QStringLiteral("生成"));
 
-  int added = populateColumnsFromHttp(doc);
+  int added = populateColumnsFromHttp(doc, rawText);
   if (added < 0) return;  // 解析/校验失败，错误提示已在 populateColumnsFromHttp 中弹出
 
   // 生成成功提示
@@ -195,7 +196,7 @@ void JsonVueEditor::onHttpError(const QString &url, const QString &errorMsg) {
   AuiMessageBox::show(this, QStringLiteral("请求失败"), msg);
 }
 
-int JsonVueEditor::populateColumnsFromHttp(const QJsonDocument &doc) {
+int JsonVueEditor::populateColumnsFromHttp(const QJsonDocument &doc, const QString &rawText) {
   // 解析 { code, msg, data: { list: [ { col1, col2, ... } ] } }
   QJsonObject root = doc.object();
   QJsonValue dataVal = root.value(QStringLiteral("data"));
@@ -211,7 +212,8 @@ int JsonVueEditor::populateColumnsFromHttp(const QJsonDocument &doc) {
   }
 
   if (listArr.isEmpty()) {
-    AuiMessageBox::show(this, QStringLiteral("提示"), QStringLiteral("返回数据中未找到 list 数组"));
+    AuiMessageBox::show(this, QStringLiteral("提示"),
+                        QStringLiteral("返回数据中未找到 list 数组,可能数据库没有数据"));
     return -1;
   }
 
@@ -231,11 +233,16 @@ int JsonVueEditor::populateColumnsFromHttp(const QJsonDocument &doc) {
     }
   }
 
+  // 列顺序：QJsonObject 迭代按键字母序，无法还原服务端返回的属性顺序
+  // （即数据库表结构列顺序）；改用原始响应文本按序提取，失败回退字母序
+  bool orderedOk = false;
+  QStringList colNames = UtilJson::objectKeysInOrder(rawText, &orderedOk);
+  if (!orderedOk) colNames = firstRow.keys();
+
   // 仅把网络数据中新增（当前列配置里没有）的列追加到表格末尾，已有列保持原顺序不变
   int addedCount = 0;
   m_loading = true;
-  for (auto it = firstRow.begin(); it != firstRow.end(); ++it) {
-    QString colName = it.key();
+  for (const QString &colName : colNames) {
     if (existingNames.contains(colName)) continue;  // 已有列跳过，不修改
 
     ColumnConfig col;
