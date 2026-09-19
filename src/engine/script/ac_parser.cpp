@@ -180,12 +180,16 @@ bool AcParser::parseProgram(Block &block) {
       advance();
       if (!parseBlock(block)) return false;
     } else {
-      // 顶层表达式语句（函数调用、赋值等）
+      // 顶层语句（函数调用、赋值、控制流等）——顶层即隐式 main 函数体，
+      // 与 parseBlock 相同：以 } 结尾的语句不要求分号
       Block::Stmt stmt;
       if (!parseStmt(stmt)) return false;
       block.stmts.append(stmt);
       if (stmt.kind != Block::Stmt::kClassDef && stmt.kind != Block::Stmt::kInterfaceDef &&
-          stmt.kind != Block::Stmt::kEnumDef && stmt.kind != Block::Stmt::kFuncDef) {
+          stmt.kind != Block::Stmt::kEnumDef && stmt.kind != Block::Stmt::kFuncDef &&
+          stmt.kind != Block::Stmt::kIf && stmt.kind != Block::Stmt::kFor &&
+          stmt.kind != Block::Stmt::kWhile && stmt.kind != Block::Stmt::kSwitch &&
+          stmt.kind != Block::Stmt::kBlock) {
         if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.line)) return false;
       }
       continue;

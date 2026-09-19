@@ -1046,14 +1046,110 @@ main {
   let fileContent: String = file.read("test_output.txt");
   printLog(`File.read 返回: ${fileContent}`);
   assert(fileContent == "Hello, File Class!", "File 类读写测试失败");
-
-  // ── 测试总结 ──
-  printLog("\n========================================");
-  printLog("=== 完整功能测试执行完毕 ===");
-  printLog("========================================");
-
-  printLog("✅ 所有测试用例通过！");
 }
+
+// ═══════════════════════════════════════════════════════════════
+// 第七部分：顶层语句测试（顶层即隐式 main 函数体）
+// ═══════════════════════════════════════════════════════════════
+
+printLog("\n--- 20. 顶层语句测试 ---");
+
+// 顶层 for-in：对象按插入序迭代（键保序核心语义）
+let tlObj: Object = { zebra: 1, apple: 2, mango: 3 };
+let tlKeys: String = "";
+for (let k: String in tlObj) {
+  tlKeys = tlKeys + k + ",";
+}
+printLog(`顶层 for-in 键序: ${tlKeys}`);
+assert(tlKeys == "zebra,apple,mango,", "顶层 for-in 插入序测试失败");
+
+// 顶层标准 for
+let tlSum: Number = 0;
+for (let i: Number = 1; i <= 10; i++) {
+  tlSum = tlSum + i;
+}
+printLog(`顶层 for 求和: ${tlSum}`);
+assert(tlSum == 55, "顶层标准 for 测试失败");
+
+// 顶层 while
+let tlW: Number = 0;
+while (tlW < 3) {
+  tlW++;
+}
+printLog(`顶层 while: w=${tlW}`);
+assert(tlW == 3, "顶层 while 测试失败");
+
+// 顶层 if/else
+if (tlW == 3) {
+  printLog("顶层 if: OK");
+} else {
+  assert(false, "顶层 if 测试失败");
+}
+
+// 顶层 switch
+let tlSw: String = "b";
+switch (tlSw) {
+  case "a":
+    assert(false, "顶层 switch 测试失败");
+    break;
+  case "b":
+    printLog("顶层 switch: OK");
+    break;
+  default:
+    assert(false, "顶层 switch 测试失败");
+}
+
+// 顶层独立块作用域
+{
+  let tlBlockVar: String = "块内可见";
+  printLog(`顶层块: ${tlBlockVar}`);
+  assert(tlBlockVar == "块内可见", "顶层块作用域测试失败");
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 第八部分：静态成员与实例边界测试
+// ═══════════════════════════════════════════════════════════════
+
+printLog("\n--- 21. 静态成员与实例边界测试 ---");
+
+class StaticBox {
+  public static let staticCount: Number;
+  public static let instanceRef: StaticBox;
+  public let tag: String;
+  public let num: Number;
+
+  public constructor() {
+    this.tag = "box";
+    this.num = 7;
+  }
+}
+
+// 1) 未赋值静态属性 == null（单例惯用法的基础语义）
+assert(StaticBox.instanceRef == null, "未赋值静态属性应为 null");
+assert(StaticBox.staticCount == null, "未赋值数值静态应为 null");
+
+// 2) 静态属性赋值后可读回
+StaticBox.staticCount = 5;
+StaticBox.instanceRef = new StaticBox();
+assert(StaticBox.staticCount == 5, "静态数值赋值读回失败");
+assert(!(StaticBox.instanceRef == null), "赋值后实例静态不应为 null");
+
+// 3) 静态属性不嵌入实例对象（实例序列化不含静态键）
+let sb: StaticBox = StaticBox.instanceRef;
+let sbJson: String = JSON.stringify(sb);
+printLog(`实例序列化: ${sbJson}`);
+assert(sbJson.indexOf("staticCount") == -1, "静态属性不应嵌入实例对象");
+assert(sbJson.indexOf("instanceRef") == -1, "静态属性不应嵌入实例对象");
+assert(sbJson.indexOf("\"tag\":\"box\"") >= 0, "实例属性序列化测试失败");
+
+// ═══════════════════════════════════════════════════════════════
+// 测试总结
+// ═══════════════════════════════════════════════════════════════
+
+printLog("\n========================================");
+printLog("=== 完整功能测试执行完毕 ===");
+printLog("========================================");
+printLog("✅ 所有测试用例通过！");
 
 // ═══════════════════════════════════════════════════════════════
 // 辅助函数

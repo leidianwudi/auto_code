@@ -19,27 +19,30 @@
 #include "ac_builtin_eval.h"
 #include "ac_builtin_loader.h"
 #include "ac_object_manager.h"
+#include "src/core/json/ac_json_value.h"
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  变量操作
 // ═════════════════════════════════════════════════════════════════════════════
 
-QJsonValue AcInterpreter::resolveVar(const QString &name) const {
-  if (name == QString::fromLatin1(AcKeyword::kThis)) return QJsonValue(m_currentThis);
-  if (name == QString::fromLatin1(AcKeyword::kSuper)) return QJsonValue(m_currentThis);
+accore::AcJsonValue AcInterpreter::resolveVar(const QString &name) const {
+  if (name == QString::fromLatin1(AcKeyword::kThis)) return m_currentThis;
+  if (name == QString::fromLatin1(AcKeyword::kSuper)) return m_currentThis;
   for (int i = m_scopeStack.size() - 1; i >= 0; --i) {
     auto it = m_scopeStack[i].find(name);
     if (it != m_scopeStack[i].end()) return it.value();
   }
-  return QJsonValue();
+  return accore::AcJsonValue();
 }
 
-void AcInterpreter::setVar(const QString &name, const QJsonValue &val) {
+void AcInterpreter::setVar(const QString &name, const accore::AcJsonValue &val) {
   for (int i = m_scopeStack.size() - 1; i >= 0; --i) {
     if (m_scopeStack[i].contains(name)) {
-      const QJsonValue &old = m_scopeStack[i][name];
-      if (AcObjectManager::isManagedInstance(old) && AcObjectManager::isManagedInstance(val) &&
-          AcObjectManager::getObjId(old) == AcObjectManager::getObjId(val)) {
+      const accore::AcJsonValue &old = m_scopeStack[i][name];
+      if (AcObjectManager::isManagedInstance(old.toQJsonValue()) &&
+          AcObjectManager::isManagedInstance(val.toQJsonValue()) &&
+          AcObjectManager::getObjId(old.toQJsonValue()) ==
+              AcObjectManager::getObjId(val.toQJsonValue())) {
         m_scopeStack[i][name] = val;
         return;
       }
@@ -53,14 +56,14 @@ void AcInterpreter::setVar(const QString &name, const QJsonValue &val) {
   m_scopeStack.last()[name] = val;
 }
 
-void AcInterpreter::declareVar(const QString &name, const QJsonValue &val) {
+void AcInterpreter::declareVar(const QString &name, const accore::AcJsonValue &val) {
   // let 声明只在最新（最内层）作用域内创建变量，绝不覆盖外层同名变量
   retainIfInstance(val);
   m_scopeStack.last()[name] = val;
 }
 
 void AcInterpreter::pushScope() {
-  m_scopeStack.append(QHash<QString, QJsonValue>());
+  m_scopeStack.append(QHash<QString, accore::AcJsonValue>());
   m_usingStack.append(QVector<QString>());
   m_varLocStack.append(QHash<QString, QPair<QString, int>>());
 }
@@ -71,21 +74,20 @@ void AcInterpreter::popScope() {
   if (!m_usingStack.isEmpty()) {
     auto usingVars = m_usingStack.takeLast();
     for (int i = usingVars.size() - 1; i >= 0; --i) {
-      QJsonValue val = resolveVar(usingVars[i]);
+      accore::AcJsonValue val = resolveVar(usingVars[i]);
       if (val.isObject()) {
-        QJsonObject obj = val.toObject();
-        QString className = obj.value(QString::fromLatin1(AcRuntime::kClassKey)).toString();
+        QString className = val.value(QString::fromLatin1(AcRuntime::kClassKey)).toString();
         if (!className.isEmpty() && m_classes.contains(className)) {
           const ClassDef &cd = m_classes[className];
           QString disposeName = QString::fromLatin1(AcKeyword::kDispose);
           if (cd.isNative) {
             // 原生类 dispose：显式传递实例 thisObj（实例方法经 registerFuncsWithThis 注册）
-            FunMgr::ins().call(className, disposeName, QJsonValue(obj), QJsonArray());
+            FunMgr::ins().call(className, disposeName, val.toQJsonValue(), QJsonArray());
             FunMgr::takeError();
           } else {
             const MethodDef *disposeMethod = findMethod(className, disposeName);
             if (disposeMethod) {
-              execMethod(*disposeMethod, obj, QJsonValue());
+              execMethod(*disposeMethod, val, accore::AcJsonValue());
             }
           }
         }
@@ -115,11 +117,11 @@ bool AcInterpreter::containsVar(const QString &name) const {
   return false;
 }
 
-bool AcInterpreter::isTruthy(const QJsonValue &cond) {
+bool AcInterpreter::isTruthy(const accore::AcJsonValue &cond) {
   if (cond.isBool()) return cond.toBool();
   if (cond.isString()) return !cond.toString().isEmpty();
   if (cond.isDouble()) return cond.toDouble() != 0.0;
-  if (cond.isNull() || cond.isUndefined()) return false;
+  if (cond.isNull()) return false;
   return true;
 }
 
@@ -127,19 +129,19 @@ bool AcInterpreter::isTruthy(const QJsonValue &cond) {
 //  引用计数辅助
 // ═════════════════════════════════════════════════════════════════════════════
 
-void AcInterpreter::retainIfInstance(const QJsonValue &val) {
-  if (!AcObjectManager::isManagedInstance(val)) return;
-  m_objMgr.retain(AcObjectManager::getObjId(val));
+void AcInterpreter::retainIfInstance(const accore::AcJsonValue &val) {
+  if (!AcObjectManager::isManagedInstance(val.toQJsonValue())) return;
+  m_objMgr.retain(AcObjectManager::getObjId(val.toQJsonValue()));
 }
 
-void AcInterpreter::releaseIfInstance(const QJsonValue &val) {
-  if (!AcObjectManager::isManagedInstance(val)) return;
-  m_objMgr.release(AcObjectManager::getObjId(val));
+void AcInterpreter::releaseIfInstance(const accore::AcJsonValue &val) {
+  if (!AcObjectManager::isManagedInstance(val.toQJsonValue())) return;
+  m_objMgr.release(AcObjectManager::getObjId(val.toQJsonValue()));
 }
 
-void AcInterpreter::releaseIfInstanceWithDestruct(const QJsonValue &val) {
-  if (!AcObjectManager::isManagedInstance(val)) return;
-  m_objMgr.release(AcObjectManager::getObjId(val));
+void AcInterpreter::releaseIfInstanceWithDestruct(const accore::AcJsonValue &val) {
+  if (!AcObjectManager::isManagedInstance(val.toQJsonValue())) return;
+  m_objMgr.release(AcObjectManager::getObjId(val.toQJsonValue()));
   QVector<AcObjectManager::DestructInfo> pending = m_objMgr.takePendingDestructs();
   for (const auto &info : pending) {
     processDestructInfo(info);
@@ -147,12 +149,12 @@ void AcInterpreter::releaseIfInstanceWithDestruct(const QJsonValue &val) {
 }
 
 void AcInterpreter::processDestructInfo(const AcObjectManager::DestructInfo &info) {
-  QJsonObject obj = info.instance;
-  for (auto it = obj.begin(); it != obj.end(); ++it) {
-    if (it.key() == QString::fromLatin1(AcRuntime::kClassKey) ||
-        it.key() == QString::fromLatin1(AcRuntime::kObjId))
+  accore::AcJsonValue obj = accore::AcJsonValue::fromQJsonValue(info.instance);
+  for (const auto &m : obj.members()) {
+    if (m.key == QString::fromLatin1(AcRuntime::kClassKey) ||
+        m.key == QString::fromLatin1(AcRuntime::kObjId))
       continue;
-    releaseDeep(it.value());
+    releaseDeep(m.value);
   }
   if (FunMgr::ins().contains(info.className, QString::fromLatin1(AcRuntime::kDestructor))) {
     // 原生类析构：显式传递实例 thisObj（实例方法经 registerFuncsWithThis 注册）
@@ -161,48 +163,49 @@ void AcInterpreter::processDestructInfo(const AcObjectManager::DestructInfo &inf
   } else if (m_classes.contains(info.className) && !m_classes[info.className].isNative) {
     const MethodDef *dtor = findMethod(info.className, QString::fromLatin1(AcRuntime::kDestructor));
     if (dtor) {
-      execMethod(*dtor, info.instance, QJsonValue(QJsonArray()));
+      execMethod(*dtor, accore::AcJsonValue::fromQJsonValue(info.instance),
+                 accore::AcJsonValue::makeArray());
     }
   }
 }
 
-void AcInterpreter::traverseNested(const QJsonValue &val,
-                                   const std::function<void(const QJsonValue &)> &onChild) {
+void AcInterpreter::traverseNested(
+    const accore::AcJsonValue &val,
+    const std::function<void(const accore::AcJsonValue &)> &onChild) {
   if (val.isArray()) {
-    for (const QJsonValue &item : val.toArray()) onChild(item);
+    for (const accore::AcJsonValue &item : val.items()) onChild(item);
   } else if (val.isObject()) {
-    QJsonObject obj = val.toObject();
-    for (auto it = obj.begin(); it != obj.end(); ++it) {
-      if (it.key() == QString::fromLatin1(AcRuntime::kClassKey) ||
-          it.key() == QString::fromLatin1(AcRuntime::kObjId))
+    for (const auto &m : val.members()) {
+      if (m.key == QString::fromLatin1(AcRuntime::kClassKey) ||
+          m.key == QString::fromLatin1(AcRuntime::kObjId))
         continue;
-      onChild(it.value());
+      onChild(m.value);
     }
   }
 }
 
-void AcInterpreter::releaseDeep(const QJsonValue &val) {
-  if (AcObjectManager::isManagedInstance(val)) {
+void AcInterpreter::releaseDeep(const accore::AcJsonValue &val) {
+  if (AcObjectManager::isManagedInstance(val.toQJsonValue())) {
     releaseIfInstanceWithDestruct(val);
     return;
   }
-  traverseNested(val, [this](const QJsonValue &child) { releaseDeep(child); });
+  traverseNested(val, [this](const accore::AcJsonValue &child) { releaseDeep(child); });
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  标记-清扫（处理循环引用）
 // ═════════════════════════════════════════════════════════════════════════════
 
-void AcInterpreter::markFromValue(const QJsonValue &val) {
-  if (AcObjectManager::isManagedInstance(val)) {
-    QString objId = AcObjectManager::getObjId(val);
+void AcInterpreter::markFromValue(const accore::AcJsonValue &val) {
+  if (AcObjectManager::isManagedInstance(val.toQJsonValue())) {
+    QString objId = AcObjectManager::getObjId(val.toQJsonValue());
     if (m_objMgr.isMarked(objId) || !m_objMgr.contains(objId)) return;
     m_objMgr.mark(objId);
-    QJsonObject obj = m_objMgr.getObject(objId);
-    traverseNested(QJsonValue(obj), [this](const QJsonValue &child) { markFromValue(child); });
+    accore::AcJsonValue obj = accore::AcJsonValue::fromQJsonValue(m_objMgr.getObject(objId));
+    traverseNested(obj, [this](const accore::AcJsonValue &child) { markFromValue(child); });
     return;
   }
-  traverseNested(val, [this](const QJsonValue &child) { markFromValue(child); });
+  traverseNested(val, [this](const accore::AcJsonValue &child) { markFromValue(child); });
 }
 
 void AcInterpreter::collectCycles() {
@@ -217,24 +220,24 @@ void AcInterpreter::collectCycles() {
     }
   }
   for (auto it = m_staticVars.begin(); it != m_staticVars.end(); ++it) {
-    for (auto pit = it.value().begin(); pit != it.value().end(); ++pit) {
-      markFromValue(pit.value());
+    for (const auto &m : it.value().members()) {
+      markFromValue(m.value);
     }
   }
   if (!m_currentThis.isEmpty()) {
-    for (auto it = m_currentThis.begin(); it != m_currentThis.end(); ++it) {
-      if (it.key() == QString::fromLatin1(AcRuntime::kClassKey) ||
-          it.key() == QString::fromLatin1(AcRuntime::kObjId))
+    for (const auto &m : m_currentThis.members()) {
+      if (m.key == QString::fromLatin1(AcRuntime::kClassKey) ||
+          m.key == QString::fromLatin1(AcRuntime::kObjId))
         continue;
-      markFromValue(it.value());
+      markFromValue(m.value);
     }
   }
   if (!m_modifiedThis.isEmpty()) {
-    for (auto it = m_modifiedThis.begin(); it != m_modifiedThis.end(); ++it) {
-      if (it.key() == QString::fromLatin1(AcRuntime::kClassKey) ||
-          it.key() == QString::fromLatin1(AcRuntime::kObjId))
+    for (const auto &m : m_modifiedThis.members()) {
+      if (m.key == QString::fromLatin1(AcRuntime::kClassKey) ||
+          m.key == QString::fromLatin1(AcRuntime::kObjId))
         continue;
-      markFromValue(it.value());
+      markFromValue(m.value);
     }
   }
 
@@ -248,16 +251,16 @@ void AcInterpreter::collectCycles() {
 //  执行入口
 // ═════════════════════════════════════════════════════════════════════════════
 
-QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
+accore::AcJsonValue AcInterpreter::execute(const Block &program, QString &error) {
   m_error.clear();
   m_scopeStack.clear();
   m_usingStack.clear();
   m_varLocStack.clear();
   m_classes.clear();
   m_functions.clear();
-  m_currentThis = QJsonObject();
+  m_currentThis = accore::AcJsonValue();
   m_hasReturned = false;
-  m_returnValue = QJsonValue();
+  m_returnValue = accore::AcJsonValue();
   m_generatedFiles.clear();
   m_funcExprCounter = 0;
 
@@ -293,7 +296,7 @@ QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
       case Block::Stmt::kEnumDef:
         for (const auto &member : stmt.enumDef.members) {
           QString varName = QStringLiteral("%1.%2").arg(stmt.enumDef.name, member.name);
-          setVar(varName, member.value);
+          setVar(varName, accore::AcJsonValue::fromQJsonValue(member.value));
         }
         break;
       default:
@@ -309,7 +312,7 @@ QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
       m_callStack.removeLast();
       --m_callDepth;
     }
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
 
   while (!m_scopeStack.isEmpty()) {
@@ -321,5 +324,5 @@ QJsonValue AcInterpreter::execute(const Block &program, QString &error) {
     --m_callDepth;
   }
 
-  return m_hasReturned ? m_returnValue : QJsonValue();
+  return m_hasReturned ? m_returnValue : accore::AcJsonValue();
 }

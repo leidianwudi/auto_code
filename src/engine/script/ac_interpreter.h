@@ -17,6 +17,7 @@
 #include "ac_debugger.h"
 #include "ac_object_manager.h"
 #include "ac_type.h"
+#include "src/core/json/ac_json_value.h"
 
 class TplEngine;
 class AcBuiltinEval;
@@ -33,7 +34,7 @@ public:
   /// @param program AST 根节点
   /// @param error 错误信息输出
   /// @return 执行结果
-  QJsonValue execute(const Block &program, QString &error);
+  accore::AcJsonValue execute(const Block &program, QString &error);
 
   /// @brief 设置日志回调
   void setLogCallback(const LogCallback &cb) { m_logCallback = cb; }
@@ -61,73 +62,75 @@ public:
   const QHash<QString, ClassDef> &classes() const { return m_classes; }
 
   /// @brief 比较两个 JSON 值（用于 == 和数组 indexOf/includes）
-  static int compareValues(const QJsonValue &l, const QJsonValue &r);
+  static int compareValues(const accore::AcJsonValue &l, const accore::AcJsonValue &r);
 
   /// @brief 判断值是否为真
-  static bool isTruthy(const QJsonValue &cond);
+  static bool isTruthy(const accore::AcJsonValue &cond);
 
   /// @brief 推导类型名称
-  static QString inferTypeName(const QJsonValue &val);
+  static QString inferTypeName(const accore::AcJsonValue &val);
 
   /// @brief 记录变量的推导类型（供类型检查使用）
-  void recordInferredType(const QString &name, const QJsonValue &val);
+  void recordInferredType(const QString &name, const accore::AcJsonValue &val);
 
 private:
   // ── 执行 ──
   void execBlock(const Block &block);
   void execStmt(const Block::Stmt &stmt);
   void execIfStmt(const IfStmt &ifStmt);
-  QJsonValue evalExpr(const Expr &expr);
-  QJsonValue evalExprWithThis(const Expr &expr, const QJsonObject &thisObj);
+  accore::AcJsonValue evalExpr(const Expr &expr);
+  accore::AcJsonValue evalExprWithThis(const Expr &expr, const accore::AcJsonValue &thisObj);
   /// @brief 设置带行号的错误信息
   void setError(const QString &msg, int line);
-  /// @brief 解析类名.属性访问（静态属性 + 类对象回退），返回属性值；失败返回 Undefined
-  QJsonValue resolveClassAccess(const QString &className, const QString &propName);
-  /// @brief 解析类的静态属性或方法访问，返回属性值/类引用；失败返回 Undefined
-  QJsonValue resolveClassPropOrMethod(const QString &className, const QString &propName);
+  /// @brief 解析类名.属性访问（静态属性 + 类对象回退），返回属性值；失败返回 Null
+  accore::AcJsonValue resolveClassAccess(const QString &className, const QString &propName);
+  /// @brief 解析类的静态属性或方法访问，返回属性值/类引用；失败返回 Null
+  accore::AcJsonValue resolveClassPropOrMethod(const QString &className, const QString &propName);
   /// @brief 创建类引用对象 { __class__: className }
-  QJsonValue makeClassRef(const QString &className) const;
+  accore::AcJsonValue makeClassRef(const QString &className) const;
   /// @brief 从对象中取属性值（处理 length/数组索引/普通属性/enum fallback）
-  QJsonValue getPropertyValue(const QJsonValue &obj, const QString &prop, const QString &ident);
+  accore::AcJsonValue getPropertyValue(const accore::AcJsonValue &obj, const QString &prop,
+                                       const QString &ident);
   /// @brief 计算链式属性访问 (ident.prop 或 propObject->prop)
-  QJsonValue evalPropertyChain(const Expr &expr);
+  accore::AcJsonValue evalPropertyChain(const Expr &expr);
   /// @brief 应用复合赋值运算符
-  QJsonValue applyCompoundOp(const QJsonValue &currentVal, const QJsonValue &newVal, CompoundOp op,
-                             int line);
+  accore::AcJsonValue applyCompoundOp(const accore::AcJsonValue &currentVal,
+                                      const accore::AcJsonValue &newVal, CompoundOp op, int line);
   /// @brief 将修改后的值回写到变量/this/属性
-  void writeBackVar(const Expr &objectExpr, const QJsonValue &val);
+  void writeBackVar(const Expr &objectExpr, const accore::AcJsonValue &val);
   /// @brief 执行静态属性赋值
-  void execStaticAssign(const QString &className, const QString &propName, const QJsonValue &val);
+  void execStaticAssign(const QString &className, const QString &propName,
+                        const accore::AcJsonValue &val);
   /// @brief 执行 this 属性赋值
-  void execThisAssign(const QString &propName, const QJsonValue &val);
+  void execThisAssign(const QString &propName, const accore::AcJsonValue &val);
   /// @brief 执行索引赋值（对象[key]/数组[idx]）
-  void assignToIndex(const QJsonValue &objVal, const QJsonValue &idxVal, const QJsonValue &newVal,
-                     const Expr &objectExpr);
+  void assignToIndex(const accore::AcJsonValue &objVal, const accore::AcJsonValue &idxVal,
+                     const accore::AcJsonValue &newVal, const Expr &objectExpr);
   /// @brief 执行属性赋值（obj.prop = newVal，支持复合赋值）
-  void assignToProperty(const QJsonValue &objVal, const QString &prop, QJsonValue newVal,
-                        const Expr &objectExpr, CompoundOp op);
-  QJsonValue evalBinary(const Expr &expr);
-  QJsonValue evalUnary(const Expr &expr);
-  QJsonValue evalMethodCall(const Expr &expr);
-  QJsonValue evalJSONBuiltin(const Expr &expr);
-  QJsonValue resolveMethodCallTarget(const Expr &expr);
-  QJsonValue evalNewInstance(const Expr &expr);
-  QJsonValue callBuiltin(const QString &name, const std::vector<std::unique_ptr<Expr>> &args,
-                         int line);
-  QJsonValue evalStringBuiltin(const QString &obj, const QString &method,
-                               const std::vector<std::unique_ptr<Expr>> &args, int line);
-  QJsonValue evalArrayBuiltin(const QJsonArray &arr, const QString &method,
-                              const std::vector<std::unique_ptr<Expr>> &args, int line,
-                              QJsonValue &modifiedArr);
+  void assignToProperty(const accore::AcJsonValue &objVal, const QString &prop,
+                        accore::AcJsonValue newVal, const Expr &objectExpr, CompoundOp op);
+  accore::AcJsonValue evalBinary(const Expr &expr);
+  accore::AcJsonValue evalUnary(const Expr &expr);
+  accore::AcJsonValue evalMethodCall(const Expr &expr);
+  accore::AcJsonValue evalJSONBuiltin(const Expr &expr);
+  accore::AcJsonValue resolveMethodCallTarget(const Expr &expr);
+  accore::AcJsonValue evalNewInstance(const Expr &expr);
+  accore::AcJsonValue callBuiltin(const QString &name,
+                                  const std::vector<std::unique_ptr<Expr>> &args, int line);
+  accore::AcJsonValue evalStringBuiltin(const QString &obj, const QString &method,
+                                        const std::vector<std::unique_ptr<Expr>> &args, int line);
+  accore::AcJsonValue evalArrayBuiltin(const accore::AcJsonValue &arr, const QString &method,
+                                       const std::vector<std::unique_ptr<Expr>> &args, int line,
+                                       accore::AcJsonValue &modifiedArr);
   /// @brief 执行类方法调用（native 类 + 用户类 + super）
-  QJsonValue evalClassMethod(const QJsonObject &obj, const QString &className, const Expr &expr,
-                             bool isChained, bool isSuper);
+  accore::AcJsonValue evalClassMethod(const accore::AcJsonValue &obj, const QString &className,
+                                      const Expr &expr, bool isChained, bool isSuper);
 
   // ── 变量操作 ──
-  QJsonValue resolveVar(const QString &name) const;
-  void setVar(const QString &name, const QJsonValue &val);
+  accore::AcJsonValue resolveVar(const QString &name) const;
+  void setVar(const QString &name, const accore::AcJsonValue &val);
   void declareVar(const QString &name,
-                  const QJsonValue &val);  ///< 在最新作用域内声明变量，不覆盖外层同名变量
+                  const accore::AcJsonValue &val);  ///< 在最新作用域内声明变量，不覆盖外层同名变量
   /// 记录变量的声明位置（文件 + 行号），供调试面板定位
   void recordVarLoc(const QString &name, const QString &filePath, int line);
   bool containsVar(const QString &name) const;
@@ -136,40 +139,41 @@ private:
 
   // ── 引用计数辅助 ──
   /// 如果值是受管理的实例，retain
-  void retainIfInstance(const QJsonValue &val);
+  void retainIfInstance(const accore::AcJsonValue &val);
   /// 如果值是受管理的实例，release（引用计数归零时触发析构）
-  void releaseIfInstance(const QJsonValue &val);
+  void releaseIfInstance(const accore::AcJsonValue &val);
   /// 如果值是受管理的实例，release（用户自定义类需执行 __destruct__ AST）
-  void releaseIfInstanceWithDestruct(const QJsonValue &val);
+  void releaseIfInstanceWithDestruct(const accore::AcJsonValue &val);
   /// 递归遍历值中的嵌套数据（数组/普通对象），跳过实例类关键字
-  void traverseNested(const QJsonValue &val,
-                      const std::function<void(const QJsonValue &)> &onChild);
+  void traverseNested(const accore::AcJsonValue &val,
+                      const std::function<void(const accore::AcJsonValue &)> &onChild);
   /// 递归释放值中的所有受管理实例（数组/对象内部的实例）
-  void releaseDeep(const QJsonValue &val);
+  void releaseDeep(const accore::AcJsonValue &val);
 
   // ── 标记-清扫（处理循环引用） ──
   /// 从根（存活作用域、静态变量）出发标记所有可达实例，回收未标记的循环引用垃圾
   void collectCycles();
-  /// 递归标记 QJsonValue 中所有可达的受管理实例
-  void markFromValue(const QJsonValue &val);
+  /// 递归标记 accore::AcJsonValue 中所有可达的受管理实例
+  void markFromValue(const accore::AcJsonValue &val);
   /// 执行单个实例的析构（释放属性引用 + 调用 __destruct__）
   void processDestructInfo(const AcObjectManager::DestructInfo &info);
 
   // ── 类方法执行 ──
-  QJsonValue execMethod(const MethodDef &method, const QJsonObject &thisObj,
-                        const QJsonValue &callArgs);
+  accore::AcJsonValue execMethod(const MethodDef &method, const accore::AcJsonValue &thisObj,
+                                 const accore::AcJsonValue &callArgs);
   /// @brief 执行带 this 上下文的函数体（method/function 通用）
-  QJsonValue execCallBody(const QVector<ParamDef> &params, const QJsonValue &callArgs,
-                          const Block &body, const QJsonObject *thisObj,
-                          const QString &funcName = QString());
+  accore::AcJsonValue execCallBody(const QVector<ParamDef> &params,
+                                   const accore::AcJsonValue &callArgs, const Block &body,
+                                   const accore::AcJsonValue *thisObj,
+                                   const QString &funcName = QString());
   void initStaticVars(const ClassDef &cd);
 
   // ── 继承辅助 ──
   const MethodDef *findMethod(const QString &className, const QString &methodName) const;
-  QJsonObject createBaseInstance(const QString &baseClassName);
+  accore::AcJsonValue createBaseInstance(const QString &baseClassName);
 
   // ── 顶层函数执行 ──
-  QJsonValue execUserFunction(const MethodDef &func, const QJsonValue &callArgs);
+  accore::AcJsonValue execUserFunction(const MethodDef &func, const accore::AcJsonValue &callArgs);
 
   // ── 调试支持 ──
   /// 暂停时构建调用栈与变量快照
@@ -185,7 +189,7 @@ private:
   int m_callDepth = 0;
   QVector<AcDebugFrame> m_callStack;  ///< 调用栈（仅调试时维护）
   AcObjectManager m_objMgr;
-  QVector<QHash<QString, QJsonValue>> m_scopeStack;
+  QVector<QHash<QString, accore::AcJsonValue>> m_scopeStack;
   QVector<QVector<QString>> m_usingStack;
   /// 变量声明位置（与 m_scopeStack 一一对应）：变量名 → (文件, 行号)
   QVector<QHash<QString, QPair<QString, int>>> m_varLocStack;
@@ -193,15 +197,15 @@ private:
   QHash<QString, ClassDef> m_classes;
   QHash<QString, MethodDef> m_functions;
   int m_funcExprCounter = 0;  ///< 函数表达式计数器（生成唯一 lambda 名）
-  QHash<QString, QJsonObject> m_staticVars;
+  QHash<QString, accore::AcJsonValue> m_staticVars;
   QSet<QString> m_staticInited;
-  QJsonObject m_currentThis;
-  QJsonObject m_modifiedThis;
+  accore::AcJsonValue m_currentThis;
+  accore::AcJsonValue m_modifiedThis;
   QHash<QString, QString> m_inferredTypes;  ///< 推导类型映射：变量名 → 类型名
   bool m_hasReturned = false;
   bool m_hasBreak = false;
   bool m_hasContinue = false;
-  QJsonValue m_returnValue;
+  accore::AcJsonValue m_returnValue;
   QStringList m_generatedFiles;
 
   LogCallback m_logCallback;

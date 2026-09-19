@@ -159,8 +159,8 @@ QJsonValue AcExecutor::execute() {
   qDebug() << "[AcExecutor::execute] type check passed";
 #endif
 
-  // 步骤 4：执行
-  QJsonValue result = m_interpreter.execute(m_program, m_error);
+  // 步骤 4：执行（解释器核心已迁移到 accore::AcJsonValue，此处转回 Qt 值供上层使用）
+  QJsonValue result = m_interpreter.execute(m_program, m_error).toQJsonValue();
   if (!m_error.isEmpty()) {
     // 在解释器错误信息前加上文件名
     if (!m_scriptFile.isEmpty()) {

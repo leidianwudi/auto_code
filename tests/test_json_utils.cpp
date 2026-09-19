@@ -117,6 +117,12 @@ static void testResolveSchemaPath() {
 /// AC 参数默认值语法测试（tests/test_ac_param_default.cpp），返回失败数
 int runAcParamDefaultTests();
 
+/// accore JSON 值类型测试（tests/test_ac_json_value.cpp），返回失败数
+int runAcJsonValueTests();
+
+/// 端到端 golden 脚本测试（tests/test_golden_script.cpp），返回失败数
+int runGoldenScriptTests();
+
 /// .jsonsource 作用域查找：项目根（project.acproj）内严格过滤，无标记目录回退全局
 static void testProjectScopedJsonsourceFinder() {
   const QString fileRoot =
@@ -292,7 +298,10 @@ int main() {
   testProjectScopedJsonuploadFinder();
   testJsonUploadConfigRoundTrip();
   const int extraFailed = runAcParamDefaultTests();
+  const int jsonValueFailed = runAcJsonValueTests();
+  const int goldenFailed = runGoldenScriptTests();
 
-  std::printf("%d checks, %d failed\n", g_total, g_failed + extraFailed);
-  return (g_failed + extraFailed) == 0 ? 0 : 1;
+  std::printf("%d checks, %d failed\n", g_total,
+              g_failed + extraFailed + jsonValueFailed + goldenFailed);
+  return (g_failed + extraFailed + jsonValueFailed + goldenFailed) == 0 ? 0 : 1;
 }

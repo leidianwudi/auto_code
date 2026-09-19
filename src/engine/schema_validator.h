@@ -54,6 +54,8 @@
 #include <QVector>
 #include <memory>
 
+#include "src/core/json/ac_json_value.h"
+
 /**
  * @class SchemaValidator
  * @brief 基于类定义的 JSON 数据校验器 + 智能提示
@@ -209,11 +211,8 @@ private:
   void validateValue(const PropertyDef &pd, const QJsonValue &val, const QString &childPath,
                      QVector<QString> *errors) const;
 
-  /// 解析单个类定义（properties/required/additionalProperties）
-  void parseClassDef(const QJsonObject &obj, ClassDef &def) const;
-
-  /// 按 schema 文本中记录的键声明顺序重排类属性表（QJsonObject 解析会丢失声明序）
-  void applyDeclarationOrder(const QString &classPath, ClassDef &def) const;
+  /// 解析单个类定义（properties/required/additionalProperties）；属性表按声明序直填
+  void parseClassDef(const accore::AcJsonValue &obj, ClassDef &def) const;
 
   /// 在类中查找属性定义；不存在返回 nullptr
   static const PropertyDef *propertyOf(const ClassDef &def, const QString &name);
@@ -226,8 +225,4 @@ private:
 
   QMap<QString, ClassDef> m_classes;
   QString m_rootClass;  // 根入口类名
-
-  /// 对象键声明顺序表：对象路径（如 "definitions.TableConfig.properties"）→ 键序。
-  /// QJsonObject 按键字母排序，声明序只能从归一化文本单独扫描获得。
-  QHash<QString, QStringList> m_keyOrders;
 };

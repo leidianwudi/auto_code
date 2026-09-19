@@ -16,6 +16,11 @@ qt_add_executable(auto_code
     WIN32 MACOSX_BUNDLE
     main.cpp
     res/app_icon.rc
+    # accore 编译器核心（自有值类型，无 GUI/QJson 依赖）
+    src/core/json/ac_json_value.h
+    src/core/json/ac_json_value.cpp
+    src/core/json/ac_json_parse.cpp
+    src/core/json/ac_json_write.cpp
     src/engine/script/ac_type.h
     src/engine/script/ac_type.cpp
     src/engine/script/ac_lexer.h
@@ -363,6 +368,14 @@ target_link_libraries(gen_icon PRIVATE Qt::Core Qt::Widgets)
 add_executable(auto_code_tests EXCLUDE_FROM_ALL
     tests/test_json_utils.cpp
     tests/test_ac_param_default.cpp
+    # accore JSON 值类型测试
+    src/core/json/ac_json_value.h
+    src/core/json/ac_json_value.cpp
+    src/core/json/ac_json_parse.cpp
+    src/core/json/ac_json_write.cpp
+    tests/test_ac_json_value.cpp
+    # 端到端 golden 脚本测试（QProcess 调主程序 --run，无引擎链接依赖）
+    tests/test_golden_script.cpp
     src/util/common/util_json.cpp
     src/util/common/path_resolver.cpp
     src/ui/json_source/json_upload_model.cpp

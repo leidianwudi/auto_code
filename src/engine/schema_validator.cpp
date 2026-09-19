@@ -6,12 +6,11 @@
 #include "schema_validator.h"
 
 #include <QJsonArray>
-#include <QJsonDocument>
 #include <QJsonObject>
-#include <QJsonParseError>
 #include <QJsonValue>
 #include <QSet>
 
+#include "src/core/json/ac_json_value.h"
 #include "src/util/common/util_json.h"
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -39,258 +38,72 @@ inline constexpr const char *kTypeObject = "object";
 
 /// 元数据键（$schema/$id 等以 $ 开头的键不参与校验）
 inline bool isMetaKey(const QString &key) { return key.startsWith(QLatin1Char('$')); }
-
-/// 递归扫描标准 JSON 文本，记录每个对象节点的键声明顺序（对象路径 → 键序）。
-/// QJsonObject/QMap 都按键排序，schema 的声明顺序只能从文本本身获得；
-/// 文本先经 UtilJson::json5ToJson 归一化，故此处只需处理标准 JSON 语法。
-class KeyOrderScanner {
-public:
-  explicit KeyOrderScanner(const QString &text) : m_text(text) {}
-
-  QHash<QString, QStringList> scan() {
-    QHash<QString, QStringList> out;
-    m_i = 0;
-    skipWs();
-    parseValue(QString(), out);
-    return out;
-  }
-
-private:
-  QChar peek() const { return m_i < m_text.size() ? m_text.at(m_i) : QChar(); }
-
-  void skipWs() {
-    while (m_i < m_text.size() && m_text.at(m_i).isSpace()) ++m_i;
-  }
-
-  /// 解析字符串字面量（含转义还原）；out 为空时仅跳过
-  void parseString(QString *out) {
-    ++m_i;  // 开引号
-    while (m_i < m_text.size()) {
-      const QChar c = m_text.at(m_i);
-      if (c == QLatin1Char('"')) {
-        ++m_i;
-        return;
-      }
-      if (c == QLatin1Char('\\')) {
-        ++m_i;
-        if (m_i >= m_text.size()) return;
-        const QChar e = m_text.at(m_i);
-        if (out) {
-          switch (e.unicode()) {
-            case '"':
-              out->append(QLatin1Char('"'));
-              break;
-            case '\\':
-              out->append(QLatin1Char('\\'));
-              break;
-            case '/':
-              out->append(QLatin1Char('/'));
-              break;
-            case 'b':
-              out->append(QLatin1Char('\b'));
-              break;
-            case 'f':
-              out->append(QLatin1Char('\f'));
-              break;
-            case 'n':
-              out->append(QLatin1Char('\n'));
-              break;
-            case 'r':
-              out->append(QLatin1Char('\r'));
-              break;
-            case 't':
-              out->append(QLatin1Char('\t'));
-              break;
-            case 'u': {
-              if (m_i + 4 < m_text.size()) {
-                bool ok = false;
-                const uint cp = m_text.mid(m_i + 1, 4).toUInt(&ok, 16);
-                if (ok) out->append(QChar(cp));
-                m_i += 4;
-              }
-              break;
-            }
-            default:
-              out->append(e);
-              break;
-          }
-        }
-        if (e == QLatin1Char('u'))
-          ++m_i;  // u 后 4 位已在上面消费（失败也跳过避免死循环）
-        else
-          ++m_i;
-        continue;
-      }
-      if (out) out->append(c);
-      ++m_i;
-    }
-  }
-
-  /// 跳过标量（数字/true/false/null）
-  void skipScalar() {
-    while (m_i < m_text.size()) {
-      const QChar c = m_text.at(m_i);
-      if (c.isSpace() || c == QLatin1Char(',') || c == QLatin1Char('}') || c == QLatin1Char(']'))
-        break;
-      ++m_i;
-    }
-  }
-
-  void parseValue(const QString &path, QHash<QString, QStringList> &out) {
-    skipWs();
-    if (m_i >= m_text.size()) return;
-    const QChar c = peek();
-    if (c == QLatin1Char('{')) {
-      parseObject(path, out);
-    } else if (c == QLatin1Char('[')) {
-      ++m_i;
-      int idx = 0;
-      while (m_i < m_text.size()) {
-        skipWs();
-        if (peek() == QLatin1Char(']')) {
-          ++m_i;
-          return;
-        }
-        parseValue(path + QLatin1Char('.') + QString::number(idx), out);
-        ++idx;
-        skipWs();
-        if (peek() == QLatin1Char(',')) ++m_i;
-      }
-    } else if (c == QLatin1Char('"')) {
-      parseString(nullptr);
-    } else {
-      skipScalar();
-    }
-  }
-
-  void parseObject(const QString &path, QHash<QString, QStringList> &out) {
-    ++m_i;  // '{'
-    QStringList keys;
-    while (m_i < m_text.size()) {
-      skipWs();
-      if (peek() == QLatin1Char('}')) {
-        ++m_i;
-        break;
-      }
-      QString key;
-      parseString(&key);
-      skipWs();
-      if (peek() == QLatin1Char(':')) ++m_i;
-      const QString child = path.isEmpty() ? key : path + QLatin1Char('.') + key;
-      if (!key.isEmpty()) keys.append(key);
-      parseValue(child, out);
-      skipWs();
-      if (peek() == QLatin1Char(',')) {
-        ++m_i;
-        continue;
-      }
-      if (peek() == QLatin1Char('}')) {
-        ++m_i;
-        break;
-      }
-      break;  // 容错：异常文本直接结束
-    }
-    out.insert(path, keys);
-  }
-
-  const QString &m_text;
-  int m_i = 0;
-};
 }  // namespace
 
 // load — 加载 schema 定义文件（支持新格式 root/definitions 与旧格式类名）
 bool SchemaValidator::load(const QString &filePath) {
-  // 读取原文并归一化（JSON5 → 标准 JSON，保持声明顺序）：
-  // 值用 QJsonDocument 解析；键声明顺序从同一份归一化文本单独扫描
-  // （QJsonObject 按键字母排序，声明序在解析时就丢了）。
+  // 直接用 accore 键保序解析器读取 schema（原生支持 JSON5：注释/无引号键/单引号/尾逗号）：
+  // 类与属性的定义顺序即解析顺序，无需再从文本单独扫描声明序（原 KeyOrderScanner 已删）
   const QString raw = UtilJson::readTextFile(filePath);
   if (raw.isEmpty()) return false;
-  const QString normalized = UtilJson::json5ToJson(raw);
-  QJsonParseError err;
-  QJsonDocument doc = UtilJson::fromJson(normalized, &err);
-  if (err.error != QJsonParseError::NoError || doc.isNull()) return false;
-  if (!doc.isObject()) return false;
+  bool ok = false;
+  const accore::AcJsonValue root = accore::AcJsonValue::parse(raw, &ok);
+  if (!ok || !root.isObject()) return false;
 
-  QJsonObject root = doc.object();
   m_classes.clear();
   m_rootClass.clear();
-  m_keyOrders = KeyOrderScanner(normalized).scan();
 
   // ── 新格式：{ root: "X", definitions: { ... } } ──
-  if (root.contains(QString::fromLatin1(kSchemaRoot)) &&
-      root.contains(QString::fromLatin1(kSchemaDefinitions))) {
+  if (root.has(QString::fromLatin1(kSchemaRoot)) &&
+      root.has(QString::fromLatin1(kSchemaDefinitions))) {
     m_rootClass = root.value(QString::fromLatin1(kSchemaRoot)).toString();
-    QJsonObject defs = root.value(QString::fromLatin1(kSchemaDefinitions)).toObject();
-    for (auto it = defs.begin(); it != defs.end(); ++it) {
+    const accore::AcJsonValue defs = root.value(QString::fromLatin1(kSchemaDefinitions));
+    for (const auto &m : defs.members()) {
       ClassDef def;
-      parseClassDef(it.value().toObject(), def);
-      applyDeclarationOrder(QStringLiteral("definitions.") + it.key(), def);
-      m_classes[it.key()] = def;
+      parseClassDef(m.value, def);
+      m_classes[m.key] = def;
     }
     if (m_rootClass.isEmpty() && !m_classes.isEmpty()) m_rootClass = m_classes.begin().key();
     return true;
   }
 
   // ── 旧格式：根对象 key 为类名 ──
-  for (auto it = root.begin(); it != root.end(); ++it) {
+  for (const auto &m : root.members()) {
     ClassDef def;
-    parseClassDef(it.value().toObject(), def);
-    applyDeclarationOrder(it.key(), def);
-    m_classes[it.key()] = def;
+    parseClassDef(m.value, def);
+    m_classes[m.key] = def;
   }
   if (!m_classes.isEmpty()) m_rootClass = m_classes.begin().key();
   return true;
 }
 
-// applyDeclarationOrder — 按声明顺序重排类属性表
-void SchemaValidator::applyDeclarationOrder(const QString &classPath, ClassDef &def) const {
-  const QStringList order = m_keyOrders.value(classPath + QStringLiteral(".properties"));
-  if (order.isEmpty()) return;
-  QVector<QPair<QString, PropertyDef>> ordered;
-  ordered.reserve(def.properties.size());
-  QSet<QString> placed;
-  // 1) 先按声明序取出已声明的属性
-  for (const QString &k : order) {
-    for (const auto &kv : def.properties) {
-      if (kv.first == k) {
-        ordered.append(kv);
-        placed.insert(k);
-        break;
-      }
-    }
-  }
-  // 2) 声明序里缺失的键（异常 schema/重复键）按原序补尾，避免丢属性
-  for (const auto &kv : def.properties) {
-    if (!placed.contains(kv.first)) ordered.append(kv);
-  }
-  def.properties = ordered;
-}
-
 // 解析单个类的定义（properties / required / additionalProperties）
-void SchemaValidator::parseClassDef(const QJsonObject &obj, ClassDef &def) const {
-  QJsonObject props = obj.value(QString::fromLatin1(kSchemaProperties)).toObject();
-  for (auto pit = props.begin(); pit != props.end(); ++pit) {
+// 属性表按 schema 声明顺序直填（accore 解析保序）
+void SchemaValidator::parseClassDef(const accore::AcJsonValue &obj, ClassDef &def) const {
+  const accore::AcJsonValue props = obj.value(QString::fromLatin1(kSchemaProperties));
+  for (const auto &pm : props.members()) {
     PropertyDef pd;
-    QJsonObject pdef = pit.value().toObject();
+    const accore::AcJsonValue &pdef = pm.value;
     pd.type = pdef.value(QString::fromLatin1(kSchemaType)).toString();
     pd.items = pdef.value(QString::fromLatin1(kSchemaItems)).toString();
     pd.className = pdef.value(QString::fromLatin1(kSchemaClass)).toString();
     pd.description = pdef.value(QString::fromLatin1(kSchemaDescription)).toString();
 
-    QJsonArray en = pdef.value(QString::fromLatin1(kSchemaEnum)).toArray();
-    for (const QJsonValue &v : en) pd.enumValues.append(v.toString());
-    def.properties.append(qMakePair(pit.key(), pd));
+    const accore::AcJsonValue en = pdef.value(QString::fromLatin1(kSchemaEnum));
+    for (const accore::AcJsonValue &v : en.items()) pd.enumValues.append(v.toString());
+    def.properties.append(qMakePair(pm.key, pd));
   }
 
-  QJsonArray req = obj.value(QString::fromLatin1(kSchemaRequired)).toArray();
-  for (const QJsonValue &v : req) def.required.append(v.toString());
+  const accore::AcJsonValue req = obj.value(QString::fromLatin1(kSchemaRequired));
+  for (const accore::AcJsonValue &v : req.items()) def.required.append(v.toString());
 
-  if (obj.contains(QString::fromLatin1(kSchemaAdditionalProperties))) {
-    QJsonObject ap = obj.value(QString::fromLatin1(kSchemaAdditionalProperties)).toObject();
+  if (obj.has(QString::fromLatin1(kSchemaAdditionalProperties))) {
+    const accore::AcJsonValue ap = obj.value(QString::fromLatin1(kSchemaAdditionalProperties));
     def.hasAdditionalProp = true;
     def.additionalProp.type = ap.value(QString::fromLatin1(kSchemaType)).toString();
-    QJsonArray aen = ap.value(QString::fromLatin1(kSchemaEnum)).toArray();
-    for (const QJsonValue &v : aen) def.additionalProp.enumValues.append(v.toString());
+    const accore::AcJsonValue aen = ap.value(QString::fromLatin1(kSchemaEnum));
+    for (const accore::AcJsonValue &v : aen.items())
+      def.additionalProp.enumValues.append(v.toString());
   }
 }
 

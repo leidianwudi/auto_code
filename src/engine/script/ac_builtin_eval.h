@@ -5,8 +5,7 @@
 
 #pragma once
 
-#include <QJsonArray>
-#include <QJsonValue>
+#include "src/core/json/ac_json_value.h"
 #include <memory>
 #include <vector>
 
@@ -25,10 +24,10 @@ public:
   /// @param line 源码行号
   /// @param error 错误输出
   /// @return 方法返回值
-  static QJsonValue evalStringMethod(AcInterpreter &interpreter, const QString &obj,
-                                     const QString &method,
-                                     const std::vector<std::unique_ptr<Expr>> &args, int line,
-                                     QString &error);
+  static accore::AcJsonValue evalStringMethod(AcInterpreter &interpreter, const QString &obj,
+                                              const QString &method,
+                                              const std::vector<std::unique_ptr<Expr>> &args,
+                                              int line, QString &error);
 
   /// @brief 求值数组内置方法
   /// @param interpreter 解释器实例
@@ -39,8 +38,9 @@ public:
   /// @param modifiedArr 修改后的数组（非 null 时需回写）
   /// @param error 错误输出
   /// @return 方法返回值
-  static QJsonValue evalArrayMethod(AcInterpreter &interpreter, const QJsonArray &arr,
-                                    const QString &method,
-                                    const std::vector<std::unique_ptr<Expr>> &args, int line,
-                                    QJsonValue &modifiedArr, QString &error);
+  static accore::AcJsonValue evalArrayMethod(AcInterpreter &interpreter,
+                                             const accore::AcJsonValue &arr, const QString &method,
+                                             const std::vector<std::unique_ptr<Expr>> &args,
+                                             int line, accore::AcJsonValue &modifiedArr,
+                                             QString &error);
 };
