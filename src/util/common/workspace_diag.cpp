@@ -14,6 +14,7 @@
 #include <QRegularExpression>
 #include <QTextStream>
 
+#include "src/core/json/ac_json_value.h"
 #include "src/engine/ac_language.h"
 #include "src/engine/json_validator.h"
 #include "src/engine/schema_validator.h"
@@ -23,6 +24,7 @@
 #include "src/util/common/path_resolver.h"
 #include "src/util/common/util_json.h"
 #include "src/util/common/workspace_iter.h"
+
 
 namespace {
 
@@ -85,7 +87,8 @@ QVector<ValidationResult> validateJsonFile(const QString &filePath, const QStrin
   if (!schema.load(PathResolver::resolveSchemaPath(filePath, schemaRef))) return results;
   if (!schema.hasRoot()) return results;
 
-  const QVector<QString> errs = schema.validateDocument(obj);
+  // SchemaValidator 已迁 accore：UI 侧 QJson 文档在边界转一次
+  const QVector<QString> errs = schema.validateDocument(accore::AcJsonValue::fromQJsonValue(obj));
   for (const QString &e : errs) {
     QString prop = extractSchemaPath(e).section(QLatin1Char('.'), -1);
     int line = findSchemaKeyLine(source, prop);

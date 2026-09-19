@@ -8,6 +8,8 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 
 #include "../ac_language.h"
@@ -56,54 +58,55 @@ void FunBuiltin::init() {
 // renderTpl — 渲染模板
 // ============================================================================
 
-QJsonValue FunBuiltin::renderTpl(const QJsonArray &args) {
+accore::AcJsonValue FunBuiltin::renderTpl(const accore::AcJsonValue &args) {
   if (!FunArgs::requireCount(
           args, 2,
           QStringLiteral("renderTpl() requires 2 arguments: template path and data object")))
-    return QJsonValue();
+    return accore::AcJsonValue();
 
-  QString tplPath = args[0].toString();
+  QString tplPath = args.at(0).toString();
   QFileInfo tplInfo(tplPath);
   if (tplInfo.isRelative()) tplPath = s_ctx.scriptDir + QStringLiteral("/") + tplPath;
 
   QFile f(tplPath);
   if (!f.open(QIODevice::ReadOnly)) {
     FunMgr::setError(QStringLiteral("template not found: '%1'").arg(tplPath));
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
   QString tplContent = QString::fromUtf8(f.readAll());
 
   TplEngine engine;
   if (s_ctx.logCallback) engine.setLogCallback(s_ctx.logCallback);
 
-  if (!args[1].isObject()) {
+  if (!args.at(1).isObject()) {
     FunMgr::setError(QStringLiteral("renderTpl() second argument must be a data object"));
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
 
-  QString result = engine.render(tplContent, args[1].toObject());
+  // TplEngine 已迁 accore：参数直达，零转换
+  QString result = engine.render(tplContent, args.at(1));
   // 渲染错误必须传播到 FunMgr，否则脚本层只收到空串而看不到失败原因
   if (!engine.lastError().isEmpty()) {
     FunMgr::setError(engine.lastError());
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
-  return QJsonValue(result);
+  return accore::AcJsonValue(result);
 }
 
 // ============================================================================
 // readFile — 读文件（委托 FunFile::read）
 // ============================================================================
 
-QJsonValue FunBuiltin::readFile(const QJsonArray &args) {
+accore::AcJsonValue FunBuiltin::readFile(const accore::AcJsonValue &args) {
   // 参数校验：需要文件路径
   if (!FunArgs::requireString(args, 0, QStringLiteral("readFile() requires a file path argument")))
-    return QJsonValue();
+    return accore::AcJsonValue();
 
   // 检查文件是否存在
-  QString path = args[0].toString();
+  QString path = args.at(0).toString();
   if (!QFileInfo::exists(path)) {
     FunMgr::setError(QStringLiteral("file not found: '%1'").arg(path));
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
   return FunMgr::ins().call(QString::fromLatin1(AcFile::kClassName),
                             QString::fromLatin1(AcFile::kRead), args);
@@ -113,16 +116,16 @@ QJsonValue FunBuiltin::readFile(const QJsonArray &args) {
 // writeFile — 写文件（委托 FunFile::write）
 // ============================================================================
 
-QJsonValue FunBuiltin::writeFile(const QJsonArray &args) {
+accore::AcJsonValue FunBuiltin::writeFile(const accore::AcJsonValue &args) {
   if (!FunArgs::requireCount(
           args, 2, QStringLiteral("writeFile() requires 2 arguments: file path and content")) ||
       !FunArgs::requireString(
           args, 0, QStringLiteral("writeFile() requires 2 arguments: file path and content")))
-    return QJsonValue();
-  QJsonValue r = FunMgr::ins().call(QString::fromLatin1(AcFile::kClassName),
-                                    QString::fromLatin1(AcFile::kWrite), args);
-  if (r.toBool(false) && s_ctx.generatedFiles && !args.isEmpty())
-    s_ctx.generatedFiles->append(QDir::toNativeSeparators(args[0].toString()));
+    return accore::AcJsonValue();
+  accore::AcJsonValue r = FunMgr::ins().call(QString::fromLatin1(AcFile::kClassName),
+                                             QString::fromLatin1(AcFile::kWrite), args);
+  if (r.toBool(false) && s_ctx.generatedFiles && args.size() > 0)
+    s_ctx.generatedFiles->append(QDir::toNativeSeparators(args.at(0).toString()));
   return r;
 }
 
@@ -130,11 +133,11 @@ QJsonValue FunBuiltin::writeFile(const QJsonArray &args) {
 // printLog / printError — 打印日志/错误
 // ============================================================================
 
-QJsonValue FunBuiltin::printLog(const QJsonArray &args) {
-  if (args.isEmpty()) return QJsonValue();
+accore::AcJsonValue FunBuiltin::printLog(const accore::AcJsonValue &args) {
+  if (args.size() == 0) return accore::AcJsonValue();
 
   QString text;
-  for (const QJsonValue &v : args) {
+  for (const accore::AcJsonValue &v : args.items()) {
     if (v.isString()) {
       text += v.toString();
     } else {
@@ -157,14 +160,14 @@ QJsonValue FunBuiltin::printLog(const QJsonArray &args) {
   }
 #endif
 
-  return QJsonValue(true);
+  return accore::AcJsonValue(true);
 }
 
-QJsonValue FunBuiltin::printError(const QJsonArray &args) {
-  if (args.isEmpty()) return QJsonValue();
+accore::AcJsonValue FunBuiltin::printError(const accore::AcJsonValue &args) {
+  if (args.size() == 0) return accore::AcJsonValue();
 
   QString text;
-  for (const QJsonValue &v : args) {
+  for (const accore::AcJsonValue &v : args.items()) {
     if (v.isString()) {
       text += v.toString();
     } else {
@@ -178,25 +181,25 @@ QJsonValue FunBuiltin::printError(const QJsonArray &args) {
     s_ctx.logCallback(text, true);
   }
 
-  return QJsonValue(true);
+  return accore::AcJsonValue(true);
 }
 
 // ============================================================================
 // getCheckedFiles — 获取 tree.config 中勾选的文件列表
 // ============================================================================
 
-QJsonValue FunBuiltin::getCheckedFiles(const QJsonArray &args) {
+accore::AcJsonValue FunBuiltin::getCheckedFiles(const accore::AcJsonValue &args) {
   QString treePath =
       s_ctx.rootDir.isEmpty()
           ? s_ctx.scriptDir + QString::fromUtf8(CodeConstants::Paths::kTreeConfigFile)
           : s_ctx.rootDir + QString::fromUtf8(CodeConstants::Paths::kTreeConfigFile);
   // 可选参数：基准路径，传入后只返回该路径下的文件
   QString basePath;
-  if (!args.isEmpty() && args[0].isString()) {
-    basePath = QDir::cleanPath(args[0].toString());
+  if (args.size() > 0 && args.at(0).isString()) {
+    basePath = QDir::cleanPath(args.at(0).toString());
   }
 
-  QJsonArray result;
+  accore::AcJsonValue result = accore::AcJsonValue::makeArray();
   QJsonDocument doc = UtilJson::loadFile(treePath);
   if (!doc.isNull()) {
     QJsonArray checked = doc.object().value(QStringLiteral("checked")).toArray();
@@ -231,22 +234,22 @@ QJsonValue FunBuiltin::getCheckedFiles(const QJsonArray &args) {
 // scriptDir — 获取当前 .ac 脚本所在目录
 // ============================================================================
 
-QJsonValue FunBuiltin::scriptDir(const QJsonArray & /*args*/) {
-  return QJsonValue(s_ctx.scriptDir);
+accore::AcJsonValue FunBuiltin::scriptDir(const accore::AcJsonValue & /*args*/) {
+  return accore::AcJsonValue(s_ctx.scriptDir);
 }
 
 // ============================================================================
 // merge — 合并两个 JSON 对象
 // ============================================================================
 
-QJsonValue FunBuiltin::merge(const QJsonArray &args) {
+accore::AcJsonValue FunBuiltin::merge(const accore::AcJsonValue &args) {
   if (!FunArgs::requireCount(
           args, 2, QStringLiteral("merge() requires 2 arguments: target object and source object")))
-    return QJsonValue();
+    return accore::AcJsonValue();
 
-  QJsonObject result = args[0].toObject();
-  QJsonObject ob = args[1].toObject();
-  for (auto it = ob.begin(); it != ob.end(); ++it) result[it.key()] = it.value();
+  accore::AcJsonValue result = args.at(0);
+  const accore::AcJsonValue ob = args.at(1);
+  for (const auto &m : ob.members()) result.set(m.key, m.value);
 
   return result;
 }
@@ -255,34 +258,34 @@ QJsonValue FunBuiltin::merge(const QJsonArray &args) {
 // basename — 获取文件名（不含扩展名）
 // ============================================================================
 
-QJsonValue FunBuiltin::basename(const QJsonArray &args) {
+accore::AcJsonValue FunBuiltin::basename(const accore::AcJsonValue &args) {
   if (!FunArgs::requireString(args, 0, QStringLiteral("basename() requires a file path argument")))
-    return QJsonValue();
+    return accore::AcJsonValue();
 
-  return QJsonValue(QFileInfo(args[0].toString()).completeBaseName());
+  return accore::AcJsonValue(QFileInfo(args.at(0).toString()).completeBaseName());
 }
 
 // ============================================================================
 // fileName — 获取文件名（含扩展名）
 // ============================================================================
 
-QJsonValue FunBuiltin::fileName(const QJsonArray &args) {
+accore::AcJsonValue FunBuiltin::fileName(const accore::AcJsonValue &args) {
   if (!FunArgs::requireString(args, 0, QStringLiteral("fileName() requires a file path argument")))
-    return QJsonValue();
+    return accore::AcJsonValue();
 
-  return QJsonValue(QFileInfo(args[0].toString()).fileName());
+  return accore::AcJsonValue(QFileInfo(args.at(0).toString()).fileName());
 }
 
 // ============================================================================
 // fileExists — 判断文件/目录是否存在（脚本侧与模板侧同名函数语义一致）
 // ============================================================================
 
-QJsonValue FunBuiltin::fileExists(const QJsonArray &args) {
+accore::AcJsonValue FunBuiltin::fileExists(const accore::AcJsonValue &args) {
   if (!FunArgs::requireString(args, 0,
                               QStringLiteral("fileExists() requires a file path argument")))
-    return QJsonValue();
+    return accore::AcJsonValue();
 
-  return QJsonValue(QFileInfo::exists(args[0].toString()));
+  return accore::AcJsonValue(QFileInfo::exists(args.at(0).toString()));
 }
 
 // ============================================================================
@@ -304,15 +307,15 @@ QJsonValue FunBuiltin::fileExists(const QJsonArray &args) {
 // 示例：
 //   formatPath("{base}/{name}.ts", {base:"D:/out", name:"user"})
 //   → "D:/out/user.ts"
-QJsonValue FunBuiltin::formatPath(const QJsonArray &args) {
+accore::AcJsonValue FunBuiltin::formatPath(const accore::AcJsonValue &args) {
   const QString fmtErr =
       QStringLiteral("formatPath() requires 2 arguments: pattern string and data object");
   if (!FunArgs::requireCount(args, 2, fmtErr) || !FunArgs::requireString(args, 0, fmtErr) ||
       !FunArgs::requireObject(args, 1, fmtErr))
-    return QJsonValue();
+    return accore::AcJsonValue();
 
-  QString pattern = args[0].toString();
-  QJsonObject data = args[1].toObject();
+  QString pattern = args.at(0).toString();
+  const accore::AcJsonValue data = args.at(1);
 
   QString result;
   int i = 0;
@@ -337,23 +340,23 @@ QJsonValue FunBuiltin::formatPath(const QJsonArray &args) {
       if (end == -1) {
         FunMgr::setError(
             QStringLiteral("formatPath() unterminated placeholder at position %1").arg(i));
-        return QJsonValue();
+        return accore::AcJsonValue();
       }
       QString key = pattern.mid(i + 1, end - i - 1).trimmed();
       if (key.isEmpty()) {
         FunMgr::setError(QStringLiteral("formatPath() empty placeholder at position %1").arg(i));
-        return QJsonValue();
+        return accore::AcJsonValue();
       }
-      if (!data.contains(key)) {
+      if (!data.has(key)) {
         FunMgr::setError(
             QStringLiteral("formatPath() placeholder '%1' not found in data object").arg(key));
-        return QJsonValue();
+        return accore::AcJsonValue();
       }
-      QJsonValue v = data.value(key);
+      accore::AcJsonValue v = data.value(key);
       QString vs;
       if (v.isString()) {
         vs = v.toString();
-      } else if (v.isDouble()) {
+      } else if (v.isNumber()) {
         vs = QString::number(v.toDouble());
       } else if (v.isBool()) {
         vs = v.toBool() ? QString::fromLatin1(AcKeyword::kTrue)
@@ -362,7 +365,7 @@ QJsonValue FunBuiltin::formatPath(const QJsonArray &args) {
         FunMgr::setError(
             QStringLiteral("formatPath() placeholder '%1' value must be string/number/bool")
                 .arg(key));
-        return QJsonValue();
+        return accore::AcJsonValue();
       }
       result += vs;
       i = end + 1;
@@ -378,36 +381,36 @@ QJsonValue FunBuiltin::formatPath(const QJsonArray &args) {
   // 规整路径（去除冗余 ./、解析 ../）
   result = QDir::cleanPath(result);
 
-  return QJsonValue(result);
+  return accore::AcJsonValue(result);
 }
 
 // ============================================================================
 // assert — 断言函数
 // ============================================================================
 
-QJsonValue FunBuiltin::assertFn(const QJsonArray &args) {
+accore::AcJsonValue FunBuiltin::assertFn(const accore::AcJsonValue &args) {
   if (!FunArgs::requireCount(args, 1,
                              QStringLiteral("assert() requires at least 1 argument: condition")))
-    return QJsonValue();
+    return accore::AcJsonValue();
 
   bool condition = false;
-  const QJsonValue &condVal = args[0];
+  const accore::AcJsonValue &condVal = args.at(0);
   if (condVal.isBool()) {
     condition = condVal.toBool();
-  } else if (condVal.isDouble()) {
+  } else if (condVal.isNumber()) {
     condition = condVal.toDouble() != 0;
   } else if (condVal.isString()) {
     condition = !condVal.toString().isEmpty();
   } else {
-    condition = !condVal.isNull() && !condVal.isUndefined();
+    condition = !condVal.isNull();
   }
 
   if (!condition) {
-    QString message = args.size() >= 2 ? args[1].toString() : QStringLiteral("assertion failed");
+    QString message = args.size() >= 2 ? args.at(1).toString() : QStringLiteral("assertion failed");
     QString lineInfo =
         s_ctx.currentLine > 0 ? QStringLiteral(" at line %1").arg(s_ctx.currentLine) : QString();
     FunMgr::setError(QStringLiteral("Assertion failed: %1%2").arg(message, lineInfo));
   }
 
-  return QJsonValue();
+  return accore::AcJsonValue();
 }

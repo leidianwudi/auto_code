@@ -91,8 +91,8 @@ void DemoMgr::onGenerate() {
   m_model->setDataObject(data);
   m_model->clearError();
 
-  // 渲染
-  QString result = m_engine->render(m_model->getTemplate(), data);
+  // 渲染（TplEngine 已迁 accore：GUI 侧 QJson 数据在边界转一次）
+  QString result = m_engine->render(m_model->getTemplate(), accore::AcJsonValue::fromQJsonValue(data));
 
   if (!m_engine->lastError().isEmpty()) {
     m_model->setError(m_engine->lastError());

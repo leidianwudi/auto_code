@@ -9,13 +9,13 @@
  *
  * 引用计数负责确定性释放（离开作用域即析构）；循环引用由
  * AcInterpreter 的 mark-sweep 周期回收兜底（见 ac_interpreter.cpp 的 collectCycles）。
+ *
+ * 值模型：全程 accore::AcJsonValue（键保序运行时模型），与解释器零转换。
  */
 
 #pragma once
 
 #include <QHash>
-#include <QJsonObject>
-#include <QJsonValue>
 #include <QSet>
 #include <QString>
 #include <QVector>
@@ -26,8 +26,8 @@ class AcObjectManager {
 public:
   /// 引用计数归零的实例信息（由 AcInterpreter 在 release 后检查并执行析构）
   struct DestructInfo {
-    QJsonObject instance;  ///< 实例数据
-    QString className;     ///< 类名
+    accore::AcJsonValue instance;  ///< 实例数据
+    QString className;             ///< 类名
   };
 
   AcObjectManager() = default;
@@ -39,7 +39,8 @@ public:
    * @param className 类名
    * @return 带 __objId__ 的实例对象
    */
-  QJsonObject registerInstance(const QJsonObject &instance, const QString &className);
+  accore::AcJsonValue registerInstance(const accore::AcJsonValue &instance,
+                                       const QString &className);
 
   /**
    * @brief 引用计数 +1（赋值给变量/属性/数组时调用）
@@ -56,24 +57,10 @@ public:
    */
   bool release(const QString &objId);
 
-  /**
-   * @brief 判断 QJsonValue 是否为受管理的实例对象
-   */
-  static bool isManagedInstance(const QJsonValue &val);
-
-  /**
-   * @brief 从 QJsonValue 中提取 objId
-   */
-  static QString getObjId(const QJsonValue &val);
-
-  // ── accore 原生重载 ──
-  // 解释器热路径（setVar/作用域退出/GC 标记）直接使用 accore::AcJsonValue，
-  // 避免每次判断/取 ID 都做 AcJsonValue→QJsonObject 的深拷贝转换。
-
-  /// @brief 判断 accore 值是否为受管理的实例对象（无深拷贝开销）
+  /// @brief 判断 accore 值是否为受管理的实例对象（直读内部成员，无拷贝开销）
   static bool isManagedInstance(const accore::AcJsonValue &val);
 
-  /// @brief 从 accore 值中提取 objId（无深拷贝开销）
+  /// @brief 从 accore 值中提取 objId（直读内部成员，无拷贝开销）
   static QString getObjId(const accore::AcJsonValue &val);
 
   /**
@@ -102,9 +89,6 @@ public:
   /// @brief 检查 objId 是否仍在管理器中
   bool contains(const QString &objId) const;
 
-  /// @brief 获取实例数据（用于遍历属性）
-  QJsonObject getObject(const QString &objId) const;
-
   /**
    * @brief 收集所有未标记的实例（循环引用垃圾）
    *
@@ -124,9 +108,9 @@ public:
   void cleanup();
 
 private:
-  QHash<QString, int> m_refCount;            ///< objId → 引用计数
-  QHash<QString, QJsonObject> m_objects;     ///< objId → 实例数据
-  QHash<QString, QString> m_classNames;      ///< objId → 类名
-  QVector<DestructInfo> m_pendingDestructs;  ///< 待析构列表
-  QSet<QString> m_marked;                    ///< 标记-清扫的标记集合
+  QHash<QString, int> m_refCount;                 ///< objId → 引用计数
+  QHash<QString, accore::AcJsonValue> m_objects;  ///< objId → 实例数据
+  QHash<QString, QString> m_classNames;           ///< objId → 类名
+  QVector<DestructInfo> m_pendingDestructs;       ///< 待析构列表
+  QSet<QString> m_marked;                         ///< 标记-清扫的标记集合
 };

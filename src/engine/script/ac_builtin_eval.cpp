@@ -56,7 +56,7 @@ AcJsonValue AcBuiltinEval::evalStringMethod(AcInterpreter &interp, const QString
     // JS 语义：from 可选，默认 0；负值按 0 处理
     int from = 0;
     if (args.size() >= 2) {
-      from = safeJsonToInt(evalArg(1).toQJsonValue());
+      from = safeJsonToInt(evalArg(1));
       if (from < 0) from = 0;
     }
     return AcJsonValue(int(obj.indexOf(evalArg(0).toString(), from)));
@@ -69,7 +69,7 @@ AcJsonValue AcBuiltinEval::evalStringMethod(AcInterpreter &interp, const QString
     // JS 语义：from 可选，缺省从末尾开始反向搜索（Qt 用 -1 表示）
     int from = -1;
     if (args.size() >= 2) {
-      from = safeJsonToInt(evalArg(1).toQJsonValue());
+      from = safeJsonToInt(evalArg(1));
     }
     return AcJsonValue(int(obj.lastIndexOf(evalArg(0).toString(), from)));
   }
@@ -99,9 +99,9 @@ AcJsonValue AcBuiltinEval::evalStringMethod(AcInterpreter &interp, const QString
                   .arg(line);
       return AcJsonValue();
     }
-    int start = safeJsonToInt(evalArg(0).toQJsonValue());
+    int start = safeJsonToInt(evalArg(0));
     if (args.size() >= 2) {
-      int end = safeJsonToInt(evalArg(1).toQJsonValue());
+      int end = safeJsonToInt(evalArg(1));
       return AcJsonValue(obj.mid(start, end - start));
     }
     return AcJsonValue(obj.mid(start));
@@ -111,7 +111,7 @@ AcJsonValue AcBuiltinEval::evalStringMethod(AcInterpreter &interp, const QString
       error = QStringLiteral("string.charAt() requires 1 argument at line %1").arg(line);
       return AcJsonValue();
     }
-    int idx = safeJsonToInt(evalArg(0).toQJsonValue());
+    int idx = safeJsonToInt(evalArg(0));
     if (idx >= 0 && idx < obj.size()) return AcJsonValue(QString(obj[idx]));
     return AcJsonValue(QString());
   }
@@ -120,14 +120,14 @@ AcJsonValue AcBuiltinEval::evalStringMethod(AcInterpreter &interp, const QString
       error = QStringLiteral("string.repeat() requires 1 argument at line %1").arg(line);
       return AcJsonValue();
     }
-    return AcJsonValue(QString(obj).repeated(safeJsonToInt(evalArg(0).toQJsonValue())));
+    return AcJsonValue(QString(obj).repeated(safeJsonToInt(evalArg(0))));
   }
   if (method == QStringLiteral("padStart")) {
     if (args.size() < 2) {
       error = QStringLiteral("string.padStart() requires 2 arguments at line %1").arg(line);
       return AcJsonValue();
     }
-    int len = safeJsonToInt(evalArg(0).toQJsonValue());
+    int len = safeJsonToInt(evalArg(0));
     QString fill = evalArg(1).toString();
     QString result = obj;
     while (result.length() < len) result = fill + result;
@@ -138,7 +138,7 @@ AcJsonValue AcBuiltinEval::evalStringMethod(AcInterpreter &interp, const QString
       error = QStringLiteral("string.padEnd() requires 2 arguments at line %1").arg(line);
       return AcJsonValue();
     }
-    int len = safeJsonToInt(evalArg(0).toQJsonValue());
+    int len = safeJsonToInt(evalArg(0));
     QString fill = evalArg(1).toString();
     QString result = obj;
     while (result.length() < len) result = result + fill;
@@ -221,7 +221,7 @@ AcJsonValue AcBuiltinEval::evalArrayMethod(AcInterpreter &interp, const AcJsonVa
     // JS 语义：from 可选，默认 0；负值按 0 处理
     int from = 0;
     if (args.size() >= 2) {
-      from = safeJsonToInt(evalArg(1).toQJsonValue());
+      from = safeJsonToInt(evalArg(1));
       if (from < 0) from = 0;
     }
     for (int i = from; i < arr.size(); ++i) {
@@ -243,8 +243,8 @@ AcJsonValue AcBuiltinEval::evalArrayMethod(AcInterpreter &interp, const AcJsonVa
   if (method == QStringLiteral("slice")) {
     int start = 0;
     int end = arr.size();
-    if (!args.empty()) start = safeJsonToInt(evalArg(0).toQJsonValue());
-    if (args.size() >= 2) end = safeJsonToInt(evalArg(1).toQJsonValue());
+    if (!args.empty()) start = safeJsonToInt(evalArg(0));
+    if (args.size() >= 2) end = safeJsonToInt(evalArg(1));
     AcJsonValue result = AcJsonValue::makeArray();
     for (int i = start; i < end && i < arr.size(); ++i) result.append(arr.at(i));
     return result;
@@ -272,13 +272,13 @@ AcJsonValue AcBuiltinEval::evalArrayMethod(AcInterpreter &interp, const AcJsonVa
       error = QStringLiteral("array.splice() requires at least 1 argument at line %1").arg(line);
       return AcJsonValue();
     }
-    int start = safeJsonToInt(evalArg(0).toQJsonValue());
+    int start = safeJsonToInt(evalArg(0));
     // 钳制 start 到合法范围，避免负数或越界位置访问数组元素
     if (start < 0) start = 0;
     if (start > arr.size()) start = arr.size();
     int deleteCount = arr.size() - start;
     if (args.size() >= 2) {
-      deleteCount = safeJsonToInt(evalArg(1).toQJsonValue());
+      deleteCount = safeJsonToInt(evalArg(1));
       // 负删除数无意义，按 0 处理（与 JS 语义一致）
       if (deleteCount < 0) deleteCount = 0;
     }

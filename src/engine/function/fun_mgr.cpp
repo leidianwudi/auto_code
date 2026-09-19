@@ -45,14 +45,16 @@ void FunMgr::registerFuncs(const QString &className, const std::map<QString, Fun
   auto &target = m_registry[className];
   // 纯参数方法 → 包装为忽略 this 的实例方法签名，统一调用路径
   for (const auto &[name, fn] : funcs) {
-    target[name] = [fn](const QJsonValue &, const QJsonArray &args) { return fn(args); };
+    target[name] = [fn](const accore::AcJsonValue &, const accore::AcJsonValue &args) {
+      return fn(args);
+    };
   }
 }
 
 void FunMgr::registerFuncs(const QString &className, const std::map<QString, FunPtrVoid> &funcs) {
   auto &target = m_registry[className];
   for (const auto &[name, fn] : funcs) {
-    target[name] = [fn](const QJsonValue &, const QJsonArray &) { return fn(); };
+    target[name] = [fn](const accore::AcJsonValue &, const accore::AcJsonValue &) { return fn(); };
   }
 }
 
@@ -67,18 +69,20 @@ void FunMgr::registerFuncsWithThis(const QString &className,
 // call — 二级查找并执行
 // ============================================================================
 
-QJsonValue FunMgr::call(const QString &className, const QString &funcName, const QJsonArray &args) {
-  return call(className, funcName, QJsonValue(), args);
+accore::AcJsonValue FunMgr::call(const QString &className, const QString &funcName,
+                                 const accore::AcJsonValue &args) {
+  return call(className, funcName, accore::AcJsonValue(), args);
 }
 
-QJsonValue FunMgr::call(const QString &className, const QString &funcName,
-                        const QJsonValue &thisObj, const QJsonArray &args) {
+accore::AcJsonValue FunMgr::call(const QString &className, const QString &funcName,
+                                 const accore::AcJsonValue &thisObj,
+                                 const accore::AcJsonValue &args) {
   auto clsIt = m_registry.find(className);
-  if (clsIt == m_registry.end()) return QJsonValue();
+  if (clsIt == m_registry.end()) return accore::AcJsonValue();
 
   const auto &funcs = clsIt->second;
   auto funcIt = funcs.find(funcName);
-  if (funcIt == funcs.end()) return QJsonValue();
+  if (funcIt == funcs.end()) return accore::AcJsonValue();
 
   return funcIt->second(thisObj, args);
 }

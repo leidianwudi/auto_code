@@ -21,11 +21,11 @@
 
 #pragma once
 
-#include <QJsonArray>
-#include <QJsonValue>
 #include <QString>
 #include <QStringList>
 #include <functional>
+
+#include "src/core/json/ac_json_value.h"
 
 /**
  * @brief 解释器上下文 — 内置函数需要的运行时状态
@@ -44,7 +44,7 @@ struct BuiltinContext {
 /**
  * @brief 内置函数实现类
  *
- * 所有函数签名统一为 FunMgr::FunPtr：QJsonValue(const QJsonArray &)
+ * 所有函数签名统一为 FunMgr::FunPtr：accore::AcJsonValue(const accore::AcJsonValue &)
  * 参数已在 AcInterpreter 中通过 evalExpr() 求值完毕，此处直接使用。
  * 每个函数实现对应 ac_language.h 中 AcBuiltin 命名空间的一个常量。
  */
@@ -64,52 +64,52 @@ private:
 
   /// 渲染模板文件，返回渲染后的字符串
   /// @param args [0] 模板路径, [1] 数据对象
-  static QJsonValue renderTpl(const QJsonArray &args);
+  static accore::AcJsonValue renderTpl(const accore::AcJsonValue &args);
 
   /// 读文件（委托 FunFile::read）
   /// @param args [0] 文件路径
-  static QJsonValue readFile(const QJsonArray &args);
+  static accore::AcJsonValue readFile(const accore::AcJsonValue &args);
 
   /// 写文件（委托 FunFile::write），自动创建父目录并追踪生成文件
   /// @param args [0] 文件路径, [1] 文件内容
-  static QJsonValue writeFile(const QJsonArray &args);
+  static accore::AcJsonValue writeFile(const accore::AcJsonValue &args);
 
   /// 打印日志到 UI 输出面板
   /// @param args [0] 要打印的文本
-  static QJsonValue printLog(const QJsonArray &args);
+  static accore::AcJsonValue printLog(const accore::AcJsonValue &args);
 
   /// 打印错误到 UI 输出面板（红色显示）
   /// @param args [0] 要打印的错误文本
-  static QJsonValue printError(const QJsonArray &args);
+  static accore::AcJsonValue printError(const accore::AcJsonValue &args);
 
   /// 获取 tree.config 中勾选的文件列表（绝对路径）
   /// @param args [0] 可选基准路径，传入后只返回该路径下的文件
-  static QJsonValue getCheckedFiles(const QJsonArray &args);
+  static accore::AcJsonValue getCheckedFiles(const accore::AcJsonValue &args);
 
   /// 获取当前 .ac 脚本所在目录（绝对路径）
-  static QJsonValue scriptDir(const QJsonArray &args);
+  static accore::AcJsonValue scriptDir(const accore::AcJsonValue &args);
 
   /// 合并两个 JSON 对象（浅合并，b 覆盖 a 的同名键）
   /// @param args [0] 基础对象, [1] 覆盖对象
-  static QJsonValue merge(const QJsonArray &args);
+  static accore::AcJsonValue merge(const accore::AcJsonValue &args);
 
   /// 获取文件名（不含扩展名）
   /// @param args [0] 文件路径
-  static QJsonValue basename(const QJsonArray &args);
+  static accore::AcJsonValue basename(const accore::AcJsonValue &args);
 
   /// 获取文件名（含扩展名）
   /// @param args [0] 文件路径
-  static QJsonValue fileName(const QJsonArray &args);
+  static accore::AcJsonValue fileName(const accore::AcJsonValue &args);
 
   /// 判断文件/目录是否存在（脚本侧与模板侧同名函数语义一致）
   /// @param args [0] 文件路径
-  static QJsonValue fileExists(const QJsonArray &args);
+  static accore::AcJsonValue fileExists(const accore::AcJsonValue &args);
 
   /// 格式化路径：用 {key} 占位符从数据对象中取值替换
   /// @param args [0] 路径模板（如 "{basePath}/{name}.ts"），[1] 数据对象
-  static QJsonValue formatPath(const QJsonArray &args);
+  static accore::AcJsonValue formatPath(const accore::AcJsonValue &args);
 
   /// 断言函数：condition 为 false 时输出错误消息
   /// @param args [0] 条件表达式, [1] 错误消息（可选）
-  static QJsonValue assertFn(const QJsonArray &args);
+  static accore::AcJsonValue assertFn(const accore::AcJsonValue &args);
 };

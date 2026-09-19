@@ -23,11 +23,11 @@
 
 #pragma once
 
-#include <QJsonObject>
 #include <QList>
 #include <QSharedPointer>
 #include <QString>
 
+#include "src/core/json/ac_json_value.h"
 #include "tpl_ast.h"
 
 class TplEngine;
@@ -40,7 +40,7 @@ namespace TplRenderer {
 /// @param context JSON 数据上下文
 /// @param engine 模板引擎（提供 resolvePath 等工具方法）
 /// @return 渲染后的字符串，出错时返回空字符串（错误信息通过 engine.setError 设置）
-QString render(const QList<QSharedPointer<TplAst::AstNode>> &nodes, const QJsonObject &context,
-               const TplEngine &engine);
+QString render(const QList<QSharedPointer<TplAst::AstNode>> &nodes,
+               const accore::AcJsonValue &context, const TplEngine &engine);
 
 }  // namespace TplRenderer

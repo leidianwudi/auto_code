@@ -276,8 +276,8 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       QString clsName = cls.toString();
       QString funcName = func.toString();
 
-      // FunMgr 签名保持 Qt 类型：参数转 QJsonArray
-      FunMgr::ins().call(clsName, funcName, accore::toQJsonArray(args));
+      // FunMgr 已迁移到 accore 签名：直接传值，无边界转换
+      FunMgr::ins().call(clsName, funcName, args);
       QString err = FunMgr::takeError();
       if (!err.isEmpty()) {
         setError(err, stmt.call.className.line);

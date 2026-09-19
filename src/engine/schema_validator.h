@@ -83,14 +83,14 @@ public:
    * @param data 待校验的 JSON 数据
    * @return 空字符串表示通过，否则返回第一个错误描述
    */
-  QString validate(const QString &className, const QJsonObject &data) const;
+  QString validate(const QString &className, const accore::AcJsonValue &data) const;
 
   /**
    * @brief 校验整个文档是否符合根类（root）定义
    * @param data 待校验的 JSON 数据
    * @return 错误列表（空表示通过）
    */
-  QVector<QString> validateDocument(const QJsonObject &data) const;
+  QVector<QString> validateDocument(const accore::AcJsonValue &data) const;
 
   /**
    * @brief 根据光标位置返回 schema 智能提示（属性名或枚举值）
@@ -204,12 +204,12 @@ private:
     PropertyDef additionalProp;
   };
 
-  void validateObject(const ClassDef &def, const QJsonObject &obj, const QString &path,
+  void validateObject(const ClassDef &def, const accore::AcJsonValue &obj, const QString &path,
                       QVector<QString> *errors) const;
 
   /// 按属性类型校验单个值
-  void validateValue(const PropertyDef &pd, const QJsonValue &val, const QString &childPath,
-                     QVector<QString> *errors) const;
+  void validateValue(const PropertyDef &pd, const accore::AcJsonValue &val,
+                     const QString &childPath, QVector<QString> *errors) const;
 
   /// 解析单个类定义（properties/required/additionalProperties）；属性表按声明序直填
   void parseClassDef(const accore::AcJsonValue &obj, ClassDef &def) const;

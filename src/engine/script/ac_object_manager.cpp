@@ -9,16 +9,16 @@
 
 #include "../ac_language.h"
 
-QJsonObject AcObjectManager::registerInstance(const QJsonObject &instance,
-                                              const QString &className) {
+accore::AcJsonValue AcObjectManager::registerInstance(const accore::AcJsonValue &instance,
+                                                      const QString &className) {
   QString objId = QUuid::createUuid().toString(QUuid::WithoutBraces);
   // 初始引用计数为 0，由调用方（setVar/retainIfInstance）负责增加
   m_refCount[objId] = 0;
   m_objects[objId] = instance;
   m_classNames[objId] = className;
 
-  QJsonObject result = instance;
-  result[QString::fromLatin1(AcRuntime::kObjId)] = objId;
+  accore::AcJsonValue result = instance;
+  result.set(QString::fromLatin1(AcRuntime::kObjId), accore::AcJsonValue(objId));
   return result;
 }
 
@@ -42,17 +42,7 @@ bool AcObjectManager::release(const QString &objId) {
   return false;
 }
 
-bool AcObjectManager::isManagedInstance(const QJsonValue &val) {
-  if (!val.isObject()) return false;
-  return val.toObject().contains(QString::fromLatin1(AcRuntime::kObjId));
-}
-
-QString AcObjectManager::getObjId(const QJsonValue &val) {
-  if (!val.isObject()) return QString();
-  return val.toObject().value(QString::fromLatin1(AcRuntime::kObjId)).toString();
-}
-
-// accore 原生重载：has/value 直接读取内部成员，无 AcJsonValue→QJsonObject 深拷贝
+// accore 原生判断：has/value 直读内部成员，无深拷贝
 bool AcObjectManager::isManagedInstance(const accore::AcJsonValue &val) {
   if (!val.isObject()) return false;
   return val.has(QString::fromLatin1(AcRuntime::kObjId));
@@ -64,8 +54,8 @@ QString AcObjectManager::getObjId(const accore::AcJsonValue &val) {
 }
 
 accore::AcJsonValue AcObjectManager::getAcObject(const QString &objId) const {
-  // m_objects 存储的是 QJsonObject（与 FunMgr/析构边界保持一致），此处一次性转回
-  return accore::AcJsonValue::fromQJsonValue(m_objects.value(objId));
+  // 存储即 accore 原生形态，直读零转换
+  return m_objects.value(objId);
 }
 
 QVector<AcObjectManager::DestructInfo> AcObjectManager::takePendingDestructs() {
@@ -93,10 +83,6 @@ bool AcObjectManager::isMarked(const QString &objId) const { return m_marked.con
 
 bool AcObjectManager::contains(const QString &objId) const { return m_objects.contains(objId); }
 
-QJsonObject AcObjectManager::getObject(const QString &objId) const {
-  return m_objects.value(objId);
-}
-
 QVector<AcObjectManager::DestructInfo> AcObjectManager::collectUnmarked() {
   QVector<DestructInfo> result;
   // 遍历所有实例，收集未标记的（循环引用垃圾）
@@ -107,7 +93,7 @@ QVector<AcObjectManager::DestructInfo> AcObjectManager::collectUnmarked() {
   }
   // 从管理器中移除所有未标记实例
   for (const auto &info : result) {
-    QString objId = getObjId(QJsonValue(info.instance));
+    QString objId = getObjId(info.instance);
     m_refCount.remove(objId);
     m_objects.remove(objId);
     m_classNames.remove(objId);

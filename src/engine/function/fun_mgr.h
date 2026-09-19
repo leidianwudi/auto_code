@@ -9,25 +9,24 @@
  * 架构：
  * - FunBuiltin / FunStr / FunDb / FunFile / FunJson 等类在初始化时调用
  *   FunMgr::ins().registerFuncs() 将所有支持的函数指针注册到 FunMgr 中
- * - 每个函数使用 std::function<QJsonValue(const QJsonArray&)> 签名
+ * - 每个函数使用 std::function<accore::AcJsonValue(const accore::AcJsonValue&)> 签名
+ *   （值模型与解释器一致，调用边界无深拷贝转换）
  *
  * 用法示例：
  * @code
  *   FunMgr::init();  // 注册所有内置函数
- *   QJsonValue r = FunMgr::ins().call("str", "toLowerCase",
- * QJsonArray{"Hello"}); QJsonValue v = FunMgr::ins().call("builtin",
- * "readJson", QJsonArray{"data.json"});
+ *   accore::AcJsonValue r = FunMgr::ins().call("str", "toLowerCase",
+ *       accore::AcJsonValue::makeArray());  // 参数为 accore 数组值
  * @endcode
  */
 
 #pragma once
 
-#include <QJsonArray>
-#include <QJsonValue>
 #include <QString>
 #include <functional>
 #include <map>
 
+#include "src/core/json/ac_json_value.h"
 #include "src/util/design/singleton.h"
 
 /**
@@ -41,13 +40,14 @@ public:
   FunMgr() = default;
   ~FunMgr();
 
-  /// 函数指针类型：接收 QJsonArray 参数，返回 QJsonValue
-  using FunPtr = std::function<QJsonValue(const QJsonArray &)>;
-  /// 无参函数指针类型：不接收参数，返回 QJsonValue
-  using FunPtrVoid = std::function<QJsonValue()>;
-  /// 实例方法指针类型：显式接收对象实例（this）与实参，返回 QJsonValue
+  /// 函数指针类型：接收 accore 数组值参数，返回 accore 值
+  using FunPtr = std::function<accore::AcJsonValue(const accore::AcJsonValue &)>;
+  /// 无参函数指针类型：不接收参数，返回 accore 值
+  using FunPtrVoid = std::function<accore::AcJsonValue()>;
+  /// 实例方法指针类型：显式接收对象实例（this）与实参，返回 accore 值
   /// 由 registerFuncsWithThis() 注册，用于需要访问对象状态的类方法（如 DB 实例）
-  using FunPtrThis = std::function<QJsonValue(const QJsonValue &thisObj, const QJsonArray &args)>;
+  using FunPtrThis = std::function<accore::AcJsonValue(const accore::AcJsonValue &thisObj,
+                                                       const accore::AcJsonValue &args)>;
 
   /**
    * @brief
@@ -96,24 +96,25 @@ public:
    * 适用于静态类函数与 call("类","方法",...) 系统调用。
    * @param className 类名（如 "builtin"、"str"、"DB"）
    * @param funcName  函数名
-   * @param args      参数数组
+   * @param args      参数数组（accore 数组值）
    * @return 执行结果；未注册时返回 Null
    */
-  QJsonValue call(const QString &className, const QString &funcName, const QJsonArray &args);
+  accore::AcJsonValue call(const QString &className, const QString &funcName,
+                           const accore::AcJsonValue &args);
 
   /**
    * @brief 调用已注册的类实例方法（显式携带对象实例）
    *
    * 适用于 new 实例化类的实例方法调用，thisObj 为对象实例本身。
-   * 静态类函数调用时传 QJsonValue() 即可。
+   * 静态类函数调用时传 accore::AcJsonValue() 即可。
    * @param className 类名
    * @param funcName  函数名
    * @param thisObj   对象实例（this）
    * @param args      实参数组
    * @return 执行结果；未注册时返回 Null
    */
-  QJsonValue call(const QString &className, const QString &funcName, const QJsonValue &thisObj,
-                  const QJsonArray &args);
+  accore::AcJsonValue call(const QString &className, const QString &funcName,
+                           const accore::AcJsonValue &thisObj, const accore::AcJsonValue &args);
 
   /**
    * @brief 检查某类是否已注册

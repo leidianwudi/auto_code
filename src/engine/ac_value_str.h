@@ -20,6 +20,7 @@
 #include <cmath>
 
 #include "ac_language.h"
+#include "src/core/json/ac_json_value.h"
 
 namespace AcValueStr {
 
@@ -88,6 +89,78 @@ inline QString toString(const QJsonValue &v) {
       return arrayToString(v.toArray());
     case QJsonValue::Object:
       return objectToString(v.toObject());
+    default:
+      return QString::fromLatin1(AcKeyword::kUndefined);
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// accore 原生重载 — 语义与 QJsonValue 版本一致，供解释器/print 免转换使用
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// @brief 将 accore 值转为可读字符串（递归）
+inline QString toString(const accore::AcJsonValue &v);
+
+/// @brief 将 accore 对象转为可读字符串
+inline QString objectToString(const accore::AcJsonValue &obj) {
+  bool isInstance = obj.has(QString::fromLatin1(AcRuntime::kObjId));
+  bool isFuncRef =
+      obj.value(QString::fromLatin1(AcRuntime::kClassKey)).toString() == QStringLiteral("__func__");
+
+  QString className;
+  if (isInstance) {
+    className = obj.value(QString::fromLatin1(AcRuntime::kClassKey)).toString();
+  }
+
+  QStringList parts;
+  for (const auto &m : obj.members()) {
+    if (m.key == QString::fromLatin1(AcRuntime::kClassKey) ||
+        m.key == QString::fromLatin1(AcRuntime::kObjId))
+      continue;
+    parts.append(QStringLiteral("\"%1\":%2").arg(m.key).arg(toString(m.value)));
+  }
+
+  QString content = parts.join(QStringLiteral(","));
+  if (isInstance) {
+    return QStringLiteral("<%1>{%2}").arg(className).arg(content);
+  } else if (isFuncRef) {
+    QString funcName = obj.value(QStringLiteral("__name__")).toString();
+    return QStringLiteral("function(%1)")
+        .arg(funcName.isEmpty() ? QStringLiteral("...") : funcName);
+  }
+  return QStringLiteral("{%1}").arg(content);
+}
+
+/// @brief 将 accore 数组转为可读字符串
+inline QString arrayToString(const accore::AcJsonValue &arr) {
+  QStringList parts;
+  for (const accore::AcJsonValue &v : arr.items()) {
+    parts.append(toString(v));
+  }
+  return QStringLiteral("[%1]").arg(parts.join(QStringLiteral(",")));
+}
+
+/// @brief 将 accore 值转为可读字符串（递归）
+inline QString toString(const accore::AcJsonValue &v) {
+  switch (v.type()) {
+    case accore::AcJsonValue::Type::String:
+      return QStringLiteral("\"%1\"").arg(v.toString().replace('"', "\\\""));
+    case accore::AcJsonValue::Type::Bool:
+      return v.toBool() ? QString::fromLatin1(AcKeyword::kTrue)
+                        : QString::fromLatin1(AcKeyword::kFalse);
+    case accore::AcJsonValue::Type::Number: {
+      double d = v.toDouble();
+      if (d == std::floor(d)) {
+        return QString::number(static_cast<qint64>(d));
+      }
+      return QString::number(d);
+    }
+    case accore::AcJsonValue::Type::Null:
+      return QStringLiteral("null");
+    case accore::AcJsonValue::Type::Array:
+      return arrayToString(v);
+    case accore::AcJsonValue::Type::Object:
+      return objectToString(v);
     default:
       return QString::fromLatin1(AcKeyword::kUndefined);
   }

@@ -14,8 +14,6 @@
 #include "tpl_renderer.h"
 
 #include <QFileInfo>
-#include <QJsonArray>
-#include <QJsonValue>
 #include <cmath>
 #include <optional>
 
@@ -63,8 +61,8 @@ std::optional<QString> parseFuncArg(const QString &expr, const QString &funcName
   return expr.mid(prefix.length(), expr.length() - prefix.length() - 1).trimmed();
 }
 
-/// @brief 将 QJsonValue 转为字符串（用于输出）
-QString valueToString(const QJsonValue &v) {
+/// @brief 将值转为字符串（用于输出）
+QString valueToString(const accore::AcJsonValue &v) {
   if (v.isString()) return v.toString();
   if (v.isDouble()) {
     double d = v.toDouble();
@@ -80,30 +78,31 @@ QString valueToString(const QJsonValue &v) {
 }
 
 /// @brief 解析函数调用的字符串参数
-QString resolveStringArg(const QString &raw, const QJsonObject &context, const TplEngine &engine) {
+QString resolveStringArg(const QString &raw, const accore::AcJsonValue &context,
+                         const TplEngine &engine) {
   QString stripped = stripQuotes(raw);
   if (stripped != raw) return stripped;  // 原值带引号，是字面量
-  QJsonValue v = engine.resolvePath(raw, context);
-  if (!v.isNull() && !v.isUndefined()) return v.toString();
+  accore::AcJsonValue v = engine.resolvePath(raw, context);
+  if (!v.isNull()) return v.toString();
   return raw;
 }
 
 /// @brief 算术表达式递归下降求值
-QJsonValue evalAddSub(const QString &expr, int &pos, const QJsonObject &context,
-                      const TplEngine &engine);
-QJsonValue evalMulDiv(const QString &expr, int &pos, const QJsonObject &context,
-                      const TplEngine &engine);
+accore::AcJsonValue evalAddSub(const QString &expr, int &pos, const accore::AcJsonValue &context,
+                               const TplEngine &engine);
+accore::AcJsonValue evalMulDiv(const QString &expr, int &pos, const accore::AcJsonValue &context,
+                               const TplEngine &engine);
 
-QJsonValue evalPrimary(const QString &expr, int &pos, const QJsonObject &context,
-                       const TplEngine &engine) {
+accore::AcJsonValue evalPrimary(const QString &expr, int &pos, const accore::AcJsonValue &context,
+                                const TplEngine &engine) {
   while (pos < expr.length() && expr[pos].isSpace()) ++pos;
-  if (pos >= expr.length()) return QJsonValue();
+  if (pos >= expr.length()) return accore::AcJsonValue();
   QChar ch = expr[pos];
   if (ch == '+') return ++pos, evalPrimary(expr, pos, context, engine);
-  if (ch == '-') return ++pos, QJsonValue(-evalPrimary(expr, pos, context, engine).toDouble());
+  if (ch == '-') return ++pos, accore::AcJsonValue(-evalPrimary(expr, pos, context, engine).toDouble());
   if (ch == '(') {
     ++pos;
-    QJsonValue result = evalAddSub(expr, pos, context, engine);
+    accore::AcJsonValue result = evalAddSub(expr, pos, context, engine);
     while (pos < expr.length() && expr[pos].isSpace()) ++pos;
     if (pos < expr.length() && expr[pos] == ')') ++pos;
     return result;
@@ -115,14 +114,14 @@ QJsonValue evalPrimary(const QString &expr, int &pos, const QJsonObject &context
     while (pos < expr.length() && expr[pos] != quote) ++pos;
     QString str = expr.mid(start, pos - start);
     if (pos < expr.length()) ++pos;
-    return QJsonValue(str);
+    return accore::AcJsonValue(str);
   }
   if (ch.isDigit() || ch == '.') {
     int start = pos;
     while (pos < expr.length() && (expr[pos].isDigit() || expr[pos] == '.')) ++pos;
     bool ok = false;
     double num = expr.mid(start, pos - start).toDouble(&ok);
-    return ok ? QJsonValue(num) : QJsonValue();
+    return ok ? accore::AcJsonValue(num) : accore::AcJsonValue();
   }
   if (ch.isLetter() || ch == '_') {
     int start = pos;
@@ -131,28 +130,28 @@ QJsonValue evalPrimary(const QString &expr, int &pos, const QJsonObject &context
       ++pos;
     return engine.resolvePath(expr.mid(start, pos - start), context);
   }
-  return QJsonValue();
+  return accore::AcJsonValue();
 }
 
-QJsonValue evalMulDiv(const QString &expr, int &pos, const QJsonObject &context,
-                      const TplEngine &engine) {
-  QJsonValue left = evalPrimary(expr, pos, context, engine);
+accore::AcJsonValue evalMulDiv(const QString &expr, int &pos, const accore::AcJsonValue &context,
+                               const TplEngine &engine) {
+  accore::AcJsonValue left = evalPrimary(expr, pos, context, engine);
   while (pos < expr.length()) {
     while (pos < expr.length() && expr[pos].isSpace()) ++pos;
     if (pos >= expr.length()) break;
     QChar ch = expr[pos];
     if (ch == '*') {
       ++pos;
-      QJsonValue right = evalPrimary(expr, pos, context, engine);
-      left = QJsonValue(left.toDouble() * right.toDouble());
+      accore::AcJsonValue right = evalPrimary(expr, pos, context, engine);
+      left = accore::AcJsonValue(left.toDouble() * right.toDouble());
     } else if (ch == '/') {
       ++pos;
-      QJsonValue right = evalPrimary(expr, pos, context, engine);
+      accore::AcJsonValue right = evalPrimary(expr, pos, context, engine);
       if (right.toDouble() == 0) {
         const_cast<TplEngine &>(engine).setError(QStringLiteral("Division by zero"));
-        return QJsonValue();
+        return accore::AcJsonValue();
       }
-      left = QJsonValue(left.toDouble() / right.toDouble());
+      left = accore::AcJsonValue(left.toDouble() / right.toDouble());
     } else {
       break;
     }
@@ -160,25 +159,25 @@ QJsonValue evalMulDiv(const QString &expr, int &pos, const QJsonObject &context,
   return left;
 }
 
-QJsonValue evalAddSub(const QString &expr, int &pos, const QJsonObject &context,
-                      const TplEngine &engine) {
-  QJsonValue left = evalMulDiv(expr, pos, context, engine);
+accore::AcJsonValue evalAddSub(const QString &expr, int &pos, const accore::AcJsonValue &context,
+                               const TplEngine &engine) {
+  accore::AcJsonValue left = evalMulDiv(expr, pos, context, engine);
   while (pos < expr.length()) {
     while (pos < expr.length() && expr[pos].isSpace()) ++pos;
     if (pos >= expr.length()) break;
     QChar ch = expr[pos];
     if (ch == '+') {
       ++pos;
-      QJsonValue right = evalMulDiv(expr, pos, context, engine);
+      accore::AcJsonValue right = evalMulDiv(expr, pos, context, engine);
       if (left.isString() || right.isString()) {
-        left = QJsonValue(valueToString(left) + valueToString(right));
+        left = accore::AcJsonValue(valueToString(left) + valueToString(right));
       } else {
-        left = QJsonValue(left.toDouble() + right.toDouble());
+        left = accore::AcJsonValue(left.toDouble() + right.toDouble());
       }
     } else if (ch == '-') {
       ++pos;
-      QJsonValue right = evalMulDiv(expr, pos, context, engine);
-      left = QJsonValue(left.toDouble() - right.toDouble());
+      accore::AcJsonValue right = evalMulDiv(expr, pos, context, engine);
+      left = accore::AcJsonValue(left.toDouble() - right.toDouble());
     } else {
       break;
     }
@@ -187,8 +186,8 @@ QJsonValue evalAddSub(const QString &expr, int &pos, const QJsonObject &context,
 }
 
 /// @brief 算术表达式求值入口
-QJsonValue evalArithmetic(const QString &expr, const QJsonObject &context,
-                          const TplEngine &engine) {
+accore::AcJsonValue evalArithmetic(const QString &expr, const accore::AcJsonValue &context,
+                                   const TplEngine &engine) {
   int pos = 0;
   return evalAddSub(expr, pos, context, engine);
 }
@@ -201,7 +200,8 @@ QJsonValue evalArithmetic(const QString &expr, const QJsonObject &context,
 ///   3. 循环变量 ${this} 或 ${.}
 ///   4. 算术表达式（含四则运算符）
 ///   5. 普通变量路径
-QString evalVariable(const QString &expr, const QJsonObject &context, const TplEngine &engine) {
+QString evalVariable(const QString &expr, const accore::AcJsonValue &context,
+                     const TplEngine &engine) {
   // 1. printLog(text)
   if (auto arg = parseFuncArg(expr, QString::fromLatin1(AcBuiltin::kPrintLog))) {
     QString resolved = resolveStringArg(*arg, context, engine);
@@ -220,7 +220,7 @@ QString evalVariable(const QString &expr, const QJsonObject &context, const TplE
   // 3. 循环变量 ${this} 或 ${.}
   if (expr == QString::fromLatin1(AcKeyword::kThis) ||
       expr == QString::fromLatin1(AcTemplate::kCurrentItem)) {
-    QJsonValue v = context.value(QString::fromLatin1(AcTemplate::kCurrentItem));
+    accore::AcJsonValue v = context.value(QString::fromLatin1(AcTemplate::kCurrentItem));
     return valueToString(v);
   }
 
@@ -233,75 +233,81 @@ QString evalVariable(const QString &expr, const QJsonObject &context, const TplE
   return valueToString(engine.resolvePath(expr, context));
 }
 
-/// @brief 判断 JSON 值是否为 truthy
-bool isTruthy(const QJsonValue &val) {
-  switch (val.type()) {
-    case QJsonValue::Bool:
-      return val.toBool();
-    case QJsonValue::String:
-      return !val.toString().isEmpty();
-    case QJsonValue::Double: {
-      double d = val.toDouble();
-      return d != 0.0 && !std::isnan(d);
-    }
-    case QJsonValue::Array:
-      return !val.toArray().isEmpty();
-    case QJsonValue::Object:
-      return true;
-    default:
-      return false;  // Null / Undefined
+/// @brief 判断值是否为 truthy
+bool isTruthy(const accore::AcJsonValue &val) {
+  if (val.isBool()) return val.toBool();
+  if (val.isString()) return !val.toString().isEmpty();
+  if (val.isDouble()) {
+    double d = val.toDouble();
+    return d != 0.0 && !std::isnan(d);
   }
+  if (val.isArray()) return !val.isEmpty();
+  if (val.isObject()) return true;
+  return false;  // Null
 }
 
-/// @brief 将表达式求值为 QJsonValue（支持字面量、内置函数和变量路径）
-QJsonValue evalExprToJson(const QString &expr, const QJsonObject &context,
-                          const TplEngine &engine) {
+/// @brief 深度相等比较（类型严格；对象键序无关，数组按位比较）
+bool deepEqual(const accore::AcJsonValue &l, const accore::AcJsonValue &r) {
+  if (l.type() != r.type()) return false;
+  switch (l.type()) {
+    case accore::AcJsonValue::Type::Bool:
+      return l.toBool() == r.toBool();
+    case accore::AcJsonValue::Type::Number:
+      return l.toDouble() == r.toDouble();
+    case accore::AcJsonValue::Type::String:
+      return l.toString() == r.toString();
+    case accore::AcJsonValue::Type::Null:
+      return true;
+    case accore::AcJsonValue::Type::Array: {
+      if (l.size() != r.size()) return false;
+      for (int i = 0; i < l.size(); ++i) {
+        if (!deepEqual(l.at(i), r.at(i))) return false;
+      }
+      return true;
+    }
+    case accore::AcJsonValue::Type::Object: {
+      const auto &lm = l.members();
+      if (lm.size() != r.size()) return false;
+      for (const auto &m : lm) {
+        if (!r.has(m.key) || !deepEqual(m.value, r.value(m.key))) return false;
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
+/// @brief 将表达式求值为值（支持字面量、内置函数和变量路径）
+accore::AcJsonValue evalExprToJson(const QString &expr, const accore::AcJsonValue &context,
+                                   const TplEngine &engine) {
   // 1. 字符串字面量：'abc' / "abc"
   //    否则 == 比较右侧 "number" 会被当变量路径解析返回 null，比较永远失败
   QString trimmed = expr.trimmed();
   if (trimmed.length() >= 2 &&
       ((trimmed.startsWith(QChar('"')) && trimmed.endsWith(QChar('"'))) ||
        (trimmed.startsWith(QChar('\'')) && trimmed.endsWith(QChar('\''))))) {
-    return QJsonValue(trimmed.mid(1, trimmed.length() - 2));
+    return accore::AcJsonValue(trimmed.mid(1, trimmed.length() - 2));
   }
   // 2. 数字字面量：123 / 3.14
   {
     bool ok = false;
     double num = trimmed.toDouble(&ok);
-    if (ok) return QJsonValue(num);
+    if (ok) return accore::AcJsonValue(num);
   }
   // 3. 内置函数 fileExists(path)
   if (auto arg = parseFuncArg(expr, QString::fromLatin1(AcBuiltin::kFileExists))) {
     QString resolved = resolveStringArg(*arg, context, engine);
-    return QJsonValue(QFileInfo::exists(resolved));
+    return accore::AcJsonValue(QFileInfo::exists(resolved));
   }
   // 4. 内置函数 printLog(text)
   if (auto arg = parseFuncArg(expr, QString::fromLatin1(AcBuiltin::kPrintLog))) {
     QString resolved = resolveStringArg(*arg, context, engine);
     auto cb = engine.logCallback();
     if (cb) cb(resolved, false);
-    return QJsonValue(QJsonValue::Null);
+    return accore::AcJsonValue();
   }
   // 5. 变量路径
   return engine.resolvePath(expr, context);
-}
-
-/// @brief 比较两个 JSON 值是否相等（按类型严格比较）
-static bool valuesEqual(const QJsonValue &l, const QJsonValue &r) {
-  if (l.type() != r.type()) {
-    // 数值与字符串不宽松互比（模板场景均为同类型比较）
-    return false;
-  }
-  switch (l.type()) {
-    case QJsonValue::Bool:
-      return l.toBool() == r.toBool();
-    case QJsonValue::Double:
-      return l.toDouble() == r.toDouble();
-    case QJsonValue::String:
-      return l.toString() == r.toString();
-    default:
-      return l == r;
-  }
 }
 
 /// @brief 在表达式顶层（引号、括号外）查找 == / != 比较运算符位置
@@ -333,7 +339,7 @@ static int findTopLevelCompare(const QString &expr, bool &isNeq) {
 }
 
 /// @brief 解析条件表达式（支持 ! 取反、== / != 比较）
-bool evalCondition(QString expr, const QJsonObject &context, const TplEngine &engine) {
+bool evalCondition(QString expr, const accore::AcJsonValue &context, const TplEngine &engine) {
   expr = expr.trimmed();
   // == / != 比较（先于 ! 前缀处理，避免 field.a != "x" 被误剥）
   bool isNeq = false;
@@ -341,9 +347,9 @@ bool evalCondition(QString expr, const QJsonObject &context, const TplEngine &en
   if (cmpPos > 0) {
     const QString lhs = expr.left(cmpPos).trimmed();
     const QString rhs = expr.mid(cmpPos + 2).trimmed();
-    const QJsonValue l = evalExprToJson(lhs, context, engine);
-    const QJsonValue r = evalExprToJson(rhs, context, engine);
-    const bool equal = valuesEqual(l, r);
+    const accore::AcJsonValue l = evalExprToJson(lhs, context, engine);
+    const accore::AcJsonValue r = evalExprToJson(rhs, context, engine);
+    const bool equal = deepEqual(l, r);
     return isNeq ? !equal : equal;
   }
   bool negate = false;
@@ -351,7 +357,7 @@ bool evalCondition(QString expr, const QJsonObject &context, const TplEngine &en
     negate = true;
     expr = expr.mid(1).trimmed();
   }
-  QJsonValue condVal = evalExprToJson(expr, context, engine);
+  accore::AcJsonValue condVal = evalExprToJson(expr, context, engine);
   bool truthy = isTruthy(condVal);
 #ifdef AC_DEBUG
   // 调试日志：输出条件求值结果
@@ -381,11 +387,12 @@ bool evalCondition(QString expr, const QJsonObject &context, const TplEngine &en
 }
 
 /// @brief 递归渲染节点列表
-QString renderNodes(const QList<QSharedPointer<TplAst::AstNode>> &nodes, const QJsonObject &context,
-                    const TplEngine &engine);
+QString renderNodes(const QList<QSharedPointer<TplAst::AstNode>> &nodes,
+                    const accore::AcJsonValue &context, const TplEngine &engine);
 
 /// @brief 渲染单个 If 节点
-QString renderIf(const TplAst::IfNode *node, const QJsonObject &context, const TplEngine &engine) {
+QString renderIf(const TplAst::IfNode *node, const accore::AcJsonValue &context,
+                 const TplEngine &engine) {
   for (const auto &branch : node->branches) {
     bool match;
     if (branch.isElse) {
@@ -401,9 +408,9 @@ QString renderIf(const TplAst::IfNode *node, const QJsonObject &context, const T
 }
 
 /// @brief 渲染单个 Each 节点
-QString renderEach(const TplAst::EachNode *node, const QJsonObject &context,
+QString renderEach(const TplAst::EachNode *node, const accore::AcJsonValue &context,
                    const TplEngine &engine) {
-  QJsonValue arrVal = engine.resolvePath(node->arrayName, context);
+  accore::AcJsonValue arrVal = engine.resolvePath(node->arrayName, context);
   if (!arrVal.isArray()) {
     const_cast<TplEngine &>(engine).setError(
         QStringLiteral("'%1' is not an array").arg(node->arrayName));
@@ -411,28 +418,29 @@ QString renderEach(const TplAst::EachNode *node, const QJsonObject &context,
   }
 
   QString result;
-  QJsonArray arr = arrVal.toArray();
+  const int count = arrVal.size();
   int idx = 0;
-  for (const QJsonValue &item : arr) {
-    QJsonObject itemContext = context;
+  for (const accore::AcJsonValue &item : arrVal.items()) {
+    // 值拷贝为 COW 共享，set 时才写时分离——与 QJsonObject 拷贝语义一致
+    accore::AcJsonValue itemContext = context;
     // 注入循环元信息：${item名}_index（从 0 起）、${item名}_last（是否末项）
     // 模板可用 ${if !item_last},${/if} 实现末项无分隔符等排版
-    itemContext[node->itemName + QStringLiteral("_index")] = idx;
-    itemContext[node->itemName + QStringLiteral("_last")] = (idx == arr.size() - 1);
+    itemContext.set(node->itemName + QStringLiteral("_index"), accore::AcJsonValue(idx));
+    itemContext.set(node->itemName + QStringLiteral("_last"),
+                    accore::AcJsonValue(idx == count - 1));
     if (item.isObject()) {
-      QJsonObject itemObj = item.toObject();
       if (node->explicitNaming) {
-        itemContext[node->itemName] = itemObj;
+        itemContext.set(node->itemName, item);
       } else {
         // 隐式命名：把对象所有属性合并到顶层
-        for (auto it = itemObj.begin(); it != itemObj.end(); ++it) {
-          itemContext[it.key()] = it.value();
+        for (const auto &m : item.members()) {
+          itemContext.set(m.key, m.value);
         }
       }
     } else {
       // 基本类型值
-      itemContext[QString::fromLatin1(AcTemplate::kCurrentItem)] = item;
-      itemContext[node->itemName] = item;
+      itemContext.set(QString::fromLatin1(AcTemplate::kCurrentItem), item);
+      itemContext.set(node->itemName, item);
     }
     result += renderNodes(node->body, itemContext, engine);
     ++idx;
@@ -440,8 +448,8 @@ QString renderEach(const TplAst::EachNode *node, const QJsonObject &context,
   return result;
 }
 
-QString renderNodes(const QList<QSharedPointer<TplAst::AstNode>> &nodes, const QJsonObject &context,
-                    const TplEngine &engine) {
+QString renderNodes(const QList<QSharedPointer<TplAst::AstNode>> &nodes,
+                    const accore::AcJsonValue &context, const TplEngine &engine) {
   QString result;
   for (const auto &node : nodes) {
     switch (node->type) {
@@ -472,8 +480,8 @@ QString renderNodes(const QList<QSharedPointer<TplAst::AstNode>> &nodes, const Q
 
 }  // namespace
 
-QString render(const QList<QSharedPointer<TplAst::AstNode>> &nodes, const QJsonObject &context,
-               const TplEngine &engine) {
+QString render(const QList<QSharedPointer<TplAst::AstNode>> &nodes,
+               const accore::AcJsonValue &context, const TplEngine &engine) {
   return renderNodes(nodes, context, engine);
 }
 

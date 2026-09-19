@@ -17,8 +17,10 @@
 #include <QString>
 #include <QStringList>
 
+#include "src/core/json/ac_json_value.h"
+
 // ═════════════════════════════════════════════════════════════════════════════
-// 安全数值转换 — 避免 QJsonValue::toInt() 对超出 int 范围的值触发 Qt 断言
+// 安全数值转换 — 避免 JSON 值 toInt() 对超出 int 范围的值触发 Qt 断言
 // ═════════════════════════════════════════════════════════════════════════════
 
 /// @brief 将 QJsonValue 安全转为 int（不触发 Qt 断言）
@@ -26,6 +28,15 @@
 /// @return 越界时截断到 INT_MAX/INT_MIN，非数字返回 0
 inline int safeJsonToInt(const QJsonValue &v) {
   if (!v.isDouble()) return 0;
+  double d = v.toDouble();
+  if (d >= 2147483647.0) return 2147483647;
+  if (d <= -2147483648.0) return -2147483648;
+  return static_cast<int>(d);
+}
+
+/// @brief accore 值的安全 int 转换重载（语义同上，供 accore 原生路径免转换使用）
+inline int safeJsonToInt(const accore::AcJsonValue &v) {
+  if (!v.isNumber()) return 0;
   double d = v.toDouble();
   if (d >= 2147483647.0) return 2147483647;
   if (d <= -2147483648.0) return -2147483648;
@@ -221,6 +232,18 @@ struct DbConfig {
 
   /// @brief 从 JSON 对象解析配置
   static DbConfig fromJson(const QJsonObject &obj) {
+    DbConfig cfg;
+    cfg.host = obj.value(QString::fromLatin1(kHost)).toString();
+    cfg.port = safeJsonToInt(obj.value(QString::fromLatin1(kPort)));
+    if (cfg.port == 0) cfg.port = 3306;
+    cfg.user = obj.value(QString::fromLatin1(kUser)).toString();
+    cfg.password = obj.value(QString::fromLatin1(kPassword)).toString();
+    cfg.database = obj.value(QString::fromLatin1(kDatabase)).toString();
+    return cfg;
+  }
+
+  /// @brief 从 accore 值解析配置（内置函数 accore 原生路径使用）
+  static DbConfig fromJson(const accore::AcJsonValue &obj) {
     DbConfig cfg;
     cfg.host = obj.value(QString::fromLatin1(kHost)).toString();
     cfg.port = safeJsonToInt(obj.value(QString::fromLatin1(kPort)));

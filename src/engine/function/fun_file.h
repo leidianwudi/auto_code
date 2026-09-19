@@ -10,18 +10,15 @@
  * @code
  *   FunFile::init();  // 启动时注册
  *   // 读文件
- *   QJsonValue r = FunMgr::ins().call("File", "read",
- *       QJsonArray{"C:/data/config.json"});
- *   // 写文件
- *   FunMgr::ins().call("File", "write",
- *       QJsonArray{"C:/data/output.txt", "Hello World"});
+ *   accore::AcJsonValue args = accore::AcJsonValue::makeArray();
+ *   args.append("C:/data/config.json");
+ *   accore::AcJsonValue r = FunMgr::ins().call("File", "read", args);
  * @endcode
  */
 
 #pragma once
 
-#include <QJsonArray>
-#include <QJsonValue>
+#include "src/core/json/ac_json_value.h"
 
 /// 文件工具类（全静态）
 class FunFile {
@@ -30,8 +27,8 @@ public:
   static void init();
 
   /// 读取文件内容（UTF-8），args: [filePath]
-  static QJsonValue read(const QJsonArray &args);
+  static accore::AcJsonValue read(const accore::AcJsonValue &args);
 
   /// 写入文件内容（UTF-8），args: [filePath, content]
-  static QJsonValue write(const QJsonArray &args);
+  static accore::AcJsonValue write(const accore::AcJsonValue &args);
 };

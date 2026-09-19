@@ -81,7 +81,7 @@ void AcInterpreter::popScope() {
           QString disposeName = QString::fromLatin1(AcKeyword::kDispose);
           if (cd.isNative) {
             // 原生类 dispose：显式传递实例 thisObj（实例方法经 registerFuncsWithThis 注册）
-            FunMgr::ins().call(className, disposeName, val.toQJsonValue(), QJsonArray());
+            FunMgr::ins().call(className, disposeName, val, accore::AcJsonValue::makeArray());
             FunMgr::takeError();
           } else {
             const MethodDef *disposeMethod = findMethod(className, disposeName);
@@ -161,7 +161,7 @@ void AcInterpreter::releaseIfInstanceWithDestruct(const accore::AcJsonValue &val
 }
 
 void AcInterpreter::processDestructInfo(const AcObjectManager::DestructInfo &info) {
-  accore::AcJsonValue obj = accore::AcJsonValue::fromQJsonValue(info.instance);
+  const accore::AcJsonValue &obj = info.instance;
   for (const auto &m : obj.members()) {
     if (m.key == QString::fromLatin1(AcRuntime::kClassKey) ||
         m.key == QString::fromLatin1(AcRuntime::kObjId))
@@ -170,13 +170,12 @@ void AcInterpreter::processDestructInfo(const AcObjectManager::DestructInfo &inf
   }
   if (FunMgr::ins().contains(info.className, QString::fromLatin1(AcRuntime::kDestructor))) {
     // 原生类析构：显式传递实例 thisObj（实例方法经 registerFuncsWithThis 注册）
-    FunMgr::ins().call(info.className, QString::fromLatin1(AcRuntime::kDestructor),
-                       QJsonValue(info.instance), QJsonArray());
+    FunMgr::ins().call(info.className, QString::fromLatin1(AcRuntime::kDestructor), obj,
+                       accore::AcJsonValue::makeArray());
   } else if (m_classes.contains(info.className) && !m_classes[info.className].isNative) {
     const MethodDef *dtor = findMethod(info.className, QString::fromLatin1(AcRuntime::kDestructor));
     if (dtor) {
-      execMethod(*dtor, accore::AcJsonValue::fromQJsonValue(info.instance),
-                 accore::AcJsonValue::makeArray());
+      execMethod(*dtor, obj, accore::AcJsonValue::makeArray());
     }
   }
 }

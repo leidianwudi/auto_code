@@ -11,8 +11,6 @@
 #include <mysql.h>
 
 #include <QByteArray>
-#include <QJsonArray>
-#include <QJsonObject>
 #include <QString>
 #include <QUuid>
 
@@ -62,31 +60,31 @@ void FunDb::cleanup() {
 }
 
 // getConnection — 根据实例对象获取连接
-MYSQL *FunDb::getConnection(const QJsonObject &instance) {
+MYSQL *FunDb::getConnection(const accore::AcJsonValue &instance) {
   const QString connId = instance.value(QString::fromLatin1(AcDB::kConnId)).toString();
   return s_connections.value(connId, nullptr);
 }
 
 // constructor — new DB({...}) 时调用
-QJsonValue FunDb::constructor(const QJsonArray &args) {
-  if (args.isEmpty() || !args[0].isObject()) {
+accore::AcJsonValue FunDb::constructor(const accore::AcJsonValue &args) {
+  if (args.size() == 0 || !args.at(0).isObject()) {
     FunMgr::setError(
         QStringLiteral("DB() requires a config object with host, user, password, database"));
-    return QJsonValue(false);
+    return accore::AcJsonValue(false);
   }
 
-  const AcDB::DbConfig cfg = AcDB::DbConfig::fromJson(args[0].toObject());
+  const AcDB::DbConfig cfg = AcDB::DbConfig::fromJson(args.at(0));
 
   if (!cfg.isValid()) {
     FunMgr::setError(
         QStringLiteral("DB() config is invalid: host, user, password, database are required"));
-    return QJsonValue(false);
+    return accore::AcJsonValue(false);
   }
 
   MYSQL *conn = mysql_init(nullptr);
   if (!conn) {
     FunMgr::setError(QStringLiteral("DB() failed to initialize MySQL connection"));
-    return QJsonValue(false);
+    return accore::AcJsonValue(false);
   }
 
   unsigned int timeout = 5;
@@ -98,7 +96,7 @@ QJsonValue FunDb::constructor(const QJsonArray &args) {
     QString err = QString::fromUtf8(mysql_error(conn));
     mysql_close(conn);
     FunMgr::setError(QStringLiteral("DB() connection failed: %1").arg(err));
-    return QJsonValue(false);
+    return accore::AcJsonValue(false);
   }
 
   mysql_set_character_set(conn, "utf8mb4");
@@ -107,39 +105,39 @@ QJsonValue FunDb::constructor(const QJsonArray &args) {
   s_connections[connId] = conn;
   s_configs[connId] = cfg;
 
-  QJsonObject result;
-  result[QString::fromLatin1(AcDB::kConnId)] = connId;
-  result[QString::fromLatin1(AcDB::kConnected)] = true;
-  return QJsonValue(result);
+  accore::AcJsonValue result = accore::AcJsonValue::makeObject();
+  result.set(QString::fromLatin1(AcDB::kConnId), accore::AcJsonValue(connId));
+  result.set(QString::fromLatin1(AcDB::kConnected), accore::AcJsonValue(true));
+  return result;
 }
 
 // destructor — 引用计数归零时自动调用，关闭 MySQL 连接
-QJsonValue FunDb::destructor(const QJsonValue &thisObj, const QJsonArray &) {
-  if (!thisObj.isObject()) return QJsonValue(false);
-  const QJsonObject instance = thisObj.toObject();
-  const QString connId = instance.value(QString::fromLatin1(AcDB::kConnId)).toString();
-  if (connId.isEmpty()) return QJsonValue(false);
+accore::AcJsonValue FunDb::destructor(const accore::AcJsonValue &thisObj,
+                                      const accore::AcJsonValue &) {
+  if (!thisObj.isObject()) return accore::AcJsonValue(false);
+  const QString connId = thisObj.value(QString::fromLatin1(AcDB::kConnId)).toString();
+  if (connId.isEmpty()) return accore::AcJsonValue(false);
   if (s_connections.contains(connId)) {
     MYSQL *conn = s_connections[connId];
     if (conn) mysql_close(conn);
     s_connections.remove(connId);
     s_configs.remove(connId);
   }
-  return QJsonValue(true);
+  return accore::AcJsonValue(true);
 }
 
 // disconnect — 断开连接
-QJsonValue FunDb::disconnect(const QJsonValue &thisObj, const QJsonArray &) {
+accore::AcJsonValue FunDb::disconnect(const accore::AcJsonValue &thisObj,
+                                      const accore::AcJsonValue &) {
   if (!thisObj.isObject()) {
     FunMgr::setError(QStringLiteral("DB::disconnect() requires a DB instance object"));
-    return QJsonValue(false);
+    return accore::AcJsonValue();
   }
 
-  const QJsonObject instance = thisObj.toObject();
-  const QString connId = instance.value(QString::fromLatin1(AcDB::kConnId)).toString();
+  const QString connId = thisObj.value(QString::fromLatin1(AcDB::kConnId)).toString();
   if (connId.isEmpty()) {
     FunMgr::setError(QStringLiteral("DB::disconnect() invalid DB instance"));
-    return QJsonValue(false);
+    return accore::AcJsonValue();
   }
 
   if (s_connections.contains(connId)) {
@@ -148,31 +146,31 @@ QJsonValue FunDb::disconnect(const QJsonValue &thisObj, const QJsonArray &) {
     s_connections.remove(connId);
     s_configs.remove(connId);
   }
-  return QJsonValue(true);
+  return accore::AcJsonValue(true);
 }
 
 // tableSchema — 获取表列信息
-QJsonValue FunDb::tableSchema(const QJsonValue &thisObj, const QJsonArray &args) {
-  if (!thisObj.isObject() || args.isEmpty() || !args[0].isObject()) {
+accore::AcJsonValue FunDb::tableSchema(const accore::AcJsonValue &thisObj,
+                                       const accore::AcJsonValue &args) {
+  if (!thisObj.isObject() || args.size() == 0 || !args.at(0).isObject()) {
     FunMgr::setError(QStringLiteral("DB::tableSchema() requires a DB instance and params object"));
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
 
-  const QJsonObject instance = thisObj.toObject();
-  const QJsonObject params = args[0].toObject();
+  const accore::AcJsonValue params = args.at(0);
 
-  MYSQL *conn = getConnection(instance);
+  MYSQL *conn = getConnection(thisObj);
   if (!conn) {
     FunMgr::setError(QStringLiteral("DB::tableSchema() not connected, call new DB() first"));
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
 
-  const QString connId = instance.value(QString::fromLatin1(AcDB::kConnId)).toString();
+  const QString connId = thisObj.value(QString::fromLatin1(AcDB::kConnId)).toString();
   const AcDB::DbConfig cfg = s_configs.value(connId);
   const QString table = params.value(QString::fromLatin1(AcDB::kTable)).toString();
   if (table.isEmpty()) {
     FunMgr::setError(QStringLiteral("DB::tableSchema() requires 'table' in params"));
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
 
   const QString sql = QStringLiteral(
@@ -183,63 +181,69 @@ QJsonValue FunDb::tableSchema(const QJsonValue &thisObj, const QJsonArray &args)
                           "ORDER BY ORDINAL_POSITION")
                           .arg(escapeSqlLiteral(conn, cfg.database), escapeSqlLiteral(conn, table));
 
-  QJsonArray columns;
+  accore::AcJsonValue columns = accore::AcJsonValue::makeArray();
 
   if (mysql_query(conn, sql.toUtf8().constData()) != 0) {
     FunMgr::setError(QStringLiteral("DB::tableSchema() query failed: %1")
                          .arg(QString::fromUtf8(mysql_error(conn))));
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
 
   MYSQL_RES *result = mysql_store_result(conn);
   if (!result) {
     FunMgr::setError(QStringLiteral("DB::tableSchema() no result from query"));
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
 
   MYSQL_ROW row;
   while ((row = mysql_fetch_row(result))) {
-    QJsonObject col;
+    accore::AcJsonValue col = accore::AcJsonValue::makeObject();
 
-    col[QString::fromLatin1(AcDB::kColName)] = row[0] ? QString::fromUtf8(row[0]) : QString();
-    col[QString::fromLatin1(AcDB::kColType)] = row[1] ? QString::fromUtf8(row[1]) : QString();
-    col[QString::fromLatin1(AcDB::kColNullable)] =
-        row[2] && QString::fromUtf8(row[2]).toUpper() == QStringLiteral("YES");
-    col[QString::fromLatin1(AcDB::kColKey)] = row[3] ? QString::fromUtf8(row[3]) : QString();
-    col[QString::fromLatin1(AcDB::kColDefault)] =
-        row[4] ? QJsonValue(QString::fromUtf8(row[4])) : QJsonValue();
-    col[QString::fromLatin1(AcDB::kColExtra)] = row[5] ? QString::fromUtf8(row[5]) : QString();
-    col[QString::fromLatin1(AcDB::kColComment)] = row[6] ? QString::fromUtf8(row[6]) : QString();
+    col.set(QString::fromLatin1(AcDB::kColName),
+            accore::AcJsonValue(row[0] ? QString::fromUtf8(row[0]) : QString()));
+    col.set(QString::fromLatin1(AcDB::kColType),
+            accore::AcJsonValue(row[1] ? QString::fromUtf8(row[1]) : QString()));
+    col.set(QString::fromLatin1(AcDB::kColNullable),
+            accore::AcJsonValue(row[2] &&
+                                QString::fromUtf8(row[2]).toUpper() == QStringLiteral("YES")));
+    col.set(QString::fromLatin1(AcDB::kColKey),
+            accore::AcJsonValue(row[3] ? QString::fromUtf8(row[3]) : QString()));
+    col.set(QString::fromLatin1(AcDB::kColDefault),
+            row[4] ? accore::AcJsonValue(QString::fromUtf8(row[4])) : accore::AcJsonValue());
+    col.set(QString::fromLatin1(AcDB::kColExtra),
+            accore::AcJsonValue(row[5] ? QString::fromUtf8(row[5]) : QString()));
+    col.set(QString::fromLatin1(AcDB::kColComment),
+            accore::AcJsonValue(row[6] ? QString::fromUtf8(row[6]) : QString()));
 
     columns.append(col);
   }
 
   mysql_free_result(result);
-  return QJsonValue(columns);
+  return columns;
 }
 
 // tableInfo — 获取表元信息（表注释、引擎等）
-QJsonValue FunDb::tableInfo(const QJsonValue &thisObj, const QJsonArray &args) {
-  if (!thisObj.isObject() || args.isEmpty() || !args[0].isObject()) {
+accore::AcJsonValue FunDb::tableInfo(const accore::AcJsonValue &thisObj,
+                                     const accore::AcJsonValue &args) {
+  if (!thisObj.isObject() || args.size() == 0 || !args.at(0).isObject()) {
     FunMgr::setError(QStringLiteral("DB::tableInfo() requires a DB instance and params object"));
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
 
-  const QJsonObject instance = thisObj.toObject();
-  const QJsonObject params = args[0].toObject();
+  const accore::AcJsonValue params = args.at(0);
 
-  MYSQL *conn = getConnection(instance);
+  MYSQL *conn = getConnection(thisObj);
   if (!conn) {
     FunMgr::setError(QStringLiteral("DB::tableInfo() not connected, call new DB() first"));
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
 
-  const QString connId = instance.value(QString::fromLatin1(AcDB::kConnId)).toString();
+  const QString connId = thisObj.value(QString::fromLatin1(AcDB::kConnId)).toString();
   const AcDB::DbConfig cfg = s_configs.value(connId);
   const QString table = params.value(QString::fromLatin1(AcDB::kTable)).toString();
   if (table.isEmpty()) {
     FunMgr::setError(QStringLiteral("DB::tableInfo() requires 'table' in params"));
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
 
   const QString sql = QStringLiteral(
@@ -251,76 +255,78 @@ QJsonValue FunDb::tableInfo(const QJsonValue &thisObj, const QJsonArray &args) {
   if (mysql_query(conn, sql.toUtf8().constData()) != 0) {
     FunMgr::setError(QStringLiteral("DB::tableInfo() query failed: %1")
                          .arg(QString::fromUtf8(mysql_error(conn))));
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
 
   MYSQL_RES *result = mysql_store_result(conn);
   if (!result) {
     FunMgr::setError(QStringLiteral("DB::tableInfo() no result from query"));
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
 
-  QJsonObject info;
+  accore::AcJsonValue info = accore::AcJsonValue::makeObject();
   MYSQL_ROW row = mysql_fetch_row(result);
   if (row) {
-    info[QString::fromLatin1(AcDB::kTblComment)] = row[0] ? QString::fromUtf8(row[0]) : QString();
-    info[QString::fromLatin1(AcDB::kTblEngine)] = row[1] ? QString::fromUtf8(row[1]) : QString();
+    info.set(QString::fromLatin1(AcDB::kTblComment),
+             accore::AcJsonValue(row[0] ? QString::fromUtf8(row[0]) : QString()));
+    info.set(QString::fromLatin1(AcDB::kTblEngine),
+             accore::AcJsonValue(row[1] ? QString::fromUtf8(row[1]) : QString()));
   } else {
-    info[QString::fromLatin1(AcDB::kTblComment)] = QString();
-    info[QString::fromLatin1(AcDB::kTblEngine)] = QString();
+    info.set(QString::fromLatin1(AcDB::kTblComment), accore::AcJsonValue());
+    info.set(QString::fromLatin1(AcDB::kTblEngine), accore::AcJsonValue());
   }
 
   mysql_free_result(result);
-  return QJsonValue(info);
+  return info;
 }
 
 // query — 执行自定义 SQL
-QJsonValue FunDb::query(const QJsonValue &thisObj, const QJsonArray &args) {
-  if (!thisObj.isObject() || args.isEmpty() || !args[0].isObject()) {
+accore::AcJsonValue FunDb::query(const accore::AcJsonValue &thisObj,
+                                 const accore::AcJsonValue &args) {
+  if (!thisObj.isObject() || args.size() == 0 || !args.at(0).isObject()) {
     FunMgr::setError(QStringLiteral("DB::query() requires a DB instance and params object"));
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
 
-  const QJsonObject instance = thisObj.toObject();
-  const QJsonObject params = args[0].toObject();
+  const accore::AcJsonValue params = args.at(0);
 
-  MYSQL *conn = getConnection(instance);
+  MYSQL *conn = getConnection(thisObj);
   if (!conn) {
     FunMgr::setError(QStringLiteral("DB::query() not connected, call new DB() first"));
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
 
   const QString sql = params.value(QString::fromLatin1(AcDB::kSql)).toString();
   if (sql.isEmpty()) {
     FunMgr::setError(QStringLiteral("DB::query() requires 'sql' in params"));
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
 
   if (mysql_query(conn, sql.toUtf8().constData()) != 0) {
     FunMgr::setError(
         QStringLiteral("DB::query() failed: %1").arg(QString::fromUtf8(mysql_error(conn))));
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
 
   MYSQL_RES *result = mysql_store_result(conn);
   if (!result) {
-    return QJsonValue(QJsonArray{});
+    return accore::AcJsonValue::makeArray();
   }
 
   const unsigned int numFields = mysql_num_fields(result);
   MYSQL_FIELD *fields = mysql_fetch_fields(result);
 
-  QJsonArray rows;
+  accore::AcJsonValue rows = accore::AcJsonValue::makeArray();
   MYSQL_ROW row;
   while ((row = mysql_fetch_row(result))) {
-    QJsonObject rowObj;
+    accore::AcJsonValue rowObj = accore::AcJsonValue::makeObject();
     for (unsigned int i = 0; i < numFields; ++i) {
       const QString val = row[i] ? QString::fromUtf8(row[i]) : QString();
-      rowObj[QString::fromUtf8(fields[i].name)] = QJsonValue(val);
+      rowObj.set(QString::fromUtf8(fields[i].name), accore::AcJsonValue(val));
     }
     rows.append(rowObj);
   }
 
   mysql_free_result(result);
-  return QJsonValue(rows);
+  return rows;
 }

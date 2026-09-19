@@ -8,7 +8,6 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QJsonArray>
 #include <QString>
 #include <QTextStream>
 
@@ -28,19 +27,19 @@ void FunFile::init() {
 // read — 读文件（UTF-8）
 // ============================================================================
 
-QJsonValue FunFile::read(const QJsonArray &args) {
+accore::AcJsonValue FunFile::read(const accore::AcJsonValue &args) {
   // 参数校验：需要一个文件路径字符串参数
   if (!FunArgs::requireString(args, 0,
                               QStringLiteral("File::read() requires a file path argument")))
-    return QJsonValue();
+    return accore::AcJsonValue();
 
-  const QString path = args[0].toString();
+  const QString path = args.at(0).toString();
 
   // 打开文件，只读模式
   QFile file(path);
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
     FunMgr::setError(QStringLiteral("File::read() cannot open file: '%1'").arg(path));
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
 
   // UTF-8 编码读取全部内容
@@ -49,23 +48,23 @@ QJsonValue FunFile::read(const QJsonArray &args) {
   const QString content = in.readAll();
   file.close();
 
-  return QJsonValue(content);
+  return accore::AcJsonValue(content);
 }
 
 // ============================================================================
 // write — 写文件（UTF-8）
 // ============================================================================
 
-QJsonValue FunFile::write(const QJsonArray &args) {
+accore::AcJsonValue FunFile::write(const accore::AcJsonValue &args) {
   // 参数校验：需要 path 和 content 两个字符串参数
   const QString writeErr =
       QStringLiteral("File::write() requires 2 arguments: file path and content");
   if (!FunArgs::requireCount(args, 2, writeErr) || !FunArgs::requireString(args, 0, writeErr) ||
       !FunArgs::requireString(args, 1, writeErr))
-    return QJsonValue();
+    return accore::AcJsonValue();
 
-  const QString path = args[0].toString();
-  const QString content = args[1].toString();
+  const QString path = args.at(0).toString();
+  const QString content = args.at(1).toString();
 
   QDir().mkpath(QFileInfo(path).absolutePath());
 
@@ -73,7 +72,7 @@ QJsonValue FunFile::write(const QJsonArray &args) {
   QFile file(path);
   if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
     FunMgr::setError(QStringLiteral("File::write() cannot open file for writing: '%1'").arg(path));
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
 
   // UTF-8 编码写入，强制使用 Unix 换行符 (\n)
@@ -87,5 +86,5 @@ QJsonValue FunFile::write(const QJsonArray &args) {
   out << cleanContent;
   file.close();
 
-  return QJsonValue(true);
+  return accore::AcJsonValue(true);
 }

@@ -9,22 +9,18 @@
  * @code
  *   FunDb::init();    // 注册函数 + 连接配置
  *   // 获取表结构
- *   QJsonValue r = FunMgr::ins().call("db", "tableSchema",
- *       QJsonArray{{{"host":"127.0.0.1","port":3306,"user":"root",
- *                     "password":"123456","database":"my_db",
- *                     "table":"users"}}});
+ *   accore::AcJsonValue args = accore::AcJsonValue::makeArray();
+ *   accore::AcJsonValue r = FunMgr::ins().call("db", "tableSchema", args);
  * @endcode
  */
 
 #pragma once
 
 #include <QHash>
-#include <QJsonArray>
-#include <QJsonValue>
 #include <QString>
 
 #include "../ac_language.h"
-
+#include "src/core/json/ac_json_value.h"
 
 struct MYSQL;
 
@@ -52,7 +48,7 @@ public:
    * args[0] JSON: { host, port?, user, password, database }
    * @return 返回连接实例对象：{ connId: uuid, connected: bool }
    */
-  static QJsonValue constructor(const QJsonArray &args);
+  static accore::AcJsonValue constructor(const accore::AcJsonValue &args);
 
   /**
    * @brief 析构 DB 实例（引用计数归零时自动调用）
@@ -60,22 +56,25 @@ public:
    * 关闭 MySQL 连接并释放资源，与 disconnect() 逻辑相同。
    * thisObj: DB 实例对象
    */
-  static QJsonValue destructor(const QJsonValue &thisObj, const QJsonArray &args);
+  static accore::AcJsonValue destructor(const accore::AcJsonValue &thisObj,
+                                        const accore::AcJsonValue &args);
 
   /**
    * @brief 断开数据库连接并释放资源
    * thisObj: DB 实例对象
    * @return 成功返回 true
    */
-  static QJsonValue disconnect(const QJsonValue &thisObj, const QJsonArray &args);
+  static accore::AcJsonValue disconnect(const accore::AcJsonValue &thisObj,
+                                        const accore::AcJsonValue &args);
 
   /**
    * @brief 获取指定表的列信息
    * thisObj: DB 实例对象
    * args[0] JSON: { table }
-   * @return 列信息 JSON 数组
+   * @return 列信息数组
    */
-  static QJsonValue tableSchema(const QJsonValue &thisObj, const QJsonArray &args);
+  static accore::AcJsonValue tableSchema(const accore::AcJsonValue &thisObj,
+                                         const accore::AcJsonValue &args);
 
   /**
    * @brief 获取指定表的元信息（表注释、引擎等）
@@ -83,19 +82,21 @@ public:
    * args[0] JSON: { table }
    * @return { comment: "表注释", engine: "InnoDB" }
    */
-  static QJsonValue tableInfo(const QJsonValue &thisObj, const QJsonArray &args);
+  static accore::AcJsonValue tableInfo(const accore::AcJsonValue &thisObj,
+                                       const accore::AcJsonValue &args);
 
   /**
    * @brief 执行自定义 SQL 查询
    * thisObj: DB 实例对象
    * args[0] JSON: { sql }
-   * @return 查询结果 JSON 数组
+   * @return 查询结果数组
    */
-  static QJsonValue query(const QJsonValue &thisObj, const QJsonArray &args);
+  static accore::AcJsonValue query(const accore::AcJsonValue &thisObj,
+                                   const accore::AcJsonValue &args);
 
 private:
   /// 获取实例的连接（根据 this.obj 中的 connId）
-  static MYSQL *getConnection(const QJsonObject &instance);
+  static MYSQL *getConnection(const accore::AcJsonValue &instance);
   /// 全局连接池：connId -> MYSQL*
   static QHash<QString, MYSQL *> s_connections;
   /// 连接配置池：connId -> DbConfig

@@ -18,11 +18,10 @@
 
 #pragma once
 
-#include <QJsonArray>
-#include <QJsonObject>
-#include <QJsonValue>
 #include <QString>
 #include <functional>
+
+#include "src/core/json/ac_json_value.h"
 
 class SchemaValidator;
 
@@ -66,7 +65,7 @@ public:
    * @param data JSON 对象，作为变量上下文
    * @return 渲染后的字符串，如果出错返回空字符串
    */
-  QString render(const QString &tmpl, const QJsonObject &data) const;
+  QString render(const QString &tmpl, const accore::AcJsonValue &data) const;
 
   /**
    * @brief 获取最后一次渲染的错误信息
@@ -92,7 +91,7 @@ public:
    * @param context JSON 上下文
    * @return 解析后的值，未找到返回 Null
    */
-  QJsonValue resolvePath(const QString &path, const QJsonObject &context) const;
+  accore::AcJsonValue resolvePath(const QString &path, const accore::AcJsonValue &context) const;
 
 private:
   /**
@@ -101,14 +100,15 @@ private:
    * 拆分为 类名.函数名(参数) 格式，通过 FunMgr::call 执行。
    * 参数支持数字字面量、字符串字面量、变量路径（递归 resolvePath）。
    */
-  QJsonValue resolveFuncCall(const QString &path, const QJsonObject &context) const;
+  accore::AcJsonValue resolveFuncCall(const QString &path,
+                                      const accore::AcJsonValue &context) const;
 
   /**
    * @brief 解析嵌套变量路径（如 "user.name.email"）
    *
    * 按点号分割逐层查找 JSON 对象/数组的属性。
    */
-  QJsonValue resolveVarPath(const QString &path, const QJsonObject &context) const;
+  accore::AcJsonValue resolveVarPath(const QString &path, const accore::AcJsonValue &context) const;
 
   /// 最后一次错误信息
   mutable QString m_lastError;

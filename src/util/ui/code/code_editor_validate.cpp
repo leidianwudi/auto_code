@@ -18,6 +18,7 @@
 #include <QRegularExpression>
 
 #include "code_editor.h"
+#include "src/core/json/ac_json_value.h"
 #include "src/engine/json_validator.h"
 #include "src/engine/script/ac_validator.h"
 #include "src/engine/tpl/tpl_validator.h"
@@ -211,7 +212,8 @@ void CodeEditor::runSchemaValidation(const QJsonObject &doc, QVector<ValidationR
   if (!m_schemaLoaded || !m_schema.hasRoot()) return;
 
   const QString &text = cachedText();
-  const QVector<QString> errs = m_schema.validateDocument(doc);
+  // SchemaValidator 已迁 accore：UI 侧 QJson 文档在边界转一次
+  const QVector<QString> errs = m_schema.validateDocument(accore::AcJsonValue::fromQJsonValue(doc));
   for (const QString &e : errs) {
     QString prop = extractSchemaPath(e).section(QLatin1Char('.'), -1);
     int line = findSchemaKeyLine(text, prop);

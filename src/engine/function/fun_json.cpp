@@ -22,23 +22,24 @@ void FunJson::init() {
 }
 
 // readJson — 读取 JSON 文件
-QJsonValue FunJson::readJson(const QJsonArray &args) {
+accore::AcJsonValue FunJson::readJson(const accore::AcJsonValue &args) {
   if (!FunArgs::requireString(args, 0,
                               QStringLiteral("readJson() requires a file path argument")))
-    return QJsonObject();
+    return accore::AcJsonValue();
 
   QJsonParseError parseError;
-  QJsonDocument doc = UtilJson::loadFile(args[0].toString(), &parseError);
+  QJsonDocument doc = UtilJson::loadFile(args.at(0).toString(), &parseError);
   if (parseError.error != QJsonParseError::NoError || doc.isNull()) {
     FunMgr::setError(
-        QStringLiteral("readJson() cannot open or parse file: '%1'").arg(args[0].toString()));
-    return QJsonObject();
+        QStringLiteral("readJson() cannot open or parse file: '%1'").arg(args.at(0).toString()));
+    return accore::AcJsonValue();
   }
 
   if (!doc.isObject() && !doc.isArray()) {
     FunMgr::setError(QStringLiteral("readJson() file is not a valid JSON object or array"));
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
-  if (doc.isArray()) return QJsonValue(doc.array());
-  return QJsonValue(doc.object());
+  // UtilJson/QJsonDocument 为解析边界（QJson 解析器），此处一次性转入 accore 值模型
+  if (doc.isArray()) return accore::AcJsonValue::fromQJsonValue(doc.array());
+  return accore::AcJsonValue::fromQJsonValue(doc.object());
 }

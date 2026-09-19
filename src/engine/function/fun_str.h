@@ -13,16 +13,15 @@
  * 用法示例：
  * @code
  *   FunStr::init();  // 启动时注册
- *   FunMgr::ins().call("str", "toLowerCase", QJsonArray{"Hello"});
+ *   accore::AcJsonValue args = accore::AcJsonValue::makeArray();
+ *   args.append("Hello");
+ *   accore::AcJsonValue r = FunMgr::ins().call("str", "toLowerCase", args);
  * @endcode
  */
 
 #pragma once
 
-#include <QJsonArray>
-#include <QJsonValue>
-
-class FunMgr;
+#include "src/core/json/ac_json_value.h"
 
 /// 字符串工具类（全静态）
 class FunStr {
@@ -31,10 +30,10 @@ public:
   static void init();
 
   // ── 具体操作（公开，也可直接调用） ──
-  static QJsonValue toLowerCase(const QJsonArray &args);
-  static QJsonValue toUpperCase(const QJsonArray &args);
-  static QJsonValue trim(const QJsonArray &args);
-  static QJsonValue capitalize(const QJsonArray &args);
-  static QJsonValue substring(const QJsonArray &args);
-  static QJsonValue replace(const QJsonArray &args);
+  static accore::AcJsonValue toLowerCase(const accore::AcJsonValue &args);
+  static accore::AcJsonValue toUpperCase(const accore::AcJsonValue &args);
+  static accore::AcJsonValue trim(const accore::AcJsonValue &args);
+  static accore::AcJsonValue capitalize(const accore::AcJsonValue &args);
+  static accore::AcJsonValue substring(const accore::AcJsonValue &args);
+  static accore::AcJsonValue replace(const accore::AcJsonValue &args);
 };

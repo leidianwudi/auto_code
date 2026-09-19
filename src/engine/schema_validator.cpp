@@ -5,9 +5,6 @@
 
 #include "schema_validator.h"
 
-#include <QJsonArray>
-#include <QJsonObject>
-#include <QJsonValue>
 #include <QSet>
 
 #include "src/core/json/ac_json_value.h"
@@ -139,7 +136,7 @@ bool SchemaValidator::isRequiredProperty(const SchemaClassInfo &info, const QStr
 }
 
 // validate — 校验入口（旧接口，返回第一个错误）
-QString SchemaValidator::validate(const QString &className, const QJsonObject &data) const {
+QString SchemaValidator::validate(const QString &className, const accore::AcJsonValue &data) const {
   auto it = m_classes.find(className);
   if (it == m_classes.end()) return QStringLiteral("Schema class '%1' not defined").arg(className);
 
@@ -149,7 +146,7 @@ QString SchemaValidator::validate(const QString &className, const QJsonObject &d
 }
 
 // validateDocument — 校验整个文档（返回所有错误）
-QVector<QString> SchemaValidator::validateDocument(const QJsonObject &data) const {
+QVector<QString> SchemaValidator::validateDocument(const accore::AcJsonValue &data) const {
   QVector<QString> errors;
   if (m_rootClass.isEmpty()) {
     errors.append(QStringLiteral("Schema root not defined"));
@@ -165,23 +162,22 @@ QVector<QString> SchemaValidator::validateDocument(const QJsonObject &data) cons
 }
 
 // validateObject — 递归校验对象
-void SchemaValidator::validateObject(const ClassDef &def, const QJsonObject &obj,
+void SchemaValidator::validateObject(const ClassDef &def, const accore::AcJsonValue &obj,
                                      const QString &path, QVector<QString> *errors) const {
   auto addErr = [&](const QString &msg) { errors->append(msg); };
 
   // 检查未定义的属性（跳过 $ 开头的元数据键）
-  for (auto it = obj.begin(); it != obj.end(); ++it) {
-    const QString &key = it.key();
-    if (isMetaKey(key)) continue;
-    if (!propertyOf(def, key) && !def.hasAdditionalProp) {
-      addErr(QStringLiteral("'%1.%2' is not a valid property").arg(path, key));
+  for (const auto &m : obj.members()) {
+    if (isMetaKey(m.key)) continue;
+    if (!propertyOf(def, m.key) && !def.hasAdditionalProp) {
+      addErr(QStringLiteral("'%1.%2' is not a valid property").arg(path, m.key));
       continue;
     }
   }
 
   // 检查必填属性
   for (const QString &req : def.required) {
-    if (!obj.contains(req)) {
+    if (!obj.has(req)) {
       addErr(QStringLiteral("'%1.%2' is required").arg(path, req));
     }
   }
@@ -190,26 +186,25 @@ void SchemaValidator::validateObject(const ClassDef &def, const QJsonObject &obj
   for (const auto &kv : def.properties) {
     const QString &propName = kv.first;
     const PropertyDef &pd = kv.second;
-    if (!obj.contains(propName)) continue;  // 可选属性，跳过
+    if (!obj.has(propName)) continue;  // 可选属性，跳过
 
-    QJsonValue val = obj.value(propName);
+    accore::AcJsonValue val = obj.value(propName);
     QString childPath = path + QStringLiteral(".") + propName;
     validateValue(pd, val, childPath, errors);
   }
 
   // additionalProperties：任意键，值按该类型约束校验
   if (def.hasAdditionalProp) {
-    for (auto it = obj.begin(); it != obj.end(); ++it) {
-      const QString &key = it.key();
-      if (propertyOf(def, key) || isMetaKey(key)) continue;
-      QString childPath = path + QStringLiteral(".") + key;
-      validateValue(def.additionalProp, it.value(), childPath, errors);
+    for (const auto &m : obj.members()) {
+      if (propertyOf(def, m.key) || isMetaKey(m.key)) continue;
+      QString childPath = path + QStringLiteral(".") + m.key;
+      validateValue(def.additionalProp, m.value, childPath, errors);
     }
   }
 }
 
 // validateValue — 按属性类型校验单个值
-void SchemaValidator::validateValue(const PropertyDef &pd, const QJsonValue &val,
+void SchemaValidator::validateValue(const PropertyDef &pd, const accore::AcJsonValue &val,
                                     const QString &childPath, QVector<QString> *errors) const {
   const QString &type = pd.type;
   if (type == QString::fromLatin1(kTypeInt)) {
@@ -233,14 +228,14 @@ void SchemaValidator::validateValue(const PropertyDef &pd, const QJsonValue &val
       errors->append(QStringLiteral("'%1' should be array").arg(childPath));
       return;
     }
-    QJsonArray arr = val.toArray();
+    const int count = val.size();
     if (pd.items.isEmpty()) return;
     // 数组元素为基本类型
     if (isPrimitiveType(pd.items)) {
-      for (int i = 0; i < arr.size(); ++i) {
+      for (int i = 0; i < count; ++i) {
         PropertyDef elem;
         elem.type = pd.items;
-        validateValue(elem, arr[i], childPath + QStringLiteral("[%1]").arg(i), errors);
+        validateValue(elem, val.at(i), childPath + QStringLiteral("[%1]").arg(i), errors);
       }
       return;
     }
@@ -250,13 +245,12 @@ void SchemaValidator::validateValue(const PropertyDef &pd, const QJsonValue &val
       errors->append(QStringLiteral("'%1' item class '%2' not defined").arg(childPath, pd.items));
       return;
     }
-    for (int i = 0; i < arr.size(); ++i) {
-      if (!arr[i].isObject()) {
+    for (int i = 0; i < count; ++i) {
+      if (!val.at(i).isObject()) {
         errors->append(QStringLiteral("'%1[%2]' should be object").arg(childPath).arg(i));
         continue;
       }
-      validateObject(itemIt.value(), arr[i].toObject(), childPath + QStringLiteral("[%1]").arg(i),
-                     errors);
+      validateObject(itemIt.value(), val.at(i), childPath + QStringLiteral("[%1]").arg(i), errors);
     }
   } else if (type == QString::fromLatin1(kTypeObject)) {
     if (!val.isObject()) {
@@ -269,7 +263,7 @@ void SchemaValidator::validateValue(const PropertyDef &pd, const QJsonValue &val
         errors->append(QStringLiteral("'%1' class '%2' not defined").arg(childPath, pd.className));
         return;
       }
-      validateObject(clsIt.value(), val.toObject(), childPath, errors);
+      validateObject(clsIt.value(), val, childPath, errors);
     }
   }
 }

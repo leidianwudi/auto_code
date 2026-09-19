@@ -9,15 +9,12 @@
 
 #include "tpl_engine.h"
 
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QJsonValue>
 #include <QString>
 
 #include "../ac_language.h"
 #include "../function/fun_mgr.h"
 #include "../schema_validator.h"
+#include "src/core/json/ac_json_value.h"
 #include "tpl_lexer.h"
 #include "tpl_parser.h"
 #include "tpl_renderer.h"
@@ -63,7 +60,7 @@ void TplEngine::clearSchema() {
 //   - 块标签（${if}/${each}/${else} 等）独占一行时，剔除该行的缩进和换行符
 //   - 块标签行内出现时，保留所有空白字符
 //   - 不做任何"智能空行压缩"，模板里几个 \n 就输出几个 \n
-QString TplEngine::render(const QString &tmpl, const QJsonObject &data) const {
+QString TplEngine::render(const QString &tmpl, const accore::AcJsonValue &data) const {
   m_lastError.clear();
 
   if (sm_validator && !sm_schemaClass.isEmpty()) {
@@ -106,7 +103,8 @@ QString TplEngine::render(const QString &tmpl, const QJsonObject &data) const {
 
 // resolvePath — 路径解析入口（函数调用 / 变量路径分发）
 
-QJsonValue TplEngine::resolvePath(const QString &path, const QJsonObject &context) const {
+accore::AcJsonValue TplEngine::resolvePath(const QString &path,
+                                           const accore::AcJsonValue &context) const {
   int parenPos = path.indexOf(kOpenParen);
   if (parenPos != -1 && path.endsWith(kCloseParen)) {
     return resolveFuncCall(path, context);
@@ -116,7 +114,8 @@ QJsonValue TplEngine::resolvePath(const QString &path, const QJsonObject &contex
 
 // resolveFuncCall — 函数调用解析（类名.函数名(参数)）
 
-QJsonValue TplEngine::resolveFuncCall(const QString &path, const QJsonObject &context) const {
+accore::AcJsonValue TplEngine::resolveFuncCall(const QString &path,
+                                               const accore::AcJsonValue &context) const {
   int parenPos = path.indexOf(kOpenParen);
   QString fullFunc = path.left(parenPos);
   QString argsStr = path.mid(parenPos + 1);
@@ -141,16 +140,16 @@ QJsonValue TplEngine::resolveFuncCall(const QString &path, const QJsonObject &co
     rawArgs.append(argsStr.mid(start).trimmed());
   }
 
-  // 解析参数：递归调用 resolvePath 处理每个参数
-  QJsonArray evalArgs;
+  // 解析参数：递归调用 resolvePath 处理每个参数（全程 accore，无转换）
+  accore::AcJsonValue evalArgs = accore::AcJsonValue::makeArray();
   for (const QString &raw : rawArgs) {
     bool ok = false;
     double num = raw.toDouble(&ok);
     if (ok) {
-      evalArgs.append(num);
+      evalArgs.append(accore::AcJsonValue(num));
     } else if ((raw.startsWith(kDoubleQuote) && raw.endsWith(kDoubleQuote)) ||
                (raw.startsWith(kSingleQuote) && raw.endsWith(kSingleQuote))) {
-      evalArgs.append(raw.mid(1, raw.length() - 2));
+      evalArgs.append(accore::AcJsonValue(raw.mid(1, raw.length() - 2)));
     } else {
       evalArgs.append(resolvePath(raw, context));
     }
@@ -170,32 +169,32 @@ QJsonValue TplEngine::resolveFuncCall(const QString &path, const QJsonObject &co
   }
 
   m_lastError = QString::fromUtf8(kInvalidFuncCallFormat).arg(path);
-  return QJsonValue();
+  return accore::AcJsonValue();
 }
 
 // resolveVarPath — 嵌套属性路径解析（按点号逐层查找）
 
-QJsonValue TplEngine::resolveVarPath(const QString &path, const QJsonObject &context) const {
+accore::AcJsonValue TplEngine::resolveVarPath(const QString &path,
+                                              const accore::AcJsonValue &context) const {
   QStringList parts = path.split(kDot);
-  QJsonValue value = QJsonValue(context);
+  accore::AcJsonValue value = context;
 
   for (const QString &part : parts) {
     if (value.isObject()) {
-      value = value.toObject().value(part);
+      value = value.value(part);
     } else if (value.isArray()) {
       bool ok = false;
       int idx = part.toInt(&ok);
       if (ok) {
-        QJsonArray arr = value.toArray();
-        if (idx >= 0 && idx < arr.size())
-          value = arr[idx];
+        if (idx >= 0 && idx < value.size())
+          value = value.at(idx);
         else
-          return QJsonValue();
+          return accore::AcJsonValue();
       } else {
-        return QJsonValue();
+        return accore::AcJsonValue();
       }
     } else {
-      return QJsonValue();
+      return accore::AcJsonValue();
     }
   }
 
