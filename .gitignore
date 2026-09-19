@@ -55,3 +55,11 @@ compile_commands.json
 *creator.user*
 
 *_qmlcache.qrc
+
+# 本地构建/运行产物（不入库）
+*.exe
+*.dll
+*.pdb
+*.ilk
+/build_*.txt
+/test_*.txt

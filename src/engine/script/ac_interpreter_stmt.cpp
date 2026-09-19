@@ -20,15 +20,6 @@
 //  类方法执行
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace {
-/// FunMgr 边界适配：AcJsonValue 数组转 QJsonArray（FunMgr::call 签名保持 Qt 类型）
-QJsonArray toQJsonArray(const accore::AcJsonValue &arr) {
-  QJsonArray out;
-  for (const accore::AcJsonValue &v : arr.items()) out.append(v.toQJsonValue());
-  return out;
-}
-}  // namespace
-
 accore::AcJsonValue AcInterpreter::execCallBody(const QVector<ParamDef> &params,
                                                 const accore::AcJsonValue &callArgs,
                                                 const Block &body,
@@ -260,7 +251,8 @@ void AcInterpreter::assignToProperty(const accore::AcJsonValue &objVal, const QS
   accore::AcJsonValue obj = objVal;
   if (op != CompoundOp::kNone) {
     accore::AcJsonValue oldVal = obj.value(prop);
-    newVal = applyCompoundOp(oldVal, newVal, op, 0);
+    // 复合运算报错带上宿主表达式行号（此前传 0 丢失行号）
+    newVal = applyCompoundOp(oldVal, newVal, op, objectExpr.line);
     if (!m_error.isEmpty()) return;
   }
   if (obj.has(prop)) {
@@ -285,7 +277,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       QString funcName = func.toString();
 
       // FunMgr 签名保持 Qt 类型：参数转 QJsonArray
-      FunMgr::ins().call(clsName, funcName, toQJsonArray(args));
+      FunMgr::ins().call(clsName, funcName, accore::toQJsonArray(args));
       QString err = FunMgr::takeError();
       if (!err.isEmpty()) {
         setError(err, stmt.call.className.line);
@@ -544,10 +536,14 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       break;
     }
 
-    case Block::Stmt::kReturn:
+    case Block::Stmt::kReturn: {
+      // 先求值后置标志：求值出错时保留 m_error 通道，不误置 m_hasReturned
+      accore::AcJsonValue rv = evalExpr(stmt.returnValue);
+      if (!m_error.isEmpty()) break;
       m_hasReturned = true;
-      m_returnValue = evalExpr(stmt.returnValue);
+      m_returnValue = rv;
       break;
+    }
 
     case Block::Stmt::kImport:
       break;

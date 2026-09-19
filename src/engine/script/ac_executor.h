@@ -33,7 +33,6 @@ public:
   void setScriptDir(const QString &dir) { m_scriptDir = dir; }
   void setScriptFile(const QString &path) { m_scriptFile = path; }
   void setRootDir(const QString &dir) { m_rootDir = dir; }
-  void setJsonFile(const QString &path) { m_jsonPath = path; }
   QStringList generatedFiles() const { return m_interpreter.generatedFiles(); }
 
   /// @brief 设置取消标志（工作线程中由解释器轮询检查）
@@ -82,7 +81,6 @@ private:
   QString m_scriptDir;           ///< .ac 文件所在目录
   QString m_scriptFile;          ///< .ac 入口文件绝对路径（循环导入检测用）
   QString m_rootDir;             ///< 项目根目录
-  QString m_jsonPath;            ///< 当前处理的 JSON 文件路径（保留但未使用）
   QString m_error;               ///< 错误信息
   QVector<Token> m_tokens;       ///< 词法分析结果
   QSet<QString> m_declaredVars;  ///< 已用 let 声明的变量名

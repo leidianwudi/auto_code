@@ -8,8 +8,8 @@
 #include <QString>
 
 #include "../ac_language.h"
+#include "fun_args.h"
 #include "fun_mgr.h"
-
 
 void FunStr::init() {
   FunMgr::ins().registerFuncs(QString::fromLatin1(AcCallStr::kClassName),
@@ -28,10 +28,9 @@ void FunStr::init() {
 // ============================================================================
 
 QJsonValue FunStr::toLowerCase(const QJsonArray &args) {
-  if (args.isEmpty() || !args[0].isString()) {
-    FunMgr::setError(QStringLiteral("str::toLowerCase() requires a string argument"));
+  if (!FunArgs::requireString(args, 0,
+                              QStringLiteral("str::toLowerCase() requires a string argument")))
     return QJsonValue();
-  }
   return QJsonValue(args[0].toString().toLower());
 }
 
@@ -40,10 +39,9 @@ QJsonValue FunStr::toLowerCase(const QJsonArray &args) {
 // ============================================================================
 
 QJsonValue FunStr::toUpperCase(const QJsonArray &args) {
-  if (args.isEmpty() || !args[0].isString()) {
-    FunMgr::setError(QStringLiteral("str::toUpperCase() requires a string argument"));
+  if (!FunArgs::requireString(args, 0,
+                              QStringLiteral("str::toUpperCase() requires a string argument")))
     return QJsonValue();
-  }
   return QJsonValue(args[0].toString().toUpper());
 }
 
@@ -52,10 +50,8 @@ QJsonValue FunStr::toUpperCase(const QJsonArray &args) {
 // ============================================================================
 
 QJsonValue FunStr::trim(const QJsonArray &args) {
-  if (args.isEmpty() || !args[0].isString()) {
-    FunMgr::setError(QStringLiteral("str::trim() requires a string argument"));
+  if (!FunArgs::requireString(args, 0, QStringLiteral("str::trim() requires a string argument")))
     return QJsonValue();
-  }
   return QJsonValue(args[0].toString().trimmed());
 }
 
@@ -64,10 +60,9 @@ QJsonValue FunStr::trim(const QJsonArray &args) {
 // ============================================================================
 
 QJsonValue FunStr::capitalize(const QJsonArray &args) {
-  if (args.isEmpty() || !args[0].isString()) {
-    FunMgr::setError(QStringLiteral("str::capitalize() requires a string argument"));
+  if (!FunArgs::requireString(args, 0,
+                              QStringLiteral("str::capitalize() requires a string argument")))
     return QJsonValue();
-  }
   QString str = args[0].toString();
   if (!str.isEmpty()) str = str[0].toUpper() + str.mid(1);
   return QJsonValue(str);
@@ -78,10 +73,10 @@ QJsonValue FunStr::capitalize(const QJsonArray &args) {
 // ============================================================================
 
 QJsonValue FunStr::substring(const QJsonArray &args) {
-  if (args.size() < 2 || !args[0].isString() || !args[1].isDouble()) {
-    FunMgr::setError(QStringLiteral("str::substring() requires a string and a start position"));
+  const QString subErr = QStringLiteral("str::substring() requires a string and a start position");
+  if (!FunArgs::requireCount(args, 2, subErr) || !FunArgs::requireString(args, 0, subErr) ||
+      !FunArgs::requireNumber(args, 1, subErr))
     return QJsonValue();
-  }
 
   const QString str = args[0].toString();
   const int start = safeJsonToInt(args[1]);
@@ -99,10 +94,11 @@ QJsonValue FunStr::substring(const QJsonArray &args) {
 // ============================================================================
 
 QJsonValue FunStr::replace(const QJsonArray &args) {
-  if (args.size() < 3 || !args[0].isString() || !args[1].isString() || !args[2].isString()) {
-    FunMgr::setError(QStringLiteral("str::replace() requires 3 arguments: string, before, after"));
+  const QString repErr =
+      QStringLiteral("str::replace() requires 3 arguments: string, before, after");
+  if (!FunArgs::requireCount(args, 3, repErr) || !FunArgs::requireString(args, 0, repErr) ||
+      !FunArgs::requireString(args, 1, repErr) || !FunArgs::requireString(args, 2, repErr))
     return QJsonValue();
-  }
 
   QString str = args[0].toString();
   const QString before = args[1].toString();

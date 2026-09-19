@@ -1,8 +1,13 @@
 cmake_minimum_required(VERSION 3.19)
 project(auto_code LANGUAGES CXX)
-# 设置 Qt 安装路径，使 CMake 能找到 Qt6Config.cmake
+# Qt 安装路径：优先读环境变量 QT_HOME（跨机器），未设置时回退到本机默认安装路径；
+# 也可在命令行显式 -DCMAKE_PREFIX_PATH=... 覆盖
 if(NOT DEFINED CMAKE_PREFIX_PATH)
-    set(CMAKE_PREFIX_PATH "D:/tool/Qt/6.12.0/msvc2022_64")
+    if(DEFINED ENV{QT_HOME})
+        set(CMAKE_PREFIX_PATH "$ENV{QT_HOME}")
+    else()
+        set(CMAKE_PREFIX_PATH "D:/tool/Qt/6.12.0/msvc2022_64")
+    endif()
 endif()
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Sql Network Svg Concurrent)
@@ -85,6 +90,7 @@ qt_add_executable(auto_code
     src/engine/function/fun_json.cpp
     src/engine/function/fun_mgr.h
     src/engine/function/fun_mgr.cpp
+    src/engine/function/fun_args.h
     src/engine/function/fun_builtin.h
     src/engine/function/fun_builtin.cpp
     src/engine/ac_language.h

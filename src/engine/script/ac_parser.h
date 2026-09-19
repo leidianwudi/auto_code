@@ -36,6 +36,10 @@ private:
   bool expect(TokenType t, const QString &msg);
   /// @brief 期望分号；缺失时错误定位到语句所在行（stmtLine），而非下一个 token 的行
   bool expectSemi(const QString &msg, int stmtLine);
+  /// @brief 判断语句之后是否需要分号：声明类（class/interface/enum/function）与
+  ///        复合语句（if/for/while/switch）以 } 结尾不需要分号；
+  ///        blockAllowed 为 true 时独立块语句 { } 同样豁免
+  bool stmtNeedsSemi(const Block::Stmt &stmt, bool blockAllowed) const;
   bool isPropertyName(TokenType t) const;
   /// @brief 判断 token 是否可作为参数名；关键字 from 可用作参数名（如 indexOf(sub, from?: Number)）
   bool isParamName(TokenType t) const;
@@ -83,6 +87,13 @@ private:
   bool parseFuncCall(const QString &name, Expr &expr);
   bool parseTemplateString(Expr &expr);
   bool parseMethodDef(MethodDef &md);
+  /// @brief 解析参数列表统一入口（构造器/接口方法/方法/函数表达式原先各写一份）。
+  ///        前置：调用方已消费 '('；返回后停在 ')' 之前，由调用方 expect(')') 收尾。
+  /// @param requireType  参数是否必须带类型注解（接口方法/方法要求，构造器可选）
+  /// @param allowDefault 是否允许 = 字面量默认值（接口方法不允许）
+  /// @param declareVars  参数名是否加入 m_declaredVars（接口方法不注入）
+  bool parseParamList(QVector<ParamDef> &out, bool requireType, bool allowDefault,
+                      bool declareVars);
   /// @brief 解析参数默认值字面量（= 后仅允许 数字/字符串/布尔/null，支持负数）
   /// @param[out] out 解析到的字面量值（Null 类型表示显式 = null）
   bool parseParamDefault(QJsonValue &out);

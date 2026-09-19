@@ -185,11 +185,7 @@ bool AcParser::parseProgram(Block &block) {
       Block::Stmt stmt;
       if (!parseStmt(stmt)) return false;
       block.stmts.append(stmt);
-      if (stmt.kind != Block::Stmt::kClassDef && stmt.kind != Block::Stmt::kInterfaceDef &&
-          stmt.kind != Block::Stmt::kEnumDef && stmt.kind != Block::Stmt::kFuncDef &&
-          stmt.kind != Block::Stmt::kIf && stmt.kind != Block::Stmt::kFor &&
-          stmt.kind != Block::Stmt::kWhile && stmt.kind != Block::Stmt::kSwitch &&
-          stmt.kind != Block::Stmt::kBlock) {
+      if (stmtNeedsSemi(stmt, /*blockAllowed=*/true)) {
         if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.line)) return false;
       }
       continue;
@@ -205,17 +201,25 @@ bool AcParser::parseBlock(Block &block) {
     Block::Stmt stmt;
     if (!parseStmt(stmt)) return false;
     block.stmts.append(stmt);
-    // class/interface/enum/function 定义以 } 结尾，不需要分号
-    // block 和 if/for/while/switch 也以 } 结尾，不需要分号
-    if (stmt.kind != Block::Stmt::kClassDef && stmt.kind != Block::Stmt::kInterfaceDef &&
-        stmt.kind != Block::Stmt::kEnumDef && stmt.kind != Block::Stmt::kFuncDef &&
-        stmt.kind != Block::Stmt::kIf && stmt.kind != Block::Stmt::kFor &&
-        stmt.kind != Block::Stmt::kWhile && stmt.kind != Block::Stmt::kSwitch &&
-        stmt.kind != Block::Stmt::kBlock) {
+    if (stmtNeedsSemi(stmt, /*blockAllowed=*/true)) {
       if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.line)) return false;
     }
   }
   return expect(TOK_RBRACE, QStringLiteral("expected '}'"));
+}
+
+bool AcParser::stmtNeedsSemi(const Block::Stmt &stmt, bool blockAllowed) const {
+  // class/interface/enum/function 定义以 } 结尾，不需要分号
+  // if/for/while/switch 也以 } 结尾，不需要分号
+  if (stmt.kind == Block::Stmt::kClassDef || stmt.kind == Block::Stmt::kInterfaceDef ||
+      stmt.kind == Block::Stmt::kEnumDef || stmt.kind == Block::Stmt::kFuncDef ||
+      stmt.kind == Block::Stmt::kIf || stmt.kind == Block::Stmt::kFor ||
+      stmt.kind == Block::Stmt::kWhile || stmt.kind == Block::Stmt::kSwitch) {
+    return false;
+  }
+  // 独立块语句 { }（blockAllowed=false 时用于单语句位置，保持原行为要求分号）
+  if (blockAllowed && stmt.kind == Block::Stmt::kBlock) return false;
+  return true;
 }
 
 bool AcParser::parseBlockOrStmt(Block &block) {
@@ -225,10 +229,7 @@ bool AcParser::parseBlockOrStmt(Block &block) {
   Block::Stmt stmt;
   if (!parseStmt(stmt)) return false;
   block.stmts.append(stmt);
-  if (stmt.kind != Block::Stmt::kClassDef && stmt.kind != Block::Stmt::kInterfaceDef &&
-      stmt.kind != Block::Stmt::kEnumDef && stmt.kind != Block::Stmt::kFuncDef &&
-      stmt.kind != Block::Stmt::kIf && stmt.kind != Block::Stmt::kFor &&
-      stmt.kind != Block::Stmt::kWhile && stmt.kind != Block::Stmt::kSwitch) {
+  if (stmtNeedsSemi(stmt, /*blockAllowed=*/false)) {
     if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.line)) return false;
   }
   return true;

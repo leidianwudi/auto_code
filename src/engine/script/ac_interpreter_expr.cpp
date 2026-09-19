@@ -26,13 +26,6 @@ namespace {
 /// 运行时错误消息常量（多处复用，统一文案与维护）
 const QString kErrUndefinedVariable = QStringLiteral("undefined variable '%1'");
 const QString kErrUndefinedClass = QStringLiteral("undefined class '%1'");
-
-/// FunMgr 边界适配：AcJsonValue 数组转 QJsonArray（FunMgr::call 签名保持 Qt 类型）
-QJsonArray toQJsonArray(const accore::AcJsonValue &arr) {
-  QJsonArray out;
-  for (const accore::AcJsonValue &v : arr.items()) out.append(v.toQJsonValue());
-  return out;
-}
 }  // namespace
 
 accore::AcJsonValue AcInterpreter::resolveClassAccess(const QString &className,
@@ -314,38 +307,14 @@ accore::AcJsonValue AcInterpreter::evalExpr(const Expr &expr) {
     case Expr::kUnary:
       return evalUnary(expr);
 
-    case Expr::kPreInc: {
-      accore::AcJsonValue val = evalExpr(*expr.operand);
-      double newVal = val.toDouble() + 1;
-      if (expr.operand->kind == Expr::kIdent) {
-        setVar(expr.operand->ident, accore::AcJsonValue(newVal));
-      }
-      return accore::AcJsonValue(newVal);
-    }
-    case Expr::kPreDec: {
-      accore::AcJsonValue val = evalExpr(*expr.operand);
-      double newVal = val.toDouble() - 1;
-      if (expr.operand->kind == Expr::kIdent) {
-        setVar(expr.operand->ident, accore::AcJsonValue(newVal));
-      }
-      return accore::AcJsonValue(newVal);
-    }
-    case Expr::kPostInc: {
-      accore::AcJsonValue val = evalExpr(*expr.operand);
-      double newVal = val.toDouble() + 1;
-      if (expr.operand->kind == Expr::kIdent) {
-        setVar(expr.operand->ident, accore::AcJsonValue(newVal));
-      }
-      return val;
-    }
-    case Expr::kPostDec: {
-      accore::AcJsonValue val = evalExpr(*expr.operand);
-      double newVal = val.toDouble() - 1;
-      if (expr.operand->kind == Expr::kIdent) {
-        setVar(expr.operand->ident, accore::AcJsonValue(newVal));
-      }
-      return val;
-    }
+    case Expr::kPreInc:
+      return applyIncDec(expr, +1.0, false);
+    case Expr::kPreDec:
+      return applyIncDec(expr, -1.0, false);
+    case Expr::kPostInc:
+      return applyIncDec(expr, +1.0, true);
+    case Expr::kPostDec:
+      return applyIncDec(expr, -1.0, true);
 
     case Expr::kAssign: {
       accore::AcJsonValue value = evalExpr(*expr.right);
@@ -524,6 +493,44 @@ accore::AcJsonValue AcInterpreter::evalUnary(const Expr &expr) {
   return accore::AcJsonValue();
 }
 
+// applyIncDec — ++/-- 统一实现（前置/后置）
+// 左值支持三种：标识符（setVar）、属性 obj.prop（回写宿主对象）、
+// 索引 obj[key]（assignToIndex）。此前仅标识符回写，属性/索引自增会静默丢失。
+accore::AcJsonValue AcInterpreter::applyIncDec(const Expr &expr, double delta, bool postReturnOld) {
+  accore::AcJsonValue val = evalExpr(*expr.operand);
+  if (!m_error.isEmpty()) return accore::AcJsonValue();
+
+  const double oldVal = val.toDouble();
+  const double newVal = oldVal + delta;
+  const accore::AcJsonValue result = postReturnOld ? val : accore::AcJsonValue(newVal);
+  const Expr &lv = *expr.operand;
+
+  if (lv.kind == Expr::kIdent) {
+    setVar(lv.ident, accore::AcJsonValue(newVal));
+  } else if (lv.kind == Expr::kPropAccess) {
+    // 简单属性自增：obj.prop++（链式基与表达式级赋值保持同样的限制）
+    if (lv.propObject && lv.propObject->kind == Expr::kIdent) {
+      const QString &baseName = lv.propObject->ident;
+      accore::AcJsonValue obj = resolveVar(baseName);
+      if (!obj.isObject()) {
+        setError(QStringLiteral("cannot set property '%1' on value").arg(lv.prop), expr.line);
+        return accore::AcJsonValue();
+      }
+      obj.set(lv.prop, accore::AcJsonValue(newVal));
+      setVar(baseName, obj);
+    } else {
+      setError(QStringLiteral("unsupported increment/decrement target"), expr.line);
+    }
+  } else if (lv.kind == Expr::kIndexAccess && lv.left->kind == Expr::kIdent) {
+    // 索引自增：obj[key]++ / arr[i]++
+    accore::AcJsonValue target = resolveVar(lv.left->ident);
+    accore::AcJsonValue idxVal = evalExpr(*lv.right);
+    if (!m_error.isEmpty()) return accore::AcJsonValue();
+    assignToIndex(target, idxVal, accore::AcJsonValue(newVal), *lv.left);
+  }
+  return result;
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  内置函数调用
 // ═════════════════════════════════════════════════════════════════════════════
@@ -546,8 +553,8 @@ accore::AcJsonValue AcInterpreter::callBuiltin(const QString &name,
     accore::AcJsonValue callArgs = accore::AcJsonValue::makeArray();
     for (int i = 2; i < arr.size(); ++i) callArgs.append(arr.at(i));
     // FunMgr 签名保持 Qt 类型：参数转 QJsonArray，返回值转回 AcJsonValue
-    accore::AcJsonValue r =
-        accore::AcJsonValue::fromQJsonValue(FunMgr::ins().call(cls, func, toQJsonArray(callArgs)));
+    accore::AcJsonValue r = accore::AcJsonValue::fromQJsonValue(
+        FunMgr::ins().call(cls, func, accore::toQJsonArray(callArgs)));
     QString err = FunMgr::takeError();
     if (!err.isEmpty()) {
       m_error = QStringLiteral("%1 at line %2").arg(err).arg(line);
@@ -560,7 +567,7 @@ accore::AcJsonValue AcInterpreter::callBuiltin(const QString &name,
   if (FunMgr::ins().contains(builtinClass, name)) {
     FunBuiltin::setCurrentLine(line);
     accore::AcJsonValue r = accore::AcJsonValue::fromQJsonValue(
-        FunMgr::ins().call(builtinClass, name, toQJsonArray(arr)));
+        FunMgr::ins().call(builtinClass, name, accore::toQJsonArray(arr)));
     FunBuiltin::setCurrentLine(0);
     QString err = FunMgr::takeError();
     if (!err.isEmpty()) {
@@ -744,7 +751,7 @@ accore::AcJsonValue AcInterpreter::evalClassMethod(const accore::AcJsonValue &ob
     if (!m_error.isEmpty()) return accore::AcJsonValue();
     // FunMgr 签名保持 Qt 类型：this/实参转 QJsonValue/QJsonArray，返回值转回 AcJsonValue
     accore::AcJsonValue r = accore::AcJsonValue::fromQJsonValue(FunMgr::ins().call(
-        className, expr.methodCall.methodName, obj.toQJsonValue(), toQJsonArray(args)));
+        className, expr.methodCall.methodName, obj.toQJsonValue(), accore::toQJsonArray(args)));
     QString err = FunMgr::takeError();
     if (!err.isEmpty()) {
       setError(err, expr.line);
@@ -817,8 +824,9 @@ accore::AcJsonValue AcInterpreter::evalNewInstance(const Expr &expr) {
     accore::AcJsonValue ctorArgs = accore::AcJsonValue::makeArray();
     for (const auto &arg : expr.constructorArgs) ctorArgs.append(evalExpr(*arg));
     if (!m_error.isEmpty()) return accore::AcJsonValue();
-    accore::AcJsonValue ctorResult = accore::AcJsonValue::fromQJsonValue(FunMgr::ins().call(
-        expr.className, QString::fromLatin1(AcRuntime::kConstructor), toQJsonArray(ctorArgs)));
+    accore::AcJsonValue ctorResult = accore::AcJsonValue::fromQJsonValue(
+        FunMgr::ins().call(expr.className, QString::fromLatin1(AcRuntime::kConstructor),
+                           accore::toQJsonArray(ctorArgs)));
     if (ctorResult.isObject()) instance = ctorResult;
     instance.set(QString::fromLatin1(AcRuntime::kClassKey), expr.className);
     // AcObjectManager 边界保持 QJsonObject 签名：传入转 QJsonObject，取出转回 AcJsonValue

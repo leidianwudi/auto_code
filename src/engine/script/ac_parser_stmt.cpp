@@ -644,10 +644,7 @@ bool AcParser::parseSwitchStmt(SwitchStmt &ss) {
         Block::Stmt stmt;
         if (!parseStmt(stmt)) return false;
         sc.body.stmts.append(stmt);
-        if (stmt.kind != Block::Stmt::kIf && stmt.kind != Block::Stmt::kFor &&
-            stmt.kind != Block::Stmt::kWhile && stmt.kind != Block::Stmt::kSwitch &&
-            stmt.kind != Block::Stmt::kClassDef && stmt.kind != Block::Stmt::kInterfaceDef &&
-            stmt.kind != Block::Stmt::kEnumDef && stmt.kind != Block::Stmt::kFuncDef) {
+        if (stmtNeedsSemi(stmt, /*blockAllowed=*/false)) {
           if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.line)) return false;
         }
       }
@@ -662,10 +659,7 @@ bool AcParser::parseSwitchStmt(SwitchStmt &ss) {
         Block::Stmt stmt;
         if (!parseStmt(stmt)) return false;
         sc.body.stmts.append(stmt);
-        if (stmt.kind != Block::Stmt::kIf && stmt.kind != Block::Stmt::kFor &&
-            stmt.kind != Block::Stmt::kWhile && stmt.kind != Block::Stmt::kSwitch &&
-            stmt.kind != Block::Stmt::kClassDef && stmt.kind != Block::Stmt::kInterfaceDef &&
-            stmt.kind != Block::Stmt::kEnumDef && stmt.kind != Block::Stmt::kFuncDef) {
+        if (stmtNeedsSemi(stmt, /*blockAllowed=*/false)) {
           if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.line)) return false;
         }
       }
@@ -740,29 +734,9 @@ bool AcParser::parseClassDef(ClassDef &cd) {
       MethodDef md;
       md.name = QStringLiteral("constructor");
       if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after 'constructor'"))) return false;
-      while (isParamName(peek().type)) {
-        ParamDef pd;
-        const Token nameTok = advance();
-        pd.name = nameTok.text;
-        pd.line = nameTok.line;
-        if (peek().type == TOK_QUESTION) {
-          advance();
-          pd.isOptional = true;
-        }
-        if (peek().type == TOK_COLON) {
-          advance();
-          pd.type = parseType();
-        }
-        // = 字面量 默认值（自动视为可选参数）
-        if (peek().type == TOK_EQUALS) {
-          advance();
-          if (!parseParamDefault(pd.defaultValue)) return false;
-          pd.isOptional = true;
-        }
-        md.params.append(pd);
-        m_declaredVars->insert(pd.name);
-        if (peek().type == TOK_COMMA) advance();
-      }
+      if (!parseParamList(md.params, /*requireType=*/false, /*allowDefault=*/true,
+                          /*declareVars=*/true))
+        return false;
       if (!expect(TOK_RPAREN, QStringLiteral("expected ')' after parameters"))) return false;
       // 支持声明-only 语法：constructor(params);（无函数体，用于 .d.ac 声明文件）
       if (peek().type == TOK_SEMI) {
@@ -828,27 +802,10 @@ bool AcParser::parseInterfaceDef(InterfaceDef &iface) {
       }
       im.name = advance().text;
       if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after method name"))) return false;
-      while (isParamName(peek().type)) {
-        ParamDef pd;
-        const Token nameTok = advance();
-        pd.name = nameTok.text;
-        pd.line = nameTok.line;
-        if (peek().type == TOK_QUESTION) {
-          advance();
-          pd.isOptional = true;
-        }
-        if (peek().type != TOK_COLON) {
-          m_error =
-              QStringLiteral("parameter '%1' requires a type annotation (e.g. %1: Type) at line %2")
-                  .arg(pd.name)
-                  .arg(peek().line);
-          return false;
-        }
-        advance();
-        pd.type = parseType();
-        im.params.append(pd);
-        if (peek().type == TOK_COMMA) advance();
-      }
+      // 接口方法：类型注解必须、无默认值、参数名不注入作用域
+      if (!parseParamList(im.params, /*requireType=*/true, /*allowDefault=*/false,
+                          /*declareVars=*/false))
+        return false;
       if (!expect(TOK_RPAREN, QStringLiteral("expected ')' after parameters"))) return false;
       if (peek().type == TOK_COLON) {
         advance();
@@ -947,6 +904,40 @@ bool AcParser::parseParamDefault(QJsonValue &out) {
   }
 }
 
+bool AcParser::parseParamList(QVector<ParamDef> &out, bool requireType, bool allowDefault,
+                              bool declareVars) {
+  while (isParamName(peek().type)) {
+    ParamDef pd;
+    const Token nameTok = advance();
+    pd.name = nameTok.text;
+    pd.line = nameTok.line;
+    if (peek().type == TOK_QUESTION) {
+      advance();
+      pd.isOptional = true;
+    }
+    if (peek().type == TOK_COLON) {
+      advance();
+      pd.type = parseType();
+    } else if (requireType) {
+      m_error =
+          QStringLiteral("parameter '%1' requires a type annotation (e.g. %1: Type) at line %2")
+              .arg(pd.name)
+              .arg(peek().line);
+      return false;
+    }
+    // = 字面量 默认值（自动视为可选参数）
+    if (allowDefault && peek().type == TOK_EQUALS) {
+      advance();
+      if (!parseParamDefault(pd.defaultValue)) return false;
+      pd.isOptional = true;
+    }
+    out.append(pd);
+    if (declareVars) m_declaredVars->insert(pd.name);
+    if (peek().type == TOK_COMMA) advance();
+  }
+  return true;
+}
+
 bool AcParser::parseMethodDef(MethodDef &md) {
   // dispose 是语言关键字（TOK_DISPOSE），但允许作为方法名使用（using/dispose 模式）
   if (peek().type != TOK_IDENT && peek().type != TOK_DISPOSE) {
@@ -958,34 +949,9 @@ bool AcParser::parseMethodDef(MethodDef &md) {
 
   if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after method name"))) return false;
 
-  while (isParamName(peek().type)) {
-    ParamDef pd;
-    const Token nameTok = advance();
-    pd.name = nameTok.text;
-    pd.line = nameTok.line;
-    if (peek().type == TOK_QUESTION) {
-      advance();
-      pd.isOptional = true;
-    }
-    if (peek().type != TOK_COLON) {
-      m_error =
-          QStringLiteral("parameter '%1' requires a type annotation (e.g. %1: Type) at line %2")
-              .arg(pd.name)
-              .arg(peek().line);
-      return false;
-    }
-    advance();
-    pd.type = parseType();
-    // = 字面量 默认值（自动视为可选参数）
-    if (peek().type == TOK_EQUALS) {
-      advance();
-      if (!parseParamDefault(pd.defaultValue)) return false;
-      pd.isOptional = true;
-    }
-    md.params.append(pd);
-    m_declaredVars->insert(pd.name);
-    if (peek().type == TOK_COMMA) advance();
-  }
+  if (!parseParamList(md.params, /*requireType=*/true, /*allowDefault=*/true,
+                      /*declareVars=*/true))
+    return false;
 
   if (!expect(TOK_RPAREN, QStringLiteral("expected ')' after parameters"))) return false;
 

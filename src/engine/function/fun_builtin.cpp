@@ -13,6 +13,7 @@
 #include "../ac_language.h"
 #include "../ac_value_str.h"
 #include "../tpl/tpl_engine.h"
+#include "fun_args.h"
 #include "fun_mgr.h"
 #include "src/util/common/code_constants.h"
 #include "src/util/common/util_json.h"
@@ -56,11 +57,10 @@ void FunBuiltin::init() {
 // ============================================================================
 
 QJsonValue FunBuiltin::renderTpl(const QJsonArray &args) {
-  if (args.size() < 2) {
-    FunMgr::setError(
-        QStringLiteral("renderTpl() requires 2 arguments: template path and data object"));
+  if (!FunArgs::requireCount(
+          args, 2,
+          QStringLiteral("renderTpl() requires 2 arguments: template path and data object")))
     return QJsonValue();
-  }
 
   QString tplPath = args[0].toString();
   QFileInfo tplInfo(tplPath);
@@ -96,10 +96,8 @@ QJsonValue FunBuiltin::renderTpl(const QJsonArray &args) {
 
 QJsonValue FunBuiltin::readFile(const QJsonArray &args) {
   // 参数校验：需要文件路径
-  if (args.isEmpty() || !args[0].isString()) {
-    FunMgr::setError(QStringLiteral("readFile() requires a file path argument"));
+  if (!FunArgs::requireString(args, 0, QStringLiteral("readFile() requires a file path argument")))
     return QJsonValue();
-  }
 
   // 检查文件是否存在
   QString path = args[0].toString();
@@ -116,10 +114,11 @@ QJsonValue FunBuiltin::readFile(const QJsonArray &args) {
 // ============================================================================
 
 QJsonValue FunBuiltin::writeFile(const QJsonArray &args) {
-  if (args.size() < 2 || !args[0].isString()) {
-    FunMgr::setError(QStringLiteral("writeFile() requires 2 arguments: file path and content"));
+  if (!FunArgs::requireCount(
+          args, 2, QStringLiteral("writeFile() requires 2 arguments: file path and content")) ||
+      !FunArgs::requireString(
+          args, 0, QStringLiteral("writeFile() requires 2 arguments: file path and content")))
     return QJsonValue();
-  }
   QJsonValue r = FunMgr::ins().call(QString::fromLatin1(AcFile::kClassName),
                                     QString::fromLatin1(AcFile::kWrite), args);
   if (r.toBool(false) && s_ctx.generatedFiles && !args.isEmpty())
@@ -241,11 +240,9 @@ QJsonValue FunBuiltin::scriptDir(const QJsonArray & /*args*/) {
 // ============================================================================
 
 QJsonValue FunBuiltin::merge(const QJsonArray &args) {
-  if (args.size() < 2) {
-    FunMgr::setError(
-        QStringLiteral("merge() requires 2 arguments: target object and source object"));
+  if (!FunArgs::requireCount(
+          args, 2, QStringLiteral("merge() requires 2 arguments: target object and source object")))
     return QJsonValue();
-  }
 
   QJsonObject result = args[0].toObject();
   QJsonObject ob = args[1].toObject();
@@ -259,10 +256,8 @@ QJsonValue FunBuiltin::merge(const QJsonArray &args) {
 // ============================================================================
 
 QJsonValue FunBuiltin::basename(const QJsonArray &args) {
-  if (args.isEmpty() || !args[0].isString()) {
-    FunMgr::setError(QStringLiteral("basename() requires a file path argument"));
+  if (!FunArgs::requireString(args, 0, QStringLiteral("basename() requires a file path argument")))
     return QJsonValue();
-  }
 
   return QJsonValue(QFileInfo(args[0].toString()).completeBaseName());
 }
@@ -272,10 +267,8 @@ QJsonValue FunBuiltin::basename(const QJsonArray &args) {
 // ============================================================================
 
 QJsonValue FunBuiltin::fileName(const QJsonArray &args) {
-  if (args.isEmpty() || !args[0].isString()) {
-    FunMgr::setError(QStringLiteral("fileName() requires a file path argument"));
+  if (!FunArgs::requireString(args, 0, QStringLiteral("fileName() requires a file path argument")))
     return QJsonValue();
-  }
 
   return QJsonValue(QFileInfo(args[0].toString()).fileName());
 }
@@ -285,10 +278,9 @@ QJsonValue FunBuiltin::fileName(const QJsonArray &args) {
 // ============================================================================
 
 QJsonValue FunBuiltin::fileExists(const QJsonArray &args) {
-  if (args.isEmpty() || !args[0].isString()) {
-    FunMgr::setError(QStringLiteral("fileExists() requires a file path argument"));
+  if (!FunArgs::requireString(args, 0,
+                              QStringLiteral("fileExists() requires a file path argument")))
     return QJsonValue();
-  }
 
   return QJsonValue(QFileInfo::exists(args[0].toString()));
 }
@@ -313,11 +305,11 @@ QJsonValue FunBuiltin::fileExists(const QJsonArray &args) {
 //   formatPath("{base}/{name}.ts", {base:"D:/out", name:"user"})
 //   → "D:/out/user.ts"
 QJsonValue FunBuiltin::formatPath(const QJsonArray &args) {
-  if (args.size() < 2 || !args[0].isString() || !args[1].isObject()) {
-    FunMgr::setError(
-        QStringLiteral("formatPath() requires 2 arguments: pattern string and data object"));
+  const QString fmtErr =
+      QStringLiteral("formatPath() requires 2 arguments: pattern string and data object");
+  if (!FunArgs::requireCount(args, 2, fmtErr) || !FunArgs::requireString(args, 0, fmtErr) ||
+      !FunArgs::requireObject(args, 1, fmtErr))
     return QJsonValue();
-  }
 
   QString pattern = args[0].toString();
   QJsonObject data = args[1].toObject();
@@ -394,10 +386,9 @@ QJsonValue FunBuiltin::formatPath(const QJsonArray &args) {
 // ============================================================================
 
 QJsonValue FunBuiltin::assertFn(const QJsonArray &args) {
-  if (args.size() < 1) {
-    FunMgr::setError(QStringLiteral("assert() requires at least 1 argument: condition"));
+  if (!FunArgs::requireCount(args, 1,
+                             QStringLiteral("assert() requires at least 1 argument: condition")))
     return QJsonValue();
-  }
 
   bool condition = false;
   const QJsonValue &condVal = args[0];

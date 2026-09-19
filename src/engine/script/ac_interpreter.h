@@ -111,6 +111,9 @@ private:
                         accore::AcJsonValue newVal, const Expr &objectExpr, CompoundOp op);
   accore::AcJsonValue evalBinary(const Expr &expr);
   accore::AcJsonValue evalUnary(const Expr &expr);
+  /// @brief 执行 ++/-- 统一入口（前置/后置）：支持标识符、属性（obj.prop）、
+  ///        索引（obj[key]）三种左值的回写；postReturnOld 为 true 时返回旧值（后置语义）
+  accore::AcJsonValue applyIncDec(const Expr &expr, double delta, bool postReturnOld);
   accore::AcJsonValue evalMethodCall(const Expr &expr);
   accore::AcJsonValue evalJSONBuiltin(const Expr &expr);
   accore::AcJsonValue resolveMethodCallTarget(const Expr &expr);
@@ -189,6 +192,8 @@ private:
   int m_callDepth = 0;
   QVector<AcDebugFrame> m_callStack;  ///< 调用栈（仅调试时维护）
   AcObjectManager m_objMgr;
+  /// 环回收节流：上次 mark-sweep 时的托管对象数（popScope 用，避免每次退出作用域全堆清扫）
+  int m_objectsAtLastGc = 0;
   QVector<QHash<QString, accore::AcJsonValue>> m_scopeStack;
   QVector<QVector<QString>> m_usingStack;
   /// 变量声明位置（与 m_scopeStack 一一对应）：变量名 → (文件, 行号)

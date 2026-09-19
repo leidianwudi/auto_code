@@ -11,6 +11,7 @@
 #include <QString>
 
 #include "../ac_language.h"
+#include "fun_args.h"
 #include "fun_mgr.h"
 #include "src/util/common/util_json.h"
 
@@ -22,10 +23,9 @@ void FunJson::init() {
 
 // readJson — 读取 JSON 文件
 QJsonValue FunJson::readJson(const QJsonArray &args) {
-  if (args.isEmpty() || !args[0].isString()) {
-    FunMgr::setError(QStringLiteral("readJson() requires a file path argument"));
+  if (!FunArgs::requireString(args, 0,
+                              QStringLiteral("readJson() requires a file path argument")))
     return QJsonObject();
-  }
 
   QJsonParseError parseError;
   QJsonDocument doc = UtilJson::loadFile(args[0].toString(), &parseError);

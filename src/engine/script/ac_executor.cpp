@@ -14,6 +14,68 @@
 #include "ac_builtin_loader.h"
 #include "undeclared_ident_validator.h"
 
+namespace {
+// stmtSymbolName — 提取声明/赋值语句的符号名（其余语句类型返回空串）。
+// 统一原先在模块链接中重复 4 处的按 kind 取名逻辑。
+QString stmtSymbolName(const Block::Stmt &stmt) {
+  switch (stmt.kind) {
+    case Block::Stmt::kAssign:
+      return stmt.assign.name;
+    case Block::Stmt::kClassDef:
+      return stmt.classDef.name;
+    case Block::Stmt::kFuncDef:
+      return stmt.funcDef.name;
+    case Block::Stmt::kInterfaceDef:
+      return stmt.interfaceDef.name;
+    case Block::Stmt::kEnumDef:
+      return stmt.enumDef.name;
+    default:
+      return QString();
+  }
+}
+
+// stmtIsExported — 该语句是否带 export 标记
+bool stmtIsExported(const Block::Stmt &stmt) {
+  switch (stmt.kind) {
+    case Block::Stmt::kAssign:
+      return stmt.assign.isExported;
+    case Block::Stmt::kClassDef:
+      return stmt.classDef.isExported;
+    case Block::Stmt::kFuncDef:
+      return stmt.funcDef.isExported;
+    case Block::Stmt::kInterfaceDef:
+      return stmt.interfaceDef.isExported;
+    case Block::Stmt::kEnumDef:
+      return stmt.enumDef.isExported;
+    default:
+      return false;
+  }
+}
+
+// stmtSetSymbolName — 就地重命名语句的符号名（import 别名注入用）
+void stmtSetSymbolName(Block::Stmt &stmt, const QString &name) {
+  switch (stmt.kind) {
+    case Block::Stmt::kAssign:
+      stmt.assign.name = name;
+      break;
+    case Block::Stmt::kClassDef:
+      stmt.classDef.name = name;
+      break;
+    case Block::Stmt::kFuncDef:
+      stmt.funcDef.name = name;
+      break;
+    case Block::Stmt::kInterfaceDef:
+      stmt.interfaceDef.name = name;
+      break;
+    case Block::Stmt::kEnumDef:
+      stmt.enumDef.name = name;
+      break;
+    default:
+      break;
+  }
+}
+}  // namespace
+
 AcExecutor::AcExecutor() = default;
 
 /**
@@ -269,32 +331,8 @@ bool AcExecutor::linkImportsRecursive(Block &program, const QString &baseDir,
 
     // 从目标 AST 中提取 export 符号并注入当前程序
     for (const auto &stmt : moduleAst.stmts) {
-      bool isExported = false;
-
-      if (stmt.kind == Block::Stmt::kAssign && stmt.assign.isExported) {
-        isExported = true;
-      } else if (stmt.kind == Block::Stmt::kClassDef && stmt.classDef.isExported) {
-        isExported = true;
-      } else if (stmt.kind == Block::Stmt::kFuncDef && stmt.funcDef.isExported) {
-        isExported = true;
-      } else if (stmt.kind == Block::Stmt::kInterfaceDef && stmt.interfaceDef.isExported) {
-        isExported = true;
-      } else if (stmt.kind == Block::Stmt::kEnumDef && stmt.enumDef.isExported) {
-        isExported = true;
-      }
-
-      // 调试输出
-      QString stmtName;
-      if (stmt.kind == Block::Stmt::kAssign)
-        stmtName = stmt.assign.name;
-      else if (stmt.kind == Block::Stmt::kClassDef)
-        stmtName = stmt.classDef.name;
-      else if (stmt.kind == Block::Stmt::kFuncDef)
-        stmtName = stmt.funcDef.name;
-      else if (stmt.kind == Block::Stmt::kInterfaceDef)
-        stmtName = stmt.interfaceDef.name;
-      else if (stmt.kind == Block::Stmt::kEnumDef)
-        stmtName = stmt.enumDef.name;
+      const bool isExported = stmtIsExported(stmt);
+      const QString stmtName = stmtSymbolName(stmt);
 #ifdef AC_DEBUG
       qDebug() << "  stmt kind:" << (int)stmt.kind << "name:" << stmtName
                << "isExported:" << isExported;
@@ -302,26 +340,15 @@ bool AcExecutor::linkImportsRecursive(Block &program, const QString &baseDir,
 
       if (!isExported) continue;
 
-      // 检查是否在 import 列表中
-      QString exportName;
-      if (stmt.kind == Block::Stmt::kAssign) {
-        exportName = stmt.assign.name;
-      } else if (stmt.kind == Block::Stmt::kClassDef) {
-        exportName = stmt.classDef.name;
-      } else if (stmt.kind == Block::Stmt::kFuncDef) {
-        exportName = stmt.funcDef.name;
-      } else if (stmt.kind == Block::Stmt::kInterfaceDef) {
-        exportName = stmt.interfaceDef.name;
-      } else if (stmt.kind == Block::Stmt::kEnumDef) {
-        exportName = stmt.enumDef.name;
-      }
-
+      // 检查是否在 import 列表中（exportName 即符号名）
+      const QString exportName = stmtName;
       if (!imp.names.contains(exportName)) {
         // 不在 import 列表中的导出符号也注入，作为依赖：
         // - 类：类型依赖（例如 Param 内部使用 RelationDef）
-        // - 函数：已导出函数的传递依赖（例如 main_api 使用 tool_str 的 escapeJsStr/capitalizeFirst）
-        if (isExported && (stmt.kind == Block::Stmt::kClassDef ||
-                           stmt.kind == Block::Stmt::kFuncDef)) {
+        // - 函数：已导出函数的传递依赖（例如 main_api 使用 tool_str 的
+        // escapeJsStr/capitalizeFirst）
+        if (isExported &&
+            (stmt.kind == Block::Stmt::kClassDef || stmt.kind == Block::Stmt::kFuncDef)) {
           importedStmts.append(stmt);
         }
         continue;
@@ -333,17 +360,7 @@ bool AcExecutor::linkImportsRecursive(Block &program, const QString &baseDir,
       QString localName = exportName;
       if (imp.aliases.contains(exportName)) {
         localName = imp.aliases[exportName];
-        if (renamedStmt.kind == Block::Stmt::kAssign) {
-          renamedStmt.assign.name = localName;
-        } else if (renamedStmt.kind == Block::Stmt::kClassDef) {
-          renamedStmt.classDef.name = localName;
-        } else if (renamedStmt.kind == Block::Stmt::kFuncDef) {
-          renamedStmt.funcDef.name = localName;
-        } else if (renamedStmt.kind == Block::Stmt::kInterfaceDef) {
-          renamedStmt.interfaceDef.name = localName;
-        } else if (renamedStmt.kind == Block::Stmt::kEnumDef) {
-          renamedStmt.enumDef.name = localName;
-        }
+        stmtSetSymbolName(renamedStmt, localName);
       }
       importedStmts.append(renamedStmt);
 
@@ -357,18 +374,10 @@ bool AcExecutor::linkImportsRecursive(Block &program, const QString &baseDir,
     // 检查所有导入名是否都找到了
     QSet<QString> foundNames;
     for (const auto &stmt : moduleAst.stmts) {
-      QString name;
-      if (stmt.kind == Block::Stmt::kAssign && stmt.assign.isExported)
-        name = stmt.assign.name;
-      else if (stmt.kind == Block::Stmt::kClassDef && stmt.classDef.isExported)
-        name = stmt.classDef.name;
-      else if (stmt.kind == Block::Stmt::kFuncDef && stmt.funcDef.isExported)
-        name = stmt.funcDef.name;
-      else if (stmt.kind == Block::Stmt::kInterfaceDef && stmt.interfaceDef.isExported)
-        name = stmt.interfaceDef.name;
-      else if (stmt.kind == Block::Stmt::kEnumDef && stmt.enumDef.isExported)
-        name = stmt.enumDef.name;
-      if (!name.isEmpty()) foundNames.insert(name);
+      if (stmtIsExported(stmt)) {
+        const QString name = stmtSymbolName(stmt);
+        if (!name.isEmpty()) foundNames.insert(name);
+      }
     }
 
     for (const auto &name : imp.names) {

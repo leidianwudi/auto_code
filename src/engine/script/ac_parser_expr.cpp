@@ -518,30 +518,9 @@ bool AcParser::parsePrimary(Expr &expr) {
         expr.funcExpr.name = QStringLiteral("__anonymous__");
       }
       if (!expect(TOK_LPAREN, QStringLiteral("expected '(' in function expression"))) return false;
-      while (isParamName(peek().type)) {
-        ParamDef pd;
-        const Token nameTok = advance();
-        pd.name = nameTok.text;
-        pd.line = nameTok.line;
-        if (peek().type != TOK_COLON) {
-          m_error =
-              QStringLiteral("parameter '%1' requires a type annotation (e.g. %1: Type) at line %2")
-                  .arg(pd.name)
-                  .arg(peek().line);
-          return false;
-        }
-        advance();
-        pd.type = parseType();
-        // = 字面量 默认值（自动视为可选参数）
-        if (peek().type == TOK_EQUALS) {
-          advance();
-          if (!parseParamDefault(pd.defaultValue)) return false;
-          pd.isOptional = true;
-        }
-        expr.funcExpr.params.append(pd);
-        m_declaredVars->insert(pd.name);
-        if (peek().type == TOK_COMMA) advance();
-      }
+      if (!parseParamList(expr.funcExpr.params, /*requireType=*/true, /*allowDefault=*/true,
+                          /*declareVars=*/true))
+        return false;
       if (!expect(TOK_RPAREN, QStringLiteral("expected ')' after parameters"))) return false;
       if (peek().type != TOK_COLON) {
         m_error = QStringLiteral(

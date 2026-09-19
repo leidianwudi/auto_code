@@ -13,6 +13,7 @@
 #include <QTextStream>
 
 #include "../ac_language.h"
+#include "fun_args.h"
 #include "fun_mgr.h"
 
 void FunFile::init() {
@@ -29,10 +30,9 @@ void FunFile::init() {
 
 QJsonValue FunFile::read(const QJsonArray &args) {
   // 参数校验：需要一个文件路径字符串参数
-  if (args.isEmpty() || !args[0].isString()) {
-    FunMgr::setError(QStringLiteral("File::read() requires a file path argument"));
+  if (!FunArgs::requireString(args, 0,
+                              QStringLiteral("File::read() requires a file path argument")))
     return QJsonValue();
-  }
 
   const QString path = args[0].toString();
 
@@ -58,10 +58,11 @@ QJsonValue FunFile::read(const QJsonArray &args) {
 
 QJsonValue FunFile::write(const QJsonArray &args) {
   // 参数校验：需要 path 和 content 两个字符串参数
-  if (args.size() < 2 || !args[0].isString() || !args[1].isString()) {
-    FunMgr::setError(QStringLiteral("File::write() requires 2 arguments: file path and content"));
+  const QString writeErr =
+      QStringLiteral("File::write() requires 2 arguments: file path and content");
+  if (!FunArgs::requireCount(args, 2, writeErr) || !FunArgs::requireString(args, 0, writeErr) ||
+      !FunArgs::requireString(args, 1, writeErr))
     return QJsonValue();
-  }
 
   const QString path = args[0].toString();
   const QString content = args[1].toString();

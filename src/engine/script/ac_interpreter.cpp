@@ -100,7 +100,20 @@ void AcInterpreter::popScope() {
     releaseDeep(it.value());
   }
   if (!m_varLocStack.isEmpty()) m_varLocStack.takeLast();
-  collectCycles();
+
+  // 环回收节流：不在每次退出作用域时都做全堆 mark-sweep——
+  // for/for-in 循环逐轮 push/pop 作用域，若每轮都全堆回收，整体复杂度近似 O(n²)。
+  // 改为两类触发时机：
+  //   1) 托管对象数自上次回收后增长超过阈值（分配驱动，循环体内不反弹）
+  //   2) 作用域栈清空（脚本/函数执行边界，兜底保证最终回收）
+  // 引用计数的确定性析构（releaseDeep → releaseIfInstanceWithDestruct）不受影响，
+  // 延迟的只是循环引用垃圾的清扫时机。
+  constexpr int kGcGrowthThreshold = 64;
+  const int objCount = m_objMgr.objectCount();
+  if (m_scopeStack.isEmpty() || objCount - m_objectsAtLastGc >= kGcGrowthThreshold) {
+    collectCycles();
+    m_objectsAtLastGc = m_objMgr.objectCount();
+  }
 }
 
 void AcInterpreter::recordVarLoc(const QString &name, const QString &filePath, int line) {
@@ -284,6 +297,7 @@ accore::AcJsonValue AcInterpreter::execute(const Block &program, QString &error)
 
   FunMgr::init();
   FunBuiltin::setContext({m_scriptDir, m_rootDir, m_logCallback, &m_generatedFiles, 0});
+  m_objectsAtLastGc = 0;  // 环回收节流基线随每次执行重置
 
   for (const auto &stmt : program.stmts) {
     switch (stmt.kind) {

@@ -7,7 +7,8 @@
  * - 赋值给属性/数组时自动 retain
  * - 引用计数归零时标记为待析构，由 AcInterpreter 统一调用 __destruct__
  *
- * 不处理循环引用（ac 脚本无闭包，不存在循环引用场景）。
+ * 引用计数负责确定性释放（离开作用域即析构）；循环引用由
+ * AcInterpreter 的 mark-sweep 周期回收兜底（见 ac_interpreter.cpp 的 collectCycles）。
  */
 
 #pragma once

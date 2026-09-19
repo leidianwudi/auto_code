@@ -1,0 +1,10 @@
+{
+  meta: {
+    dataMethod: 'POST',
+    dataUrl: 'shop/selectByIn',
+    description: '商店管理/店铺设置',
+    noDelete: false,
+    noDetail: false,
+    noEdit: false,
+  },
+}

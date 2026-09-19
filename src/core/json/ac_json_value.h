@@ -23,6 +23,7 @@
 #pragma once
 
 #include <QHash>
+#include <QJsonArray>
 #include <QJsonValue>
 #include <QString>
 #include <QStringList>
@@ -159,5 +160,13 @@ struct AcJsonValue::Member {
   QString key;
   AcJsonValue value;
 };
+
+/// 数组边界互转：AcJsonValue 数组转 QJsonArray。
+/// 供 FunMgr 等保持 Qt 签名的接口使用（原先在解释器两个编译单元里各自重复定义）。
+inline QJsonArray toQJsonArray(const AcJsonValue &arr) {
+  QJsonArray out;
+  for (const AcJsonValue &v : arr.items()) out.append(v.toQJsonValue());
+  return out;
+}
 
 }  // namespace accore

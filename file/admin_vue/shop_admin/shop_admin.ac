@@ -1,0 +1,27 @@
+// ============================================================================
+//shop_admin.ac — 后台管理界面代码生成入口脚本
+// ----------------------------------------------------------------------------
+// 本脚本只包含 "shop_admin 项目" 相关的参数配置，
+// 具体的代码生成逻辑（.jsonvue 解析、数据加工、模板渲染）统一放在
+//   ../template/main_admin.ac 的 generateAdminMain() 中。
+//
+// 流程：
+//   1. 配置 HTTP 通用参数（可视化编辑器"生成"按钮使用）
+//   2. 配置输出根目录
+//   3. 调用 generateAdminMain() 生成 Vue 文件
+// ============================================================================
+import { generateAdminMain } from "../template/main_admin.ac";
+
+main {
+  // ── 1. 输出文件的根目录 ──────────────────────────────────────────
+  let basePath: String = "D:/work/github/shop_admin";
+  //测试目录：d:/work/github/auto_code/build/outtest
+  //let basePath: String = "d:/work/github/auto_code/build/outtest";
+  // ── 2. 组装项目参数并调用通用生成逻辑 ────────────────────────────
+  let params: Object = {
+    basePath: basePath
+  };
+  generateAdminMain(params);
+
+  printLog("--- shop_admin 生成结束 ---");
+}

@@ -22,6 +22,17 @@
 QHash<QString, MYSQL *> FunDb::s_connections;
 QHash<QString, AcDB::DbConfig> FunDb::s_configs;
 
+// escapeSqlLiteral — 把字符串转义为可安全嵌入 SQL 单引号字面量的形式
+// 使用连接的字符集做转义（含引号/反斜杠），防止表名/库名中的特殊字符
+// 破坏 SQL 结构（注入或查询失败）。仅在已建立连接后调用。
+static QString escapeSqlLiteral(MYSQL *conn, const QString &value) {
+  const QByteArray utf8 = value.toUtf8();
+  QByteArray buf(utf8.size() * 2 + 1, '\0');
+  const unsigned long n =
+      mysql_real_escape_string_quote(conn, buf.data(), utf8.constData(), utf8.size(), '\'');
+  return QString::fromUtf8(buf.data(), static_cast<int>(n));
+}
+
 // init — 注册所有数据库函数到 FunMgr
 void FunDb::init() {
   // 注册原生类 DB 的构造器（纯参数，new DB({...}) 时调用）
@@ -170,7 +181,7 @@ QJsonValue FunDb::tableSchema(const QJsonValue &thisObj, const QJsonArray &args)
                           "FROM INFORMATION_SCHEMA.COLUMNS "
                           "WHERE TABLE_SCHEMA = '%1' AND TABLE_NAME = '%2' "
                           "ORDER BY ORDINAL_POSITION")
-                          .arg(cfg.database, table);
+                          .arg(escapeSqlLiteral(conn, cfg.database), escapeSqlLiteral(conn, table));
 
   QJsonArray columns;
 
@@ -235,7 +246,7 @@ QJsonValue FunDb::tableInfo(const QJsonValue &thisObj, const QJsonArray &args) {
                           "SELECT TABLE_COMMENT, ENGINE "
                           "FROM INFORMATION_SCHEMA.TABLES "
                           "WHERE TABLE_SCHEMA = '%1' AND TABLE_NAME = '%2'")
-                          .arg(cfg.database, table);
+                          .arg(escapeSqlLiteral(conn, cfg.database), escapeSqlLiteral(conn, table));
 
   if (mysql_query(conn, sql.toUtf8().constData()) != 0) {
     FunMgr::setError(QStringLiteral("DB::tableInfo() query failed: %1")

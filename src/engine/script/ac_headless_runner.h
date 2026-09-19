@@ -17,9 +17,11 @@
 
 #pragma once
 
-#include <cstdio>
+#include <QCoreApplication>
+#include <QDir>
 #include <QStringList>
 #include <QTextStream>
+#include <cstdio>
 
 #include "ac_engine.h"
 #include "src/engine/function/fun_mgr.h"
@@ -32,9 +34,18 @@ inline int runAcScriptHeadless(const QStringList &args) {
   if (runIdx < 0 || runIdx + 1 >= args.size()) return -1;
 
   const QString scriptPath = args.at(runIdx + 1);
-  // 注意：默认根目录用大写盘符 D:/，与脚本路径的盘符大小写保持一致，
+  // 根目录解析优先级：--root 参数 > 环境变量 AC_AUTO_CODE_ROOT >
+  // 可执行文件相对路径（build/<config>/ 上两级的 file/）> 本机开发默认路径。
+  // 注意：默认值用大写盘符 D:/，与脚本路径的盘符大小写保持一致，
   // 否则 getCheckedFiles(basePath) 的 startsWith 前缀过滤会因大小写不匹配而失效
-  QString rootDir = QStringLiteral("D:/work/github/auto_code/file");
+  QString rootDir = []() {
+    if (const QByteArray env = qgetenv("AC_AUTO_CODE_ROOT"); !env.isEmpty())
+      return QString::fromUtf8(env);
+    const QString candidate =
+        QDir::cleanPath(QCoreApplication::applicationDirPath() + QStringLiteral("/../../file"));
+    if (QDir(candidate).exists()) return candidate;
+    return QStringLiteral("D:/work/github/auto_code/file");
+  }();
   const int rootIdx = args.indexOf(QStringLiteral("--root"));
   if (rootIdx >= 0 && rootIdx + 1 < args.size()) rootDir = args.at(rootIdx + 1);
 
