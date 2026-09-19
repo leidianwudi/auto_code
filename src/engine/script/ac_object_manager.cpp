@@ -52,6 +52,22 @@ QString AcObjectManager::getObjId(const QJsonValue &val) {
   return val.toObject().value(QString::fromLatin1(AcRuntime::kObjId)).toString();
 }
 
+// accore 原生重载：has/value 直接读取内部成员，无 AcJsonValue→QJsonObject 深拷贝
+bool AcObjectManager::isManagedInstance(const accore::AcJsonValue &val) {
+  if (!val.isObject()) return false;
+  return val.has(QString::fromLatin1(AcRuntime::kObjId));
+}
+
+QString AcObjectManager::getObjId(const accore::AcJsonValue &val) {
+  if (!val.isObject()) return QString();
+  return val.value(QString::fromLatin1(AcRuntime::kObjId)).toString();
+}
+
+accore::AcJsonValue AcObjectManager::getAcObject(const QString &objId) const {
+  // m_objects 存储的是 QJsonObject（与 FunMgr/析构边界保持一致），此处一次性转回
+  return accore::AcJsonValue::fromQJsonValue(m_objects.value(objId));
+}
+
 QVector<AcObjectManager::DestructInfo> AcObjectManager::takePendingDestructs() {
   QVector<DestructInfo> result = std::move(m_pendingDestructs);
   m_pendingDestructs.clear();

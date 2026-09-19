@@ -43,6 +43,8 @@ private:
   bool isPropertyName(TokenType t) const;
   /// @brief 判断 token 是否可作为参数名；关键字 from 可用作参数名（如 indexOf(sub, from?: Number)）
   bool isParamName(TokenType t) const;
+  /// @brief 前瞻：语句开头 ident[...] 的匹配 ']' 之后是否紧跟 ++/--（索引自增语句判定，不消耗 token）
+  bool indexTargetFollowedByIncDec() const;
 
   // ── 二元运算解析辅助（模板化，消除重复代码） ──
   using ParseNextFn = bool (AcParser::*)(Expr &);

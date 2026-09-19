@@ -6,7 +6,6 @@
 #include "json_validator.h"
 
 #include <QJsonParseError>
-#include <QTextBlock>
 
 #include "src/util/common/code_constants.h"
 #include "src/util/common/util_json.h"

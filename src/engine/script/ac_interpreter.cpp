@@ -39,10 +39,9 @@ void AcInterpreter::setVar(const QString &name, const accore::AcJsonValue &val) 
   for (int i = m_scopeStack.size() - 1; i >= 0; --i) {
     if (m_scopeStack[i].contains(name)) {
       const accore::AcJsonValue &old = m_scopeStack[i][name];
-      if (AcObjectManager::isManagedInstance(old.toQJsonValue()) &&
-          AcObjectManager::isManagedInstance(val.toQJsonValue()) &&
-          AcObjectManager::getObjId(old.toQJsonValue()) ==
-              AcObjectManager::getObjId(val.toQJsonValue())) {
+      // 自赋值检测走 accore 原生接口，避免每次赋值 4 次 AcJsonValue→QJsonObject 深拷贝
+      if (AcObjectManager::isManagedInstance(old) && AcObjectManager::isManagedInstance(val) &&
+          AcObjectManager::getObjId(old) == AcObjectManager::getObjId(val)) {
         m_scopeStack[i][name] = val;
         return;
       }
@@ -143,18 +142,18 @@ bool AcInterpreter::isTruthy(const accore::AcJsonValue &cond) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 void AcInterpreter::retainIfInstance(const accore::AcJsonValue &val) {
-  if (!AcObjectManager::isManagedInstance(val.toQJsonValue())) return;
-  m_objMgr.retain(AcObjectManager::getObjId(val.toQJsonValue()));
+  if (!AcObjectManager::isManagedInstance(val)) return;
+  m_objMgr.retain(AcObjectManager::getObjId(val));
 }
 
 void AcInterpreter::releaseIfInstance(const accore::AcJsonValue &val) {
-  if (!AcObjectManager::isManagedInstance(val.toQJsonValue())) return;
-  m_objMgr.release(AcObjectManager::getObjId(val.toQJsonValue()));
+  if (!AcObjectManager::isManagedInstance(val)) return;
+  m_objMgr.release(AcObjectManager::getObjId(val));
 }
 
 void AcInterpreter::releaseIfInstanceWithDestruct(const accore::AcJsonValue &val) {
-  if (!AcObjectManager::isManagedInstance(val.toQJsonValue())) return;
-  m_objMgr.release(AcObjectManager::getObjId(val.toQJsonValue()));
+  if (!AcObjectManager::isManagedInstance(val)) return;
+  m_objMgr.release(AcObjectManager::getObjId(val));
   QVector<AcObjectManager::DestructInfo> pending = m_objMgr.takePendingDestructs();
   for (const auto &info : pending) {
     processDestructInfo(info);
@@ -198,7 +197,7 @@ void AcInterpreter::traverseNested(
 }
 
 void AcInterpreter::releaseDeep(const accore::AcJsonValue &val) {
-  if (AcObjectManager::isManagedInstance(val.toQJsonValue())) {
+  if (AcObjectManager::isManagedInstance(val)) {
     releaseIfInstanceWithDestruct(val);
     return;
   }
@@ -210,11 +209,12 @@ void AcInterpreter::releaseDeep(const accore::AcJsonValue &val) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 void AcInterpreter::markFromValue(const accore::AcJsonValue &val) {
-  if (AcObjectManager::isManagedInstance(val.toQJsonValue())) {
-    QString objId = AcObjectManager::getObjId(val.toQJsonValue());
+  if (AcObjectManager::isManagedInstance(val)) {
+    QString objId = AcObjectManager::getObjId(val);
     if (m_objMgr.isMarked(objId) || !m_objMgr.contains(objId)) return;
     m_objMgr.mark(objId);
-    accore::AcJsonValue obj = accore::AcJsonValue::fromQJsonValue(m_objMgr.getObject(objId));
+    // accore 原生形态遍历，避免 GC 标记阶段对每个实例做一次深拷贝转换
+    accore::AcJsonValue obj = m_objMgr.getAcObject(objId);
     traverseNested(obj, [this](const accore::AcJsonValue &child) { markFromValue(child); });
     return;
   }

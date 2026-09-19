@@ -227,6 +227,29 @@ bool AcParser::tryParseStaticAssign(Block::Stmt &stmt) {
   return false;
 }
 
+// indexTargetFollowedByIncDec — 前瞻 ident[...] 语句形式：跳到与开头 '[' 匹配的 ']'，
+// 其后紧跟 ++/-- 时返回 true（索引自增/自减语句需走表达式路径）。不消耗 token。
+bool AcParser::indexTargetFollowedByIncDec() const {
+  int depth = 0;
+  int i = m_pos + 1;  // m_pos+1 是 '['（调用方已确认）
+  for (; i < m_tokens.size(); ++i) {
+    const TokenType ty = m_tokens[i].type;
+    if (ty == TOK_LBRACKET) {
+      ++depth;
+    } else if (ty == TOK_RBRACKET) {
+      --depth;
+      if (depth == 0) {
+        ++i;
+        break;
+      }
+    } else if (ty == TOK_EOF) {
+      return false;
+    }
+  }
+  return i < m_tokens.size() &&
+         (m_tokens[i].type == TOK_PLUSPLUS || m_tokens[i].type == TOK_MINUSMINUS);
+}
+
 bool AcParser::parseIdentStmt(Block::Stmt &stmt, const Token &t) {
   // ClassName::prop = value  — 静态属性赋值
   if (tryParseStaticAssign(stmt)) return true;
@@ -250,6 +273,11 @@ bool AcParser::parseIdentStmt(Block::Stmt &stmt, const Token &t) {
     return parseAssignStmt(stmt.assign);
   }
   if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_LBRACKET) {
+    // m["k"]++ / arr[i]-- : 索引自增/自减走表达式路径（kIndexAssign 仅接受 = 与复合赋值）
+    if (indexTargetFollowedByIncDec()) {
+      stmt.kind = Block::Stmt::kExpr;
+      return parseExpr(stmt.exprStmt);
+    }
     stmt.kind = Block::Stmt::kIndexAssign;
     return parseIndexAssignStmt(stmt.indexAssign);
   }
@@ -305,6 +333,7 @@ bool AcParser::parseIdentStmt(Block::Stmt &stmt, const Token &t) {
 }
 
 bool AcParser::parseThisStmt(Block::Stmt &stmt) {
+  const int thisLine = peek().line;  // 'this' token 所在行（供赋值语句报错定位）
   if (m_pos + 1 < m_tokens.size() && m_tokens[m_pos + 1].type == TOK_DOT) {
     int savedPos = m_pos;
     advance();  // skip this
@@ -324,6 +353,7 @@ bool AcParser::parseThisStmt(Block::Stmt &stmt) {
         (m_tokens[m_pos + 3].type == TOK_EQUALS || isCompoundAssign)) {
       advance();  // skip property name
       stmt.assign.thisProp = prop;
+      stmt.assign.line = thisLine;  // 行号供类型检查器报错定位（此前缺失导致 "at line 0"）
       CompoundOp op = parseCompoundOp();
       if (op != CompoundOp::kNone) {
         stmt.assign.compoundOp = op;
@@ -340,6 +370,7 @@ bool AcParser::parseThisStmt(Block::Stmt &stmt) {
         (m_tokens[m_pos + 1].type == TOK_EQUALS || isCompoundAssign)) {
       advance();  // skip property name
       stmt.assign.thisProp = prop;
+      stmt.assign.line = thisLine;  // 行号供类型检查器报错定位（此前缺失导致 "at line 0"）
       CompoundOp op = parseCompoundOp();
       if (op != CompoundOp::kNone) {
         stmt.assign.compoundOp = op;

@@ -17,15 +17,25 @@ qt_standard_project_setup()
 # 本项目不使用 .ui 文件，关闭 AutoUic 避免将 aui_mgr.h 误判为 UI 表单头文件
 set(CMAKE_AUTOUIC OFF)
 
-qt_add_executable(auto_code
-    WIN32 MACOSX_BUNDLE
-    main.cpp
-    res/app_icon.rc
-    # accore 编译器核心（自有值类型，无 GUI/QJson 依赖）
+# ════════════════════════════════════════════════════════════
+#  库边界拆分
+#  - ac_core  : accore JSON 值模型（顺序敏感，无 QJson 语义依赖）
+#  - ac_engine: 脚本引擎/模板/语义/内置函数 + 非界面工具（util/common）
+#  主程序只保留 UI 层（src/ui + src/util/ui），链接库复用引擎；
+#  auto_code_tests 直接链接同一份库，消除手工摘抄源文件的双份维护。
+# ════════════════════════════════════════════════════════════
+
+add_library(ac_core STATIC
     src/core/json/ac_json_value.h
     src/core/json/ac_json_value.cpp
     src/core/json/ac_json_parse.cpp
     src/core/json/ac_json_write.cpp
+)
+target_include_directories(ac_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(ac_core PUBLIC Qt::Core)
+
+add_library(ac_engine STATIC
+    # ── 脚本引擎 ──
     src/engine/script/ac_type.h
     src/engine/script/ac_type.cpp
     src/engine/script/ac_lexer.h
@@ -60,6 +70,7 @@ qt_add_executable(auto_code
     src/engine/script/ac_builtin_loader.cpp
     src/engine/script/ac_symbol_table.h
     src/engine/script/ac_symbol_table.cpp
+    # ── 模板引擎 ──
     src/engine/tpl/tpl_engine.h
     src/engine/tpl/tpl_engine.cpp
     src/engine/tpl/tpl_validator.h
@@ -71,6 +82,7 @@ qt_add_executable(auto_code
     src/engine/tpl/tpl_parser.cpp
     src/engine/tpl/tpl_renderer.h
     src/engine/tpl/tpl_renderer.cpp
+    # ── 校验 / 重命名 / 语义 ──
     src/engine/schema_validator.h
     src/engine/schema_validator.cpp
     src/engine/validation_result.h
@@ -80,6 +92,7 @@ qt_add_executable(auto_code
     src/engine/rename/symbol_rename.cpp
     src/engine/semantic/workspace_index.h
     src/engine/semantic/workspace_index.cpp
+    # ── 内置函数 ──
     src/engine/function/fun_str.h
     src/engine/function/fun_str.cpp
     src/engine/function/fun_db.h
@@ -94,6 +107,7 @@ qt_add_executable(auto_code
     src/engine/function/fun_builtin.h
     src/engine/function/fun_builtin.cpp
     src/engine/ac_language.h
+    # ── 非界面工具（util/common）──
     src/util/common/util_json.h
     src/util/common/util_json.cpp
     src/util/common/util_file.h
@@ -106,6 +120,30 @@ qt_add_executable(auto_code
     src/util/common/workspace_diag.h
     src/util/common/workspace_diag.cpp
     src/util/common/workspace_iter.h
+)
+target_include_directories(ac_engine PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mysql-connector-c/include
+)
+target_compile_definitions(ac_engine PUBLIC
+    PROJECT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    # 调试模式宏：需要调试 ac 引擎 / 模板引擎日志时取消注释
+    # AC_DEBUG
+)
+target_link_libraries(ac_engine
+    PUBLIC
+        ac_core
+        Qt::Core
+        Qt::Network
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mysql-connector-c/lib/libmysql.lib
+)
+
+qt_add_executable(auto_code
+    WIN32 MACOSX_BUNDLE
+    main.cpp
+    res/app_icon.rc
+    # ── UI 工具层（src/util/ui + util/design）──
     src/util/ui/code/tree_dir.h
     src/util/ui/code/tree_dir.cpp
     src/util/ui/code/tree_state_store.h
@@ -185,6 +223,7 @@ qt_add_executable(auto_code
     src/util/ui/code/format_code.cpp
     src/util/ui/code/guess_code.h
     src/util/ui/code/guess_code.cpp
+    # ── UI 业务层（src/ui）──
     src/ui/main_dev/main_dev_ui.h
     src/ui/main_dev/main_dev_ui.cpp
     src/ui/main_dev/main_dev_ui_ext.h
@@ -282,25 +321,16 @@ qt_add_executable(auto_code
 
 target_include_directories(auto_code PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mysql-connector-c/include
-)
-
-# 注入项目源码路径，使运行时能准确找到 file/ 目录
-target_compile_definitions(auto_code PRIVATE
-    PROJECT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
-    # 调试模式宏：需要调试 ac 引擎 / 模板引擎日志时取消注释
-    # AC_DEBUG
 )
 
 target_link_libraries(auto_code
     PRIVATE
-        Qt::Core
+        ac_core
+        ac_engine
         Qt::Widgets
         Qt::Sql
-        Qt::Network
         Qt::Svg
         Qt::Concurrent
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mysql-connector-c/lib/libmysql.lib
         dwmapi.lib
 )
 
@@ -374,26 +404,20 @@ target_link_libraries(gen_icon PRIVATE Qt::Core Qt::Widgets)
 add_executable(auto_code_tests EXCLUDE_FROM_ALL
     tests/test_json_utils.cpp
     tests/test_ac_param_default.cpp
-    # accore JSON 值类型测试
-    src/core/json/ac_json_value.h
-    src/core/json/ac_json_value.cpp
-    src/core/json/ac_json_parse.cpp
-    src/core/json/ac_json_write.cpp
     tests/test_ac_json_value.cpp
+    tests/test_ac_interpreter.cpp
     # 端到端 golden 脚本测试（QProcess 调主程序 --run，无引擎链接依赖）
     tests/test_golden_script.cpp
-    src/util/common/util_json.cpp
-    src/util/common/path_resolver.cpp
+    # JSON 上传模型测试所需（UI 层纯模型文件，测试直接编译）
     src/ui/json_source/json_upload_model.cpp
-    # AC 脚本解析器（参数默认值语法测试）
-    src/engine/script/ac_lexer.cpp
-    src/engine/script/ac_parser.cpp
-    src/engine/script/ac_parser_stmt.cpp
-    src/engine/script/ac_parser_expr.cpp
-    src/engine/script/ac_type.cpp
 )
 target_include_directories(auto_code_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(auto_code_tests PRIVATE
     PROJECT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
 )
-target_link_libraries(auto_code_tests PRIVATE Qt::Core)
+# 直接链接引擎库（与主程序同一份产物），不再手工摘抄引擎源文件
+target_link_libraries(auto_code_tests PRIVATE
+    ac_core
+    ac_engine
+    Qt::Core
+)

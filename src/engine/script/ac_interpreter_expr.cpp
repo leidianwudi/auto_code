@@ -297,8 +297,8 @@ accore::AcJsonValue AcInterpreter::evalExpr(const Expr &expr) {
         }
       }
 
-      m_error = QStringLiteral("class '%1' has no static member '%2' at line %3")
-                    .arg(className, expr.prop, QString::number(expr.line));
+      setError(QStringLiteral("class '%1' has no static member '%2'").arg(className, expr.prop),
+               expr.line);
       return accore::AcJsonValue();
     }
 
@@ -508,19 +508,26 @@ accore::AcJsonValue AcInterpreter::applyIncDec(const Expr &expr, double delta, b
   if (lv.kind == Expr::kIdent) {
     setVar(lv.ident, accore::AcJsonValue(newVal));
   } else if (lv.kind == Expr::kPropAccess) {
-    // 简单属性自增：obj.prop++（链式基与表达式级赋值保持同样的限制）
-    if (lv.propObject && lv.propObject->kind == Expr::kIdent) {
-      const QString &baseName = lv.propObject->ident;
-      accore::AcJsonValue obj = resolveVar(baseName);
-      if (!obj.isObject()) {
-        setError(QStringLiteral("cannot set property '%1' on value").arg(lv.prop), expr.line);
-        return accore::AcJsonValue();
-      }
-      obj.set(lv.prop, accore::AcJsonValue(newVal));
-      setVar(baseName, obj);
-    } else {
-      setError(QStringLiteral("unsupported increment/decrement target"), expr.line);
+    // 属性自增回写。基名两种形态：
+    //   简单访问 o.n++   —— parsePrimary 构造，基名在 ident，propObject 为空
+    //   链式访问 a.b.n++ —— parsePostfix 构造，基表达式在 propObject（仅支持基为标识符）
+    QString baseName;
+    if (!lv.ident.isEmpty()) {
+      baseName = lv.ident;
+    } else if (lv.propObject && lv.propObject->kind == Expr::kIdent) {
+      baseName = lv.propObject->ident;
     }
+    if (baseName.isEmpty()) {
+      setError(QStringLiteral("unsupported increment/decrement target"), expr.line);
+      return accore::AcJsonValue();
+    }
+    accore::AcJsonValue obj = resolveVar(baseName);
+    if (!obj.isObject()) {
+      setError(QStringLiteral("cannot set property '%1' on value").arg(lv.prop), expr.line);
+      return accore::AcJsonValue();
+    }
+    obj.set(lv.prop, accore::AcJsonValue(newVal));
+    setVar(baseName, obj);
   } else if (lv.kind == Expr::kIndexAccess && lv.left->kind == Expr::kIdent) {
     // 索引自增：obj[key]++ / arr[i]++
     accore::AcJsonValue target = resolveVar(lv.left->ident);
@@ -557,7 +564,7 @@ accore::AcJsonValue AcInterpreter::callBuiltin(const QString &name,
         FunMgr::ins().call(cls, func, accore::toQJsonArray(callArgs)));
     QString err = FunMgr::takeError();
     if (!err.isEmpty()) {
-      m_error = QStringLiteral("%1 at line %2").arg(err).arg(line);
+      setError(err, line);
       return accore::AcJsonValue();
     }
     return r;
@@ -571,7 +578,7 @@ accore::AcJsonValue AcInterpreter::callBuiltin(const QString &name,
     FunBuiltin::setCurrentLine(0);
     QString err = FunMgr::takeError();
     if (!err.isEmpty()) {
-      m_error = QStringLiteral("%1 at line %2").arg(err).arg(line);
+      setError(err, line);
       return accore::AcJsonValue();
     }
     return r;
@@ -592,7 +599,7 @@ accore::AcJsonValue AcInterpreter::callBuiltin(const QString &name,
     }
   }
 
-  m_error = QStringLiteral("unknown function '%1' at line %2").arg(name).arg(line);
+  setError(QStringLiteral("unknown function '%1'").arg(name), line);
   return accore::AcJsonValue();
 }
 

@@ -202,8 +202,20 @@ static void testRealScriptsParse() {
     if (!opened) continue;
     Block program;
     const bool ok = parseSource(QString::fromUtf8(f.readAll()), program);
-    if (!ok) std::printf("  [diag] %s 解析失败\n", path.toUtf8().constData());
-    CHECK(ok);
+    if (!ok) {
+      QString err;
+      // 复跑一次拿具体错误（parseSource 不回传错误）
+      AcLexer::tokenize(QString::fromUtf8(f.readAll()), err);
+      if (err.isEmpty()) {
+        QSet<QString> declared;
+        AcParser parser;
+        parser.parse(AcLexer::tokenize(QString::fromUtf8(f.readAll()), err), program, declared);
+        err = parser.error();
+      }
+      std::printf("  [diag] %s 解析失败: %s\n", path.toUtf8().constData(),
+                  err.toUtf8().constData());
+      CHECK(ok);
+    }
   }
 }
 

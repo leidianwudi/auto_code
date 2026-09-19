@@ -20,6 +20,8 @@
 #include <QString>
 #include <QVector>
 
+#include "src/core/json/ac_json_value.h"
+
 class AcObjectManager {
 public:
   /// 引用计数归零的实例信息（由 AcInterpreter 在 release 后检查并执行析构）
@@ -63,6 +65,21 @@ public:
    * @brief 从 QJsonValue 中提取 objId
    */
   static QString getObjId(const QJsonValue &val);
+
+  // ── accore 原生重载 ──
+  // 解释器热路径（setVar/作用域退出/GC 标记）直接使用 accore::AcJsonValue，
+  // 避免每次判断/取 ID 都做 AcJsonValue→QJsonObject 的深拷贝转换。
+
+  /// @brief 判断 accore 值是否为受管理的实例对象（无深拷贝开销）
+  static bool isManagedInstance(const accore::AcJsonValue &val);
+
+  /// @brief 从 accore 值中提取 objId（无深拷贝开销）
+  static QString getObjId(const accore::AcJsonValue &val);
+
+  /**
+   * @brief 获取实例数据（accore 原生形态，供 GC 标记遍历免转换使用）
+   */
+  accore::AcJsonValue getAcObject(const QString &objId) const;
 
   /**
    * @brief 取出所有待析构的实例（由 AcInterpreter 调用后执行 __destruct__）
