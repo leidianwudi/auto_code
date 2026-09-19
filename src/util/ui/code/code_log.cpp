@@ -13,11 +13,13 @@
 #include <QMenu>
 #include <QPainter>
 #include <QScrollBar>
+#include <QStringList>
 #include <QTextBlock>
 #include <QTextBlockFormat>
 #include <QTextCursor>
 #include <QTextDocument>
 #include <QTextFragment>
+#include <QTime>
 
 #include "src/util/ui/component/aui_style.h"
 #include "src/util/ui/setting_store.h"
@@ -74,6 +76,11 @@ void CodeLog::append(const QString &text, bool isError) {
   QString cleanText = text;
   while (cleanText.endsWith('\n')) cleanText.chop(1);
 
+  // 行首时间戳：标记每条输出的时刻（同一批多行输出共用同一时刻；
+  // 空行不加时间戳，保留原样作视觉间隔）
+  const QString stamp = QTime::currentTime().toString(QStringLiteral("[HH:mm:ss.zzz] "));
+  const QStringList lines = cleanText.split(QLatin1Char('\n'));
+
   QTextCharFormat msgFmt;
   if (isError) {
     // 错误文本：标记属性 + 当前主题的错误红色
@@ -91,8 +98,7 @@ void CodeLog::append(const QString &text, bool isError) {
   // 用户光标状态：滚动条在底部、无选区、光标位于末块时才自动跟随新日志滚动，
   // 否则保留用户的选区与滚动位置（避免流式输出不断破坏正在进行的复制选择）
   const bool atBottom = verticalScrollBar()->value() >= verticalScrollBar()->maximum() - 1;
-  const bool follow = atBottom && !textCursor().hasSelection() &&
-                      textCursor().block() == lastBlock;
+  const bool follow = atBottom && !textCursor().hasSelection() && textCursor().block() == lastBlock;
 
   // 如果文档末尾有空的尾随段落（QPlainTextEdit 默认行为），回退到前一个块
   if (lastBlock.text().isEmpty() && doc->blockCount() > 1) {
@@ -100,13 +106,15 @@ void CodeLog::append(const QString &text, bool isError) {
     cursor.movePosition(QTextCursor::EndOfBlock);
   }
 
-  // 非首条日志时，先插入新块再追加（同时指定行块格式）
-  if (cursor.position() > 0) {
-    QTextBlockFormat lineBlockFmt = AuiStyle::createLogBlockFormat(font());
-    cursor.insertBlock(lineBlockFmt, QTextCharFormat());
+  // 逐行追加：非首行先插入新块（同时指定行块格式），非空行带时间戳前缀
+  const QTextBlockFormat lineBlockFmt = AuiStyle::createLogBlockFormat(font());
+  for (int i = 0; i < lines.size(); ++i) {
+    if (cursor.position() > 0) {
+      cursor.insertBlock(lineBlockFmt, QTextCharFormat());
+    }
+    if (lines.at(i).isEmpty()) continue;
+    cursor.insertText(stamp + lines.at(i), msgFmt);
   }
-
-  cursor.insertText(cleanText, msgFmt);
 
   // 仅在"跟随"状态下抢占光标并滚动到底（保护用户选区/滚动位置）
   if (follow) {

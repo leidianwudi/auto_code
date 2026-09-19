@@ -32,7 +32,9 @@ inline int runAcScriptHeadless(const QStringList &args) {
   if (runIdx < 0 || runIdx + 1 >= args.size()) return -1;
 
   const QString scriptPath = args.at(runIdx + 1);
-  QString rootDir = QStringLiteral("d:/work/github/auto_code/file");
+  // 注意：默认根目录用大写盘符 D:/，与脚本路径的盘符大小写保持一致，
+  // 否则 getCheckedFiles(basePath) 的 startsWith 前缀过滤会因大小写不匹配而失效
+  QString rootDir = QStringLiteral("D:/work/github/auto_code/file");
   const int rootIdx = args.indexOf(QStringLiteral("--root"));
   if (rootIdx >= 0 && rootIdx + 1 < args.size()) rootDir = args.at(rootIdx + 1);
 

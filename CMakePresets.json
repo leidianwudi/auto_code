@@ -19,10 +19,17 @@
   ],
   "buildPresets": [
     {
+      "name": "relwithdebinfo",
+      "configurePreset": "vs2022",
+      "configuration": "RelWithDebInfo",
+      "displayName": "RelWithDebInfo（日常推荐）",
+      "description": "带优化 + 调试符号：脚本执行快（~1s），可正常断点调试。日常开发请选中此预设"
+    },
+    {
       "name": "debug",
       "configurePreset": "vs2022",
       "configuration": "Debug",
-      "description": "构建 Debug 版（产物 build/Debug）"
+      "description": "无优化构建：脚本执行慢约 14 倍（~15s），仅排查优化相关问题/需要纯 Debug 行为时使用"
     },
     {
       "name": "release",

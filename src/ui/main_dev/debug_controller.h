@@ -113,6 +113,8 @@ public:
 signals:
   /// 双击断点/调用栈/变量条目：请求主窗口打开文件并定位到行
   void navigateToRequested(const QString &filePath, int line);
+  /// 脚本执行/调试结束（含取消）：MainDevMgr 用于恢复被抑制的工作区扫描
+  void scriptFinished();
 
 private slots:
   /// 调试器暂停（工作线程阻塞中）：高亮当前行、填充调用栈/变量面板

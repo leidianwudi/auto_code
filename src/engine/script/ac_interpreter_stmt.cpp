@@ -572,8 +572,10 @@ void AcInterpreter::execBlock(const Block &block) {
         (m_scriptFile.isEmpty() || stmt.filePath == m_scriptFile)) {
       m_callStack[0].line = stmt.line;
     }
-    // 调试：命中断点/单步时暂停（阻塞等待 GUI 指令），返回 false 表示用户停止
-    if (m_debugger && !isDeclStmt) {
+    // 调试：命中断点/单步时暂停（阻塞等待 GUI 指令），返回 false 表示用户停止。
+    // 先用无锁原子标志门控：普通执行（调试器指针常驻但未进入调试会话）直接跳过，
+    // 否则每条语句都要构造快照 lambda + 加锁，Debug 构建下脚本执行会慢数倍
+    if (m_debugger && !isDeclStmt && m_debugger->isDebugging()) {
       bool cont =
           m_debugger->onStatement(stmt.filePath, stmt.line, m_callDepth,
                                   [this](QVector<AcDebugFrame> &stack, QList<AcDebugVar> &vars) {

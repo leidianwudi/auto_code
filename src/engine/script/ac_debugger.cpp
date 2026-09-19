@@ -162,8 +162,8 @@ void AcDebugger::stop() {
 }
 
 bool AcDebugger::isDebugging() const {
-  QMutexLocker lock(&m_mutex);
-  return m_debugging;
+  // 无锁读取：解释器每条语句都会调用，非调试会话下必须近乎零开销
+  return m_debugging.load(std::memory_order_relaxed);
 }
 
 bool AcDebugger::isPaused() const {

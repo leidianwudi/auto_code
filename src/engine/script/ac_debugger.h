@@ -22,6 +22,7 @@
 #include <QString>
 #include <QVector>
 #include <QWaitCondition>
+#include <atomic>
 #include <functional>
 
 /// @brief 调用栈帧
@@ -113,8 +114,10 @@ private:
   QWaitCondition m_cond;
 
   QMap<QString, QMap<int, bool>> m_breakpoints;  ///< 断点集合（文件 → 行号 → 是否生效）
-  bool m_debugging = false;                      ///< 是否处于调试模式
-  bool m_paused = false;                         ///< 是否已暂停
+  /// 是否处于调试模式（原子：解释器每条语句无锁读取，
+  /// 非调试会话下跳过整条语句钩子——快照 lambda 构造 + 互斥锁在 Debug 构建下开销显著）
+  std::atomic<bool> m_debugging{false};
+  bool m_paused = false;  ///< 是否已暂停
   bool m_stopRequested = false;
   bool m_skipNext = false;  ///< 恢复后跳过紧邻的同一行，避免立即再次命中
   QString m_pausedFile;     ///< 最近一次暂停的文件路径

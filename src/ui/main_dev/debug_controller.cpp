@@ -7,6 +7,7 @@
 
 #include <QApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -27,8 +28,7 @@
 //  构造 / 析构 / 初始化
 // ════════════════════════════════════════════════════════════
 
-DebugController::DebugController(MainDevUi *ui, QObject *parent)
-    : QObject(parent), m_ui(ui) {}
+DebugController::DebugController(MainDevUi *ui, QObject *parent) : QObject(parent), m_ui(ui) {}
 
 DebugController::~DebugController() { shutdownAndWait(); }
 
@@ -93,16 +93,20 @@ void DebugController::runScript(const QString &scriptPath, const QString &rootDi
 
   // 在工作线程执行脚本，避免卡住 GUI 线程
   m_scriptFuture = QtConcurrent::run([this, scriptPath, rootDir, debug]() {
+    QElapsedTimer runTimer;
+    runTimer.start();
     AcEngine::ins().setRootDir(rootDir);
     QString err = AcEngine::ins().execute(scriptPath);
+    const qint64 runMs = runTimer.elapsed();
     // 结果投递回 GUI 线程处理
     QMetaObject::invokeMethod(
         this,
-        [this, err, debug]() {
+        [this, err, debug, runMs]() {
           m_scriptRunning = false;
           m_debugging = false;
           m_ui->buildBtn()->setEnabled(true);
           m_ui->stopBtn()->setEnabled(false);
+          emit scriptFinished();
           if (debug) {
             m_ui->debugPanel()->setActive(false);
             m_ui->debugPanel()->clear();
@@ -119,13 +123,14 @@ void DebugController::runScript(const QString &scriptPath, const QString &rootDi
           } else if (!err.isEmpty()) {
             m_ui->appendOutput(err, true);
           } else {
-            m_ui->appendOutput(debug ? QStringLiteral("调试完成") : QStringLiteral("执行完成"),
+            m_ui->appendOutput(debug ? QStringLiteral("调试完成")
+                                     : QStringLiteral("执行完成（脚本耗时 %1 ms）").arg(runMs),
                                false);
             const QStringList files = AcEngine::ins().generatedFiles();
 
-            //不生成输出
-            //for (const QString &f : files)
-            //  m_ui->appendOutput(QStringLiteral("  生成: %1").arg(f), false);
+            // 不生成输出
+            // for (const QString &f : files)
+            //   m_ui->appendOutput(QStringLiteral("  生成: %1").arg(f), false);
           }
         },
         Qt::QueuedConnection);
@@ -244,7 +249,8 @@ void DebugController::onDebuggerFinished() {
 /// @brief 断点存储文件路径（AppData 目录下，目录不存在则创建）
 static QString breakpointStorePath() {
   QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-  if (dir.isEmpty()) dir = QDir::homePath() + QString::fromUtf8(CodeConstants::Paths::kAppDataDirName);
+  if (dir.isEmpty())
+    dir = QDir::homePath() + QString::fromUtf8(CodeConstants::Paths::kAppDataDirName);
   QDir().mkpath(dir);
   return dir + QString::fromUtf8(CodeConstants::Paths::kBreakpointsStoreFile);
 }

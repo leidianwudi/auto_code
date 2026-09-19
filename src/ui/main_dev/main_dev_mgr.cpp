@@ -104,6 +104,8 @@ QWidget *MainDevMgr::onCreateWindow() {
   m_debug->setEditorProvider([this]() { return currentEditor(); });
   m_debug->setFileOpener([this](const QString &fp) { return openFileInEditor(fp); });
   m_debug->init();
+  // 脚本执行结束后补扫工作区错误：执行期间扫描被抑制（避免与脚本争抢线程池/CRT 堆锁）
+  connect(m_debug, &DebugController::scriptFinished, this, [this]() { scheduleWorkspaceRescan(); });
   // 双击断点/调用栈/变量条目：打开对应文件并定位到行
   connect(m_debug, &DebugController::navigateToRequested, this,
           [this](const QString &filePath, int line) {
@@ -532,6 +534,9 @@ void MainDevMgr::loadFiles() {
 /// 完成后通过 onWorkspaceScanFinished 合并到问题面板（不阻塞 UI）
 void MainDevMgr::startWorkspaceScan(bool silent) {
   if (m_workspaceScanWatcher) return;  // 已有扫描任务，避免重复启动
+  // 脚本执行期间暂停扫描：扫描与脚本共用 QtConcurrent 线程池，Debug 构建下两个
+  // 分配密集线程在 CRT 堆锁上互相串行化，会把脚本执行拖慢数倍（执行结束后补扫）
+  if (m_debug && m_debug->isScriptRunning()) return;
   const QString rootDir = m_ui ? m_ui->fileTree()->rootPath() : QString();
   if (rootDir.isEmpty()) return;
 

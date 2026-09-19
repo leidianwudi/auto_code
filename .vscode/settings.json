@@ -7,5 +7,32 @@
     "[c]": {
         "editor.defaultFormatter": "xaver.clang-format",
         "editor.formatOnSave": true
+    },
+    "cmake.defaultVariants": {
+        "buildType": {
+            "default": "reldeb",
+            "choices": {
+                "debug": {
+                    "short": "Debug",
+                    "buildType": "Debug"
+                },
+                "release": {
+                    "short": "Release",
+                    "buildType": "Release"
+                },
+                "minsize": {
+                    "short": "MinSizeRel",
+                    "buildType": "MinSizeRel"
+                },
+                "reldeb": {
+                    "short": "RelWithDebInfo",
+                    "buildType": "RelWithDebInfo"
+                },
+                "unspecified": {
+                    "short": "Unspecified",
+                    "buildType": "Unspecified"
+                }
+            }
+        }
     }
 }
