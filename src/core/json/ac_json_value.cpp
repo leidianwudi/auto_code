@@ -197,6 +197,9 @@ const AcJsonValue::Array &AcJsonValue::items() const {
 
 void AcJsonValue::append(const AcJsonValue &v) {
   if (m_type != Type::Array) return;
+  // 自包含防护：a.append(a) 在深拷贝语义下每轮快照整个数组，宽度指数爆炸直到
+  // 内存耗尽/卡死，直接拒绝（深度维度已由 clone 的 kMaxDepth 截断兜底）
+  if (v.m_arr && v.m_arr == m_arr) return;
   detachArr();
   m_arr->items.append(v.clone());  // 深拷贝被插入值，杜绝自引用环
 }
@@ -245,6 +248,8 @@ const AcJsonValue::Members &AcJsonValue::members() const {
 
 void AcJsonValue::set(const QString &key, const AcJsonValue &v) {
   if (m_type != Type::Object && m_type != Type::Instance) return;
+  // 自包含防护：同 append（obj.set(k, obj) 会宽度指数爆炸）
+  if (v.m_obj && v.m_obj == m_obj) return;
   detachObj();
   const auto it = m_obj->index.constFind(key);
   if (it != m_obj->index.constEnd()) {
@@ -274,7 +279,11 @@ void AcJsonValue::remove(const QString &key) {
 //  深拷贝
 // ──────────────────────────────────────────────────────────────
 
-AcJsonValue AcJsonValue::clone() const {
+AcJsonValue AcJsonValue::clone() const { return clone(0); }
+
+/// 深拷贝（带深度上限：超限截断为 Null，防止脚本构造的超深嵌套数据打爆 C++ 栈）
+AcJsonValue AcJsonValue::clone(int depth) const {
+  if (depth >= kMaxDepth) return AcJsonValue();
   AcJsonValue dst;
   dst.m_type = m_type;
   dst.m_bool = m_bool;
@@ -284,14 +293,14 @@ AcJsonValue AcJsonValue::clone() const {
   if (m_arr) {
     dst.m_arr = std::make_shared<ArrData>();
     dst.m_arr->items.reserve(m_arr->items.size());
-    for (const AcJsonValue &e : m_arr->items) dst.m_arr->items.append(e.clone());
+    for (const AcJsonValue &e : m_arr->items) dst.m_arr->items.append(e.clone(depth + 1));
   }
   if (m_obj) {
     dst.m_obj = std::make_shared<ObjData>();
     dst.m_obj->members.reserve(m_obj->members.size());
     for (const Member &m : m_obj->members) {
       dst.m_obj->index.insert(m.key, int(dst.m_obj->members.size()));
-      dst.m_obj->members.append({m.key, m.value.clone()});
+      dst.m_obj->members.append({m.key, m.value.clone(depth + 1)});
     }
   }
   return dst;
@@ -342,7 +351,11 @@ QJsonValue AcJsonValue::toQJsonValue() const {
   return QJsonValue(QJsonValue::Null);
 }
 
-AcJsonValue AcJsonValue::fromQJsonValue(const QJsonValue &v) {
+AcJsonValue AcJsonValue::fromQJsonValue(const QJsonValue &v) { return fromQJsonValue(v, 0); }
+
+/// 带深度上限的 QJson 转换：超限截断为 Null（QJson 输入方深嵌套不至打爆栈）
+AcJsonValue AcJsonValue::fromQJsonValue(const QJsonValue &v, int depth) {
+  if (depth >= kMaxDepth) return AcJsonValue();
   switch (v.type()) {
     case QJsonValue::Null:
     case QJsonValue::Undefined:
@@ -356,7 +369,7 @@ AcJsonValue AcJsonValue::fromQJsonValue(const QJsonValue &v) {
     case QJsonValue::Array: {
       AcJsonValue dst = makeArray();
       const QJsonArray arr = v.toArray();
-      for (const QJsonValue &e : arr) dst.append(fromQJsonValue(e));
+      for (const QJsonValue &e : arr) dst.append(fromQJsonValue(e, depth + 1));
       return dst;
     }
     case QJsonValue::Object: {
@@ -364,7 +377,7 @@ AcJsonValue AcJsonValue::fromQJsonValue(const QJsonValue &v) {
       AcJsonValue dst = makeObject();
       const QJsonObject obj = v.toObject();
       for (auto it = obj.begin(); it != obj.end(); ++it) {
-        dst.set(it.key(), fromQJsonValue(it.value()));
+        dst.set(it.key(), fromQJsonValue(it.value(), depth + 1));
       }
       return dst;
     }

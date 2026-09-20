@@ -219,6 +219,30 @@ static void testRealScriptsParse() {
   }
 }
 
+/// 表达式深度防护：超深嵌套显式报错而非打爆 C++ 栈；正常深度不受影响
+static void testExprDepthGuard() {
+  const int deep = 500;  // 远超 128 层上限
+  QString src = QStringLiteral("let x = ");
+  for (int i = 0; i < deep; ++i) src += u'(';
+  src += u'1';
+  for (int i = 0; i < deep; ++i) src += u')';
+  src += u';';
+
+  Block program;
+  const bool ok = parseSource(src, program);
+  CHECK(!ok);  // 超深嵌套显式失败（此前会打爆 C++ 栈）
+  CHECK(program.stmts.isEmpty());
+
+  // 上限内的正常嵌套仍可解析
+  QString fine = QStringLiteral("let y = ");
+  for (int i = 0; i < 50; ++i) fine += u'(';
+  fine += u'1';
+  for (int i = 0; i < 50; ++i) fine += u')';
+  fine += u';';
+  Block fineProgram;
+  CHECK(parseSource(fine, fineProgram));
+}
+
 /// 运行全部用例，返回失败数（0 = 全部通过）；由 test_json_utils.cpp 的 main 调用
 int runAcParamDefaultTests() {
   testTopLevelFuncDefaults();
@@ -226,6 +250,7 @@ int runAcParamDefaultTests() {
   testNonLiteralRejected();
   testFromAsParamName();
   testRealScriptsParse();
+  testExprDepthGuard();
   std::printf("[ac_param_default] %d checks, %d failed\n", g_total, g_failed);
   return g_failed;
 }

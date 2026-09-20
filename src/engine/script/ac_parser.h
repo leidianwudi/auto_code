@@ -128,6 +128,7 @@ private:
 
   // ── 内部状态 ──
   int m_pos = 0;
+  int m_exprDepth = 0;  ///< 表达式嵌套深度（parseExpr 递归计数，防超深嵌套打爆栈）
   QVector<Token> m_tokens;
   QString m_error;
   QString m_filePath;  ///< 当前解析的源文件路径

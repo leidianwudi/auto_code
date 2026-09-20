@@ -165,7 +165,21 @@ accore::AcJsonValue AcInterpreter::applyCompoundOp(const accore::AcJsonValue &cu
   }
 }
 
+/// 表达式求值嵌套深度上限：evalBinary/evalUnary 等经 evalExpr 递归求值子表达式，
+/// 深嵌套 AST（受解析器 128 层限制）之外再兜底一层，防止任何来源的深 AST 打爆栈
+static constexpr int kMaxEvalDepth = 256;
+
 accore::AcJsonValue AcInterpreter::evalExpr(const Expr &expr) {
+  if (m_exprDepth >= kMaxEvalDepth) {
+    setError(QStringLiteral("expression nesting too deep (limit %1)").arg(kMaxEvalDepth),
+             expr.loc.line);
+    return accore::AcJsonValue();
+  }
+  ++m_exprDepth;
+  struct DepthPop {
+    int &d;
+    ~DepthPop() { --d; }
+  } pop{m_exprDepth};
   switch (expr.kind) {
     case Expr::kNull:
       return accore::AcJsonValue();

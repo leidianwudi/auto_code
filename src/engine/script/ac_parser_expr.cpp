@@ -10,7 +10,22 @@
 
 // ── 表达式解析入口 ──
 
+/// 表达式嵌套深度上限：括号/数组/对象字面量会递归回到 parseExpr，
+/// 无上限时机器生成的深嵌套代码会打爆 C++ 栈（一层约 10 个递归帧）
+static constexpr int kMaxExprDepth = 128;
+
 bool AcParser::parseExpr(Expr &expr) {
+  if (m_exprDepth >= kMaxExprDepth) {
+    m_error = QStringLiteral("表达式嵌套过深（上限 %1 层）at line %2")
+                  .arg(kMaxExprDepth)
+                  .arg(peek().loc.line);
+    return false;
+  }
+  ++m_exprDepth;
+  struct DepthPop {
+    int &d;
+    ~DepthPop() { --d; }
+  } pop{m_exprDepth};
   if (!parseTernary(expr)) return false;
   // 赋值表达式: lhs = rhs
   if (peek().type == TokenType::kEquals) {

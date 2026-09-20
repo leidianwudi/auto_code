@@ -157,6 +157,10 @@ public:
   void remove(const QString &key);
 
   // ── 深拷贝 ──
+  /// 值嵌套深度上限：clone/fromQJsonValue/parse 构造侧统一限制，
+  /// 深嵌套数据超限截断为 Null —— 保证 serialize/GC/打印等下游递归遍历不会打爆 C++ 栈
+  static constexpr int kMaxDepth = 256;
+
   /// 递归深拷贝（容器插入时内部使用；外部一般不需要）
   AcJsonValue clone() const;
 
@@ -186,6 +190,11 @@ private:
   struct ArrData;
   /// 对象存储（定义在 .cpp）
   struct ObjData;
+
+  /// 带深度上限的深拷贝（clone() 公开入口固定从 0 起）
+  AcJsonValue clone(int depth) const;
+  /// 带深度上限的 QJson 转换（公开入口固定从 0 起）
+  static AcJsonValue fromQJsonValue(const QJsonValue &v, int depth);
 
   Type m_type = Type::Null;
   bool m_bool = false;

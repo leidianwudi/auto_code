@@ -190,6 +190,7 @@ private:
   std::atomic<bool> *m_cancelFlag = nullptr;  ///< 取消标志（指向 AcEngine 的原子标志）
   AcDebugger *m_debugger = nullptr;           ///< 调试器（为空则不启用调试）
   int m_callDepth = 0;
+  int m_exprDepth = 0;  ///< 表达式嵌套深度（evalExpr 递归计数，防超深嵌套打爆栈）
   QVector<AcDebugFrame> m_callStack;  ///< 调用栈（仅调试时维护）
   AcObjectManager m_objMgr;
   /// 环回收节流：上次 mark-sweep 时的托管对象数（popScope 用，避免每次退出作用域全堆清扫）

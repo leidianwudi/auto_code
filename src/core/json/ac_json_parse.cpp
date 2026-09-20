@@ -44,6 +44,8 @@ public:
 private:
   QChar peek() const { return m_i < m_s.size() ? m_s.at(m_i) : QChar(u'\0'); }
 
+  int m_depth = 0;  ///< 当前嵌套深度（parseValue 递归计数）
+
   bool fail(const QString &msg) {
     if (m_err.isEmpty()) m_err = QStringLiteral("%1（位置 %2）").arg(msg).arg(m_i);
     return false;
@@ -78,6 +80,15 @@ private:
   }
 
   bool parseValue(AcJsonValue &out) {
+    // 深度防护：超深嵌套输入（如机器生成的 [[[[...]]]]）会打爆 C++ 栈，显式报错
+    if (m_depth >= AcJsonValue::kMaxDepth) {
+      return fail(QStringLiteral("JSON 嵌套过深（上限 %1 层）").arg(AcJsonValue::kMaxDepth));
+    }
+    ++m_depth;
+    struct DepthPop {
+      int &d;
+      ~DepthPop() { --d; }
+    } pop{m_depth};
     skipWs();
     const QChar c = peek();
     if (c == u'{') return parseObject(out);

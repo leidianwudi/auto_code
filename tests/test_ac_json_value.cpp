@@ -308,6 +308,66 @@ static void testCoreIncludeHygiene() {
   CHECK(violations.isEmpty());
 }
 
+/// 深嵌套防护：parse 对超深输入显式报错而非崩溃；正常深度不受影响
+static void testDeepNestingParseReject() {
+  const int deep = AcJsonValue::kMaxDepth * 8;  // 远超上限
+  QString text;
+  text.reserve(deep * 2 + 8);
+  for (int i = 0; i < deep; ++i) text += u'[';
+  text += u'1';
+  for (int i = 0; i < deep; ++i) text += u']';
+
+  bool ok = true;
+  QString err;
+  AcJsonValue::parse(text, &ok, &err);
+  CHECK(!ok);  // 超深输入显式失败（此前会打爆 C++ 栈）
+  CHECK(err.contains(QStringLiteral("嵌套")));
+
+  // 上限内的正常嵌套仍然可解析
+  const QString fine = QStringLiteral("[[[[1]]]]");
+  ok = false;
+  const AcJsonValue v = AcJsonValue::parse(fine, &ok);
+  CHECK(ok);
+  CHECK(v.isArray());
+}
+
+/// 深嵌套防护：clone 深度截断 —— 超深链收敛到上限，序列化不再打爆栈
+static void testDeepNestingCloneTruncate() {
+  // 构造一条远超上限的深链（每轮把旧值包进新数组，宽度恒为 1）
+  accore::AcJsonValue deep = accore::AcJsonValue::makeArray();
+  deep.append(1);
+  for (int i = 0; i < 3000; ++i) {
+    accore::AcJsonValue wrapper = accore::AcJsonValue::makeArray();
+    wrapper.append(deep);
+    deep = wrapper;
+  }
+  // 沿首元素下潜：应在 kMaxDepth 内变为 Null（截断），而不是无限递归
+  accore::AcJsonValue cur = deep;
+  int steps = 0;
+  while (cur.isArray() && steps <= AcJsonValue::kMaxDepth + 8) {
+    cur = cur.at(0);
+    ++steps;
+  }
+  CHECK(cur.isNull());
+  CHECK(steps <= AcJsonValue::kMaxDepth + 2);
+
+  // 序列化超深值不再打爆栈（截断后正常输出）
+  const QString ser = deep.serialize(false);
+  CHECK(ser.startsWith(u'['));
+}
+
+/// 自包含防护：a.append(a) 在深拷贝语义下会宽度指数爆炸，直接拒绝
+static void testSelfAppendRejected() {
+  accore::AcJsonValue a = accore::AcJsonValue::makeArray();
+  a.append(1);
+  a.append(a);  // 自包含：被拒绝
+  CHECK(a.size() == 1);
+
+  accore::AcJsonValue o = accore::AcJsonValue::makeObject();
+  o.set(QStringLiteral("self"), o);  // 对象同理
+  CHECK(o.size() == 0);
+}
+
 int runAcJsonValueTests() {
   testObjectInsertionOrder();
   testObjectUpdateAndReinsert();
@@ -322,6 +382,9 @@ int runAcJsonValueTests() {
   testSerialize();
   testQJsonValueRoundTrip();
   testToIntSemantics();
+  testDeepNestingParseReject();
+  testDeepNestingCloneTruncate();
+  testSelfAppendRejected();
   testCoreIncludeHygiene();
   return g_failed;
 }
