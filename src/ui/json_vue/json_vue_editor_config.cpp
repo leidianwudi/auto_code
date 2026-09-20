@@ -272,3 +272,36 @@ void JsonVueEditor::onRemoveButton() {
   }
   emit configChanged();
 }
+
+void JsonVueEditor::onButtonMoveUp() {
+  int row = m_buttonTable->currentRow();
+  if (row <= 0 || row >= m_buttons.size()) return;
+  m_buttons.swapItemsAt(row, row - 1);
+  refreshButtonRow(row - 1);
+  refreshButtonRow(row);
+  m_buttonTable->selectRow(row - 1);
+  emit configChanged();
+}
+
+void JsonVueEditor::onButtonMoveDown() {
+  int row = m_buttonTable->currentRow();
+  if (row < 0 || row >= m_buttonTable->rowCount() - 1) return;
+  if (row >= m_buttons.size() - 1) return;
+  m_buttons.swapItemsAt(row, row + 1);
+  refreshButtonRow(row);
+  refreshButtonRow(row + 1);
+  m_buttonTable->selectRow(row + 1);
+  emit configChanged();
+}
+
+/// 把 m_buttons[row] 应用到表格行显示（文字/标识/位置/行为/配置摘要）
+void JsonVueEditor::refreshButtonRow(int row) {
+  if (row < 0 || row >= m_buttons.size()) return;
+  const ButtonConfig &btn = m_buttons[row];
+  m_buttonTable->item(row, BColLabel)->setText(btn.label);
+  m_buttonTable->item(row, BColActionKey)->setText(btn.actionKey);
+  m_buttonTable->item(row, BColPosition)->setText(buttonPositionToString(btn.position));
+  m_buttonTable->item(row, BColActionType)->setText(buttonActionTypeToString(btn.actionType));
+  auto *configBtn = qobject_cast<QPushButton *>(m_buttonTable->cellWidget(row, BColConfig));
+  if (configBtn) configBtn->setText(buttonConfigSummary(btn));
+}

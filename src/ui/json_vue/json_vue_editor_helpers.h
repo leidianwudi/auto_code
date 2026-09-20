@@ -13,44 +13,66 @@
 
 #include <QComboBox>
 #include <QFileInfo>
+#include <QItemSelectionModel>
 #include <QPainter>
 #include <QStyleOption>
-#include <QTimer>
+#include <QTableWidget>
 
 #include "json_vue_model.h"
 #include "src/util/common/code_constants.h"
+#include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_style.h"
 
 /// 接口鉴权/连接配置文件（baseUrl、authHeader、postData），从 .jsonvue 所在目录向上查找
 inline const QString kApiAuthDataAcFile = QStringLiteral("api_auth_data.ac");
 
-/// 自绘 QComboBox：无边框，只有文字 + 箭头，文字区域不受原生样式限制
+/// 自绘 QComboBox：无边框，只有文字 + 箭头，文字区域不受原生样式限制。
+/// 弹层高度保证复用通用机制（AuiComboBox::ensurePopupFit，全局过滤器兜底），
+/// 这里仅在弹出前显式调用一次，让固定高度赶在 Qt 原生几何计算之前生效。
 class NoBorderCombo : public QComboBox {
 public:
   explicit NoBorderCombo(QWidget *parent = nullptr) : QComboBox(parent) {}
 
 protected:
-  // 强制弹出列表始终向下展开：若控件下方空间不足，Qt 默认会往上弹，
-  // 视觉上很别扭；这里在弹出后把列表移动到下拉框正下方（左对齐 + 顶边对齐）
   void showPopup() override {
+    AuiComboBox::ensurePopupFit(this);
     QComboBox::showPopup();
-    if (QWidget *popup = view()->window()) {
-      const QPoint pos = mapToGlobal(QPoint(0, height()));
-      QTimer::singleShot(0, popup, [popup, pos]() { popup->move(pos); });
-    }
   }
 
   void paintEvent(QPaintEvent *) override {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
 
+    // 所在行选中联动：表格的行选中背景会被不透明的控件盖住（只有文本项列能看到
+    // 高亮）。这里检测所在行的选中态，用表格的选中色绘制背景与文字，保证
+    // "点任意单元格 = 整行选中"的视觉反馈完整。
+    QWidget *vp = parentWidget();
+    auto *table = vp ? qobject_cast<QTableWidget *>(vp->parentWidget()) : nullptr;
+    bool rowSelected = false;
+    if (table && vp) {
+      const int row = table->rowAt(mapTo(vp, QPoint(0, 0)).y());
+      rowSelected = row >= 0 && table->selectionModel()->isRowSelected(row);
+    }
+
+    QColor bg;
+    QColor fg;
+    if (rowSelected) {
+      bg = table->palette().color(QPalette::Highlight);
+      fg = table->palette().color(QPalette::HighlightedText);
+    } else if (hasFocus()) {
+      bg = AuiStyle::listSelectionBackground();
+      fg = AuiStyle::textColor();
+    } else {
+      bg = AuiStyle::panelBackground();
+      fg = AuiStyle::textColor();
+    }
+
     // 背景（直接用主题色，深色主题下也能看清）
-    QColor bg = hasFocus() ? AuiStyle::listSelectionBackground() : AuiStyle::panelBackground();
     p.fillRect(rect(), bg);
 
     // 文字
     QRect textRect = rect().adjusted(2, 0, -18, 0);
-    p.setPen(AuiStyle::textColor());
+    p.setPen(fg);
     p.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, currentText());
 
     // 向下箭头
@@ -59,7 +81,7 @@ protected:
     arrowOpt.rect = arrowRect.adjusted(3, 0, -3, 0);
     arrowOpt.palette = palette();
     arrowOpt.state = QStyle::State_Enabled;
-    p.setPen(AuiStyle::textColor());
+    p.setPen(fg);
     style()->drawPrimitive(QStyle::PE_IndicatorArrowDown, &arrowOpt, &p, this);
   }
 };

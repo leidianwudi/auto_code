@@ -103,6 +103,10 @@ private slots:
   void onAddQueryField();
   /// 查询设置：删除查询字段
   void onRemoveQueryField();
+  /// 查询设置：上移选中行
+  void onQueryMoveUp();
+  /// 查询设置：下移选中行
+  void onQueryMoveDown();
 
   /// 按钮配置：添加按钮
   void onAddButton();
@@ -110,6 +114,10 @@ private slots:
   void onEditButton(int row);
   /// 按钮配置：删除按钮
   void onRemoveButton();
+  /// 按钮配置：上移选中按钮
+  void onButtonMoveUp();
+  /// 按钮配置：下移选中按钮
+  void onButtonMoveDown();
 
   /// 列配置：点击⚙按钮配置下拉框数据源
   void onConfigureCombobox();
@@ -140,6 +148,9 @@ private:
   /// 刷新查询字段下拉框选项
   void refreshQueryFieldDataNames();
 
+  /// 把 m_buttons[row] 应用到按钮表格行显示（文字/标识/位置/行为/配置摘要）
+  void refreshButtonRow(int row);
+
   /// 显示配置按钮的右键菜单（复制配置 / 粘贴配置）
   void showColumnConfigMenu(int row, const QPoint &globalPos);
 
@@ -161,14 +172,18 @@ private:
 
   // ── 查询字段表格 ──
   QTableWidget *m_queryTable = nullptr;     ///< 查询字段表格
+  QPushButton *m_queryMoveUpBtn = nullptr;  ///< 上移
+  QPushButton *m_queryMoveDownBtn = nullptr;  ///< 下移
   QPushButton *m_addQueryBtn = nullptr;     ///< 添加查询字段
   QPushButton *m_removeQueryBtn = nullptr;  ///< 删除查询字段
 
   // ── 操作按钮表格 ──
-  QTableWidget *m_buttonTable = nullptr;     ///< 操作按钮表格
-  QPushButton *m_addButtonBtn = nullptr;     ///< 添加按钮
-  QPushButton *m_removeButtonBtn = nullptr;  ///< 删除按钮
-  QVector<ButtonConfig> m_buttons;           ///< 按钮配置数据
+  QTableWidget *m_buttonTable = nullptr;      ///< 操作按钮表格
+  QPushButton *m_buttonMoveUpBtn = nullptr;   ///< 上移
+  QPushButton *m_buttonMoveDownBtn = nullptr; ///< 下移
+  QPushButton *m_addButtonBtn = nullptr;      ///< 添加按钮
+  QPushButton *m_removeButtonBtn = nullptr;   ///< 删除按钮
+  QVector<ButtonConfig> m_buttons;            ///< 按钮配置数据
 
   // ── 状态数据 ──
   QString m_baseUrl;           ///< AC 脚本传来的 baseUrl，用于 HTTP 请求拼接

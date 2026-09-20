@@ -34,6 +34,16 @@ public:
   /// 内部通过动态属性结合全局样式表（AuiStyle 中的 QComboBox[auiNoArrow="true"] 规则）实现。
   static void hideArrow(QComboBox *combo);
 
+  /// 弹层高度保证（通用机制，对所有 QComboBox 生效）：
+  /// ① 统一条目高度口径——安装与渲染严格一致的委托（hint = 字体行高 + 全局样式表
+  ///    ::item padding 4px×2）；默认委托的 hint 在样式表字体刷新前会给出过期值，
+  ///    弹层按过期 hint 计算高度会导致条目截断并出现滚动条。定制委托可预先给视图
+  ///    设置 auiComboDelegateCustom 属性声明豁免（如 AuiComboDelete）。
+  /// ② 视图高度按内容精确固定（min=max，任何后续布局 pass 都无法改变视图高度）。
+  /// ComboPopDownFilter 在弹层显示时自动调用；填完条目后手动调用可赶在 Qt 原生
+  /// 几何计算之前生效。
+  static void ensurePopupFit(QComboBox *combo);
+
   /// 安装全局事件过滤器：所有 QComboBox 的弹出列表一律向下展开（不上弹）。
   /// 程序启动时调用一次即可（幂等）。
   static void ensureGlobalPopDown();

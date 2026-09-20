@@ -15,6 +15,7 @@
 #include <QStyle>
 #include <QStyleOption>
 #include <QStylePainter>
+#include <QStyledItemDelegate>
 #include <QTimer>
 #include <QWheelEvent>
 #include <QWidget>
@@ -108,15 +109,70 @@ protected:
 };
 
 // ════════════════════════════════════════════════════════════
+//  弹层高度保证 — 条目口径统一的委托 + ensurePopupFit
+// ════════════════════════════════════════════════════════════
+
+namespace {
+/**
+ * @brief 弹层条目委托：高度恒等于「字体行高 + 全局样式表 ::item padding(4px)*2」，
+ *        与实际渲染严格一致；宽度按真实文本宽给出（保留 Qt 原生「弹层可宽于
+ *        下拉框以完整显示长条目」的行为）。
+ *
+ * 默认委托的 sizeHint 在样式表字体刷新前会给出过期值，弹层高度按过期 hint 计算
+ * 会导致条目截断并出现滚动条（调试会话 combo-popup-truncated 定位）。
+ */
+class AuiComboItemDelegate : public QStyledItemDelegate {
+  Q_OBJECT
+
+public:
+  explicit AuiComboItemDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
+
+  QSize sizeHint(const QStyleOptionViewItem &opt, const QModelIndex &index) const override {
+    const QFontMetrics fm(opt.font);
+    // 宽度：文本宽 + ::item padding(8px)×2；图标项另计图标宽 + 间距
+    int w = fm.horizontalAdvance(index.data(Qt::DisplayRole).toString()) + 16;
+    if (!opt.icon.isNull()) w += opt.decorationSize.width() + 4;
+    return {w, fm.height() + 8};
+  }
+};
+}  // namespace
+
+void AuiComboBox::ensurePopupFit(QComboBox *combo) {
+  if (!combo || !combo->view()) return;
+  QAbstractItemView *view = combo->view();
+  // ① 条目高度口径：安装与渲染一致的委托；定制委托（如 AuiComboDelete 的
+  //    「文本 + 删除按钮」）通过 auiComboDelegateCustom 属性声明豁免
+  if (!view->property("auiComboDelegateCustom").toBool() &&
+      !qobject_cast<AuiComboItemDelegate *>(view->itemDelegate()))
+    view->setItemDelegate(new AuiComboItemDelegate(view));
+  // ② 视图高度按内容精确固定（min=max，任何后续布局 pass 都无法改变视图高度）；
+  //    空列表时解除历史约束，避免空弹层残留上一次条目的固定高度
+  const QAbstractItemModel *model = view->model();
+  if (model && model->rowCount() > 0) {
+    int contentH = 0;
+    for (int i = 0; i < model->rowCount(); ++i)
+      contentH += view->sizeHintForIndex(model->index(i, 0)).height();
+    view->setFixedHeight(contentH + 2 * view->frameWidth());
+  } else {
+    view->setMinimumHeight(0);
+    view->setMaximumHeight(QWIDGETSIZE_MAX);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
 //  全局过滤器 — 所有下拉框弹出列表一律向下展开
 // ════════════════════════════════════════════════════════════
 
 /**
  * @brief 全局事件过滤器：拦截所有 QComboBox 弹出层（Qt::Popup）的显示事件，
- *        在弹出后将其强制移动到下拉框正下方（左对齐 + 顶边对齐）。
+ *        优先将其移动到下拉框正下方（左对齐 + 顶边对齐）。
  *
  * 无论下拉框是 AuiComboBox::create() 创建还是直接 new QComboBox，均生效。
- * 若下方空间不足，只压缩列表高度而不向上弹。
+ * 定位策略（与 NoBorderCombo::showPopup 的截断修复配套）：
+ *  - 下方放得下：正下方展开；
+ *  - 下方放不下且上方放得下：整体翻转到上方（不再压缩列表高度——压缩即截断，
+ *    正是查询设置表格下拉框弹层显示不全一类问题的根源）；
+ *  - 上下都放不下：贴屏幕底边，仅裁掉必然放不下的部分。
  */
 class ComboPopDownFilter : public QObject {
 public:
@@ -127,15 +183,28 @@ public:
       auto *w = qobject_cast<QWidget *>(watched);
       if (w && w->isWindow() && (w->windowType() == Qt::Popup)) {
         if (auto *combo = qobject_cast<QComboBox *>(w->parentWidget())) {
-          // 弹出列表已经显示，等当前事件处理完（Qt 内部布局完成）后再移动到正下方
-          const QPoint pos = combo->mapToGlobal(QPoint(0, combo->height()));
-          QTimer::singleShot(0, w, [w, pos]() {
+          // 高度保证：条目口径统一 + 视图高度固定（幂等，重复调用安全）
+          AuiComboBox::ensurePopupFit(combo);
+          // 弹出列表已经显示，等当前事件处理完（Qt 内部布局完成）后再定位
+          QTimer::singleShot(0, w, [w, combo]() {
+            QAbstractItemView *view = combo->view();
+            if (!view) return;
+            // 高度钳制：弹层窗口钉到视图高度。视图已精确等于内容高，多出部分必为
+            // 样式盒死区（如 QComboBox padding 2px×2 传播），不足则补齐
+            if (w->height() != view->height()) {
+              w->setFixedHeight(view->height());
+              w->resize(w->width(), view->height());
+            }
+            const QPoint comboTopLeft = combo->mapToGlobal(QPoint(0, 0));
+            QScreen *screen = QGuiApplication::screenAt(comboTopLeft);
+            if (!screen) return;
+            const QRect avail = screen->availableGeometry();
             QRect g = w->geometry();
-            g.moveTopLeft(pos);
-            // 始终向下：若超出屏幕底部，压缩高度而非向上弹
-            if (QScreen *screen = QGuiApplication::screenAt(pos)) {
-              const QRect avail = screen->availableGeometry();
-              if (g.bottom() > avail.bottom()) g.setHeight(avail.bottom() - g.top() + 1);
+            g.moveTopLeft(combo->mapToGlobal(QPoint(0, combo->height())));
+            if (g.bottom() > avail.bottom()) {
+              const int h = g.height();
+              g.moveTop(comboTopLeft.y() - h);  // 翻转到上方（底部对齐下拉框顶部）
+              if (g.top() < avail.top()) g.moveTop(avail.bottom() + 1 - h);  // 贴屏幕底边
             }
             w->setGeometry(g);
           });
@@ -239,3 +308,5 @@ void AuiComboBox::ensureGlobalWheelSafe() {
   installed = true;
   qApp->installEventFilter(new ComboWheelSafeFilter(qApp));
 }
+
+#include "aui_combo_box.moc"

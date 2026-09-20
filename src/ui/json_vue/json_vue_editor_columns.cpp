@@ -160,6 +160,31 @@ void JsonVueEditor::onRemoveQueryField() {
   emit configChanged();
 }
 
+void JsonVueEditor::onQueryMoveUp() {
+  int row = m_queryTable->currentRow();
+  if (row <= 0) return;
+  // 与列配置上移/下移一致：collectConfig + loadConfig 往返（收集已无损）
+  JsonVueConfig cfg = collectConfig();
+  if (row - 1 >= 0 && row < cfg.queryFields.size()) {
+    cfg.queryFields.swapItemsAt(row, row - 1);
+    loadConfig(cfg);
+    m_queryTable->selectRow(row - 1);
+    emit configChanged();
+  }
+}
+
+void JsonVueEditor::onQueryMoveDown() {
+  int row = m_queryTable->currentRow();
+  if (row < 0 || row >= m_queryTable->rowCount() - 1) return;
+  JsonVueConfig cfg = collectConfig();
+  if (row + 1 < cfg.queryFields.size()) {
+    cfg.queryFields.swapItemsAt(row, row + 1);
+    loadConfig(cfg);
+    m_queryTable->selectRow(row + 1);
+    emit configChanged();
+  }
+}
+
 QStringList JsonVueEditor::columnDataNames() const {
   QStringList names;
   for (int row = 0; row < m_columnTable->rowCount(); ++row) {

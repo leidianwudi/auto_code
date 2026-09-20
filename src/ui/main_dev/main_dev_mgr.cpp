@@ -317,7 +317,10 @@ bool MainDevMgr::confirmExit() {
   });
   for (const QString &fp : m_pendingChanges.filePaths()) dirty << QFileInfo(fp).fileName();
   dirty.removeDuplicates();
-  if (dirty.isEmpty()) return true;
+  // 无未保存修改：仍弹确认框，防止误点关闭按钮直接退出
+  if (dirty.isEmpty())
+    return AuiMessageBox::confirm(m_ui, QStringLiteral("关闭确认"),
+                                  QStringLiteral("您是否要关闭编译器？"));
 
   // 统一使用封装的消息框（与项目其它提示风格一致）
   const AuiMessageBox::Choice ch =

@@ -14,6 +14,7 @@
 #include <functional>
 
 #include "debug_controller.h"
+#include "editor_lookup.h"
 #include "main_dev_mgr.h"
 #include "main_dev_model.h"
 #include "main_dev_ui.h"
@@ -78,7 +79,9 @@ void MainDevMgr::connectEditorSignals(CodeEditor *editor) {
       auto *tabs = m_ui->editorPanelAt(pi);
       if (!tabs) continue;
       for (int ti = 0; ti < tabs->count(); ++ti) {
-        auto *ed = qobject_cast<CodeEditor *>(tabs->widget(ti));
+        // 兼容可视化包装器（.jsonvue 等）：tab 页 widget 是 CodeVisualSyncWidget，
+        // 需解包出内部 CodeEditor，否则符号搜索会跳过这些文件
+        auto *ed = editorFromWidget(tabs->widget(ti));
         if (!ed) continue;
         QFileInfo fi(ed->objectName());
         // 搜索当前编辑器的符号表
@@ -290,14 +293,14 @@ bool MainDevMgr::eventFilter(QObject *obj, QEvent *event) {
 //  引用高亮（VSCode：引用面板可见时编辑器持续变色）
 // ──────────────────────────────────────────────────────────────
 
-/// 遍历所有已打开编辑器（含拆分面板）
+/// 遍历所有已打开编辑器（含拆分面板；可视化包装器解包出内部 CodeEditor）
 static void forEachEditor(MainDevUi *ui,
                           const std::function<void(CodeEditor *)> &func) {
   for (int pi = 0; pi < ui->editorPanelCount(); ++pi) {
     auto *tabs = ui->editorPanelAt(pi);
     if (!tabs) continue;
     for (int ti = 0; ti < tabs->count(); ++ti) {
-      auto *ed = qobject_cast<CodeEditor *>(tabs->widget(ti));
+      CodeEditor *ed = editorFromWidget(tabs->widget(ti));
       if (ed) func(ed);
     }
   }

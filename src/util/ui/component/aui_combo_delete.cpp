@@ -97,6 +97,8 @@ private:
 AuiComboDelete::AuiComboDelete(QWidget *parent) : QComboBox(parent) {
   // 下拉列表使用自定义委托绘制「文本 + 删除按钮」
   setItemDelegate(new AuiComboDeleteDelegate(this));
+  // 向弹层高度保证机制声明豁免：定制委托不被 AuiComboItemDelegate 覆盖
+  view()->setProperty("auiComboDelegateCustom", true);
   // 允许查看的 viewport 接收鼠标移动事件，用于悬停高亮
   view()->viewport()->setAttribute(Qt::WA_MouseTracking, true);
   view()->viewport()->installEventFilter(this);

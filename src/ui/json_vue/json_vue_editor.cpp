@@ -18,6 +18,7 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QItemSelectionModel>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QKeyEvent>
@@ -109,6 +110,14 @@ void JsonVueEditor::connectStaticControlSignals() {
 
 void JsonVueEditor::connectCellWidgetSignals(QWidget *widget) {
   if (!widget) return;
+  // 点击单元格内嵌控件（下拉框/复选框）时同步选中所在行（见 eventFilter）
+  widget->installEventFilter(this);
+  // 所在行选中变化时让控件重绘（NoBorderCombo 的行选中联动背景依赖此刷新）
+  QWidget *vp = widget->parentWidget();
+  if (auto *t = vp ? qobject_cast<QTableWidget *>(vp->parentWidget()) : nullptr) {
+    connect(t->selectionModel(), &QItemSelectionModel::selectionChanged, widget,
+            [widget]() { widget->update(); });
+  }
   if (auto *cb = qobject_cast<QCheckBox *>(widget)) {
     connect(cb, &QCheckBox::stateChanged, this, [this]() {
       if (!m_loading) emit configChanged();
@@ -194,14 +203,14 @@ QWidget *JsonVueEditor::buildColumnsSection() {
 
   // 操作按钮行
   auto *btnRow = new QHBoxLayout;
-  m_moveUpBtn = new QPushButton(QStringLiteral("↑ 上移"), this);
-  m_moveDownBtn = new QPushButton(QStringLiteral("↓ 下移"), this);
   m_addColBtn = new QPushButton(QStringLiteral("+ 添加列"), this);
   m_removeColBtn = new QPushButton(QStringLiteral("- 删除列"), this);
-  btnRow->addWidget(m_moveUpBtn);
-  btnRow->addWidget(m_moveDownBtn);
+  m_moveUpBtn = new QPushButton(QStringLiteral("↑ 上移"), this);
+  m_moveDownBtn = new QPushButton(QStringLiteral("↓ 下移"), this);
   btnRow->addWidget(m_addColBtn);
   btnRow->addWidget(m_removeColBtn);
+  btnRow->addWidget(m_moveUpBtn);
+  btnRow->addWidget(m_moveDownBtn);
   btnRow->addStretch();
   layout->addLayout(btnRow);
 
@@ -233,8 +242,12 @@ QWidget *JsonVueEditor::buildQueryFieldsSection() {
   auto *btnRow = new QHBoxLayout;
   m_addQueryBtn = new QPushButton(QStringLiteral("+ 添加查询字段"), this);
   m_removeQueryBtn = new QPushButton(QStringLiteral("- 删除查询字段"), this);
+  m_queryMoveUpBtn = new QPushButton(QStringLiteral("↑ 上移"), this);
+  m_queryMoveDownBtn = new QPushButton(QStringLiteral("↓ 下移"), this);
   btnRow->addWidget(m_addQueryBtn);
   btnRow->addWidget(m_removeQueryBtn);
+  btnRow->addWidget(m_queryMoveUpBtn);
+  btnRow->addWidget(m_queryMoveDownBtn);
   btnRow->addStretch();
   layout->addLayout(btnRow);
 
@@ -247,6 +260,8 @@ QWidget *JsonVueEditor::buildQueryFieldsSection() {
       this, 60, 0, QAbstractItemView::SelectRows);
   layout->addWidget(m_queryTable);
 
+  connect(m_queryMoveUpBtn, &QPushButton::clicked, this, &JsonVueEditor::onQueryMoveUp);
+  connect(m_queryMoveDownBtn, &QPushButton::clicked, this, &JsonVueEditor::onQueryMoveDown);
   connect(m_addQueryBtn, &QPushButton::clicked, this, &JsonVueEditor::onAddQueryField);
   connect(m_removeQueryBtn, &QPushButton::clicked, this, &JsonVueEditor::onRemoveQueryField);
 
@@ -262,8 +277,12 @@ QWidget *JsonVueEditor::buildButtonsSection() {
   auto *btnRow = new QHBoxLayout;
   m_addButtonBtn = new QPushButton(QStringLiteral("+ 添加按钮"), this);
   m_removeButtonBtn = new QPushButton(QStringLiteral("- 删除按钮"), this);
+  m_buttonMoveUpBtn = new QPushButton(QStringLiteral("↑ 上移"), this);
+  m_buttonMoveDownBtn = new QPushButton(QStringLiteral("↓ 下移"), this);
   btnRow->addWidget(m_addButtonBtn);
   btnRow->addWidget(m_removeButtonBtn);
+  btnRow->addWidget(m_buttonMoveUpBtn);
+  btnRow->addWidget(m_buttonMoveDownBtn);
   btnRow->addStretch();
   layout->addLayout(btnRow);
 
@@ -277,6 +296,8 @@ QWidget *JsonVueEditor::buildButtonsSection() {
   m_buttonTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
   layout->addWidget(m_buttonTable);
 
+  connect(m_buttonMoveUpBtn, &QPushButton::clicked, this, &JsonVueEditor::onButtonMoveUp);
+  connect(m_buttonMoveDownBtn, &QPushButton::clicked, this, &JsonVueEditor::onButtonMoveDown);
   connect(m_addButtonBtn, &QPushButton::clicked, this, &JsonVueEditor::onAddButton);
   connect(m_removeButtonBtn, &QPushButton::clicked, this, &JsonVueEditor::onRemoveButton);
 
@@ -508,7 +529,10 @@ JsonVueConfig JsonVueEditor::collectConfig() const {
       readColumnConfig(configBtn, col);
     }
 
-    if (!col.dataName.isEmpty()) cfg.columns.append(col);
+    // 所见即所得：列行原样收集，不再按字段名丢弃。此前新建列（字段名初始为空）
+    // 在上移/下移的 collect+load 往返中会直接从界面消失，退出保存时也会静默丢失。
+    // 合并按 dataName 补齐，字段名留空的行原样透传。
+    cfg.columns.append(col);
   }
 
   // 查询字段
@@ -531,7 +555,10 @@ JsonVueConfig JsonVueEditor::collectConfig() const {
       readQueryConfig(qConfigBtn, q);
     }
 
-    if (!q.displayName.isEmpty()) cfg.queryFields.append(q);
+    // 所见即所得：表格里的行原样收集，不再按标签名丢弃（此前标签名留空的行会被
+    // 静默丢弃，导致退出保存后可视化新增的查询字段丢失）。合并按 dataName 补齐，
+    // 标签名留空不影响保存与回读。
+    cfg.queryFields.append(q);
   }
 
   // 操作按钮（直接从 m_buttons 返回，表格只用于显示）
@@ -653,6 +680,23 @@ bool JsonVueEditor::eventFilter(QObject *obj, QEvent *ev) {
       }
     }
     return QWidget::eventFilter(obj, ev);
+  }
+
+  // 点击单元格内嵌控件（下拉框/复选框/配置按钮）时同步选中所在行：
+  // 查询设置表格首列就是下拉框，控件会吃掉点击事件，导致整行没有选中反馈、
+  // 上移/下移没有明确的操作对象。这里按下时补选行，事件本身照常传递
+  // （下拉框仍会弹出、复选框仍会切换）。
+  if (ev->type() == QEvent::MouseButtonPress) {
+    for (QTableWidget *t : {m_columnTable, m_queryTable, m_buttonTable}) {
+      if (!t) continue;
+      for (int r = 0; r < t->rowCount(); ++r) {
+        for (int c = 0; c < t->columnCount(); ++c) {
+          if (t->cellWidget(r, c) == obj) {
+            t->selectRow(r);
+          }
+        }
+      }
+    }
   }
 
   // 配置按钮双击：列配置按钮打开样式配置，查询配置按钮打开查询样式配置
