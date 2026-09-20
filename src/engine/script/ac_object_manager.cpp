@@ -14,12 +14,14 @@ accore::AcJsonValue AcObjectManager::registerInstance(const accore::AcJsonValue 
   QString objId = QUuid::createUuid().toString(QUuid::WithoutBraces);
   // 初始引用计数为 0，由调用方（setVar/retainIfInstance）负责增加
   m_refCount[objId] = 0;
-  m_objects[objId] = instance;
+  // 非 Instance 种类的输入（如构造器返回的普通对象）包装为实例
+  accore::AcJsonValue stored = instance.isInstance()
+                                   ? instance
+                                   : accore::AcJsonValue::instanceFrom(instance, className, objId);
+  stored.setInstanceObjId(objId);
+  m_objects[objId] = stored;
   m_classNames[objId] = className;
-
-  accore::AcJsonValue result = instance;
-  result.set(QString::fromLatin1(AcRuntime::kObjId), accore::AcJsonValue(objId));
-  return result;
+  return stored;
 }
 
 void AcObjectManager::retain(const QString &objId) {
@@ -42,16 +44,12 @@ bool AcObjectManager::release(const QString &objId) {
   return false;
 }
 
-// accore 原生判断：has/value 直读内部成员，无深拷贝
+// accore 原生判断：实例种类 + 已登记 id，无深拷贝
 bool AcObjectManager::isManagedInstance(const accore::AcJsonValue &val) {
-  if (!val.isObject()) return false;
-  return val.has(QString::fromLatin1(AcRuntime::kObjId));
+  return val.isInstance() && !val.instanceObjId().isEmpty();
 }
 
-QString AcObjectManager::getObjId(const accore::AcJsonValue &val) {
-  if (!val.isObject()) return QString();
-  return val.value(QString::fromLatin1(AcRuntime::kObjId)).toString();
-}
+QString AcObjectManager::getObjId(const accore::AcJsonValue &val) { return val.instanceObjId(); }
 
 accore::AcJsonValue AcObjectManager::getAcObject(const QString &objId) const {
   // 存储即 accore 原生形态，直读零转换

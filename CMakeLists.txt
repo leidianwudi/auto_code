@@ -405,6 +405,7 @@ add_executable(auto_code_tests EXCLUDE_FROM_ALL
     tests/test_json_utils.cpp
     tests/test_ac_param_default.cpp
     tests/test_ac_json_value.cpp
+    tests/test_ac_ident_pool.cpp
     tests/test_ac_interpreter.cpp
     # 端到端 golden 脚本测试（QProcess 调主程序 --run，无引擎链接依赖）
     tests/test_golden_script.cpp

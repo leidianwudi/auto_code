@@ -31,14 +31,14 @@ accore::AcJsonValue AcInterpreter::execCallBody(const QVector<ParamDef> &params,
     setError(QStringLiteral("调用栈溢出（递归过深，超过 %1 层）：函数 %2")
                  .arg(kMaxCallDepth)
                  .arg(funcName),
-             body.stmts.isEmpty() ? 0 : body.stmts.first().line);
+             body.stmts.isEmpty() ? 0 : body.stmts.first().loc.line);
     return accore::AcJsonValue();
   }
   ++m_callDepth;
   QString frameFile;
   int frameLine = 0;
   if (m_debugger) {
-    frameLine = body.stmts.isEmpty() ? 0 : body.stmts.first().line;
+    frameLine = body.stmts.isEmpty() ? 0 : body.stmts.first().loc.line;
     frameFile = body.stmts.isEmpty() ? QString() : body.stmts.first().filePath;
     m_callStack.append(AcDebugFrame{funcName, frameFile, frameLine});
   }
@@ -97,7 +97,7 @@ accore::AcJsonValue AcInterpreter::execMethod(const MethodDef &method,
                                               const accore::AcJsonValue &callArgs) {
   // 用「类名.方法名」作为函数名，供调用栈与变量位置列展示
   QString qualified = method.name;
-  const QString cls = thisObj.value(QString::fromLatin1(AcRuntime::kClassKey)).toString();
+  const QString cls = thisObj.instanceClass();
   if (!cls.isEmpty()) qualified = QStringLiteral("%1.%2").arg(cls, method.name);
   return execCallBody(method.params, callArgs, method.body, &thisObj, qualified);
 }
@@ -142,9 +142,9 @@ const MethodDef *AcInterpreter::findMethod(const QString &className,
 }
 
 accore::AcJsonValue AcInterpreter::createBaseInstance(const QString &baseClassName) {
-  if (!m_classes.contains(baseClassName)) return accore::AcJsonValue::makeObject();
+  if (!m_classes.contains(baseClassName)) return accore::AcJsonValue::makeInstance(baseClassName);
   const ClassDef &cd = m_classes[baseClassName];
-  accore::AcJsonValue instance = accore::AcJsonValue::makeObject();
+  accore::AcJsonValue instance = accore::AcJsonValue::makeInstance(baseClassName);
   if (!cd.baseClass.isEmpty()) {
     instance = createBaseInstance(cd.baseClass);
   }
@@ -236,7 +236,7 @@ void AcInterpreter::assignToIndex(const accore::AcJsonValue &objVal,
     writeBackVar(objectExpr, arr);
   } else {
     // 对齐 JS TypeError 语义：对 null/标量做索引赋值属于非法操作，显式报错而非静默跳过
-    setError(QStringLiteral("cannot index-assign on value"), objectExpr.line);
+    setError(QStringLiteral("cannot index-assign on value"), objectExpr.loc.line);
   }
 }
 
@@ -245,14 +245,14 @@ void AcInterpreter::assignToProperty(const accore::AcJsonValue &objVal, const QS
                                      CompoundOp op) {
   if (!objVal.isObject()) {
     // 对齐 JS TypeError 语义：对 null/标量设置属性属于非法操作，显式报错
-    setError(QStringLiteral("cannot set property '%1' on value").arg(prop), objectExpr.line);
+    setError(QStringLiteral("cannot set property '%1' on value").arg(prop), objectExpr.loc.line);
     return;
   }
   accore::AcJsonValue obj = objVal;
   if (op != CompoundOp::kNone) {
     accore::AcJsonValue oldVal = obj.value(prop);
     // 复合运算报错带上宿主表达式行号（此前传 0 丢失行号）
-    newVal = applyCompoundOp(oldVal, newVal, op, objectExpr.line);
+    newVal = applyCompoundOp(oldVal, newVal, op, objectExpr.loc.line);
     if (!m_error.isEmpty()) return;
   }
   if (obj.has(prop)) {
@@ -280,7 +280,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       FunMgr::ins().call(clsName, funcName, args);
       QString err = FunMgr::takeError();
       if (!err.isEmpty()) {
-        setError(err, stmt.call.className.line);
+        setError(err, stmt.call.className.loc.line);
       }
       break;
     }
@@ -298,7 +298,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
         } else {
           currentVal = resolveVar(stmt.assign.name);
         }
-        val = applyCompoundOp(currentVal, val, stmt.assign.compoundOp, stmt.assign.value.line);
+        val = applyCompoundOp(currentVal, val, stmt.assign.compoundOp, stmt.assign.value.loc.line);
         if (!m_error.isEmpty()) return;
       }
 
@@ -314,7 +314,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
 
       if (stmt.assign.isDeclaration) {
         declareVar(stmt.assign.name, val);
-        recordVarLoc(stmt.assign.name, stmt.filePath, stmt.line);
+        recordVarLoc(stmt.assign.name, stmt.filePath, stmt.loc.line);
       } else {
         setVar(stmt.assign.name, val);
       }
@@ -407,7 +407,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
         for (const accore::AcJsonValue &v : arr.items()) {
           pushScope();
           declareVar(stmt.forStmt.varName, v);
-          recordVarLoc(stmt.forStmt.varName, stmt.filePath, stmt.line);
+          recordVarLoc(stmt.forStmt.varName, stmt.filePath, stmt.loc.line);
           execBlock(stmt.forStmt.body);
           popScope();
           if (!m_error.isEmpty()) return;
@@ -521,7 +521,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       if (!m_error.isEmpty()) return;
       retainIfInstance(val);
       declareVar(stmt.usingStmt.varName, val);
-      recordVarLoc(stmt.usingStmt.varName, stmt.filePath, stmt.line);
+      recordVarLoc(stmt.usingStmt.varName, stmt.filePath, stmt.loc.line);
       recordInferredType(stmt.usingStmt.varName, val);
       if (!m_usingStack.isEmpty()) {
         m_usingStack.last().append(stmt.usingStmt.varName);
@@ -566,14 +566,14 @@ void AcInterpreter::execBlock(const Block &block) {
     // 顶层脚本帧：实时更新其行号为当前执行语句行，使调用栈展示当前所在位置
     if (m_debugger && m_callDepth == 1 && !m_callStack.isEmpty() &&
         (m_scriptFile.isEmpty() || stmt.filePath == m_scriptFile)) {
-      m_callStack[0].line = stmt.line;
+      m_callStack[0].line = stmt.loc.line;
     }
     // 调试：命中断点/单步时暂停（阻塞等待 GUI 指令），返回 false 表示用户停止。
     // 先用无锁原子标志门控：普通执行（调试器指针常驻但未进入调试会话）直接跳过，
     // 否则每条语句都要构造快照 lambda + 加锁，Debug 构建下脚本执行会慢数倍
     if (m_debugger && !isDeclStmt && m_debugger->isDebugging()) {
       bool cont =
-          m_debugger->onStatement(stmt.filePath, stmt.line, m_callDepth,
+          m_debugger->onStatement(stmt.filePath, stmt.loc.line, m_callDepth,
                                   [this](QVector<AcDebugFrame> &stack, QList<AcDebugVar> &vars) {
                                     buildDebugSnapshot(stack, vars);
                                   });

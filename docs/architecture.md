@@ -459,3 +459,62 @@ QString s = v.isString() ? v.toString() : QString::number(v.toDouble());
 ### 11.7 qFloor(double) 在 Qt 6.12 返回 int
 
 `qFloor(double)` 在 Qt 6.12 返回 int 并对大值触发断言。时间戳处理应使用 `std::floor(double)`（返回 double）。
+
+## 12. 运行时值模型与标识符驻留
+
+### 12.1 运行时值种类（accore::AcJsonValue）
+
+运行时值不是"裸 JSON + 内部魔法键"，而是带种类标记的完整值模型：
+
+| Type | 说明 | 存储 |
+|------|------|------|
+| Null/Bool/Number/String | 标量 | 直接成员 |
+| Array/Object | 数据容器 | COW 共享 |
+| `Instance` | 类实例 | 类名 + 唯一 objId 存**专用字段**，属性存对象存储 |
+| `ClassRef` | 类引用（`ClassName::x` 上下文） | 类名存专用字段 |
+| `FuncRef` | 函数引用（function 表达式） | 函数名存专用字段 |
+
+设计要点：
+
+- **无内部协议键**：实例的类名/objId 曾用 `__class__`/`__objId__` 键编码在用户属性空间里，
+  用户数据若含这些键会污染引擎；现已全部迁入种类专用字段，`members()/keys()` 即纯属性
+- **实例即对象**：`isObject()` 对 Instance 返回 true（JS 语义），属性访问接口直接可用；
+  区分纯数据对象与实例用 `isInstance()`
+- **序列化**：Instance 按属性集输出；ClassRef/FuncRef 输出 null（运行时引用不应持久化）
+- 类名提取统一走 `instanceClass()`，唯一 id 走 `instanceObjId()`
+
+### 12.2 源码位置（AcLoc）
+
+Token 与所有 AST 节点统一携带 `AcLoc{line, col, offset}`（列/偏移按 UTF-16 码元计，
+与 QString 索引一致；line/col 1-based）。词法器逐 token 计算列号与偏移。
+诊断信息目前仍只输出行号（`at line %N`），列号供 LSP/格式化等后续特性使用。
+
+### 12.3 标识符驻留（accore::AcIdentPool）
+
+[src/core/common/ac_ident_pool.h](file:///d:/work/github/auto_code/src/core/common/ac_ident_pool.h)
+实现字符串驻留：同名标识符全局唯一 `uint32 id`，id 比较 O(1)，id↔名字互查 O(1)。
+
+- **当前接入点**：AcLexer 对每个标识符 token 驻留（`Token::identId`），
+  词法期一次哈希，全阶段共享
+- **演进路径**：当引入字节码/IR 或 LSP 需要稳定符号身份时，将 AST 的 name 字段
+  批量切换为 `AcIdent`；符号表/类型检查/重命名以 id 为键
+- **为何不立即全量 id 化**：本语言运行时的热点是动态 JSON 属性访问（数据键，
+  不可驻留）与 QHash 变量查找（已 O(1)），AST 全量 id 化当前收益低、扰动面大；
+  待有真实消费方（IR/符号身份）时再做
+
+## 13. QString 策略与分层边界
+
+| 层 | Qt 依赖 | 字符串策略 |
+|----|---------|-----------|
+| `src/core/` | 仅 QtCore，禁 QtGui | 新代码优先 `std::string_view`/驻留 id；值类型内部沿用 QString（UTF-16 与运行时语义一致） |
+| `src/engine/` | QtCore，禁 QtGui/QtWidgets | 同上；AST 标识符经驻留池去重 |
+| `src/ui/`、`src/util/ui/` | 全量 Qt | QString 自由使用（与 QWidget API 交互） |
+
+原则：
+
+1. **问题不在 QString，在边界**：GUI 层用 QString 零成本；引擎核心若被外部嵌入
+   （无 Qt 环境）才需要替换。先定边界，后按模块迁移（lexer → parser → interpreter），
+   禁止一次性全局替换（UTF-8/UTF-16 边界 bug 风险）
+2. 字符串字面量与 JSON 数据保留 QString：脚本的字符串值运行时即 UTF-16，
+   全链路换 UTF-8 需要连带动 AccJsonValue/FunMgr 签名，收益不成比例，暂缓
+3. 新增编译器基础设施（位置、驻留、未来 IR）一律落在 `src/core/`，与 Qt 解耦

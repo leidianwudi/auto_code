@@ -39,7 +39,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
       entry.name = fd.name;
       entry.kind = AcSymbolKind::kFunction;
       entry.filePath = m_filePath;
-      entry.line = stmt.line;
+      entry.line = stmt.loc.line;
       entry.returnType = acTypeToString(fd.returnType);
       entry.params = fd.params;
       entry.signature = makeFunctionSignature(fd.name, fd.params, fd.returnType);
@@ -53,7 +53,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
           paramEntry.name = param.name;
           paramEntry.kind = AcSymbolKind::kParameter;
           paramEntry.filePath = m_filePath;
-          paramEntry.line = stmt.line;
+          paramEntry.line = stmt.loc.line;
           paramEntry.parentClass = fd.name;
           paramEntry.returnType = acTypeToString(param.type);
           paramEntry.signature = param.name + QStringLiteral(": ") + acTypeToString(param.type);
@@ -72,7 +72,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
       entry.name = iface.name;
       entry.kind = AcSymbolKind::kClass;
       entry.filePath = m_filePath;
-      entry.line = stmt.line;
+      entry.line = stmt.loc.line;
       entry.signature = QStringLiteral("interface ") + iface.name;
       if (!iface.baseInterfaces.isEmpty()) {
         entry.signature +=
@@ -86,7 +86,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
         methodEntry.name = method.name;
         methodEntry.kind = AcSymbolKind::kMethod;
         methodEntry.filePath = m_filePath;
-        methodEntry.line = stmt.line;
+        methodEntry.line = stmt.loc.line;
         methodEntry.parentClass = iface.name;
         methodEntry.returnType = acTypeToString(method.returnType);
         methodEntry.params = method.params;
@@ -107,7 +107,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
       entry.name = cd.name;
       entry.kind = AcSymbolKind::kClass;
       entry.filePath = m_filePath;
-      entry.line = stmt.line;
+      entry.line = stmt.loc.line;
       entry.comment =
           cd.baseClass.isEmpty() ? QString() : QStringLiteral("extends %1").arg(cd.baseClass);
       entry.signature =
@@ -121,7 +121,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
         propEntry.name = prop.key;
         propEntry.kind = AcSymbolKind::kProperty;
         propEntry.filePath = m_filePath;
-        propEntry.line = prop.line > 0 ? prop.line : stmt.line;
+        propEntry.line = prop.loc.line > 0 ? prop.loc.line : stmt.loc.line;
         propEntry.parentClass = cd.name;
         propEntry.returnType = acTypeToString(prop.type);
         propEntry.signature = prop.key + QStringLiteral(": ") + acTypeToString(prop.type);
@@ -134,7 +134,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
         methodEntry.name = method.name;
         methodEntry.kind = AcSymbolKind::kMethod;
         methodEntry.filePath = m_filePath;
-        methodEntry.line = method.line > 0 ? method.line : stmt.line;
+        methodEntry.line = method.loc.line > 0 ? method.loc.line : stmt.loc.line;
         methodEntry.parentClass = cd.name;
         methodEntry.returnType = acTypeToString(method.returnType);
         methodEntry.params = method.params;
@@ -151,7 +151,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
             paramEntry.name = param.name;
             paramEntry.kind = AcSymbolKind::kParameter;
             paramEntry.filePath = m_filePath;
-            paramEntry.line = stmt.line;
+            paramEntry.line = stmt.loc.line;
             paramEntry.parentClass = cd.name + QStringLiteral(".") + method.name;
             paramEntry.returnType = acTypeToString(param.type);
             paramEntry.signature = param.name + QStringLiteral(": ") + acTypeToString(param.type);
@@ -174,7 +174,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
         entry.name = as.name;
         entry.kind = AcSymbolKind::kVariable;
         entry.filePath = m_filePath;
-        entry.line = as.line > 0 ? as.line : stmt.line;
+        entry.line = as.loc.line > 0 ? as.loc.line : stmt.loc.line;
         if (as.hasTypeAnnotation) {
           // 显式类型注解：let x: Type = ...
           entry.returnType = acTypeToString(as.typeAnnotation);
@@ -212,7 +212,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
         entry.name = fs.varName;
         entry.kind = AcSymbolKind::kVariable;
         entry.filePath = m_filePath;
-        entry.line = fs.line > 0 ? fs.line : stmt.line;
+        entry.line = fs.loc.line > 0 ? fs.loc.line : stmt.loc.line;
 
         // 类型推断：优先使用显式注解，其次从可迭代表达式推断元素类型
         QString elemType;
@@ -268,7 +268,7 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
         entry.name = us.varName;
         entry.kind = AcSymbolKind::kVariable;
         entry.filePath = m_filePath;
-        entry.line = stmt.line;
+        entry.line = stmt.loc.line;
         entry.signature = us.varName + QStringLiteral(": using");
         m_symbols.insert(us.varName, entry);
       }
@@ -628,7 +628,7 @@ void AcSymbolTable::collectObjectProperties(const QString &varName, const Expr &
     propEntry.name = entry.key;
     propEntry.kind = AcSymbolKind::kProperty;
     propEntry.filePath = m_filePath;
-    propEntry.line = entry.line;
+    propEntry.line = entry.loc.line;
     propEntry.returnType = propType;
     if (!propType.isEmpty()) {
       propEntry.signature = entry.key + QStringLiteral(": ") + propType;

@@ -13,26 +13,26 @@
 bool AcParser::parseExpr(Expr &expr) {
   if (!parseTernary(expr)) return false;
   // 赋值表达式: lhs = rhs
-  if (peek().type == TOK_EQUALS) {
-    int assignLine = peek().line;
+  if (peek().type == TokenType::kEquals) {
+    int assignLine = peek().loc.line;
     advance();
     auto left = std::make_unique<Expr>(std::move(expr));
     auto right = std::make_unique<Expr>();
     if (!parseExpr(*right)) return false;
     expr.kind = Expr::kAssign;
-    expr.line = assignLine;
+    expr.loc.line = assignLine;
     expr.left = std::move(left);
     expr.right = std::move(right);
     return true;
   }
-  if (peek().type == TOK_PLUSPLUS) {
+  if (peek().type == TokenType::kPlusPlus) {
     advance();
     auto operand = std::make_unique<Expr>(std::move(expr));
     expr.kind = Expr::kPostInc;
     expr.operand = std::move(operand);
     return true;
   }
-  if (peek().type == TOK_MINUSMINUS) {
+  if (peek().type == TokenType::kMinusMinus) {
     advance();
     auto operand = std::make_unique<Expr>(std::move(expr));
     expr.kind = Expr::kPostDec;
@@ -44,15 +44,15 @@ bool AcParser::parseExpr(Expr &expr) {
 
 bool AcParser::parseTernary(Expr &expr) {
   if (!parseLogicalOr(expr)) return false;
-  if (peek().type == TOK_QUESTION) {
-    int ternaryLine = peek().line;
+  if (peek().type == TokenType::kQuestion) {
+    int ternaryLine = peek().loc.line;
     advance();
     auto cond = std::make_unique<Expr>(std::move(expr));
     auto trueExpr = std::make_unique<Expr>();
     if (!parseLogicalOr(*trueExpr)) {
       return false;
     }
-    if (!expect(TOK_COLON, QStringLiteral("expected ':' in ternary expression"))) {
+    if (!expect(TokenType::kColon, QStringLiteral("expected ':' in ternary expression"))) {
       return false;
     }
     auto falseExpr = std::make_unique<Expr>();
@@ -60,7 +60,7 @@ bool AcParser::parseTernary(Expr &expr) {
       return false;
     }
     expr.kind = Expr::kTernary;
-    expr.line = ternaryLine;
+    expr.loc.line = ternaryLine;
     expr.left = std::move(cond);
     expr.right = std::move(trueExpr);
     expr.operand = std::move(falseExpr);
@@ -95,7 +95,7 @@ bool AcParser::parseBinary(Expr &expr,
     if (!(this->*parseNext)(*right)) return false;
     Expr binary;
     binary.kind = Expr::kBinary;
-    binary.line = opToken.line;
+    binary.loc = opToken.loc;
     binary.binOp = matchedOp;
     binary.left = std::move(left);
     binary.right = std::move(right);
@@ -105,75 +105,76 @@ bool AcParser::parseBinary(Expr &expr,
 }
 
 bool AcParser::parseLogicalOr(Expr &expr) {
-  return parseBinary<&AcParser::parseLogicalAnd>(expr, {{TOK_OR, Expr::kOr}});
+  return parseBinary<&AcParser::parseLogicalAnd>(expr, {{TokenType::kOr, Expr::kOr}});
 }
 
 bool AcParser::parseLogicalAnd(Expr &expr) {
-  return parseBinary<&AcParser::parseComparison>(expr, {{TOK_AND, Expr::kAnd}});
+  return parseBinary<&AcParser::parseComparison>(expr, {{TokenType::kAnd, Expr::kAnd}});
 }
 
 bool AcParser::parseComparison(Expr &expr) {
-  return parseBinary<&AcParser::parseAddSub>(expr, {{TOK_EQ, Expr::kEq},
-                                                    {TOK_NEQ, Expr::kNeq},
-                                                    {TOK_LT, Expr::kLt},
-                                                    {TOK_GT, Expr::kGt},
-                                                    {TOK_LTE, Expr::kLte},
-                                                    {TOK_GTE, Expr::kGte}});
+  return parseBinary<&AcParser::parseAddSub>(expr, {{TokenType::kEq, Expr::kEq},
+                                                    {TokenType::kNeq, Expr::kNeq},
+                                                    {TokenType::kLt, Expr::kLt},
+                                                    {TokenType::kGt, Expr::kGt},
+                                                    {TokenType::kLte, Expr::kLte},
+                                                    {TokenType::kGte, Expr::kGte}});
 }
 
 bool AcParser::parseAddSub(Expr &expr) {
-  return parseBinary<&AcParser::parseMulDiv>(expr,
-                                             {{TOK_PLUS, Expr::kAdd}, {TOK_MINUS, Expr::kSub}});
+  return parseBinary<&AcParser::parseMulDiv>(
+      expr, {{TokenType::kPlus, Expr::kAdd}, {TokenType::kMinus, Expr::kSub}});
 }
 
 bool AcParser::parseMulDiv(Expr &expr) {
-  return parseBinary<&AcParser::parseUnary>(
-      expr, {{TOK_MUL, Expr::kMul}, {TOK_DIV, Expr::kDiv}, {TOK_MOD, Expr::kMod}});
+  return parseBinary<&AcParser::parseUnary>(expr, {{TokenType::kMul, Expr::kMul},
+                                                   {TokenType::kDiv, Expr::kDiv},
+                                                   {TokenType::kMod, Expr::kMod}});
 }
 
 bool AcParser::parseUnary(Expr &expr) {
   Token t = peek();
 
-  if (t.type == TOK_PLUSPLUS) {
+  if (t.type == TokenType::kPlusPlus) {
     advance();
     auto operand = std::make_unique<Expr>();
     if (!parseUnary(*operand)) {
       return false;
     }
     expr.kind = Expr::kPreInc;
-    expr.line = t.line;
+    expr.loc = t.loc;
     expr.operand = std::move(operand);
     return true;
   }
 
-  if (t.type == TOK_MINUSMINUS) {
+  if (t.type == TokenType::kMinusMinus) {
     advance();
     auto operand = std::make_unique<Expr>();
     if (!parseUnary(*operand)) {
       return false;
     }
     expr.kind = Expr::kPreDec;
-    expr.line = t.line;
+    expr.loc = t.loc;
     expr.operand = std::move(operand);
     return true;
   }
 
-  if (t.type == TOK_NOT) {
+  if (t.type == TokenType::kNot) {
     advance();
     auto operand = std::make_unique<Expr>();
     if (!parseUnary(*operand)) {
       return false;
     }
     expr.kind = Expr::kUnary;
-    expr.line = t.line;
+    expr.loc = t.loc;
     expr.unaryOp = Expr::kNot;
     expr.operand = std::move(operand);
     return true;
   }
 
-  if (t.type == TOK_MINUS) {
+  if (t.type == TokenType::kMinus) {
     advance();
-    if (peek().type == TOK_NUMBER) {
+    if (peek().type == TokenType::kNumber) {
       expr.kind = Expr::kNumber;
       expr.numVal = -advance().text.toDouble();
       return true;
@@ -199,56 +200,58 @@ bool AcParser::parseUnary(Expr &expr) {
 bool AcParser::parsePostfix(Expr &expr) {
   if (!parsePrimary(expr)) return false;
   while (true) {
-    if (peek().type == TOK_DOT) {
+    if (peek().type == TokenType::kDot) {
       advance();
       if (!isPropertyName(peek().type)) {
-        m_error = QStringLiteral("expected property name after '.' at line %1").arg(peek().line);
+        m_error =
+            QStringLiteral("expected property name after '.' at line %1").arg(peek().loc.line);
         return false;
       }
       QString memberName = advance().text;
-      if (peek().type == TOK_LPAREN) {
+      if (peek().type == TokenType::kLParen) {
         advance();
         Expr chained;
         chained.kind = Expr::kMethodCall;
-        chained.line = peek().line;
+        chained.loc.line = peek().loc.line;
         chained.methodCall.methodName = memberName;
         if (expr.kind == Expr::kIdent ||
             (expr.kind == Expr::kPropAccess && !expr.ident.isEmpty())) {
           chained.methodCall.objName = expr.ident;
         }
         chained.methodCall.object = std::make_unique<Expr>(std::move(expr));
-        while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
+        while (peek().type != TokenType::kRParen && peek().type != TokenType::kEof) {
           auto arg = std::make_unique<Expr>();
           if (!parseLogicalOr(*arg)) {
             return false;
           }
           chained.methodCall.args.push_back(std::move(arg));
-          if (peek().type == TOK_COMMA) advance();
+          if (peek().type == TokenType::kComma) advance();
         }
-        if (!expect(TOK_RPAREN,
-                    QStringLiteral("expected ')' after method call at line %1").arg(peek().line)))
+        if (!expect(
+                TokenType::kRParen,
+                QStringLiteral("expected ')' after method call at line %1").arg(peek().loc.line)))
           return false;
         expr = std::move(chained);
       } else {
         Expr propAccess;
         propAccess.kind = Expr::kPropAccess;
-        propAccess.line = peek().line;
+        propAccess.loc.line = peek().loc.line;
         propAccess.prop = memberName;
         propAccess.propObject = std::make_unique<Expr>(std::move(expr));
         expr = std::move(propAccess);
       }
-    } else if (peek().type == TOK_LBRACKET) {
+    } else if (peek().type == TokenType::kLBracket) {
       advance();
       auto idxExpr = std::make_unique<Expr>();
       if (!parseLogicalOr(*idxExpr)) {
         return false;
       }
-      if (!expect(TOK_RBRACKET, QStringLiteral("expected ']' after index expression"))) {
+      if (!expect(TokenType::kRBracket, QStringLiteral("expected ']' after index expression"))) {
         return false;
       }
       Expr idxAccess;
       idxAccess.kind = Expr::kIndexAccess;
-      idxAccess.line = peek().line;
+      idxAccess.loc.line = peek().loc.line;
       idxAccess.left = std::make_unique<Expr>(std::move(expr));
       idxAccess.right = std::move(idxExpr);
       expr = std::move(idxAccess);
@@ -262,271 +265,277 @@ bool AcParser::parsePostfix(Expr &expr) {
 bool AcParser::parsePrimary(Expr &expr) {
   Token t = peek();
 
-  if (t.type == TOK_THIS) {
+  if (t.type == TokenType::kThis) {
     advance();
-    if (peek().type == TOK_DOT) {
+    if (peek().type == TokenType::kDot) {
       advance();
       if (!isPropertyName(peek().type)) {
         m_error =
-            QStringLiteral("expected property name after 'this.' at line %1").arg(peek().line);
+            QStringLiteral("expected property name after 'this.' at line %1").arg(peek().loc.line);
         return false;
       }
       QString propName = advance().text;
-      if (peek().type == TOK_LPAREN) {
+      if (peek().type == TokenType::kLParen) {
         expr.kind = Expr::kMethodCall;
-        expr.line = peek().line;
+        expr.loc.line = peek().loc.line;
         expr.methodCall.objName = QString::fromLatin1(AcKeyword::kThis);
         expr.methodCall.methodName = propName;
         advance();
-        while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
+        while (peek().type != TokenType::kRParen && peek().type != TokenType::kEof) {
           auto arg = std::make_unique<Expr>();
           if (!parseLogicalOr(*arg)) {
             return false;
           }
           expr.methodCall.args.push_back(std::move(arg));
-          if (peek().type == TOK_COMMA) advance();
+          if (peek().type == TokenType::kComma) advance();
         }
-        return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
+        return expect(TokenType::kRParen, QStringLiteral("expected ')'"));
       }
       expr.kind = Expr::kPropAccess;
-      expr.line = t.line;
+      expr.loc = t.loc;
       expr.ident = QString::fromLatin1(AcKeyword::kThis);
       expr.prop = propName;
       return true;
     }
-    if (peek().type == TOK_LBRACKET) {
+    if (peek().type == TokenType::kLBracket) {
       advance();
       expr.kind = Expr::kIndexAccess;
       expr.left = std::make_unique<Expr>();
       expr.left->kind = Expr::kThis;
       expr.right = std::make_unique<Expr>();
       if (!parseExpr(*expr.right)) return false;
-      return expect(TOK_RBRACKET, QStringLiteral("expected ']'"));
+      return expect(TokenType::kRBracket, QStringLiteral("expected ']'"));
     }
     expr.kind = Expr::kThis;
     return true;
   }
 
-  if (t.type == TOK_SUPER) {
+  if (t.type == TokenType::kSuper) {
     advance();
-    if (peek().type == TOK_LPAREN) {
+    if (peek().type == TokenType::kLParen) {
       expr.kind = Expr::kMethodCall;
-      expr.line = peek().line;
+      expr.loc.line = peek().loc.line;
       expr.methodCall.objName = QString::fromLatin1(AcKeyword::kSuper);
       expr.methodCall.methodName = QStringLiteral("constructor");
       advance();
-      while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
+      while (peek().type != TokenType::kRParen && peek().type != TokenType::kEof) {
         auto arg = std::make_unique<Expr>();
         if (!parseLogicalOr(*arg)) {
           return false;
         }
         expr.methodCall.args.push_back(std::move(arg));
-        if (peek().type == TOK_COMMA) advance();
+        if (peek().type == TokenType::kComma) advance();
       }
-      return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
+      return expect(TokenType::kRParen, QStringLiteral("expected ')'"));
     }
-    if (peek().type != TOK_DOT) {
-      m_error = QStringLiteral("expected '.' or '(' after 'super' at line %1").arg(peek().line);
+    if (peek().type != TokenType::kDot) {
+      m_error = QStringLiteral("expected '.' or '(' after 'super' at line %1").arg(peek().loc.line);
       return false;
     }
     advance();
-    if (peek().type != TOK_IDENT) {
-      m_error = QStringLiteral("expected method name after 'super.' at line %1").arg(peek().line);
+    if (peek().type != TokenType::kIdent) {
+      m_error =
+          QStringLiteral("expected method name after 'super.' at line %1").arg(peek().loc.line);
       return false;
     }
     QString methodName = advance().text;
-    if (peek().type == TOK_LPAREN) {
+    if (peek().type == TokenType::kLParen) {
       expr.kind = Expr::kMethodCall;
-      expr.line = peek().line;
+      expr.loc.line = peek().loc.line;
       expr.methodCall.objName = QString::fromLatin1(AcKeyword::kSuper);
       expr.methodCall.methodName = methodName;
       advance();
-      while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
+      while (peek().type != TokenType::kRParen && peek().type != TokenType::kEof) {
         auto arg = std::make_unique<Expr>();
         if (!parseLogicalOr(*arg)) {
           return false;
         }
         expr.methodCall.args.push_back(std::move(arg));
-        if (peek().type == TOK_COMMA) advance();
+        if (peek().type == TokenType::kComma) advance();
       }
-      return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
+      return expect(TokenType::kRParen, QStringLiteral("expected ')'"));
     }
     expr.kind = Expr::kPropAccess;
-    expr.line = t.line;
+    expr.loc = t.loc;
     expr.ident = QString::fromLatin1(AcKeyword::kSuper);
     expr.prop = methodName;
     return true;
   }
 
-  if (t.type == TOK_NEW) {
-    int newLine = t.line;
+  if (t.type == TokenType::kNew) {
+    int newLine = t.loc.line;
     advance();
-    if (peek().type != TOK_IDENT) {
-      m_error = QStringLiteral("expected class name after 'new' at line %1").arg(peek().line);
+    if (peek().type != TokenType::kIdent) {
+      m_error = QStringLiteral("expected class name after 'new' at line %1").arg(peek().loc.line);
       return false;
     }
     expr.kind = Expr::kNewInstance;
-    expr.line = newLine;
+    expr.loc.line = newLine;
     expr.className = advance().text;
-    if (!expect(TOK_LPAREN, QStringLiteral("expected '(' after class name"))) return false;
-    if (peek().type != TOK_RPAREN) {
+    if (!expect(TokenType::kLParen, QStringLiteral("expected '(' after class name"))) return false;
+    if (peek().type != TokenType::kRParen) {
       do {
         auto arg = std::make_unique<Expr>();
         if (!parseLogicalOr(*arg)) {
           return false;
         }
         expr.constructorArgs.push_back(std::move(arg));
-        if (peek().type != TOK_COMMA) break;
+        if (peek().type != TokenType::kComma) break;
         advance();
       } while (true);
     }
-    return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
+    return expect(TokenType::kRParen, QStringLiteral("expected ')'"));
   }
 
   switch (t.type) {
-    case TOK_STRING:
+    case TokenType::kString:
       expr.kind = Expr::kString;
       expr.strVal = advance().text;
       return true;
 
-    case TOK_NUMBER:
+    case TokenType::kNumber:
       expr.kind = Expr::kNumber;
       expr.numVal = advance().text.toDouble();
       return true;
 
-    case TOK_TRUE:
+    case TokenType::kTrue:
       expr.kind = Expr::kBool;
       expr.boolVal = true;
       advance();
       return true;
 
-    case TOK_FALSE:
+    case TokenType::kFalse:
       expr.kind = Expr::kBool;
       expr.boolVal = false;
       advance();
       return true;
 
-    case TOK_NULL:
+    case TokenType::kNull:
       expr.kind = Expr::kNull;
       advance();
       return true;
 
-    case TOK_UNDEFINED:
+    case TokenType::kUndefined:
       expr.kind = Expr::kUndefined;
       advance();
       return true;
 
-    case TOK_TEMPLATE_STRING:
+    case TokenType::kTemplateString:
       return parseTemplateString(expr);
 
-    case TOK_LPAREN: {
+    case TokenType::kLParen: {
       advance();
       if (!parseExpr(expr)) return false;
-      return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
+      return expect(TokenType::kRParen, QStringLiteral("expected ')'"));
     }
 
-    case TOK_IDENT: {
-      int identLine = peek().line;
+    case TokenType::kIdent: {
+      int identLine = peek().loc.line;
       QString name = advance().text;
-      if (peek().type == TOK_SCOPE) {
-        int scopeLine = peek().line;
+      if (peek().type == TokenType::kScope) {
+        int scopeLine = peek().loc.line;
         advance();
-        if (peek().type != TOK_IDENT) {
-          m_error = QStringLiteral("expected member name after '::' at line %1").arg(peek().line);
+        if (peek().type != TokenType::kIdent) {
+          m_error =
+              QStringLiteral("expected member name after '::' at line %1").arg(peek().loc.line);
           return false;
         }
         QString member = advance().text;
         expr.kind = Expr::kStaticAccess;
-        expr.line = scopeLine;
+        expr.loc.line = scopeLine;
         expr.className = name;
         expr.prop = member;
-        if (peek().type == TOK_LPAREN) {
+        if (peek().type == TokenType::kLParen) {
           advance();
-          while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
+          while (peek().type != TokenType::kRParen && peek().type != TokenType::kEof) {
             auto arg = std::make_unique<Expr>();
             if (!parseLogicalOr(*arg)) {
               return false;
             }
             expr.funcCall.args.push_back(std::move(arg));
-            if (peek().type == TOK_COMMA) advance();
+            if (peek().type == TokenType::kComma) advance();
           }
-          return expect(TOK_RPAREN, QStringLiteral("expected ')' after static method call"));
+          return expect(TokenType::kRParen,
+                        QStringLiteral("expected ')' after static method call"));
         }
         return true;
       }
-      if (peek().type == TOK_DOT) {
+      if (peek().type == TokenType::kDot) {
         advance();
         if (!isPropertyName(peek().type)) {
-          m_error = QStringLiteral("expected property name after '.' at line %1").arg(peek().line);
+          m_error =
+              QStringLiteral("expected property name after '.' at line %1").arg(peek().loc.line);
           return false;
         }
         QString propName = advance().text;
-        if (peek().type == TOK_LPAREN) {
+        if (peek().type == TokenType::kLParen) {
           expr.kind = Expr::kMethodCall;
-          expr.line = peek().line;
+          expr.loc.line = peek().loc.line;
           expr.methodCall.objName = name;
           expr.methodCall.methodName = propName;
           advance();
-          while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
+          while (peek().type != TokenType::kRParen && peek().type != TokenType::kEof) {
             auto arg = std::make_unique<Expr>();
             if (!parseLogicalOr(*arg)) {
               return false;
             }
             expr.methodCall.args.push_back(std::move(arg));
-            if (peek().type == TOK_COMMA) advance();
+            if (peek().type == TokenType::kComma) advance();
           }
-          return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
+          return expect(TokenType::kRParen, QStringLiteral("expected ')'"));
         }
         expr.kind = Expr::kPropAccess;
-        expr.line = identLine;
+        expr.loc.line = identLine;
         expr.ident = name;
         expr.prop = propName;
         return true;
       }
-      if (peek().type == TOK_LPAREN) {
+      if (peek().type == TokenType::kLParen) {
         return parseFuncCall(name, expr);
       }
-      if (peek().type == TOK_LBRACKET) {
+      if (peek().type == TokenType::kLBracket) {
         advance();
         expr.kind = Expr::kIndexAccess;
         expr.left = std::make_unique<Expr>();
         expr.left->kind = Expr::kIdent;
         expr.left->ident = name;
-        expr.left->line = t.line;
+        expr.left->loc = t.loc;
         expr.right = std::make_unique<Expr>();
         if (!parseExpr(*expr.right)) return false;
-        return expect(TOK_RBRACKET, QStringLiteral("expected ']'"));
+        return expect(TokenType::kRBracket, QStringLiteral("expected ']'"));
       }
       expr.kind = Expr::kIdent;
       expr.ident = name;
-      expr.line = t.line;
+      expr.loc = t.loc;
       return true;
     }
 
-    case TOK_LBRACE:
+    case TokenType::kLBrace:
       return parseObject(expr);
 
-    case TOK_LBRACKET:
+    case TokenType::kLBracket:
       return parseArray(expr);
 
-    case TOK_FUNCTION: {
+    case TokenType::kFunction: {
       advance();
       expr.kind = Expr::kFuncExpr;
-      if (peek().type == TOK_IDENT) {
+      if (peek().type == TokenType::kIdent) {
         expr.funcExpr.name = advance().text;
       } else {
         expr.funcExpr.name = QStringLiteral("__anonymous__");
       }
-      if (!expect(TOK_LPAREN, QStringLiteral("expected '(' in function expression"))) return false;
+      if (!expect(TokenType::kLParen, QStringLiteral("expected '(' in function expression")))
+        return false;
       if (!parseParamList(expr.funcExpr.params, /*requireType=*/true, /*allowDefault=*/true,
                           /*declareVars=*/true))
         return false;
-      if (!expect(TOK_RPAREN, QStringLiteral("expected ')' after parameters"))) return false;
-      if (peek().type != TOK_COLON) {
+      if (!expect(TokenType::kRParen, QStringLiteral("expected ')' after parameters")))
+        return false;
+      if (peek().type != TokenType::kColon) {
         m_error = QStringLiteral(
                       "function expression requires a return type annotation (e.g. : Type) at "
                       "line %1")
-                      .arg(peek().line);
+                      .arg(peek().loc.line);
         return false;
       }
       advance();
@@ -536,8 +545,8 @@ bool AcParser::parsePrimary(Expr &expr) {
     }
 
     default:
-      m_error =
-          QStringLiteral("unexpected token '%1' at line %2").arg(t.text, QString::number(t.line));
+      m_error = QStringLiteral("unexpected token '%1' at line %2")
+                    .arg(t.text, QString::number(t.loc.line));
       return false;
   }
 }
@@ -545,53 +554,53 @@ bool AcParser::parsePrimary(Expr &expr) {
 bool AcParser::parseObject(Expr &expr) {
   expr.kind = Expr::kObject;
   advance();
-  while (peek().type != TOK_RBRACE && peek().type != TOK_EOF) {
+  while (peek().type != TokenType::kRBrace && peek().type != TokenType::kEof) {
     if (!isPropertyName(peek().type)) {
-      m_error = QStringLiteral("expected key in object at line %1").arg(peek().line);
+      m_error = QStringLiteral("expected key in object at line %1").arg(peek().loc.line);
       return false;
     }
     ObjectEntry entry;
     entry.key = advance().text;
-    if (!expect(TOK_COLON, QStringLiteral("expected ':'"))) return false;
+    if (!expect(TokenType::kColon, QStringLiteral("expected ':'"))) return false;
     entry.value = std::make_unique<Expr>();
     if (!parseExpr(*entry.value)) {
       entry.value = nullptr;
       return false;
     }
     expr.objEntries.append(entry);
-    if (peek().type == TOK_COMMA) advance();
+    if (peek().type == TokenType::kComma) advance();
   }
-  return expect(TOK_RBRACE, QStringLiteral("expected '}'"));
+  return expect(TokenType::kRBrace, QStringLiteral("expected '}'"));
 }
 
 bool AcParser::parseArray(Expr &expr) {
   expr.kind = Expr::kArray;
   advance();
-  while (peek().type != TOK_RBRACKET && peek().type != TOK_EOF) {
+  while (peek().type != TokenType::kRBracket && peek().type != TokenType::kEof) {
     auto item = std::make_unique<Expr>();
     if (!parseExpr(*item)) {
       return false;
     }
     expr.arrItems.push_back(std::move(item));
-    if (peek().type == TOK_COMMA) advance();
+    if (peek().type == TokenType::kComma) advance();
   }
-  return expect(TOK_RBRACKET, QStringLiteral("expected ']'"));
+  return expect(TokenType::kRBracket, QStringLiteral("expected ']'"));
 }
 
 bool AcParser::parseFuncCall(const QString &name, Expr &expr) {
   expr.kind = Expr::kFuncCall;
   expr.funcCall.name = name;
-  expr.line = peek().line;
+  expr.loc.line = peek().loc.line;
   advance();
-  while (peek().type != TOK_RPAREN && peek().type != TOK_EOF) {
+  while (peek().type != TokenType::kRParen && peek().type != TokenType::kEof) {
     auto arg = std::make_unique<Expr>();
     if (!parseLogicalOr(*arg)) {
       return false;
     }
     expr.funcCall.args.push_back(std::move(arg));
-    if (peek().type == TOK_COMMA) advance();
+    if (peek().type == TokenType::kComma) advance();
   }
-  return expect(TOK_RPAREN, QStringLiteral("expected ')'"));
+  return expect(TokenType::kRParen, QStringLiteral("expected ')'"));
 }
 
 bool AcParser::parseTemplateString(Expr &expr) {
@@ -629,9 +638,9 @@ bool AcParser::parseTemplateString(Expr &expr) {
       // 插值片段是独立 tokenize 的，token 行号从片段内起始（常为 1），
       // 需偏移回源文件真实行号，否则 ${var} 里的标识符其引用/校验/报错都定位不到正确行。
       // 片段起始行 = 模板 token 行 + 片段之前的换行数；把片段内第 1 行映射到该行。
-      const int baseLine = tok.line + raw.left(start).count(QLatin1Char('\n'));
+      const int baseLine = tok.loc.line + raw.left(start).count(QLatin1Char('\n'));
       const int lineOffset = baseLine - 1;
-      for (Token &epTok : exprTokens) epTok.line += lineOffset;
+      for (Token &epTok : exprTokens) epTok.loc.line += lineOffset;
 
       int savedPos = m_pos;
       QVector<Token> savedTokens = m_tokens;

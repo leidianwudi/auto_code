@@ -96,7 +96,8 @@ void writeValue(QString &out, const AcJsonValue &v, bool pretty, int depth) {
       out += u']';
       break;
     }
-    case AcJsonValue::Type::Object: {
+    case AcJsonValue::Type::Object:
+    case AcJsonValue::Type::Instance: {  // 实例按属性集序列化（类名/objId 为运行时元数据）
       const AcJsonValue::Members &members = v.members();
       if (members.isEmpty()) {
         out += QStringLiteral("{}");
@@ -120,6 +121,11 @@ void writeValue(QString &out, const AcJsonValue &v, bool pretty, int depth) {
       out += u'}';
       break;
     }
+    case AcJsonValue::Type::ClassRef:
+    case AcJsonValue::Type::FuncRef:
+      // 类引用/函数引用是运行时引用，不应持久化，序列化为 null
+      out += QStringLiteral("null");
+      break;
   }
 }
 

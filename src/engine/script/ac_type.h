@@ -25,11 +25,21 @@
 #include <memory>
 #include <vector>
 
+#include "src/core/common/ac_ident_pool.h"
+
 /// @defgroup ac_type .ac 脚本类型定义
 /// @{
 
 // ── 前置声明 ──
 struct Expr;
+
+/// @brief 源码位置 — 行、列、偏移
+/// 列与偏移按 UTF-16 码元计（QString 索引一致）；line/col 均 1-based，0 表示未知
+struct AcLoc {
+  int line = 0;    ///< 行号（1-based）
+  int col = 0;     ///< 列号（1-based，token 首字符）
+  int offset = 0;  ///< 相对源码起始的偏移（token 首字符）
+};
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  词法单元
@@ -49,90 +59,91 @@ enum class CompoundOp {
 };
 
 /// @brief 词法单元类型
-enum TokenType {
-  TOK_EOF,              ///< 输入结束
-  TOK_IDENT,            ///< 标识符（变量名、函数名、方法名）
-  TOK_STRING,           ///< 字符串字面量 "hello"
-  TOK_NUMBER,           ///< 数字字面量 123
-  TOK_LBRACE,           ///< {
-  TOK_RBRACE,           ///< }
-  TOK_LPAREN,           ///< (
-  TOK_RPAREN,           ///< )
-  TOK_LBRACKET,         ///< [
-  TOK_RBRACKET,         ///< ]
-  TOK_COMMA,            ///< ,
-  TOK_COLON,            ///< :
-  TOK_DOT,              ///< .（属性访问）
-  TOK_EQUALS,           ///< =（赋值）
-  TOK_PLUS,             ///< +
-  TOK_MINUS,            ///< -
-  TOK_MUL,              ///< *
-  TOK_DIV,              ///< /
-  TOK_MOD,              ///< %（取模）
-  TOK_PLUSEQ,           ///< +=
-  TOK_MINUSEQ,          ///< -=
-  TOK_MULEQ,            ///< *=
-  TOK_DIVEQ,            ///< /=
-  TOK_MODEQ,            ///< %=（取模赋值）
-  TOK_PLUSPLUS,         ///< ++（自增）
-  TOK_MINUSMINUS,       ///< --（自减）
-  TOK_OR,               ///< ||（逻辑或）
-  TOK_AND,              ///< &&（逻辑与）
-  TOK_NOT,              ///< !（逻辑非）
-  TOK_EQ,               ///< ==（等于）
-  TOK_NEQ,              ///< !=（不等于）
-  TOK_LT,               ///< <（小于）
-  TOK_GT,               ///< >（大于）
-  TOK_LTE,              ///< <=（小于等于）
-  TOK_GTE,              ///< >=（大于等于）
-  TOK_SEMI,             ///< ;（语句结束）
-  TOK_FOR,              ///< for 关键字
-  TOK_IN,               ///< in 关键字
-  TOK_IF,               ///< if 关键字
-  TOK_ELSE,             ///< else 关键字
-  TOK_LET,              ///< let 关键字（变量声明）
-  TOK_CLASS,            ///< class 关键字（类定义）
-  TOK_FUNCTION,         ///< function 关键字（方法定义）
-  TOK_NEW,              ///< new 关键字（实例化）
-  TOK_THIS,             ///< this 关键字（当前实例引用）
-  TOK_RETURN,           ///< return 关键字（返回值）
-  TOK_TRUE,             ///< true 布尔字面量
-  TOK_FALSE,            ///< false 布尔字面量
-  TOK_SCOPE,            ///< ::（作用域解析）
-  TOK_STATIC,           ///< static 关键字（静态成员）
-  TOK_PUBLIC,           ///< public 访问修饰符
-  TOK_PROTECTED,        ///< protected 访问修饰符
-  TOK_PRIVATE,          ///< private 访问修饰符
-  TOK_EXTENDS,          ///< extends 关键字（继承）
-  TOK_OVERRIDE,         ///< override 关键字（重写标注）
-  TOK_INTERFACE,        ///< interface 关键字（接口定义）
-  TOK_IMPLEMENTS,       ///< implements 关键字（接口实现）
-  TOK_SUPER,            ///< super 关键字（父类引用）
-  TOK_EXPORT,           ///< export 关键字（导出）
-  TOK_IMPORT,           ///< import 关键字（导入）
-  TOK_FROM,             ///< from 关键字（import ... from "file"）
-  TOK_NULL,             ///< null 关键字
-  TOK_UNDEFINED,        ///< undefined 关键字
-  TOK_WHILE,            ///< while 关键字
-  TOK_BREAK,            ///< break 关键字
-  TOK_CONTINUE,         ///< continue 关键字
-  TOK_SWITCH,           ///< switch 关键字
-  TOK_CASE,             ///< case 关键字
-  TOK_DEFAULT,          ///< default 关键字
-  TOK_ENUM,             ///< enum 关键字（枚举定义）
-  TOK_CONSTRUCTOR,      ///< constructor 关键字（类构造函数）
-  TOK_USING,            ///< using 关键字（显式资源管理）
-  TOK_DISPOSE,          ///< dispose 关键字（资源释放方法）
-  TOK_AS,               ///< as 关键字（导入别名）
-  TOK_QUESTION,         ///< ?（三元运算符）
-  TOK_TEMPLATE_STRING,  ///< 模板字符串 `...${...}...`
+enum class TokenType {
+  kEof,             ///< 输入结束
+  kIdent,           ///< 标识符（变量名、函数名、方法名）
+  kString,          ///< 字符串字面量 "hello"
+  kNumber,          ///< 数字字面量 123
+  kLBrace,          ///< {
+  kRBrace,          ///< }
+  kLParen,          ///< (
+  kRParen,          ///< )
+  kLBracket,        ///< [
+  kRBracket,        ///< ]
+  kComma,           ///< ,
+  kColon,           ///< :
+  kDot,             ///< .（属性访问）
+  kEquals,          ///< =（赋值）
+  kPlus,            ///< +
+  kMinus,           ///< -
+  kMul,             ///< *
+  kDiv,             ///< /
+  kMod,             ///< %（取模）
+  kPlusEq,          ///< +=
+  kMinusEq,         ///< -=
+  kMulEq,           ///< *=
+  kDivEq,           ///< /=
+  kModEq,           ///< %=（取模赋值）
+  kPlusPlus,        ///< ++（自增）
+  kMinusMinus,      ///< --（自减）
+  kOr,              ///< ||（逻辑或）
+  kAnd,             ///< &&（逻辑与）
+  kNot,             ///< !（逻辑非）
+  kEq,              ///< ==（等于）
+  kNeq,             ///< !=（不等于）
+  kLt,              ///< <（小于）
+  kGt,              ///< >（大于）
+  kLte,             ///< <=（小于等于）
+  kGte,             ///< >=（大于等于）
+  kSemi,            ///< ;（语句结束）
+  kFor,             ///< for 关键字
+  kIn,              ///< in 关键字
+  kIf,              ///< if 关键字
+  kElse,            ///< else 关键字
+  kLet,             ///< let 关键字（变量声明）
+  kClass,           ///< class 关键字（类定义）
+  kFunction,        ///< function 关键字（方法定义）
+  kNew,             ///< new 关键字（实例化）
+  kThis,            ///< this 关键字（当前实例引用）
+  kReturn,          ///< return 关键字（返回值）
+  kTrue,            ///< true 布尔字面量
+  kFalse,           ///< false 布尔字面量
+  kScope,           ///< ::（作用域解析）
+  kStatic,          ///< static 关键字（静态成员）
+  kPublic,          ///< public 访问修饰符
+  kProtected,       ///< protected 访问修饰符
+  kPrivate,         ///< private 访问修饰符
+  kExtends,         ///< extends 关键字（继承）
+  kOverride,        ///< override 关键字（重写标注）
+  kInterface,       ///< interface 关键字（接口定义）
+  kImplements,      ///< implements 关键字（接口实现）
+  kSuper,           ///< super 关键字（父类引用）
+  kExport,          ///< export 关键字（导出）
+  kImport,          ///< import 关键字（导入）
+  kFrom,            ///< from 关键字（import ... from "file"）
+  kNull,            ///< null 关键字
+  kUndefined,       ///< undefined 关键字
+  kWhile,           ///< while 关键字
+  kBreak,           ///< break 关键字
+  kContinue,        ///< continue 关键字
+  kSwitch,          ///< switch 关键字
+  kCase,            ///< case 关键字
+  kDefault,         ///< default 关键字
+  kEnum,            ///< enum 关键字（枚举定义）
+  kConstructor,     ///< constructor 关键字（类构造函数）
+  kUsing,           ///< using 关键字（显式资源管理）
+  kDispose,         ///< dispose 关键字（资源释放方法）
+  kAs,              ///< as 关键字（导入别名）
+  kQuestion,        ///< ?（三元运算符）
+  kTemplateString,  ///< 模板字符串 `...${...}...`
 };
 
 /// @brief 词法单元
 struct Token {
-  TokenType type = TOK_EOF;
-  QString text;  ///< 原始文本
-  int line = 0;  ///< 行号（用于错误报告）
+  TokenType type = TokenType::kEof;
+  QString text;                                     ///< 原始文本
+  AcLoc loc;                                        ///< 源码位置（行/列/偏移，用于错误报告与导航）
+  accore::AcIdent identId = accore::kInvalidIdent;  ///< 标识符驻留 id（仅 kIdent 有效）
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -218,7 +229,7 @@ struct ParamDef {
   /// Undefined 表示未声明默认值；Null 表示显式声明了 = null
   /// （注意：QJsonValue 默认构造是 Null，必须显式初始化为 Undefined 才能区分两种情况）
   QJsonValue defaultValue = QJsonValue(QJsonValue::Undefined);
-  int line = 0;  ///< 参数名所在行（1-based，引用/重命名定位用）
+  AcLoc loc;  ///< 参数名位置（引用/重命名定位用）
 };
 
 /// @brief 语句块 — 由 { } 包裹的一组语句
@@ -234,8 +245,7 @@ struct ObjectEntry {
   std::unique_ptr<Expr> value;
   bool isStatic = false;                      ///< 是否为静态属性
   AccessLevel access = AccessLevel::kPublic;  ///< 访问级别
-  int line = 0;                               ///< 源码行号（1-based，用于符号导航）
-
+  AcLoc loc;                                  ///< 属性名位置（用于符号导航）
   ObjectEntry() = default;
   ObjectEntry(const ObjectEntry &other);
   ObjectEntry &operator=(const ObjectEntry &other);
@@ -268,7 +278,7 @@ struct MethodCall {
 struct UsingStmt {
   QString varName;              ///< 变量名
   std::unique_ptr<Expr> value;  ///< 初始化表达式
-  int line = 0;                 ///< using 语句所在行（1-based，引用/重命名定位用）
+  AcLoc loc;                    ///< using 语句位置（引用/重命名定位用）
 
   UsingStmt() = default;
   UsingStmt(const UsingStmt &other);
@@ -283,7 +293,7 @@ struct MethodDef {
   QVector<ParamDef> params;  ///< 参数列表（带类型注解）
   AcType returnType;         ///< 返回类型（默认 Any，无注解时）
   Block body;
-  int line = 0;                               ///< 源码行号（1-based，用于符号导航）
+  AcLoc loc;                                  ///< 方法定义位置（用于符号导航）
   bool isStatic = false;                      ///< 是否为静态方法
   AccessLevel access = AccessLevel::kPublic;  ///< 访问级别
   bool isOverride = false;                    ///< 是否重写父类方法
@@ -361,7 +371,7 @@ struct Expr {
     kStaticAccess,  ///< 静态访问 ClassName::member
     kFuncExpr,      ///< 函数表达式 function(params): Type { body }
   } kind = kString;
-  int line = 0;          ///< 源码行号（用于错误报告）
+  AcLoc loc;             ///< 源码位置（用于错误报告）
   QString strVal;        ///< 字符串值
   double numVal = 0;     ///< 数值
   bool boolVal = false;  ///< 布尔值（用于 kBool）
@@ -436,7 +446,7 @@ struct AssignStmt {
   QString name;
   QString thisProp;
   Expr value;
-  int line = 0;                    ///< 源码行号（1-based，用于符号导航）
+  AcLoc loc;                       ///< 语句位置（用于符号导航与错误定位）
   bool isStatic = false;           ///< 是否为静态属性赋值
   QString staticClassName;         ///< 静态类名（isStatic=true 时有效）
   AcType typeAnnotation;           ///< let 声明时的类型注解（如 let x: Number = 1）
@@ -467,7 +477,7 @@ struct ForStmt {
   QString varType;  ///< for-in 变量类型注解（如 for (let item: String in arr)）
   Expr arrayExpr;
   Block body;
-  int line = 0;  ///< 源码行号（1-based，用于符号导航）
+  AcLoc loc;  ///< for 语句位置（用于符号导航）
 
   // 标准 for 循环支持：for (init; condition; update) { body }
   bool isStandard = false;  ///< 是否为标准 for 循环（非 for-in）
@@ -497,7 +507,7 @@ struct ImportStmt {
   QStringList names;               ///< 导入的符号名列表（原始名）
   QMap<QString, QString> aliases;  ///< 别名映射：原始名 → 别名（无别名时不含该键）
   QString filePath;                ///< 源文件路径（相对或绝对）
-  int line = 0;                    ///< import 关键字所在行号（1-based，用于报错/引用定位）
+  AcLoc loc;                       ///< import 关键字位置（用于报错/引用定位）
   QHash<QString, int> nameLines;   ///< 原始名 → 该名字所在行号（多行 import 时定位用）
   QHash<QString, int> aliasLines;  ///< 别名 → 该别名所在行号（多行 import 时定位用）
 };
@@ -544,7 +554,7 @@ struct Block::Stmt {
     kUsing,
     kBlock  ///< 独立块作用域 { stmts }
   } kind = kCall;
-  int line = 0;      ///< 源码行号（1-based，用于符号导航）
+  AcLoc loc;         ///< 语句位置（用于符号导航与错误定位）
   QString filePath;  ///< 语句所属源文件路径（import 内联后用于断点定位）
   CallStmt call;
   AssignStmt assign;

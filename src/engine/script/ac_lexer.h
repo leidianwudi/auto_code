@@ -24,20 +24,23 @@ private:
   /// @param source 源码字符串
   /// @param pos 当前位置（会被更新到 */ 之后）
   /// @param line 当前行号（会被更新以反映注释中的换行）
+  /// @param lineStart 当前行首偏移（会被更新，用于列号计算）
   /// @param[out] error 错误信息（未闭合的块注释时设置）
   /// @return true 成功跳过，false 块注释未闭合
-  static bool skipBlockComment(const QString &source, int &pos, int &line, QString &error);
+  static bool skipBlockComment(const QString &source, int &pos, int &line, int &lineStart,
+                               QString &error);
 
   /// @brief 解析字符串字面量（从当前位置的 " 开始）
-  static Token parseStringLiteral(const QString &source, int &pos, int line, QString &error);
+  static Token parseStringLiteral(const QString &source, int &pos, const AcLoc &startLoc,
+                                  QString &error);
 
   /// @brief 解析模板字符串字面量（从当前位置的 ` 开始）
   static Token parseTemplateStringLiteral(const QString &source, int &pos, int &line,
-                                          QString &error);
+                                          int &lineStart, QString &error);
 
   /// @brief 解析数字字面量（从当前位置的数字开始）
-  static Token parseNumberLiteral(const QString &source, int &pos, int line);
+  static Token parseNumberLiteral(const QString &source, int &pos, const AcLoc &startLoc);
 
   /// @brief 解析标识符或关键字（从当前位置的字母/下划线开始）
-  static Token parseIdentifier(const QString &source, int &pos, int line);
+  static Token parseIdentifier(const QString &source, int &pos, const AcLoc &startLoc);
 };

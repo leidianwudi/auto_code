@@ -321,18 +321,18 @@ inline const QStringList kMethods = {
 }  // namespace AcCallStr
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 四、运行时内部协议 — 实例对象标记、构造器入口、伪类名
+// 四、运行时内部协议 — 构造器入口、析构方法名、伪类名
 // ═════════════════════════════════════════════════════════════════════════════
 
+/// @brief 运行时内部协议 — 构造器入口、析构方法名、伪类名
+///
+/// 注：实例的类名与唯一 id 曾用 __class__/__objId__ 内部键编码，
+/// 现已迁移到 accore::AcJsonValue 的 Instance/ClassRef/FuncRef 专用种类字段。
 namespace AcRuntime {
-/// @brief 实例对象中标记类名的内部键：instance["__class__"] = "DB"
-inline constexpr const char *kClassKey = "__class__";
 /// @brief 构造方法名：new DB({...}) 自动调用 __construct__
 inline constexpr const char *kConstructor = "__construct__";
 /// @brief 析构方法名：引用计数归零时自动调用 __destruct__
 inline constexpr const char *kDestructor = "__destruct__";
-/// @brief 实例对象中标记唯一ID的内部键：instance["__objId__"] = "uuid"
-inline constexpr const char *kObjId = "__objId__";
 /// @brief 一级函数注册的伪类名：FunMgr::call("builtin", name, args)
 inline constexpr const char *kBuiltinClass = "builtin";
 }  // namespace AcRuntime

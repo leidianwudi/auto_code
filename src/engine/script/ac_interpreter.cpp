@@ -74,8 +74,8 @@ void AcInterpreter::popScope() {
     auto usingVars = m_usingStack.takeLast();
     for (int i = usingVars.size() - 1; i >= 0; --i) {
       accore::AcJsonValue val = resolveVar(usingVars[i]);
-      if (val.isObject()) {
-        QString className = val.value(QString::fromLatin1(AcRuntime::kClassKey)).toString();
+      if (val.isInstance()) {
+        QString className = val.instanceClass();
         if (!className.isEmpty() && m_classes.contains(className)) {
           const ClassDef &cd = m_classes[className];
           QString disposeName = QString::fromLatin1(AcKeyword::kDispose);
@@ -162,10 +162,8 @@ void AcInterpreter::releaseIfInstanceWithDestruct(const accore::AcJsonValue &val
 
 void AcInterpreter::processDestructInfo(const AcObjectManager::DestructInfo &info) {
   const accore::AcJsonValue &obj = info.instance;
+  // 实例的属性即全部成员（类名/objId 在专用字段，无需再过滤内部键）
   for (const auto &m : obj.members()) {
-    if (m.key == QString::fromLatin1(AcRuntime::kClassKey) ||
-        m.key == QString::fromLatin1(AcRuntime::kObjId))
-      continue;
     releaseDeep(m.value);
   }
   if (FunMgr::ins().contains(info.className, QString::fromLatin1(AcRuntime::kDestructor))) {
@@ -186,12 +184,8 @@ void AcInterpreter::traverseNested(
   if (val.isArray()) {
     for (const accore::AcJsonValue &item : val.items()) onChild(item);
   } else if (val.isObject()) {
-    for (const auto &m : val.members()) {
-      if (m.key == QString::fromLatin1(AcRuntime::kClassKey) ||
-          m.key == QString::fromLatin1(AcRuntime::kObjId))
-        continue;
-      onChild(m.value);
-    }
+    // 实例的类名/objId 在专用字段，members 即纯属性，无需过滤内部键
+    for (const auto &m : val.members()) onChild(m.value);
   }
 }
 
@@ -238,17 +232,11 @@ void AcInterpreter::collectCycles() {
   }
   if (!m_currentThis.isEmpty()) {
     for (const auto &m : m_currentThis.members()) {
-      if (m.key == QString::fromLatin1(AcRuntime::kClassKey) ||
-          m.key == QString::fromLatin1(AcRuntime::kObjId))
-        continue;
       markFromValue(m.value);
     }
   }
   if (!m_modifiedThis.isEmpty()) {
     for (const auto &m : m_modifiedThis.members()) {
-      if (m.key == QString::fromLatin1(AcRuntime::kClassKey) ||
-          m.key == QString::fromLatin1(AcRuntime::kObjId))
-        continue;
       markFromValue(m.value);
     }
   }
@@ -283,7 +271,7 @@ accore::AcJsonValue AcInterpreter::execute(const Block &program, QString &error)
     QString topFile = m_scriptFile;
     for (const auto &s : program.stmts) {
       if (m_scriptFile.isEmpty() || s.filePath == m_scriptFile) {
-        topLine = s.line;
+        topLine = s.loc.line;
         break;
       }
     }

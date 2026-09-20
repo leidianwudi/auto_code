@@ -35,7 +35,24 @@ namespace accore {
 class AcJsonValue {
 public:
   /// 值类型（Undefined 不存在：缺失即 Null，需要区分时用 has()）
-  enum class Type : char { Null, Bool, Number, String, Array, Object };
+  ///
+  /// 运行时专用种类（Instance/ClassRef/FuncRef）由解释器内部使用：
+  /// - Instance：类实例，类名与唯一 id 存于专用字段，属性存于对象存储 —— 用户的
+  ///   属性空间里没有内部协议键，任意键名的用户数据都不会污染引擎
+  /// - ClassRef / FuncRef：类引用与函数引用
+  /// 三者对 isObject() 均返回 true（JS 语义：实例即对象），属性访问接口直接可用；
+  /// 序列化时 Instance 输出属性集，ClassRef/FuncRef 输出 null（运行时引用不应持久化）
+  enum class Type : char {
+    Null,
+    Bool,
+    Number,
+    String,
+    Array,
+    Object,
+    Instance,  ///< 类实例（运行时）
+    ClassRef,  ///< 类引用（运行时）
+    FuncRef    ///< 函数引用（运行时）
+  };
 
   /// 数组元素列表（元素为完整 AcJsonValue；别名仅声明，使用点实例化）
   using Array = QVector<AcJsonValue>;
@@ -56,11 +73,20 @@ public:
   AcJsonValue(AcJsonValue &&other) noexcept;
   AcJsonValue &operator=(AcJsonValue &&other) noexcept;
   ~AcJsonValue();
-
+  // ── 工厂 ──
   /// 空数组
   static AcJsonValue makeArray();
   /// 空对象
   static AcJsonValue makeObject();
+  /// 类实例：属性集初始为空（set() 追加）；objId 由对象管理器生成后回填
+  static AcJsonValue makeInstance(const QString &className);
+  /// 以 obj 的属性为初始属性集创建实例（native 构造器结果包装用）
+  static AcJsonValue instanceFrom(const AcJsonValue &obj, const QString &className,
+                                  const QString &objId = QString());
+  /// 类引用
+  static AcJsonValue makeClassRef(const QString &className);
+  /// 函数引用
+  static AcJsonValue makeFuncRef(const QString &funcName);
 
   // ── 类型判断 ──
   Type type() const { return m_type; }
@@ -71,7 +97,24 @@ public:
   bool isDouble() const { return m_type == Type::Number; }
   bool isString() const { return m_type == Type::String; }
   bool isArray() const { return m_type == Type::Array; }
-  bool isObject() const { return m_type == Type::Object; }
+  /// 对象判断（实例也是对象 —— JS 语义：实例即对象，属性访问接口对其可用）；
+  /// 需要区分"纯数据对象"与"类实例"时用 isInstance()
+  bool isObject() const { return m_type == Type::Object || m_type == Type::Instance; }
+  bool isInstance() const { return m_type == Type::Instance; }
+  bool isClassRef() const { return m_type == Type::ClassRef; }
+  bool isFuncRef() const { return m_type == Type::FuncRef; }
+
+  // ── 运行时种类访问 ──
+  /// 实例/类引用的类名；其余类型返回空
+  QString instanceClass() const { return isInstance() || isClassRef() ? m_str : QString(); }
+  /// 实例唯一 id；非实例返回空
+  QString instanceObjId() const { return isInstance() ? m_objId : QString(); }
+  /// 函数引用的函数名；非函数引用返回空
+  QString funcRefName() const { return isFuncRef() ? m_str : QString(); }
+  /// 回填实例唯一 id（对象管理器生成 uuid 后调用）；非实例忽略
+  void setInstanceObjId(const QString &objId) {
+    if (isInstance()) m_objId = objId;
+  }
 
   // ── 标量取值 ──
   bool toBool(bool def = false) const { return m_type == Type::Bool ? m_bool : def; }
@@ -147,7 +190,8 @@ private:
   Type m_type = Type::Null;
   bool m_bool = false;
   double m_num = 0.0;
-  QString m_str;
+  QString m_str;                   ///< String 值；Instance/ClassRef 的类名；FuncRef 的函数名
+  QString m_objId;                 ///< Instance 的唯一 id（仅实例非空）
   std::shared_ptr<ArrData> m_arr;  // 共享 + 写时分离
   std::shared_ptr<ObjData> m_obj;  // 共享 + 写时分离
 

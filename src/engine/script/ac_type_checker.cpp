@@ -100,7 +100,7 @@ void AcTypeChecker::checkStmt(const Block::Stmt &stmt, TypeEnv &env) {
           reportError(QStringLiteral("warning: for-in loop variable '%1' has unknown type — "
                                      "array expression type is Any, consider using typed array")
                           .arg(stmt.forStmt.varName),
-                      stmt.line);
+                      stmt.loc.line);
         }
       }
       checkBlock(stmt.forStmt.body, env);
@@ -155,7 +155,7 @@ void AcTypeChecker::checkStmt(const Block::Stmt &stmt, TypeEnv &env) {
             reportError(QStringLiteral(
                             "type mismatch: property '%1' expects '%2' but default value is '%3'")
                             .arg(prop.key, typeToString(prop.type), typeToString(valType)),
-                        prop.value->line);
+                        prop.value->loc.line);
           }
         }
       }
@@ -217,7 +217,7 @@ void AcTypeChecker::checkStmt(const Block::Stmt &stmt, TypeEnv &env) {
           reportError(QStringLiteral("return type mismatch in function '%1': "
                                      "expected '%2' but got '%3'")
                           .arg(env.funcName, typeToString(env.returnType), typeToString(retType)),
-                      stmt.line);
+                      stmt.loc.line);
         }
       }
       break;
@@ -249,7 +249,7 @@ void AcTypeChecker::checkAssign(const AssignStmt &as, const TypeEnv &env) {
     reportError(QStringLiteral("empty array literal requires type annotation: "
                                "let %1: Type[] = []")
                     .arg(as.name),
-                as.line);
+                as.loc.line);
   }
 
   // P1a: 空对象字面量 {} 必须有类型注解（仅 let 首次声明）
@@ -259,7 +259,7 @@ void AcTypeChecker::checkAssign(const AssignStmt &as, const TypeEnv &env) {
     reportError(QStringLiteral("empty object literal requires type annotation: "
                                "let %1: TypeName = new ClassName() or let %1: ClassName = {}")
                     .arg(as.name),
-                as.line);
+                as.loc.line);
   }
 
   // P1b: 非空对象字面量 { a: 1, b: 2 } 必须有类型注解（仅 let 首次声明）
@@ -269,7 +269,7 @@ void AcTypeChecker::checkAssign(const AssignStmt &as, const TypeEnv &env) {
     reportError(QStringLiteral("object literal requires type annotation: "
                                "let %1: TypeName = { ... }")
                     .arg(as.name),
-                as.line);
+                as.loc.line);
   }
 
   // P0: let 变量声明如果没有类型注解，且推导的类型为 Any，则报错
@@ -283,7 +283,7 @@ void AcTypeChecker::checkAssign(const AssignStmt &as, const TypeEnv &env) {
     reportError(QStringLiteral("variable '%1' requires type annotation — "
                                "cannot infer type from expression (e.g. let %1: Type = ...)")
                     .arg(as.name),
-                as.line);
+                as.loc.line);
   }
 
   // P3: 限制 Any 类型使用（警告，仅首次声明）
@@ -292,7 +292,7 @@ void AcTypeChecker::checkAssign(const AssignStmt &as, const TypeEnv &env) {
     reportError(QStringLiteral("warning: variable '%1' uses 'Any' type — consider using a "
                                "specific type for better type safety")
                     .arg(as.name),
-                as.line);
+                as.loc.line);
   }
 
   // 静态属性赋值：ClassName::prop = value
@@ -306,17 +306,17 @@ void AcTypeChecker::checkAssign(const AssignStmt &as, const TypeEnv &env) {
                 QStringLiteral("type mismatch: static property '%1::%2' expects '%3' but got '%4'")
                     .arg(as.staticClassName, as.name, typeToString(prop.type),
                          typeToString(valType)),
-                as.value.line);
+                as.value.loc.line);
           }
           return;
         }
       }
       reportError(
           QStringLiteral("static property '%1::%2' not found").arg(as.staticClassName, as.name),
-          as.value.line);
+          as.value.loc.line);
     } else {
       reportError(QStringLiteral("unknown class '%1' in static assignment").arg(as.staticClassName),
-                  as.value.line);
+                  as.value.loc.line);
     }
     return;
   }
@@ -328,14 +328,14 @@ void AcTypeChecker::checkAssign(const AssignStmt &as, const TypeEnv &env) {
       if (!isCompatible(valType, propType)) {
         reportError(QStringLiteral("type mismatch: property '%1' expects '%2' but got '%3'")
                         .arg(as.thisProp, typeToString(propType), typeToString(valType)),
-                    as.value.line);
+                    as.value.loc.line);
       }
     } else {
       // P2b: 检测 this.dynamicProp 未声明属性
       reportError(QStringLiteral("undeclared property 'this.%1' — properties must be declared "
                                  "in the class definition before assignment")
                       .arg(as.thisProp),
-                  as.line);
+                  as.loc.line);
     }
     return;
   }
@@ -346,7 +346,7 @@ void AcTypeChecker::checkAssign(const AssignStmt &as, const TypeEnv &env) {
     if (!isCompatible(valType, as.typeAnnotation)) {
       reportError(QStringLiteral("type mismatch: variable '%1' annotated as '%2' but got '%3'")
                       .arg(as.name, typeToString(as.typeAnnotation), typeToString(valType)),
-                  as.value.line);
+                  as.value.loc.line);
     }
     // 用注解类型更新环境（首次声明时覆盖 Any）
     const_cast<TypeEnv &>(env).varTypes.insert(as.name, as.typeAnnotation);
@@ -355,7 +355,7 @@ void AcTypeChecker::checkAssign(const AssignStmt &as, const TypeEnv &env) {
     if (!isCompatible(valType, varType)) {
       reportError(QStringLiteral("type mismatch: variable '%1' expects '%2' but got '%3'")
                       .arg(as.name, typeToString(varType), typeToString(valType)),
-                  as.value.line);
+                  as.value.loc.line);
     }
     // 用推导的类型更新环境（如果推导的类型更具体）
     if (valType.kind != AcType::kAny) {
@@ -572,14 +572,14 @@ AcType AcTypeChecker::checkExprFuncCall(const Expr &expr, const TypeEnv &env) {
                       .arg(expr.funcCall.name)
                       .arg(paramCount)
                       .arg(argCount),
-                  expr.line);
+                  expr.loc.line);
     }
     if (argCount < requiredCount) {
       reportError(QStringLiteral("function '%1' expects at least %2 arguments but got %3")
                       .arg(expr.funcCall.name)
                       .arg(requiredCount)
                       .arg(argCount),
-                  expr.line);
+                  expr.loc.line);
     }
     // 检查参数类型
     for (int i = 0; i < qMin(argCount, paramCount); ++i) {
@@ -590,7 +590,7 @@ AcType AcTypeChecker::checkExprFuncCall(const Expr &expr, const TypeEnv &env) {
                 .arg(i + 1)
                 .arg(expr.funcCall.name)
                 .arg(typeToString(func.params[i].type), typeToString(argType)),
-            expr.funcCall.args[i]->line);
+            expr.funcCall.args[i]->loc.line);
       }
     }
     return func.returnType;
@@ -637,7 +637,7 @@ AcType AcTypeChecker::checkExprMethodCall(const Expr &expr, const TypeEnv &env) 
                   .arg(method.name, cd.name)
                   .arg(paramCount)
                   .arg(argCount),
-              expr.line);
+              expr.loc.line);
         }
         if (argCount < requiredCount) {
           reportError(
@@ -645,7 +645,7 @@ AcType AcTypeChecker::checkExprMethodCall(const Expr &expr, const TypeEnv &env) 
                   .arg(method.name, cd.name)
                   .arg(requiredCount)
                   .arg(argCount),
-              expr.line);
+              expr.loc.line);
         }
         // 检查参数类型
         for (int i = 0; i < qMin(argCount, paramCount); ++i) {
@@ -656,7 +656,7 @@ AcType AcTypeChecker::checkExprMethodCall(const Expr &expr, const TypeEnv &env) 
                             .arg(i + 1)
                             .arg(cd.name, method.name)
                             .arg(typeToString(method.params[i].type), typeToString(argType)),
-                        expr.methodCall.args[i]->line);
+                        expr.methodCall.args[i]->loc.line);
           }
         }
         return method.returnType;
@@ -664,7 +664,7 @@ AcType AcTypeChecker::checkExprMethodCall(const Expr &expr, const TypeEnv &env) 
     }
     reportError(QStringLiteral("class '%1' has no method named '%2'")
                     .arg(objType.className, expr.methodCall.methodName),
-                expr.line);
+                expr.loc.line);
   }
   for (const auto &arg : expr.methodCall.args) checkExpr(*arg, env);
   return AcType::any();
@@ -678,7 +678,7 @@ AcType AcTypeChecker::checkExprNewInstance(const Expr &expr, const TypeEnv &env)
   // new ClassName()
   if (!m_classes->contains(expr.className) && !m_declaredVars.contains(expr.className)) {
     reportError(QStringLiteral("unknown class '%1' in 'new' expression").arg(expr.className),
-                expr.line);
+                expr.loc.line);
     return AcType::any();
   }
   return AcType::classType(expr.className);
@@ -708,7 +708,7 @@ AcType AcTypeChecker::checkExprStaticAccess(const Expr &expr, const TypeEnv &env
                     .arg(expr.className, expr.prop)
                     .arg(paramCount)
                     .arg(argCount),
-                expr.line);
+                expr.loc.line);
           }
           if (argCount < requiredCount) {
             reportError(
@@ -716,7 +716,7 @@ AcType AcTypeChecker::checkExprStaticAccess(const Expr &expr, const TypeEnv &env
                     .arg(expr.className, expr.prop)
                     .arg(requiredCount)
                     .arg(argCount),
-                expr.line);
+                expr.loc.line);
           }
           for (int i = 0; i < qMin(argCount, paramCount); ++i) {
             AcType argType = checkExpr(*expr.funcCall.args[i], env);
@@ -726,14 +726,14 @@ AcType AcTypeChecker::checkExprStaticAccess(const Expr &expr, const TypeEnv &env
                               .arg(i + 1)
                               .arg(expr.className, expr.prop)
                               .arg(typeToString(method.params[i].type), typeToString(argType)),
-                          expr.funcCall.args[i]->line);
+                          expr.funcCall.args[i]->loc.line);
             }
           }
           return method.returnType;
         }
       }
       reportError(QStringLiteral("static method '%1::%2' not found").arg(expr.className, expr.prop),
-                  expr.line);
+                  expr.loc.line);
       return AcType::any();
     }
 
@@ -750,10 +750,10 @@ AcType AcTypeChecker::checkExprStaticAccess(const Expr &expr, const TypeEnv &env
       }
     }
     reportError(QStringLiteral("static member '%1::%2' not found").arg(expr.className, expr.prop),
-                expr.line);
+                expr.loc.line);
   } else if (!m_declaredVars.contains(expr.className)) {
     reportError(QStringLiteral("unknown class '%1' in static access").arg(expr.className),
-                expr.line);
+                expr.loc.line);
   }
   return AcType::any();
 }
@@ -838,7 +838,7 @@ AcType AcTypeChecker::checkExprBinary(const Expr &expr, const TypeEnv &env) {
   if (!isCompatible(leftType, rightType)) {
     reportError(QStringLiteral("type mismatch: '%1' and '%2' in binary operation")
                     .arg(typeToString(leftType), typeToString(rightType)),
-                expr.line);
+                expr.loc.line);
   }
 
   return AcType::number();

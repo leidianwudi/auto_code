@@ -145,7 +145,7 @@ void AcValidator::resolveImportedSymbols(const Block &program) {
       QString absPath = PathResolver::resolveImportPath(imp.filePath, m_filePath);
 
       // 读取目标文件并收集符号
-      collectSymbolsFromFile(absPath, imp.names, imp.line);
+      collectSymbolsFromFile(absPath, imp.names, imp.loc.line);
 
       // 注册别名（import { A as B }）：使 B 的悬停/跳转指向 A 的定义。
       // 此时 collectSymbolsFromFile 已把原导出名合并进符号表（尚未被当前文件同名声明覆盖）

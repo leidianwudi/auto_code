@@ -162,9 +162,9 @@ public:
 
   void visitAssignStmt(const AssignStmt &as) override {
     if (as.isDeclaration) {
-      declareCurrent(as.name, as.line);
+      declareCurrent(as.name, as.loc.line);
     } else if (!as.name.isEmpty() && as.name == target) {
-      recordUsage(as.name, as.line);
+      recordUsage(as.name, as.loc.line);
     }
     // 类型推断：new Class / 类型注解
     if (!as.name.isEmpty()) {
@@ -179,20 +179,20 @@ public:
   }
 
   void visitUsingStmt(const UsingStmt &us) override {
-    // 用 using 语句所在行（us.line）：声明行必须是真实行号，
+    // 用 using 语句所在行（us.loc.line）：声明行必须是真实行号，
     // 否则右键 using 变量/重命名时声明行无法被捕获 → 漏改 using X = ... 那一行
-    declareCurrent(us.varName, us.line);
+    declareCurrent(us.varName, us.loc.line);
     if (!us.value) return;
     visitExpr(*us.value);
   }
 
   void visitFuncDef(const MethodDef &md) override {
-    declareCurrent(md.name, md.line);
+    declareCurrent(md.name, md.loc.line);
     ScopeGuard guard(*this);
     for (const ParamDef &p : md.params) {
-      // 用参数自身的行号（p.line）而非方法名行：签名跨多行时，右键参数/重命名
+      // 用参数自身的行号（p.loc.line）而非方法名行：签名跨多行时，右键参数/重命名
       // 必须能命中参数声明行，否则声明行被记成方法名行导致漏改
-      declareCurrent(p.name, p.line);
+      declareCurrent(p.name, p.loc.line);
       if (p.type.kind == AcType::kClass && !p.type.className.isEmpty()) {
         varClass[p.name] = p.type.className;
       }
@@ -203,7 +203,7 @@ public:
   void visitForStmt(const ForStmt &fs) override {
     if (fs.isStandard) {
       ScopeGuard guard(*this);
-      if (!fs.varName.isEmpty()) declareCurrent(fs.varName, fs.line);
+      if (!fs.varName.isEmpty()) declareCurrent(fs.varName, fs.loc.line);
       visitBlock(fs.initBlock);
       visitExpr(fs.condition);
       visitExpr(fs.updateExpr);
@@ -211,7 +211,7 @@ public:
     } else {
       ScopeGuard guard(*this);
       if (!fs.varName.isEmpty()) {
-        declareCurrent(fs.varName, fs.line);
+        declareCurrent(fs.varName, fs.loc.line);
         if (!fs.varType.isEmpty()) varClass[fs.varName] = fs.varType;
       }
       visitExpr(fs.arrayExpr);
@@ -246,20 +246,20 @@ public:
       ScopeGuard guard(*this);
       AcClassInfo info;
       for (const ObjectEntry &prop : cd.properties) {
-        declareCurrent(prop.key, prop.line);
-        if (prop.line > 0) info.props.insert(prop.key, prop.line);
+        declareCurrent(prop.key, prop.loc.line);
+        if (prop.loc.line > 0) info.props.insert(prop.key, prop.loc.line);
         if (prop.value) visitExpr(*prop.value);
       }
       for (const MethodDef &m : cd.methods) {
-        declareCurrent(m.name, m.line);
-        if (m.line > 0) info.methods.insert(m.name, m.line);
+        declareCurrent(m.name, m.loc.line);
+        if (m.loc.line > 0) info.methods.insert(m.name, m.loc.line);
         ScopeGuard mGuard(*this);
         // 方法体内（参数/局部 let 等）声明的名字是局部变量，不是类成员，
         // 不能写入 m_memberDeclClass（否则右键局部变量会误判成类成员 → 走成员路径 → 0 引用）
         m_inMethodBody = true;
         for (const ParamDef &p : m.params) {
           // 同 visitFuncDef：用参数自身行号，跨行签名时保证参数声明行可被命中
-          declareCurrent(p.name, p.line);
+          declareCurrent(p.name, p.loc.line);
           if (p.type.kind == AcType::kClass && !p.type.className.isEmpty()) {
             varClass[p.name] = p.type.className;
           }
@@ -284,8 +284,8 @@ public:
       // import 语句中的符号名也是目标符号的一次引用：
       // 重命名/查找引用必须包含 import 行（否则跨文件重命名会漏改 import 列表）
       if (n == target) {
-        // 多行 import 时每个名字各有自己的行号，不能统一用 imp.line
-        const int ln = imp.nameLines.value(n, imp.line);
+        // 多行 import 时每个名字各有自己的行号，不能统一用 imp.loc.line
+        const int ln = imp.nameLines.value(n, imp.loc.line);
         recordUsage(n, ln);
         importNameLines[resolved].insert(ln);
       }
@@ -296,26 +296,27 @@ public:
       classImports.insert(it.value(), resolved);
       // 别名的绑定处（import { A as B } 里的 B）也是别名符号的一次引用：
       // 否则重命名别名会漏改 import 绑定行，导致调用处改新名、import 仍绑定旧名
-      if (it.value() == target) recordUsage(it.value(), imp.aliasLines.value(it.value(), imp.line));
+      if (it.value() == target)
+        recordUsage(it.value(), imp.aliasLines.value(it.value(), imp.loc.line));
     }
   }
 
   // ── 表达式 ──
 
-  void visitIdentExpr(const Expr &expr) override { recordUsage(expr.ident, expr.line); }
+  void visitIdentExpr(const Expr &expr) override { recordUsage(expr.ident, expr.loc.line); }
 
   void visitFuncCallExpr(const Expr &expr) override {
-    recordUsage(expr.funcCall.name, expr.line);
+    recordUsage(expr.funcCall.name, expr.loc.line);
     AstVisitor::visitFuncCallExpr(expr);
   }
 
   void visitMethodCallExpr(const Expr &expr) override {
     if (expr.methodCall.methodName == target) {
-      recordMember(expr.line, expr.methodCall.object.get(), expr.methodCall.objName);
+      recordMember(expr.loc.line, expr.methodCall.object.get(), expr.methodCall.objName);
     }
     // 简单接收者：AST 存于 objName（object 为空），视为一次引用
     if (!expr.methodCall.objName.isEmpty() && !expr.methodCall.object) {
-      recordUsage(expr.methodCall.objName, expr.line);
+      recordUsage(expr.methodCall.objName, expr.loc.line);
     }
     if (expr.methodCall.object) visitExpr(*expr.methodCall.object);
     for (const auto &arg : expr.methodCall.args) {
@@ -325,25 +326,25 @@ public:
 
   void visitPropAccessExpr(const Expr &expr) override {
     if (expr.prop == target) {
-      recordMember(expr.line, expr.propObject.get(), expr.ident);
+      recordMember(expr.loc.line, expr.propObject.get(), expr.ident);
     }
     // 简单接收者：AST 存于 ident（propObject 为空），视为一次引用
     if (!expr.ident.isEmpty() && !expr.propObject) {
-      recordUsage(expr.ident, expr.line);
+      recordUsage(expr.ident, expr.loc.line);
     }
     if (expr.propObject) visitExpr(*expr.propObject);
   }
 
   void visitStaticAccessExpr(const Expr &expr) override {
-    recordUsage(expr.className, expr.line);
-    if (!expr.funcCall.name.isEmpty()) recordUsage(expr.funcCall.name, expr.line);
+    recordUsage(expr.className, expr.loc.line);
+    if (!expr.funcCall.name.isEmpty()) recordUsage(expr.funcCall.name, expr.loc.line);
     for (const auto &arg : expr.funcCall.args) {
       if (arg) visitExpr(*arg);
     }
   }
 
   void visitNewInstanceExpr(const Expr &expr) override {
-    recordUsage(expr.className, expr.line);
+    recordUsage(expr.className, expr.loc.line);
     AstVisitor::visitNewInstanceExpr(expr);
   }
 
@@ -351,7 +352,7 @@ public:
     ScopeGuard guard(*this);
     for (const ParamDef &p : expr.funcExpr.params) {
       // 同 visitFuncDef：用参数自身行号，跨行签名时保证参数声明行可被命中
-      declareCurrent(p.name, p.line);
+      declareCurrent(p.name, p.loc.line);
       if (p.type.kind == AcType::kClass && !p.type.className.isEmpty()) {
         varClass[p.name] = p.type.className;
       }
@@ -831,7 +832,7 @@ void WorkspaceIndex::collectModuleSymbols(const QString &text, const QString &pa
         s.name = stmt.funcDef.name;
         s.kind = QStringLiteral("function");
         s.filePath = path;
-        s.line = stmt.funcDef.line;
+        s.line = stmt.funcDef.loc.line;
         s.isExported = stmt.funcDef.isExported;
         for (const ParamDef &p : stmt.funcDef.params) s.params << p.name;
         s.key = QStringLiteral("g:") + path + QLatin1Char('#') + s.name;
@@ -844,7 +845,7 @@ void WorkspaceIndex::collectModuleSymbols(const QString &text, const QString &pa
         cs.name = stmt.classDef.name;
         cs.kind = QStringLiteral("class");
         cs.filePath = path;
-        cs.line = stmt.line;
+        cs.line = stmt.loc.line;
         cs.isExported = stmt.classDef.isExported;
         cs.key = QStringLiteral("g:") + path + QLatin1Char('#') + cs.name;
         mi.topSymbols.insert(cs.name, cs);
@@ -855,7 +856,7 @@ void WorkspaceIndex::collectModuleSymbols(const QString &text, const QString &pa
           ms.name = m.name;
           ms.kind = QStringLiteral("method");
           ms.filePath = path;
-          ms.line = m.line;
+          ms.line = m.loc.line;
           ms.parentClass = cs.name;
           ms.isStatic = m.isStatic;
           ms.key =
@@ -867,7 +868,7 @@ void WorkspaceIndex::collectModuleSymbols(const QString &text, const QString &pa
           ps.name = prop.key;
           ps.kind = QStringLiteral("property");
           ps.filePath = path;
-          ps.line = prop.line;
+          ps.line = prop.loc.line;
           ps.parentClass = cs.name;
           ps.isStatic = prop.isStatic;
           ps.key =
@@ -881,7 +882,7 @@ void WorkspaceIndex::collectModuleSymbols(const QString &text, const QString &pa
         s.name = stmt.interfaceDef.name;
         s.kind = QStringLiteral("interface");
         s.filePath = path;
-        s.line = stmt.line;
+        s.line = stmt.loc.line;
         s.isExported = stmt.interfaceDef.isExported;
         s.key = QStringLiteral("g:") + path + QLatin1Char('#') + s.name;
         mi.topSymbols.insert(s.name, s);
@@ -893,7 +894,7 @@ void WorkspaceIndex::collectModuleSymbols(const QString &text, const QString &pa
         s.name = stmt.enumDef.name;
         s.kind = QStringLiteral("enum");
         s.filePath = path;
-        s.line = stmt.line;
+        s.line = stmt.loc.line;
         s.isExported = stmt.enumDef.isExported;
         s.key = QStringLiteral("g:") + path + QLatin1Char('#') + s.name;
         mi.topSymbols.insert(s.name, s);
@@ -906,7 +907,7 @@ void WorkspaceIndex::collectModuleSymbols(const QString &text, const QString &pa
           s.name = stmt.assign.name;
           s.kind = QStringLiteral("variable");
           s.filePath = path;
-          s.line = stmt.assign.line;
+          s.line = stmt.assign.loc.line;
           s.isExported = stmt.assign.isExported;
           s.key = QStringLiteral("g:") + path + QLatin1Char('#') + s.name;
           mi.topSymbols.insert(s.name, s);

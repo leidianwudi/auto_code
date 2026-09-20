@@ -14,7 +14,7 @@
 
 void Expr::copyFrom(const Expr &other) {
   kind = other.kind;
-  line = other.line;
+  loc = other.loc;
   strVal = other.strVal;
   numVal = other.numVal;
   boolVal = other.boolVal;
@@ -27,6 +27,8 @@ void Expr::copyFrom(const Expr &other) {
     oe.type = e.type;
     oe.value = e.value ? std::make_unique<Expr>(*e.value) : nullptr;
     oe.isStatic = e.isStatic;
+    oe.access = e.access;
+    oe.loc = e.loc;
     objEntries.append(oe);
   }
   for (const auto &e : other.arrItems) arrItems.push_back(e ? std::make_unique<Expr>(*e) : nullptr);
@@ -47,7 +49,7 @@ void Expr::copyFrom(const Expr &other) {
 
 void Expr::moveFrom(Expr &&other) {
   kind = other.kind;
-  line = other.line;
+  loc = other.loc;
   strVal = std::move(other.strVal);
   numVal = other.numVal;
   boolVal = other.boolVal;
@@ -100,7 +102,7 @@ ObjectEntry::ObjectEntry(const ObjectEntry &other)
       value(other.value ? std::make_unique<Expr>(*other.value) : nullptr),
       isStatic(other.isStatic),
       access(other.access),
-      line(other.line) {}
+      loc(other.loc) {}
 
 ObjectEntry &ObjectEntry::operator=(const ObjectEntry &other) {
   if (this != &other) {
@@ -109,7 +111,7 @@ ObjectEntry &ObjectEntry::operator=(const ObjectEntry &other) {
     value = other.value ? std::make_unique<Expr>(*other.value) : nullptr;
     isStatic = other.isStatic;
     access = other.access;
-    line = other.line;
+    loc = other.loc;
   }
   return *this;
 }

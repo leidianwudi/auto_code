@@ -13,18 +13,18 @@
 
 Token AcParser::peek() {
   if (m_pos < m_tokens.size()) return m_tokens[m_pos];
-  return {TOK_EOF, {}, 0};
+  return {TokenType::kEof, {}, 0};
 }
 
 Token AcParser::peek(int offset) {
   int pos = m_pos + offset;
   if (pos >= 0 && pos < m_tokens.size()) return m_tokens[pos];
-  return {TOK_EOF, {}, 0};
+  return {TokenType::kEof, {}, 0};
 }
 
 Token AcParser::advance() {
   if (m_pos < m_tokens.size()) return m_tokens[m_pos++];
-  return {TOK_EOF, {}, 0};
+  return {TokenType::kEof, {}, 0};
 }
 
 bool AcParser::match(TokenType t) {
@@ -40,36 +40,36 @@ bool AcParser::expect(TokenType t, const QString &msg) {
     advance();
     return true;
   }
-  m_error = QStringLiteral("%1 at line %2").arg(msg).arg(peek().line);
+  m_error = QStringLiteral("%1 at line %2").arg(msg).arg(peek().loc.line);
   return false;
 }
 
 bool AcParser::expectSemi(const QString &msg, int stmtLine) {
-  if (peek().type == TOK_SEMI) {
+  if (peek().type == TokenType::kSemi) {
     advance();
     return true;
   }
   // 分号缺失时，错误定位到语句所在行而不是下一个 token 的行，
   // 避免错误行号跳到后续行（如下一行是空行/注释/另一条语句）导致波浪线画错位置
-  m_error = QStringLiteral("%1 at line %2").arg(msg).arg(stmtLine > 0 ? stmtLine : peek().line);
+  m_error = QStringLiteral("%1 at line %2").arg(msg).arg(stmtLine > 0 ? stmtLine : peek().loc.line);
   return false;
 }
 
 bool AcParser::isPropertyName(TokenType t) const {
-  return t == TOK_IDENT || t == TOK_STRING || t == TOK_DEFAULT || t == TOK_CASE || t == TOK_NULL ||
-         t == TOK_UNDEFINED || t == TOK_WHILE || t == TOK_BREAK || t == TOK_CONTINUE ||
-         t == TOK_SWITCH || t == TOK_FOR || t == TOK_IF || t == TOK_ELSE || t == TOK_RETURN ||
-         t == TOK_CLASS || t == TOK_FUNCTION || t == TOK_STATIC || t == TOK_PUBLIC ||
-         t == TOK_PROTECTED || t == TOK_PRIVATE || t == TOK_EXTENDS || t == TOK_OVERRIDE ||
-         t == TOK_INTERFACE || t == TOK_IMPLEMENTS || t == TOK_SUPER || t == TOK_EXPORT ||
-         t == TOK_IMPORT || t == TOK_FROM || t == TOK_NEW || t == TOK_LET || t == TOK_IN ||
-         t == TOK_TRUE || t == TOK_FALSE || t == TOK_THIS || t == TOK_ENUM || t == TOK_USING ||
-         t == TOK_DISPOSE;
+  return t == TokenType::kIdent || t == TokenType::kString || t == TokenType::kDefault || t == TokenType::kCase || t == TokenType::kNull ||
+         t == TokenType::kUndefined || t == TokenType::kWhile || t == TokenType::kBreak || t == TokenType::kContinue ||
+         t == TokenType::kSwitch || t == TokenType::kFor || t == TokenType::kIf || t == TokenType::kElse || t == TokenType::kReturn ||
+         t == TokenType::kClass || t == TokenType::kFunction || t == TokenType::kStatic || t == TokenType::kPublic ||
+         t == TokenType::kProtected || t == TokenType::kPrivate || t == TokenType::kExtends || t == TokenType::kOverride ||
+         t == TokenType::kInterface || t == TokenType::kImplements || t == TokenType::kSuper || t == TokenType::kExport ||
+         t == TokenType::kImport || t == TokenType::kFrom || t == TokenType::kNew || t == TokenType::kLet || t == TokenType::kIn ||
+         t == TokenType::kTrue || t == TokenType::kFalse || t == TokenType::kThis || t == TokenType::kEnum || t == TokenType::kUsing ||
+         t == TokenType::kDispose;
 }
 
 bool AcParser::isParamName(TokenType t) const {
   // from 是关键字（import ... from），但允许用作参数名（builtin.d.ac 中 indexOf/lastIndexOf）
-  return t == TOK_IDENT || t == TOK_FROM;
+  return t == TokenType::kIdent || t == TokenType::kFrom;
 }
 
 // ── 解析入口 ──
@@ -101,82 +101,82 @@ bool AcParser::declareVar(const QString &name, int line) {
 }
 
 bool AcParser::parseProgram(Block &block) {
-  while (peek().type != TOK_EOF) {
+  while (peek().type != TokenType::kEof) {
     Token t = peek();
 
     // import { A, B } from "file"
-    if (t.type == TOK_IMPORT) {
+    if (t.type == TokenType::kImport) {
       advance();
       Block::Stmt stmt;
-      stmt.line = t.line;
+      stmt.loc = t.loc;
       stmt.filePath = m_filePath;
       stmt.kind = Block::Stmt::kImport;
       if (!parseImportStmt(stmt.importStmt)) return false;
       block.stmts.append(stmt);
-      if (!expectSemi(QStringLiteral("expected ';' after import statement"), t.line)) return false;
+      if (!expectSemi(QStringLiteral("expected ';' after import statement"), t.loc.line)) return false;
       continue;
     }
 
     // export let / export class / export function / export interface / export enum
-    if (t.type == TOK_EXPORT) {
+    if (t.type == TokenType::kExport) {
       Block::Stmt stmt;
       if (!parseStmt(stmt)) return false;
       block.stmts.append(stmt);
       if (stmt.kind != Block::Stmt::kClassDef && stmt.kind != Block::Stmt::kInterfaceDef &&
           stmt.kind != Block::Stmt::kEnumDef && stmt.kind != Block::Stmt::kFuncDef) {
-        if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.line)) return false;
+        if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.loc.line)) return false;
       }
       continue;
     }
 
-    if (t.type == TOK_CLASS) {
+    if (t.type == TokenType::kClass) {
       advance();
       Block::Stmt stmt;
-      stmt.line = t.line;
+      stmt.loc = t.loc;
       stmt.filePath = m_filePath;
       stmt.kind = Block::Stmt::kClassDef;
       if (!parseClassDef(stmt.classDef)) return false;
       block.stmts.append(stmt);
-    } else if (t.type == TOK_INTERFACE) {
+    } else if (t.type == TokenType::kInterface) {
       advance();
       Block::Stmt stmt;
-      stmt.line = t.line;
+      stmt.loc = t.loc;
       stmt.filePath = m_filePath;
       stmt.kind = Block::Stmt::kInterfaceDef;
       if (!parseInterfaceDef(stmt.interfaceDef)) return false;
       block.stmts.append(stmt);
-    } else if (t.type == TOK_ENUM) {
+    } else if (t.type == TokenType::kEnum) {
       advance();
       Block::Stmt stmt;
-      stmt.line = t.line;
+      stmt.loc = t.loc;
       stmt.filePath = m_filePath;
       stmt.kind = Block::Stmt::kEnumDef;
       if (!parseEnumDef(stmt.enumDef)) return false;
       block.stmts.append(stmt);
-    } else if (t.type == TOK_FUNCTION) {
+    } else if (t.type == TokenType::kFunction) {
       advance();
       Block::Stmt stmt;
-      stmt.line = t.line;
+      stmt.loc = t.loc;
       stmt.filePath = m_filePath;
       stmt.kind = Block::Stmt::kFuncDef;
       if (!parseMethodDef(stmt.funcDef)) return false;
       block.stmts.append(stmt);
-    } else if (t.type == TOK_LET) {
+    } else if (t.type == TokenType::kLet) {
       advance();
-      if (peek().type != TOK_IDENT) {
-        m_error = QStringLiteral("expected variable name after 'let' at line %1").arg(peek().line);
+      if (peek().type != TokenType::kIdent) {
+        m_error = QStringLiteral("expected variable name after 'let' at line %1").arg(peek().loc.line);
         return false;
       }
-      if (!declareVar(peek().text, peek().line)) return false;
+      if (!declareVar(peek().text, peek().loc.line)) return false;
       Block::Stmt stmt;
-      stmt.line = t.line;
+      stmt.loc = t.loc;
       stmt.filePath = m_filePath;
       stmt.kind = Block::Stmt::kAssign;
       if (!parseAssignStmt(stmt.assign)) return false;
-      stmt.assign.line = t.line;
+      stmt.assign.loc = t.loc;
       block.stmts.append(stmt);
-      if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.line)) return false;
-    } else if (t.type == TOK_IDENT && t.text == QString::fromLatin1(AcKeyword::kMain)) {
+      if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.loc.line)) return false;
+    } else if (t.type == TokenType::kIdent && t.text == QString::fromLatin1(AcKeyword::kMain)) {
       advance();
       if (!parseBlock(block)) return false;
     } else {
@@ -186,7 +186,7 @@ bool AcParser::parseProgram(Block &block) {
       if (!parseStmt(stmt)) return false;
       block.stmts.append(stmt);
       if (stmtNeedsSemi(stmt, /*blockAllowed=*/true)) {
-        if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.line)) return false;
+        if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.loc.line)) return false;
       }
       continue;
     }
@@ -195,17 +195,17 @@ bool AcParser::parseProgram(Block &block) {
 }
 
 bool AcParser::parseBlock(Block &block) {
-  if (!expect(TOK_LBRACE, QStringLiteral("expected '{'"))) return false;
+  if (!expect(TokenType::kLBrace, QStringLiteral("expected '{'"))) return false;
   ScopeGuard _sg(m_scopes);
-  while (peek().type != TOK_RBRACE && peek().type != TOK_EOF) {
+  while (peek().type != TokenType::kRBrace && peek().type != TokenType::kEof) {
     Block::Stmt stmt;
     if (!parseStmt(stmt)) return false;
     block.stmts.append(stmt);
     if (stmtNeedsSemi(stmt, /*blockAllowed=*/true)) {
-      if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.line)) return false;
+      if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.loc.line)) return false;
     }
   }
-  return expect(TOK_RBRACE, QStringLiteral("expected '}'"));
+  return expect(TokenType::kRBrace, QStringLiteral("expected '}'"));
 }
 
 bool AcParser::stmtNeedsSemi(const Block::Stmt &stmt, bool blockAllowed) const {
@@ -223,14 +223,14 @@ bool AcParser::stmtNeedsSemi(const Block::Stmt &stmt, bool blockAllowed) const {
 }
 
 bool AcParser::parseBlockOrStmt(Block &block) {
-  if (peek().type == TOK_LBRACE) {
+  if (peek().type == TokenType::kLBrace) {
     return parseBlock(block);
   }
   Block::Stmt stmt;
   if (!parseStmt(stmt)) return false;
   block.stmts.append(stmt);
   if (stmtNeedsSemi(stmt, /*blockAllowed=*/false)) {
-    if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.line)) return false;
+    if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.loc.line)) return false;
   }
   return true;
 }
@@ -239,8 +239,8 @@ bool AcParser::parseBlockOrStmt(Block &block) {
 
 AcType AcParser::parseType() {
   // 类型必须以标识符开头（内建类型名或自定义类名）
-  if (peek().type != TOK_IDENT) {
-    m_error = QStringLiteral("expected type name at line %1").arg(peek().line);
+  if (peek().type != TokenType::kIdent) {
+    m_error = QStringLiteral("expected type name at line %1").arg(peek().loc.line);
     return AcType::any();
   }
 
@@ -248,11 +248,11 @@ AcType AcParser::parseType() {
   QString typeName = typeToken.text;
 
   // 泛型参数：Array<T>
-  if (peek().type == TOK_LT) {
+  if (peek().type == TokenType::kLt) {
     advance();
     auto elementType = std::make_shared<AcType>(parseType());
     auto type = AcType::arrayOf(*elementType);
-    if (!expect(TOK_GT, QStringLiteral("expected '>' after type arguments"))) {
+    if (!expect(TokenType::kGt, QStringLiteral("expected '>' after type arguments"))) {
       return AcType::any();
     }
     return type;
@@ -275,7 +275,7 @@ AcType AcParser::parseType() {
     // P1b: 禁止弱类型 Array，必须使用 Array<Type> 或 Type[]
     m_error = QStringLiteral(
                   "bare 'Array' type requires element type: use Array<Type> or Type[] at line %1")
-                  .arg(peek().line);
+                  .arg(peek().loc.line);
     return AcType::any();
   } else if (typeName == AcTypeName::kObject) {
     baseType = AcType::classType(QString::fromLatin1(AcTypeName::kObject));
@@ -307,7 +307,7 @@ AcType AcParser::parseType() {
                     "unknown type '%1' at line %2 — type names are case-sensitive, did you mean "
                     "'%3'?")
                     .arg(typeName)
-                    .arg(typeToken.line)
+                    .arg(typeToken.loc.line)
                     .arg(suggestion);
       return AcType::any();
     }
@@ -316,7 +316,7 @@ AcType AcParser::parseType() {
   }
 
   // TypeScript 风格数组后缀：Type[]（支持多维 Type[][]）
-  while (peek().type == TOK_LBRACKET && peek(1).type == TOK_RBRACKET) {
+  while (peek().type == TokenType::kLBracket && peek(1).type == TokenType::kRBracket) {
     advance();  // [
     advance();  // ]
     baseType = AcType::arrayOf(baseType);

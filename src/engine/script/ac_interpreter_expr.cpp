@@ -65,9 +65,8 @@ void AcInterpreter::setError(const QString &msg, int line) {
 }
 
 accore::AcJsonValue AcInterpreter::makeClassRef(const QString &className) const {
-  accore::AcJsonValue classObj = accore::AcJsonValue::makeObject();
-  classObj.set(QString::fromLatin1(AcRuntime::kClassKey), className);
-  return classObj;
+  // 类引用：专用的运行时种类（类名存于值内，不再用 __class__ 魔法键编码）
+  return accore::AcJsonValue::makeClassRef(className);
 }
 
 accore::AcJsonValue AcInterpreter::getPropertyValue(const accore::AcJsonValue &obj,
@@ -123,7 +122,7 @@ accore::AcJsonValue AcInterpreter::evalPropertyChain(const Expr &expr) {
         // （不能直接返回 classRef，否则未赋值静态属性会被误判为非空）
         return getPropertyValue(makeClassRef(expr.ident), expr.prop, expr.ident);
       }
-      setError(QStringLiteral("variable '%1' is null").arg(expr.ident), expr.line);
+      setError(QStringLiteral("variable '%1' is null").arg(expr.ident), expr.loc.line);
       return accore::AcJsonValue();
     }
   }
@@ -187,7 +186,7 @@ accore::AcJsonValue AcInterpreter::evalExpr(const Expr &expr) {
       if (!containsVar(expr.ident)) {
         // 裸类名：求值为类引用对象（JS 语义：类名即类对象），不报「未定义变量」错误
         if (m_classes.contains(expr.ident)) return makeClassRef(expr.ident);
-        setError(kErrUndefinedVariable.arg(expr.ident), expr.line);
+        setError(kErrUndefinedVariable.arg(expr.ident), expr.loc.line);
         return accore::AcJsonValue();
       }
       return resolveVar(expr.ident);
@@ -220,7 +219,7 @@ accore::AcJsonValue AcInterpreter::evalExpr(const Expr &expr) {
         if (idx >= 0 && idx < s.length()) return accore::AcJsonValue(QString(s[idx]));
         return accore::AcJsonValue();
       }
-      setError(QStringLiteral("cannot access index on value"), expr.line);
+      setError(QStringLiteral("cannot access index on value"), expr.loc.line);
       return accore::AcJsonValue();
     }
 
@@ -247,16 +246,14 @@ accore::AcJsonValue AcInterpreter::evalExpr(const Expr &expr) {
     }
 
     case Expr::kFuncCall:
-      return callBuiltin(expr.funcCall.name, expr.funcCall.args, expr.line);
+      return callBuiltin(expr.funcCall.name, expr.funcCall.args, expr.loc.line);
 
     case Expr::kFuncExpr: {
       QString funcName = QStringLiteral("__lambda_%1").arg(++m_funcExprCounter);
       m_functions[funcName] = expr.funcExpr;
       m_functions[funcName].name = funcName;
-      accore::AcJsonValue funcRef = accore::AcJsonValue::makeObject();
-      funcRef.set(QString::fromLatin1(AcRuntime::kClassKey), QStringLiteral("__func__"));
-      funcRef.set(QStringLiteral("name"), funcName);
-      return funcRef;
+      // 函数引用：专用运行时种类（函数名存于值内）
+      return accore::AcJsonValue::makeFuncRef(funcName);
     }
 
     case Expr::kMethodCall:
@@ -268,7 +265,7 @@ accore::AcJsonValue AcInterpreter::evalExpr(const Expr &expr) {
     case Expr::kStaticAccess: {
       QString className = expr.className;
       if (!m_classes.contains(className)) {
-        setError(kErrUndefinedClass.arg(className), expr.line);
+        setError(kErrUndefinedClass.arg(className), expr.loc.line);
         return accore::AcJsonValue();
       }
       const ClassDef &cd = m_classes[className];
@@ -296,7 +293,7 @@ accore::AcJsonValue AcInterpreter::evalExpr(const Expr &expr) {
       }
 
       setError(QStringLiteral("class '%1' has no static member '%2'").arg(className, expr.prop),
-               expr.line);
+               expr.loc.line);
       return accore::AcJsonValue();
     }
 
@@ -329,14 +326,14 @@ accore::AcJsonValue AcInterpreter::evalExpr(const Expr &expr) {
           accore::AcJsonValue obj = resolveVar(baseName);
           if (!obj.isObject()) {
             setError(QStringLiteral("cannot set property '%1' on value").arg(expr.left->prop),
-                     expr.line);
+                     expr.loc.line);
             return accore::AcJsonValue();
           }
           obj.set(expr.left->prop, value);
           setVar(baseName, obj);
         } else {
           // 链式基（a.b.c = value）：语句级解析器走 kPropAssign/kIndexAssign，表达式级不支持
-          setError(QStringLiteral("unsupported assignment target"), expr.line);
+          setError(QStringLiteral("unsupported assignment target"), expr.loc.line);
         }
       }
       // 左值为索引访问：obj[key] = value（对象/数组语义与语句级 assignToIndex 一致）
@@ -408,13 +405,13 @@ accore::AcJsonValue AcInterpreter::evalBinary(const Expr &expr) {
       return accore::AcJsonValue(l.toDouble() * r.toDouble());
     case Expr::kDiv:
       if (r.toDouble() == 0.0) {
-        setError(QStringLiteral("division by zero"), expr.line);
+        setError(QStringLiteral("division by zero"), expr.loc.line);
         return accore::AcJsonValue();
       }
       return accore::AcJsonValue(l.toDouble() / r.toDouble());
     case Expr::kMod:
       if (r.toDouble() == 0.0) {
-        setError(QStringLiteral("modulo by zero"), expr.line);
+        setError(QStringLiteral("modulo by zero"), expr.loc.line);
         return accore::AcJsonValue();
       }
       return accore::AcJsonValue(fmod(l.toDouble(), r.toDouble()));
@@ -467,12 +464,9 @@ QString AcInterpreter::inferTypeName(const accore::AcJsonValue &val) {
   if (val.isDouble()) return QString::fromLatin1(AcTypeName::kNumber);
   if (val.isString()) return QString::fromLatin1(AcTypeName::kString);
   if (val.isArray()) return QString::fromLatin1(AcTypeName::kArray);
-  if (val.isObject()) {
-    if (val.has(QString::fromLatin1(AcRuntime::kClassKey))) {
-      return val.value(QString::fromLatin1(AcRuntime::kClassKey)).toString();
-    }
-    return QString::fromLatin1(AcTypeName::kObject);
-  }
+  if (val.isInstance() || val.isClassRef()) return val.instanceClass();
+  if (val.isFuncRef()) return QStringLiteral("Function");
+  if (val.isObject()) return QString::fromLatin1(AcTypeName::kObject);
   if (val.isNull()) return QString::fromLatin1(AcTypeName::kNull);
   return QString::fromLatin1(AcTypeName::kAny);
 }
@@ -516,12 +510,12 @@ accore::AcJsonValue AcInterpreter::applyIncDec(const Expr &expr, double delta, b
       baseName = lv.propObject->ident;
     }
     if (baseName.isEmpty()) {
-      setError(QStringLiteral("unsupported increment/decrement target"), expr.line);
+      setError(QStringLiteral("unsupported increment/decrement target"), expr.loc.line);
       return accore::AcJsonValue();
     }
     accore::AcJsonValue obj = resolveVar(baseName);
     if (!obj.isObject()) {
-      setError(QStringLiteral("cannot set property '%1' on value").arg(lv.prop), expr.line);
+      setError(QStringLiteral("cannot set property '%1' on value").arg(lv.prop), expr.loc.line);
       return accore::AcJsonValue();
     }
     obj.set(lv.prop, accore::AcJsonValue(newVal));
@@ -584,13 +578,10 @@ accore::AcJsonValue AcInterpreter::callBuiltin(const QString &name,
 
   if (containsVar(name)) {
     accore::AcJsonValue varVal = resolveVar(name);
-    if (varVal.isObject()) {
-      if (varVal.value(QString::fromLatin1(AcRuntime::kClassKey)).toString() ==
-          QStringLiteral("__func__")) {
-        QString funcName = varVal.value(QStringLiteral("name")).toString();
-        auto fi = m_functions.find(funcName);
-        if (fi != m_functions.end()) return execUserFunction(*fi, arr);
-      }
+    if (varVal.isFuncRef()) {
+      QString funcName = varVal.funcRefName();
+      auto fi = m_functions.find(funcName);
+      if (fi != m_functions.end()) return execUserFunction(*fi, arr);
     }
   }
 
@@ -602,12 +593,12 @@ accore::AcJsonValue AcInterpreter::evalJSONBuiltin(const Expr &expr) {
   const QString &method = expr.methodCall.methodName;
   if (method == QStringLiteral("parse")) {
     if (expr.methodCall.args.empty()) {
-      setError(QStringLiteral("JSON.parse() requires 1 argument"), expr.line);
+      setError(QStringLiteral("JSON.parse() requires 1 argument"), expr.loc.line);
       return accore::AcJsonValue();
     }
     accore::AcJsonValue argVal = evalExpr(*expr.methodCall.args[0]);
     if (!argVal.isString()) {
-      setError(QStringLiteral("JSON.parse() argument must be a string"), expr.line);
+      setError(QStringLiteral("JSON.parse() argument must be a string"), expr.loc.line);
       return accore::AcJsonValue();
     }
     // 改走自有解析器：对象键保序（迁移核心收益），并支持 JSON5 超集（注释/单引号/尾逗号）
@@ -615,21 +606,21 @@ accore::AcJsonValue AcInterpreter::evalJSONBuiltin(const Expr &expr) {
     QString err;
     accore::AcJsonValue parsed = accore::AcJsonValue::parse(argVal.toString(), &ok, &err);
     if (!ok) {
-      setError(QStringLiteral("JSON.parse() error: %1").arg(err), expr.line);
+      setError(QStringLiteral("JSON.parse() error: %1").arg(err), expr.loc.line);
       return accore::AcJsonValue();
     }
     return parsed;
   }
   if (method == QStringLiteral("stringify")) {
     if (expr.methodCall.args.empty()) {
-      setError(QStringLiteral("JSON.stringify() requires 1 argument"), expr.line);
+      setError(QStringLiteral("JSON.stringify() requires 1 argument"), expr.loc.line);
       return accore::AcJsonValue();
     }
     accore::AcJsonValue argVal = evalExpr(*expr.methodCall.args[0]);
     if (!argVal.isObject() && !argVal.isArray()) return accore::AcJsonValue(argVal.toString());
     return accore::AcJsonValue(argVal.serialize(false));
   }
-  setError(QStringLiteral("JSON has no method '%1'").arg(method), expr.line);
+  setError(QStringLiteral("JSON has no method '%1'").arg(method), expr.loc.line);
   return accore::AcJsonValue();
 }
 
@@ -643,7 +634,7 @@ accore::AcJsonValue AcInterpreter::resolveMethodCallTarget(const Expr &expr) {
     if (!m_error.isEmpty()) return accore::AcJsonValue();
     // 类名经 kIdent 求值直接得到类引用对象；此处仅拦截真正的空基调用
     if (objVal.isNull()) {
-      setError(QStringLiteral("method call on null value"), expr.line);
+      setError(QStringLiteral("method call on null value"), expr.loc.line);
       return accore::AcJsonValue();
     }
   } else if (isSuper) {
@@ -657,13 +648,13 @@ accore::AcJsonValue AcInterpreter::resolveMethodCallTarget(const Expr &expr) {
         // 变量根本未定义（类似 TS 的 "Cannot find name 'x'"）
         setError(
             QStringLiteral("undefined variable '%1' in method call").arg(expr.methodCall.objName),
-            expr.line);
+            expr.loc.line);
         return accore::AcJsonValue();
       } else if (objVal.isNull()) {
         // 变量已定义但值为 null（类似 TS 的 "Cannot read properties of null"）
         setError(QStringLiteral("cannot call method '%1' on null value of variable '%2'")
                      .arg(expr.methodCall.methodName, expr.methodCall.objName),
-                 expr.line);
+                 expr.loc.line);
         return accore::AcJsonValue();
       }
     }
@@ -684,13 +675,13 @@ accore::AcJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
 
   if (objVal.isString()) {
     return evalStringBuiltin(objVal.toString(), expr.methodCall.methodName, expr.methodCall.args,
-                             expr.line);
+                             expr.loc.line);
   }
 
   if (objVal.isArray()) {
     accore::AcJsonValue modifiedArr;
     accore::AcJsonValue result = evalArrayBuiltin(objVal, expr.methodCall.methodName,
-                                                  expr.methodCall.args, expr.line, modifiedArr);
+                                                  expr.methodCall.args, expr.loc.line, modifiedArr);
     if (!modifiedArr.isNull()) {
       if (isChained) {
         if (expr.methodCall.object && expr.methodCall.object->kind == Expr::kPropAccess &&
@@ -717,7 +708,7 @@ accore::AcJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
     return result;
   }
 
-  if (!objVal.isObject()) {
+  if (!objVal.isObject() && !objVal.isClassRef()) {
     QString name = isChained ? QStringLiteral("chain expression") : expr.methodCall.objName;
     QString type = objVal.isDouble()   ? QString::fromLatin1(AcTypeName::kNumber)
                    : objVal.isBool()   ? QString::fromLatin1(AcTypeName::kBool)
@@ -726,14 +717,15 @@ accore::AcJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
                    : objVal.isString() ? QString::fromLatin1(AcTypeName::kString)
                                        : QString::fromLatin1(AcTypeName::kUnknown);
     setError(QStringLiteral("cannot call method on non-object '%1' (type=%2)").arg(name, type),
-             expr.line);
+             expr.loc.line);
     return accore::AcJsonValue();
   }
 
-  QString className = objVal.value(QString::fromLatin1(AcRuntime::kClassKey)).toString();
+  // 类名来源：类引用或实例（运行时种类字段，不再读 __class__ 键）
+  QString className = objVal.instanceClass();
   if (className.isEmpty() || !m_classes.contains(className)) {
     QString name = isChained ? QStringLiteral("chain expression") : expr.methodCall.objName;
-    setError(QStringLiteral("object '%1' has no class information").arg(name), expr.line);
+    setError(QStringLiteral("object '%1' has no class information").arg(name), expr.loc.line);
     return accore::AcJsonValue();
   }
 
@@ -755,7 +747,7 @@ accore::AcJsonValue AcInterpreter::evalClassMethod(const accore::AcJsonValue &ob
     accore::AcJsonValue r = FunMgr::ins().call(className, expr.methodCall.methodName, obj, args);
     QString err = FunMgr::takeError();
     if (!err.isEmpty()) {
-      setError(err, expr.line);
+      setError(err, expr.loc.line);
       return accore::AcJsonValue();
     }
     return r;
@@ -764,7 +756,7 @@ accore::AcJsonValue AcInterpreter::evalClassMethod(const accore::AcJsonValue &ob
   QString searchClassName = className;
   if (isSuper) {
     if (cd.baseClass.isEmpty()) {
-      setError(QStringLiteral("cannot use 'super' in class without base class"), expr.line);
+      setError(QStringLiteral("cannot use 'super' in class without base class"), expr.loc.line);
       return accore::AcJsonValue();
     }
     searchClassName = cd.baseClass;
@@ -808,18 +800,18 @@ accore::AcJsonValue AcInterpreter::evalClassMethod(const accore::AcJsonValue &ob
 
   setError(QStringLiteral("method '%1' not found in class '%2'")
                .arg(expr.methodCall.methodName, className),
-           expr.line);
+           expr.loc.line);
   return accore::AcJsonValue();
 }
 
 accore::AcJsonValue AcInterpreter::evalNewInstance(const Expr &expr) {
   if (!m_classes.contains(expr.className)) {
-    setError(QStringLiteral("undefined class '%1'").arg(expr.className), expr.line);
+    setError(QStringLiteral("undefined class '%1'").arg(expr.className), expr.loc.line);
     return accore::AcJsonValue();
   }
 
   const ClassDef &cd = m_classes[expr.className];
-  accore::AcJsonValue instance = accore::AcJsonValue::makeObject();
+  accore::AcJsonValue instance = accore::AcJsonValue::makeInstance(expr.className);
 
   if (cd.isNative) {
     accore::AcJsonValue ctorArgs = accore::AcJsonValue::makeArray();
@@ -827,15 +819,19 @@ accore::AcJsonValue AcInterpreter::evalNewInstance(const Expr &expr) {
     if (!m_error.isEmpty()) return accore::AcJsonValue();
     accore::AcJsonValue ctorResult =
         FunMgr::ins().call(expr.className, QString::fromLatin1(AcRuntime::kConstructor), ctorArgs);
-    if (ctorResult.isObject()) instance = ctorResult;
-    instance.set(QString::fromLatin1(AcRuntime::kClassKey), expr.className);
+    // 构造器返回的属性集迁入实例（实例的类名/objId 由专用字段承载）
+    if (ctorResult.isObject()) {
+      instance = accore::AcJsonValue::instanceFrom(ctorResult, expr.className);
+    }
     instance = m_objMgr.registerInstance(instance, expr.className);
     return instance;
   }
 
   if (!cd.baseClass.isEmpty()) {
-    instance = createBaseInstance(cd.baseClass);
+    accore::AcJsonValue base = createBaseInstance(cd.baseClass);
     if (!m_error.isEmpty()) return accore::AcJsonValue();
+    // 继承：基类属性复制到派生实例
+    for (const auto &m : base.members()) instance.set(m.key, m.value);
   }
 
   for (const auto &prop : cd.properties) {
@@ -849,8 +845,6 @@ accore::AcJsonValue AcInterpreter::evalNewInstance(const Expr &expr) {
       instance.set(prop.key, accore::AcJsonValue());
     }
   }
-
-  instance.set(QString::fromLatin1(AcRuntime::kClassKey), expr.className);
 
   instance = m_objMgr.registerInstance(instance, expr.className);
 

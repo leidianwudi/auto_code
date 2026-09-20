@@ -120,6 +120,9 @@ int runAcParamDefaultTests();
 /// accore JSON 值类型测试（tests/test_ac_json_value.cpp），返回失败数
 int runAcJsonValueTests();
 
+/// 标识符驻留池测试（tests/test_ac_ident_pool.cpp），返回失败数
+int runAcIdentPoolTests();
+
 /// AC 解释器直接单测（tests/test_ac_interpreter.cpp），返回失败数
 int runAcInterpreterTests();
 
@@ -302,11 +305,12 @@ int main() {
   testJsonUploadConfigRoundTrip();
   const int extraFailed = runAcParamDefaultTests();
   const int jsonValueFailed = runAcJsonValueTests();
+  const int identPoolFailed = runAcIdentPoolTests();
   const int interpreterFailed = runAcInterpreterTests();
   const int goldenFailed = runGoldenScriptTests();
 
   const int totalFailed =
-      g_failed + extraFailed + jsonValueFailed + interpreterFailed + goldenFailed;
+      g_failed + extraFailed + jsonValueFailed + identPoolFailed + interpreterFailed + goldenFailed;
   std::printf("%d checks, %d failed\n", g_total, totalFailed);
   return totalFailed == 0 ? 0 : 1;
 }

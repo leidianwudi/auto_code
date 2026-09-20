@@ -165,7 +165,7 @@ void UndeclaredIdentValidator::visitIdentExpr(const Expr &expr) {
   if (expr.ident.isEmpty()) return;
   if (expr.ident == QStringLiteral("JSON")) return;
   if (!m_scopeVars.contains(expr.ident)) {
-    reportError(expr.ident, expr.line);
+    reportError(expr.ident, expr.loc.line);
   }
 }
 
@@ -174,7 +174,7 @@ void UndeclaredIdentValidator::visitPropAccessExpr(const Expr &expr) {
     visitExpr(*expr.propObject);
   } else if (!expr.ident.isEmpty() && expr.ident != QString::fromLatin1(AcKeyword::kThis) &&
              expr.ident != QStringLiteral("JSON") && !m_scopeVars.contains(expr.ident)) {
-    reportError(expr.ident, expr.line);
+    reportError(expr.ident, expr.loc.line);
   }
 }
 
@@ -187,7 +187,7 @@ void UndeclaredIdentValidator::visitFuncCallExpr(const Expr &expr) {
       // 优先使用当前语句所属文件（import 导入的真实文件），否则回退到入口文件
       const QString &file = m_currentFile.isEmpty() ? m_filePath : m_currentFile;
       QString fileTag = file.isEmpty() ? QString() : QFileInfo(file).fileName();
-      QString loc = QStringLiteral("at line %1").arg(expr.line);
+      QString loc = QStringLiteral("at line %1").arg(expr.loc.line);
       if (!fileTag.isEmpty()) {
         m_errors->append(
             QStringLiteral("unknown function '%1' %2 in %3").arg(expr.funcCall.name, loc, fileTag));
@@ -201,7 +201,7 @@ void UndeclaredIdentValidator::visitFuncCallExpr(const Expr &expr) {
       expr.funcCall.args.empty()) {
     if (m_errors) {
       m_errors->append(
-          QStringLiteral("readFile() requires a file path argument at line %1").arg(expr.line));
+          QStringLiteral("readFile() requires a file path argument at line %1").arg(expr.loc.line));
     }
   }
 }
@@ -215,7 +215,7 @@ void UndeclaredIdentValidator::visitMethodCallExpr(const Expr &expr) {
         expr.methodCall.objName != QString::fromLatin1(AcKeyword::kSuper) &&
         expr.methodCall.objName != QStringLiteral("JSON") &&
         !m_scopeVars.contains(expr.methodCall.objName)) {
-      reportError(expr.methodCall.objName, expr.line);
+      reportError(expr.methodCall.objName, expr.loc.line);
     }
 
     // 检查方法名是否在对应的类中定义
@@ -226,7 +226,7 @@ void UndeclaredIdentValidator::visitMethodCallExpr(const Expr &expr) {
         if (m_errors) {
           m_errors->append(
               QStringLiteral("class '%1' has no method '%2' at line %3")
-                  .arg(clsName, expr.methodCall.methodName, QString::number(expr.line)));
+                  .arg(clsName, expr.methodCall.methodName, QString::number(expr.loc.line)));
         }
       }
     }

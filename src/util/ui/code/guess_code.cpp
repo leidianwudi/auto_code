@@ -153,14 +153,14 @@ QStringList GuessCode::extractUserFunctions(const QString &text, int cursorLine)
   if (!error.isEmpty()) return funcs;
 
   for (int i = 0; i < tokens.size(); ++i) {
-    if (tokens[i].type == TOK_CLASS) {
+    if (tokens[i].type == TokenType::kClass) {
       // 跳过整个类定义体（含嵌套大括号），避免收集类方法
-      while (i < tokens.size() && tokens[i].type != TOK_LBRACE) ++i;
+      while (i < tokens.size() && tokens[i].type != TokenType::kLBrace) ++i;
       int braceDepth = 0;
       while (i < tokens.size()) {
-        if (tokens[i].type == TOK_LBRACE)
+        if (tokens[i].type == TokenType::kLBrace)
           ++braceDepth;
-        else if (tokens[i].type == TOK_RBRACE) {
+        else if (tokens[i].type == TokenType::kRBrace) {
           --braceDepth;
           if (braceDepth == 0) break;
         }
@@ -169,9 +169,9 @@ QStringList GuessCode::extractUserFunctions(const QString &text, int cursorLine)
       continue;
     }
 
-    if (tokens[i].type == TOK_FUNCTION && i + 1 < tokens.size() &&
-        tokens[i + 1].type == TOK_IDENT) {
-      int defLine = tokens[i].line;
+    if (tokens[i].type == TokenType::kFunction && i + 1 < tokens.size() &&
+        tokens[i + 1].type == TokenType::kIdent) {
+      int defLine = tokens[i].loc.line;
       if (cursorLine < 0 || defLine < cursorLine) {
         funcs << tokens[i + 1].text + QStringLiteral("()");
       }
@@ -193,8 +193,8 @@ QStringList GuessCode::extractUserClasses(const QString &text, int cursorLine) {
   if (!error.isEmpty()) return classes;
 
   for (int i = 0; i < tokens.size() - 1; ++i) {
-    if (tokens[i].type == TOK_CLASS && tokens[i + 1].type == TOK_IDENT) {
-      int defLine = tokens[i].line;
+    if (tokens[i].type == TokenType::kClass && tokens[i + 1].type == TokenType::kIdent) {
+      int defLine = tokens[i].loc.line;
       if (cursorLine < 0 || defLine < cursorLine) {
         classes << tokens[i + 1].text;
       }
@@ -216,26 +216,26 @@ QHash<QString, QStringList> GuessCode::extractClassMethods(const QString &text) 
   if (!error.isEmpty()) return result;
 
   for (int i = 0; i < tokens.size(); ++i) {
-    if (tokens[i].type == TOK_CLASS && i + 1 < tokens.size() && tokens[i + 1].type == TOK_IDENT) {
+    if (tokens[i].type == TokenType::kClass && i + 1 < tokens.size() && tokens[i + 1].type == TokenType::kIdent) {
       QString className = tokens[i + 1].text;
       QStringList methods;
 
-      // 跳过 class 关键字和类名，定位到类体 TOK_LBRACE
+      // 跳过 class 关键字和类名，定位到类体 TokenType::kLBrace
       i += 2;
-      while (i < tokens.size() && tokens[i].type != TOK_LBRACE) ++i;
+      while (i < tokens.size() && tokens[i].type != TokenType::kLBrace) ++i;
       if (i >= tokens.size()) break;
 
-      // 扫描类体，收集 TOK_FUNCTION → TOK_IDENT
+      // 扫描类体，收集 TokenType::kFunction → TokenType::kIdent
       int braceDepth = 1;
       ++i;
       while (i < tokens.size() && braceDepth > 0) {
-        if (tokens[i].type == TOK_LBRACE) {
+        if (tokens[i].type == TokenType::kLBrace) {
           ++braceDepth;
-        } else if (tokens[i].type == TOK_RBRACE) {
+        } else if (tokens[i].type == TokenType::kRBrace) {
           --braceDepth;
           if (braceDepth == 0) break;
-        } else if (tokens[i].type == TOK_FUNCTION && i + 1 < tokens.size() &&
-                   tokens[i + 1].type == TOK_IDENT) {
+        } else if (tokens[i].type == TokenType::kFunction && i + 1 < tokens.size() &&
+                   tokens[i + 1].type == TokenType::kIdent) {
           methods << tokens[i + 1].text + QStringLiteral("()");
         }
         ++i;
@@ -260,27 +260,27 @@ QHash<QString, QString> GuessCode::extractVariableTypes(const QString &text) {
 
   // 匹配模式: let varName = new ClassName ( ... )
   for (int i = 0; i < tokens.size(); ++i) {
-    if (tokens[i].type == TOK_LET && i + 1 < tokens.size() && tokens[i + 1].type == TOK_IDENT) {
+    if (tokens[i].type == TokenType::kLet && i + 1 < tokens.size() && tokens[i + 1].type == TokenType::kIdent) {
       QString varName = tokens[i + 1].text;
 
       // 查找 = new ClassName
       int j = i + 2;
-      while (j < tokens.size() && tokens[j].type != TOK_EQUALS && tokens[j].type != TOK_SEMI &&
-             tokens[j].type != TOK_LBRACE && tokens[j].type != TOK_EOF) {
+      while (j < tokens.size() && tokens[j].type != TokenType::kEquals && tokens[j].type != TokenType::kSemi &&
+             tokens[j].type != TokenType::kLBrace && tokens[j].type != TokenType::kEof) {
         ++j;
       }
-      if (j >= tokens.size() || tokens[j].type != TOK_EQUALS) continue;
+      if (j >= tokens.size() || tokens[j].type != TokenType::kEquals) continue;
 
       // 跳过 = 和空格/new
       ++j;
-      while (j < tokens.size() && tokens[j].type != TOK_NEW && tokens[j].type != TOK_SEMI &&
-             tokens[j].type != TOK_LBRACE && tokens[j].type != TOK_EOF) {
+      while (j < tokens.size() && tokens[j].type != TokenType::kNew && tokens[j].type != TokenType::kSemi &&
+             tokens[j].type != TokenType::kLBrace && tokens[j].type != TokenType::kEof) {
         ++j;
       }
-      if (j >= tokens.size() || tokens[j].type != TOK_NEW) continue;
+      if (j >= tokens.size() || tokens[j].type != TokenType::kNew) continue;
 
-      // new 后面的 TOK_IDENT 就是类型名
-      if (j + 1 < tokens.size() && tokens[j + 1].type == TOK_IDENT) {
+      // new 后面的 TokenType::kIdent 就是类型名
+      if (j + 1 < tokens.size() && tokens[j + 1].type == TokenType::kIdent) {
         result[varName] = tokens[j + 1].text;
       }
     }

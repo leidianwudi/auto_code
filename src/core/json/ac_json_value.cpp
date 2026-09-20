@@ -41,6 +41,7 @@ AcJsonValue::AcJsonValue(const AcJsonValue &other)
       m_bool(other.m_bool),
       m_num(other.m_num),
       m_str(other.m_str),
+      m_objId(other.m_objId),
       m_arr(other.m_arr),  // 共享（写入时分离）
       m_obj(other.m_obj) {}
 
@@ -50,6 +51,7 @@ AcJsonValue &AcJsonValue::operator=(const AcJsonValue &other) {
     m_bool = other.m_bool;
     m_num = other.m_num;
     m_str = other.m_str;
+    m_objId = other.m_objId;
     m_arr = other.m_arr;
     m_obj = other.m_obj;
   }
@@ -61,6 +63,7 @@ AcJsonValue::AcJsonValue(AcJsonValue &&other) noexcept
       m_bool(other.m_bool),
       m_num(other.m_num),
       m_str(std::move(other.m_str)),
+      m_objId(std::move(other.m_objId)),
       m_arr(std::move(other.m_arr)),
       m_obj(std::move(other.m_obj)) {
   other.m_type = Type::Null;
@@ -72,6 +75,7 @@ AcJsonValue &AcJsonValue::operator=(AcJsonValue &&other) noexcept {
     m_bool = other.m_bool;
     m_num = other.m_num;
     m_str = std::move(other.m_str);
+    m_objId = std::move(other.m_objId);
     m_arr = std::move(other.m_arr);
     m_obj = std::move(other.m_obj);
     other.m_type = Type::Null;
@@ -99,6 +103,38 @@ AcJsonValue AcJsonValue::makeObject() {
   return v;
 }
 
+AcJsonValue AcJsonValue::makeInstance(const QString &className) {
+  AcJsonValue v;
+  v.m_type = Type::Instance;
+  v.m_str = className;
+  v.m_obj = std::make_shared<ObjData>();
+  return v;
+}
+
+AcJsonValue AcJsonValue::instanceFrom(const AcJsonValue &obj, const QString &className,
+                                      const QString &objId) {
+  AcJsonValue v = makeInstance(className);
+  v.m_objId = objId;
+  if (obj.isObject()) {
+    for (const Member &m : obj.members()) v.set(m.key, m.value);
+  }
+  return v;
+}
+
+AcJsonValue AcJsonValue::makeClassRef(const QString &className) {
+  AcJsonValue v;
+  v.m_type = Type::ClassRef;
+  v.m_str = className;
+  return v;
+}
+
+AcJsonValue AcJsonValue::makeFuncRef(const QString &funcName) {
+  AcJsonValue v;
+  v.m_type = Type::FuncRef;
+  v.m_str = funcName;
+  return v;
+}
+
 // ──────────────────────────────────────────────────────────────
 //  通用
 // ──────────────────────────────────────────────────────────────
@@ -112,13 +148,15 @@ int AcJsonValue::toInt(int def) const {
 
 int AcJsonValue::size() const {
   if (m_type == Type::Array) return m_arr ? int(m_arr->items.size()) : 0;
-  if (m_type == Type::Object) return m_obj ? int(m_obj->members.size()) : 0;
+  if (m_type == Type::Object || m_type == Type::Instance)
+    return m_obj ? int(m_obj->members.size()) : 0;
   return 0;
 }
 
 bool AcJsonValue::isEmpty() const {
   if (m_type == Type::Null) return true;
-  if (m_type == Type::Array || m_type == Type::Object) return size() == 0;
+  if (m_type == Type::Array || m_type == Type::Object || m_type == Type::Instance)
+    return size() == 0;
   return false;
 }
 
@@ -182,18 +220,19 @@ void AcJsonValue::removeLast() {
 
 QStringList AcJsonValue::keys() const {
   QStringList ks;
-  if (m_type != Type::Object || !m_obj) return ks;
+  if ((m_type != Type::Object && m_type != Type::Instance) || !m_obj) return ks;
   ks.reserve(m_obj->members.size());
   for (const Member &m : m_obj->members) ks.append(m.key);
   return ks;
 }
 
 bool AcJsonValue::has(const QString &key) const {
-  return m_type == Type::Object && m_obj && m_obj->index.contains(key);
+  return (m_type == Type::Object || m_type == Type::Instance) && m_obj &&
+         m_obj->index.contains(key);
 }
 
 AcJsonValue AcJsonValue::value(const QString &key) const {
-  if (m_type != Type::Object || !m_obj) return AcJsonValue();
+  if ((m_type != Type::Object && m_type != Type::Instance) || !m_obj) return AcJsonValue();
   const auto it = m_obj->index.constFind(key);
   if (it == m_obj->index.constEnd()) return AcJsonValue();
   return m_obj->members.at(it.value()).value;
@@ -205,7 +244,7 @@ const AcJsonValue::Members &AcJsonValue::members() const {
 }
 
 void AcJsonValue::set(const QString &key, const AcJsonValue &v) {
-  if (m_type != Type::Object) return;
+  if (m_type != Type::Object && m_type != Type::Instance) return;
   detachObj();
   const auto it = m_obj->index.constFind(key);
   if (it != m_obj->index.constEnd()) {
@@ -218,7 +257,7 @@ void AcJsonValue::set(const QString &key, const AcJsonValue &v) {
 }
 
 void AcJsonValue::remove(const QString &key) {
-  if (m_type != Type::Object || !m_obj) return;
+  if ((m_type != Type::Object && m_type != Type::Instance) || !m_obj) return;
   const auto it = m_obj->index.constFind(key);
   if (it == m_obj->index.constEnd()) return;
   detachObj();
@@ -241,6 +280,7 @@ AcJsonValue AcJsonValue::clone() const {
   dst.m_bool = m_bool;
   dst.m_num = m_num;
   dst.m_str = m_str;
+  dst.m_objId = m_objId;
   if (m_arr) {
     dst.m_arr = std::make_shared<ArrData>();
     dst.m_arr->items.reserve(m_arr->items.size());
@@ -286,6 +326,18 @@ QJsonValue AcJsonValue::toQJsonValue() const {
       }
       return QJsonValue(obj);
     }
+    case Type::Instance: {
+      // 实例按属性集序列化（类名/objId 是运行时元数据，不属于数据）
+      QJsonObject obj;
+      if (m_obj) {
+        for (const Member &m : m_obj->members) obj.insert(m.key, m.value.toQJsonValue());
+      }
+      return QJsonValue(obj);
+    }
+    case Type::ClassRef:
+    case Type::FuncRef:
+      // 运行时引用不应持久化
+      return QJsonValue(QJsonValue::Null);
   }
   return QJsonValue(QJsonValue::Null);
 }
