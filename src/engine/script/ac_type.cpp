@@ -15,6 +15,7 @@
 void Expr::copyFrom(const Expr &other) {
   kind = other.kind;
   loc = other.loc;
+  isOptional = other.isOptional;
   strVal = other.strVal;
   numVal = other.numVal;
   boolVal = other.boolVal;
@@ -50,6 +51,7 @@ void Expr::copyFrom(const Expr &other) {
 void Expr::moveFrom(Expr &&other) {
   kind = other.kind;
   loc = other.loc;
+  isOptional = other.isOptional;
   strVal = std::move(other.strVal);
   numVal = other.numVal;
   boolVal = other.boolVal;
@@ -77,7 +79,8 @@ void Expr::moveFrom(Expr &&other) {
 MethodCall::MethodCall(const MethodCall &other)
     : objName(other.objName),
       methodName(other.methodName),
-      object(other.object ? std::make_unique<Expr>(*other.object) : nullptr) {
+      object(other.object ? std::make_unique<Expr>(*other.object) : nullptr),
+      isOptional(other.isOptional) {
   for (const auto &e : other.args) args.push_back(e ? std::make_unique<Expr>(*e) : nullptr);
 }
 
@@ -88,6 +91,7 @@ MethodCall &MethodCall::operator=(const MethodCall &other) {
     args.clear();
     for (const auto &e : other.args) args.push_back(e ? std::make_unique<Expr>(*e) : nullptr);
     object = other.object ? std::make_unique<Expr>(*other.object) : nullptr;
+    isOptional = other.isOptional;
   }
   return *this;
 }

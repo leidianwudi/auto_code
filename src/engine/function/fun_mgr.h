@@ -25,6 +25,7 @@
 #include <QString>
 #include <functional>
 #include <map>
+#include <shared_mutex>
 
 #include "src/core/json/ac_json_value.h"
 #include "src/util/design/singleton.h"
@@ -33,7 +34,11 @@
  * @class FunMgr
  * @brief 函数管理器（单例，继承 Singleton<FunMgr>）
  *
- * 线程安全说明：当前为单线程设计，未加锁。
+ * 线程安全说明（支持多线程并行解释器）：
+ * - 函数注册表受 std::shared_mutex 保护：call/contains 并发读（共享锁），
+ *   register* 写入（独占锁）；应用启动期注册完成后以并发读为主，锁开销极低
+ * - 执行错误通道为 thread_local：每个线程独立的"最后一次错误"槽位，
+ *   并行 worker 各自 setError/takeError，互不串扰
  */
 class FunMgr : public Singleton<FunMgr> {
 public:
@@ -127,12 +132,12 @@ public:
   bool contains(const QString &className, const QString &funcName) const;
 
   /**
-   * @brief 设置函数执行错误（由各函数实现调用）
+   * @brief 设置当前线程的函数执行错误（由各函数实现调用）
    */
   static void setError(const QString &msg);
 
   /**
-   * @brief 获取并清除最后一次函数执行错误
+   * @brief 获取并清除当前线程的最后一次函数执行错误
    */
   static QString takeError();
 
@@ -141,6 +146,6 @@ private:
   /// 纯参数方法注册时自动包装为忽略 this 的实例方法签名，保证调用路径统一
   std::map<QString, std::map<QString, FunPtrThis>> m_registry;
 
-  /// 最后一次函数执行错误（单线程，每次执行前清空）
-  static QString s_lastError;
+  /// 注册表读写锁：注册（写）/查找调用（读）互斥，读读并发
+  mutable std::shared_mutex m_registryMutex;
 };

@@ -105,6 +105,7 @@ accore::AcJsonValue AcInterpreter::evalPropertyChain(const Expr &expr) {
     }
     obj = evalExpr(*expr.propObject);
     if (!m_error.isEmpty()) return accore::AcJsonValue();
+    if (expr.isOptional && obj.isNull()) return accore::AcJsonValue();  // ?. 短路
   } else if (expr.ident == QString::fromLatin1(AcKeyword::kThis)) {
     obj = m_currentThis;
   } else if (expr.ident == QString::fromLatin1(AcKeyword::kSuper)) {
@@ -112,6 +113,7 @@ accore::AcJsonValue AcInterpreter::evalPropertyChain(const Expr &expr) {
   } else {
     obj = resolveVar(expr.ident);
     if (obj.isNull()) {
+      if (expr.isOptional) return accore::AcJsonValue();  // ?. 短路：变量为 null
       QString enumMemberName = QStringLiteral("%1.%2").arg(expr.ident, expr.prop);
       if (containsVar(enumMemberName)) return resolveVar(enumMemberName);
       if (m_classes.contains(expr.ident)) {
@@ -166,8 +168,8 @@ accore::AcJsonValue AcInterpreter::applyCompoundOp(const accore::AcJsonValue &cu
 }
 
 /// 表达式求值嵌套深度上限：evalBinary/evalUnary 等经 evalExpr 递归求值子表达式，
-/// 深嵌套 AST（受解析器 128 层限制）之外再兜底一层，防止任何来源的深 AST 打爆栈
-static constexpr int kMaxEvalDepth = 256;
+/// 深嵌套 AST（受解析器 64 层限制）之外再兜底一层，防止任何来源的深 AST 打爆栈
+static constexpr int kMaxEvalDepth = 128;
 
 accore::AcJsonValue AcInterpreter::evalExpr(const Expr &expr) {
   if (m_exprDepth >= kMaxEvalDepth) {
@@ -257,6 +259,14 @@ accore::AcJsonValue AcInterpreter::evalExpr(const Expr &expr) {
         arr.append(item);
       }
       return arr;
+    }
+
+    case Expr::kCoalesce: {
+      // 空值合并：左侧非 null 直接返回（含 false/0 —— 与 || 的区别）
+      accore::AcJsonValue l = evalExpr(*expr.left);
+      if (!m_error.isEmpty()) return accore::AcJsonValue();
+      if (!l.isNull()) return l;
+      return evalExpr(*expr.right);
     }
 
     case Expr::kFuncCall:
@@ -466,6 +476,42 @@ int AcInterpreter::compareValues(const accore::AcJsonValue &l, const accore::AcJ
     if (isNullOrUndef(l) && isNullOrUndef(r)) return 0;
     return isNullOrUndef(l) ? -1 : 1;
   }
+  // 容器与运行时种类的相等语义（对齐 JS；修复此前回退字符串比较导致任意两对象恒为相等）：
+  // - 实例：引用相等（objId）；函数引用：函数名相等；类引用：类名相等
+  // - 数组/普通对象：结构化深比较（.ac 数据为值语义，快照一致即相等）
+  // - 混合种类：按种类号全序（仅供 < > 排序使用，无语义承诺）
+  auto containerKind = [](const accore::AcJsonValue &v) {
+    if (v.isInstance()) return 1;
+    if (v.isClassRef()) return 2;
+    if (v.isFuncRef()) return 3;
+    if (v.isArray()) return 4;
+    if (v.isObject()) return 5;
+    return 0;
+  };
+  const int lk = containerKind(l);
+  const int rk = containerKind(r);
+  if (lk != 0 || rk != 0) {
+    if (lk != rk) return lk < rk ? -1 : 1;
+    if (lk == 1) return l.instanceObjId().compare(r.instanceObjId());
+    if (lk == 2) return l.instanceClass().compare(r.instanceClass());
+    if (lk == 3) return l.funcRefName().compare(r.funcRefName());
+    if (l.size() != r.size()) return l.size() < r.size() ? -1 : 1;
+    if (lk == 4) {
+      for (int i = 0; i < l.size(); ++i) {
+        const int c = compareValues(l.at(i), r.at(i));
+        if (c != 0) return c;
+      }
+      return 0;
+    }
+    const auto &lm = l.members();
+    const auto &rm = r.members();
+    for (int i = 0; i < lm.size(); ++i) {
+      if (lm.at(i).key != rm.at(i).key) return lm.at(i).key < rm.at(i).key ? -1 : 1;
+      const int c = compareValues(lm.at(i).value, rm.at(i).value);
+      if (c != 0) return c;
+    }
+    return 0;
+  }
   QString ls =
       l.isString() ? l.toString() : (l.isDouble() ? QString::number(l.toDouble()) : l.toString());
   QString rs =
@@ -487,6 +533,53 @@ QString AcInterpreter::inferTypeName(const accore::AcJsonValue &val) {
 
 void AcInterpreter::recordInferredType(const QString &name, const accore::AcJsonValue &val) {
   m_inferredTypes[name] = inferTypeName(val);
+}
+
+accore::AcJsonValue AcInterpreter::callFunctionValue(const accore::AcJsonValue &funcRef,
+                                                     const accore::AcJsonValue &callArgs) {
+  if (!funcRef.isFuncRef()) {
+    m_error = QStringLiteral("callback is not a function");
+    return accore::AcJsonValue();
+  }
+  const auto it = m_functions.find(funcRef.funcRefName());
+  if (it == m_functions.end()) {
+    m_error = QStringLiteral("callback function '%1' not found").arg(funcRef.funcRefName());
+    return accore::AcJsonValue();
+  }
+  return execUserFunction(*it, callArgs);
+}
+
+QString AcInterpreter::takeError() {
+  QString e = m_error;
+  m_error.clear();
+  return e;
+}
+
+accore::AcJsonValue AcInterpreter::evalObjectBuiltin(const accore::AcJsonValue &obj,
+                                                     const QString &method,
+                                                     const std::vector<std::unique_ptr<Expr>> &args,
+                                                     int line) {
+  if (method == QStringLiteral("keys")) {
+    accore::AcJsonValue out = accore::AcJsonValue::makeArray();
+    for (const auto &m : obj.members()) out.append(accore::AcJsonValue(m.key));
+    return out;
+  }
+  if (method == QStringLiteral("values")) {
+    accore::AcJsonValue out = accore::AcJsonValue::makeArray();
+    for (const auto &m : obj.members()) out.append(m.value);
+    return out;
+  }
+  if (method == QStringLiteral("has")) {
+    if (args.empty()) {
+      setError(QStringLiteral("has() requires 1 argument"), line);
+      return accore::AcJsonValue();
+    }
+    accore::AcJsonValue k = evalExpr(*args[0]);
+    if (!m_error.isEmpty()) return accore::AcJsonValue();
+    return accore::AcJsonValue(obj.has(k.toString()));
+  }
+  // size()
+  return accore::AcJsonValue(obj.size());
 }
 
 accore::AcJsonValue AcInterpreter::evalUnary(const Expr &expr) {
@@ -648,6 +741,7 @@ accore::AcJsonValue AcInterpreter::resolveMethodCallTarget(const Expr &expr) {
     if (!m_error.isEmpty()) return accore::AcJsonValue();
     // 类名经 kIdent 求值直接得到类引用对象；此处仅拦截真正的空基调用
     if (objVal.isNull()) {
+      if (expr.methodCall.isOptional) return accore::AcJsonValue();  // ?. 短路
       setError(QStringLiteral("method call on null value"), expr.loc.line);
       return accore::AcJsonValue();
     }
@@ -686,6 +780,9 @@ accore::AcJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
 
   accore::AcJsonValue objVal = resolveMethodCallTarget(expr);
   if (!m_error.isEmpty()) return accore::AcJsonValue();
+  if (expr.methodCall.isOptional && objVal.isNull()) {
+    return accore::AcJsonValue();  // ?. 短路：对象为 null 时整体返回 null
+  }
 
   if (objVal.isString()) {
     return evalStringBuiltin(objVal.toString(), expr.methodCall.methodName, expr.methodCall.args,
@@ -733,6 +830,15 @@ accore::AcJsonValue AcInterpreter::evalMethodCall(const Expr &expr) {
     setError(QStringLiteral("cannot call method on non-object '%1' (type=%2)").arg(name, type),
              expr.loc.line);
     return accore::AcJsonValue();
+  }
+
+  // 普通对象的内置方法（keys/values/has/size）—— 类实例同样适用
+  if (objVal.isObject() && (expr.methodCall.methodName == QStringLiteral("keys") ||
+                            expr.methodCall.methodName == QStringLiteral("values") ||
+                            expr.methodCall.methodName == QStringLiteral("has") ||
+                            expr.methodCall.methodName == QStringLiteral("size"))) {
+    return evalObjectBuiltin(objVal, expr.methodCall.methodName, expr.methodCall.args,
+                             expr.loc.line);
   }
 
   // 类名来源：类引用或实例（运行时种类字段，不再读 __class__ 键）

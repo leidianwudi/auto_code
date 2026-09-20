@@ -161,6 +161,16 @@ void UndeclaredIdentValidator::visitImportStmt(const ImportStmt &imp) {
 // 表达式 — 重写 AstVisitor
 // ═════════════════════════════════════════════════════════════════════════════
 
+void UndeclaredIdentValidator::visitTryStmt(const Block::Stmt &stmt) {
+  visitBlock(stmt.tryStmt.tryBody);
+  // catch 错误变量仅 catch 块内可见
+  const QSet<QString> saved = m_scopeVars;
+  if (!stmt.tryStmt.catchVar.isEmpty()) m_scopeVars.insert(stmt.tryStmt.catchVar);
+  visitBlock(stmt.tryStmt.catchBody);
+  m_scopeVars = saved;
+  visitBlock(stmt.tryStmt.finallyBody);
+}
+
 void UndeclaredIdentValidator::visitIdentExpr(const Expr &expr) {
   if (expr.ident.isEmpty()) return;
   if (expr.ident == QStringLiteral("JSON")) return;

@@ -90,10 +90,16 @@ QString FormatCode::format(const QString &input, FormatMode mode) {
  * @param orderedKeys 每个对象的 key 顺序（路径 -> key 列表）
  * @param path 当前对象在 JSON 树中的路径（如 "0" 表示顶层，"0.2.1" 表示更深层）
  * @param json5Style 是否使用 JSON5 风格（无引号 key、尾随逗号）
+ * @param isRoot 是否为根值（JSON5 的尾随逗号仅允许出现在容器内部，
+ *        根值闭合后绝不能有逗号，否则再次解析会报「末尾存在多余内容」）
  */
 static void serializeJsonValue(const QJsonValue &v, QStringList &lines, int indent, bool isLast,
                                const OrderedKeyMap &orderedKeys, const QString &path,
-                               bool json5Style = false) {
+                               bool json5Style = false, bool isRoot = false) {
+  // 逗号条件：非最后成员必有分隔逗号；JSON5 风格下容器内部最后成员也加尾随逗号，
+  // 但根值（isRoot）永不加 —— 见 param.schema.json 曾因根闭合后多逗号导致 schema 加载失败
+  const bool comma = !isLast || (json5Style && !isRoot);
+
   const QString prefix(indent * FormatCode::kIndentSize, QLatin1Char(' '));
 
   switch (v.type()) {
@@ -101,6 +107,7 @@ static void serializeJsonValue(const QJsonValue &v, QStringList &lines, int inde
       QJsonObject obj = v.toObject();
       if (obj.isEmpty()) {
         lines.last() += QStringLiteral("{}");
+        if (comma) lines.last() += QLatin1Char(',');
         return;
       }
       lines.last() += QLatin1Char('{');
@@ -134,16 +141,16 @@ static void serializeJsonValue(const QJsonValue &v, QStringList &lines, int inde
         serializeJsonValue(obj.value(key), lines, indent + 1, i == keys.size() - 1, orderedKeys,
                            childPath, json5Style);
       }
-      // JSON5 风格：对象结束行也添加尾随逗号
+      // JSON5 风格：对象结束行也添加尾随逗号（根对象除外）
       lines.append(prefix + QLatin1Char('}'));
-      if (json5Style || !isLast) lines.last() += QLatin1Char(',');
+      if (comma) lines.last() += QLatin1Char(',');
       break;
     }
     case QJsonValue::Array: {
       QJsonArray arr = v.toArray();
       if (arr.isEmpty()) {
         lines.last() += QStringLiteral("[]");
-        if (!isLast) lines.last() += QLatin1Char(',');
+        if (comma) lines.last() += QLatin1Char(',');
         return;
       }
       lines.last() += QLatin1Char('[');
@@ -154,9 +161,9 @@ static void serializeJsonValue(const QJsonValue &v, QStringList &lines, int inde
         serializeJsonValue(arr[i], lines, indent + 1, i == arr.size() - 1, orderedKeys, childPath,
                            json5Style);
       }
-      // JSON5 风格：数组结束行也添加尾随逗号
+      // JSON5 风格：数组结束行也添加尾随逗号（根数组除外）
       lines.append(prefix + QLatin1Char(']'));
-      if (json5Style || !isLast) lines.last() += QLatin1Char(',');
+      if (comma) lines.last() += QLatin1Char(',');
       break;
     }
     case QJsonValue::String: {
@@ -175,8 +182,7 @@ static void serializeJsonValue(const QJsonValue &v, QStringList &lines, int inde
       } else {
         lines.last() += QLatin1Char('"') + escaped + QLatin1Char('"');
       }
-      // JSON5 风格：所有值后都加尾随逗号
-      if (json5Style || !isLast) lines.last() += QLatin1Char(',');
+      if (comma) lines.last() += QLatin1Char(',');
       break;
     }
     case QJsonValue::Double: {
@@ -187,21 +193,18 @@ static void serializeJsonValue(const QJsonValue &v, QStringList &lines, int inde
         while (lines.last().endsWith(QLatin1Char('0'))) lines.last().chop(1);
         if (lines.last().endsWith(QLatin1Char('.'))) lines.last().chop(1);
       }
-      // JSON5 风格：所有值后都加尾随逗号
-      if (json5Style || !isLast) lines.last() += QLatin1Char(',');
+      if (comma) lines.last() += QLatin1Char(',');
       break;
     }
     case QJsonValue::Bool: {
       lines.last() += v.toBool() ? QString::fromLatin1(AcKeyword::kTrue)
                                  : QString::fromLatin1(AcKeyword::kFalse);
-      // JSON5 风格：所有值后都加尾随逗号
-      if (json5Style || !isLast) lines.last() += QLatin1Char(',');
+      if (comma) lines.last() += QLatin1Char(',');
       break;
     }
     case QJsonValue::Null: {
       lines.last() += QStringLiteral("null");
-      // JSON5 风格：所有值后都加尾随逗号
-      if (json5Style || !isLast) lines.last() += QLatin1Char(',');
+      if (comma) lines.last() += QLatin1Char(',');
       break;
     }
     case QJsonValue::Undefined:
@@ -780,9 +783,9 @@ QString FormatCode::formatJson(const QString &input, bool json5Style) {
 
   QStringList lines;
   lines.append(QString());
-  // 2. 使用原始 key 顺序序列化 JSON；顶层对象路径为 "0"
+  // 2. 使用原始 key 顺序序列化 JSON；顶层对象路径为 "0"，isRoot=true 根值后不加尾随逗号
   serializeJsonValue(doc.isObject() ? QJsonValue(doc.object()) : QJsonValue(doc.array()), lines, 0,
-                     true, orderedKeys, QStringLiteral("0"), json5Style);
+                     true, orderedKeys, QStringLiteral("0"), json5Style, true);
 
   while (!lines.isEmpty() && lines.first().trimmed().isEmpty()) lines.removeFirst();
   while (!lines.isEmpty() && lines.last().trimmed().isEmpty()) lines.removeLast();

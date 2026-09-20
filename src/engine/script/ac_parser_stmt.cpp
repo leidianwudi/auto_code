@@ -10,7 +10,7 @@
 
 bool AcParser::parseStmt(Block::Stmt &stmt) {
   Token t = peek();
-  stmt.loc = t.loc;          // 记录语句起始行号
+  stmt.loc = t.loc;            // 记录语句起始行号
   stmt.filePath = m_filePath;  // 记录语句所属源文件
 
   // ── import { A, B } from "file" ──
@@ -28,8 +28,8 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
     if (next.type == TokenType::kLet) {
       advance();
       if (peek().type != TokenType::kIdent) {
-        m_error =
-            QStringLiteral("expected variable name after 'export let' at line %1").arg(peek().loc.line);
+        m_error = QStringLiteral("expected variable name after 'export let' at line %1")
+                      .arg(peek().loc.line);
         return false;
       }
       if (!declareVar(peek().text, peek().loc.line)) return false;
@@ -155,13 +155,15 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
   if (t.type == TokenType::kUsing) {
     advance();
     if (peek().type != TokenType::kIdent) {
-      m_error = QStringLiteral("expected variable name after 'using' at line %1").arg(peek().loc.line);
+      m_error =
+          QStringLiteral("expected variable name after 'using' at line %1").arg(peek().loc.line);
       return false;
     }
     stmt.usingStmt.varName = advance().text;
     stmt.usingStmt.loc = t.loc;  // using 关键字所在行（引用/重命名定位用）
     if (!declareVar(stmt.usingStmt.varName, t.loc.line)) return false;
-    if (!expect(TokenType::kEquals, QStringLiteral("expected '=' after 'using varName'"))) return false;
+    if (!expect(TokenType::kEquals, QStringLiteral("expected '=' after 'using varName'")))
+      return false;
     stmt.kind = Block::Stmt::kUsing;
     stmt.usingStmt.value = std::make_unique<Expr>();
     return parseExpr(*stmt.usingStmt.value);
@@ -170,7 +172,8 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
   if (t.type == TokenType::kLet) {
     advance();
     if (peek().type != TokenType::kIdent) {
-      m_error = QStringLiteral("expected variable name after 'let' at line %1").arg(peek().loc.line);
+      m_error =
+          QStringLiteral("expected variable name after 'let' at line %1").arg(peek().loc.line);
       return false;
     }
     if (!peek().text.isEmpty() && peek().text[0].isDigit()) {
@@ -186,10 +189,59 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
     return true;
   }
 
+  if (t.type == TokenType::kConst) {
+    advance();
+    if (peek().type != TokenType::kIdent) {
+      m_error =
+          QStringLiteral("expected variable name after 'const' at line %1").arg(peek().loc.line);
+      return false;
+    }
+    if (!declareVar(peek().text, t.loc.line)) return false;
+    stmt.kind = Block::Stmt::kAssign;
+    if (!parseAssignStmt(stmt.assign)) return false;
+    stmt.assign.loc = t.loc;
+    stmt.assign.isDeclaration = true;
+    stmt.assign.isConst = true;
+    return true;
+  }
+
+  if (t.type == TokenType::kDo) {
+    // do…while：先执行循环体，再判断条件（结尾必须有分号）
+    advance();
+    stmt.kind = Block::Stmt::kWhile;
+    stmt.whileStmt.isDoWhile = true;
+    if (!parseBlockOrStmt(stmt.whileStmt.body)) return false;
+    if (!expect(TokenType::kWhile, QStringLiteral("expected 'while' after 'do' block")))
+      return false;
+    if (!expect(TokenType::kLParen, QStringLiteral("expected '(' after 'while'"))) return false;
+    if (!parseExpr(stmt.whileStmt.condition)) return false;
+    if (!expect(TokenType::kRParen, QStringLiteral("expected ')' after while condition")))
+      return false;
+    return true;
+  }
+
+  if (t.type == TokenType::kTry) {
+    advance();
+    return parseTryStmt(stmt);
+  }
+
+  if (t.type == TokenType::kThrow) {
+    advance();
+    stmt.kind = Block::Stmt::kThrow;
+    return parseExpr(stmt.returnValue);  // 抛出值复用 returnValue 成员
+  }
+
   if (t.type == TokenType::kLBrace) {
     // 独立块作用域：{ stmts }
     stmt.kind = Block::Stmt::kBlock;
     return parseBlock(stmt.blockBody);
+  }
+
+  if (t.type == TokenType::kSemi) {
+    // 空语句：单独的分号无效果（do…while 结尾分号、多余分号容错）
+    advance();
+    stmt.kind = Block::Stmt::kBlock;
+    return true;
   }
 
   if (t.type == TokenType::kIdent) {
@@ -204,8 +256,9 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
   // 独立的值字面量（数字/字符串/布尔等）作为语句没有任何效果，视为错误并定位到该行。
   // 若不在此拦截，`11111111111` 会被当作合法表达式，随后在“缺分号”检查时
   // 用下一个 token 的行号报错，导致波浪线画到错误的行上。
-  if (t.type == TokenType::kNumber || t.type == TokenType::kString || t.type == TokenType::kTrue || t.type == TokenType::kFalse ||
-      t.type == TokenType::kNull || t.type == TokenType::kUndefined || t.type == TokenType::kTemplateString) {
+  if (t.type == TokenType::kNumber || t.type == TokenType::kString || t.type == TokenType::kTrue ||
+      t.type == TokenType::kFalse || t.type == TokenType::kNull ||
+      t.type == TokenType::kUndefined || t.type == TokenType::kTemplateString) {
     m_error = QStringLiteral("独立的字面值语句没有效果 at line %1").arg(t.loc.line);
     return false;
   }
@@ -213,9 +266,45 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
   return parseExpr(stmt.exprStmt);
 }
 
+bool AcParser::parseTryStmt(Block::Stmt &stmt) {
+  stmt.kind = Block::Stmt::kTry;
+  if (!parseBlockOrStmt(stmt.tryStmt.tryBody)) return false;
+
+  bool hasHandler = false;
+  if (peek().type == TokenType::kCatch) {
+    advance();
+    hasHandler = true;
+    stmt.tryStmt.hasCatch = true;
+    if (peek().type == TokenType::kLParen) {  // catch (e) — 错误变量可选
+      advance();
+      if (peek().type != TokenType::kIdent) {
+        m_error = QStringLiteral("expected catch variable name at line %1").arg(peek().loc.line);
+        return false;
+      }
+      stmt.tryStmt.catchVar = advance().text;
+      if (!expect(TokenType::kRParen, QStringLiteral("expected ')' after catch variable")))
+        return false;
+    }
+    if (!parseBlockOrStmt(stmt.tryStmt.catchBody)) return false;
+  }
+  if (peek().type == TokenType::kFinally) {
+    advance();
+    hasHandler = true;
+    stmt.tryStmt.hasFinally = true;
+    if (!parseBlockOrStmt(stmt.tryStmt.finallyBody)) return false;
+  }
+  if (!hasHandler) {
+    m_error =
+        QStringLiteral("expected 'catch' or 'finally' after 'try' at line %1").arg(peek().loc.line);
+    return false;
+  }
+  return true;
+}
+
 bool AcParser::tryParseStaticAssign(Block::Stmt &stmt) {
   if (m_pos + 3 < m_tokens.size() && m_tokens[m_pos + 1].type == TokenType::kScope &&
-      m_tokens[m_pos + 2].type == TokenType::kIdent && m_tokens[m_pos + 3].type == TokenType::kEquals) {
+      m_tokens[m_pos + 2].type == TokenType::kIdent &&
+      m_tokens[m_pos + 3].type == TokenType::kEquals) {
     stmt.kind = Block::Stmt::kAssign;
     stmt.assign.isStatic = true;
     stmt.assign.staticClassName = advance().text;
@@ -258,10 +347,12 @@ bool AcParser::parseIdentStmt(Block::Stmt &stmt, const Token &t) {
     stmt.kind = Block::Stmt::kExpr;
     return parseExpr(stmt.exprStmt);
   }
-  if (m_pos + 1 < m_tokens.size() &&
-      (m_tokens[m_pos + 1].type == TokenType::kEquals || m_tokens[m_pos + 1].type == TokenType::kPlusEq ||
-       m_tokens[m_pos + 1].type == TokenType::kMinusEq || m_tokens[m_pos + 1].type == TokenType::kMulEq ||
-       m_tokens[m_pos + 1].type == TokenType::kDivEq || m_tokens[m_pos + 1].type == TokenType::kModEq)) {
+  if (m_pos + 1 < m_tokens.size() && (m_tokens[m_pos + 1].type == TokenType::kEquals ||
+                                      m_tokens[m_pos + 1].type == TokenType::kPlusEq ||
+                                      m_tokens[m_pos + 1].type == TokenType::kMinusEq ||
+                                      m_tokens[m_pos + 1].type == TokenType::kMulEq ||
+                                      m_tokens[m_pos + 1].type == TokenType::kDivEq ||
+                                      m_tokens[m_pos + 1].type == TokenType::kModEq)) {
     if (!m_declaredVars->contains(t.text)) {
       m_error = QStringLiteral(
                     "variable '%1' must be declared with 'let' "
@@ -305,9 +396,12 @@ bool AcParser::parseIdentStmt(Block::Stmt &stmt, const Token &t) {
     // 检查是否为 ident.prop = value（属性赋值）
     if (m_pos + 2 < m_tokens.size() && m_tokens[m_pos + 2].type == TokenType::kIdent &&
         m_pos + 3 < m_tokens.size() &&
-        (m_tokens[m_pos + 3].type == TokenType::kEquals || m_tokens[m_pos + 3].type == TokenType::kPlusEq ||
-         m_tokens[m_pos + 3].type == TokenType::kMinusEq || m_tokens[m_pos + 3].type == TokenType::kMulEq ||
-         m_tokens[m_pos + 3].type == TokenType::kDivEq || m_tokens[m_pos + 3].type == TokenType::kModEq)) {
+        (m_tokens[m_pos + 3].type == TokenType::kEquals ||
+         m_tokens[m_pos + 3].type == TokenType::kPlusEq ||
+         m_tokens[m_pos + 3].type == TokenType::kMinusEq ||
+         m_tokens[m_pos + 3].type == TokenType::kMulEq ||
+         m_tokens[m_pos + 3].type == TokenType::kDivEq ||
+         m_tokens[m_pos + 3].type == TokenType::kModEq)) {
       stmt.kind = Block::Stmt::kPropAssign;
       stmt.propAssign.objectExpr.kind = Expr::kIdent;
       stmt.propAssign.objectExpr.ident = advance().text;
@@ -339,14 +433,15 @@ bool AcParser::parseThisStmt(Block::Stmt &stmt) {
     advance();  // skip this
     advance();  // skip .
     if (!isPropertyName(peek().type)) {
-      m_error = QStringLiteral("expected property name after 'this.' at line %1").arg(peek().loc.line);
+      m_error =
+          QStringLiteral("expected property name after 'this.' at line %1").arg(peek().loc.line);
       return false;
     }
     QString prop = peek().text;
     TokenType assignOp = peek(1).type;
-    bool isCompoundAssign =
-        (assignOp == TokenType::kPlusEq || assignOp == TokenType::kMinusEq || assignOp == TokenType::kMulEq ||
-         assignOp == TokenType::kDivEq || assignOp == TokenType::kModEq);
+    bool isCompoundAssign = (assignOp == TokenType::kPlusEq || assignOp == TokenType::kMinusEq ||
+                             assignOp == TokenType::kMulEq || assignOp == TokenType::kDivEq ||
+                             assignOp == TokenType::kModEq);
     // 检查 this.prop 后面是否跟 '=' 或复合赋值运算符
     if (m_pos + 2 < m_tokens.size() && m_tokens[m_pos + 1].type == TokenType::kDot &&
         m_tokens[m_pos + 2].type == TokenType::kIdent && m_pos + 3 < m_tokens.size() &&
@@ -477,7 +572,8 @@ bool AcParser::parseIndexAssignStmt(IndexAssignStmt &ias) {
     if (!parseExpr(ias.objectExpr)) return false;
     if (!expect(TokenType::kRParen, QStringLiteral("expected ')'"))) return false;
   } else {
-    m_error = QStringLiteral("expected identifier or expression before '[' at line %1").arg(t.loc.line);
+    m_error =
+        QStringLiteral("expected identifier or expression before '[' at line %1").arg(t.loc.line);
     return false;
   }
   // 处理 .prop 和 .method() 后缀，遇到 [ 则停止
@@ -504,7 +600,8 @@ bool AcParser::parseIndexAssignStmt(IndexAssignStmt &ias) {
         chained.methodCall.args.push_back(std::move(arg));
         if (peek().type == TokenType::kComma) advance();
       }
-      if (!expect(TokenType::kRParen, QStringLiteral("expected ')' after method call"))) return false;
+      if (!expect(TokenType::kRParen, QStringLiteral("expected ')' after method call")))
+        return false;
       ias.objectExpr = std::move(chained);
     } else {
       Expr propAccess;
@@ -516,7 +613,8 @@ bool AcParser::parseIndexAssignStmt(IndexAssignStmt &ias) {
     }
   }
   // 现在应该是 [
-  if (!expect(TokenType::kLBracket, QStringLiteral("expected '[' for index assignment"))) return false;
+  if (!expect(TokenType::kLBracket, QStringLiteral("expected '[' for index assignment")))
+    return false;
   if (!parseExpr(ias.indexExpr)) return false;
   if (!expect(TokenType::kRBracket, QStringLiteral("expected ']'"))) return false;
   if (!expect(TokenType::kEquals, QStringLiteral("expected '='"))) return false;
@@ -534,7 +632,8 @@ bool AcParser::parseForStmt(ForStmt &fs) {
   if (peek().type == TokenType::kLet) {
     advance();
     if (peek().type != TokenType::kIdent) {
-      m_error = QStringLiteral("expected variable name after 'let' at line %1").arg(peek().loc.line);
+      m_error =
+          QStringLiteral("expected variable name after 'let' at line %1").arg(peek().loc.line);
       return false;
     }
 
@@ -619,7 +718,8 @@ bool AcParser::parseImportStmt(ImportStmt &imp) {
   if (!expect(TokenType::kLBrace, QStringLiteral("expected '{' after 'import'"))) return false;
   while (peek().type != TokenType::kRBrace && peek().type != TokenType::kEof) {
     if (peek().type != TokenType::kIdent) {
-      m_error = QStringLiteral("expected identifier in import list at line %1").arg(peek().loc.line);
+      m_error =
+          QStringLiteral("expected identifier in import list at line %1").arg(peek().loc.line);
       return false;
     }
     const Token nameTok = advance();
@@ -643,7 +743,8 @@ bool AcParser::parseImportStmt(ImportStmt &imp) {
   if (!expect(TokenType::kRBrace, QStringLiteral("expected '}' after import list"))) return false;
   if (!expect(TokenType::kFrom, QStringLiteral("expected 'from' after import list"))) return false;
   if (peek().type != TokenType::kString) {
-    m_error = QStringLiteral("expected file path string after 'from' at line %1").arg(peek().loc.line);
+    m_error =
+        QStringLiteral("expected file path string after 'from' at line %1").arg(peek().loc.line);
     return false;
   }
   imp.filePath = advance().text;
@@ -653,14 +754,16 @@ bool AcParser::parseImportStmt(ImportStmt &imp) {
 bool AcParser::parseWhileStmt(WhileStmt &ws) {
   if (!expect(TokenType::kLParen, QStringLiteral("expected '(' after 'while'"))) return false;
   if (!parseExpr(ws.condition)) return false;
-  if (!expect(TokenType::kRParen, QStringLiteral("expected ')' after while condition"))) return false;
+  if (!expect(TokenType::kRParen, QStringLiteral("expected ')' after while condition")))
+    return false;
   return parseBlockOrStmt(ws.body);
 }
 
 bool AcParser::parseSwitchStmt(SwitchStmt &ss) {
   if (!expect(TokenType::kLParen, QStringLiteral("expected '(' after 'switch'"))) return false;
   if (!parseExpr(ss.expr)) return false;
-  if (!expect(TokenType::kRParen, QStringLiteral("expected ')' after switch expression"))) return false;
+  if (!expect(TokenType::kRParen, QStringLiteral("expected ')' after switch expression")))
+    return false;
   if (!expect(TokenType::kLBrace, QStringLiteral("expected '{' after switch"))) return false;
 
   while (peek().type != TokenType::kRBrace && peek().type != TokenType::kEof) {
@@ -670,13 +773,14 @@ bool AcParser::parseSwitchStmt(SwitchStmt &ss) {
       sc.isDefault = false;
       if (!parseExpr(sc.value)) return false;
       if (!expect(TokenType::kColon, QStringLiteral("expected ':' after case value"))) return false;
-      while (peek().type != TokenType::kCase && peek().type != TokenType::kDefault && peek().type != TokenType::kRBrace &&
-             peek().type != TokenType::kEof) {
+      while (peek().type != TokenType::kCase && peek().type != TokenType::kDefault &&
+             peek().type != TokenType::kRBrace && peek().type != TokenType::kEof) {
         Block::Stmt stmt;
         if (!parseStmt(stmt)) return false;
         sc.body.stmts.append(stmt);
         if (stmtNeedsSemi(stmt, /*blockAllowed=*/false)) {
-          if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.loc.line)) return false;
+          if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.loc.line))
+            return false;
         }
       }
       ss.cases.append(sc);
@@ -685,13 +789,14 @@ bool AcParser::parseSwitchStmt(SwitchStmt &ss) {
       if (!expect(TokenType::kColon, QStringLiteral("expected ':' after 'default'"))) return false;
       SwitchCase sc;
       sc.isDefault = true;
-      while (peek().type != TokenType::kCase && peek().type != TokenType::kDefault && peek().type != TokenType::kRBrace &&
-             peek().type != TokenType::kEof) {
+      while (peek().type != TokenType::kCase && peek().type != TokenType::kDefault &&
+             peek().type != TokenType::kRBrace && peek().type != TokenType::kEof) {
         Block::Stmt stmt;
         if (!parseStmt(stmt)) return false;
         sc.body.stmts.append(stmt);
         if (stmtNeedsSemi(stmt, /*blockAllowed=*/false)) {
-          if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.loc.line)) return false;
+          if (!expectSemi(QStringLiteral("expected ';' after statement"), stmt.loc.line))
+            return false;
         }
       }
       ss.cases.append(sc);
@@ -714,8 +819,8 @@ bool AcParser::parseClassDef(ClassDef &cd) {
   if (peek().type == TokenType::kExtends) {
     advance();
     if (peek().type != TokenType::kIdent) {
-      m_error =
-          QStringLiteral("expected parent class name after 'extends' at line %1").arg(peek().loc.line);
+      m_error = QStringLiteral("expected parent class name after 'extends' at line %1")
+                    .arg(peek().loc.line);
       return false;
     }
     cd.baseClass = advance().text;
@@ -764,11 +869,13 @@ bool AcParser::parseClassDef(ClassDef &cd) {
       advance();
       MethodDef md;
       md.name = QStringLiteral("constructor");
-      if (!expect(TokenType::kLParen, QStringLiteral("expected '(' after 'constructor'"))) return false;
+      if (!expect(TokenType::kLParen, QStringLiteral("expected '(' after 'constructor'")))
+        return false;
       if (!parseParamList(md.params, /*requireType=*/false, /*allowDefault=*/true,
                           /*declareVars=*/true))
         return false;
-      if (!expect(TokenType::kRParen, QStringLiteral("expected ')' after parameters"))) return false;
+      if (!expect(TokenType::kRParen, QStringLiteral("expected ')' after parameters")))
+        return false;
       // 支持声明-only 语法：constructor(params);（无函数体，用于 .d.ac 声明文件）
       if (peek().type == TokenType::kSemi) {
         advance();
@@ -821,10 +928,28 @@ bool AcParser::parseInterfaceDef(InterfaceDef &iface) {
   }
   iface.name = advance().text;
 
-  if (!expect(TokenType::kLBrace, QStringLiteral("expected '{' after interface name"))) return false;
+  if (!expect(TokenType::kLBrace, QStringLiteral("expected '{' after interface name")))
+    return false;
 
   while (peek().type != TokenType::kRBrace && peek().type != TokenType::kEof) {
-    if (peek().type == TokenType::kFunction) {
+    if (peek().type == TokenType::kLet) {
+      // 对象形状属性契约：let name: Type; / let name?: Type;
+      advance();
+      ParamDef prop;
+      if (peek().type != TokenType::kIdent) {
+        m_error = QStringLiteral("expected property name at line %1").arg(peek().loc.line);
+        return false;
+      }
+      prop.name = advance().text;
+      if (peek().type == TokenType::kQuestion) {
+        advance();
+        prop.isOptional = true;
+      }
+      if (!expect(TokenType::kColon, QStringLiteral("expected ':' after property name")))
+        return false;
+      prop.type = parseType();
+      iface.properties.append(prop);
+    } else if (peek().type == TokenType::kFunction) {
       advance();
       InterfaceMethod im;
       if (peek().type != TokenType::kIdent) {
@@ -832,12 +957,14 @@ bool AcParser::parseInterfaceDef(InterfaceDef &iface) {
         return false;
       }
       im.name = advance().text;
-      if (!expect(TokenType::kLParen, QStringLiteral("expected '(' after method name"))) return false;
+      if (!expect(TokenType::kLParen, QStringLiteral("expected '(' after method name")))
+        return false;
       // 接口方法：类型注解必须、无默认值、参数名不注入作用域
       if (!parseParamList(im.params, /*requireType=*/true, /*allowDefault=*/false,
                           /*declareVars=*/false))
         return false;
-      if (!expect(TokenType::kRParen, QStringLiteral("expected ')' after parameters"))) return false;
+      if (!expect(TokenType::kRParen, QStringLiteral("expected ')' after parameters")))
+        return false;
       if (peek().type == TokenType::kColon) {
         advance();
         im.returnType = parseType();
@@ -845,7 +972,8 @@ bool AcParser::parseInterfaceDef(InterfaceDef &iface) {
       iface.methods.append(im);
     }
     if (peek().type != TokenType::kRBrace) {
-      if (!expect(TokenType::kSemi, QStringLiteral("expected ';' after interface member"))) return false;
+      if (!expect(TokenType::kSemi, QStringLiteral("expected ';' after interface member")))
+        return false;
     }
   }
   return expect(TokenType::kRBrace, QStringLiteral("expected '}' after interface body"));
@@ -1066,7 +1194,8 @@ bool AcParser::parseClassProperty(ClassDef &cd, AccessLevel access, bool isStati
 }
 
 bool AcParser::parseReturnStmt(Expr &retVal) {
-  if (peek().type == TokenType::kSemi || peek().type == TokenType::kRBrace || peek().type == TokenType::kEof) {
+  if (peek().type == TokenType::kSemi || peek().type == TokenType::kRBrace ||
+      peek().type == TokenType::kEof) {
     retVal.kind = Expr::kNull;
     return true;
   }

@@ -19,6 +19,7 @@
 
 QHash<QString, MYSQL *> FunDb::s_connections;
 QHash<QString, AcDB::DbConfig> FunDb::s_configs;
+QMutex FunDb::s_connMutex;
 
 // escapeSqlLiteral — 把字符串转义为可安全嵌入 SQL 单引号字面量的形式
 // 使用连接的字符集做转义（含引号/反斜杠），防止表名/库名中的特殊字符
@@ -33,6 +34,11 @@ static QString escapeSqlLiteral(MYSQL *conn, const QString &value) {
 
 // init — 注册所有数据库函数到 FunMgr
 void FunDb::init() {
+  // 显式初始化 MySQL 客户端库：若不显式调用，首个 mysql_init 会隐式初始化，
+  // 而隐式初始化非线程安全 —— 并行 worker 首次 new DB() 并发触发会竞态。
+  // 必须在应用启动期（单线程阶段）完成；重复调用为幂等 no-op
+  mysql_library_init(0, nullptr, nullptr);
+
   // 注册原生类 DB 的构造器（纯参数，new DB({...}) 时调用）
   FunMgr::ins().registerFuncs(QString::fromLatin1(AcDB::kClassName),
                               {{QString::fromLatin1(AcRuntime::kConstructor), constructor}});
@@ -50,6 +56,7 @@ void FunDb::init() {
 
 // cleanup — 关闭所有连接
 void FunDb::cleanup() {
+  QMutexLocker lock(&s_connMutex);
   for (auto it = s_connections.begin(); it != s_connections.end(); ++it) {
     if (it.value()) {
       mysql_close(it.value());
@@ -62,6 +69,7 @@ void FunDb::cleanup() {
 // getConnection — 根据实例对象获取连接
 MYSQL *FunDb::getConnection(const accore::AcJsonValue &instance) {
   const QString connId = instance.value(QString::fromLatin1(AcDB::kConnId)).toString();
+  QMutexLocker lock(&s_connMutex);
   return s_connections.value(connId, nullptr);
 }
 
@@ -102,8 +110,11 @@ accore::AcJsonValue FunDb::constructor(const accore::AcJsonValue &args) {
   mysql_set_character_set(conn, "utf8mb4");
 
   const QString connId = QUuid::createUuid().toString(QUuid::WithoutBraces);
-  s_connections[connId] = conn;
-  s_configs[connId] = cfg;
+  {
+    QMutexLocker lock(&s_connMutex);
+    s_connections[connId] = conn;
+    s_configs[connId] = cfg;
+  }
 
   accore::AcJsonValue result = accore::AcJsonValue::makeObject();
   result.set(QString::fromLatin1(AcDB::kConnId), accore::AcJsonValue(connId));
@@ -117,11 +128,14 @@ accore::AcJsonValue FunDb::destructor(const accore::AcJsonValue &thisObj,
   if (!thisObj.isObject()) return accore::AcJsonValue(false);
   const QString connId = thisObj.value(QString::fromLatin1(AcDB::kConnId)).toString();
   if (connId.isEmpty()) return accore::AcJsonValue(false);
-  if (s_connections.contains(connId)) {
-    MYSQL *conn = s_connections[connId];
-    if (conn) mysql_close(conn);
-    s_connections.remove(connId);
-    s_configs.remove(connId);
+  {
+    QMutexLocker lock(&s_connMutex);
+    if (s_connections.contains(connId)) {
+      MYSQL *conn = s_connections[connId];
+      if (conn) mysql_close(conn);
+      s_connections.remove(connId);
+      s_configs.remove(connId);
+    }
   }
   return accore::AcJsonValue(true);
 }
@@ -140,11 +154,14 @@ accore::AcJsonValue FunDb::disconnect(const accore::AcJsonValue &thisObj,
     return accore::AcJsonValue();
   }
 
-  if (s_connections.contains(connId)) {
-    MYSQL *conn = s_connections[connId];
-    if (conn) mysql_close(conn);
-    s_connections.remove(connId);
-    s_configs.remove(connId);
+  {
+    QMutexLocker lock(&s_connMutex);
+    if (s_connections.contains(connId)) {
+      MYSQL *conn = s_connections[connId];
+      if (conn) mysql_close(conn);
+      s_connections.remove(connId);
+      s_configs.remove(connId);
+    }
   }
   return accore::AcJsonValue(true);
 }
@@ -166,7 +183,11 @@ accore::AcJsonValue FunDb::tableSchema(const accore::AcJsonValue &thisObj,
   }
 
   const QString connId = thisObj.value(QString::fromLatin1(AcDB::kConnId)).toString();
-  const AcDB::DbConfig cfg = s_configs.value(connId);
+  AcDB::DbConfig cfg;
+  {
+    QMutexLocker lock(&s_connMutex);
+    cfg = s_configs.value(connId);
+  }
   const QString table = params.value(QString::fromLatin1(AcDB::kTable)).toString();
   if (table.isEmpty()) {
     FunMgr::setError(QStringLiteral("DB::tableSchema() requires 'table' in params"));
@@ -239,7 +260,11 @@ accore::AcJsonValue FunDb::tableInfo(const accore::AcJsonValue &thisObj,
   }
 
   const QString connId = thisObj.value(QString::fromLatin1(AcDB::kConnId)).toString();
-  const AcDB::DbConfig cfg = s_configs.value(connId);
+  AcDB::DbConfig cfg;
+  {
+    QMutexLocker lock(&s_connMutex);
+    cfg = s_configs.value(connId);
+  }
   const QString table = params.value(QString::fromLatin1(AcDB::kTable)).toString();
   if (table.isEmpty()) {
     FunMgr::setError(QStringLiteral("DB::tableInfo() requires 'table' in params"));

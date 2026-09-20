@@ -14,8 +14,12 @@
  * 构建：cmake --build <build-dir> --target auto_code_tests
  */
 
+#include <atomic>
 #include <cstdio>
+#include <thread>
+#include <vector>
 
+#include "src/engine/function/fun_mgr.h"
 #include "src/engine/script/ac_executor.h"
 
 static int g_total = 0;
@@ -179,10 +183,11 @@ static void testLambda() {
 
 static void testClassInstanceAndThis() {
   QJsonValue r;
-  CHECK(runScript(QStringLiteral("class Counter { let n: Number = 0; "
-                                 "constructor(base: Number) { this.n = base; } "
-                                 "function add(v: Number): Number { this.n += v; return this.n; } } "
-                                 "let c = new Counter(10); c.add(5); return c.n;"),
+  CHECK(
+      runScript(QStringLiteral("class Counter { let n: Number = 0; "
+                               "constructor(base: Number) { this.n = base; } "
+                               "function add(v: Number): Number { this.n += v; return this.n; } } "
+                               "let c = new Counter(10); c.add(5); return c.n;"),
                 r));
   CHECK(r.toDouble() == 15.0);
 }
@@ -229,6 +234,240 @@ static void testSyntaxErrorRejected() {
   CHECK(!exec.error().isEmpty());
 }
 
+// ── 新语言特性：== 语义 / sort / map/filter / ?. / ?? / const / 对象方法 / do-while / try-catch ──
+
+/// 对象相等：值语义结构化比较；实例按引用（objId）比较
+static void testObjectEqualitySemantics() {
+  QJsonValue r;
+  QString err;
+  CHECK(runScript(QStringLiteral("let a = {x: 1, y: \"s\"}; let b = {x: 1, y: \"s\"};") +
+                      QStringLiteral("return a == b;"),
+                  r));
+  CHECK(r.toBool() == true);  // 结构一致即相等（值语义）
+  CHECK(runScript(QStringLiteral("let a = {x: 1}; let b = {x: 2}; return a == b;"), r));
+  CHECK(r.toBool() == false);
+  CHECK(runScript(QStringLiteral("let a = [1, 2]; return a == [1, 2] && a != [2, 1];"), r));
+  CHECK(r.toBool() == true);
+  // 实例：引用相等 —— 同一实例相等，不同实例即便属性一致也不相等
+  CHECK(runScript(QStringLiteral("class P { let v = 1; }") +
+                      QStringLiteral("let a = new P(); let b = new P();") +
+                      QStringLiteral("return a == b || a != b;"),
+                  r, &err));
+  CHECK(r.toBool() == true);  // a==b 为 false，a!=b 为 true → true
+}
+
+/// 数组 sort：默认排序 + 比较函数
+static void testArraySort() {
+  QJsonValue r;
+  CHECK(runScript(QStringLiteral("let a = [3, 1, 2]; a.sort(); return a[0] + \",\" + a[2];"), r));
+  CHECK(r.toString() == QStringLiteral("1,3"));
+  CHECK(runScript(QStringLiteral("let a = [\"b\", \"a\", \"c\"]; a.sort(); return a.join(\"\");"),
+                  r));
+  CHECK(r.toString() == QStringLiteral("abc"));
+  CHECK(runScript(
+      QStringLiteral("let a = [10, 1, 5];") +
+          QStringLiteral("a.sort(function(x: Number, y: Number): Number { return y - x; });") +
+          QStringLiteral("return a[0];"),
+      r));
+  CHECK(r.toDouble() == 10.0);  // 比较函数降序
+}
+
+/// map/filter/forEach 高阶方法（回调为 function 表达式）
+static void testArrayHigherOrder() {
+  QJsonValue r;
+  CHECK(runScript(
+      QStringLiteral("let a = [1, 2, 3];") +
+          QStringLiteral("let b = a.map(function(e: Number): Number { return e * 2; });") +
+          QStringLiteral("return b.join(\",\");"),
+      r));
+  CHECK(r.toString() == QStringLiteral("2,4,6"));
+  CHECK(runScript(
+      QStringLiteral("let a = [1, 2, 3, 4];") +
+          QStringLiteral("let b = a.filter(function(e: Number): Bool { return e > 2; });") +
+          QStringLiteral("return b.length;"),
+      r));
+  CHECK(r.toDouble() == 2.0);
+  CHECK(runScript(
+      QStringLiteral("let s = 0; let a = [1, 2, 3];") +
+          QStringLiteral("a.forEach(function(e: Number): Void { s = s + e; }); return s;"),
+      r));
+  CHECK(r.toDouble() == 6.0);
+}
+
+/// ?. 可选链：null 时短路为 null，非 null 正常访问；?? 空值合并
+static void testOptionalChainAndCoalesce() {
+  QJsonValue r;
+  QString err;
+  CHECK(runScript(QStringLiteral("let o = null; return o?.x;"), r, &err));
+  CHECK(r.isNull());
+  CHECK(err.isEmpty());  // 短路不报错
+  CHECK(runScript(QStringLiteral("let o = {x: {y: 7}}; return o?.x.y;"), r));
+  CHECK(r.toDouble() == 7.0);
+  CHECK(runScript(QStringLiteral("let o = null; return o?.x?.y ?? 42;"), r));
+  CHECK(r.toDouble() == 42.0);  // 链式短路 + ?? 兜底
+  CHECK(runScript(QStringLiteral("let o = {a: 1}; return o?.size();"), r));
+  CHECK(r.toDouble() == 1.0);  // 非空对象：?. 方法调用走内置方法
+  CHECK(runScript(QStringLiteral("let o = null; return o?.size() ?? 5;"), r));
+  CHECK(r.toDouble() == 5.0);  // null 短路 + ?? 兜底
+  // ?? 与 || 的区别：false/0 不触发 ??
+  CHECK(runScript(QStringLiteral("return (false ?? \"dflt\");"), r));
+  CHECK(r.toBool() == false);
+  CHECK(runScript(QStringLiteral("return (null ?? 0) == 0;"), r));
+  CHECK(r.toBool() == true);
+}
+
+/// const 常量：声明后赋值报错
+static void testConstDeclaration() {
+  QJsonValue r;
+  QString err;
+  CHECK(runScript(QStringLiteral("const N = 10; return N + 1;"), r));
+  CHECK(r.toDouble() == 11.0);
+  err.clear();
+  CHECK(!runScript(QStringLiteral("const N = 10; N = 20; return N;"), r, &err));
+  CHECK(err.contains(QStringLiteral("const")));
+}
+
+/// 对象内置方法 keys/values/has/size
+static void testObjectBuiltinMethods() {
+  QJsonValue r;
+  CHECK(runScript(QStringLiteral("let o = {a: 1, b: 2}; return o.keys().join(\",\");"), r));
+  CHECK(r.toString() == QStringLiteral("a,b"));
+  CHECK(runScript(QStringLiteral("let o = {a: 1, b: 2}; return o.values().join(\",\");"), r));
+  CHECK(r.toString() == QStringLiteral("1,2"));
+  CHECK(runScript(QStringLiteral("let o = {a: 1}; return (o.has(\"a\") ? 1 : 0) + o.size();"), r));
+  CHECK(r.toDouble() == 2.0);
+}
+
+/// do…while：至少执行一次；条件在循环体后判断
+static void testDoWhile() {
+  QJsonValue r;
+  CHECK(runScript(QStringLiteral("let i = 10; let n = 0;") +
+                      QStringLiteral("do { n = n + 1; i = i + 1; } while (i < 5);") +
+                      QStringLiteral("return n;"),
+                  r));
+  CHECK(r.toDouble() == 1.0);  // 条件先假也执行一次
+  CHECK(runScript(QStringLiteral("let n = 0; let i = 0;") +
+                      QStringLiteral("do { n = n + i; i = i + 1; } while (i < 4);") +
+                      QStringLiteral("return n;"),
+                  r));
+  CHECK(r.toDouble() == 6.0);  // 0+1+2+3
+}
+
+/// try/catch/finally/throw
+static void testTryCatchThrow() {
+  QJsonValue r;
+  QString err;
+  CHECK(runScript(QStringLiteral("let msg = \"\";") +
+                      QStringLiteral("try { throw \"boom\"; } catch (e) { msg = e; }") +
+                      QStringLiteral("return msg;"),
+                  r, &err));
+  CHECK(r.toString() == QStringLiteral("boom"));
+  CHECK(
+      runScript(QStringLiteral("let out = \"a\";") +
+                    QStringLiteral("try { out = out + \"b\"; } catch (e) { out = out + \"X\"; }") +
+                    QStringLiteral("return out;"),
+                r));
+  CHECK(r.toString() == QStringLiteral("ab"));  // 无错误不进 catch
+  CHECK(runScript(QStringLiteral("let order = \"\";") +
+                      QStringLiteral("try { throw \"e1\"; } catch (e) { order = order + \"c\"; }") +
+                      QStringLiteral("finally { order = order + \"f\"; }") +
+                      QStringLiteral("return order;"),
+                  r));
+  CHECK(r.toString() == QStringLiteral("cf"));  // finally 在 catch 后执行
+  CHECK(runScript(QStringLiteral("let x = 0;") +
+                      QStringLiteral("try { x = 1; } finally { x = x + 10; }") +
+                      QStringLiteral("return x;"),
+                  r));
+  CHECK(r.toDouble() == 11.0);  // 只有 finally
+  // catch 后不再向上传播
+  err.clear();
+  CHECK(runScript(QStringLiteral("try { throw \"x\"; } catch (e) { } return \"done\";"), r, &err));
+  CHECK(r.toString() == QStringLiteral("done"));
+  CHECK(err.isEmpty());
+}
+
+/// 对象形状 interface：类 implements 时必须提供属性且类型兼容（可选属性可缺失）
+static void testInterfacePropertyContract() {
+  QJsonValue r;
+  QString err;
+  CHECK(runScript(
+      QStringLiteral("interface Pt { let x: Number; let y: Number; }") +
+          QStringLiteral("class P implements Pt { let x: Number = 1; let y: Number = 2; }") +
+          QStringLiteral("let p: Pt = new P(); return p.x + p.y;"),
+      r, &err));
+  CHECK(r.toDouble() == 3.0);
+  err.clear();
+  CHECK(!runScript(QStringLiteral("interface Pt { let x: Number; let y: Number; }") +
+                       QStringLiteral("class P implements Pt { let x: Number = 1; }") +
+                       QStringLiteral("return 1;"),
+                   r, &err));
+  CHECK(err.contains(QStringLiteral("property")));
+  err.clear();
+  CHECK(!runScript(QStringLiteral("interface Pt { let x: Number; }") +
+                       QStringLiteral("class P implements Pt { let x: String = \"s\"; }") +
+                       QStringLiteral("return 1;"),
+                   r, &err));
+  CHECK(err.contains(QStringLiteral("incompatible")));
+  err.clear();
+  // 可选属性缺失合法
+  CHECK(runScript(QStringLiteral("interface Cfg { let name: String; let tag?: String; }") +
+                      QStringLiteral("class C implements Cfg { let name: String = \"n\"; }") +
+                      QStringLiteral("return 1;"),
+                  r, &err));
+  CHECK(err.isEmpty());
+}
+
+/// FunMgr 线程安全：注册表并发读 + thread_local 错误通道隔离（多线程并行 worker 的前置保障）
+static void testFunMgrThreadSafety() {
+  // 注册所有内置函数（幂等：同名重复注册仅覆盖）；FunDb::init 内部
+  // mysql_library_init 显式化，消除并行 worker 首次 new DB() 的隐式初始化竞态
+  FunMgr::init();
+
+  // ── 1) 注册表并发调用：4 线程 × 300 次 str.toUpperCase/contains，共享读不崩、结果正确 ──
+  constexpr int kThreads = 4;
+  constexpr int kIters = 300;
+  std::atomic<int> bad{0};
+  std::vector<std::thread> workers;
+  for (int t = 0; t < kThreads; ++t) {
+    workers.emplace_back([&bad, t]() {
+      for (int i = 0; i < kIters; ++i) {
+        if (!FunMgr::ins().contains(QStringLiteral("str"), QStringLiteral("toUpperCase"))) {
+          ++bad;
+          continue;
+        }
+        accore::AcJsonValue args = accore::AcJsonValue::makeArray();
+        args.append(accore::AcJsonValue(QStringLiteral("abc") + QString::number(t)));
+        const accore::AcJsonValue r =
+            FunMgr::ins().call(QStringLiteral("str"), QStringLiteral("toUpperCase"), args);
+        if (r.toString() != QStringLiteral("ABC") + QString::number(t)) ++bad;
+      }
+    });
+  }
+  for (auto &w : workers) w.join();
+  CHECK(bad.load() == 0);
+
+  // ── 2) 错误通道隔离：worker 先 setError，主线程再 takeError ──
+  // 时序由两个原子标志确定性编排：主线程的 takeError 必然发生在 worker 的 setError 之后。
+  // 旧实现（全局静态 s_lastError）：主线程拿到 "worker-error"（串扰）→ 此用例失败；
+  // thread_local 实现：主线程拿到的仍是自己的 "main-error"
+  FunMgr::setError(QStringLiteral("main-error"));
+  std::atomic<bool> workerSet{false};
+  std::atomic<bool> mainDone{false};
+  QString workerTaken;
+  std::thread worker([&]() {
+    FunMgr::setError(QStringLiteral("worker-error"));
+    workerSet.store(true);
+    while (!mainDone.load()) std::this_thread::yield();  // 等主线程完成 takeError
+    workerTaken = FunMgr::takeError();
+  });
+  while (!workerSet.load()) std::this_thread::yield();
+  const QString mainTaken = FunMgr::takeError();
+  mainDone.store(true);
+  worker.join();
+  CHECK(mainTaken == QStringLiteral("main-error"));
+  CHECK(workerTaken == QStringLiteral("worker-error"));
+}
+
 /// 运行全部用例，返回失败数（0 = 全部通过）；由 test_json_utils.cpp 的 main 调用
 int runAcInterpreterTests() {
   testArithmeticPrecedence();
@@ -253,6 +492,16 @@ int runAcInterpreterTests() {
   testRuntimeErrorPropagates();
   testRuntimeErrorHasLineNumber();
   testSyntaxErrorRejected();
+  testObjectEqualitySemantics();
+  testArraySort();
+  testArrayHigherOrder();
+  testOptionalChainAndCoalesce();
+  testConstDeclaration();
+  testObjectBuiltinMethods();
+  testDoWhile();
+  testTryCatchThrow();
+  testInterfacePropertyContract();
+  testFunMgrThreadSafety();
   std::printf("[ac_interpreter] %d checks, %d failed\n", g_total, g_failed);
   return g_failed;
 }

@@ -880,6 +880,13 @@ bool AcTypeChecker::isCompatible(const AcType &from, const AcType &to) const {
     if (to.className == QString::fromLatin1(AcTypeName::kObject)) return true;
   }
 
+  // 注解期无法区分接口与自定义类（parseType 对未知名字统一产 kClass）——
+  // 检查期纠正：to 是已声明的接口名时，按"类实现接口"语义判定
+  if (from.kind == AcType::kClass && to.kind == AcType::kClass &&
+      m_interfaces.contains(to.className)) {
+    return classImplementsInterface(from.className, to.className);
+  }
+
   if (from.kind == to.kind) {
     if (from.kind == AcType::kArray) {
       return isCompatible(*from.elementType, *to.elementType);
@@ -952,6 +959,34 @@ void AcTypeChecker::checkImplements(const ClassDef &cd) {
         reportError(
             QStringLiteral("class '%1' does not implement method '%2()' from interface '%3'")
                 .arg(cd.name, im.name, ifaceName),
+            0);
+      }
+    }
+    // 属性契约（对象形状接口）：类/父类必须存在同名属性且类型兼容（可选属性可缺失）
+    for (const auto &ip : iface.properties) {
+      bool found = false;
+      QString searchClass = cd.name;
+      while (!searchClass.isEmpty() && m_classes->contains(searchClass)) {
+        const ClassDef &searchCd = (*m_classes)[searchClass];
+        for (const auto &p : searchCd.properties) {
+          if (p.key != ip.name) continue;
+          found = true;
+          if (!ip.isOptional && !isCompatible(p.type, ip.type)) {
+            reportError(
+                QStringLiteral("class '%1' property '%2' type '%3' is incompatible "
+                               "with interface '%4' property type '%5'")
+                    .arg(cd.name, ip.name, typeToString(p.type), ifaceName, typeToString(ip.type)),
+                0);
+          }
+          break;
+        }
+        if (found) break;
+        searchClass = searchCd.baseClass;
+      }
+      if (!found && !ip.isOptional) {
+        reportError(
+            QStringLiteral("class '%1' does not implement property '%2' from interface '%3'")
+                .arg(cd.name, ip.name, ifaceName),
             0);
       }
     }

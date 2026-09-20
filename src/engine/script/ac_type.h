@@ -60,82 +60,90 @@ enum class CompoundOp {
 
 /// @brief 词法单元类型
 enum class TokenType {
-  kEof,             ///< 输入结束
-  kIdent,           ///< 标识符（变量名、函数名、方法名）
-  kString,          ///< 字符串字面量 "hello"
-  kNumber,          ///< 数字字面量 123
-  kLBrace,          ///< {
-  kRBrace,          ///< }
-  kLParen,          ///< (
-  kRParen,          ///< )
-  kLBracket,        ///< [
-  kRBracket,        ///< ]
-  kComma,           ///< ,
-  kColon,           ///< :
-  kDot,             ///< .（属性访问）
-  kEquals,          ///< =（赋值）
-  kPlus,            ///< +
-  kMinus,           ///< -
-  kMul,             ///< *
-  kDiv,             ///< /
-  kMod,             ///< %（取模）
-  kPlusEq,          ///< +=
-  kMinusEq,         ///< -=
-  kMulEq,           ///< *=
-  kDivEq,           ///< /=
-  kModEq,           ///< %=（取模赋值）
-  kPlusPlus,        ///< ++（自增）
-  kMinusMinus,      ///< --（自减）
-  kOr,              ///< ||（逻辑或）
-  kAnd,             ///< &&（逻辑与）
-  kNot,             ///< !（逻辑非）
-  kEq,              ///< ==（等于）
-  kNeq,             ///< !=（不等于）
-  kLt,              ///< <（小于）
-  kGt,              ///< >（大于）
-  kLte,             ///< <=（小于等于）
-  kGte,             ///< >=（大于等于）
-  kSemi,            ///< ;（语句结束）
-  kFor,             ///< for 关键字
-  kIn,              ///< in 关键字
-  kIf,              ///< if 关键字
-  kElse,            ///< else 关键字
-  kLet,             ///< let 关键字（变量声明）
-  kClass,           ///< class 关键字（类定义）
-  kFunction,        ///< function 关键字（方法定义）
-  kNew,             ///< new 关键字（实例化）
-  kThis,            ///< this 关键字（当前实例引用）
-  kReturn,          ///< return 关键字（返回值）
-  kTrue,            ///< true 布尔字面量
-  kFalse,           ///< false 布尔字面量
-  kScope,           ///< ::（作用域解析）
-  kStatic,          ///< static 关键字（静态成员）
-  kPublic,          ///< public 访问修饰符
-  kProtected,       ///< protected 访问修饰符
-  kPrivate,         ///< private 访问修饰符
-  kExtends,         ///< extends 关键字（继承）
-  kOverride,        ///< override 关键字（重写标注）
-  kInterface,       ///< interface 关键字（接口定义）
-  kImplements,      ///< implements 关键字（接口实现）
-  kSuper,           ///< super 关键字（父类引用）
-  kExport,          ///< export 关键字（导出）
-  kImport,          ///< import 关键字（导入）
-  kFrom,            ///< from 关键字（import ... from "file"）
-  kNull,            ///< null 关键字
-  kUndefined,       ///< undefined 关键字
-  kWhile,           ///< while 关键字
-  kBreak,           ///< break 关键字
-  kContinue,        ///< continue 关键字
-  kSwitch,          ///< switch 关键字
-  kCase,            ///< case 关键字
-  kDefault,         ///< default 关键字
-  kEnum,            ///< enum 关键字（枚举定义）
-  kConstructor,     ///< constructor 关键字（类构造函数）
-  kUsing,           ///< using 关键字（显式资源管理）
-  kDispose,         ///< dispose 关键字（资源释放方法）
-  kAs,              ///< as 关键字（导入别名）
-  kQuestion,        ///< ?（三元运算符）
-  kTemplateString,  ///< 模板字符串 `...${...}...`
+  kEof,               ///< 输入结束
+  kIdent,             ///< 标识符（变量名、函数名、方法名）
+  kString,            ///< 字符串字面量 "hello"
+  kNumber,            ///< 数字字面量 123
+  kLBrace,            ///< {
+  kRBrace,            ///< }
+  kLParen,            ///< (
+  kRParen,            ///< )
+  kLBracket,          ///< [
+  kRBracket,          ///< ]
+  kComma,             ///< ,
+  kColon,             ///< :
+  kDot,               ///< .（属性访问）
+  kEquals,            ///< =（赋值）
+  kPlus,              ///< +
+  kMinus,             ///< -
+  kMul,               ///< *
+  kDiv,               ///< /
+  kMod,               ///< %（取模）
+  kPlusEq,            ///< +=
+  kMinusEq,           ///< -=
+  kMulEq,             ///< *=
+  kDivEq,             ///< /=
+  kModEq,             ///< %=（取模赋值）
+  kPlusPlus,          ///< ++（自增）
+  kMinusMinus,        ///< --（自减）
+  kOr,                ///< ||（逻辑或）
+  kAnd,               ///< &&（逻辑与）
+  kNot,               ///< !（逻辑非）
+  kEq,                ///< ==（等于）
+  kNeq,               ///< !=（不等于）
+  kLt,                ///< <（小于）
+  kGt,                ///< >（大于）
+  kLte,               ///< <=（小于等于）
+  kGte,               ///< >=（大于等于）
+  kSemi,              ///< ;（语句结束）
+  kFor,               ///< for 关键字
+  kIn,                ///< in 关键字
+  kIf,                ///< if 关键字
+  kElse,              ///< else 关键字
+  kLet,               ///< let 关键字（变量声明）
+  kClass,             ///< class 关键字（类定义）
+  kFunction,          ///< function 关键字（方法定义）
+  kNew,               ///< new 关键字（实例化）
+  kThis,              ///< this 关键字（当前实例引用）
+  kReturn,            ///< return 关键字（返回值）
+  kTrue,              ///< true 布尔字面量
+  kFalse,             ///< false 布尔字面量
+  kScope,             ///< ::（作用域解析）
+  kStatic,            ///< static 关键字（静态成员）
+  kPublic,            ///< public 访问修饰符
+  kProtected,         ///< protected 访问修饰符
+  kPrivate,           ///< private 访问修饰符
+  kExtends,           ///< extends 关键字（继承）
+  kOverride,          ///< override 关键字（重写标注）
+  kInterface,         ///< interface 关键字（接口定义）
+  kImplements,        ///< implements 关键字（接口实现）
+  kSuper,             ///< super 关键字（父类引用）
+  kExport,            ///< export 关键字（导出）
+  kImport,            ///< import 关键字（导入）
+  kFrom,              ///< from 关键字（import ... from "file"）
+  kNull,              ///< null 关键字
+  kUndefined,         ///< undefined 关键字
+  kWhile,             ///< while 关键字
+  kBreak,             ///< break 关键字
+  kContinue,          ///< continue 关键字
+  kSwitch,            ///< switch 关键字
+  kCase,              ///< case 关键字
+  kDefault,           ///< default 关键字
+  kEnum,              ///< enum 关键字（枚举定义）
+  kConstructor,       ///< constructor 关键字（类构造函数）
+  kUsing,             ///< using 关键字（显式资源管理）
+  kDispose,           ///< dispose 关键字（资源释放方法）
+  kAs,                ///< as 关键字（导入别名）
+  kConst,             ///< const 关键字（常量声明）
+  kDo,                ///< do 关键字（do…while 循环）
+  kTry,               ///< try 关键字（错误处理）
+  kCatch,             ///< catch 关键字（错误处理）
+  kFinally,           ///< finally 关键字（错误处理）
+  kThrow,             ///< throw 关键字（抛出错误）
+  kQuestion,          ///< ?（三元运算符）
+  kQuestionDot,       ///< ?.（可选链）
+  kQuestionQuestion,  ///< ??（空值合并）
+  kTemplateString,    ///< 模板字符串 `...${...}...`
 };
 
 /// @brief 词法单元
@@ -266,6 +274,7 @@ struct MethodCall {
   std::vector<std::unique_ptr<Expr>> args;  ///< 参数列表
   std::unique_ptr<Expr>
       object;  ///< 对象表达式（用于链式访问，如 this.engine.start()，优先级高于 objName）
+  bool isOptional = false;  ///< ?. 可选方法调用（对象为 null 时整体短路为 null）
 
   MethodCall() = default;
   MethodCall(const MethodCall &other);
@@ -308,12 +317,14 @@ struct InterfaceMethod {
   AcType returnType;
 };
 
-/// @brief 接口定义：interface Name { function method(); }
+/// @brief 接口定义：interface Name { function method(); let prop: Type; }
+/// 也支持对象形状属性契约（let 成员），类 implements 时属性必须存在且类型兼容
 struct InterfaceDef {
   QString name;
   QVector<InterfaceMethod> methods;
-  QStringList baseInterfaces;  ///< 接口继承的父接口列表
-  bool isExported = false;     ///< 是否导出
+  QVector<ParamDef> properties;  ///< 属性契约（let x: Number；? 后缀为可选属性）
+  QStringList baseInterfaces;    ///< 接口继承的父接口列表
+  bool isExported = false;       ///< 是否导出
 };
 
 /// @brief 枚举成员定义：Name 或 Name = Value
@@ -370,13 +381,15 @@ struct Expr {
     kBool,          ///< 布尔字面量 true/false
     kStaticAccess,  ///< 静态访问 ClassName::member
     kFuncExpr,      ///< 函数表达式 function(params): Type { body }
+    kCoalesce,      ///< 空值合并 ??（左操作数为 null/undefined 时取右操作数）
   } kind = kString;
-  AcLoc loc;             ///< 源码位置（用于错误报告）
-  QString strVal;        ///< 字符串值
-  double numVal = 0;     ///< 数值
-  bool boolVal = false;  ///< 布尔值（用于 kBool）
-  QString ident;         ///< 标识符名
-  QString prop;          ///< 属性名（用于 kPropAccess）
+  bool isOptional = false;  ///< 可选访问 ?.（kPropAccess/kIndexAccess 用；null 时短路为 null）
+  AcLoc loc;                ///< 源码位置（用于错误报告）
+  QString strVal;           ///< 字符串值
+  double numVal = 0;        ///< 数值
+  bool boolVal = false;     ///< 布尔值（用于 kBool）
+  QString ident;            ///< 标识符名
+  QString prop;             ///< 属性名（用于 kPropAccess）
   std::unique_ptr<Expr>
       propObject;  ///< 链式属性访问的对象表达式（用于 kPropAccess 链式，优先级高于 ident）
   QVector<ObjectEntry> objEntries;              ///< 对象条目
@@ -453,6 +466,7 @@ struct AssignStmt {
   bool hasTypeAnnotation = false;  ///< 是否有类型注解
   bool isExported = false;         ///< 是否导出
   bool isDeclaration = false;  ///< 是否为 let 变量声明（须在最新作用域内创建，不覆盖外层同名变量）
+  bool isConst = false;        ///< 是否为 const 常量声明（运行时赋值报错）
   CompoundOp compoundOp = CompoundOp::kNone;  ///< 复合赋值运算符
 };
 
@@ -512,10 +526,21 @@ struct ImportStmt {
   QHash<QString, int> aliasLines;  ///< 别名 → 该别名所在行号（多行 import 时定位用）
 };
 
-/// @brief while 循环语句：while (condition) { body }
+/// @brief while / do…while 循环语句
 struct WhileStmt {
   Expr condition;
   Block body;
+  bool isDoWhile = false;  ///< do…while 形式（先执行一次循环体）
+};
+
+/// @brief try/catch/finally 错误处理语句
+struct TryStmt {
+  Block tryBody;
+  QString catchVar;  ///< catch 错误变量名（catch (e)）；可为空
+  Block catchBody;
+  bool hasCatch = false;
+  bool hasFinally = false;
+  Block finallyBody;
 };
 
 /// @brief switch-case 分支
@@ -552,7 +577,9 @@ struct Block::Stmt {
     kBreak,
     kContinue,
     kUsing,
-    kBlock  ///< 独立块作用域 { stmts }
+    kBlock,  ///< 独立块作用域 { stmts }
+    kTry,    ///< try/catch/finally 错误处理
+    kThrow   ///< throw 抛出错误（值复用 returnValue 成员）
   } kind = kCall;
   AcLoc loc;         ///< 语句位置（用于符号导航与错误定位）
   QString filePath;  ///< 语句所属源文件路径（import 内联后用于断点定位）
@@ -572,6 +599,7 @@ struct Block::Stmt {
   WhileStmt whileStmt;
   SwitchStmt switchStmt;
   UsingStmt usingStmt;
+  TryStmt tryStmt;  ///< try/catch/finally（kTry 时有效）
   Block blockBody;  ///< 独立块作用域 { stmts } 的 body
 };
 

@@ -94,6 +94,19 @@ void AcSymbolTable::collectFromStmt(const Block::Stmt &stmt) {
             makeMethodSignature(iface.name, method.name, method.params, method.returnType, false);
         m_symbols.insert(iface.name + QStringLiteral(".") + method.name, methodEntry);
       }
+
+      // 收集接口属性契约（对象形状接口；IDE 导航/补全与类属性同构）
+      for (const auto &prop : iface.properties) {
+        AcSymbolEntry propEntry;
+        propEntry.name = prop.name;
+        propEntry.kind = AcSymbolKind::kProperty;
+        propEntry.filePath = m_filePath;
+        propEntry.line = stmt.loc.line;
+        propEntry.parentClass = iface.name;
+        propEntry.returnType = acTypeToString(prop.type);
+        propEntry.signature = prop.name + QStringLiteral(": ") + acTypeToString(prop.type);
+        m_symbols.insert(iface.name + QStringLiteral(".") + prop.name, propEntry);
+      }
       break;
     }
 

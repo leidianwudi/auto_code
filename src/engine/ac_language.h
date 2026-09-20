@@ -88,6 +88,12 @@ inline constexpr const char *kConstructor = "constructor";
 inline constexpr const char *kUsing = "using";
 inline constexpr const char *kDispose = "dispose";
 inline constexpr const char *kAs = "as";
+inline constexpr const char *kConst = "const";
+inline constexpr const char *kDo = "do";
+inline constexpr const char *kTry = "try";
+inline constexpr const char *kCatch = "catch";
+inline constexpr const char *kFinally = "finally";
+inline constexpr const char *kThrow = "throw";
 
 /// @brief 关键字列表（供高亮、补全使用）
 inline const QStringList kAll = {
@@ -110,7 +116,10 @@ inline const QStringList kAll = {
     QString::fromLatin1(kCase),      QString::fromLatin1(kDefault),
     QString::fromLatin1(kEnum),      QString::fromLatin1(kConstructor),
     QString::fromLatin1(kUsing),     QString::fromLatin1(kDispose),
-    QString::fromLatin1(kAs),
+    QString::fromLatin1(kAs),        QString::fromLatin1(kConst),
+    QString::fromLatin1(kDo),        QString::fromLatin1(kTry),
+    QString::fromLatin1(kCatch),     QString::fromLatin1(kFinally),
+    QString::fromLatin1(kThrow),
 };
 }  // namespace AcKeyword
 

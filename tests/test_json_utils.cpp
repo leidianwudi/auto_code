@@ -19,10 +19,12 @@
 #include <QJsonParseError>
 #include <cstdio>
 
+#include "src/engine/schema_validator.h"
 #include "src/ui/json_source/json_source_finder.h"
 #include "src/ui/json_source/json_upload_model.h"
 #include "src/util/common/path_resolver.h"
 #include "src/util/common/util_json.h"
+#include "src/util/ui/code/format_code.h"
 
 static int g_total = 0;
 static int g_failed = 0;
@@ -295,8 +297,78 @@ static void testJsonUploadConfigRoundTrip() {
   // 保真合并由 JsonUploadWidget 的 collectMergedObject 层负责（同 jsonsource），模型层只保证不崩
 }
 
+/// 回归防护：项目内置 param.schema.json 必须能被 SchemaValidator 加载
+/// （该文件为手工维护的 JSON5；历史上因根对象闭合后多写一个尾逗号导致
+///  AcJsonValue::parse 报「末尾存在多余内容」，可视化编辑提示 schema 加载失败）
+static void testBuiltinParamSchemaLoads() {
+  const QString path =
+      QDir::cleanPath(QStringLiteral(PROJECT_SOURCE_DIR) +
+                      QStringLiteral("/file/crud_nest/template/tool/param.schema.json"));
+
+  // 解析层：文件级 JSON5 语法必须干净（尾逗号仅允许出现在对象/数组内部）
+  const QString raw = UtilJson::readTextFile(path);
+  CHECK(!raw.isEmpty());
+  bool ok = false;
+  QString err;
+  accore::AcJsonValue::parse(raw, &ok, &err);
+  CHECK(ok);
+
+  // 加载层：root/definitions 完整解析，rootClass 指向 AutoConfig
+  SchemaValidator schema;
+  CHECK(schema.load(path));
+  CHECK(schema.hasRoot());
+  CHECK(schema.rootClass() == QStringLiteral("AutoConfig"));
+  CHECK(schema.classNames().contains(QStringLiteral("TableConfig")));
+}
+
+/// 回归防护：JSON/JSON5 格式化输出必须可再次解析，且根值闭合后不得有尾随逗号
+/// （历史上 FormatJson5 对根对象闭合后也输出逗号，param.schema.json 被格式化
+///   一次后即出现「schema 加载失败」——逗号恰好落在根值之后，属非法 JSON5）
+static void testFormatCodeJsonRoundTrip() {
+  // ── 普通风格 ──
+  // 空对象/空数组作为非最后成员必须保留分隔逗号（历史上空对象漏逗号 → 输出非法 JSON）
+  const QString plain =
+      FormatCode::format(QStringLiteral("{\"a\": {}, \"b\": []}"), FormatCode::FormatJson);
+  QJsonParseError perr;
+  const QJsonDocument pdoc = UtilJson::fromJson(plain, &perr);
+  CHECK(perr.error == QJsonParseError::NoError);
+  CHECK(pdoc.object().value(QStringLiteral("a")).toObject().isEmpty());
+  CHECK(pdoc.object().value(QStringLiteral("b")).toArray().isEmpty());
+  CHECK(plain.contains(QStringLiteral("\"a\": {},")));
+  CHECK(plain.contains(QStringLiteral("\"b\": []")));
+
+  // ── JSON5 风格 ──
+  const QString json5 = FormatCode::format(QStringLiteral("{\"name\": \"x\", \"cfg\": {\"n\": 1}}"),
+                                           FormatCode::FormatJson5);
+  // 根值闭合后绝不能有逗号（核心回归：param.schema.json 场景）
+  CHECK(json5.trimmed().endsWith(QLatin1Char('}')));
+  // 容器内部最后成员保留尾随逗号（JSON5 风格特征）
+  CHECK(json5.contains(QStringLiteral("1,")));
+  CHECK(json5.contains(QStringLiteral("},")));
+  // 无引号 key + 单引号字符串
+  CHECK(json5.contains(QStringLiteral("name: 'x'")));
+  // 输出必须是合法 JSON5（UtilJson::fromJson 支持 JSON5）
+  const QJsonDocument j5doc = UtilJson::fromJson(json5, &perr);
+  CHECK(perr.error == QJsonParseError::NoError);
+  CHECK(j5doc.object()
+            .value(QStringLiteral("cfg"))
+            .toObject()
+            .value(QStringLiteral("n"))
+            .toDouble() == 1.0);
+
+  // 根数组同理：闭合 ] 后无逗号
+  const QString arr5 =
+      FormatCode::format(QStringLiteral("[{\"k\": 1}, {}]"), FormatCode::FormatJson5);
+  CHECK(arr5.trimmed().endsWith(QLatin1Char(']')));
+  const QJsonDocument arrDoc = UtilJson::fromJson(arr5, &perr);
+  CHECK(perr.error == QJsonParseError::NoError);
+  CHECK(arrDoc.array().size() == 2);
+}
+
 int main() {
   // 所测接口均不依赖 QCoreApplication 实例，无需构造应用对象
+  testBuiltinParamSchemaLoads();
+  testFormatCodeJsonRoundTrip();
   testJson5Parsing();
   testFingerprint();
   testResolveSchemaPath();

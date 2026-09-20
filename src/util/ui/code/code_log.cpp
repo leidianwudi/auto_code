@@ -122,13 +122,13 @@ void CodeLog::append(const QString &text, bool isError) {
     ensureCursorVisible();
   }
 
-  ++m_lineNumber;
+  // 行号以文档实际块数为唯一事实源（一次 append 可能插入多行），
+  // 无需手动计数；刷新行号区域重绘
   m_lineNumberArea->update();
 }
 
 void CodeLog::clearLog() {
   clear();
-  m_lineNumber = 0;
   updateLineNumberAreaWidth(0);
 }
 
@@ -180,8 +180,9 @@ void CodeLog::applyFontFromSetting() {
 // ════════════════════════════════════════════════════════════════
 
 int CodeLog::lineNumberAreaWidth() const {
+  // 宽度按文档实际块数（日志行数）的位数计算
   int digits = 1;
-  int max = qMax(1, m_lineNumber);
+  int max = qMax(1, document()->blockCount());
   while (max >= 10) {
     max /= 10;
     ++digits;
@@ -202,14 +203,15 @@ void CodeLog::lineNumberAreaPaintEvent(QPaintEvent *event, const QRect &area) {
 
   painter.setFont(font());
 
+  // 行号 = 块序号 + 1，与文档内容天然对齐（历史 bug：手动计数器在多行
+  // append 时与真实行数脱节，导致后半部分行不显示行号）。
+  // 达到 maximumBlockCount 上限后顶部块被裁剪，行号从最早保留行重新编号，
+  // 始终与可见文本一致
   while (block.isValid() && top <= event->rect().bottom()) {
     if (block.isVisible() && bottom >= event->rect().top()) {
-      int lineNum = blockNumber + 1;
-      if (lineNum <= m_lineNumber) {
-        painter.setPen(AuiStyle::textColor());
-        painter.drawText(0, top, area.width() - 4, painter.fontMetrics().height(), Qt::AlignRight,
-                         QString::number(lineNum));
-      }
+      painter.setPen(AuiStyle::textColor());
+      painter.drawText(0, top, area.width() - 4, painter.fontMetrics().height(), Qt::AlignRight,
+                       QString::number(blockNumber + 1));
     }
     block = block.next();
     top = bottom;

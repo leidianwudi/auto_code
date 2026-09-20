@@ -73,6 +73,16 @@ public:
   /// @brief 记录变量的推导类型（供类型检查使用）
   void recordInferredType(const QString &name, const accore::AcJsonValue &val);
 
+  /// @brief 调用函数引用值（数组 map/filter/sort 等高阶方法的回调入口）
+  /// @param funcRef FuncRef 值（function 表达式求值结果）
+  /// @param callArgs 参数值数组（AcJsonValue 数组）
+  /// @return 回调返回值；失败时设置内部错误并返回 Null
+  accore::AcJsonValue callFunctionValue(const accore::AcJsonValue &funcRef,
+                                        const accore::AcJsonValue &callArgs);
+
+  /// @brief 取出并清除当前错误（供内置方法在回调后检查并传播失败）
+  QString takeError();
+
 private:
   // ── 执行 ──
   void execBlock(const Block &block);
@@ -132,8 +142,8 @@ private:
   // ── 变量操作 ──
   accore::AcJsonValue resolveVar(const QString &name) const;
   void setVar(const QString &name, const accore::AcJsonValue &val);
-  void declareVar(const QString &name,
-                  const accore::AcJsonValue &val);  ///< 在最新作用域内声明变量，不覆盖外层同名变量
+  /// @brief 在最新作用域内声明变量，不覆盖外层同名变量；isConst 时登记为常量（赋值报错）
+  void declareVar(const QString &name, const accore::AcJsonValue &val, bool isConst = false);
   /// 记录变量的声明位置（文件 + 行号），供调试面板定位
   void recordVarLoc(const QString &name, const QString &filePath, int line);
   bool containsVar(const QString &name) const;
@@ -161,6 +171,11 @@ private:
   /// 执行单个实例的析构（释放属性引用 + 调用 __destruct__）
   void processDestructInfo(const AcObjectManager::DestructInfo &info);
 
+  /// @brief 普通对象的内置方法（keys/values/has/size）
+  accore::AcJsonValue evalObjectBuiltin(const accore::AcJsonValue &obj, const QString &method,
+                                        const std::vector<std::unique_ptr<Expr>> &args, int line);
+  /// @brief 执行 try/catch/finally（错误经 m_error 通道在块边界拦截）
+  void execTryStmt(const TryStmt &ts);
   // ── 类方法执行 ──
   accore::AcJsonValue execMethod(const MethodDef &method, const accore::AcJsonValue &thisObj,
                                  const accore::AcJsonValue &callArgs);
@@ -190,12 +205,13 @@ private:
   std::atomic<bool> *m_cancelFlag = nullptr;  ///< 取消标志（指向 AcEngine 的原子标志）
   AcDebugger *m_debugger = nullptr;           ///< 调试器（为空则不启用调试）
   int m_callDepth = 0;
-  int m_exprDepth = 0;  ///< 表达式嵌套深度（evalExpr 递归计数，防超深嵌套打爆栈）
+  int m_exprDepth = 0;                ///< 表达式嵌套深度（evalExpr 递归计数，防超深嵌套打爆栈）
   QVector<AcDebugFrame> m_callStack;  ///< 调用栈（仅调试时维护）
   AcObjectManager m_objMgr;
   /// 环回收节流：上次 mark-sweep 时的托管对象数（popScope 用，避免每次退出作用域全堆清扫）
   int m_objectsAtLastGc = 0;
   QVector<QHash<QString, accore::AcJsonValue>> m_scopeStack;
+  QVector<QSet<QString>> m_constVars;  ///< 每层作用域的 const 变量名（与 m_scopeStack 平行）
   QVector<QVector<QString>> m_usingStack;
   /// 变量声明位置（与 m_scopeStack 一一对应）：变量名 → (文件, 行号)
   QVector<QHash<QString, QPair<QString, int>>> m_varLocStack;

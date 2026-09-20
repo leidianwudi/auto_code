@@ -38,6 +38,11 @@ accore::AcJsonValue AcInterpreter::resolveVar(const QString &name) const {
 void AcInterpreter::setVar(const QString &name, const accore::AcJsonValue &val) {
   for (int i = m_scopeStack.size() - 1; i >= 0; --i) {
     if (m_scopeStack[i].contains(name)) {
+      // const 常量：定义所在作用域内禁止再赋值
+      if (i < m_constVars.size() && m_constVars[i].contains(name)) {
+        setError(QStringLiteral("cannot assign to const '%1'").arg(name), 0);
+        return;
+      }
       const accore::AcJsonValue &old = m_scopeStack[i][name];
       // 自赋值检测走 accore 原生接口，避免每次赋值 4 次 AcJsonValue→QJsonObject 深拷贝
       if (AcObjectManager::isManagedInstance(old) && AcObjectManager::isManagedInstance(val) &&
@@ -55,14 +60,16 @@ void AcInterpreter::setVar(const QString &name, const accore::AcJsonValue &val) 
   m_scopeStack.last()[name] = val;
 }
 
-void AcInterpreter::declareVar(const QString &name, const accore::AcJsonValue &val) {
-  // let 声明只在最新（最内层）作用域内创建变量，绝不覆盖外层同名变量
+void AcInterpreter::declareVar(const QString &name, const accore::AcJsonValue &val, bool isConst) {
+  // let/const 声明只在最新（最内层）作用域内创建变量，绝不覆盖外层同名变量
   retainIfInstance(val);
   m_scopeStack.last()[name] = val;
+  if (isConst) m_constVars.last().insert(name);
 }
 
 void AcInterpreter::pushScope() {
   m_scopeStack.append(QHash<QString, accore::AcJsonValue>());
+  m_constVars.append(QSet<QString>());
   m_usingStack.append(QVector<QString>());
   m_varLocStack.append(QHash<QString, QPair<QString, int>>());
 }
@@ -95,6 +102,7 @@ void AcInterpreter::popScope() {
   }
 
   auto scope = m_scopeStack.takeLast();
+  m_constVars.removeLast();
   for (auto it = scope.begin(); it != scope.end(); ++it) {
     releaseDeep(it.value());
   }

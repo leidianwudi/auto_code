@@ -62,6 +62,9 @@ public:
   virtual void visitPropAccessExpr(const Expr &expr);
   virtual void visitIndexAccessExpr(const Expr &expr);
   virtual void visitFuncCallExpr(const Expr &expr);
+
+  /// @brief try/catch/finally 语句（默认遍历三个子块）
+  virtual void visitTryStmt(const Block::Stmt &stmt);
   virtual void visitMethodCallExpr(const Expr &expr);
   virtual void visitStaticAccessExpr(const Expr &expr);
   virtual void visitNewInstanceExpr(const Expr &expr);

@@ -11,8 +11,10 @@
 // ── 表达式解析入口 ──
 
 /// 表达式嵌套深度上限：括号/数组/对象字面量会递归回到 parseExpr，
-/// 无上限时机器生成的深嵌套代码会打爆 C++ 栈（一层约 10 个递归帧）
-static constexpr int kMaxExprDepth = 128;
+/// 无上限时机器生成的深嵌套代码会打爆 C++ 栈。
+/// 实测每层嵌套约消耗 9KB 栈（parseExpr→…→parsePrimary 一条链 16 个递归帧），
+/// 64 层 ≈ 590KB，为 1MB 线程栈留足余量 —— 上限不可随意调大
+static constexpr int kMaxExprDepth = 64;
 
 bool AcParser::parseExpr(Expr &expr) {
   if (m_exprDepth >= kMaxExprDepth) {
@@ -59,6 +61,19 @@ bool AcParser::parseExpr(Expr &expr) {
 
 bool AcParser::parseTernary(Expr &expr) {
   if (!parseLogicalOr(expr)) return false;
+  // 空值合并 a ?? b（左结合链；左为 null/undefined 时取右）
+  while (peek().type == TokenType::kQuestionQuestion) {
+    const int line = peek().loc.line;
+    advance();
+    Expr node;
+    node.kind = Expr::kCoalesce;
+    node.loc.line = line;
+    node.left = std::make_unique<Expr>(std::move(expr));
+    auto right = std::make_unique<Expr>();
+    if (!parseLogicalOr(*right)) return false;
+    node.right = std::move(right);
+    expr = std::move(node);
+  }
   if (peek().type == TokenType::kQuestion) {
     int ternaryLine = peek().loc.line;
     advance();
@@ -252,6 +267,45 @@ bool AcParser::parsePostfix(Expr &expr) {
         propAccess.kind = Expr::kPropAccess;
         propAccess.loc.line = peek().loc.line;
         propAccess.prop = memberName;
+        propAccess.propObject = std::make_unique<Expr>(std::move(expr));
+        expr = std::move(propAccess);
+      }
+    } else if (peek().type == TokenType::kQuestionDot) {
+      // 可选链 ?.prop / ?.method(...)：对象为 null 时整体短路为 null
+      advance();
+      if (!isPropertyName(peek().type)) {
+        m_error =
+            QStringLiteral("expected property name after '?.' at line %1").arg(peek().loc.line);
+        return false;
+      }
+      QString memberName = advance().text;
+      if (peek().type == TokenType::kLParen) {
+        advance();
+        Expr chained;
+        chained.kind = Expr::kMethodCall;
+        chained.loc.line = peek().loc.line;
+        chained.methodCall.methodName = memberName;
+        chained.methodCall.isOptional = true;
+        chained.methodCall.object = std::make_unique<Expr>(std::move(expr));
+        while (peek().type != TokenType::kRParen && peek().type != TokenType::kEof) {
+          auto arg = std::make_unique<Expr>();
+          if (!parseLogicalOr(*arg)) {
+            return false;
+          }
+          chained.methodCall.args.push_back(std::move(arg));
+          if (peek().type == TokenType::kComma) advance();
+        }
+        if (!expect(
+                TokenType::kRParen,
+                QStringLiteral("expected ')' after method call at line %1").arg(peek().loc.line)))
+          return false;
+        expr = std::move(chained);
+      } else {
+        Expr propAccess;
+        propAccess.kind = Expr::kPropAccess;
+        propAccess.loc.line = peek().loc.line;
+        propAccess.prop = memberName;
+        propAccess.isOptional = true;
         propAccess.propObject = std::make_unique<Expr>(std::move(expr));
         expr = std::move(propAccess);
       }

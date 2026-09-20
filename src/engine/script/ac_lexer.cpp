@@ -145,6 +145,12 @@ static const QHash<QString, TokenType> &keywordMap() {
       {QString::fromLatin1(AcKeyword::kUsing), TokenType::kUsing},
       {QString::fromLatin1(AcKeyword::kDispose), TokenType::kDispose},
       {QString::fromLatin1(AcKeyword::kAs), TokenType::kAs},
+      {QString::fromLatin1(AcKeyword::kConst), TokenType::kConst},
+      {QString::fromLatin1(AcKeyword::kDo), TokenType::kDo},
+      {QString::fromLatin1(AcKeyword::kTry), TokenType::kTry},
+      {QString::fromLatin1(AcKeyword::kCatch), TokenType::kCatch},
+      {QString::fromLatin1(AcKeyword::kFinally), TokenType::kFinally},
+      {QString::fromLatin1(AcKeyword::kThrow), TokenType::kThrow},
   };
   return map;
 }
@@ -357,8 +363,18 @@ QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
         ++i;
         break;
       case '?':
-        tokens.append({TokenType::kQuestion, QStringLiteral("?"), locAt(i)});
-        ++i;
+        if (i + 1 < n && source[i + 1] == '?') {
+          tokens.append({TokenType::kQuestionQuestion, QStringLiteral("??"), locAt(i)});
+          i += 2;
+        } else if (i + 1 < n && source[i + 1] == '.' &&
+                   !(i + 2 < n && source[i + 2].isDigit())) {
+          // `?.` 可选链；后跟数字时按三元处理（如 a ?.5 : 1，与 JS 规范一致）
+          tokens.append({TokenType::kQuestionDot, QStringLiteral("?."), locAt(i)});
+          i += 2;
+        } else {
+          tokens.append({TokenType::kQuestion, QStringLiteral("?"), locAt(i)});
+          ++i;
+        }
         break;
       case '"': {
         Token tok = parseStringLiteral(source, i, locAt(i), error);

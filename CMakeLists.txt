@@ -411,6 +411,8 @@ add_executable(auto_code_tests EXCLUDE_FROM_ALL
     tests/test_golden_script.cpp
     # JSON 上传模型测试所需（UI 层纯模型文件，测试直接编译）
     src/ui/json_source/json_upload_model.cpp
+    # JSON/JSON5 格式化测试所需（UI 层纯 QtCore 工具，测试直接编译）
+    src/util/ui/code/format_code.cpp
 )
 target_include_directories(auto_code_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(auto_code_tests PRIVATE

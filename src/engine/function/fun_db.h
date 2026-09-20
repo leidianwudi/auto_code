@@ -17,6 +17,7 @@
 #pragma once
 
 #include <QHash>
+#include <QMutex>
 #include <QString>
 
 #include "../ac_language.h"
@@ -97,8 +98,12 @@ public:
 private:
   /// 获取实例的连接（根据 this.obj 中的 connId）
   static MYSQL *getConnection(const accore::AcJsonValue &instance);
-  /// 全局连接池：connId -> MYSQL*
+  /// 全局连接池：connId -> MYSQL*（受 s_connMutex 保护）
   static QHash<QString, MYSQL *> s_connections;
-  /// 连接配置池：connId -> DbConfig
+  /// 连接配置池：connId -> DbConfig（受 s_connMutex 保护）
   static QHash<QString, AcDB::DbConfig> s_configs;
+  /// 连接池互斥锁：并行 worker 线程同时 new DB()/析构/查询时保护两张池表；
+  /// 锁只保护池结构本身，单个 MYSQL* 连接仍不可跨线程并发使用
+  /// （每个 DB 实例由创建它的 worker 线程独占使用）
+  static QMutex s_connMutex;
 };

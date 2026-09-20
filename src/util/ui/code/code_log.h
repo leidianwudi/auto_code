@@ -34,11 +34,11 @@ public:
   /// 追加一行日志，isError=true 时显示红色
   void append(const QString &text, bool isError = false);
 
-  /// 清空所有日志并重置行号计数器
+  /// 清空所有日志
   void clearLog();
 
-  /// 获取当前日志行数
-  int logLineCount() const { return m_lineNumber; }
+  /// 获取当前日志行数（以文档实际块数为准）
+  int logLineCount() const { return document()->blockCount(); }
 
   /// 主题切换后重新应用样式表（背景/文字色随主题更新）
   void reloadStyle();
@@ -65,7 +65,6 @@ private:
   };
 
   LineNumberArea *m_lineNumberArea = nullptr;  ///< 行号区域控件
-  int m_lineNumber = 0;                        ///< 日志行号计数器
 
   /// 从设置读取「代码字体」大小与字体族并应用
   void applyFontFromSetting();

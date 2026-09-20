@@ -8,6 +8,7 @@
 #include <cmath>
 
 #include "../ac_language.h"
+#include "../ac_value_str.h"
 #include "../function/fun_builtin.h"
 #include "../function/fun_mgr.h"
 #include "../tpl/tpl_engine.h"
@@ -313,7 +314,7 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       }
 
       if (stmt.assign.isDeclaration) {
-        declareVar(stmt.assign.name, val);
+        declareVar(stmt.assign.name, val, stmt.assign.isConst);
         recordVarLoc(stmt.assign.name, stmt.filePath, stmt.loc.line);
       } else {
         setVar(stmt.assign.name, val);
@@ -429,19 +430,36 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
 
     case Block::Stmt::kWhile: {
       pushScope();
-      while (isTruthy(evalExpr(stmt.whileStmt.condition))) {
-        execBlock(stmt.whileStmt.body);
-        if (!m_error.isEmpty()) {
-          popScope();
-          return;
+      if (stmt.whileStmt.isDoWhile) {
+        // do { body } while (cond); — 至少执行一次循环体，再判断条件
+        while (true) {
+          execBlock(stmt.whileStmt.body);
+          if (!m_error.isEmpty()) {
+            popScope();
+            return;
+          }
+          if (m_hasBreak || m_hasReturned) {
+            m_hasBreak = false;
+            break;
+          }
+          m_hasContinue = false;
+          if (!isTruthy(evalExpr(stmt.whileStmt.condition))) break;
         }
-        // 循环体内 return 后必须立即退出循环，
-        // 否则后续轮次的 return 会覆盖正确的返回值
-        if (m_hasBreak || m_hasReturned) {
-          m_hasBreak = false;
-          break;
+      } else {
+        while (isTruthy(evalExpr(stmt.whileStmt.condition))) {
+          execBlock(stmt.whileStmt.body);
+          if (!m_error.isEmpty()) {
+            popScope();
+            return;
+          }
+          // 循环体内 return 后必须立即退出循环，
+          // 否则后续轮次的 return 会覆盖正确的返回值
+          if (m_hasBreak || m_hasReturned) {
+            m_hasBreak = false;
+            break;
+          }
+          m_hasContinue = false;
         }
-        m_hasContinue = false;
       }
       popScope();
       break;
@@ -529,6 +547,20 @@ void AcInterpreter::execStmt(const Block::Stmt &stmt) {
       break;
     }
 
+    case Block::Stmt::kThrow: {
+      // 抛出错误：求值表达式后经 m_error 通道传播；try/catch 在块边界拦截。
+      // 抛出值即错误消息本身，不追加 "at line N"（用户主动抛出，非引擎内部错误）
+      accore::AcJsonValue v = evalExpr(stmt.returnValue);
+      if (!m_error.isEmpty()) return;
+      m_error = v.isString() ? v.toString() : AcValueStr::toString(v);
+      return;
+    }
+
+    case Block::Stmt::kTry: {
+      execTryStmt(stmt.tryStmt);
+      return;
+    }
+
     case Block::Stmt::kBlock: {
       pushScope();
       execBlock(stmt.blockBody);
@@ -585,6 +617,33 @@ void AcInterpreter::execBlock(const Block &block) {
     execStmt(stmt);
     if (!m_error.isEmpty()) return;
     if (m_hasReturned || m_hasBreak || m_hasContinue) return;
+  }
+}
+
+void AcInterpreter::execTryStmt(const TryStmt &ts) {
+  execBlock(ts.tryBody);
+  const bool tryFailed = !m_error.isEmpty();
+  QString caughtErr;
+  if (tryFailed) caughtErr = takeError();
+
+  bool handled = false;
+  if (tryFailed && ts.hasCatch) {
+    // catch：错误消息绑定为字符串变量，仅 catch 块内可见
+    pushScope();
+    if (!ts.catchVar.isEmpty()) {
+      declareVar(ts.catchVar, accore::AcJsonValue(caughtErr));
+      recordVarLoc(ts.catchVar, m_scriptFile, 0);
+    }
+    execBlock(ts.catchBody);
+    popScope();
+    handled = m_error.isEmpty();  // catch 自身出错则继续向上传播
+  }
+
+  const bool propagate = tryFailed && !handled;
+  if (propagate) m_error = caughtErr;  // 恢复错误状态，finally 执行后继续向上传播
+
+  if (ts.hasFinally) {
+    execBlock(ts.finallyBody);
   }
 }
 

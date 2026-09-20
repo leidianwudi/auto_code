@@ -210,11 +210,12 @@ bool AcParser::parseBlock(Block &block) {
 
 bool AcParser::stmtNeedsSemi(const Block::Stmt &stmt, bool blockAllowed) const {
   // class/interface/enum/function 定义以 } 结尾，不需要分号
-  // if/for/while/switch 也以 } 结尾，不需要分号
+  // if/for/while/switch/try 也以 } 结尾，不需要分号
   if (stmt.kind == Block::Stmt::kClassDef || stmt.kind == Block::Stmt::kInterfaceDef ||
       stmt.kind == Block::Stmt::kEnumDef || stmt.kind == Block::Stmt::kFuncDef ||
       stmt.kind == Block::Stmt::kIf || stmt.kind == Block::Stmt::kFor ||
-      stmt.kind == Block::Stmt::kWhile || stmt.kind == Block::Stmt::kSwitch) {
+      stmt.kind == Block::Stmt::kWhile || stmt.kind == Block::Stmt::kSwitch ||
+      stmt.kind == Block::Stmt::kTry) {
     return false;
   }
   // 独立块语句 { }（blockAllowed=false 时用于单语句位置，保持原行为要求分号）

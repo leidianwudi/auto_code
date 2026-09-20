@@ -170,6 +170,18 @@ export class Array {
 
   /// 从 start 位置删除 deleteCount 个元素，并插入 item（deleteCount/item 均可省略）
   function splice(start: Number, deleteCount?: Number, item?: Object): Object[];
+
+  /// 排序：无参按默认全序（数字按数值、字符串按字典序），可传比较函数（返回负数/0/正数）
+  function sort(cb?: Any): Object[];
+
+  /// 映射：对每个元素调用 callback(value, index)，返回结果数组
+  function map(callback: Any): Object[];
+
+  /// 过滤：保留 callback(value, index) 为真的元素，返回新数组
+  function filter(callback: Any): Object[];
+
+  /// 遍历：对每个元素调用 callback(value, index)，无返回值
+  function forEach(callback: Any): Void;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -185,6 +197,9 @@ export class Object {
 
   /// 是否包含指定键
   function has(key: String): Bool;
+
+  /// 对象成员个数
+  function size(): Number;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

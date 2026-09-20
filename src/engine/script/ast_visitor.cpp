@@ -64,7 +64,16 @@ void AstVisitor::visitStmt(const Block::Stmt &stmt) {
     case Block::Stmt::kUsing:
       visitUsingStmt(stmt.usingStmt);
       break;
+    case Block::Stmt::kTry:
+      visitTryStmt(stmt);
+      break;
   }
+}
+
+void AstVisitor::visitTryStmt(const Block::Stmt &stmt) {
+  visitBlock(stmt.tryStmt.tryBody);
+  visitBlock(stmt.tryStmt.catchBody);
+  visitBlock(stmt.tryStmt.finallyBody);
 }
 
 void AstVisitor::visitExpr(const Expr &expr) {
@@ -110,6 +119,9 @@ void AstVisitor::visitExpr(const Expr &expr) {
       break;
     case Expr::kBinary:
       visitBinaryExpr(expr);
+      break;
+    case Expr::kCoalesce:
+      visitBinaryExpr(expr);  // ?? 复用左右子树遍历
       break;
     case Expr::kUnary:
       visitUnaryExpr(expr);

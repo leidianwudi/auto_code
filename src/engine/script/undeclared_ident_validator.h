@@ -37,6 +37,7 @@ protected:
   void visitFuncDef(const MethodDef &md) override;
   void visitImportStmt(const ImportStmt &imp) override;
   void visitUsingStmt(const UsingStmt &us) override;
+  void visitTryStmt(const Block::Stmt &stmt) override;
 
   void visitIdentExpr(const Expr &expr) override;
   void visitPropAccessExpr(const Expr &expr) override;

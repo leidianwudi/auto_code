@@ -5,6 +5,8 @@
 
 #include "ac_builtin_eval.h"
 
+#include <algorithm>
+
 #include "../ac_language.h"
 #include "ac_interpreter.h"
 #include "src/core/json/ac_json_value.h"
@@ -299,10 +301,75 @@ AcJsonValue AcBuiltinEval::evalArrayMethod(AcInterpreter &interp, const AcJsonVa
   }
   if (method == QStringLiteral("map") || method == QStringLiteral("filter") ||
       method == QStringLiteral("forEach")) {
-    error = QStringLiteral("array.%1() with callback is not supported yet at line %2")
-                .arg(method)
-                .arg(line);
-    return AcJsonValue();
+    if (args.empty()) {
+      error = QStringLiteral("array.%1() requires a callback at line %2").arg(method).arg(line);
+      return AcJsonValue();
+    }
+    AcJsonValue cb = interp.evalExpr(*args[0]);
+    if (!cb.isFuncRef()) {
+      error =
+          QStringLiteral("array.%1() callback must be a function at line %2").arg(method).arg(line);
+      return AcJsonValue();
+    }
+    AcJsonValue out;
+    if (method != QStringLiteral("forEach")) out = AcJsonValue::makeArray();
+    const int n = arr.size();
+    for (int i = 0; i < n; ++i) {
+      AcJsonValue callArgs = AcJsonValue::makeArray();
+      callArgs.append(arr.at(i));       // 元素
+      callArgs.append(AcJsonValue(i));  // 索引
+      AcJsonValue r = interp.callFunctionValue(cb, callArgs);
+      QString cbErr = interp.takeError();
+      if (!cbErr.isEmpty()) {
+        error = QStringLiteral("array.%1() callback failed: %2 at line %3")
+                    .arg(method, cbErr)
+                    .arg(line);
+        return AcJsonValue();
+      }
+      if (method == QStringLiteral("map")) {
+        out.append(r);
+      } else if (method == QStringLiteral("filter") && AcInterpreter::isTruthy(r)) {
+        out.append(arr.at(i));
+      }
+    }
+    return out;
+  }
+  if (method == QStringLiteral("sort")) {
+    // 值语义：返回排序后的新数组并经 modifiedArr 回写（与 push 等变异方法一致）
+    AcJsonValue cmp;
+    if (!args.empty()) {
+      cmp = interp.evalExpr(*args[0]);
+      if (!cmp.isFuncRef()) {
+        error = QStringLiteral("array.sort() comparator must be a function at line %1").arg(line);
+        return AcJsonValue();
+      }
+    }
+    QVector<AcJsonValue> list = arr.items();
+    QString sortErr;
+    std::stable_sort(list.begin(), list.end(), [&](const AcJsonValue &a, const AcJsonValue &b) {
+      if (cmp.isFuncRef()) {
+        AcJsonValue cargs = AcJsonValue::makeArray();
+        cargs.append(a);
+        cargs.append(b);
+        AcJsonValue r = interp.callFunctionValue(cmp, cargs);
+        QString cbErr = interp.takeError();
+        if (!cbErr.isEmpty()) {
+          if (sortErr.isEmpty()) sortErr = cbErr;
+          return false;
+        }
+        return r.toDouble() < 0;
+      }
+      return AcInterpreter::compareValues(a, b) < 0;
+    });
+    if (!sortErr.isEmpty()) {
+      error =
+          QStringLiteral("array.sort() comparator failed: %1 at line %2").arg(sortErr).arg(line);
+      return AcJsonValue();
+    }
+    AcJsonValue out = AcJsonValue::makeArray();
+    for (const AcJsonValue &v : list) out.append(v);
+    modifiedArr = out;
+    return out;
   }
 
   error = QStringLiteral("array has no method '%1' at line %2").arg(method).arg(line);
