@@ -26,6 +26,8 @@ void UndeclaredIdentValidator::validate(const Block &program, const QSet<QString
 /// （import 导入的模块语句携带各自的 filePath，与入口脚本文件不同）
 void UndeclaredIdentValidator::visitStmt(const Block::Stmt &stmt) {
   if (!stmt.filePath.isEmpty()) m_currentFile = stmt.filePath;
+  // 错误恢复的残缺语句：不检查（Expr::kError 无真实符号），避免级联假错
+  if (stmt.isRecovered) return;
   AstVisitor::visitStmt(stmt);
 }
 
@@ -75,6 +77,13 @@ void UndeclaredIdentValidator::reportError(const QString &msg, int line) {
     } else {
       m_errors->append(QStringLiteral("undefined variable '%1' %2").arg(msg, location));
     }
+  }
+  // 双轨：同步产出结构化诊断（干净消息，不带行号/文件名后缀）
+  if (m_diags) {
+    const QString &file = m_currentFile.isEmpty() ? m_filePath : m_currentFile;
+    m_diags->error(AcDiagCode::kUndeclaredIdent,
+                   QStringLiteral("undefined variable '%1'").arg(msg), file,
+                   AcLoc{line > 0 ? line : 0, 0, 0});
   }
 }
 

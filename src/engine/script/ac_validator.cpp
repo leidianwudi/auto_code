@@ -8,7 +8,6 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QRegularExpression>
 #include <QTextStream>
 
 #include "../../util/common/path_resolver.h"
@@ -28,18 +27,45 @@ QVector<ValidationResult> AcValidator::validate(const QString &source) {
   // 清空类和函数表（在 import 解析之前清空，以便导入文件的类能被收集）
   m_classes.clear();
   m_functions.clear();
-  m_importErrors.clear();
+  m_diags.clear();
 
-  // ── 步骤 1+2：词法+语法分析 + AST 构建 ──
+  // ── 步骤 1+2：词法+语法分析 + AST 构建（产出结构化诊断） ──
   m_declaredVars.clear();
   m_program = Block();
-  QString parseErrMsg;
-  if (!parseSource(source, m_program, m_declaredVars, parseErrMsg)) {
-    int line = extractLine(parseErrMsg);
-    if (line == 0) line = 1;
-    ValidationResult vr = ValidationResult::atLine(line, parseErrMsg);
-    results.append(vr);
-    return results;
+  {
+    QString parseErrMsg;
+    QVector<Token> tokens = AcLexer::tokenize(source, parseErrMsg, &m_diags);
+    if (!parseErrMsg.isEmpty() || tokens.isEmpty()) {
+      if (parseErrMsg.isEmpty()) parseErrMsg = QStringLiteral("lexer returned empty token list");
+      // 首错转 ValidationResult（诊断优先，缺失时回退整串 + 首行）
+      const AcDiagnostic *first = m_diags.all().isEmpty() ? nullptr : &m_diags.all().first();
+      if (first) {
+        results.append(toValidationResult(*first));
+      } else {
+        results.append(ValidationResult::atLine(1, parseErrMsg));
+      }
+      return results;
+    }
+    AcParser parser;
+    parser.setFilePath(m_filePath);
+    parser.setDiagCollector(&m_diags);
+    // 错误恢复：编辑器场景尽量收集全部诊断；语法错误不中断后续语句解析
+    parser.setRecoveryMode(true);
+    if (!parser.parse(tokens, m_program, m_declaredVars)) {
+      // 恢复模式下 parse 几乎总成功；仅当连诊断都没有时回退 legacy 单错
+      const AcDiagnostic *first = m_diags.all().isEmpty() ? nullptr : &m_diags.all().first();
+      if (first) {
+        results.append(toValidationResult(*first));
+      } else if (!parser.error().isEmpty()) {
+        results.append(ValidationResult::atLine(1, parser.error()));
+      }
+      return results;
+    }
+    // 语法错误已进 m_diags（恢复模式仍产出）；无诊断且 parse 报告错误 → legacy 兜底
+    if (m_diags.all().isEmpty() && !parser.error().isEmpty()) {
+      results.append(ValidationResult::atLine(1, parser.error()));
+      return results;
+    }
   }
 
   // ── 步骤 2.5：构建符号表（先加载依赖，再收集当前文件，确保类型推断可用）──
@@ -62,12 +88,9 @@ QVector<ValidationResult> AcValidator::validate(const QString &source) {
   }
 
   // 步骤 2.5b：解析 import 语句，收集跨文件符号
+  // （import 的符号在目标文件中不存在 → AC2003 诊断，如 import { add } 但目标文件无 add）
   if (!m_filePath.isEmpty()) {
     resolveImportedSymbols(m_program);
-    // import 的符号在目标文件中不存在 → 报错（如 import { add } 但目标文件无 add）
-    for (const QString &err : m_importErrors) {
-      if (!err.isEmpty()) results.append(parseError(err));
-    }
   }
 
   // 步骤 2.5c：收集当前文件符号（此时内置函数和 import 符号已在符号表中，类型推断可正常工作）
@@ -75,15 +98,13 @@ QVector<ValidationResult> AcValidator::validate(const QString &source) {
     m_symbolTable.collectStmt(stmt);
   }
 
-  // ── 步骤 3：未声明标识符检查 ──
+  // ── 步骤 3：未声明标识符检查（诊断进 m_diags） ──
   QStringList undeclaredErrors;
   m_undeclaredValidator.setFilePath(m_filePath);
+  m_undeclaredValidator.setDiagCollector(&m_diags);
   m_undeclaredValidator.validate(m_program, m_declaredVars, undeclaredErrors);
-  for (const QString &err : undeclaredErrors) {
-    if (!err.isEmpty()) results.append(parseError(err));
-  }
 
-  // ── 步骤 4：静态类型检查 ──
+  // ── 步骤 4：静态类型检查（诊断进 m_diags） ──
   // 注意：m_classes/m_functions 已在 validate() 开头清空，并在 import 解析时收集了导入文件的类
   collectClassesAndFunctions(m_program);
 
@@ -92,9 +113,12 @@ QVector<ValidationResult> AcValidator::validate(const QString &source) {
 
   QStringList typeErrors;
   m_typeChecker.setFilePath(m_filePath);
+  m_typeChecker.setDiagCollector(&m_diags);
   m_typeChecker.check(m_program, m_declaredVars, m_classes, m_functions, typeErrors);
-  for (const QString &err : typeErrors) {
-    if (!err.isEmpty()) results.append(parseError(err));
+
+  // ── 统一：全部结构化诊断 → ValidationResult ──
+  for (const auto &d : m_diags.all()) {
+    results.append(toValidationResult(d));
   }
 
   // 按行号排序
@@ -212,9 +236,11 @@ void AcValidator::collectSymbolsFromFile(const QString &filePath, const QStringL
         }
       }
       if (!found) {
-        m_importErrors << QStringLiteral("import 的符号「%1」在 %2 中不存在 at line %3")
-                              .arg(name, QFileInfo(filePath).fileName())
-                              .arg(importLine);
+        // import 的符号在目标文件中不存在 → 结构化诊断（AC2003）
+        m_diags.error(AcDiagCode::kLinkSymbolMissing,
+                      QStringLiteral("import 的符号「%1」在 %2 中不存在")
+                          .arg(name, QFileInfo(filePath).fileName()),
+                      m_filePath, AcLoc{importLine > 0 ? importLine : 0, 0, 0});
       }
     }
   }
@@ -244,7 +270,7 @@ void AcValidator::collectSymbolsFromFile(const QString &filePath, const QStringL
 
 bool AcValidator::parseSource(const QString &source, Block &program, QSet<QString> &declaredVars,
                               QString &error) {
-  // ── 旧递归下降词法分析 ──
+  // ── 旧递归下降词法分析（静默：不产出诊断，供 import 文件解析） ──
   QVector<Token> tokens = AcLexer::tokenize(source, error);
   if (tokens.isEmpty()) {
     if (error.isEmpty()) error = QStringLiteral("lexer returned empty token list");
@@ -258,30 +284,4 @@ bool AcValidator::parseSource(const QString &source, Block &program, QSet<QStrin
     return false;
   }
   return true;
-}
-
-int AcValidator::extractLine(const QString &msg) const {
-  // 匹配 "at line N" 或 "at line N in file"
-  QRegularExpression re(QStringLiteral("at line (\\d+)"));
-  auto match = re.match(msg);
-  if (match.hasMatch()) return match.captured(1).toInt();
-  return 0;
-}
-
-ValidationResult AcValidator::parseError(const QString &msg) const {
-  int line = extractLine(msg);
-
-  // 清理消息：去掉行号和文件名后缀，只保留错误描述
-  QString cleanMsg = msg;
-  if (line > 0) {
-    // 去掉 " at line N in file.ac" 或 " at line N" 后缀
-    QRegularExpression re(QStringLiteral(" at line \\d+( in \\S+)?$"));
-    cleanMsg = cleanMsg.remove(re);
-  } else {
-    // 去掉 " (line unknown) in file.ac" 或 " (line unknown)" 后缀
-    QRegularExpression re(QStringLiteral(" \\(line unknown\\)( in \\S+)?$"));
-    cleanMsg = cleanMsg.remove(re);
-  }
-
-  return ValidationResult::atLine(line, cleanMsg);
 }

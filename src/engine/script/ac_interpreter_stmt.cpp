@@ -268,6 +268,8 @@ void AcInterpreter::assignToProperty(const accore::AcJsonValue &objVal, const QS
 // ═════════════════════════════════════════════════════════════════════════════
 
 void AcInterpreter::execStmt(const Block::Stmt &stmt) {
+  // 错误恢复的残缺语句：跳过执行（执行管线不经恢复式解析，此处为防御）
+  if (stmt.isRecovered) return;
   switch (stmt.kind) {
     case Block::Stmt::kCall: {
       accore::AcJsonValue cls = evalExpr(stmt.call.className);

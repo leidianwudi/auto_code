@@ -128,6 +128,21 @@ int runAcIdentPoolTests();
 /// AC 解释器直接单测（tests/test_ac_interpreter.cpp），返回失败数
 int runAcInterpreterTests();
 
+/// AC 结构化诊断系统测试（tests/test_ac_diagnostic.cpp），返回失败数
+int runAcDiagnosticTests();
+
+/// 字节码 VM 对拍测试（tests/test_ac_vm.cpp），返回失败数
+int runAcVmTests();
+
+/// 预编译缓存测试（tests/test_ac_cache.cpp），返回失败数
+int runAcCacheTests();
+
+/// Parser 错误恢复测试（tests/test_ac_recovery.cpp），返回失败数
+int runAcRecoveryTests();
+
+/// 进程内语义服务测试（tests/test_ac_semantic.cpp），返回失败数
+int runAcSemanticTests();
+
 /// 端到端 golden 脚本测试（tests/test_golden_script.cpp），返回失败数
 int runGoldenScriptTests();
 
@@ -366,6 +381,8 @@ static void testFormatCodeJsonRoundTrip() {
 }
 
 int main() {
+  // 无缓冲输出：崩溃前也能看到进度（stdout 重定向到文件是块缓冲，崩溃会丢缓冲）
+  std::setvbuf(stdout, nullptr, _IONBF, 0);
   // 所测接口均不依赖 QCoreApplication 实例，无需构造应用对象
   testBuiltinParamSchemaLoads();
   testFormatCodeJsonRoundTrip();
@@ -379,10 +396,16 @@ int main() {
   const int jsonValueFailed = runAcJsonValueTests();
   const int identPoolFailed = runAcIdentPoolTests();
   const int interpreterFailed = runAcInterpreterTests();
+  const int diagnosticFailed = runAcDiagnosticTests();
+  const int vmFailed = runAcVmTests();
+  const int cacheFailed = runAcCacheTests();
+  const int recoveryFailed = runAcRecoveryTests();
+  const int semanticFailed = runAcSemanticTests();
   const int goldenFailed = runGoldenScriptTests();
 
-  const int totalFailed =
-      g_failed + extraFailed + jsonValueFailed + identPoolFailed + interpreterFailed + goldenFailed;
+  const int totalFailed = g_failed + extraFailed + jsonValueFailed + identPoolFailed +
+                          interpreterFailed + diagnosticFailed + vmFailed + cacheFailed +
+                          recoveryFailed + semanticFailed + goldenFailed;
   std::printf("%d checks, %d failed\n", g_total, totalFailed);
   return totalFailed == 0 ? 0 : 1;
 }

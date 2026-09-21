@@ -382,6 +382,7 @@ struct Expr {
     kStaticAccess,  ///< 静态访问 ClassName::member
     kFuncExpr,      ///< 函数表达式 function(params): Type { body }
     kCoalesce,      ///< 空值合并 ??（左操作数为 null/undefined 时取右操作数）
+    kError,         ///< 错误占位（错误恢复：残缺表达式；类型检查视为 Any，解释器/编译器跳过）
   } kind = kString;
   bool isOptional = false;  ///< 可选访问 ?.（kPropAccess/kIndexAccess 用；null 时短路为 null）
   AcLoc loc;                ///< 源码位置（用于错误报告）
@@ -583,6 +584,7 @@ struct Block::Stmt {
   } kind = kCall;
   AcLoc loc;         ///< 语句位置（用于符号导航与错误定位）
   QString filePath;  ///< 语句所属源文件路径（import 内联后用于断点定位）
+  bool isRecovered = false;  ///< 错误恢复：本条语句解析失败被跳过（检查器/编译器忽略）
   CallStmt call;
   AssignStmt assign;
   IndexAssignStmt indexAssign;

@@ -12,6 +12,7 @@
 #include "../../util/common/util_file.h"
 #include "../ac_language.h"
 #include "ac_builtin_loader.h"
+#include "ac_bytecode_cache.h"
 #include "undeclared_ident_validator.h"
 
 namespace {
@@ -87,14 +88,16 @@ AcExecutor::AcExecutor() = default;
 bool AcExecutor::parse(const QString &source) {
   m_error.clear();
   m_declaredVars.clear();
+  m_diags.clear();
   m_sourceLines = source.split(QLatin1Char('\n'));
 
   // ── 步骤 1：词法分析 ──
-  m_tokens = m_lexer.tokenize(source, m_error);
+  m_tokens = m_lexer.tokenize(source, m_error, &m_diags);
   if (!m_error.isEmpty()) return false;
 
   // ── 步骤 2：语法分析 ──
   m_parser.setFilePath(m_scriptFile);
+  m_parser.setDiagCollector(&m_diags);
   if (!m_parser.parse(m_tokens, m_program, m_declaredVars)) {
     m_error = m_parser.error();
     return false;
@@ -164,6 +167,7 @@ QStringList AcExecutor::validateTypes() {
 
   AcTypeChecker typeChecker;
   typeChecker.setFilePath(m_scriptFile);
+  typeChecker.setDiagCollector(&m_diags);
   typeChecker.check(m_program, m_declaredVars, classes, functions, m_typeErrors);
   return m_typeErrors;
 }
@@ -187,6 +191,7 @@ QJsonValue AcExecutor::execute() {
 
   // 步骤 2：验证未声明的标识符
   UndeclaredIdentValidator undeclaredValidator;
+  undeclaredValidator.setDiagCollector(&m_diags);
   QStringList undeclared;
   undeclaredValidator.validate(m_program, m_declaredVars, undeclared);
   if (!undeclared.isEmpty()) {
@@ -221,7 +226,44 @@ QJsonValue AcExecutor::execute() {
   qDebug() << "[AcExecutor::execute] type check passed";
 #endif
 
-  // 步骤 4：执行（解释器核心已迁移到 accore::AcJsonValue，此处转回 Qt 值供上层使用）
+  // 步骤 4：执行（解释器/字节码 VM 双模式；字节码语义与解释器对拍）
+  if (m_execMode == AcExecMode::kBytecode) {
+    // 编译 → VM 执行（预编译缓存：命中则跳过编译）
+    AcModule module;
+    bool fromCache = false;
+    if (!m_scriptFile.isEmpty() && AcBytecodeCache::tryLoad(m_scriptFile, module)) {
+      fromCache = true;
+    }
+    if (!fromCache) {
+      AcCompiler compiler;
+      module.sourceHash = AcBytecodeCache::sourceHashFor(m_scriptFile);  // 缓存失效键
+      if (!compiler.compile(m_program, module)) {
+        m_error = compiler.error();
+        return QJsonValue();
+      }
+      if (!m_scriptFile.isEmpty()) AcBytecodeCache::trySave(m_scriptFile, module);
+    }
+    AcVm vm;
+    vm.setScriptDir(m_scriptDir);
+    vm.setScriptFile(m_scriptFile);
+    vm.setRootDir(m_rootDir);
+    vm.setLogCallback(m_logCallback);
+    vm.setCancelFlag(m_cancelFlag);
+    vm.setDebugger(m_debugger);
+    if (qEnvironmentVariableIsSet("AC_VM_TRACE")) vm.setTrace(true);
+    QString vmError;
+    accore::AcJsonValue vmResult = vm.run(module, vmError);
+    if (!vmError.isEmpty()) {
+      m_error = vmError;
+      if (!m_scriptFile.isEmpty()) {
+        m_error =
+            QStringLiteral("%1: %2").arg(QFileInfo(m_scriptFile).fileName(), m_error);
+      }
+      return QJsonValue();
+    }
+    return vmResult.toQJsonValue();
+  }
+
   QJsonValue result = m_interpreter.execute(m_program, m_error).toQJsonValue();
   if (!m_error.isEmpty()) {
     // 在解释器错误信息前加上文件名

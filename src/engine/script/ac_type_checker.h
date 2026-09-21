@@ -18,6 +18,7 @@
 #include <QString>
 #include <QStringList>
 
+#include "ac_diagnostic.h"
 #include "ac_type.h"
 
 /// @brief 类型检查器 — 编译期静态类型检查
@@ -35,6 +36,9 @@ public:
 
   /// @brief 设置当前检查的文件路径（用于错误消息）
   void setFilePath(const QString &path) { m_filePath = path; }
+
+  /// @brief 设置诊断收集器（可选；设置后类型错误同步产出结构化诊断）
+  void setDiagCollector(AcDiagCollector *diags) { m_diags = diags; }
 
 private:
   QString m_filePath;     ///< 入口脚本文件路径（错误消息兜底）
@@ -54,6 +58,7 @@ private:
   const QHash<QString, ClassDef> *m_classes = nullptr;
   const QHash<QString, MethodDef> *m_functions = nullptr;
   QStringList *m_errors = nullptr;
+  AcDiagCollector *m_diags = nullptr;  ///< 诊断收集器（可选；空时不产出诊断）
   QHash<QString, InterfaceDef> m_interfaces;  ///< 接口定义集合
   QSet<QString> m_declaredVars;               ///< 已声明的标识符（含跨文件导入的类名）
 

@@ -1,0 +1,8 @@
+// 基准用例：字符串拼接密集
+let s: String = "";
+let i: Number = 0;
+while (i < 1500) {
+  s += "ab" + i + "cd";
+  i += 1;
+}
+return s;

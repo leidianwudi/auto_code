@@ -18,9 +18,8 @@ static constexpr int kMaxExprDepth = 64;
 
 bool AcParser::parseExpr(Expr &expr) {
   if (m_exprDepth >= kMaxExprDepth) {
-    m_error = QStringLiteral("表达式嵌套过深（上限 %1 层）at line %2")
-                  .arg(kMaxExprDepth)
-                  .arg(peek().loc.line);
+    reportError(AcDiagCode::kSyntaxOther,
+                QStringLiteral("表达式嵌套过深（上限 %1 层）").arg(kMaxExprDepth), peek().loc);
     return false;
   }
   ++m_exprDepth;
@@ -398,13 +397,14 @@ bool AcParser::parsePrimary(Expr &expr) {
       return expect(TokenType::kRParen, QStringLiteral("expected ')'"));
     }
     if (peek().type != TokenType::kDot) {
-      m_error = QStringLiteral("expected '.' or '(' after 'super' at line %1").arg(peek().loc.line);
+      reportError(AcDiagCode::kSyntaxExpected, QStringLiteral("expected '.' or '(' after 'super'"),
+                  peek().loc);
       return false;
     }
     advance();
     if (peek().type != TokenType::kIdent) {
-      m_error =
-          QStringLiteral("expected method name after 'super.' at line %1").arg(peek().loc.line);
+      reportError(AcDiagCode::kSyntaxExpected,
+                  QStringLiteral("expected method name after 'super.'"), peek().loc);
       return false;
     }
     QString methodName = advance().text;
@@ -435,7 +435,8 @@ bool AcParser::parsePrimary(Expr &expr) {
     int newLine = t.loc.line;
     advance();
     if (peek().type != TokenType::kIdent) {
-      m_error = QStringLiteral("expected class name after 'new' at line %1").arg(peek().loc.line);
+      reportError(AcDiagCode::kSyntaxExpected, QStringLiteral("expected class name after 'new'"),
+                  peek().loc);
       return false;
     }
     expr.kind = Expr::kNewInstance;
@@ -601,10 +602,10 @@ bool AcParser::parsePrimary(Expr &expr) {
       if (!expect(TokenType::kRParen, QStringLiteral("expected ')' after parameters")))
         return false;
       if (peek().type != TokenType::kColon) {
-        m_error = QStringLiteral(
-                      "function expression requires a return type annotation (e.g. : Type) at "
-                      "line %1")
-                      .arg(peek().loc.line);
+        reportError(AcDiagCode::kSyntaxExpected,
+                    QStringLiteral("function expression requires a return type annotation "
+                                   "(e.g. : Type)"),
+                    peek().loc);
         return false;
       }
       advance();
@@ -614,8 +615,8 @@ bool AcParser::parsePrimary(Expr &expr) {
     }
 
     default:
-      m_error = QStringLiteral("unexpected token '%1' at line %2")
-                    .arg(t.text, QString::number(t.loc.line));
+      reportError(AcDiagCode::kSyntaxUnexpected,
+                  QStringLiteral("unexpected token '%1'").arg(t.text), t.loc);
       return false;
   }
 }
@@ -625,7 +626,7 @@ bool AcParser::parseObject(Expr &expr) {
   advance();
   while (peek().type != TokenType::kRBrace && peek().type != TokenType::kEof) {
     if (!isPropertyName(peek().type)) {
-      m_error = QStringLiteral("expected key in object at line %1").arg(peek().loc.line);
+      reportError(AcDiagCode::kSyntaxExpected, QStringLiteral("expected key in object"), peek().loc);
       return false;
     }
     ObjectEntry entry;

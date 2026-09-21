@@ -52,16 +52,23 @@ AcEngine（单例入口）
     ▼
 AcExecutor（编排层）
     │
-    ├─ AcLexer        词法分析 → Token 流
-    ├─ AcParser       语法分析 → AST 树
-    ├─ linkImports    模块链接（import/export）
-    ├─ AcTypeChecker  静态类型检查
-    └─ AcInterpreter  解释执行 AST
-         │
-         └─ FunMgr::call()  调用 C++ 后端函数
+    ├─ AcLexer         词法分析 → Token 流
+    ├─ AcParser        语法分析 → AST 树
+    ├─ linkImports     模块链接（import/export）
+    ├─ AcTypeChecker   静态类型检查
+    ├─ AcValidator / AcDiagnostic   语义验证 + 结构化诊断
+    │
+    ├─ AcInterpreter   解释执行 AST（kInterpreter 默认模式）
+    │    └─ FunMgr::call()  调用 C++ 后端函数
+    │
+    └─ AcCompiler → AcModule → AcVm   字节码执行（kBytecode 模式）
+         └─ AcBytecodeCache  预编译缓存：命中跳过 parse+compile
+              └─ AcModuleIo  字节码二进制序列化（.ac_cache/*.acb）
 ```
 
 ### 4.2 核心文件
+
+执行模式：`AcExecutor::setExecMode()`（默认 `kInterpreter`；`kBytecode` 编译为栈式字节码后经 `AcVm` 执行）。两模式经 `tests/test_ac_vm.cpp` 双跑对拍断言结果与错误完全一致。
 
 | 文件 | 职责 |
 |------|------|
@@ -81,6 +88,13 @@ AcExecutor（编排层）
 | [ac_builtin_loader.h](file:///d:/work/github/auto_code/src/engine/script/ac_builtin_loader.h) | builtin.d.ac 加载 + 原生类注册 |
 | [ac_builtin_eval.h](file:///d:/work/github/auto_code/src/engine/script/ac_builtin_eval.h) | 内置类型方法求值（String/Array 方法） |
 | [ac_validator.h](file:///d:/work/github/auto_code/src/engine/script/ac_validator.h) | 语义验证器 |
+| [ac_diagnostic.h](file:///d:/work/github/auto_code/src/engine/script/ac_diagnostic.h) | 结构化诊断（错误码/定位/收集器，替代正则反解） |
+| [ac_compiler.h](file:///d:/work/github/auto_code/src/engine/script/ac_compiler.h) | AST → 字节码模块（AcModule）编译 |
+| [ac_opcode.h](file:///d:/work/github/auto_code/src/engine/script/ac_opcode.h) | 栈式指令集 + AcModule/AcFuncUnit/AcTryEntry |
+| [ac_vm.h](file:///d:/work/github/auto_code/src/engine/script/ac_vm.h) | 栈式虚拟机执行 AcModule（语义镜像解释器） |
+| [ac_module_io.h](file:///d:/work/github/auto_code/src/engine/script/ac_module_io.h) | AcModule 二进制序列化（运行时子集） |
+| [ac_bytecode_cache.h](file:///d:/work/github/auto_code/src/engine/script/ac_bytecode_cache.h) | 预编译缓存：内容哈希 + 版本失效 |
+| [ac_semantic_service.h](file:///d:/work/github/auto_code/src/engine/script/ac_semantic_service.h) | 进程内语义服务：诊断/补全/定义跳转/引用查找 |
 | [ast_visitor.h](file:///d:/work/github/auto_code/src/engine/script/ast_visitor.h) | AST 访问者模式基类 |
 
 ### 4.3 语言特性

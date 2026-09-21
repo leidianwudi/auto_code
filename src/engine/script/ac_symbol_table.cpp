@@ -25,7 +25,11 @@ void AcSymbolTable::buildFromBlock(const QString &filePath, const Block &block) 
   }
 }
 
-void AcSymbolTable::collectStmt(const Block::Stmt &stmt) { collectFromStmt(stmt); }
+void AcSymbolTable::collectStmt(const Block::Stmt &stmt) {
+  // 错误恢复的残缺语句：无有效符号可收集
+  if (stmt.isRecovered) return;
+  collectFromStmt(stmt);
+}
 
 // ──────────────────────────────────────────────────────────────
 //  collectFromStmt — 递归遍历 AST 收集符号

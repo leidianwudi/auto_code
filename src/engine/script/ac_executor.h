@@ -14,12 +14,18 @@
 #include <atomic>
 #include <functional>
 
+#include "ac_diagnostic.h"
 #include "ac_interpreter.h"
 #include "ac_lexer.h"
 #include "ac_parser.h"
 #include "ac_symbol_table.h"
 #include "ac_type.h"
 #include "ac_type_checker.h"
+#include "ac_compiler.h"
+#include "ac_vm.h"
+
+/// @brief 执行模式：解释器 / 字节码 VM（双模式并存，默认解释器，对拍稳定后切换）
+enum class AcExecMode { kInterpreter, kBytecode };
 
 /// @brief .ac 脚本执行器 — 将 .ac 脚本解析为 AST 并解释执行
 ///
@@ -35,6 +41,10 @@ public:
   void setRootDir(const QString &dir) { m_rootDir = dir; }
   QStringList generatedFiles() const { return m_interpreter.generatedFiles(); }
 
+  /// @brief 获取本次 parse+execute 全流程的结构化诊断
+  ///        （parse() 时清空并累积，execute() 继续追加验证阶段诊断）
+  const AcDiagCollector &diagnostics() const { return m_diags; }
+
   /// @brief 设置取消标志（工作线程中由解释器轮询检查）
   void setCancelFlag(std::atomic<bool> *flag) { m_cancelFlag = flag; }
 
@@ -44,6 +54,10 @@ public:
   /// 日志回调：print() 的输出通过此回调通知 UI
   using LogCallback = std::function<void(const QString &text, bool isError)>;
   void setLogCallback(LogCallback cb) { m_logCallback = std::move(cb); }
+
+  /// @brief 设置执行模式（默认解释器；字节码模式与解释器语义对拍）
+  void setExecMode(AcExecMode mode) { m_execMode = mode; }
+  AcExecMode execMode() const { return m_execMode; }
 
   bool parse(const QString &source);
   QJsonValue execute();
@@ -86,6 +100,8 @@ private:
   QSet<QString> m_declaredVars;  ///< 已用 let 声明的变量名
   Block m_program;               ///< 解析后的 AST 根节点
   QStringList m_typeErrors;      ///< 类型检查错误列表
+  AcDiagCollector m_diags;       ///< 结构化诊断收集器（全阶段累积）
+  AcExecMode m_execMode = AcExecMode::kInterpreter;  ///< 执行模式
   LogCallback m_logCallback;
   AcSymbolTable m_symbolTable;                ///< 符号表
   QStringList m_sourceLines;                  ///< 源码行列表（用于引用上下文）

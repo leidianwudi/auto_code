@@ -67,6 +67,8 @@ void AcTypeChecker::checkBlock(const Block &block, TypeEnv &env) {
 void AcTypeChecker::checkStmt(const Block::Stmt &stmt, TypeEnv &env) {
   // 记录语句所属的真实源文件，使 import 导入文件的错误能正确归因
   if (!stmt.filePath.isEmpty()) m_currentFile = stmt.filePath;
+  // 错误恢复的残缺语句：跳过检查，避免对 Expr::kError 子树产生级联假错
+  if (stmt.isRecovered) return;
   switch (stmt.kind) {
     case Block::Stmt::kCall:
       checkCallStmt(stmt.call, env);
@@ -1071,5 +1073,14 @@ void AcTypeChecker::reportError(const QString &msg, int line) {
                          .arg(msg)
                          .arg(line)
                          .arg(QFileInfo(file).fileName()));
+  }
+  // 双轨：同步产出结构化诊断（"warning: " 前缀映射为警告级别）
+  if (m_diags) {
+    const QString fullMsg = QStringLiteral("type error: %1").arg(msg);
+    if (msg.startsWith(QStringLiteral("warning: "))) {
+      m_diags->warning(AcDiagCode::kTypeError, fullMsg, file, AcLoc{line, 0, 0});
+    } else {
+      m_diags->error(AcDiagCode::kTypeError, fullMsg, file, AcLoc{line, 0, 0});
+    }
   }
 }

@@ -1,0 +1,8 @@
+// 基准用例：循环 + 整数累加（热点在 while 条件与复合赋值）
+let s: Number = 0;
+let i: Number = 0;
+while (i < 300000) {
+  s += i;
+  i += 1;
+}
+return s;

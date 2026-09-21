@@ -13,6 +13,7 @@
 #include <QString>
 #include <QStringList>
 
+#include "ac_diagnostic.h"
 #include "ast_visitor.h"
 
 /// @brief 未声明标识符检查器 — 检查脚本中所有变量/函数是否已声明
@@ -26,6 +27,9 @@ public:
 
   /// @brief 设置当前文件路径（用于错误消息中显示文件名）
   void setFilePath(const QString &path) { m_filePath = path; }
+
+  /// @brief 设置诊断收集器（可选；设置后未声明错误同步产出结构化诊断）
+  void setDiagCollector(AcDiagCollector *diags) { m_diags = diags; }
 
 protected:
   // ── AstVisitor 重写 ──
@@ -69,6 +73,7 @@ private:
 
   // ── 状态 ──
   QStringList *m_errors = nullptr;
+  AcDiagCollector *m_diags = nullptr;  ///< 诊断收集器（可选；空时不产出诊断）
   QSet<QString> m_scopeVars;
   ValidationContext m_ctx;
   QString m_filePath;     ///< 当前文件路径（用于错误消息）

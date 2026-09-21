@@ -1,0 +1,6 @@
+// 基准用例：递归函数调用（Fib 第 22 项）
+function fib(n: Number): Number {
+  if (n <= 1) { return n; }
+  return fib(n - 1) + fib(n - 2);
+}
+return fib(22);

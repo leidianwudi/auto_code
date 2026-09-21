@@ -1,0 +1,12 @@
+// 基准用例：对象属性密集写入与 for-in 遍历求和
+let o: Object = {};
+let i: Number = 0;
+while (i < 6000) {
+  o["k" + i] = i;
+  i += 1;
+}
+let t: Number = 0;
+for (let k: String in o) {
+  t += o[k];
+}
+return t;

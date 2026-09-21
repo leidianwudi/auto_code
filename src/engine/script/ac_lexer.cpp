@@ -16,7 +16,7 @@ void AcLexer::skipLineComment(const QString &source, int &pos) {
 
 /// @brief 跳过块注释（/* 到 */）
 bool AcLexer::skipBlockComment(const QString &source, int &pos, int &line, int &lineStart,
-                               QString &error) {
+                               QString &error, AcDiagCollector *diags) {
   pos += 2;
   while (pos < source.size()) {
     if (source[pos] == '*' && pos + 1 < source.size() && source[pos + 1] == '/') {
@@ -30,11 +30,15 @@ bool AcLexer::skipBlockComment(const QString &source, int &pos, int &line, int &
     ++pos;
   }
   error = QStringLiteral("unterminated block comment at line %1").arg(line);
+  if (diags) {
+    diags->error(AcDiagCode::kLexUnterminatedComment,
+                 QStringLiteral("unterminated block comment"), QString(), AcLoc{line, 0, 0});
+  }
   return false;
 }
 
 Token AcLexer::parseStringLiteral(const QString &source, int &pos, const AcLoc &startLoc,
-                                  QString &error) {
+                                  QString &error, AcDiagCollector *diags) {
   int start = ++pos;
   int n = source.size();
   while (pos < n && source[pos] != '"') {
@@ -43,6 +47,10 @@ Token AcLexer::parseStringLiteral(const QString &source, int &pos, const AcLoc &
   }
   if (pos >= n) {
     error = QStringLiteral("unterminated string at line %1").arg(startLoc.line);
+    if (diags) {
+      diags->error(AcDiagCode::kLexUnterminatedString, QStringLiteral("unterminated string"),
+                   QString(), startLoc);
+    }
     return {TokenType::kEof, {}, startLoc};
   }
   QString val = source.mid(start, pos - start);
@@ -54,7 +62,8 @@ Token AcLexer::parseStringLiteral(const QString &source, int &pos, const AcLoc &
 }
 
 Token AcLexer::parseTemplateStringLiteral(const QString &source, int &pos, int &line,
-                                          int &lineStart, QString &error) {
+                                          int &lineStart, QString &error,
+                                          AcDiagCollector *diags) {
   int start = ++pos;
   int n = source.size();
   int depth = 0;
@@ -87,6 +96,11 @@ Token AcLexer::parseTemplateStringLiteral(const QString &source, int &pos, int &
   }
   if (pos >= n) {
     error = QStringLiteral("unterminated template string at line %1").arg(line);
+    if (diags) {
+      diags->error(AcDiagCode::kLexUnterminatedTemplate,
+                   QStringLiteral("unterminated template string"), QString(),
+                   AcLoc{line, 0, 0});
+    }
     return {TokenType::kEof, {}, {line, pos - lineStart + 1, pos}};
   }
   QString val = source.mid(start, pos - start);
@@ -176,6 +190,10 @@ Token AcLexer::parseIdentifier(const QString &source, int &pos, const AcLoc &sta
 
 /// @brief 将源码字符串拆分为 token 序列
 QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
+  return tokenize(source, error, nullptr);
+}
+
+QVector<Token> AcLexer::tokenize(const QString &source, QString &error, AcDiagCollector *diags) {
   QVector<Token> tokens;
   int i = 0;
   int line = 1;
@@ -205,7 +223,7 @@ QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
 
     // 检测块注释 /* ... */
     if (c == '/' && i + 1 < n && source[i + 1] == '*') {
-      if (!skipBlockComment(source, i, line, lineStart, error)) {
+      if (!skipBlockComment(source, i, line, lineStart, error, diags)) {
         return {};  // 块注释未闭合，返回错误
       }
       continue;
@@ -310,6 +328,10 @@ QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
           i += 2;
         } else {
           error = QStringLiteral("unexpected character '|' at line %1").arg(line);
+          if (diags) {
+            diags->error(AcDiagCode::kLexUnexpectedChar, QStringLiteral("unexpected character '|'"),
+                         QString(), locAt(i));
+          }
           return {};
         }
         break;
@@ -319,6 +341,10 @@ QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
           i += 2;
         } else {
           error = QStringLiteral("unexpected character '&' at line %1").arg(line);
+          if (diags) {
+            diags->error(AcDiagCode::kLexUnexpectedChar, QStringLiteral("unexpected character '&'"),
+                         QString(), locAt(i));
+          }
           return {};
         }
         break;
@@ -377,13 +403,13 @@ QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
         }
         break;
       case '"': {
-        Token tok = parseStringLiteral(source, i, locAt(i), error);
+        Token tok = parseStringLiteral(source, i, locAt(i), error, diags);
         if (!error.isEmpty()) return {};
         tokens.append(tok);
         break;
       }
       case '`': {
-        Token tok = parseTemplateStringLiteral(source, i, line, lineStart, error);
+        Token tok = parseTemplateStringLiteral(source, i, line, lineStart, error, diags);
         if (!error.isEmpty()) return {};
         tokens.append(tok);
         break;
@@ -396,10 +422,19 @@ QVector<Token> AcLexer::tokenize(const QString &source, QString &error) {
         } else if (c.unicode() > 127) {
           error = QStringLiteral("unexpected non-ASCII character '%1' at line %2")
                       .arg(c, QString::number(line));
+          if (diags) {
+            diags->error(AcDiagCode::kLexUnexpectedChar,
+                         QStringLiteral("unexpected non-ASCII character '%1'").arg(c), QString(),
+                         locAt(i));
+          }
           return {};
         } else {
           error =
               QStringLiteral("unexpected character '%1' at line %2").arg(c, QString::number(line));
+          if (diags) {
+            diags->error(AcDiagCode::kLexUnexpectedChar,
+                         QStringLiteral("unexpected character '%1'").arg(c), QString(), locAt(i));
+          }
           return {};
         }
         break;

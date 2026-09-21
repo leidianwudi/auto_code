@@ -38,6 +38,8 @@ add_library(ac_engine STATIC
     # ── 脚本引擎 ──
     src/engine/script/ac_type.h
     src/engine/script/ac_type.cpp
+    src/engine/script/ac_diagnostic.h
+    src/engine/script/ac_diagnostic.cpp
     src/engine/script/ac_lexer.h
     src/engine/script/ac_lexer.cpp
     src/engine/script/ac_parser.h
@@ -66,6 +68,17 @@ add_library(ac_engine STATIC
     src/engine/script/undeclared_ident_validator.cpp
     src/engine/script/ac_validator.h
     src/engine/script/ac_validator.cpp
+    src/engine/script/ac_compiler.h
+    src/engine/script/ac_compiler.cpp
+    src/engine/script/ac_opcode.h
+    src/engine/script/ac_vm.h
+    src/engine/script/ac_vm.cpp
+    src/engine/script/ac_module_io.h
+    src/engine/script/ac_module_io.cpp
+    src/engine/script/ac_bytecode_cache.h
+    src/engine/script/ac_bytecode_cache.cpp
+    src/engine/script/ac_semantic_service.h
+    src/engine/script/ac_semantic_service.cpp
     src/engine/script/ac_builtin_loader.h
     src/engine/script/ac_builtin_loader.cpp
     src/engine/script/ac_symbol_table.h
@@ -407,6 +420,11 @@ add_executable(auto_code_tests EXCLUDE_FROM_ALL
     tests/test_ac_json_value.cpp
     tests/test_ac_ident_pool.cpp
     tests/test_ac_interpreter.cpp
+    tests/test_ac_diagnostic.cpp
+    tests/test_ac_vm.cpp
+    tests/test_ac_cache.cpp
+    tests/test_ac_recovery.cpp
+    tests/test_ac_semantic.cpp
     # 端到端 golden 脚本测试（QProcess 调主程序 --run，无引擎链接依赖）
     tests/test_golden_script.cpp
     # JSON 上传模型测试所需（UI 层纯模型文件，测试直接编译）
@@ -420,6 +438,24 @@ target_compile_definitions(auto_code_tests PRIVATE
 )
 # 直接链接引擎库（与主程序同一份产物），不再手工摘抄引擎源文件
 target_link_libraries(auto_code_tests PRIVATE
+    ac_core
+    ac_engine
+    Qt::Core
+)
+
+# ════════════════════════════════════════════════════════════
+#  基准测试套件（阶段 4，EXCLUDE_FROM_ALL：不随主程序构建）
+#  构建：cmake --build <build> --target ac_bench --config RelWithDebInfo
+#  运行：<build>/RelWithDebInfo/ac_bench.exe [脚本目录|脚本] [测量次数]
+# ════════════════════════════════════════════════════════════
+add_executable(ac_bench EXCLUDE_FROM_ALL
+    tests/bench/bench_main.cpp
+)
+target_include_directories(ac_bench PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(ac_bench PRIVATE
+    PROJECT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+target_link_libraries(ac_bench PRIVATE
     ac_core
     ac_engine
     Qt::Core

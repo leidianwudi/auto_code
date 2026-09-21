@@ -527,11 +527,16 @@ CompoundOp AcParser::parseCompoundOp() {
   return CompoundOp::kNone;
 }
 
-bool AcParser::parseTypeAnnotation(AcType &outType) {
-  if (peek().type != TokenType::kColon) return false;
+int AcParser::parseTypeAnnotation(AcType &outType) {
+  if (peek().type != TokenType::kColon) return 0;
   advance();  // 消耗 ':'
+  if (peek().type != TokenType::kIdent) {
+    // 冒号后必须有类型名（裸 x: 是语法错误）：语句级失败，错误恢复可接管
+    reportError(AcDiagCode::kSyntaxExpected, QStringLiteral("expected type name"), peek().loc);
+    return -1;
+  }
   outType = parseType();
-  return true;
+  return 1;
 }
 
 bool AcParser::parseAssignStmt(AssignStmt &as) {
@@ -540,7 +545,9 @@ bool AcParser::parseAssignStmt(AssignStmt &as) {
   as.loc = nameToken.loc;
   // 解析类型注解：let x: Type = ...
   AcType typeAnnotation;
-  if (parseTypeAnnotation(typeAnnotation)) {
+  const int annState = parseTypeAnnotation(typeAnnotation);
+  if (annState < 0) return false;  // 注解语法错误（裸冒号）：语句级失败
+  if (annState == 1) {
     as.typeAnnotation = typeAnnotation;
     as.hasTypeAnnotation = true;
   }
@@ -1169,8 +1176,9 @@ bool AcParser::parseClassProperty(ClassDef &cd, AccessLevel access, bool isStati
   prop.access = access;
   // 解析类型注解：let prop: Type = ...
   AcType propType;
-  const bool hasTypeAnnotation = parseTypeAnnotation(propType);
-  if (hasTypeAnnotation) {
+  const int annState = parseTypeAnnotation(propType);
+  if (annState < 0) return false;  // 注解语法错误（裸冒号）：属性声明失败
+  if (annState == 1) {
     prop.type = propType;
   }
   const bool hasValue = (peek().type == TokenType::kEquals);
@@ -1181,7 +1189,7 @@ bool AcParser::parseClassProperty(ClassDef &cd, AccessLevel access, bool isStati
   }
   // 既无类型注解也无初始值：非法属性声明（例如类体内误写的裸标识符 aaaaa），
   // 必须报错，避免被静默当作无类型属性接受
-  if (!hasTypeAnnotation && !hasValue) {
+  if (annState == 0 && !hasValue) {
     m_error = QStringLiteral(
                   "invalid class member '%1' — property requires a type annotation "
                   "or an initial value (e.g. %2: Type) at line %3")

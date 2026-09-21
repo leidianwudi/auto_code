@@ -17,6 +17,7 @@
 #include <functional>
 
 #include "../validation_result.h"
+#include "ac_diagnostic.h"
 #include "ac_symbol_table.h"
 #include "ac_type.h"
 #include "ac_type_checker.h"
@@ -72,17 +73,7 @@ private:
   void collectSymbolsFromFile(const QString &filePath, const QStringList &importNames,
                               int importLine = 0);
 
-  /// @brief 将错误信息字符串转为 ValidationResult
-  /// @param msg 错误信息，格式如 "undefined variable 'x' at line 5"
-  /// @return 解析后的 ValidationResult
-  ValidationResult parseError(const QString &msg) const;
-
-  /// @brief 从错误信息中提取行号
-  /// @param msg 错误信息字符串
-  /// @return 行号（1-based），未找到返回 0
-  int extractLine(const QString &msg) const;
-
-  /// @brief 用旧递归下降解析器解析源码为 AST
+  /// @brief 用旧递归下降解析器解析源码为 AST（静默：不产出诊断，供 import 文件解析）
   /// @param source .ac 源码字符串
   /// @param[out] program 输出的 AST 根节点
   /// @param[out] declaredVars 已声明的变量名集合（解析过程中会新增）
@@ -106,7 +97,7 @@ private:
   QStringList m_sourceLines;
   QString m_filePath;            ///< 当前文件路径（用于解析 import 相对路径）
   QSet<QString> m_visitedFiles;  ///< 已解析的文件集合（防止循环 import）
-  QStringList m_importErrors;    ///< import 缺失符号错误（collectSymbolsFromFile 填充）
+  AcDiagCollector m_diags;       ///< 结构化诊断收集器（validate 全流程）
   /// 文件内容提供器（跨文件 import 解析时优先用实时缓冲内容）
   std::function<QString(const QString &)> m_contentProvider;
 };
