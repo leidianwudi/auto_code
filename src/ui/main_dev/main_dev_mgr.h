@@ -16,11 +16,11 @@
 #include <QHash>
 #include <QMap>
 #include <QObject>
-#include <QStack>
 
 #include "src/engine/validation_result.h"
 #include "src/engine/rename/symbol_rename.h"
 #include "src/ui/main_dev/main_dev_ui_ext.h"
+#include "src/ui/main_dev/navigation_history.h"
 #include "src/ui/main_dev/pending_change_store.h"
 #include "src/util/common/workspace_diag.h"
 #include "src/util/ui/aui_mgr.h"
@@ -32,13 +32,6 @@ class DebugController;
 class MainDevUi;
 class MainDevModel;
 class JsonVueWidget;
-
-/// @brief 导航历史记录项
-struct NavigationEntry {
-  QString filePath;  ///< 文件路径
-  int line = 0;      ///< 行号（1-based）
-  int column = 0;    ///< 列号（1-based）
-};
 
 /**
  * @class MainDevMgr
@@ -225,10 +218,8 @@ protected:
   /// 调试控制器访问（供分文件 main_dev_mgr_*.cpp 使用）
   DebugController *debugController() const { return m_debug; }
 
-  // 导航历史栈
-  QStack<NavigationEntry> m_navHistory;       ///< 后退栈
-  QStack<NavigationEntry> m_navForwardStack;  ///< 前进栈
-  bool m_navigating = false;                  ///< 是否正在执行导航（避免循环记录）
+  // 导航历史双栈（后退/前进状态机，见 navigation_history.h）
+  NavigationHistory m_nav;
 
   /// 工作区问题聚合：文件路径 → 验证结果列表（供底部「问题」面板跨文件汇总）
   QMap<QString, QVector<ValidationResult>> m_fileIssues;

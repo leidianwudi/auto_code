@@ -556,9 +556,6 @@ QString UtilJson::json5ToJson(const QString &text, QVector<int> *offsetMap) {
   return result;
 }
 
-// stripComments — 剥离 JSON 文本中的注释（兼容旧接口，内部转发到 json5ToJson）
-QString UtilJson::stripComments(const QString &text) { return json5ToJson(text, nullptr); }
-
 // stripCommentsWithMap — 剥离 JSON 文本中的注释并记录位置映射（内部转发到 json5ToJson）
 //
 // offsetMap[strippedIndex] = originalIndex，映射剥离后文本中每个字符对应原始文本的位置。

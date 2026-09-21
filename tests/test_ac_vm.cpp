@@ -32,7 +32,7 @@ static int g_failed = 0;
 #ifdef _MSC_VER
 /// 普通调用（允许对象展开），由 __try 包裹（v1 调试保留，未启用）
 static bool vmCall(AcExecutor &exec, QJsonValue &out, QString &err) {
-  out = exec.execute();
+  out = exec.execute().toQJsonValue();
   err = exec.error();
   return true;
 }
@@ -53,7 +53,7 @@ static bool runDual(const QString &src, QString *detail = nullptr) {
   AcExecutor iexec;
   bool iOk = iexec.parse(src);
   const QString iParseErr = iOk ? QString() : iexec.error();
-  QJsonValue iResult = iOk ? iexec.execute() : QJsonValue();
+  QJsonValue iResult = iOk ? iexec.execute().toQJsonValue() : QJsonValue();
   const QString iExecErr = iOk ? iexec.error() : QString();
 
   // ── 字节码 VM（指令级 trace 已 flush，崩溃前最后指令可定位） ──
@@ -61,7 +61,7 @@ static bool runDual(const QString &src, QString *detail = nullptr) {
   vexec.setExecMode(AcExecMode::kBytecode);
   bool vOk = vexec.parse(src);
   const QString vParseErr = vOk ? QString() : vexec.error();
-  QJsonValue vResult = vOk ? vexec.execute() : QJsonValue();
+  QJsonValue vResult = vOk ? vexec.execute().toQJsonValue() : QJsonValue();
   const QString vExecErr = vOk ? vexec.error() : QString();
 
   // parse 结果一致性

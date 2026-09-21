@@ -43,7 +43,7 @@ static bool runScript(const QString &src, QJsonValue &result, QString *error = n
     std::printf("  [diag] parse error: %s\n", exec.error().toUtf8().constData());
     return false;
   }
-  result = exec.execute();
+  result = exec.execute().toQJsonValue();
   if (!exec.error().isEmpty()) {
     if (error) *error = exec.error();
     std::printf("  [diag] exec error: %s\n", exec.error().toUtf8().constData());
@@ -210,7 +210,7 @@ static void testRuntimeErrorPropagates() {
   const bool parsed = exec.parse(QStringLiteral("let s = \"a\"; return s.notAMethod();"));
   CHECK(parsed);
   if (!parsed) return;
-  QJsonValue r = exec.execute();
+  QJsonValue r = exec.execute().toQJsonValue();
   CHECK(exec.error().isEmpty() == false);
   CHECK(r.isNull());
 }

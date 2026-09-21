@@ -3,7 +3,7 @@
 ## 1. 技术栈
 
 - **Qt 6.12.0** (msvc2022_64)
-- **构建系统**：CMake + Ninja
+- **构建系统**：CMake（日常 VS 2022 生成器预设；clang-tidy 场景另配 Ninja 目录，见 code_style.md）
 - **编译器**：MSVC 2022
 - **代码缩进**：2 空格（`.editorconfig`）
 - **注释规范**：Doxygen 风格，注释内容用中文
@@ -12,14 +12,25 @@
 
 ```
 src/util/ui/
-├── aui_window.h/.cpp          # 无边框窗口工具类（标题栏、边框、拖拽）
-├── aui_message_box.h/.cpp     # 自定义消息框
-├── rename_dialog.cpp          # 重命名对话框
-└── component/
-    ├── aui_style.h/.cpp       # 全局颜色、字体、样式表
-    ├── aui_button.h/.cpp      # 按钮工厂方法 + 样式
-    ├── aui_icon.h/.cpp        # 图标生成
-    └── aui_combo.h/.cpp       # 无边框下拉框
+├── aui_mgr.h                   # UI 管理器基类（单例 + 窗口创建模板）
+├── setting_store.h/.cpp        # 设置持久化（主题/颜色/字体/高亮色，信号驱动刷新）
+├── aui_window.h/.cpp           # 无边框窗口工具类（标题栏、边框、拖拽）
+├── rename_dialog.cpp           # 重命名对话框
+├── component/
+│   ├── aui_style.h/.cpp        # 全局颜色、字体、样式表（所有颜色的唯一来源）
+│   ├── aui_button.h/.cpp       # 按钮工厂方法 + 样式
+│   ├── aui_icon.h/.cpp         # 图标生成
+│   ├── aui_combo_box.h/.cpp    # 无边框下拉框（全局下弹/防滚轮误改）
+│   ├── aui_combo_delete.h/.cpp # 带删除项的下拉框
+│   ├── aui_multi_check_combo.h/.cpp  # 多选复选下拉
+│   ├── aui_tab_bar.h/.cpp      # 可拖拽标签栏（拆分/移动）
+│   ├── aui_code_tab_bar.h/.cpp # 代码编辑器标签栏
+│   ├── aui_tree.h/.cpp         # 树控件
+│   ├── aui_message_box.h/.cpp  # 自定义消息框
+│   ├── aui_input_dialog.h/.cpp # 输入对话框
+│   └── aui_error_tool_tip.h/.cpp  # 错误提示浮层
+├── code/                       # 代码编辑器族（编辑器/查找/补全/导航/折叠/校验/格式化…）
+└── highlighter/                # 语法高亮（.ac / .json / .tpl / .ts）
 ```
 
 ### 2.1 核心工具类

@@ -4,13 +4,21 @@
 
 Auto Code 是一个**代码生成工具**，通过自定义脚本语言（.ac）和模板引擎（.tpl）驱动，从数据库表结构或 JSON 配置生成前端/后端代码文件。
 
-## 2. 技术栈
+## 2. 技术栈与文档导航
 
 - **C++** + **Qt 6.12.0** (msvc2022_64)
-- **构建系统**：CMake + Ninja
+- **构建系统**：CMake（日常 VS 2022 生成器预设，见 CMakePresets.json；clang-tidy 场景另配 Ninja 目录）
 - **编译器**：MSVC 2022
 - **代码缩进**：2 空格（`.editorconfig`）
 - **注释规范**：Doxygen 风格，注释内容用中文
+
+| 文档 | 内容 | 何时读 |
+|------|------|--------|
+| 本文 | 整体架构、目录、数据流、设计决策、常见陷阱 | 新人入门 / 跨模块改动前 |
+| [ac_language_spec.md](ac_language_spec.md) | .ac 语言语义权威（值语义/错误模型/决策记录） | 改语言特性前必读，先改它再改代码 |
+| [ui_architecture.md](ui_architecture.md) | UI 组件规范、样式表、对话框/Tab/QSS 规范 | 写界面代码前 |
+| [code_style.md](code_style.md) | C++ 命名/格式/分层边界（工具自动执行） | 写任何 C++ 代码前 |
+| [changelog.md](changelog.md) | 语言/内置函数/字节码对外可见变更记录 | 发版评估影响面 / 加破坏性变更时更新 |
 
 ## 3. 目录结构
 
@@ -68,7 +76,7 @@ AcExecutor（编排层）
 
 ### 4.2 核心文件
 
-执行模式：`AcExecutor::setExecMode()`（默认 `kInterpreter`；`kBytecode` 编译为栈式字节码后经 `AcVm` 执行）。两模式经 `tests/test_ac_vm.cpp` 双跑对拍断言结果与错误完全一致。
+执行模式：`AcExecutor::setExecMode()`（默认 `kInterpreter`；`kBytecode` 编译为栈式字节码后经 `AcVm` 执行）。两模式经 `tests/test_ac_vm.cpp` 双跑对拍断言结果与错误完全一致。灰度开关见 4.6。
 
 | 文件 | 职责 |
 |------|------|
@@ -201,6 +209,38 @@ export function generate(data: Object): Void {
 - 导入文件自动注入所有导出类作为类型依赖
 - 循环导入检测（visited 集合）
 
+### 4.6 双执行路径收敛计划
+
+**现状**：默认解释器；字节码 VM 语义 1:1 对齐中。VM 已具备与解释器相同的语句级
+调试钩子（`kOpStmt` 指令 → `AcDebugger::onStatement`，非调试会话零开销）。
+
+**灰度开关**（不影响脚本语义）：
+- 环境变量 `AC_EXEC_MODE=vm`：全局默认走 VM（所有入口生效），日常灰度试用
+- headless 单次执行：`auto_code --run <script.ac> --vm`
+
+**对拍护栏**：
+- `tests/test_ac_vm.cpp`：35 项进程内双跑（结果序列化 + 错误串一致）
+- `tests/test_golden_script.cpp` dual-mode 用例：端到端（--run 子进程）双模式
+  stdout 逐字节一致 + 退出码一致，覆盖 FunMgr 集成、日志输出、错误传播
+
+**收敛步骤**：灰度试用积累对拍数据 → 无差异后切默认 `kBytecode` → 解释器冻结
+特性、只修 bug，保留一个版本周期作逃生口 → 移除或降级为对拍基准。
+
+**新语言特性开发规约**：解释器与 VM **必须同时实现**（kOpStmt 行号、错误消息、
+对象生命周期三处最易漂移），并至少各加一条 `test_ac_vm.cpp` 对拍用例。
+
+### 4.7 错误通道冻结点
+
+**冻结点已宣布**（2026-09）：`AcExecutor::error()` 等 legacy `QString` 错误串为
+冻结接口——**新代码禁止新增依赖**，一律使用结构化诊断：
+
+- `AcDiagCollector`（编译期各阶段 + 运行时 AC5001 均已汇入）
+- 出口：`AcExecutor::validationResults()` / `diagnostics()`
+
+既有 legacy 调用方（UI 若干处）逐步迁移，迁移完成后删除 `error()`。
+语言层面的兼容性策略（废弃流程 / 字节码版本戳 / 存量普查）见
+[changelog.md](file:///d:/work/github/auto_code/docs/changelog.md)。
+
 ## 5. 模板引擎
 
 ### 5.1 架构总览
@@ -283,8 +323,10 @@ FunMgr（单例）
 ### 6.2 调用方式
 
 ```cpp
-// C++ 内部调用
-QJsonValue r = FunMgr::ins().call("str", "toLowerCase", QJsonArray{"Hello"});
+// C++ 内部调用（值模型为 accore::AcJsonValue，参数为 accore 数组值）
+accore::AcJsonValue args = accore::AcJsonValue::makeArray();
+args.append(QStringLiteral("Hello"));
+accore::AcJsonValue r = FunMgr::ins().call("str", "toLowerCase", args);
 
 // .ac 脚本中调用
 call("str", "toLowerCase", "Hello")
@@ -292,6 +334,10 @@ call("str", "toLowerCase", "Hello")
 // .tpl 模板中调用
 ${str.toLowerCase(Hello)}
 ```
+
+新增内置函数三步：实现（fun_*.cpp）→ 注册表加一项 → `ac_language.h` 加名字常量
+与 `kAll` 列表（供解析/高亮/补全）。参数校验统一走 `fun_args.h` 的
+`requireCount/requireString/...`（失败自动 setError）。
 
 ### 6.3 文件列表
 
@@ -318,6 +364,15 @@ MainDevUi（主窗口）
 ├── MainDevModel（数据模型）
 └── MainDevUiExt（扩展功能：Tab 红点、拖拽等）
 ```
+
+`MainDevMgr` 分文件实现（_file/_tab/_connect/_navigate/_rename/_session/_theme）
+只是物理拆分；**collaborator 化进行中**：首例 `NavigationHistory`
+（[navigation_history.h](file:///d:/work/github/auto_code/src/ui/main_dev/navigation_history.h)，
+纯逻辑双栈状态机，2026-09 拆出）。后续按同一模式拆：问题聚合（m_fileIssues）、
+防抖定时器群、会话恢复。调试已拆出 `DebugController`。
+
+脚本执行：`QtConcurrent::run` 工作线程 + `requestCancel()` 取消 +
+`QueuedConnection` 回 GUI（见 debug_controller.cpp），长脚本不卡 UI。
 
 ### 7.2 JSON Vue 可视化编辑器（json_vue）
 
@@ -474,6 +529,11 @@ QString s = v.isString() ? v.toString() : QString::number(v.toDouble());
 
 `qFloor(double)` 在 Qt 6.12 返回 int 并对大值触发断言。时间戳处理应使用 `std::floor(double)`（返回 double）。
 
+### 11.8 printLog 参数类型为 String
+
+`printLog` 静态签名要求 String 参数，传 Number 会被类型检查拒绝。用拼接转换：
+`printLog("" + someNumber)`。
+
 ## 12. 运行时值模型与标识符驻留
 
 ### 12.1 运行时值种类（accore::AcJsonValue）
@@ -496,6 +556,10 @@ QString s = v.isString() ? v.toString() : QString::number(v.toDouble());
   区分纯数据对象与实例用 `isInstance()`
 - **序列化**：Instance 按属性集输出；ClassRef/FuncRef 输出 null（运行时引用不应持久化）
 - 类名提取统一走 `instanceClass()`，唯一 id 走 `instanceObjId()`
+
+引擎全链路值模型统一为 `AcJsonValue`（含 `AcExecutor::execute()` 返回值，
+2026-09 从 QJsonValue 迁移）；QJson 只允许出现在 `ac_json_value.h` 适配层与
+`fun_json.cpp` 边界，UI 消费时调 `toQJsonValue()`。
 
 ### 12.2 源码位置（AcLoc）
 
@@ -532,3 +596,18 @@ Token 与所有 AST 节点统一携带 `AcLoc{line, col, offset}`（列/偏移�
 2. 字符串字面量与 JSON 数据保留 QString：脚本的字符串值运行时即 UTF-16，
    全链路换 UTF-8 需要连带动 AccJsonValue/FunMgr 签名，收益不成比例，暂缓
 3. 新增编译器基础设施（位置、驻留、未来 IR）一律落在 `src/core/`，与 Qt 解耦
+
+## 14. 测试地图
+
+| 文件 | 覆盖 |
+|------|------|
+| test_ac_interpreter / test_ac_vm | 解释器 116 项 / 双模式对拍 35 项 |
+| test_ac_cache / test_ac_recovery | 字节码缓存 / parser 错误恢复 |
+| test_ac_semantic / test_rename | 单文件语义 / 跨文件引用（import 别名、遮蔽） |
+| test_ac_diagnostic | 结构化诊断 |
+| test_tpl / test_function | 模板语法 / 内置函数 |
+| test_golden_script | 端到端（--run 子进程：键序、错误传播、双模式对拍） |
+
+构建：`cmake --build <build-dir> --target auto_code_tests --config RelWithDebInfo`，
+运行 `build/RelWithDebInfo/auto_code_tests.exe`（返回 0 = 全部通过）。
+**提交前必跑**；golden 段需 auto_code.exe 与测试 exe 同目录。

@@ -29,6 +29,7 @@ QString AcEngine::execute(const QString &acFilePath) {
   executor.setScriptFile(fi.absoluteFilePath());
   executor.setCancelFlag(&m_cancelRequested);
   executor.setDebugger(m_debugger);
+  executor.setExecMode(m_execMode);
   if (!m_rootDir.isEmpty()) executor.setRootDir(m_rootDir);
   if (m_logCallback) executor.setLogCallback(m_logCallback);
 #ifdef AC_DEBUG
@@ -40,7 +41,8 @@ QString AcEngine::execute(const QString &acFilePath) {
   qDebug() << "[AcEngine::execute] parse succeeded";
 #endif
 
-  QJsonValue result = executor.execute();
+  // 执行（返回值当前无消费方；引擎语义以 error() / generatedFiles() 出口为准）
+  executor.execute();
   m_generatedFiles = executor.generatedFiles();
   if (!executor.error().isEmpty()) return executor.error();
 

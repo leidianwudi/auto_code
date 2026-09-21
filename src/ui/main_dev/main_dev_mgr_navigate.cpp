@@ -16,28 +16,11 @@
 // ──────────────────────────────────────────────────────────────
 
 void MainDevMgr::pushNavigationHistory(const QString &filePath, int line, int column) {
-  if (m_navigating) return;
-
   NavigationEntry entry;
   entry.filePath = filePath;
   entry.line = line;
   entry.column = column;
-
-  // 避免重复记录相同位置
-  if (!m_navHistory.isEmpty()) {
-    const auto &last = m_navHistory.top();
-    if (last.filePath == filePath && last.line == line && last.column == column) return;
-  }
-
-  m_navHistory.push(entry);
-
-  // 新操作时清空前进栈
-  m_navForwardStack.clear();
-
-  // 限制历史栈大小（最多保存 100 条）
-  while (m_navHistory.size() > 100) {
-    m_navHistory.remove(0);
-  }
+  m_nav.push(entry);  // 导航中静默忽略 / 去重 / 清前进栈 / 上限裁剪（状态机内聚）
 }
 
 void MainDevMgr::jumpToLocation(const QString &filePath, int line, int column) {
@@ -105,14 +88,14 @@ void MainDevMgr::onAboutToNavigate(const QString &targetFilePath, int targetLine
 }
 
 void MainDevMgr::navigateBack() {
-  AC_LOG_INFO() << "navigateBack() called, history size:" << m_navHistory.size();
-  if (m_navHistory.isEmpty()) {
+  AC_LOG_INFO() << "navigateBack() called, history size:" << m_nav.backSize();
+  if (!m_nav.canBack()) {
     AC_LOG_INFO() << "Navigation history is empty, cannot go back";
     return;
   }
 
   // 先弹出后退栈目标位置（必须在任何修改之前，防止引用失效）
-  NavigationEntry entry = m_navHistory.pop();
+  NavigationEntry entry = m_nav.popBack();
   AC_LOG_INFO() << "Navigating back to:" << entry.filePath << "line:" << entry.line;
 
   // 记录当前位置到前进栈
@@ -123,26 +106,26 @@ void MainDevMgr::navigateBack() {
     forwardEntry.filePath = current->objectName();
     forwardEntry.line = cursor.blockNumber() + 1;
     forwardEntry.column = cursor.columnNumber() + 1;
-    m_navForwardStack.push(forwardEntry);
+    m_nav.pushForward(forwardEntry);
     AC_LOG_INFO() << "Pushed to forward stack:" << forwardEntry.filePath
                   << "line:" << forwardEntry.line;
   }
 
   // 执行跳转
-  m_navigating = true;
+  m_nav.setNavigating(true);
   jumpToLocation(entry.filePath, entry.line, entry.column);
-  m_navigating = false;
+  m_nav.setNavigating(false);
 }
 
 void MainDevMgr::navigateForward() {
-  AC_LOG_INFO() << "navigateForward() called, forward stack size:" << m_navForwardStack.size();
-  if (m_navForwardStack.isEmpty()) {
+  AC_LOG_INFO() << "navigateForward() called, forward stack size:" << m_nav.forwardSize();
+  if (!m_nav.canForward()) {
     AC_LOG_INFO() << "Forward stack is empty, cannot go forward";
     return;
   }
 
   // 先弹出前进栈目标位置（必须在 pushNavigationHistory 之前，因为后者会清空前进栈！）
-  NavigationEntry entry = m_navForwardStack.pop();
+  NavigationEntry entry = m_nav.popForward();
   AC_LOG_INFO() << "Navigating forward to:" << entry.filePath << "line:" << entry.line;
 
   // 记录当前位置到后退栈
@@ -154,7 +137,7 @@ void MainDevMgr::navigateForward() {
   }
 
   // 执行跳转
-  m_navigating = true;
+  m_nav.setNavigating(true);
   jumpToLocation(entry.filePath, entry.line, entry.column);
-  m_navigating = false;
+  m_nav.setNavigating(false);
 }

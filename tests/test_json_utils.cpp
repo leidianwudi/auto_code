@@ -146,6 +146,15 @@ int runAcSemanticTests();
 /// 端到端 golden 脚本测试（tests/test_golden_script.cpp），返回失败数
 int runGoldenScriptTests();
 
+/// 模板引擎测试（tests/test_tpl.cpp），返回失败数
+int runTplTests();
+
+/// 内置函数系统测试（tests/test_function.cpp），返回失败数
+int runFunctionTests();
+
+/// 语义引用收集测试（tests/test_rename.cpp），返回失败数
+int runRenameTests();
+
 /// .jsonsource 作用域查找：项目根（project.acproj）内严格过滤，无标记目录回退全局
 static void testProjectScopedJsonsourceFinder() {
   const QString fileRoot =
@@ -400,11 +409,15 @@ int main() {
   const int cacheFailed = runAcCacheTests();
   const int recoveryFailed = runAcRecoveryTests();
   const int semanticFailed = runAcSemanticTests();
+  const int tplFailed = runTplTests();
+  const int functionFailed = runFunctionTests();
+  const int renameFailed = runRenameTests();
   const int goldenFailed = runGoldenScriptTests();
 
   const int totalFailed = g_failed + extraFailed + jsonValueFailed + identPoolFailed +
                           interpreterFailed + diagnosticFailed + vmFailed + cacheFailed +
-                          recoveryFailed + semanticFailed + goldenFailed;
+                          recoveryFailed + semanticFailed + tplFailed + functionFailed +
+                          renameFailed + goldenFailed;
   std::printf("%d checks, %d failed\n", g_total, totalFailed);
   return totalFailed == 0 ? 0 : 1;
 }

@@ -19,6 +19,7 @@
 #include <atomic>
 #include <functional>
 
+#include "ac_executor.h"
 #include "src/util/design/singleton.h"
 
 class AcDebugger;
@@ -43,6 +44,9 @@ public:
   void setRootDir(const QString &dir) { m_rootDir = dir; }
   /// @brief 设置调试器（为空则不启用调试）
   void setDebugger(AcDebugger *dbg) { m_debugger = dbg; }
+  /// @brief 设置执行模式（默认解释器；另支持环境变量 AC_EXEC_MODE=vm 灰度）
+  void setExecMode(AcExecMode mode) { m_execMode = mode; }
+  AcExecMode execMode() const { return m_execMode; }
 
   /// @brief 请求取消正在执行的脚本（工作线程中由解释器轮询检查）
   void requestCancel() { m_cancelRequested.store(true); }
@@ -67,5 +71,6 @@ private:
   QStringList m_generatedFiles;
   LogCallback m_logCallback;
   AcDebugger *m_debugger = nullptr;            ///< 调试器（为空则不启用调试）
+  AcExecMode m_execMode = AcExecMode::kInterpreter;  ///< 执行模式（默认解释器）
   std::atomic<bool> m_cancelRequested{false};  ///< 取消标志（工作线程执行时检查）
 };

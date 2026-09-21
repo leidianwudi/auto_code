@@ -114,7 +114,15 @@ QStringList AcExecutor::collectImportFiles() const {
 
 // 统一原先在模块链接中重复 4 处的按 kind 取名逻辑。
 
-AcExecutor::AcExecutor() = default;
+AcExecutor::AcExecutor() {
+  // 灰度开关：环境变量 AC_EXEC_MODE=vm（或 bytecode）时全局默认走字节码 VM，
+  // 用于 VM 模式的日常试用与对拍数据积累（不切正式默认，对拍稳定后再切）。
+  // 其余任何值（含未设置）保持解释器模式。
+  const QByteArray mode = qgetenv("AC_EXEC_MODE");
+  if (mode == "vm" || mode == "bytecode") {
+    m_execMode = AcExecMode::kBytecode;
+  }
+}
 
 namespace {
 /// 从运行时错误串（"msg at line N"，或带 "<file>: " 前缀）提取行号；无行号返回 0
@@ -243,7 +251,7 @@ QStringList AcExecutor::validateTypes() {
 }
 
 /// @brief 执行 AST：验证 → 类型检查 → 解释执行
-QJsonValue AcExecutor::execute() {
+accore::AcJsonValue AcExecutor::execute() {
   m_error.clear();
   m_typeErrors.clear();
 
@@ -269,7 +277,7 @@ QJsonValue AcExecutor::execute() {
 #ifdef AC_DEBUG
     qDebug() << "[AcExecutor::execute] undeclared errors:" << m_error;
 #endif
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
 #ifdef AC_DEBUG
   qDebug() << "[AcExecutor::execute] undeclared check passed, program stmts:"
@@ -290,7 +298,7 @@ QJsonValue AcExecutor::execute() {
 #ifdef AC_DEBUG
     qDebug() << "[AcExecutor::execute] type errors:" << m_error;
 #endif
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
 #ifdef AC_DEBUG
   qDebug() << "[AcExecutor::execute] type check passed";
@@ -312,7 +320,7 @@ QJsonValue AcExecutor::execute() {
       module.sourceHash = invHash;  // 缓存失效键（含 import/builtin）
       if (!compiler.compile(m_program, module)) {
         m_error = compiler.error();
-        return QJsonValue();
+        return accore::AcJsonValue();
       }
       if (!m_scriptFile.isEmpty()) AcBytecodeCache::trySave(m_scriptFile, importFiles, module);
     }
@@ -333,12 +341,12 @@ QJsonValue AcExecutor::execute() {
             QStringLiteral("%1: %2").arg(QFileInfo(m_scriptFile).fileName(), m_error);
       }
       addRuntimeDiagnostic(m_error);  // 运行时错误进统一诊断流（AC5001）
-      return QJsonValue();
+      return accore::AcJsonValue();
     }
-    return vmResult.toQJsonValue();
+    return vmResult;
   }
 
-  QJsonValue result = m_interpreter.execute(m_program, m_error).toQJsonValue();
+  accore::AcJsonValue result = m_interpreter.execute(m_program, m_error);
   if (!m_error.isEmpty()) {
     // 在解释器错误信息前加上文件名
     if (!m_scriptFile.isEmpty()) {
@@ -348,11 +356,11 @@ QJsonValue AcExecutor::execute() {
 #ifdef AC_DEBUG
     qDebug() << "[AcExecutor::execute] execution error:" << m_error;
 #endif
-    return QJsonValue();
+    return accore::AcJsonValue();
   }
 
 #ifdef AC_DEBUG
-  qDebug() << "[AcExecutor::execute] execution completed, result:" << result;
+  qDebug() << "[AcExecutor::execute] execution completed, result:" << result.toQJsonValue();
 #endif
   return result;
 }

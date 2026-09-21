@@ -1,8 +1,9 @@
 # AC 语言规范（简版）
 
-> 状态：与当前解释器实现（`src/engine/script/`）对齐的快照。
+> 状态：与当前实现（`src/engine/script/`）对齐的快照。
 > 用途：固定语言语义决策，防止实现漂移；新增语言能力时先改本文件再改代码。
-> 语法以 `ac_parser*.cpp` 为准，运行时语义以 `ac_interpreter*.cpp` 为准。
+> 语法以 `ac_parser*.cpp` 为准，运行时语义以 `ac_interpreter*.cpp` 与 `ac_vm.cpp`
+> 双实现为准（两模式必须语义一致，见 architecture.md §4.6 收敛计划）。
 
 ## 1. 概述与定位
 
@@ -128,9 +129,9 @@ class ConfigManager {
 
 ## 9. 错误模型
 
-- 无 try/catch/throw（语言现状；测试套件中相关样例已注释）
-- 运行时错误：设置带行号的错误消息 → 当前语句链立即中断 → 脚本终止
-- headless 模式：`auto_code.exe --run <script.ac> [--root <dir>]`，成功退出码 0，
+- `try/catch/finally/throw` 已支持（2026-09 新增，详见 §10 决策记录与 §11.3 错误处理语义）
+- 未捕获的运行时错误：设置带行号的错误消息 → 当前语句链立即中断 → 脚本终止
+- headless 模式：`auto_code.exe --run <script.ac> [--root <dir>] [--vm]`，成功退出码 0，
   失败非 0 且输出 `[ERROR] 文件: 消息 at line N`
 - 解析错误：报 `parse error: ... at line N`，不执行任何语句
 
@@ -186,8 +187,10 @@ class ConfigManager {
 - `file/test/test_suite_main.ac`：全特性一致性套件（0–21 章，含顶层语句与静态边界）
 - `tests/test_ac_interpreter.cpp`：解释器直测（含 == 语义 / sort / map/filter / ?.?? / const /
   对象方法 / do-while / try-catch 新特性用例）
+- `tests/test_ac_vm.cpp`：解释器与字节码 VM 双跑对拍（35 项，结果与错误串必须一致）
 - `file/test/test_engine_main.ac`、`file/test/test_block_comment_main.ac`：专项语料
-- `tests/test_golden_script.cpp`：端到端 golden（键序正向用例 + 错误传播负向用例）
+- `tests/test_golden_script.cpp`：端到端 golden（键序正向 + 错误传播负向 + 双模式对拍）
 - `tests/test_ac_param_default.cpp`、`tests/test_ac_json_value.cpp`：参数默认值与有序 JSON 单测
 
 修改解释器/解析器后必须跑：`auto_code_tests`（全绿）+ `--run test_suite_main.ac`（无 [ERROR]）。
+新语言特性须解释器与 VM 同时实现并补对拍用例（规约见 architecture.md §4.6）。

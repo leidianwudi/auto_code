@@ -40,7 +40,7 @@ static QString runBytecode(const QString &scriptFile, const QString &src) {
   ex.setScriptFile(scriptFile);
   ex.setExecMode(AcExecMode::kBytecode);
   if (!ex.parse(src)) return QStringLiteral("parse:%1").arg(ex.error());
-  QJsonValue r = ex.execute();
+  QJsonValue r = ex.execute().toQJsonValue();
   const QString e = ex.error();
   if (!e.isEmpty()) return QStringLiteral("err:%1").arg(e);
   if (r.isObject())

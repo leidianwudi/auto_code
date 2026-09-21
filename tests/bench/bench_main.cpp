@@ -51,7 +51,7 @@ RunOutcome runOnce(const QString &src, AcExecMode mode) {
   }
   QElapsedTimer t;
   t.start();
-  const QJsonValue r = ex.execute();
+  const QJsonValue r = ex.execute().toQJsonValue();
   const double ms = double(t.nsecsElapsed()) / 1e6;
   const QString e = ex.error();
   RunOutcome o;

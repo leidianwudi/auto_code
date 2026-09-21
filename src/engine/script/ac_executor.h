@@ -36,6 +36,8 @@ class AcExecutor {
 public:
   AcExecutor();
 
+  /// @brief legacy 错误串（冻结点：新代码禁止再依赖本接口，一律走
+  ///        diagnostics()/validationResults() 结构化诊断；既有调用方待逐步迁移后删除）
   QString error() const { return m_error; }
   void setScriptDir(const QString &dir) { m_scriptDir = dir; }
   void setScriptFile(const QString &path) { m_scriptFile = path; }
@@ -65,7 +67,8 @@ public:
   AcExecMode execMode() const { return m_execMode; }
 
   bool parse(const QString &source);
-  QJsonValue execute();
+  /// @brief 执行脚本（值模型统一为 AcJsonValue；UI 边界需要 QJson 时调 toQJsonValue()）
+  accore::AcJsonValue execute();
 
   /// @brief 解析后调用，运行静态类型检查
   /// @return 类型错误信息列表

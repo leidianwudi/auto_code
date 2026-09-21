@@ -241,6 +241,7 @@ qt_add_executable(auto_code
     src/ui/main_dev/main_dev_ui.cpp
     src/ui/main_dev/main_dev_ui_ext.h
     src/ui/main_dev/main_dev_ui_ext.cpp
+    src/ui/main_dev/navigation_history.h
     src/ui/main_dev/debug_panel.h
     src/ui/main_dev/debug_panel.cpp
     src/ui/main_dev/debug_controller.h
@@ -425,6 +426,12 @@ add_executable(auto_code_tests EXCLUDE_FROM_ALL
     tests/test_ac_cache.cpp
     tests/test_ac_recovery.cpp
     tests/test_ac_semantic.cpp
+    # 模板引擎测试（渲染语法核心 + FunMgr 集成）
+    tests/test_tpl.cpp
+    # 内置函数系统测试（注册/调用/参数校验/错误通道）
+    tests/test_function.cpp
+    # 语义引用收集测试（跨文件 import 别名 / 遮蔽 / 跳转定义）
+    tests/test_rename.cpp
     # 端到端 golden 脚本测试（QProcess 调主程序 --run，无引擎链接依赖）
     tests/test_golden_script.cpp
     # JSON 上传模型测试所需（UI 层纯模型文件，测试直接编译）

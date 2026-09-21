@@ -26,13 +26,17 @@
 #include "ac_engine.h"
 #include "src/engine/function/fun_mgr.h"
 
-/// 无界面执行脚本：解析 --run/--root，执行并把日志与生成文件打到 stdout
+/// 无界面执行脚本：解析 --run/--root/--vm，执行并把日志与生成文件打到 stdout
 /// @param args 命令行参数（一般传入 QApplication::arguments()）
 /// @return 0 表示脚本执行成功；非 0（脚本出错）返回 1；未提供 --run 返回 -1（由调用方走 GUI）
+///
+/// --vm：本次执行走字节码 VM（默认解释器）。供 golden 对拍测试与 VM 模式
+/// 端到端验证使用；灰度试用也可用环境变量 AC_EXEC_MODE=vm（作用于所有入口）。
 inline int runAcScriptHeadless(const QStringList &args) {
   const int runIdx = args.indexOf(QStringLiteral("--run"));
   if (runIdx < 0 || runIdx + 1 >= args.size()) return -1;
 
+  const bool useVm = args.contains(QStringLiteral("--vm"));
   const QString scriptPath = args.at(runIdx + 1);
   // 根目录解析优先级：--root 参数 > 环境变量 AC_AUTO_CODE_ROOT >
   // 可执行文件相对路径（build/<config>/ 上两级的 file/）> 本机开发默认路径。
@@ -53,6 +57,7 @@ inline int runAcScriptHeadless(const QStringList &args) {
   FunMgr::init();
 
   AcEngine::ins().setRootDir(rootDir);
+  if (useVm) AcEngine::ins().setExecMode(AcExecMode::kBytecode);
   AcEngine::ins().setLogCallback([](const QString &text, bool isError) {
     QTextStream ts(stdout);
     ts << (isError ? QStringLiteral("[ERR] ") : QString()) << text << Qt::endl;

@@ -34,44 +34,6 @@
 class UtilJson {
 public:
   /**
-   * @brief 将 JSON5 文本转换为标准 JSON 文本
-   * @param text JSON5 文本
-   * @param offsetMap 可选，输出"转换后文本索引 → 原始文本索引"的映射
-   * @return 标准 JSON 文本
-   *
-   * 处理的 JSON5 特性：
-   *   - `//` 行注释 和 `/* *\/` 块注释 → 剥离
-   *   - 无引号 key（标识符）→ 加双引号
-   *   - 单引号字符串 → 改为双引号
-   *   - 尾随逗号（trailing comma）→ 删除
-   *   - 十六进制数字 `0xFF` → 转为十进制
-   *   - 前导小数点 `.5` → `0.5`
-   *   - 后导小数点 `5.` → `5`
-   *   - `Infinity` / `-Infinity` / `NaN` → 转为字符串字面量
-   *   - 字符串跨行（反斜杠续行）→ 合并为单行
-   */
-  static QString json5ToJson(const QString &text, QVector<int> *offsetMap = nullptr);
-
-  /**
-   * @brief 剥离 JSON 文本中的注释
-   * @param text 包含注释的 JSON 文本
-   * @return 剥离注释后的纯 JSON 文本
-   *
-   * 支持行注释（双斜杠）和块注释（斜杠星号）。
-   * 使用状态机正确识别字符串边界，不会删除字符串内部的注释符号。
-   * 保留换行符以维持行号一致，便于错误定位。
-   */
-  static QString stripComments(const QString &text);
-
-  /**
-   * @brief 剥离 JSON 文本中的注释，同时记录位置映射
-   * @param text 包含注释的 JSON 文本
-   * @param offsetMap 输出参数，存储"剥离后文本索引 → 原始文本索引"的映射
-   * @return 剥离注释后的纯 JSON 文本
-   */
-  static QString stripCommentsWithMap(const QString &text, QVector<int> &offsetMap);
-
-  /**
    * @brief 解析 JSON 字符串（支持 JSON5 语法自动转换），错误位置已映射回原始文本
    * @param text JSON/JSON5 文本
    * @param error 解析错误信息（可选，传入则填充，offset 已修正为原始文本位置）
@@ -121,4 +83,29 @@ public:
    * @return 指纹哈希；用于判断内容是否变化（如可视化表单跳过重建）
    */
   static QByteArray fingerprint(const QJsonObject &obj);
+
+private:
+  /**
+   * @brief 将 JSON5 文本转换为标准 JSON 文本（fromJson 的内部实现）
+   * @param text JSON5 文本
+   * @param offsetMap 可选，输出"转换后文本索引 → 原始文本索引"的映射
+   * @return 标准 JSON 文本
+   *
+   * 处理的 JSON5 特性：
+   *   - `//` 行注释 和 `/* *\/` 块注释 → 剥离
+   *   - 无引号 key（标识符）→ 加双引号
+   *   - 单引号字符串 → 改为双引号
+   *   - 尾随逗号（trailing comma）→ 删除
+   *   - 十六进制数字 `0xFF` → 转为十进制
+   *   - 前导小数点 `.5` → `0.5`
+   *   - 后导小数点 `5.` → `5`
+   *   - `Infinity` / `-Infinity` / `NaN` → 转为字符串字面量
+   *   - 字符串跨行（反斜杠续行）→ 合并为单行
+   */
+  static QString json5ToJson(const QString &text, QVector<int> *offsetMap = nullptr);
+
+  /**
+   * @brief 剥离 JSON 文本中的注释并记录位置映射（fromJson 的内部实现）
+   */
+  static QString stripCommentsWithMap(const QString &text, QVector<int> &offsetMap);
 };
