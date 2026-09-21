@@ -219,9 +219,9 @@ static void testRealScriptsParse() {
   }
 }
 
-/// 表达式深度防护：超深嵌套显式报错而非打爆 C++ 栈；正常深度不受影响
+/// 表达式深度防护：超深嵌套显式报错而非打爆 C++ 栈（Debug 下也必须安全）；正常深度不受影响
 static void testExprDepthGuard() {
-  const int deep = 500;  // 远超 128 层上限
+  const int deep = 500;  // 远超 64/40 层上限
   QString src = QStringLiteral("let x = ");
   for (int i = 0; i < deep; ++i) src += u'(';
   src += u'1';
@@ -235,12 +235,28 @@ static void testExprDepthGuard() {
 
   // 上限内的正常嵌套仍可解析
   QString fine = QStringLiteral("let y = ");
-  for (int i = 0; i < 50; ++i) fine += u'(';
+  for (int i = 0; i < 20; ++i) fine += u'(';
   fine += u'1';
-  for (int i = 0; i < 50; ++i) fine += u')';
+  for (int i = 0; i < 20; ++i) fine += u')';
   fine += u';';
   Block fineProgram;
   CHECK(parseSource(fine, fineProgram));
+
+  // 语句块嵌套同样受限：500 层大括号显式失败而非打爆 C++ 栈
+  QString deepBlock;
+  for (int i = 0; i < 500; ++i) deepBlock += u'{';
+  deepBlock += QStringLiteral("let inner: Number = 1;");
+  for (int i = 0; i < 500; ++i) deepBlock += u'}';
+  Block blockedProgram;
+  CHECK(!parseSource(deepBlock, blockedProgram));
+
+  // 上限内的正常块嵌套仍可解析
+  QString fineBlock;
+  for (int i = 0; i < 20; ++i) fineBlock += u'{';
+  fineBlock += QStringLiteral("let ok: Number = 1;");
+  for (int i = 0; i < 20; ++i) fineBlock += u'}';
+  Block fineBlockedProgram;
+  CHECK(parseSource(fineBlock, fineBlockedProgram));
 }
 
 /// 运行全部用例，返回失败数（0 = 全部通过）；由 test_json_utils.cpp 的 main 调用

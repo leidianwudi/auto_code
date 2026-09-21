@@ -71,7 +71,8 @@ private:
 };
 
 /// @brief 诊断码常量 — 编码规则：AC0xxx 词法 / AC1xxx 语法 / AC2xxx 链接 /
-///        AC3xxx 未声明 / AC4xxx 类型 / AC5xxx 运行时（预留）
+///        AC3xxx 未声明 / AC4xxx 类型 / AC5xxx 运行时 /
+///        AC6xxx 内部（字节码编译/引擎内部错误）
 namespace AcDiagCode {
 // ── 词法（AC0xxx） ──
 inline constexpr char kLexUnterminatedString[] = "AC0001";    ///< 字符串字面量未闭合
@@ -98,6 +99,12 @@ inline constexpr char kUndeclaredIdent[] = "AC3001";  ///< 使用未声明标识
 
 // ── 类型（AC4xxx） ──
 inline constexpr char kTypeError[] = "AC4001";  ///< 静态类型错误
+
+// ── 运行时（AC5xxx） ──
+inline constexpr char kRuntime[] = "AC5001";  ///< 解释器/VM 运行时错误（需行号信息时产出）
+
+// ── 内部（AC6xxx） ──
+inline constexpr char kCompilerInternal[] = "AC6001";  ///< 字节码编译内部错误（未知语句类型等）
 }  // namespace AcDiagCode
 
 /// @brief AcDiagnostic → ValidationResult 映射（编辑器校验结果统一消费）

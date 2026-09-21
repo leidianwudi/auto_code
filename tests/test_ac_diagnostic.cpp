@@ -16,6 +16,7 @@
 #include <cstdio>
 
 #include "src/engine/function/fun_mgr.h"
+#include "src/engine/script/ac_compiler.h"
 #include "src/engine/script/ac_diagnostic.h"
 #include "src/engine/script/ac_executor.h"
 #include "src/engine/script/ac_validator.h"
@@ -182,6 +183,85 @@ static void testValidatorSyntaxErrorHasLine() {
   CHECK(results.first().line == 2);
 }
 
+// ── 字节码编译内部错误：结构化诊断（AC6001）+ legacy 串 双写 ──
+
+static void testCompilerInternalErrorDiagnostic() {
+  AcCompiler compiler;
+  AcDiagCollector diags;
+  compiler.setDiagCollector(&diags);
+  AcModule module;
+  Block program;
+  // 构造一条非法语句类型（正常解析不可能产出），触发编译失败路径
+  Block::Stmt bad;
+  bad.kind = static_cast<Block::Stmt::Kind>(999);
+  bad.loc = AcLoc{7, 1, 0};
+  program.stmts.append(bad);
+
+  CHECK(!compiler.compile(program, module));
+  // legacy 单错误串非空且带行号
+  CHECK(!compiler.error().isEmpty());
+  CHECK(compiler.error().contains(QStringLiteral("at line 7")));
+  // 结构化诊断：AC6001 + 行号 + 干净消息（不含 "at line"）
+  CHECK(hasCode(diags.all(), AcDiagCode::kCompilerInternal));
+  CHECK(diags.all().first().loc.line == 7);
+  CHECK(!diags.all().first().message.contains(QStringLiteral("at line")));
+}
+
+// ── executor 统一出口：诊断 → 带位置的 ValidationResult ──
+
+static void testExecutorValidationResults() {
+  AcExecutor exec;
+  const QString src = QStringLiteral(
+      "let a: Number = 1;\n"
+      "let b: Number = undefinedVar1 + undefinedVar2;\n"
+      "return a + b;\n");
+  CHECK(exec.parse(src));
+  exec.execute();
+  const QVector<ValidationResult> results = exec.validationResults();
+  CHECK(results.size() >= 2);
+  // 消息干净（不反解 "at line N"），未声明错误定位在第 2 行
+  bool hasLine2 = false;
+  for (const auto &r : results) {
+    CHECK(!r.message.contains(QStringLiteral("at line ")));
+    if (r.line == 2 && r.message.contains(QStringLiteral("undefinedVar"))) hasLine2 = true;
+  }
+  CHECK(hasLine2);
+}
+
+// ── 运行时错误：legacy 串 + AC5001 结构化诊断 双轨（双模式一致） ──
+
+static void testRuntimeErrorDiagnostic() {
+  // 通过静态检查、仅在运行时失败：null 上调用方法（错误串带 " at line N"）
+  const QString src = QStringLiteral(
+      "let o: Any = null;\n"
+      "let v: Any = o.nope();\n"
+      "return v;\n");
+  // 解释器
+  AcExecutor iexec;
+  iexec.setScriptFile(QStringLiteral("rt.ac"));
+  CHECK(iexec.parse(src));
+  iexec.execute();
+  CHECK(!iexec.error().isEmpty());
+  CHECK(hasCode(iexec.diagnostics().all(), AcDiagCode::kRuntime));
+  // AC5001 带行号（第 2 行）+ 干净消息
+  for (const auto &d : iexec.diagnostics().all()) {
+    if (d.code == QLatin1String(AcDiagCode::kRuntime)) {
+      CHECK(d.loc.line == 2);
+      CHECK(!d.message.contains(QStringLiteral("at line")));
+      CHECK(!d.message.contains(QStringLiteral(".ac:")));
+      break;
+    }
+  }
+  // 字节码 VM 同样产出（错误表示统一跨模式）
+  AcExecutor vexec;
+  vexec.setScriptFile(QStringLiteral("rt.ac"));
+  vexec.setExecMode(AcExecMode::kBytecode);
+  CHECK(vexec.parse(src));
+  vexec.execute();
+  CHECK(!vexec.error().isEmpty());
+  CHECK(hasCode(vexec.diagnostics().all(), AcDiagCode::kRuntime));
+}
+
 int runAcDiagnosticTests() {
   testCollectorBasics();
   testUndeclaredMultipleDiagnostics();
@@ -190,6 +270,9 @@ int runAcDiagnosticTests() {
   testTypeDiagnosticAndWarningSeverity();
   testValidatorProducesPositionedResults();
   testValidatorSyntaxErrorHasLine();
+  testCompilerInternalErrorDiagnostic();
+  testExecutorValidationResults();
+  testRuntimeErrorDiagnostic();
   std::printf("[ac_diagnostic] %d checks\n", g_total);
   return g_failed;
 }

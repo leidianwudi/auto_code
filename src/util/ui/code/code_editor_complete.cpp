@@ -14,8 +14,8 @@
 
 #include "code_editor.h"
 #include "src/engine/ac_language.h"
+#include "src/engine/script/ac_semantic_service.h"
 #include "src/engine/script/ac_symbol_table.h"
-#include "guess_code.h"
 
 // ──────────────────────────────────────────────────────────────
 //  代码补全
@@ -73,16 +73,17 @@ void CodeEditor::showCompleter() {
     // JSON + schema：按 schema 提示属性名 / 枚举值
     completions = m_schema.completions(cachedText(), pos);
   } else if (m_validationMode == AcValidation) {
-    // AC：关键字 + 内置函数 + 符号表符号 + 词法级容错提取。
+    // AC：关键字 + 内置函数 + 语义服务补全 + 符号表。
     // 符号表仅在语法分析成功时填充（敲代码时编译不过 → 符号表为空），
-    // 关键字/内置函数固定存在保证始终有提示；再用词法分析（不依赖完整语法，
-    // 容忍语法错误）提取用户已定义的变量/函数/类，避免"编译不过就补不出自己的符号"
+    // 语义服务（AcSemanticService::complete）用词法分析（容忍语法错误）提取
+    // 用户已定义的变量/函数/类，避免"编译不过就补不出自己的符号"；
+    // 关键字/内置函数固定存在保证始终有提示
     const QString &text = cachedText();
     for (const QString &kw : AcKeyword::kAll) completions.append(kw);
     for (const QString &fn : AcBuiltin::kAll) completions.append(fn + QStringLiteral("()"));
-    for (const QString &v : GuessCode::extractLetVariables(text)) completions.append(v);
-    for (const QString &f : GuessCode::extractUserFunctions(text)) completions.append(f);
-    for (const QString &c : GuessCode::extractUserClasses(text)) completions.append(c);
+    for (const auto &item : AcSemanticService::complete(text, objectName())) {
+      completions.append(item.label);
+    }
     for (auto it = m_symbolTable.begin(); it != m_symbolTable.end(); ++it) {
       completions.append(it.key());
     }

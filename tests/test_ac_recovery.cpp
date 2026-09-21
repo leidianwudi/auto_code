@@ -143,11 +143,44 @@ static void testRecoveredAstNoCrash() {
   CHECK(results.size() >= 1);  // 类体内语法错误有诊断，且全程不崩溃
 }
 
+/// A6：恢复模式下声明失败回滚 — 被丢弃的声明不再残留 declaredVars
+static void testRecoveryRollbackDeclaredVars() {
+  // Parser 层：let 声明失败被恢复 → 名字从 declaredVars 回滚；成功声明保留
+  QString lexErr;
+  const QVector<Token> tokens = AcLexer::tokenize(
+      QStringLiteral("let bad: = 1; let good: Number = 2; return good;"), lexErr);
+  AcParser parser;
+  parser.setFilePath(QString());
+  parser.setRecoveryMode(true);
+  Block program;
+  QSet<QString> declaredVars;
+  CHECK(parser.parse(tokens, program, declaredVars));
+  CHECK(declaredVars.contains(QStringLiteral("good")));
+  CHECK(!declaredVars.contains(QStringLiteral("bad")));  // 失败声明已回滚
+  if (program.stmts.size() >= 2) {
+    CHECK(program.stmts[0].isRecovered);
+    CHECK(!program.stmts[1].isRecovered);
+  }
+
+  // 端到端：回滚后，后续使用 bad 被正确识别为未声明（若无回滚则被当作已声明）
+  AcValidator validator;
+  const QString src = QStringLiteral(
+      "let bad: = 1;\n"
+      "let good: Number = 2;\n"
+      "return bad + good;\n");
+  bool foundUndeclaredBad = false;
+  for (const auto &r : validator.validate(src)) {
+    if (r.message.contains(QStringLiteral("bad"))) foundUndeclaredBad = true;
+  }
+  CHECK(foundUndeclaredBad);
+}
+
 int runAcRecoveryTests() {
   testParserRecovery();
   testRecoveryInsideBlock();
   testValidatorMultiDiagnostics();
   testRecoveredAstNoCrash();
+  testRecoveryRollbackDeclaredVars();
   std::printf("[ac_recovery] %d checks, %d failed\n", g_total, g_failed);
   return g_failed;
 }

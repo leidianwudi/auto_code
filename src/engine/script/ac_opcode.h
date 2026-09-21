@@ -47,6 +47,12 @@ enum class AcOpcode : uint8_t {
   kIncIndex,    ///< b=delta(±1), c=postFlag — pop obj, idx → 自增回写, push 旧/新值
   kIncName,     ///< a=identId, b=delta(±1), c=postFlag — 变量自增回写, push 旧/新值
   kCompoundThisProp, ///< a=propId, b=CompoundOp — pop new → 读 this.prop 旧值复合写回
+  // ── 槽位局部变量（A2 性能优化：函数参数与函数级 let/const 的 O(1) 访问）──
+  // 编译期为可槽化名字分配帧内槽位；写操作"写穿"到作用域（保持动态作用域/闭包回退一致）
+  kLoadSlot,    ///< a=slot — push 本帧槽位值
+  kStoreSlot,   ///< a=slot, b=identId — pop 值写槽位并同步作用域（写穿）
+  kDeclareSlot, ///< a=slot, b=identId, c=isConst — pop 值声明槽位（同时声明作用域）
+  kCompoundSlot,///< a=slot, b=CompoundOp, c=identId — pop new → 读槽位旧值复合写回并写穿, push 结果
   // ── 运算（栈约定：先入栈为左操作数） ──
   kAdd, kSub, kMul, kDiv, kMod,
   kNeg, kNot,

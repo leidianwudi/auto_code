@@ -17,6 +17,7 @@
 #include <QHash>
 #include <QString>
 #include <QStringList>
+#include <QVector>
 #include <atomic>
 #include <functional>
 
@@ -145,6 +146,8 @@ private:
     QString funcName;        ///< 调试展示
     bool returned = false;
     accore::AcJsonValue retVal;  ///< kRet 写入的帧返回值
+    /// 槽位局部变量（A2）：参数 + 函数级 let/const；长度 = funcs[unitIdx].numLocals
+    QVector<accore::AcJsonValue> slotVals;
   };
   QVector<Frame> m_frames;
   struct IterFrame {

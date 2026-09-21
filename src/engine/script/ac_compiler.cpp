@@ -26,6 +26,46 @@ void AcCompiler::emitInstr(AcOpcode op, int32_t a, int32_t b, int32_t c, int lin
 
 int AcCompiler::emitHere() { return int(m_cur->code.size()); }
 
+// ═════════════════════════════════════════════════════════════════════════════
+//  槽位局部变量（A2）
+// ═════════════════════════════════════════════════════════════════════════════
+
+int32_t AcCompiler::slotFor(const QString &name) const {
+  auto it = m_slotOf.constFind(name);
+  if (it == m_slotOf.constEnd()) return -1;
+  if (m_shadowActive.contains(name)) return -1;
+  return it.value();
+}
+
+void AcCompiler::beginUnitSlots(const MethodDef &md) {
+  m_slotOf.clear();
+  m_shadowActive.clear();
+  m_shadowStack.clear();
+  m_slotCount = 0;
+  for (const auto &p : md.params) {
+    // 参数：槽位 0..n-1（参数名不得重复于其它参数 —— parser 已约束）
+    if (!m_slotOf.contains(p.name)) m_slotOf.insert(p.name, m_slotCount++);
+  }
+}
+
+void AcCompiler::emitLoadName(const QString &name, int line) {
+  const int32_t slot = slotFor(name);
+  if (slot >= 0) emitInstr(AcOpcode::kLoadSlot, slot, 0, 0, line);
+  else emitInstr(AcOpcode::kLoadName, identOf(name), 0, 0, line);
+}
+
+void AcCompiler::emitStoreName(const QString &name, int line) {
+  const int32_t slot = slotFor(name);
+  if (slot >= 0) emitInstr(AcOpcode::kStoreSlot, slot, identOf(name), 0, line);
+  else emitInstr(AcOpcode::kStoreName, identOf(name), 0, 0, line);
+}
+
+void AcCompiler::emitCompoundName(const QString &name, CompoundOp op, int line) {
+  const int32_t slot = slotFor(name);
+  if (slot >= 0) emitInstr(AcOpcode::kCompoundSlot, slot, int32_t(op), identOf(name), line);
+  else emitInstr(AcOpcode::kCompoundName, identOf(name), int32_t(op), 0, line);
+}
+
 int32_t AcCompiler::constIdx(const accore::AcJsonValue &v) {
   m_cur->constants.append(v);
   return int32_t(m_cur->constants.size() - 1);
@@ -37,6 +77,15 @@ int32_t AcCompiler::identOf(const QString &name) {
   }
   m_module->idents.append(name);
   return int32_t(m_module->idents.size() - 1);
+}
+
+void AcCompiler::reportCompileError(const QString &msg, int line) {
+  // legacy 单错误串：带行号走解析器同款 "msg at line N" 格式（无行号 → 纯消息）
+  m_error = line > 0 ? QStringLiteral("%1 at line %2").arg(msg).arg(line) : msg;
+  if (m_diagCollector) {
+    m_diagCollector->error(AcDiagCode::kCompilerInternal, msg, QString(),
+                           AcLoc{line, 0, 0});
+  }
 }
 
 void AcCompiler::fillSlots(int breakTarget, int continueTarget, int loopElseTarget) {
@@ -127,7 +176,9 @@ bool AcCompiler::compile(const Block &program, AcModule &module) {
       const auto it = m_funcUnits.constFind(stmt.funcDef.name);
       if (it == m_funcUnits.constEnd() || it.value() >= module.funcs.size()) continue;
       m_cur = &module.funcs[it.value()];
+      beginUnitSlots(stmt.funcDef);
       if (!compileBlock(stmt.funcDef.body, 0)) return false;
+      module.funcs[it.value()].numLocals = m_slotCount;
     } else if (stmt.kind == Block::Stmt::kClassDef && !stmt.classDef.isNative) {
       const ClassDef &cd = stmt.classDef;
       for (const auto &m : cd.methods) {
@@ -136,7 +187,9 @@ bool AcCompiler::compile(const Block &program, AcModule &module) {
         const auto it = m_funcUnits.constFind(fname);
         if (it == m_funcUnits.constEnd() || it.value() >= module.funcs.size()) continue;
         m_cur = &module.funcs[it.value()];
+        beginUnitSlots(m);
         if (!compileBlock(m.body, 0)) return false;
+        module.funcs[it.value()].numLocals = m_slotCount;
       }
     }
   }
@@ -169,7 +222,9 @@ bool AcCompiler::compile(const Block &program, AcModule &module) {
 
   // 编译顶层脚本体
   m_cur = &module.funcs[0];
+  beginUnitSlots(MethodDef());
   if (!compileBlock(program, 0)) return false;
+  module.funcs[0].numLocals = m_slotCount;
 
   return true;
 }
@@ -186,6 +241,7 @@ int AcCompiler::addClassInitUnit(const ClassDef &cd, int depth) {
   m_module->funcs.append(std::move(unit));
   const int idx = int(m_module->funcs.size() - 1);
   m_cur = &m_module->funcs[idx];
+  beginUnitSlots(MethodDef());  // 初始化单元：不分配槽位，重置状态
 
   auto appendProps = [&](const ClassDef &cls, int dep) {
     (void)dep;
@@ -200,6 +256,7 @@ int AcCompiler::addClassInitUnit(const ClassDef &cd, int depth) {
     if (baseIt != m_module->classes.constEnd()) appendProps(baseIt.value(), depth);
   }
   appendProps(cd, depth);
+  m_module->funcs[idx].numLocals = m_slotCount;
   return idx;
 }
 
@@ -212,6 +269,7 @@ int AcCompiler::addClassStaticUnit(const ClassDef &cd, int depth) {
   m_module->funcs.append(std::move(unit));
   const int idx = int(m_module->funcs.size() - 1);
   m_cur = &m_module->funcs[idx];
+  beginUnitSlots(MethodDef());  // 初始化单元：不分配槽位，重置状态
 
   for (const auto &p : cd.properties) {
     if (!p.isStatic) continue;
@@ -219,6 +277,7 @@ int AcCompiler::addClassStaticUnit(const ClassDef &cd, int depth) {
     if (p.value) compileExpr(*p.value);
     else emitInstr(AcOpcode::kNil);
   }
+  m_module->funcs[idx].numLocals = m_slotCount;
   return idx;
 }
 
@@ -227,11 +286,19 @@ int AcCompiler::addClassStaticUnit(const ClassDef &cd, int depth) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 bool AcCompiler::compileBlock(const Block &block, int depth) {
+  m_shadowStack.append(QSet<QString>());  // 进入块作用域（shadow 跟踪）
   for (const auto &stmt : block.stmts) {
+    // 错误恢复的残缺语句：跳过（不产生指令，也不发 kOpStmt）
+    if (stmt.isRecovered) continue;
     // 语句前同步作用域 + 行号（debug 钩子；声明类语句同样带行号但 VM 跳过 UI 定位）
     emitInstr(AcOpcode::kOpStmt, stmt.loc.line, depth);
     if (!compileStmt(stmt, depth)) return false;
   }
+  // 退出块：清除本块声明的影子名字（恢复外层同名变量的槽位资格）
+  // 注意：不能在语句循环外持有 m_shadowStack.last() 的引用——嵌套块编译会 append 使容器扩容，
+  const QSet<QString> blockDecls = m_shadowStack.last();
+  for (const auto &n : blockDecls) m_shadowActive.remove(n);
+  m_shadowStack.pop_back();
   return true;
 }
 
@@ -279,18 +346,29 @@ bool AcCompiler::compileStmt(const Block::Stmt &stmt, int depth) {
                  int32_t(CompoundOp::kAdd), stmt.loc.line);
             return true;
           }
-          emitInstr(AcOpcode::kLoadName, identOf(lv->ident));
+          emitLoadName(lv->ident, stmt.loc.line);
           emitInstr(AcOpcode::kIncProp, identOf(lv->prop), int32_t(delta), post ? 3 : 2,
                stmt.loc.line);
-          emitInstr(AcOpcode::kStoreName, identOf(lv->ident));
+          emitStoreName(lv->ident, stmt.loc.line);
           return true;
         }
         if (lv->kind == Expr::kIndexAccess && lv->left && lv->left->kind == Expr::kIdent) {
-          emitInstr(AcOpcode::kLoadName, identOf(lv->left->ident));
+          emitLoadName(lv->left->ident, stmt.loc.line);
           compileExpr(*lv->right);
           emitInstr(AcOpcode::kIncIndex, 0, int32_t(delta), post ? 3 : 2, stmt.loc.line);
-          emitInstr(AcOpcode::kStoreName, identOf(lv->left->ident));
+          emitStoreName(lv->left->ident, stmt.loc.line);
           return true;
+        }
+        if (lv->kind == Expr::kIdent) {
+          const int32_t slot = slotFor(lv->ident);
+          if (slot >= 0) {
+            // 语句级自增（语句值被丢弃）：槽位复合加（写穿作用域）
+            emitInstr(AcOpcode::kConst, constIdx(accore::AcJsonValue(delta)));
+            emitInstr(AcOpcode::kCompoundSlot, slot, int32_t(CompoundOp::kAdd), identOf(lv->ident),
+                 stmt.loc.line);
+            emitInstr(AcOpcode::kPop);
+            return true;
+          }
         }
       }
       // —— 语句级数组变异方法调用（a.push(...) 等）：变异后数组需写回变量
@@ -303,11 +381,11 @@ bool AcCompiler::compileStmt(const Block::Stmt &stmt, int depth) {
             mc.objName != QStringLiteral("JSON") &&
             mc.objName != QString::fromLatin1(AcKeyword::kSuper) &&
             kMutators.contains(mc.methodName)) {
-          emitInstr(AcOpcode::kLoadName, identOf(mc.objName));
+          emitLoadName(mc.objName, stmt.loc.line);
           for (const auto &arg : mc.args) compileExpr(*arg);
           emitInstr(AcOpcode::kCallMethod, identOf(mc.methodName), int32_t(mc.args.size()),
                /*flags bit4 变异写回*/ 16, stmt.loc.line);
-          emitInstr(AcOpcode::kStoreName, identOf(mc.objName));
+          emitStoreName(mc.objName, stmt.loc.line);
           return true;
         }
       }
@@ -331,7 +409,7 @@ bool AcCompiler::compileStmt(const Block::Stmt &stmt, int depth) {
       emitInstr(AcOpcode::kSetIndex, 0, 0, 0, stmt.loc.line);
       // 对象为标识符变量：写回（与解释器 writeBackVar 一致）
       if (ia.objectExpr.kind == Expr::kIdent)
-        emitInstr(AcOpcode::kStoreName, identOf(ia.objectExpr.ident));
+        emitStoreName(ia.objectExpr.ident, stmt.loc.line);
       return true;
     }
     case Block::Stmt::kPropAssign: {
@@ -357,7 +435,7 @@ bool AcCompiler::compileStmt(const Block::Stmt &stmt, int depth) {
         emitInstr(AcOpcode::kSetProp, identOf(pa.prop));
       }
       if (pa.objectExpr.kind == Expr::kIdent)
-        emitInstr(AcOpcode::kStoreName, identOf(pa.objectExpr.ident));
+        emitStoreName(pa.objectExpr.ident, stmt.loc.line);
       return true;
     }
     case Block::Stmt::kFor:
@@ -423,6 +501,8 @@ bool AcCompiler::compileStmt(const Block::Stmt &stmt, int depth) {
       return true;
     }
   }
+  // 未知语句类型：不可达的正常路径（枚举已覆盖全部），属内部错误 → 结构化诊断 + legacy 串
+  reportCompileError(QStringLiteral("内部错误：未知语句类型 (%1)").arg(int(stmt.kind)), stmt.loc.line);
   return false;
 }
 
@@ -438,7 +518,7 @@ void AcCompiler::compileAssignStmt(const Block::Stmt &s, int depth) {
       emitInstr(AcOpcode::kCompoundThisProp, identOf(as.thisProp), int32_t(as.compoundOp), 0,
            s.loc.line);
     } else {
-      emitInstr(AcOpcode::kCompoundName, identOf(as.name), int32_t(as.compoundOp), 0, s.loc.line);
+    emitCompoundName(as.name, as.compoundOp, s.loc.line);
     }
     return;
   }
@@ -448,9 +528,20 @@ void AcCompiler::compileAssignStmt(const Block::Stmt &s, int depth) {
   } else if (!as.thisProp.isEmpty()) {
     emitInstr(AcOpcode::kStoreThisProp, identOf(as.thisProp));
   } else if (as.isDeclaration) {
-    emitInstr(AcOpcode::kDeclareName, identOf(as.name), as.isConst ? 1 : 0);
+    if (m_shadowStack.size() == 1 && !m_slotOf.contains(as.name)) {
+      // 函数体顶层声明 → 分配槽位（参数之后）
+      m_slotOf.insert(as.name, m_slotCount++);
+      emitInstr(AcOpcode::kDeclareSlot, m_slotOf.value(as.name), identOf(as.name),
+           as.isConst ? 1 : 0, s.loc.line);
+    } else {
+      if (m_shadowStack.size() > 1) {
+        m_shadowStack.last().insert(as.name);
+        m_shadowActive.insert(as.name);
+      }
+      emitInstr(AcOpcode::kDeclareName, identOf(as.name), as.isConst ? 1 : 0, 0, s.loc.line);
+    }
   } else {
-    emitInstr(AcOpcode::kStoreName, identOf(as.name));
+    emitStoreName(as.name, s.loc.line);
   }
 }
 
@@ -673,7 +764,7 @@ void AcCompiler::compileExpr(const Expr &e) {
       emitInstr(AcOpcode::kLoadThis, 0, 0, 0, e.loc.line);
       return;
     case Expr::kIdent:
-      emitInstr(AcOpcode::kLoadName, identOf(e.ident), 0, 0, e.loc.line);
+      emitLoadName(e.ident, e.loc.line);
       return;
     case Expr::kPropAccess:
       compilePropChain(e);
@@ -783,7 +874,19 @@ void AcCompiler::compileFuncExprInner(const Expr &e) {
   const int idx = int(m_module->funcs.size() - 1);
   m_module->funcUnits.insert(name, idx);
   m_cur = &m_module->funcs[idx];
+  // 保存外层（宿主单元）槽位状态：beginUnitSlots 会清空影子栈，不能污染外层块跟踪
+  const QHash<QString, int> savedSlotOf = m_slotOf;
+  const QSet<QString> savedShadow = m_shadowActive;
+  const QVector<QSet<QString>> savedStack = m_shadowStack;
+  const int savedCount = m_slotCount;
+  beginUnitSlots(e.funcExpr);
   compileBlock(e.funcExpr.body, 0);
+  m_module->funcs[idx].numLocals = m_slotCount;
+  // 恢复外层槽位状态（虚拟的各单元状态互不串扰）
+  m_slotOf = savedSlotOf;
+  m_shadowActive = savedShadow;
+  m_shadowStack = savedStack;
+  m_slotCount = savedCount;
   m_cur = &m_module->funcs[outerIdx];
   emitInstr(AcOpcode::kFuncExpr, idx, 0, 0, e.loc.line);
 }
@@ -803,7 +906,7 @@ void AcCompiler::compilePropChain(const Expr &e) {
       emitInstr(AcOpcode::kConst, constIdx(enIt.value()), 0, 0, e.loc.line);
       return;
     }
-    emitInstr(AcOpcode::kLoadName, identOf(e.ident), 0, 0, e.loc.line);
+    emitLoadName(e.ident, e.loc.line);
   } else {
     emitInstr(AcOpcode::kLoadThis, 0, 0, 0, e.loc.line);
   }
@@ -865,7 +968,7 @@ void AcCompiler::compileMethodCall(const Expr &e) {
   }
   if (chained) compileExpr(*mc.object);
   else if (isSuper) emitInstr(AcOpcode::kLoadThis);
-  else emitInstr(AcOpcode::kLoadName, identOf(mc.objName));
+  else emitLoadName(mc.objName, e.loc.line);
   for (const auto &arg : mc.args) compileExpr(*arg);
   int32_t flags = 0;
   if (chained) flags |= 1;
@@ -891,11 +994,11 @@ void AcCompiler::compileIncDec(const Expr &e, double delta, bool post) {
     emitInstr(AcOpcode::kIncName, identOf(lv.ident), int32_t(delta), post ? 1 : 0, e.loc.line);
   } else if (lv.kind == Expr::kPropAccess) {
     if (lv.propObject) compileExpr(*lv.propObject);
-    else if (!lv.ident.isEmpty()) emitInstr(AcOpcode::kLoadName, identOf(lv.ident));
+    else if (!lv.ident.isEmpty()) emitLoadName(lv.ident, e.loc.line);
     else emitInstr(AcOpcode::kLoadThis);
     emitInstr(AcOpcode::kIncProp, identOf(lv.prop), int32_t(delta), post ? 1 : 0, e.loc.line);
   } else if (lv.kind == Expr::kIndexAccess && lv.left->kind == Expr::kIdent) {
-    emitInstr(AcOpcode::kLoadName, identOf(lv.left->ident));
+    emitLoadName(lv.left->ident, e.loc.line);
     compileExpr(*lv.right);
     emitInstr(AcOpcode::kIncIndex, 0, int32_t(delta), post ? 1 : 0, e.loc.line);
   } else {
@@ -909,7 +1012,7 @@ void AcCompiler::compileAssignExpr(const Expr &e) {
   // 赋值表达式结果 = 右值（留在栈顶供外层使用）：存储前复制一份
   emitInstr(AcOpcode::kDup);  // [val, val]
   if (lv.kind == Expr::kIdent) {
-    emitInstr(AcOpcode::kStoreName, identOf(lv.ident));  // pop 副本 → [val]
+    emitStoreName(lv.ident, e.loc.line);  // pop 副本 → [val]
   } else if (lv.kind == Expr::kPropAccess && !lv.propObject && !lv.ident.isEmpty()) {
     emitInstr(AcOpcode::kLoadName, identOf(lv.ident));  // [val, val, obj]
     emitInstr(AcOpcode::kSwap);                          // [val, obj, val]

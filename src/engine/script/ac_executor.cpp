@@ -4,10 +4,10 @@
  */
 
 #include "ac_executor.h"
-
 #include <QDir>
 #include <QFile>
-
+#include <QFileInfo>
+#include <functional>
 #include "../../util/common/path_resolver.h"
 #include "../../util/common/util_file.h"
 #include "../ac_language.h"
@@ -17,7 +17,7 @@
 
 namespace {
 // stmtSymbolName — 提取声明/赋值语句的符号名（其余语句类型返回空串）。
-// 统一原先在模块链接中重复 4 处的按 kind 取名逻辑。
+
 QString stmtSymbolName(const Block::Stmt &stmt) {
   switch (stmt.kind) {
     case Block::Stmt::kAssign:
@@ -76,8 +76,78 @@ void stmtSetSymbolName(Block::Stmt &stmt, const QString &name) {
   }
 }
 }  // namespace
+QStringList AcExecutor::collectImportFiles() const {
+  QStringList out;
+  QSet<QString> seen;
+  std::function<void(const Block &)> walk = [&](const Block &b) {
+    for (const auto &s : b.stmts) {
+      if (s.kind == Block::Stmt::kImport && !s.importStmt.filePath.isEmpty()) {
+        QString abs = PathResolver::resolveImportPath(s.importStmt.filePath, m_scriptFile);
+        if (abs.isEmpty() && !QFileInfo(s.importStmt.filePath).isAbsolute()) {
+          abs = QFileInfo(QFileInfo(m_scriptFile).absolutePath(), s.importStmt.filePath)
+                     .absoluteFilePath();
+        }
+        if (!abs.isEmpty() && !seen.contains(abs)) {
+          seen.insert(abs);
+          out.append(abs);
+        }
+      }
+      if (s.kind == Block::Stmt::kBlock) walk(s.blockBody);
+      if (s.kind == Block::Stmt::kIf) {
+        walk(s.ifStmt.thenBlock);
+        if (s.ifStmt.hasElse) walk(s.ifStmt.elseBlock);
+      }
+      if (s.kind == Block::Stmt::kFor) walk(s.forStmt.body);
+      if (s.kind == Block::Stmt::kWhile) walk(s.whileStmt.body);
+      if (s.kind == Block::Stmt::kSwitch)
+        for (const auto &cs : s.switchStmt.cases) walk(cs.body);
+      if (s.kind == Block::Stmt::kTry) {
+        walk(s.tryStmt.tryBody);
+        walk(s.tryStmt.catchBody);
+        walk(s.tryStmt.finallyBody);
+      }
+    }
+  };
+  walk(m_program);
+  return out;
+}
+
+// 统一原先在模块链接中重复 4 处的按 kind 取名逻辑。
 
 AcExecutor::AcExecutor() = default;
+
+namespace {
+/// 从运行时错误串（"msg at line N"，或带 "<file>: " 前缀）提取行号；无行号返回 0
+int runtimeErrorLine(const QString &err) {
+  const int i = err.lastIndexOf(QStringLiteral(" at line "));
+  if (i < 0) return 0;
+  bool ok = false;
+  const int n = err.mid(i + 9).toInt(&ok);
+  return ok ? n : 0;
+}
+}  // namespace
+
+/// @brief 全流程诊断 → 带位置的 ValidationResult（消息为干净文本，不作 "at line N" 反解）
+QVector<ValidationResult> AcExecutor::validationResults() const {
+  QVector<ValidationResult> out;
+  for (const auto &d : m_diags.all()) {
+    out.append(toValidationResult(d));
+  }
+  return out;
+}
+
+/// @brief 把运行时失败（解释器/VM 的 legacy 错误串）追加为 AC5001 结构化诊断，
+///        使运行时错误进入与编译期一致的诊断流（错误表示统一；双轨并存）
+void AcExecutor::addRuntimeDiagnostic(const QString &errorText) {
+  const int line = runtimeErrorLine(errorText);
+  // 干净消息：去掉 " at line N" 与 "<file>: " 前缀
+  QString msg = errorText;
+  const int atIdx = msg.lastIndexOf(QStringLiteral(" at line "));
+  if (atIdx >= 0) msg = msg.left(atIdx);
+  const int colon = msg.indexOf(QLatin1Char(':'));
+  if (colon > 0 && msg.mid(colon - 3, 4) == QStringLiteral(".ac:")) msg = msg.mid(colon + 1).trimmed();
+  m_diags.error(AcDiagCode::kRuntime, msg, QString(), AcLoc{line, 0, 0});
+}
 
 /**
  * @brief 解析 .ac 源码：词法分析 → 语法分析 → 模块链接
@@ -228,20 +298,23 @@ QJsonValue AcExecutor::execute() {
 
   // 步骤 4：执行（解释器/字节码 VM 双模式；字节码语义与解释器对拍）
   if (m_execMode == AcExecMode::kBytecode) {
-    // 编译 → VM 执行（预编译缓存：命中则跳过编译）
+    // 编译 → VM 执行（预编译缓存：命中则跳过编译；失效键含直接/传递 import + builtin）
+    const QStringList importFiles = collectImportFiles();
+    const QString invHash = AcBytecodeCache::invalidationHashFor(m_scriptFile, importFiles);
     AcModule module;
     bool fromCache = false;
-    if (!m_scriptFile.isEmpty() && AcBytecodeCache::tryLoad(m_scriptFile, module)) {
+    if (!m_scriptFile.isEmpty() && AcBytecodeCache::tryLoad(m_scriptFile, importFiles, module)) {
       fromCache = true;
     }
     if (!fromCache) {
       AcCompiler compiler;
-      module.sourceHash = AcBytecodeCache::sourceHashFor(m_scriptFile);  // 缓存失效键
+      compiler.setDiagCollector(&m_diags);
+      module.sourceHash = invHash;  // 缓存失效键（含 import/builtin）
       if (!compiler.compile(m_program, module)) {
         m_error = compiler.error();
         return QJsonValue();
       }
-      if (!m_scriptFile.isEmpty()) AcBytecodeCache::trySave(m_scriptFile, module);
+      if (!m_scriptFile.isEmpty()) AcBytecodeCache::trySave(m_scriptFile, importFiles, module);
     }
     AcVm vm;
     vm.setScriptDir(m_scriptDir);
@@ -259,6 +332,7 @@ QJsonValue AcExecutor::execute() {
         m_error =
             QStringLiteral("%1: %2").arg(QFileInfo(m_scriptFile).fileName(), m_error);
       }
+      addRuntimeDiagnostic(m_error);  // 运行时错误进统一诊断流（AC5001）
       return QJsonValue();
     }
     return vmResult.toQJsonValue();
@@ -270,6 +344,7 @@ QJsonValue AcExecutor::execute() {
     if (!m_scriptFile.isEmpty()) {
       m_error = QStringLiteral("%1: %2").arg(QFileInfo(m_scriptFile).fileName(), m_error);
     }
+    addRuntimeDiagnostic(m_error);  // 运行时错误进统一诊断流（AC5001）
 #ifdef AC_DEBUG
     qDebug() << "[AcExecutor::execute] execution error:" << m_error;
 #endif

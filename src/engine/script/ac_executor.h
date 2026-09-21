@@ -23,6 +23,7 @@
 #include "ac_type_checker.h"
 #include "ac_compiler.h"
 #include "ac_vm.h"
+#include "../validation_result.h"
 
 /// @brief 执行模式：解释器 / 字节码 VM（双模式并存，默认解释器，对拍稳定后切换）
 enum class AcExecMode { kInterpreter, kBytecode };
@@ -44,6 +45,10 @@ public:
   /// @brief 获取本次 parse+execute 全流程的结构化诊断
   ///        （parse() 时清空并累积，execute() 继续追加验证阶段诊断）
   const AcDiagCollector &diagnostics() const { return m_diags; }
+
+  /// @brief 全流程结构化诊断 → 带位置的 ValidationResult（API 边界统一出口）
+  ///        与 legacy error() 双轨并存：诊断消息为干净文本，行号/列号结构化
+  QVector<ValidationResult> validationResults() const;
 
   /// @brief 设置取消标志（工作线程中由解释器轮询检查）
   void setCancelFlag(std::atomic<bool> *flag) { m_cancelFlag = flag; }
@@ -85,6 +90,12 @@ private:
   /// @param baseDir 基准目录（解析相对路径）
   /// @param visited 已处理文件集合（循环引用保护）
   bool linkImportsRecursive(Block &program, const QString &baseDir, QSet<QString> &visited);
+
+  /// @brief 收集解析后 AST 中的 import 文件绝对路径（直接+传递，去重）——缓存失效键用
+  QStringList collectImportFiles() const;
+
+  /// @brief 运行时失败（解释器/VM legacy 错误串）→ AC5001 结构化诊断（错误表示统一）
+  void addRuntimeDiagnostic(const QString &errorText);
 
   // ── 子模块 ──
   AcLexer m_lexer;

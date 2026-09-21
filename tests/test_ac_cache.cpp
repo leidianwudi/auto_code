@@ -50,6 +50,51 @@ static QString runBytecode(const QString &scriptFile, const QString &src) {
   return r.toVariant().toString();
 }
 
+
+/// ── A1：失效键包含 import —— 被 import 文件内容变化使缓存失效 ──
+static void testImportInvalidation() {
+  QTemporaryDir tmp;
+  const QString dep = tmp.filePath(QStringLiteral("dep.ac"));
+  const QString main = tmp.filePath(QStringLiteral("main.ac"));
+  writeTempFile(dep, QStringLiteral("function helper(): Number { return 1; }"));
+  writeTempFile(main, QStringLiteral("import { helper } from \"dep.ac\"; return helper();"));
+  const QString h1 = AcBytecodeCache::invalidationHashFor(main, QStringList() << dep);
+  CHECK(!h1.isEmpty());
+  CHECK(h1 != AcBytecodeCache::invalidationHashFor(main, QStringList()));
+  writeTempFile(dep, QStringLiteral("function helper(): Number { return 2; }"));
+  const QString h2 = AcBytecodeCache::invalidationHashFor(main, QStringList() << dep);
+  CHECK(h2 != h1);
+  CHECK(h2 == AcBytecodeCache::invalidationHashFor(main, QStringList() << dep));
+}
+
+/// ── A6：trySave 清理同入口名的旧失效键缓存文件 ──
+static void testCacheOldFileCleanup() {
+  QTemporaryDir tmp;
+  const QString script = tmp.filePath(QStringLiteral("main.ac"));
+
+  // 版本 1：保存缓存 → 生成 <main>.<hash1>.acb
+  writeTempFile(script, QStringLiteral("let a: Number = 1; return a;"));
+  const QString p1 = AcBytecodeCache::cachePathFor(script);
+  CHECK(runBytecode(script, QStringLiteral("let a: Number = 1; return a;")) ==
+        QStringLiteral("1"));
+  CHECK(QFile::exists(p1));
+
+  // 改源 → 新哈希；再次执行时新文件生成，旧哈希缓存被清理
+  writeTempFile(script, QStringLiteral("let a: Number = 1; return a + 1;"));
+  const QString p2 = AcBytecodeCache::cachePathFor(script);
+  CHECK(p2 != p1);
+  CHECK(runBytecode(script, QStringLiteral("let a: Number = 1; return a + 1;")) ==
+        QStringLiteral("2"));
+  CHECK(QFile::exists(p2));
+  CHECK(!QFile::exists(p1));  // 旧失效键缓存已被清理
+
+  // 只清理同名入口：其它入口文件的缓存不受影响
+  const QString other = tmp.filePath(QStringLiteral("other.ac"));
+  writeTempFile(other, QStringLiteral("return 7;"));
+  CHECK(runBytecode(other, QStringLiteral("return 7;")) == QStringLiteral("7"));
+  CHECK(QFile::exists(AcBytecodeCache::cachePathFor(other)));
+  CHECK(QFile::exists(p2));
+}
 int runAcCacheTests() {
   QTemporaryDir tmp;
   CHECK(tmp.isValid());
@@ -70,7 +115,7 @@ int runAcCacheTests() {
 
   // ── 缓存可加载且能完整还原模块（VM 可直接执行）──
   AcModule loaded;
-  CHECK(AcBytecodeCache::tryLoad(script, loaded));
+  CHECK(AcBytecodeCache::tryLoad(script, QStringList(), loaded));
   CHECK(loaded.funcs.size() >= 1);
   CHECK(loaded.funcs[0].code.size() > 0);  // 顶层单元指令完整还原
 
@@ -93,7 +138,7 @@ int runAcCacheTests() {
   f.write(QByteArray("GARBAGE"));
   f.close();
   AcModule bad;
-  CHECK(!AcBytecodeCache::tryLoad(script, bad));
+  CHECK(!AcBytecodeCache::tryLoad(script, QStringList(), bad));
 
   // ── 纯 Io 回环：save → load 完整还原 ──
   QByteArray data;
@@ -122,6 +167,8 @@ int runAcCacheTests() {
     }
   }
 
+  testImportInvalidation();
+  testCacheOldFileCleanup();
   std::printf("[ac_cache] %d checks, %d failed\n", g_total, g_failed);
   return g_failed;
 }

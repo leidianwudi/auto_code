@@ -11,6 +11,7 @@
  */
 
 #include <QJsonDocument>
+
 #include <cstdio>
 
 #include "src/engine/function/fun_mgr.h"
@@ -211,6 +212,11 @@ static const DualCase kCases[] = {
 };
 
 static void testAll() {
+  const QByteArray only = qgetenv("AC_VM_CASE");
+  if (!only.isEmpty()) {
+    for (const auto &c : kCases) { if (QString::fromLatin1(c.name) == QString::fromLatin1(only)) { testDual(c.name, QString::fromLatin1(c.script)); return; } }
+    return;
+  }
   for (const auto &c : kCases) {
     std::printf("[vm-case] %s\n", c.name);
     std::fflush(stdout);

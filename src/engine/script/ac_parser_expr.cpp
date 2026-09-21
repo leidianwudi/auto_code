@@ -12,9 +12,10 @@
 
 /// 表达式嵌套深度上限：括号/数组/对象字面量会递归回到 parseExpr，
 /// 无上限时机器生成的深嵌套代码会打爆 C++ 栈。
-/// 实测每层嵌套约消耗 9KB 栈（parseExpr→…→parsePrimary 一条链 16 个递归帧），
-/// 64 层 ≈ 590KB，为 1MB 线程栈留足余量 —— 上限不可随意调大
-static constexpr int kMaxExprDepth = 64;
+/// 每层嵌套 = parseExpr→…→parsePrimary 一条链 17 个递归帧，Debug 构建（MSVC /RTC
+/// 校验帧）每帧可达 1.5KB+，实测 40 层即溢出 1MB 主线程栈（0xC00000FD）。24 层 ≈
+/// 600KB，为 Debug 留足余量 —— 上限不可随意调大。正常手写代码嵌套远低于此
+static constexpr int kMaxExprDepth = 24;
 
 bool AcParser::parseExpr(Expr &expr) {
   if (m_exprDepth >= kMaxExprDepth) {

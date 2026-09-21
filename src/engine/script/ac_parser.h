@@ -120,15 +120,16 @@ private:
   CompoundOp parseCompoundOp();
 
   // ── 类型解析 ──
+  /// @brief 类型注解解析结果三态：无注解 / 有注解且成功 / 裸冒号语法错误
+  enum class TypeAnnResult { kNone = 0, kOk = 1, kError = -1 };
   /// @brief 解析类型注解（: TypeExpr），返回类型结构
   AcType parseType();
   /// @brief 将类型名称解析为 AcType（内建类型 / 自定义类名）
   AcType resolveTypeName(const QString &name);
-  /// @brief 解析可选的 : Type 类型注解，返回三态：
-  ///        0=无注解；1=有注解且成功；-1=有冒号但类型名缺失（语法错误，已报告）
+  /// @brief 解析可选的 : Type 类型注解，返回三态（见 TypeAnnResult）：
+  ///        kNone=无注解；kOk=有注解且成功；kError=有冒号但类型名缺失（语法错误，已报告）
   /// @param outType 输出解析到的类型（如果有注解）
-  /// @return 0/1/-1 三态（见上）
-  int parseTypeAnnotation(AcType &outType);
+  TypeAnnResult parseTypeAnnotation(AcType &outType);
 
   // ── 作用域与声明 ──
   /// @brief 作用域守卫：构造时压栈，析构时弹栈（配合 RAII 保证异常/提前返回也能恢复）
@@ -139,6 +140,11 @@ private:
   };
   /// @brief 在当前作用域声明变量；重复声明时设置错误并返回 false
   bool declareVar(const QString &name, int line);
+
+  /// @brief 恢复模式：声明语句解析失败被丢弃（isRecovered 占位）时，回滚已登记的声明
+  ///        （declaredVars + 当前作用域），避免后续语句对已失败名字的误判（伪已声明 /
+  ///        伪重复声明）。非恢复模式无需调用（失败即整体终止，declaredVars 被丢弃）。
+  void rollbackDeclared(const QString &name);
 
   /// @brief 错误恢复：把一次语句解析失败转化为残缺语句并同步 token。
   ///        非恢复模式直接返回 false（保持 fail-fast）。
@@ -162,6 +168,7 @@ private:
   // ── 内部状态 ──
   int m_pos = 0;
   int m_exprDepth = 0;  ///< 表达式嵌套深度（parseExpr 递归计数，防超深嵌套打爆栈）
+  int m_blockDepth = 0; ///< 语句块嵌套深度（parseBlock 递归计数，防超深嵌套打爆栈）
   QVector<Token> m_tokens;
   QString m_error;
   QString m_filePath;  ///< 当前解析的源文件路径

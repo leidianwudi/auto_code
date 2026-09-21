@@ -9,6 +9,12 @@
 
 #include "../ac_language.h"
 
+/// 语句块嵌套深度上限：parseBlock（经 parseStmt 的 kBlock/{ 分支）递归无界时，
+/// 机器生成的深嵌套块代码会打爆 C++ 栈。parseStmt 是巨型 switch、Debug 帧可达 9KB+
+/// （MSVC /RTC），每层 ≈ parseStmt + parseBlock ≈ 10KB，64 层实测溢出 1MB 主线程栈
+/// （0xC00000FD）。32 层 ≈ 320KB，安全 —— 上限不可随意调大
+static constexpr int kMaxBlockDepth = 32;
+
 // ── token 操作 ──
 
 Token AcParser::peek() {
@@ -109,6 +115,14 @@ bool AcParser::declareVar(const QString &name, int line) {
   return true;
 }
 
+void AcParser::rollbackDeclared(const QString &name) {
+  if (name.isEmpty() || !m_declaredVars) return;
+  m_declaredVars->remove(name);
+  // 语句级声明登记在当前作用域：仅在名字确属于当前层时移除，
+  // 避免误删（本语句声明失败后作用域未变，名字必然在栈顶）
+  if (!m_scopes.isEmpty()) m_scopes.last().remove(name);
+}
+
 bool AcParser::parseProgram(Block &block) {
   while (peek().type != TokenType::kEof) {
     Token t = peek();
@@ -203,7 +217,8 @@ bool AcParser::parseProgram(Block &block) {
         if (!recoverStatement(hole, block, t.loc)) return false;
         continue;
       }
-      if (!declareVar(peek().text, peek().loc.line)) {
+      const QString varName = peek().text;
+      if (!declareVar(varName, peek().loc.line)) {
         Block::Stmt hole;
         if (!recoverStatement(hole, block, t.loc)) return false;
         continue;
@@ -214,6 +229,7 @@ bool AcParser::parseProgram(Block &block) {
       stmt.kind = Block::Stmt::kAssign;
       if (!parseAssignStmt(stmt.assign)) {
         if (!recoverStatement(stmt, block, t.loc)) return false;
+        rollbackDeclared(varName);  // 声明语句被丢弃：回滚已登记的声明
         continue;
       }
       stmt.assign.loc = t.loc;
@@ -251,6 +267,21 @@ bool AcParser::parseProgram(Block &block) {
 }
 
 bool AcParser::parseBlock(Block &block) {
+  // 语句块嵌套守卫：不要依赖 parseExpr 的表达式上限（块是另一条递归链）
+  if (m_blockDepth >= kMaxBlockDepth) {
+    reportError(AcDiagCode::kSyntaxOther,
+                QStringLiteral("语句块嵌套过深（上限 %1 层）").arg(kMaxBlockDepth), peek().loc);
+    if (m_recoveryMode) {
+      recoverToStatementBoundary(1);
+      return true;  // 恢复模式：跳过该深块，交由外层继续
+    }
+    return false;
+  }
+  ++m_blockDepth;
+  struct BlockDepthPop {
+    int &d;
+    ~BlockDepthPop() { --d; }
+  } pop{m_blockDepth};
   if (!expect(TokenType::kLBrace, QStringLiteral("expected '{'"))) {
     if (m_recoveryMode) {
       recoverToStatementBoundary(1);

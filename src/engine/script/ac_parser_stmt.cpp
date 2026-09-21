@@ -32,9 +32,13 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
                       .arg(peek().loc.line);
         return false;
       }
-      if (!declareVar(peek().text, peek().loc.line)) return false;
+      const QString declName = peek().text;
+      if (!declareVar(declName, peek().loc.line)) return false;
       stmt.kind = Block::Stmt::kAssign;
-      if (!parseAssignStmt(stmt.assign)) return false;
+      if (!parseAssignStmt(stmt.assign)) {
+        rollbackDeclared(declName);  // 声明语句被丢弃（恢复模式）：回滚
+        return false;
+      }
       stmt.assign.isExported = true;
       stmt.assign.isDeclaration = true;
       return true;
@@ -162,11 +166,17 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
     stmt.usingStmt.varName = advance().text;
     stmt.usingStmt.loc = t.loc;  // using 关键字所在行（引用/重命名定位用）
     if (!declareVar(stmt.usingStmt.varName, t.loc.line)) return false;
-    if (!expect(TokenType::kEquals, QStringLiteral("expected '=' after 'using varName'")))
+    if (!expect(TokenType::kEquals, QStringLiteral("expected '=' after 'using varName'"))) {
+      rollbackDeclared(stmt.usingStmt.varName);  // 声明语句被丢弃（恢复模式）：回滚
       return false;
+    }
     stmt.kind = Block::Stmt::kUsing;
     stmt.usingStmt.value = std::make_unique<Expr>();
-    return parseExpr(*stmt.usingStmt.value);
+    if (!parseExpr(*stmt.usingStmt.value)) {
+      rollbackDeclared(stmt.usingStmt.varName);  // 声明语句被丢弃（恢复模式）：回滚
+      return false;
+    }
+    return true;
   }
 
   if (t.type == TokenType::kLet) {
@@ -181,9 +191,13 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
           QStringLiteral("variable name cannot start with a digit at line %1").arg(peek().loc.line);
       return false;
     }
-    if (!declareVar(peek().text, t.loc.line)) return false;
+    const QString declName = peek().text;
+    if (!declareVar(declName, t.loc.line)) return false;
     stmt.kind = Block::Stmt::kAssign;
-    if (!parseAssignStmt(stmt.assign)) return false;
+    if (!parseAssignStmt(stmt.assign)) {
+      rollbackDeclared(declName);  // 声明语句被丢弃（恢复模式）：回滚
+      return false;
+    }
     stmt.assign.loc = t.loc;
     stmt.assign.isDeclaration = true;
     return true;
@@ -196,9 +210,13 @@ bool AcParser::parseStmt(Block::Stmt &stmt) {
           QStringLiteral("expected variable name after 'const' at line %1").arg(peek().loc.line);
       return false;
     }
-    if (!declareVar(peek().text, t.loc.line)) return false;
+    const QString declName = peek().text;
+    if (!declareVar(declName, t.loc.line)) return false;
     stmt.kind = Block::Stmt::kAssign;
-    if (!parseAssignStmt(stmt.assign)) return false;
+    if (!parseAssignStmt(stmt.assign)) {
+      rollbackDeclared(declName);  // 声明语句被丢弃（恢复模式）：回滚
+      return false;
+    }
     stmt.assign.loc = t.loc;
     stmt.assign.isDeclaration = true;
     stmt.assign.isConst = true;
@@ -527,16 +545,16 @@ CompoundOp AcParser::parseCompoundOp() {
   return CompoundOp::kNone;
 }
 
-int AcParser::parseTypeAnnotation(AcType &outType) {
-  if (peek().type != TokenType::kColon) return 0;
+AcParser::TypeAnnResult AcParser::parseTypeAnnotation(AcType &outType) {
+  if (peek().type != TokenType::kColon) return TypeAnnResult::kNone;
   advance();  // 消耗 ':'
   if (peek().type != TokenType::kIdent) {
     // 冒号后必须有类型名（裸 x: 是语法错误）：语句级失败，错误恢复可接管
     reportError(AcDiagCode::kSyntaxExpected, QStringLiteral("expected type name"), peek().loc);
-    return -1;
+    return TypeAnnResult::kError;
   }
   outType = parseType();
-  return 1;
+  return TypeAnnResult::kOk;
 }
 
 bool AcParser::parseAssignStmt(AssignStmt &as) {
@@ -545,9 +563,9 @@ bool AcParser::parseAssignStmt(AssignStmt &as) {
   as.loc = nameToken.loc;
   // 解析类型注解：let x: Type = ...
   AcType typeAnnotation;
-  const int annState = parseTypeAnnotation(typeAnnotation);
-  if (annState < 0) return false;  // 注解语法错误（裸冒号）：语句级失败
-  if (annState == 1) {
+  const TypeAnnResult annState = parseTypeAnnotation(typeAnnotation);
+  if (annState == TypeAnnResult::kError) return false;  // 注解语法错误（裸冒号）：语句级失败
+  if (annState == TypeAnnResult::kOk) {
     as.typeAnnotation = typeAnnotation;
     as.hasTypeAnnotation = true;
   }
@@ -636,6 +654,7 @@ bool AcParser::parseForStmt(ForStmt &fs) {
   ScopeGuard _sg(m_scopes);
 
   // for (let i = 0; i < 10; i++)
+  bool letVarDeclared = false;  // 恢复模式：let 循环变量已登记，后续失败需回滚 declaredVars
   if (peek().type == TokenType::kLet) {
     advance();
     if (peek().type != TokenType::kIdent) {
@@ -646,6 +665,7 @@ bool AcParser::parseForStmt(ForStmt &fs) {
 
     fs.varName = advance().text;
     if (!declareVar(fs.varName, fs.loc.line)) return false;
+    letVarDeclared = true;
     // 处理类型注解：let i: Number = 0 或 let ch: String in str
     if (peek().type == TokenType::kColon) {
       advance();
@@ -654,20 +674,41 @@ bool AcParser::parseForStmt(ForStmt &fs) {
     // for-in: for (let ch: String in str)
     if (peek().type == TokenType::kIn) {
       advance();
-      if (!parseExpr(fs.arrayExpr)) return false;
+      if (!parseExpr(fs.arrayExpr)) {
+        if (letVarDeclared) m_declaredVars->remove(fs.varName);  // 语句被丢弃：回滚
+        return false;
+      }
     } else {
       // 标准 for: for (let i = 0; i < n; i++)
       Block::Stmt initStmt;
       initStmt.kind = Block::Stmt::kAssign;
       initStmt.assign.name = fs.varName;
       initStmt.assign.isDeclaration = true;  // let 声明须在最新作用域创建，不覆盖外层同名变量
-      if (!expect(TokenType::kEquals, QStringLiteral("expected '='"))) return false;
-      if (!parseExpr(initStmt.assign.value)) return false;
+      if (!expect(TokenType::kEquals, QStringLiteral("expected '='"))) {
+        if (letVarDeclared) m_declaredVars->remove(fs.varName);
+        return false;
+      }
+      if (!parseExpr(initStmt.assign.value)) {
+        if (letVarDeclared) m_declaredVars->remove(fs.varName);
+        return false;
+      }
       fs.initBlock.stmts.push_back(std::move(initStmt));
-      if (!expect(TokenType::kSemi, QStringLiteral("expected ';'"))) return false;
-      if (!parseExpr(fs.condition)) return false;
-      if (!expect(TokenType::kSemi, QStringLiteral("expected ';'"))) return false;
-      if (!parseExpr(fs.updateExpr)) return false;
+      if (!expect(TokenType::kSemi, QStringLiteral("expected ';'"))) {
+        if (letVarDeclared) m_declaredVars->remove(fs.varName);
+        return false;
+      }
+      if (!parseExpr(fs.condition)) {
+        if (letVarDeclared) m_declaredVars->remove(fs.varName);
+        return false;
+      }
+      if (!expect(TokenType::kSemi, QStringLiteral("expected ';'"))) {
+        if (letVarDeclared) m_declaredVars->remove(fs.varName);
+        return false;
+      }
+      if (!parseExpr(fs.updateExpr)) {
+        if (letVarDeclared) m_declaredVars->remove(fs.varName);
+        return false;
+      }
       fs.isStandard = true;
     }
   }
@@ -691,8 +732,15 @@ bool AcParser::parseForStmt(ForStmt &fs) {
     }
   }
 
-  if (!expect(TokenType::kRParen, QStringLiteral("expected ')' after for statement"))) return false;
-  return parseBlockOrStmt(fs.body);
+  if (!expect(TokenType::kRParen, QStringLiteral("expected ')' after for statement"))) {
+    if (letVarDeclared) m_declaredVars->remove(fs.varName);  // 语句被丢弃：回滚
+    return false;
+  }
+  if (!parseBlockOrStmt(fs.body)) {
+    if (letVarDeclared) m_declaredVars->remove(fs.varName);  // 语句被丢弃：回滚
+    return false;
+  }
+  return true;
 }
 
 bool AcParser::parseIfStmt(IfStmt &is) {
@@ -1176,9 +1224,9 @@ bool AcParser::parseClassProperty(ClassDef &cd, AccessLevel access, bool isStati
   prop.access = access;
   // 解析类型注解：let prop: Type = ...
   AcType propType;
-  const int annState = parseTypeAnnotation(propType);
-  if (annState < 0) return false;  // 注解语法错误（裸冒号）：属性声明失败
-  if (annState == 1) {
+  const TypeAnnResult annState = parseTypeAnnotation(propType);
+  if (annState == TypeAnnResult::kError) return false;  // 注解语法错误（裸冒号）：属性声明失败
+  if (annState == TypeAnnResult::kOk) {
     prop.type = propType;
   }
   const bool hasValue = (peek().type == TokenType::kEquals);
@@ -1189,7 +1237,7 @@ bool AcParser::parseClassProperty(ClassDef &cd, AccessLevel access, bool isStati
   }
   // 既无类型注解也无初始值：非法属性声明（例如类体内误写的裸标识符 aaaaa），
   // 必须报错，避免被静默当作无类型属性接受
-  if (annState == 0 && !hasValue) {
+  if (annState == TypeAnnResult::kNone && !hasValue) {
     m_error = QStringLiteral(
                   "invalid class member '%1' — property requires a type annotation "
                   "or an initial value (e.g. %2: Type) at line %3")

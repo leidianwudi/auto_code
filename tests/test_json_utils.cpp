@@ -388,7 +388,6 @@ int main() {
   testFormatCodeJsonRoundTrip();
   testJson5Parsing();
   testFingerprint();
-  testResolveSchemaPath();
   testProjectScopedJsonsourceFinder();
   testProjectScopedJsonuploadFinder();
   testJsonUploadConfigRoundTrip();

@@ -102,24 +102,29 @@ void AcVm::callUnit(int unitIdx, int argc, const QString &funcName) {
   for (int i = 0; i < argc; ++i) args[argc - 1 - i] = m_vstack.takeLast();
 
   pushScope();
-  for (int i = 0; i < unit.paramNames.size(); ++i) {
-    if (i < args.size()) {
-      declareVar(unit.paramNames[i], args[i]);
-    } else if (i < unit.paramDefaults.size() && !unit.paramDefaults[i].isNull()) {
-      declareVar(unit.paramNames[i], unit.paramDefaults[i]);
-    } else {
-      declareVar(unit.paramNames[i], accore::AcJsonValue());
-    }
-  }
-
+  // 槽位初始化（A2）：帧槽位数组按单元槽数分配，参数槽 = 实参/默认值/null
   Frame f;
   f.unitIdx = unitIdx;
   f.pc = 0;
+  f.slotVals.resize(unit.numLocals > 0 ? unit.numLocals : 0);
+  f.funcName = funcName;
+  f.returned = false;
+  for (int i = 0; i < unit.paramNames.size(); ++i) {
+    accore::AcJsonValue v;
+    if (i < args.size()) {
+      v = args[i];
+    } else if (i < unit.paramDefaults.size() && !unit.paramDefaults[i].isNull()) {
+      v = unit.paramDefaults[i];
+    } else {
+      v = accore::AcJsonValue();
+    }
+    if (i < f.slotVals.size()) f.slotVals[i] = v;  // 参数字槽
+    declareVar(unit.paramNames[i], v);       // 作用域声明（动态回退/闭包查找用）
+  }
+
   // 帧作用域深度 = 参数声明 pushScope 之后的 scopeStack 大小：
   // 函数内 depth0 语句的绝对深度 = baseScope，kOpStmt 目标 = baseScope + depth
   f.baseScope = m_scopeStack.size();
-  f.funcName = funcName;
-  f.returned = false;
   m_frames.append(f);
 
   executeUnit(unitIdx);
@@ -224,6 +229,39 @@ void AcVm::dispatch(const AcInstr &ins, int unitIdx) {
       accore::AcJsonValue r = applyCompoundOp(cur, newV, ins.b, ins.line);
       if (!m_error.isEmpty()) break;
       setVar(ident(ins.a), r);
+      st.append(r);
+      break;
+    }
+    // ── 槽位局部变量（A2）：O(1) 帧内访问；写穿作用域保持动态回退一致 ──
+    case AcOpcode::kLoadSlot: {
+      const auto &slotVals = m_frames.last().slotVals;
+      if (ins.a >= 0 && ins.a < slotVals.size()) st.append(slotVals.at(ins.a));
+      else st.append(accore::AcJsonValue());
+      break;
+    }
+    case AcOpcode::kStoreSlot: {
+      accore::AcJsonValue v = st.takeLast();
+      auto &slotVals = m_frames.last().slotVals;
+      if (ins.a >= 0 && ins.a < slotVals.size()) slotVals[ins.a] = v;
+      setVar(ident(ins.b), v);  // 写穿作用域（动态/闭包回退可读到最新值）
+      break;
+    }
+    case AcOpcode::kDeclareSlot: {
+      accore::AcJsonValue v = st.takeLast();
+      auto &slotVals = m_frames.last().slotVals;
+      if (ins.a >= 0 && ins.a < slotVals.size()) slotVals[ins.a] = v;
+      declareVar(ident(ins.b), v, ins.c != 0);
+      break;
+    }
+    case AcOpcode::kCompoundSlot: {
+      accore::AcJsonValue newV = st.takeLast();
+      auto &slotVals = m_frames.last().slotVals;
+      const accore::AcJsonValue cur =
+          (ins.a >= 0 && ins.a < slotVals.size()) ? slotVals.at(ins.a) : accore::AcJsonValue();
+      accore::AcJsonValue r = applyCompoundOp(cur, newV, ins.b, ins.line);
+      if (!m_error.isEmpty()) break;
+      if (ins.a >= 0 && ins.a < slotVals.size()) slotVals[ins.a] = r;
+      setVar(ident(ins.c), r);
       st.append(r);
       break;
     }
