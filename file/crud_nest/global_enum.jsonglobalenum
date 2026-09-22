@@ -1,0 +1,1 @@
+{"enums":[{"id":"ge0a1b2c3","name":"enable","options":[{"key":"yes","label":"启用","value":"1","valueType":"number"},{"key":"no","label":"禁用","value":"0","valueType":"number"}],"remark":"是否启用"},{"id":"ge4d5e6f7","name":"is_open","options":[{"key":"open","label":"开放","value":"1","valueType":"number"},{"key":"close","label":"关闭","value":"0","valueType":"number"}],"remark":"是否开放"}]}

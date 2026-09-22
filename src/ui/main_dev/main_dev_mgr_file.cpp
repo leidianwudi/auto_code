@@ -18,6 +18,7 @@
 #include "main_dev_ui.h"
 #include "src/engine/ac_language.h"
 #include "src/engine/schema_validator.h"
+#include "src/ui/json_global_enum/json_global_enum_widget.h"
 #include "src/ui/json_source/json_source_widget.h"
 #include "src/ui/json_source/json_upload_widget.h"
 #include "src/ui/json_vue/json_vue_editor.h"
@@ -88,10 +89,13 @@ QWidget *MainDevMgr::createEditorTab(const QString &filePath, const QString &con
   CodeEditor *editor = nullptr;
   QWidget *tabWidget = nullptr;
 
-  // .jsonvue / .jsonsource / .jsonupload 文件使用可视化包装器（CodeEditor + 可视化编辑器）
+  // .jsonvue / .jsonsource / .jsonupload / .jsonglobalenum 文件使用可视化包装器
+  // （CodeEditor + 可视化编辑器）
   const bool isJsonVue = filePath.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive);
   const bool isJsonSource = filePath.endsWith(AcFileSuffix::kJsonsource, Qt::CaseInsensitive);
   const bool isJsonUpload = filePath.endsWith(AcFileSuffix::kJsonupload, Qt::CaseInsensitive);
+  const bool isJsonGlobalEnum =
+      filePath.endsWith(AcFileSuffix::kJsonglobalenum, Qt::CaseInsensitive);
   const QString acPath = resolveHttpConfigAcPath(filePath);
 
   if (isJsonVue) {
@@ -130,6 +134,15 @@ QWidget *MainDevMgr::createEditorTab(const QString &filePath, const QString &con
     // 注：上传预设无"测试请求"按钮，不需要 HTTP 配置
     // 可视化按钮生效时，自动以可视化方式打开
     if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) juw->switchToVisual();
+  } else if (isJsonGlobalEnum) {
+    auto *gew = new JsonGlobalEnumWidget;
+    editor = gew->codeEditor();
+    editor->setPlainText(content);
+    gew->setPreservedSource(content);
+    tabWidget = gew;
+    // 注：全局枚举为纯静态选项，无"测试请求"按钮，不需要 HTTP 配置
+    // 可视化按钮生效时，自动以可视化方式打开
+    if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) gew->switchToVisual();
   } else {
     CodeEditor *plain = createEditorForFile(filePath);
     plain->setPlainText(content);

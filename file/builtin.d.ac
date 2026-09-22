@@ -22,6 +22,9 @@ export function writeFile(path: String, content: String): Bool;
 /// 读取 JSON 文件并解析为对象/数组
 export function readJson(path: String): Object;
 
+/// 把对象/数组序列化为紧凑 JSON 字符串（转义由引擎统一处理）
+export function toJsonString(value: Object): String;
+
 /// 输出日志到控制台（不换行追加）
 export function printLog(message: String): Void;
 

@@ -12,6 +12,7 @@
 #include "main_dev_ui.h"
 #include "main_dev_ui_ext.h"
 #include "src/engine/ac_language.h"
+#include "src/ui/json_global_enum/json_global_enum_widget.h"
 #include "src/ui/json_source/json_source_widget.h"
 #include "src/ui/json_source/json_upload_widget.h"
 #include "src/ui/json_vue/json_vue_editor.h"
@@ -256,6 +257,7 @@ void MainDevMgr::onSplitRight() {
     bool isJsonVue = filePath.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive);
     bool isJsonSource = filePath.endsWith(AcFileSuffix::kJsonsource, Qt::CaseInsensitive);
     bool isJsonUpload = filePath.endsWith(AcFileSuffix::kJsonupload, Qt::CaseInsensitive);
+    bool isJsonGlobalEnum = filePath.endsWith(AcFileSuffix::kJsonglobalenum, Qt::CaseInsensitive);
     QFileInfo fi(filePath);
     QString tabLabel = filePath.isEmpty() ? QStringLiteral("拆分副本") : fi.fileName();
     int tabIdx = -1;
@@ -328,6 +330,24 @@ void MainDevMgr::onSplitRight() {
       if (!filePath.isEmpty()) editor->setObjectName(filePath);
 
       connect(juw, &JsonUploadWidget::contentChanged, this, [this, editor]() {
+        editor->document()->setModified(true);
+        updateSaveButtonState();
+      });
+    } else if (isJsonGlobalEnum) {
+      // .jsonglobalenum 文件拆分时创建 JsonGlobalEnumWidget，保持可视化能力
+      auto *gew = new JsonGlobalEnumWidget;
+      auto *editor = gew->codeEditor();
+      editor->setPlainText(current->toPlainText());
+      gew->setPreservedSource(current->toPlainText());
+      // 注：全局枚举为纯静态选项，不需要 HTTP 配置
+      if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) gew->switchToVisual();
+
+      tabIdx = newPanel->addTab(gew, tabLabel);
+      newPanel->setTabToolTip(tabIdx, filePath);
+      newPanel->setCurrentIndex(tabIdx);
+      if (!filePath.isEmpty()) editor->setObjectName(filePath);
+
+      connect(gew, &JsonGlobalEnumWidget::contentChanged, this, [this, editor]() {
         editor->document()->setModified(true);
         updateSaveButtonState();
       });

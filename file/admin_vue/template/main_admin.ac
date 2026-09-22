@@ -20,9 +20,13 @@
 /// 接收的项目参数（params 对象）：
 ///   - basePath  输出文件根目录
 ///   - templates 可选，模板配置数组（省略时使用本文件默认模板）
+///   - genGlobalEnum 可选，false 跳过全局枚举数据源同步（缺省/true 同步）
+///   - projectEnumPath 可选，对应后端项目目录（如 file/crud_nest/shop_api），
+///     其下的 global_enum.jsonglobalenum 作为项目级枚举参与合并（就近覆盖）
 /// ----------------------------------------------------------------------------
 
 import { buildAdminTplData, buildSourceTplData } from "./core/admin_data.ac";
+import { findGlobalEnumFiles, mergeGlobalEnumFiles, buildGlobalEnumJsonSource } from "../../tool/tool_global_enum.ac";
 
 /// @brief 模板配置（一个模板对应一个生成的代码文件）
 class TemplateConfig {
@@ -109,6 +113,71 @@ export function generateAdminMain(params: Object): Void {
       printError("  - " + d);
     }
     return;
+  }
+
+  // ── 3.5 全局枚举同步：.jsonglobalenum → 本项目 api/global_enum.jsonsource ──
+  //      两级作用域收集合并（就近在前）：
+  //        1. params.projectEnumPath 指定的后端项目目录（可选，项目级枚举；
+  //           前端目录树够不到后端项目子目录，用显式传参建立对应关系）
+  //        2. 查找链上的共享层配置（如 file/crud_nest/global_enum.jsonglobalenum）
+  //      合并后转成与 .jsonsource 同构的静态数据源写回本项目 api/ 目录
+  //      （自动生成，勿手改）：
+  //        1. 供 jsonvue「选择数据源」面板发现引用（id 与配置文件一致）
+  //        2. 直接走 source.tpl 链路渲染 {basePath}/src/api/source/global_enum.ts
+  //           （不依赖用户是否勾选该文件；勾选时循环内重复生成同样结果）
+  //      同名枚举项目级覆盖平台级（就近优先）；无任何配置时跳过（不影响页面生成）
+  //      params.genGlobalEnum 显式为 false 时跳过（缺省/true 同步）：
+  //      枚举定义稳定、无需每次重写产物时使用
+  if (params["genGlobalEnum"] != false) {
+    let geFiles: String[] = [];
+    let projDir: String = params["projectEnumPath"];
+    if (projDir != null && projDir != "") {
+      let projFile: String = projDir.replace("\\", "/") + "/global_enum.jsonglobalenum";
+      if (fileExists(projFile)) {
+        geFiles.append(projFile);
+      } else {
+        printLog("警告：projectEnumPath 下未找到 global_enum.jsonglobalenum: " + projFile);
+      }
+    }
+    let sharedFiles: String[] = findGlobalEnumFiles(scriptDir());
+    for (let sf: String in sharedFiles) {
+      geFiles.append(sf);
+    }
+    if (geFiles.length > 0) {
+      printLog("global enum files: " + geFiles.length + " 份（就近优先合并）");
+      let geJson: Object = mergeGlobalEnumFiles(geFiles);
+      let srcObj = buildGlobalEnumJsonSource(geJson);
+      let srcList: Object[] = srcObj["sources"];
+      if (srcList != null && srcList.length > 0) {
+        let jsonSourcePath = scriptDir() + "/api/global_enum.jsonsource";
+        let writeOk = writeFile(jsonSourcePath, toJsonString(srcObj));
+        if (writeOk) {
+          printLog("同步全局枚举数据源: " + jsonSourcePath);
+        }
+        // 渲染 source 链路（与勾选 .jsonsource 的处理逻辑一致）
+        let srcData = buildSourceTplData(srcObj, jsonSourcePath);
+        for (cfg in sourceTemplates) {
+          let outPath = formatPath(cfg.out, {
+            basePath: basePath,
+            sourceName: srcData["sourceName"]
+          });
+          let result = renderTpl(cfg.tpl, srcData);
+          if (result) {
+            let srcWriteOk = writeFile(outPath, result);
+            if (srcWriteOk) {
+              generatedFileCount = generatedFileCount + 1;
+            }
+            printLog("生成文件: " + outPath);
+          }
+        }
+      } else {
+        printLog("全局枚举配置为空，跳过数据源同步");
+      }
+    } else {
+      printLog("未找到 global_enum.jsonglobalenum，跳过全局枚举数据源同步");
+    }
+  } else {
+    printLog("genGlobalEnum=false，跳过全局枚举数据源同步");
   }
 
   // ── 4. 对每个勾选文件执行生成流程（.jsonvue 页面 / .jsonsource 数据源）──

@@ -1,0 +1,209 @@
+/// @file tool_global_enum.ac — 全局枚举（.jsonglobalenum）共享工具函数
+/// @brief 供 crud_nest（后端）与 admin_vue（前端）生成器共用的
+///   .jsonglobalenum 配置查找与数据加工逻辑：
+///     findGlobalEnumFiles      - 从起始目录逐级向上收集全部配置文件（就近在前）
+///     mergeGlobalEnumFiles     - 合并多份配置（就近覆盖：先出现的同名枚举优先）
+///     buildGlobalEnumTplData   - 构建后端 global_enum_.tpl 的模板数据
+///     buildGlobalEnumJsonSource- 构建前端 .jsonsource 同构对象
+///
+/// 配置文件约定（两级作用域，同名文件就近覆盖）：
+///   项目级  file/crud_nest/<项目>/global_enum.jsonglobalenum（本项目专用）
+///   平台级  file/crud_nest/global_enum.jsonglobalenum（跨项目共用）
+///   全部全局枚举聚合在各级一份文件里，格式：
+///     {"enums":[{"id":"ge0a1b2c3","name":"is_enable","remark":"是否启用",
+///       "options":[{"key":"enable","label":"启用","value":"1","valueType":"number"}]}]}
+///   字段说明：
+///     id        - 枚举唯一标识（jsonvue 引用数据源时使用，缺省用 name 兜底）
+///     name      - 枚举名称（snake_case，后端枚举名 = Enum + 帕斯卡(name)）
+///     remark    - 枚举说明
+///     options[].key  - 枚举成员名（后端生成 TS 标识符，转帕斯卡）
+///     options[].value/valueType - 实际值与类型（number 不带引号 / 字符串带引号）
+
+import { escapeJsStr, snakeToPascal } from "./tool_str.ac";
+
+/// @brief 从起始目录逐级向上收集所有全局枚举配置文件（就近在前，已去重）
+/// @param startDir 起始目录（通常传 scriptDir()）
+/// @return 有序文件路径数组（可为空数组，调用方按空判断跳过）
+///   说明：除在本目录链上直接查找外，每级同时探测 <dir>/crud_nest/ 兄弟目录，
+///   供 admin_vue 侧项目（如 file/admin_vue/shop_admin）找到平级的共享层
+///   file/crud_nest/global_enum.jsonglobalenum
+export function findGlobalEnumFiles(startDir: String): String[] {
+  let found: String[] = [];
+  let seenPath: Object = {};
+  let dir: String = startDir.replace("\\", "/");
+  // 逐级向上最多 10 层（防异常路径死循环）
+  let guard: Int = 0;
+  while (guard < 10) {
+    let p1: String = dir + "/global_enum.jsonglobalenum";
+    let p2: String = dir + "/crud_nest/global_enum.jsonglobalenum";
+    // 同一文件可能在多级目录链上被重复命中（如 dir 与其祖先的 crud_nest
+    // 探测指向同一路径），按路径去重，保证"就近在前"的顺序语义
+    if (fileExists(p1) && seenPath[p1] != true) {
+      seenPath[p1] = true;
+      found.append(p1);
+    }
+    if (fileExists(p2) && seenPath[p2] != true) {
+      seenPath[p2] = true;
+      found.append(p2);
+    }
+    let idx = dir.lastIndexOf("/");
+    if (idx <= 0) {
+      break;  // 已到根目录，停止查找
+    }
+    dir = dir.substring(0, idx);
+    guard = guard + 1;
+  }
+  return found;
+}
+
+/// @brief 合并多份全局枚举配置（就近覆盖：列表中先出现的文件优先）
+/// @param jsonFiles 有序文件路径列表（项目级在前、平台级在后）
+/// @return 合并后的配置对象 {enums:[...]}（无有效内容时 enums 为空数组）
+///   合并规则：按枚举 name 去重，同名时保留先出现的（项目级覆盖平台级）；
+///   缺少 name 的枚举跳过并输出警告
+export function mergeGlobalEnumFiles(jsonFiles: String[]): Object {
+  let merged: Object[] = [];
+  let seenName: Object = {};
+  let fLen = jsonFiles.length;
+  for (let fi = 0; fi < fLen; fi = fi + 1) {
+    let json: Object = readJson(jsonFiles[fi]);
+    if (json == null || json["enums"] == null) {
+      continue;
+    }
+    let enums: Object[] = json["enums"];
+    let eLen = enums.length;
+    for (let ei = 0; ei < eLen; ei = ei + 1) {
+      let e: Object = enums[ei];
+      let name: String = "";
+      if (e["name"] != null) {
+        name = "" + e["name"];
+      }
+      if (name == "") {
+        printLog("警告：枚举缺少 name，跳过（文件: " + jsonFiles[fi] + "）");
+        continue;
+      }
+      if (seenName[name] == true) {
+        printLog("枚举 '" + name + "' 在 " + jsonFiles[fi] +
+                 " 与更近作用域重复定义，忽略（就近优先）");
+        continue;
+      }
+      seenName[name] = true;
+      merged.append(e);
+    }
+  }
+  return { enums: merged };
+}
+
+/// @brief 读取 .jsonglobalenum 配置并构建后端模板数据（global_enum_.tpl 用）
+/// @param json readJson(.jsonglobalenum) 返回的配置对象
+/// @return tplData：{hasGlobalEnums, globalEnums: [{name, enumName, remark,
+///   items: [{key, label, valueStr}]}]}
+///   枚举名 = "Enum" + snakeToPascal(name)（is_enable → EnumIsEnable）；
+///   成员名 key = snakeToPascal(option.key)（enable → Enable），key 缺省时
+///   按序号兜底（Opt1 / Opt2 ...），防止生成非法 TS 标识符；
+///   valueStr 由 valueType 决定：number → 数字字面量，其余 → 单引号字符串
+export function buildGlobalEnumTplData(json: Object): Object {
+  let globalEnums: Object[] = [];
+  let rawEnums: Object[] = [];
+  if (json != null && json["enums"] != null) {
+    rawEnums = json["enums"];
+  }
+  let len = rawEnums.length;
+  for (let i = 0; i < len; i = i + 1) {
+    let e: Object = rawEnums[i];
+    // 枚举成员列表：key 转帕斯卡作为 TS 成员名，valueStr 按类型生成字面量
+    let items: Object[] = [];
+    let rawOpts: Object[] = [];
+    if (e["options"] != null) {
+      rawOpts = e["options"];
+    }
+    let olen = rawOpts.length;
+    for (let j = 0; j < olen; j = j + 1) {
+      let o: Object = rawOpts[j];
+      // 成员名：key 转帕斯卡，缺省按序号兜底
+      let itemKey: String = "";
+      if (o["key"] != null) {
+        itemKey = "" + o["key"];
+      }
+      if (itemKey == "") {
+        itemKey = "opt_" + (j + 1);
+      }
+      // 实际值（null 兜底为空串，防止拼接出 "null" 字样）
+      let rawValue: String = "";
+      if (o["value"] != null) {
+        rawValue = "" + o["value"];
+      }
+      // 值字面量：number 类型不带引号，字符串带单引号（转义单引号/反斜杠）
+      let valueStr: String = "'" + escapeJsStr(rawValue) + "'";
+      if (o["valueType"] == "number") {
+        valueStr = rawValue;
+      }
+      items.append({
+        key: snakeToPascal(itemKey),
+        label: o["label"],
+        valueStr: valueStr
+      });
+    }
+    let enumName: String = "";
+    if (e["name"] != null) {
+      enumName = "Enum" + snakeToPascal("" + e["name"]);
+    }
+    globalEnums.append({
+      name: e["name"],
+      enumName: enumName,
+      remark: e["remark"],
+      items: items
+    });
+  }
+  let hasGlobalEnums = (globalEnums.length > 0);
+  return {
+    hasGlobalEnums: hasGlobalEnums,
+    globalEnums: globalEnums
+  };
+}
+
+/// @brief 读取 .jsonglobalenum 配置并构建前端数据源 jsonsource 对象
+/// @param json readJson(.jsonglobalenum) 返回的配置对象
+/// @return 与 .jsonsource 同构的 {sources: [...]} 对象（type 固定 static）：
+///   - url 取枚举 name，前端函数名由此推导（globalEnumStaticIsEnable）；
+///   - id 原样传递（缺省用 name 兜底），jsonvue 引用（selectSourceFile +
+///     selectSourceId）在配置变化后保持稳定；
+///   - options 只保留 label/value/valueType（jsonsource 无 key 概念）
+export function buildGlobalEnumJsonSource(json: Object): Object {
+  let sources: Object[] = [];
+  let rawEnums: Object[] = [];
+  if (json != null && json["enums"] != null) {
+    rawEnums = json["enums"];
+  }
+  let len = rawEnums.length;
+  for (let i = 0; i < len; i = i + 1) {
+    let e: Object = rawEnums[i];
+    let options: Object[] = [];
+    let rawOpts: Object[] = [];
+    if (e["options"] != null) {
+      rawOpts = e["options"];
+    }
+    let olen = rawOpts.length;
+    for (let j = 0; j < olen; j = j + 1) {
+      let o: Object = rawOpts[j];
+      options.append({
+        label: o["label"],
+        value: o["value"],
+        valueType: o["valueType"]
+      });
+    }
+    // id 缺省用枚举 name 兜底（name 在文件内唯一且稳定）
+    let srcId: String = e["id"];
+    if (srcId == null || srcId == "") {
+      srcId = "" + e["name"];
+    }
+    sources.append({
+      id: srcId,
+      type: "static",
+      url: e["name"],
+      remark: e["remark"],
+      options: options
+    });
+  }
+  return { sources: sources };
+}

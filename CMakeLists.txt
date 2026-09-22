@@ -321,6 +321,14 @@ qt_add_executable(auto_code
     src/ui/json_source/json_upload_editor.cpp
     src/ui/json_source/json_upload_widget.h
     src/ui/json_source/json_upload_widget.cpp
+    src/ui/json_global_enum/json_global_enum_model.h
+    src/ui/json_global_enum/json_global_enum_model.cpp
+    src/ui/json_global_enum/json_global_enum_dialog.h
+    src/ui/json_global_enum/json_global_enum_dialog.cpp
+    src/ui/json_global_enum/json_global_enum_editor.h
+    src/ui/json_global_enum/json_global_enum_editor.cpp
+    src/ui/json_global_enum/json_global_enum_widget.h
+    src/ui/json_global_enum/json_global_enum_widget.cpp
     src/ui/schema_json/schema_form_editor.h
     src/ui/schema_json/schema_form_editor.cpp
     src/ui/schema_json/schema_json_widget.h

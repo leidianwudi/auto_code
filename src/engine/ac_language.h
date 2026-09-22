@@ -153,6 +153,8 @@ namespace AcBuiltin {
 inline constexpr const char *kCall = "call";
 /// @brief 读取 JSON 文件：readJson("path.json") → 返回 QJsonValue
 inline constexpr const char *kReadJson = "readJson";
+/// @brief 把对象/数组序列化为紧凑 JSON 字符串：toJsonString(obj) → 返回字符串
+inline constexpr const char *kToJsonString = "toJsonString";
 /// @brief 读取文本文件：readFile("path.txt") → 返回内容
 inline constexpr const char *kReadFile = "readFile";
 /// @brief 渲染模板文件：renderTpl("template.tpl", data) → 返回渲染文本
@@ -185,10 +187,10 @@ inline constexpr const char *kAssert = "assert";
 
 /// @brief 一级函数名列表（供解析器校验、高亮、补全使用）
 inline const QStringList kAll = {
-    QString(kCall),       QString(kReadJson),   QString(kReadFile),   QString(kRenderTpl),
-    QString(kWriteFile),  QString(kPrintLog),   QString(kPrintError), QString(kGetCheckedFiles),
-    QString(kScriptDir),  QString(kMerge),      QString(kBasename),   QString(kFileName),
-    QString(kFileExists), QString(kFormatPath), QString(kAssert),
+    QString(kCall),       QString(kReadJson),   QString(kToJsonString), QString(kReadFile),
+    QString(kRenderTpl), QString(kWriteFile),  QString(kPrintLog),     QString(kPrintError),
+    QString(kGetCheckedFiles), QString(kScriptDir), QString(kMerge),    QString(kBasename),
+    QString(kFileName),  QString(kFileExists), QString(kFormatPath),   QString(kAssert),
 };
 }  // namespace AcBuiltin
 
@@ -384,7 +386,10 @@ inline constexpr const char *kSchemaJson = ".schema.json";
 inline constexpr const char *kJsonvue = ".jsonvue";
 inline constexpr const char *kJsonsource = ".jsonsource";
 inline constexpr const char *kJsonupload = ".jsonupload";
+/// 全局枚举配置（跨表/跨项目共用的枚举定义，生成公共枚举文件与前端静态数据源）
+inline constexpr const char *kJsonglobalenum = ".jsonglobalenum";
 /// JSON 族后缀清单（.json 及其派生配置类型）；新增 json 族类型只需在此追加，
 /// 消费方（目录树可见性 isJsonLike / nameFilters 等）自动跟随
-inline constexpr const char *const kJsonFamily[] = {kJson, kJsonvue, kJsonsource, kJsonupload};
+inline constexpr const char *const kJsonFamily[] = {kJson, kJsonvue, kJsonsource, kJsonupload,
+                                                   kJsonglobalenum};
 }  // namespace AcFileSuffix

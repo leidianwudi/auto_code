@@ -15,4 +15,7 @@ public:
 
   /// 读取 JSON 文件，args: [filePath]
   static accore::AcJsonValue readJson(const accore::AcJsonValue &args);
+
+  /// 把对象/数组序列化为紧凑 JSON 字符串，args: [value]
+  static accore::AcJsonValue toJsonString(const accore::AcJsonValue &args);
 };

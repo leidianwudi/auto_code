@@ -1,0 +1,1 @@
+{"enums":[{"id":"374a9b1c","name":"enable","options":[{"key":"yes","label":"启用","value":"1","valueType":"number"},{"key":"no","label":"禁用","value":"0","valueType":"number"}],"remark":"是否启用"}]}

@@ -165,6 +165,11 @@
           description: '排序字段，推荐数组格式 [\n                        [\n                            "字段名",\n                            "ASC|DESC"\n                        ],...\n                    ]（保证与书写顺序一致）；兼容旧对象格式 {\n                        "字段名": "ASC|DESC"\n                    }',
           type: 'any',
         },
+        globalEnumCols: {
+          description: '引用全局枚举的列名列表（如 [\n                        "is_enable"\n                    ]）：列名需与 .jsonglobalenum 中的枚举 name 一致；命中后该列不生成本表枚举副本/records/接口，前端下拉框改用静态数据源 global_enum',
+          items: 'string',
+          type: 'array',
+        },
         tableEnum: {
           class: 'TableEnumConfig',
           description: '整表枚举配置,把某张数据库表的全部数据行直接生成为一个枚举',

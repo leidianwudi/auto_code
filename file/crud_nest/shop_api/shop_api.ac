@@ -34,10 +34,13 @@ main {
 
   // ── 4. 组装项目参数并调用通用生成逻辑 ────────────────────────────
   //     如需自定义模板，可在此传入 templates（见 main_api.ac 文件头说明）
+  //     genGlobalEnum: false 可跳过全局枚举生成（缺省生成）；
+  //     枚举定义稳定、无需每次重写 global_enum_.ts 时使用
   let params: Object = {
     dbConfig: dbConfig,
     basePath: basePath,
-    appModulePath: appModulePath
+    appModulePath: appModulePath,
+    genGlobalEnum: false
   };
   generateApiMain(params);
   
