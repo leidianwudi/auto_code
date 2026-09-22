@@ -76,6 +76,23 @@ QString jsonVueSourceScopeHelpText();
 /// 结构与 jsonVueSourceScopeHelpText 相同，措辞针对 .jsonupload 上传预设文件
 QString jsonVueUploadScopeHelpText();
 
+// ── 数据源函数名推导（与 AC 脚本 tool_str.ac / admin_data.ac 保持一致）──
+
+/// 下划线命名 → 帕斯卡命名（"user_role" → "UserRole"）
+QString snakeToPascal(const QString &str);
+
+/// 下划线命名 → 小驼峰命名（"user_role" → "userRole"）
+QString snakeToCamel(const QString &str);
+
+/// 数据源 url → 函数名（第一段小驼峰，后续段帕斯卡拼接）
+/// "enableState" → "enableState"；"vipprice/getTime" → "vippriceGetTime"
+QString sourceUrlToFuncName(const QString &url);
+
+/// 静态数据源函数名（与 admin_data.ac processSources 一致）：
+/// 文件名小驼峰 + "Static" + url名（帕斯卡），
+/// boolean.jsonsource + enableState → booleanStaticEnableState
+QString staticSourceFuncName(const QString &sourceName, const QString &url);
+
 /// 配置表格单列定义（供 makeConfigTable 批量设置列头 / 列宽模式 / 固定宽度）
 struct ConfigTableColumn {
   QString header;                                        ///< 列头文本

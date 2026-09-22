@@ -183,15 +183,20 @@ public:
       auto *w = qobject_cast<QWidget *>(watched);
       if (w && w->isWindow() && (w->windowType() == Qt::Popup)) {
         if (auto *combo = qobject_cast<QComboBox *>(w->parentWidget())) {
-          // 高度保证：条目口径统一 + 视图高度固定（幂等，重复调用安全）
-          AuiComboBox::ensurePopupFit(combo);
+          // 树形弹层（AuiTreeCombo）自行管理高度：仅定位，不做高度钳制
+          const bool treePopup =
+              combo->view() && combo->view()->property("auiTreePopup").toBool();
+          if (!treePopup) {
+            // 高度保证：条目口径统一 + 视图高度固定（幂等，重复调用安全）
+            AuiComboBox::ensurePopupFit(combo);
+          }
           // 弹出列表已经显示，等当前事件处理完（Qt 内部布局完成）后再定位
-          QTimer::singleShot(0, w, [w, combo]() {
+          QTimer::singleShot(0, w, [w, combo, treePopup]() {
             QAbstractItemView *view = combo->view();
             if (!view) return;
             // 高度钳制：弹层窗口钉到视图高度。视图已精确等于内容高，多出部分必为
             // 样式盒死区（如 QComboBox padding 2px×2 传播），不足则补齐
-            if (w->height() != view->height()) {
+            if (!treePopup && w->height() != view->height()) {
               w->setFixedHeight(view->height());
               w->resize(w->width(), view->height());
             }

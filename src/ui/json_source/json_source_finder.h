@@ -78,3 +78,52 @@ inline QStringList findJsonsourceFiles(const QString &baseDir = QString()) {
 inline QStringList findJsonuploadFiles(const QString &baseDir = QString()) {
   return findConfigFilesBySuffix(baseDir, AcFileSuffix::kJsonupload);
 }
+
+/// 查找工作区中的所有 .jsonglobalenum 全局枚举文件（去重、排序）。
+/// 作用域在 findConfigFilesBySuffix 之上追加「共享层」：从 baseDir 逐级向上，
+/// 每级探测 <dir>/crud_nest/*.jsonglobalenum——与生成侧 tool_global_enum.ac
+/// findGlobalEnumFiles 的查找链对齐，使 admin_vue 侧视图能引用平台共享层
+/// （file/crud_nest/）与兄弟后端项目（crud_nest/<项目>/）的全局枚举。
+inline QStringList findGlobalEnumFiles(const QString &baseDir = QString()) {
+  QStringList all = findConfigFilesBySuffix(baseDir, AcFileSuffix::kJsonglobalenum);
+  QSet<QString> seen;
+  for (const QString &p : all) seen.insert(QDir::cleanPath(p));
+  if (!baseDir.isEmpty()) {
+    QDir d(baseDir);
+    int guard = 0;
+    while (guard < 10) {
+      const QDir shared(d.filePath(QStringLiteral("crud_nest")));
+      if (shared.exists()) {
+        // 平台共享层：<dir>/crud_nest/*.jsonglobalenum（如 crud_nest/enum.jsonglobalenum）
+        const QFileInfoList files =
+            shared.entryInfoList(QStringList() << QStringLiteral("*.jsonglobalenum"), QDir::Files);
+        for (const QFileInfo &fi : files) {
+          const QString clean = QDir::cleanPath(fi.absoluteFilePath());
+          if (!seen.contains(clean)) {
+            seen.insert(clean);
+            all.append(clean);
+          }
+        }
+        // 项目子目录：<dir>/crud_nest/<项目>/*.jsonglobalenum（与生成侧
+        // projectApiPath 参数对应，如 crud_nest/shop_api/enum.jsonglobalenum）
+        const QFileInfoList subDirs = shared.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
+        for (const QFileInfo &di : subDirs) {
+          const QDir proj(di.absoluteFilePath());
+          const QFileInfoList projFiles =
+              proj.entryInfoList(QStringList() << QStringLiteral("*.jsonglobalenum"), QDir::Files);
+          for (const QFileInfo &fi : projFiles) {
+            const QString clean = QDir::cleanPath(fi.absoluteFilePath());
+            if (!seen.contains(clean)) {
+              seen.insert(clean);
+              all.append(clean);
+            }
+          }
+        }
+      }
+      if (!d.cdUp()) break;
+      ++guard;
+    }
+  }
+  all.sort(Qt::CaseInsensitive);
+  return all;
+}

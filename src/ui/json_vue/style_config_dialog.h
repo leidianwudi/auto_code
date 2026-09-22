@@ -12,6 +12,8 @@
 #pragma once
 
 #include <QDialog>
+#include <QHash>
+#include <QPair>
 
 #include "json_vue_model.h"
 
@@ -23,6 +25,7 @@ class QLabel;
 class QPushButton;
 class QTableWidget;
 class QVBoxLayout;
+class AuiTreeCombo;
 class QWidget;
 
 // ════════════════════════════════════════════════════════════
@@ -222,7 +225,7 @@ private:
   QTableWidget *m_tagItemsTable = nullptr;  ///< tag 标签映射表（动态增删行）
   QLineEdit *m_boolTrueTextEdit = nullptr;
   QLineEdit *m_boolFalseTextEdit = nullptr;
-  QComboBox *m_boolSourceCombo = nullptr;    ///< boolean 真假文字的静态数据源下拉
+  AuiTreeCombo *m_boolSourceCombo = nullptr;  ///< boolean 真假文字的静态数据源下拉（树形分组）
   QComboBox *m_uploadSourceCombo = nullptr;  ///< image 编辑样式的上传预设下拉（.jsonupload）
 
   // ── 通用配置控件 ──
@@ -249,6 +252,10 @@ private:
   QString m_cachedBoolFalseText;
   QString m_cachedBoolSourceFile;    ///< boolean 选中的静态数据源文件（恢复选中并锁定文字）
   QString m_cachedBoolSourceId;      ///< boolean 选中的静态数据源 id
+  /// 候选数据源的真/假文字映射（id → {真值文字, 假值文字}）。
+  /// 构建候选下拉时一次性从 .jsonsource / .jsonglobalenum 解析缓存，
+  /// 选中项切换时直接查表锁定文字（不重复读文件，同步产物缺失也可用）
+  QHash<QString, QPair<QString, QString>> m_boolSourceTexts;
   QString m_cachedUploadSourceFile;  ///< image 选中的上传预设文件（恢复选中）
   QString m_cachedUploadSourceId;    ///< image 选中的上传预设 id
   bool m_cachedSwitchEditable = true;

@@ -157,6 +157,9 @@ export function generateAdminMain(params: Object): Void {
         let writeOk = writeFile(jsonSourcePath, toJsonString(srcObj));
         if (writeOk) {
           printLog("同步全局枚举数据源: " + jsonSourcePath);
+          // 纳入数据源处理列表：jsonvue 引用（boolSourceFile/selectSourceFile 存
+          // 基名 global_enum.jsonsource）在 admin_data.ac 按 basename 匹配时命中
+          sourceFiles.append(jsonSourcePath);
         }
         // 渲染 source 链路（与勾选 .jsonsource 的处理逻辑一致）
         let srcData = buildSourceTplData(srcObj, jsonSourcePath);

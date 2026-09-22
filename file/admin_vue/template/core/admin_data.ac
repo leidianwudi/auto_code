@@ -296,7 +296,7 @@ export function processColumns(rawColumns: Object[], sourceMap: Object,
     if (hasSourceRef) {
       selectApiName = sourceRef["funcName"];
       selectApiUrl = effUrl;
-    } else if (isSelect && rawCol.selectUrl != "") {
+    } else if (isSelect && isNotEmpty(rawCol.selectUrl)) {
       let selUrlParts: String[] = rawCol.selectUrl.split("/");
       let selUrlPartsLen: Int = selUrlParts.length;
       for (let si = selUrlPartsLen - 1; si >= 0; si = si - 1) {
@@ -578,7 +578,7 @@ export function processQueryFields(rawQueryFields: Object[], columnMap: Object):
       if (qfHasSourceRef) {
         qfSourceRefFile = srcCol["sourceRefFile"];
       }
-    } else if (isSelect && rawQf.selectUrl != "") {
+    } else if (isSelect && isNotEmpty(rawQf.selectUrl)) {
       let selUrlParts: String[] = rawQf.selectUrl.split("/");
       let selUrlPartsLen: Int = selUrlParts.length;
       for (let si = selUrlPartsLen - 1; si >= 0; si = si - 1) {

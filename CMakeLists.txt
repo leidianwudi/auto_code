@@ -222,6 +222,8 @@ qt_add_executable(auto_code
     src/util/ui/component/aui_combo_box.cpp
     src/util/ui/component/aui_combo_delete.h
     src/util/ui/component/aui_combo_delete.cpp
+    src/util/ui/component/aui_tree_combo.h
+    src/util/ui/component/aui_tree_combo.cpp
     src/util/ui/aui_window.h
     src/util/ui/aui_window.cpp
     src/util/ui/rename_dialog.h

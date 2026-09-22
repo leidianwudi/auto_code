@@ -19,6 +19,8 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QStandardItem>
+#include <QStandardItemModel>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QTimer>
@@ -26,6 +28,7 @@
 
 #include "combobox_config_dialog.h"
 #include "config_dialog_common.h"
+#include "src/ui/json_global_enum/json_global_enum_model.h"
 #include "src/ui/json_source/json_source_finder.h"
 #include "src/ui/json_source/json_source_model.h"
 #include "src/ui/json_source/json_upload_model.h"
@@ -34,6 +37,7 @@
 #include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/component/aui_style.h"
+#include "src/util/ui/component/aui_tree_combo.h"
 
 // ════════════════════════════════════════════════════════════
 //  辅助：清空 QFormLayout
@@ -422,12 +426,31 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
     m_displayTypeWidget->setMaximumHeight(QWIDGETSIZE_MAX);  // 恢复高度限制
     m_displayTypeWidget->setVisible(true);
 
-    // 静态数据源下拉：列出所有恰好 2 项选项的静态数据源。
-    // 下拉项显示"函数名 - 说明（文件名）"，选中后真假文字从数据源实时读取并锁定
+    // 静态数据源下拉：列出所有恰好 2 项选项的静态数据源 + 全局枚举。
+    // 下拉项显示"说明 - 标识"（数据源显示 url 值，全局枚举显示枚举名），选中后真假文字从数据源实时读取并锁定
     // 不可改（数据源修改后重开对话框自动同步）；选"手动输入"时解锁，可自由填写真假文字
-    m_boolSourceCombo = AuiComboBox::create(m_displayTypeWidget);
-    m_boolSourceCombo->addItem(QStringLiteral("（手动输入真假文字）"), QString());
-    int restoreIdx = 0;
+    m_boolSourceCombo = new AuiTreeCombo(m_displayTypeWidget);
+    // 顶层"手动输入"条目：未选择时的默认项（真/假文字可自由填写）
+    m_boolSourceCombo->addEntry(nullptr, QStringLiteral("（手动输入真假文字）"), QString());
+    // 真/假文字提取（与 admin_data.ac 的布尔值约定一致）：
+    // value 为 1/true → 真值、0/false → 假值；无法判断时按顺序（第 1 项假、第 2 项真）
+    auto boolTextsOf = [](const QList<QPair<QString, QString>> &labelValues)
+        -> QPair<QString, QString> {
+      QString trueText;
+      QString falseText;
+      if (labelValues.size() == 2) {
+        falseText = labelValues.at(0).first;
+        trueText = labelValues.at(1).first;
+      }
+      for (const auto &lv : labelValues) {
+        const QString v = lv.second.trimmed().toLower();
+        if (v == QStringLiteral("1") || v == QStringLiteral("true")) trueText = lv.first;
+        if (v == QStringLiteral("0") || v == QStringLiteral("false")) falseText = lv.first;
+      }
+      return {trueText, falseText};
+    };
+
+    // 候选一：项目作用域内的 .jsonsource 静态数据源（每个文件一组，可展开/收起）
     const QStringList srcFiles = findJsonsourceFiles(m_searchRoot);
     for (const QString &sf : srcFiles) {
       JsonSourceConfig cfg;
@@ -438,18 +461,62 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
           f.close();
         }
       }
+      QStandardItem *group = nullptr;
       for (const auto &s : cfg.sources) {
         // 仅 2 项选项的静态数据源可选（真假文字只有两个状态）
         if (!s.isStatic() || s.options.size() != 2) continue;
-        const QString remark = s.remark.isEmpty() ? QStringLiteral("(未命名)") : s.remark;
-        // 显示：函数名 - 说明（文件名），不显示 0/1 具体值
-        const QString funcName = staticSourceFuncName(QFileInfo(sf).baseName(), s.url);
-        const QString text =
-            QStringLiteral("%1 - %2（%3）").arg(funcName, remark, QFileInfo(sf).fileName());
-        m_boolSourceCombo->addItem(text, sf + QStringLiteral("#") + s.id);
-        if (sf == m_cachedBoolSourceFile && s.id == m_cachedBoolSourceId) {
-          restoreIdx = m_boolSourceCombo->count() - 1;
+        if (!group) {
+          group = m_boolSourceCombo->addGroup(QStringLiteral("▍数据源 · ") +
+                                              QFileInfo(sf).fileName());
         }
+        const QString remark = s.remark.isEmpty() ? QStringLiteral("(未命名)") : s.remark;
+        // 显示：说明 - url 值（如 status），不显示 0/1 具体值；旧数据无 url 时回退为派生函数名
+        const QString funcName = staticSourceFuncName(QFileInfo(sf).baseName(), s.url);
+        QList<QPair<QString, QString>> labelValues;
+        for (const auto &o : s.options) labelValues.append({o.label, o.value});
+        const QPair<QString, QString> texts = boolTextsOf(labelValues);
+        const QString ref = sf + QStringLiteral("#") + s.id;
+        m_boolSourceTexts.insert(ref, texts);
+        m_boolSourceCombo->addEntry(
+            group, QStringLiteral("%1 - %2").arg(remark, s.url.isEmpty() ? funcName : s.url), ref);
+      }
+    }
+
+    // 候选二：全局枚举（.jsonglobalenum，含平台共享层与兄弟后端项目）。
+    // 引用存文件基名而非绝对路径——文件移动后生成侧按基名+id 仍可解析（不断链）；
+    // 同步产物 api/global_enum.jsonsource 的 id 与枚举配置一致，funcName 推导口径
+    // 固定为基名 global_enum，与生成侧 source.ts 完全一致
+    const QStringList enumFiles = findGlobalEnumFiles(m_searchRoot);
+    for (const QString &ef : enumFiles) {
+      JsonGlobalEnumConfig cfg;
+      {
+        QFile f(ef);
+        if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+          cfg = JsonGlobalEnumConfig::fromJsonString(QString::fromUtf8(f.readAll()));
+          f.close();
+        }
+      }
+      // 组标题标注层级：直接位于 crud_nest/ 下为共享层，位于 crud_nest/<项目>/ 下为项目级
+      const QString parentName = QFileInfo(ef).absolutePath().section(QLatin1Char('/'), -1);
+      const bool isShared = parentName == QStringLiteral("crud_nest");
+      QStandardItem *group = nullptr;
+      for (const auto &e : cfg.enums) {
+        if (e.options.size() != 2) continue;  // 布尔只有两个状态
+        if (!group) {
+          group = m_boolSourceCombo->addGroup(
+              isShared ? QStringLiteral("▍全局枚举（共享层） · ") + QFileInfo(ef).fileName()
+                       : QStringLiteral("▍全局枚举（%1） · %2").arg(parentName, QFileInfo(ef).fileName()));
+        }
+        const QString remark = e.remark.isEmpty() ? QStringLiteral("(未命名)") : e.remark;
+        QList<QPair<QString, QString>> labelValues;
+        for (const auto &o : e.options) labelValues.append({o.label, o.value});
+        const QPair<QString, QString> texts = boolTextsOf(labelValues);
+        QString refId = e.id;
+        if (refId.isEmpty()) refId = e.name;  // 与生成侧 buildGlobalEnumJsonSource 兜底一致
+        const QString ref = QStringLiteral("global_enum.jsonsource#") + refId;
+        if (m_boolSourceTexts.contains(ref)) continue;  // 同名枚举去重（跨文件）
+        m_boolSourceTexts.insert(ref, texts);
+        m_boolSourceCombo->addEntry(group, QStringLiteral("%1 - %2").arg(remark, e.name), ref);
       }
     }
     // 静态数据源行：标签后带问号帮助按钮，说明数据源列表受「右键设为项目」作用域过滤。
@@ -476,45 +543,35 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
 
     // 切换数据源 → 从数据源实时填充真假文字并锁定；
     // 切回"手动输入" → 解锁（保留当前文字继续编辑）
-    // value 映射：1/true → 真值，0/false → 假值；无法判断时按顺序（第 1 项假、第 2 项真）
-    connect(m_boolSourceCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
-      if (!m_boolSourceCombo || !m_boolTrueTextEdit || !m_boolFalseTextEdit) return;
+    // 选中条目 → 从候选构建时缓存的真/假文字映射查表锁定（不重复读文件，
+    // 同步产物 api/global_enum.jsonsource 缺失时全局枚举候选依然可用）；
+    // 组标题/展开收起不触发 itemSelected
+    connect(m_boolSourceCombo, &AuiTreeCombo::itemSelected, this, [this](const QVariant &refVar) {
+      if (!m_boolTrueTextEdit || !m_boolFalseTextEdit) return;
+      const QString ref = refVar.toString();
       m_cachedBoolSourceFile.clear();
       m_cachedBoolSourceId.clear();
       m_boolTrueTextEdit->setReadOnly(false);
       m_boolFalseTextEdit->setReadOnly(false);
-      const QString ref = m_boolSourceCombo->itemData(index).toString();
-      if (ref.isEmpty()) return;
+      if (ref.isEmpty()) return;  // 手动输入：解锁
       const int sep = ref.lastIndexOf(QLatin1Char('#'));
-      const QString filePath = ref.left(sep);
-      const QString sourceId = ref.mid(sep + 1);
-      JsonSourceConfig cfg;
-      {
-        QFile f(filePath);
-        if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-          cfg = JsonSourceConfig::fromJsonString(QString::fromUtf8(f.readAll()));
-          f.close();
-        }
-      }
-      const JsonSource *s = cfg.sourceById(sourceId);
-      if (!s || !s->isStatic() || s->options.size() != 2) return;
-      QString trueText = s->options.at(1).label;
-      QString falseText = s->options.at(0).label;
-      for (const auto &opt : s->options) {
-        const QString v = opt.value.trimmed().toLower();
-        if (v == QStringLiteral("1") || v == QStringLiteral("true")) trueText = opt.label;
-        if (v == QStringLiteral("0") || v == QStringLiteral("false")) falseText = opt.label;
-      }
-      m_boolTrueTextEdit->setText(trueText);
-      m_boolFalseTextEdit->setText(falseText);
+      m_cachedBoolSourceFile = ref.left(sep);
+      m_cachedBoolSourceId = ref.mid(sep + 1);
+      const auto it = m_boolSourceTexts.constFind(ref);
+      if (it == m_boolSourceTexts.constEnd()) return;
+      m_boolTrueTextEdit->setText(it.value().first);
+      m_boolFalseTextEdit->setText(it.value().second);
       m_boolTrueTextEdit->setReadOnly(true);
       m_boolFalseTextEdit->setReadOnly(true);
-      m_cachedBoolSourceFile = filePath;
-      m_cachedBoolSourceId = sourceId;
     });
-    // 恢复上次选中的数据源（触发上面的信号：实时填充 + 锁定）
-    if (restoreIdx > 0) {
-      m_boolSourceCombo->setCurrentIndex(restoreIdx);
+    // 恢复上次选中的数据源（自动展开父级链；触发 itemSelected：填充 + 锁定）；
+    // 未选过（新列）时选中"手动输入"
+    const QString expectedRef =
+        m_cachedBoolSourceFile + QStringLiteral("#") + m_cachedBoolSourceId;
+    if (expectedRef == QStringLiteral("#")) {
+      m_boolSourceCombo->selectByData(QString());
+    } else {
+      m_boolSourceCombo->selectByData(expectedRef);
     }
 
     // 开关可编辑（仅 boolean/tag 显示）
@@ -1014,13 +1071,14 @@ QList<TagItem> ColumnStyleDialog::tagItems() const {
 void ColumnStyleDialog::setBoolSourceRef(const QString &file, const QString &id) {
   m_cachedBoolSourceFile = file;
   m_cachedBoolSourceId = id;
-  // 控件已存在时直接选中对应项（触发 currentIndexChanged：实时填充 + 锁定）
+  // 树形下拉：按 UserRole 选中对应条目（树形模型下不能用扁平行号查找）；
+  // 未选择过（file/id 均空）时选中顶层"手动输入"作为默认项
   if (m_boolSourceCombo) {
-    for (int i = 0; i < m_boolSourceCombo->count(); ++i) {
-      if (m_boolSourceCombo->itemData(i).toString() == file + QStringLiteral("#") + id) {
-        m_boolSourceCombo->setCurrentIndex(i);
-        break;
-      }
+    const QString ref = file + QStringLiteral("#") + id;
+    if (ref == QStringLiteral("#")) {
+      m_boolSourceCombo->selectByData(QString());
+    } else {
+      m_boolSourceCombo->selectByData(ref);
     }
   }
 }

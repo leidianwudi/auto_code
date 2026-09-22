@@ -199,6 +199,10 @@ private:
   /// 磁盘原文解析结果（保真合并的底）；为空表示无原文可参考（如新建文件）
   QJsonObject m_preserved;
 
+  /// 是否已加载过配置。保真合并的「空数组防清空」保护仅在未加载时生效：
+  /// 界面加载后数组为空是用户删除的结果，应如实写盘而非还原磁盘原文
+  bool m_configLoaded = false;
+
   /// 已复制的列配置（用于"粘贴配置"到其它行）
   ColumnConfig m_copiedColumnConfig;
   bool m_hasCopiedConfig = false;  ///< 是否存在已复制的列配置

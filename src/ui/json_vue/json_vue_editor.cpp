@@ -491,6 +491,8 @@ void JsonVueEditor::loadConfig(const JsonVueConfig &config) {
   }
 
   m_loading = false;
+  // 标记配置已加载：此后保真合并中数组为空视为用户删除的结果，不再防清空还原
+  m_configLoaded = true;
 }
 
 JsonVueConfig JsonVueEditor::collectConfig() const {
@@ -579,9 +581,13 @@ QJsonObject mergeMeta(const QJsonObject &newMeta, const QJsonObject &oldMeta) {
 
 /// 按 key 匹配的数组级保真合并：
 /// - 新数组非空：以新数组为准（顺序/数量），每个元素同 key 元素缺失的字段从原文补齐
-/// - 新数组为空且原文非空：返回原文数组（防止界面未加载时保存把数据清空）
-QJsonArray mergeArrayByKey(const QJsonArray &news, const QJsonArray &olds, const char *key) {
-  if (news.isEmpty()) return olds;
+/// - 新数组为空且原文非空：allowEmpty=false（界面未加载）时返回原文，
+///   防止界面未加载时保存把数据清空；allowEmpty=true（界面已加载）时返回空数组——
+///   加载后数组为空是用户删除的结果，必须如实写盘（否则删除最后一个
+///   按钮/查询字段/列后保存，会被本函数还原成删除前的内容）
+QJsonArray mergeArrayByKey(const QJsonArray &news, const QJsonArray &olds, const char *key,
+                           bool allowEmpty) {
+  if (news.isEmpty()) return allowEmpty ? news : olds;
   QJsonArray out;
   for (const auto &nv : news) {
     if (!nv.isObject()) {
@@ -633,10 +639,13 @@ QJsonObject JsonVueEditor::collectMergedObject() const {
   root[JsonVueKey::kMeta] = mergeMeta(root.value(JsonVueKey::kMeta).toObject(),
                                       m_preserved.value(JsonVueKey::kMeta).toObject());
 
-  // 各业务数组：字段级补齐 + 空数组防清空
+  // 各业务数组：字段级补齐 + 空数组防清空（防清空仅未加载时生效——
+  // 界面加载后数组为空是用户删除的结果，应如实写盘而非还原磁盘原文）
+  const bool allowEmpty = m_configLoaded;
   QJsonArray columns =
       mergeArrayByKey(root.value(JsonVueKey::kColumns).toArray(),
-                      m_preserved.value(JsonVueKey::kColumns).toArray(), JsonVueKey::kDataName);
+                      m_preserved.value(JsonVueKey::kColumns).toArray(), JsonVueKey::kDataName,
+                      allowEmpty);
   // 列标签已归一为 queryName：清除保真合并可能从原文带回来的旧 editName，
   // 保证写盘后的配置只含一个标签字段
   for (int i = 0; i < columns.size(); ++i) {
@@ -649,10 +658,12 @@ QJsonObject JsonVueEditor::collectMergedObject() const {
   root[JsonVueKey::kColumns] = columns;
   root[JsonVueKey::kQueryFields] =
       mergeArrayByKey(root.value(JsonVueKey::kQueryFields).toArray(),
-                      m_preserved.value(JsonVueKey::kQueryFields).toArray(), JsonVueKey::kDataName);
+                      m_preserved.value(JsonVueKey::kQueryFields).toArray(), JsonVueKey::kDataName,
+                      allowEmpty);
   root[JsonVueKey::kButtons] =
       mergeArrayByKey(root.value(JsonVueKey::kButtons).toArray(),
-                      m_preserved.value(JsonVueKey::kButtons).toArray(), JsonVueKey::kActionKey);
+                      m_preserved.value(JsonVueKey::kButtons).toArray(), JsonVueKey::kActionKey,
+                      allowEmpty);
 
   // 顶层还有保留其它键（界面未表达的结构），一并保留避免丢失
   for (auto it = m_preserved.begin(); it != m_preserved.end(); ++it) {

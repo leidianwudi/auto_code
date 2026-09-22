@@ -148,13 +148,57 @@ QString jsonVueSourceScopeHelpText() {
 }
 
 QString jsonVueUploadScopeHelpText() {
+  // 与 jsonVueSourceScopeHelpText 结构一致，仅措辞针对 .jsonupload
   return QStringLiteral(
       "下拉框只列出「当前项目」下的 .jsonupload 上传预设文件。\n\n"
-      "上传预设声明了图片上传接口（地址/文件字段/附加参数/响应提取路径/张数），"
-      "在 .jsonupload 文件中集中管理（双击文件可视化编辑）。\n\n"
       "项目根的判定：从当前 .jsonvue 文件所在目录逐级向上，找到的第一个含 "
       "project.acproj 标记文件的文件夹即为项目根。\n"
       "（在目录树中右键文件夹「设为项目」可写入标记，取消项目即删除标记，"
       "设为项目后文件夹图标显示为齿轮。）\n\n"
       "未设项目时（如 template 模板目录），回退为列出工作区全部 .jsonupload 上传预设。");
+}
+
+// ── 数据源函数名推导 ──────────────────────────────────────────
+
+QString snakeToPascal(const QString &str) {
+  QString res;
+  const QStringList segs = str.split(QLatin1Char('_'));
+  for (const QString &seg : segs) {
+    if (seg.isEmpty()) continue;
+    res += seg.at(0).toUpper() + seg.mid(1);
+  }
+  return res;
+}
+
+QString snakeToCamel(const QString &str) {
+  const QString pascal = snakeToPascal(str);
+  if (pascal.isEmpty()) return pascal;
+  return pascal.at(0).toLower() + pascal.mid(1);
+}
+
+QString sourceUrlToFuncName(const QString &url) {
+  QString norm = url;
+  norm.replace(QLatin1Char('\\'), QLatin1Char('/'));
+  const QStringList parts = norm.split(QLatin1Char('/'));
+  QString res;
+  bool first = true;
+  for (const QString &seg : parts) {
+    if (seg.isEmpty()) continue;
+    if (first) {
+      res = snakeToCamel(seg);
+      first = false;
+    } else {
+      res += snakeToPascal(seg);
+    }
+  }
+  return res;
+}
+
+QString staticSourceFuncName(const QString &sourceName, const QString &url) {
+  QString urlName = sourceUrlToFuncName(url);
+  if (!urlName.isEmpty()) {
+    urlName[0] = urlName.at(0).toUpper();  // url 名首字母大写（Pascal）
+    return snakeToCamel(sourceName) + QStringLiteral("Static") + urlName;
+  }
+  return snakeToCamel(sourceName) + QStringLiteral("Static");  // 旧数据无 url 时仅前缀
 }

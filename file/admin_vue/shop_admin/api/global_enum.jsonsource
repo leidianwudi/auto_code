@@ -1,1 +1,0 @@
-{"sources":[{"id":"374a9b1c","options":[{"label":"启用","value":"1","valueType":"number"},{"label":"禁用","value":"0","valueType":"number"}],"remark":"是否启用","type":"static","url":"enable"},{"id":"ge4d5e6f7","options":[{"label":"开放","value":"1","valueType":"number"},{"label":"关闭","value":"0","valueType":"number"}],"remark":"是否开放","type":"static","url":"is_open"}]}
