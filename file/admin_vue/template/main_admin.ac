@@ -21,8 +21,8 @@
 ///   - basePath  输出文件根目录
 ///   - templates 可选，模板配置数组（省略时使用本文件默认模板）
 ///   - genGlobalEnum 可选，false 跳过全局枚举数据源同步（缺省/true 同步）
-///   - projectEnumPath 可选，对应后端项目目录（如 file/crud_nest/shop_api），
-///     其下的 global_enum.jsonglobalenum 作为项目级枚举参与合并（就近覆盖）
+///   - projectApiPath 可选，对应后端 API 项目目录（如 file/crud_nest/shop_api），
+///     其下全部 *.jsonglobalenum 作为项目级枚举参与合并（就近覆盖）
 /// ----------------------------------------------------------------------------
 
 import { buildAdminTplData, buildSourceTplData } from "./core/admin_data.ac";
@@ -117,9 +117,9 @@ export function generateAdminMain(params: Object): Void {
 
   // ── 3.5 全局枚举同步：.jsonglobalenum → 本项目 api/global_enum.jsonsource ──
   //      两级作用域收集合并（就近在前）：
-  //        1. params.projectEnumPath 指定的后端项目目录（可选，项目级枚举；
+  //        1. params.projectApiPath 指定的后端 API 项目目录（可选，项目级枚举；
   //           前端目录树够不到后端项目子目录，用显式传参建立对应关系）
-  //        2. 查找链上的共享层配置（如 file/crud_nest/global_enum.jsonglobalenum）
+  //        2. 查找链上的共享层配置（如 file/crud_nest/*.jsonglobalenum）
   //      合并后转成与 .jsonsource 同构的静态数据源写回本项目 api/ 目录
   //      （自动生成，勿手改）：
   //        1. 供 jsonvue「选择数据源」面板发现引用（id 与配置文件一致）
@@ -130,13 +130,17 @@ export function generateAdminMain(params: Object): Void {
   //      枚举定义稳定、无需每次重写产物时使用
   if (params["genGlobalEnum"] != false) {
     let geFiles: String[] = [];
-    let projDir: String = params["projectEnumPath"];
+    let projDir: String = params["projectApiPath"];
     if (projDir != null && projDir != "") {
-      let projFile: String = projDir.replace("\\", "/") + "/global_enum.jsonglobalenum";
-      if (fileExists(projFile)) {
-        geFiles.append(projFile);
+      if (fileExists(projDir)) {
+        // 目录下全部 *.jsonglobalenum（按文件名序）作为项目级配置收集
+        let projNames: String[] = listFiles(projDir, ".jsonglobalenum");
+        let pnLen = projNames.length;
+        for (let pi = 0; pi < pnLen; pi = pi + 1) {
+          geFiles.append(projDir.replace("\\", "/") + "/" + projNames[pi]);
+        }
       } else {
-        printLog("警告：projectEnumPath 下未找到 global_enum.jsonglobalenum: " + projFile);
+        printLog("警告：projectApiPath 不存在: " + projDir);
       }
     }
     let sharedFiles: String[] = findGlobalEnumFiles(scriptDir());

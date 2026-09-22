@@ -105,6 +105,10 @@ private:
   /// @param args [0] 文件路径
   static accore::AcJsonValue fileExists(const accore::AcJsonValue &args);
 
+  /// 列出目录下匹配后缀的文件名数组（不递归，按名称排序）
+  /// @param args [0] 目录路径，[1] 后缀（如 ".json"，空/省略返回全部文件）
+  static accore::AcJsonValue listFiles(const accore::AcJsonValue &args);
+
   /// 格式化路径：用 {key} 占位符从数据对象中取值替换
   /// @param args [0] 路径模板（如 "{basePath}/{name}.ts"），[1] 数据对象
   static accore::AcJsonValue formatPath(const accore::AcJsonValue &args);

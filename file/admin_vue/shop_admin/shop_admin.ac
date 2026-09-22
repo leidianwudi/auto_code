@@ -18,11 +18,12 @@ main {
   //测试目录：d:/work/github/auto_code/build/outtest
   //let basePath: String = "d:/work/github/auto_code/build/outtest";
   // ── 2. 组装项目参数并调用通用生成逻辑 ────────────────────────────
-  //     projectEnumPath 指向对应后端项目目录（可选）：其下的
-  //     global_enum.jsonglobalenum 作为项目级枚举参与合并（就近覆盖平台级）
+  //     projectApiPath 指向对应后端 API 项目目录（可选）：全局枚举生成时
+  //     会收集其下全部 *.jsonglobalenum 作为项目级配置（就近覆盖平台级）
+  let projectApiPath: String = "D:/work/github/auto_code/file/crud_nest/shop_api";
   let params: Object = {
     basePath: basePath,
-    projectEnumPath: "D:/work/github/auto_code/file/crud_nest/shop_api"
+    projectApiPath: projectApiPath
   };
   generateAdminMain(params);
 

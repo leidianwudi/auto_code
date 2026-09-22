@@ -178,6 +178,9 @@ inline constexpr const char *kBasename = "basename";
 inline constexpr const char *kFileName = "fileName";
 /// @brief 判断文件是否存在（模板专用）：fileExists("path.txt") → 返回 bool
 inline constexpr const char *kFileExists = "fileExists";
+/// @brief 列出目录下匹配后缀的文件名数组：listFiles("dir", ".json") → 返回字符串数组
+/// 不递归；后缀省略/为空时返回全部文件
+inline constexpr const char *kListFiles = "listFiles";
 /// @brief 格式化路径：formatPath("{basePath}/{name}.ts", {basePath:"D:/out", name:"user"})
 /// → "D:/out/user.ts"。占位符 {key} 从第二个参数的对象中查找替换。
 inline constexpr const char *kFormatPath = "formatPath";
@@ -187,10 +190,12 @@ inline constexpr const char *kAssert = "assert";
 
 /// @brief 一级函数名列表（供解析器校验、高亮、补全使用）
 inline const QStringList kAll = {
-    QString(kCall),       QString(kReadJson),   QString(kToJsonString), QString(kReadFile),
-    QString(kRenderTpl), QString(kWriteFile),  QString(kPrintLog),     QString(kPrintError),
-    QString(kGetCheckedFiles), QString(kScriptDir), QString(kMerge),    QString(kBasename),
-    QString(kFileName),  QString(kFileExists), QString(kFormatPath),   QString(kAssert),
+    QString(kCall),       QString(kReadJson),   QString(kToJsonString),
+    QString(kReadFile),   QString(kRenderTpl),  QString(kWriteFile),
+    QString(kPrintLog),   QString(kPrintError), QString(kGetCheckedFiles),
+    QString(kScriptDir),  QString(kMerge),      QString(kBasename),
+    QString(kFileName),   QString(kFileExists), QString(kListFiles),
+    QString(kFormatPath), QString(kAssert),
 };
 }  // namespace AcBuiltin
 
@@ -391,5 +396,5 @@ inline constexpr const char *kJsonglobalenum = ".jsonglobalenum";
 /// JSON 族后缀清单（.json 及其派生配置类型）；新增 json 族类型只需在此追加，
 /// 消费方（目录树可见性 isJsonLike / nameFilters 等）自动跟随
 inline constexpr const char *const kJsonFamily[] = {kJson, kJsonvue, kJsonsource, kJsonupload,
-                                                   kJsonglobalenum};
+                                                    kJsonglobalenum};
 }  // namespace AcFileSuffix

@@ -49,6 +49,7 @@ void FunBuiltin::init() {
           {QString::fromLatin1(AcBuiltin::kBasename), basename},
           {QString::fromLatin1(AcBuiltin::kFileName), fileName},
           {QString::fromLatin1(AcBuiltin::kFileExists), fileExists},
+          {QString::fromLatin1(AcBuiltin::kListFiles), listFiles},
           {QString::fromLatin1(AcBuiltin::kFormatPath), formatPath},
           {QString::fromLatin1(AcBuiltin::kAssert), assertFn},
       });
@@ -286,6 +287,38 @@ accore::AcJsonValue FunBuiltin::fileExists(const accore::AcJsonValue &args) {
     return accore::AcJsonValue();
 
   return accore::AcJsonValue(QFileInfo::exists(args.at(0).toString()));
+}
+
+// ============================================================================
+// listFiles — 列出目录下匹配后缀的文件名数组（不递归，按名称排序）
+// ============================================================================
+
+accore::AcJsonValue FunBuiltin::listFiles(const accore::AcJsonValue &args) {
+  if (!FunArgs::requireString(args, 0,
+                              QStringLiteral("listFiles() requires a directory path argument")))
+    return accore::AcJsonValue();
+
+  const QString dirPath = args.at(0).toString();
+  // 后缀可选：省略/为空返回全部文件
+  QString suffix;
+  if (args.size() > 1 && args.at(1).isString()) {
+    suffix = args.at(1).toString();
+  }
+
+  QDir dir(dirPath);
+  if (!dir.exists()) {
+    FunMgr::setError(QStringLiteral("listFiles() directory not found: '%1'").arg(dirPath));
+    return accore::AcJsonValue();
+  }
+
+  const QStringList names = dir.entryList(QDir::Files, QDir::Name);
+  accore::AcJsonValue out = accore::AcJsonValue::makeArray();
+  for (const QString &n : names) {
+    if (suffix.isEmpty() || n.endsWith(suffix, Qt::CaseInsensitive)) {
+      out.append(accore::AcJsonValue(n));
+    }
+  }
+  return out;
 }
 
 // ============================================================================

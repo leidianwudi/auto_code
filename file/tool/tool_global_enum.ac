@@ -6,10 +6,10 @@
 ///     buildGlobalEnumTplData   - 构建后端 global_enum_.tpl 的模板数据
 ///     buildGlobalEnumJsonSource- 构建前端 .jsonsource 同构对象
 ///
-/// 配置文件约定（两级作用域，同名文件就近覆盖）：
-///   项目级  file/crud_nest/<项目>/global_enum.jsonglobalenum（本项目专用）
-///   平台级  file/crud_nest/global_enum.jsonglobalenum（跨项目共用）
-///   全部全局枚举聚合在各级一份文件里，格式：
+/// 配置文件约定（按后缀识别，文件名任意；两级作用域，就近覆盖）：
+///   项目级  file/crud_nest/<项目>/*.jsonglobalenum（本项目专用）
+///   平台级  file/crud_nest/*.jsonglobalenum（跨项目共用）
+///   各配置文件的枚举聚合在 enums 数组里，格式：
 ///     {"enums":[{"id":"ge0a1b2c3","name":"is_enable","remark":"是否启用",
 ///       "options":[{"key":"enable","label":"启用","value":"1","valueType":"number"}]}]}
 ///   字段说明：
@@ -21,30 +21,42 @@
 
 import { escapeJsStr, snakeToPascal } from "./tool_str.ac";
 
-/// @brief 从起始目录逐级向上收集所有全局枚举配置文件（就近在前，已去重）
+/// @brief 从起始目录逐级向上收集所有 .jsonglobalenum 配置文件（就近在前，已去重）
 /// @param startDir 起始目录（通常传 scriptDir()）
-/// @return 有序文件路径数组（可为空数组，调用方按空判断跳过）
-///   说明：除在本目录链上直接查找外，每级同时探测 <dir>/crud_nest/ 兄弟目录，
-///   供 admin_vue 侧项目（如 file/admin_vue/shop_admin）找到平级的共享层
-///   file/crud_nest/global_enum.jsonglobalenum
+/// @return 有序文件绝对路径数组（可为空数组，调用方按空判断跳过）
+///   收集规则（按后缀识别，文件名任意，不递归子目录）：
+///     - 每级目录探测 <dir>/crud_nest/（兄弟目录，供 admin_vue 侧项目找到
+///       平级共享层 file/crud_nest/）与 <dir>/ 本级的全部 *.jsonglobalenum
+///     - 逐级向上 = 目录深度递减，收集顺序天然"就近在前"（深目录的项目级
+///       配置先于浅目录的平台级）；同目录内按文件名排序
 export function findGlobalEnumFiles(startDir: String): String[] {
-  let found: String[] = [];
+  let result: String[] = [];
   let seenPath: Object = {};
   let dir: String = startDir.replace("\\", "/");
   // 逐级向上最多 10 层（防异常路径死循环）
   let guard: Int = 0;
   while (guard < 10) {
-    let p1: String = dir + "/global_enum.jsonglobalenum";
-    let p2: String = dir + "/crud_nest/global_enum.jsonglobalenum";
-    // 同一文件可能在多级目录链上被重复命中（如 dir 与其祖先的 crud_nest
-    // 探测指向同一路径），按路径去重，保证"就近在前"的顺序语义
-    if (fileExists(p1) && seenPath[p1] != true) {
-      seenPath[p1] = true;
-      found.append(p1);
+    // 先收集更深的 crud_nest 兄弟目录（若有），再收集本级目录
+    let sub: String = dir + "/crud_nest";
+    if (fileExists(sub)) {
+      let subNames: String[] = listFiles(sub, ".jsonglobalenum");
+      let subLen = subNames.length;
+      for (let si = 0; si < subLen; si = si + 1) {
+        let p: String = sub + "/" + subNames[si];
+        if (seenPath[p] != true) {
+          seenPath[p] = true;
+          result.append(p);
+        }
+      }
     }
-    if (fileExists(p2) && seenPath[p2] != true) {
-      seenPath[p2] = true;
-      found.append(p2);
+    let names: String[] = listFiles(dir, ".jsonglobalenum");
+    let nLen = names.length;
+    for (let ni = 0; ni < nLen; ni = ni + 1) {
+      let p: String = dir + "/" + names[ni];
+      if (seenPath[p] != true) {
+        seenPath[p] = true;
+        result.append(p);
+      }
     }
     let idx = dir.lastIndexOf("/");
     if (idx <= 0) {
@@ -53,7 +65,7 @@ export function findGlobalEnumFiles(startDir: String): String[] {
     dir = dir.substring(0, idx);
     guard = guard + 1;
   }
-  return found;
+  return result;
 }
 
 /// @brief 合并多份全局枚举配置（就近覆盖：列表中先出现的文件优先）

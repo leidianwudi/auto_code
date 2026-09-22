@@ -417,6 +417,58 @@ static void testInterfacePropertyContract() {
   CHECK(err.isEmpty());
 }
 
+/// listFiles 内置函数：后缀过滤 + 名称排序（依赖项目 file/ 下已知数据文件）
+static void testListFilesBuiltin() {
+  FunMgr::init();  // 幂等：确保内置函数已注册（若更早的套件已初始化则无操作）
+
+  QJsonValue r;
+  QString err;
+  const QString dir = QStringLiteral(PROJECT_SOURCE_DIR) + QStringLiteral("/file/crud_nest");
+  CHECK(runScript(
+      QStringLiteral("return listFiles(\"") + dir + QStringLiteral("\", \".jsonglobalenum\");"), r,
+      &err));
+  CHECK(err.isEmpty());
+  CHECK(r.isArray());
+  CHECK(r.toArray().size() >= 1);
+  CHECK(r.toArray().at(0).toString().endsWith(QStringLiteral(".jsonglobalenum")));
+
+  // 不存在的目录：报错返回失败
+  err.clear();
+  CHECK(
+      !runScript(QStringLiteral("return listFiles(\"D:/__no_such_dir__\", \".json\");"), r, &err));
+}
+
+/// 未声明标识符验证器：varClass 平铺映射的作用域污染回归
+/// （历史上 A 作用域的 `let r = new Foo()` 会污染后续同名 `let r: String[]` 的
+///  r.append 检查，误报 "class 'Foo' has no method 'append'"——生产案例：
+///  query_data.ac 的 result 污染 tool_global_enum.ac 的 result）
+static void testVarClassScopeLeak() {
+  QJsonValue r;
+  QString err;
+  // 同名变量：先类实例 new 绑定，后显式标注数组 + append 调用，必须互不干扰
+  CHECK(runScript(
+      QStringLiteral("class Foo { let x: String = \"\"; }") +
+          QStringLiteral("function make(): Foo {") + QStringLiteral("  let result = new Foo();") +
+          QStringLiteral("  return result;") + QStringLiteral("}") +
+          QStringLiteral("function useArr(): String {") +
+          QStringLiteral("  let result: String[] = [];") +
+          QStringLiteral("  result.append(\"ok\");") + QStringLiteral("  return result[0];") +
+          QStringLiteral("}") + QStringLiteral("return make().x + useArr();"),
+      r, &err));
+  CHECK(err.isEmpty());
+  CHECK(r.toString() == QStringLiteral("ok"));
+
+  // 反向确认：对类实例调用不存在的方法仍应报错（修复未放松真错误检测）
+  err.clear();
+  CHECK(!runScript(
+      QStringLiteral("class Foo { let x: String = \"\"; }") +
+          QStringLiteral("function make(): Foo {") + QStringLiteral("  let result = new Foo();") +
+          QStringLiteral("  result.append(\"x\");") + QStringLiteral("  return result;") +
+          QStringLiteral("}") + QStringLiteral("return make().x;"),
+      r, &err));
+  CHECK(err.contains(QStringLiteral("has no method")));
+}
+
 /// FunMgr 线程安全：注册表并发读 + thread_local 错误通道隔离（多线程并行 worker 的前置保障）
 static void testFunMgrThreadSafety() {
   // 注册所有内置函数（幂等：同名重复注册仅覆盖）；FunDb::init 内部
@@ -501,6 +553,8 @@ int runAcInterpreterTests() {
   testDoWhile();
   testTryCatchThrow();
   testInterfacePropertyContract();
+  testListFilesBuiltin();
+  testVarClassScopeLeak();
   testFunMgrThreadSafety();
   std::printf("[ac_interpreter] %d checks, %d failed\n", g_total, g_failed);
   return g_failed;

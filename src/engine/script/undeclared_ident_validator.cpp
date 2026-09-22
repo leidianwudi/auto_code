@@ -97,6 +97,13 @@ void UndeclaredIdentValidator::visitAssignStmt(const AssignStmt &as) {
   // 记录 let x = new Car() → 变量→类名
   if (!as.name.isEmpty() && as.value.kind == Expr::kNewInstance && !as.value.className.isEmpty()) {
     m_ctx.varClass.insert(as.name, as.value.className);
+  } else if (!as.name.isEmpty()) {
+    // 非类实例声明（显式类型标注/字面量初始化/普通赋值）：清除同名变量的历史推断。
+    // varClass 为全验证过程共享的平铺映射且不随作用域弹出，若不清除，先遍历到的
+    // `let r = new Foo()` 会污染后续文件/作用域里同名变量的方法调用检查——
+    // 如 A 文件 let r = new Foo() 使 B 文件 let r: String[] 的 r.append 被误报
+    // "class 'Foo' has no method 'append'"（局部声明应遮蔽旧绑定）
+    m_ctx.varClass.remove(as.name);
   }
   // 变量声明（let x = ...）将 x 加入作用域
   m_scopeVars.insert(as.name);

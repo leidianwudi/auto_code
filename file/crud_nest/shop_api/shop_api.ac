@@ -40,7 +40,7 @@ main {
     dbConfig: dbConfig,
     basePath: basePath,
     appModulePath: appModulePath,
-    genGlobalEnum: false
+    genGlobalEnum: true
   };
   generateApiMain(params);
   
