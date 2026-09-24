@@ -239,6 +239,11 @@ void ComboboxConfigDialog::rebuildSourceTree() {
 void ComboboxConfigDialog::applySelectedSource(int candidateIdx) {
   if (m_loading) return;
   m_selectedCandidate = candidateIdx;
+  // 同步控件内部选中引用（再次打开弹层时按此高亮）；m_loading 抑制 itemSelected 回环。
+  // candidateIdx=-1 时匹配顶层「手动配置」条目（data 同为 -1），手动模式也保留高亮
+  m_loading = true;
+  m_sourceTree->selectByData(candidateIdx);
+  m_loading = false;
   if (candidateIdx < 0 || candidateIdx >= m_candidates.size()) {
     // 手动模式：无数据源可选择，面板全部可编辑；显示文字同步为手动条目
     m_staticHint->hide();

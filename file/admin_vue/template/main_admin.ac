@@ -128,6 +128,11 @@ export function generateAdminMain(params: Object): Void {
   //      同名枚举项目级覆盖平台级（就近优先）；无任何配置时跳过（不影响页面生成）
   //      params.genGlobalEnum 显式为 false 时跳过（缺省/true 同步）：
   //      枚举定义稳定、无需每次重写产物时使用
+  // ── 3.5 全局枚举同步（方案 B：内存转换，不落盘）──────────────────
+  //      处理后的枚举源（sourceName=global_enum）仅供页面生成播种 sourceMap，
+  //      不再写出 template/api/global_enum.jsonsource（历史落盘产物易被
+  //      误认为第二事实来源）；global_enum.ts 仍由 source.tpl 照常生成
+  let globalEnumSources: Object[] = null;
   if (params["genGlobalEnum"] != false) {
     let geFiles: String[] = [];
     let projDir: String = params["projectApiPath"];
@@ -153,33 +158,33 @@ export function generateAdminMain(params: Object): Void {
       let srcObj = buildGlobalEnumJsonSource(geJson);
       let srcList: Object[] = srcObj["sources"];
       if (srcList != null && srcList.length > 0) {
-        let jsonSourcePath = scriptDir() + "/api/global_enum.jsonsource";
-        let writeOk = writeFile(jsonSourcePath, toJsonString(srcObj));
-        if (writeOk) {
-          printLog("同步全局枚举数据源: " + jsonSourcePath);
-          // 纳入数据源处理列表：jsonvue 引用（boolSourceFile/selectSourceFile 存
-          // 基名 global_enum.jsonsource）在 admin_data.ac 按 basename 匹配时命中
-          sourceFiles.append(jsonSourcePath);
-        }
-        // 渲染 source 链路（与勾选 .jsonsource 的处理逻辑一致）
-        let srcData = buildSourceTplData(srcObj, jsonSourcePath);
-        for (cfg in sourceTemplates) {
-          let outPath = formatPath(cfg.out, {
-            basePath: basePath,
-            sourceName: srcData["sourceName"]
-          });
-          let result = renderTpl(cfg.tpl, srcData);
-          if (result) {
-            let srcWriteOk = writeFile(outPath, result);
-            if (srcWriteOk) {
-              generatedFileCount = generatedFileCount + 1;
-            }
-            printLog("生成文件: " + outPath);
+      // 方案 B 不落盘：枚举源仅在内存中转换为统一静态源格式，
+      // jsonSourcePath 是虚拟路径（仅供 basename 推导 sourceName=global_enum）
+      let jsonSourcePath = scriptDir() + "/api/global_enum.jsonsource";
+      // 渲染 source 链路（与勾选 .jsonsource 的处理逻辑一致）→ src/api/source/global_enum.ts
+      let srcData = buildSourceTplData(srcObj, jsonSourcePath);
+      globalEnumSources = srcData["sources"];
+      for (cfg in sourceTemplates) {
+        let outPath = formatPath(cfg.out, {
+          basePath: basePath,
+          sourceName: srcData["sourceName"]
+        });
+        let result = renderTpl(cfg.tpl, srcData);
+        if (result) {
+          let srcWriteOk = writeFile(outPath, result);
+          if (srcWriteOk) {
+            generatedFileCount = generatedFileCount + 1;
           }
+          printLog("生成文件: " + outPath);
         }
-      } else {
-        printLog("全局枚举配置为空，跳过数据源同步");
       }
+      if (fileExists(jsonSourcePath)) {
+        printLog("提示：历史落盘产物 " + jsonSourcePath +
+                 " 已不再被生成流程使用（枚举源已改为内存直读），可手动删除");
+      }
+    } else {
+      printLog("全局枚举配置为空，跳过数据源同步");
+    }
     } else {
       printLog("未找到 global_enum.jsonglobalenum，跳过全局枚举数据源同步");
     }
@@ -231,7 +236,7 @@ export function generateAdminMain(params: Object): Void {
       "select": apiSelectSuffix,
       "update": apiUpdateSuffix,
       "delete": apiDeleteSuffix
-    }, sourceFiles, uploadFiles);
+    }, sourceFiles, uploadFiles, globalEnumSources);
     let pagePath: String = tplData["pagePath"];
 
     // ── 4.2 遍历模板配置，逐个渲染并写入文件 ─────────────────────

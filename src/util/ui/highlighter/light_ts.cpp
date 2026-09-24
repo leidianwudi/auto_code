@@ -120,51 +120,85 @@ void LightTs::reloadColors() {
  * @param text 当前行的文本内容
  *
  * 处理流程：
- * 1. 遍历所有高亮规则，对匹配的文本应用对应的格式
- * 2. 处理多行注释（块注释），使用 previousBlockState/currentBlockState
- *    跨行传递注释状态（状态 1 = 在注释中）
+ * 1. 单次左→右扫描收集注释区域（行注释与块注释先到先得，
+ *    块注释用 previousBlockState/currentBlockState 跨行传递，状态 1 = 在注释中）
+ * 2. 仅在非注释区间应用语法规则
+ * 3. 最后统一施加注释格式（覆盖区间内其它规则着色）
  */
 void LightTs::highlightBlock(const QString &text) {
-  // 应用所有高亮规则（单行匹配）
-  for (const HighlightRule &rule : std::as_const(m_rules)) {
-    QRegularExpressionMatchIterator matchIterator = rule.pattern.globalMatch(text);
-    while (matchIterator.hasNext()) {
-      QRegularExpressionMatch match = matchIterator.next();
-      setFormat(match.capturedStart(), match.capturedLength(), rule.format);
-    }
-  }
+  // ── 注释区域收集（单次左→右扫描，块/行注释按出现顺序处理）──
+  // 修复：此前块注释扫描不感知行注释，行注释内的 "/*"（如 "see /a/*.md"）
+  // 会误开块注释并在无 "*/" 闭合时级联到文件末尾（后续代码全部渲染为注释）
+  setCurrentBlockState(0);
 
-  // 处理多行注释 /* ... */
-  // 使用 QSyntaxHighlighter 的状态机制跨行传递注释状态
-  setCurrentBlockState(0);  // 默认不在注释中
+  struct CommentRegion {
+    int start;
+    int length;
+    bool isBlock;
+  };
+  QVector<CommentRegion> regions;
 
-  // 如果上一行以未闭合的 /* 结束，则从行首开始高亮
-  int startIndex = 0;
-  if (previousBlockState() != 1) {
-    // 上一行不在注释中，本行从头查找 /*
-    startIndex = text.indexOf("/*");
-  }
-
-  while (startIndex >= 0) {
-    // 查找配对的 */ 结束标记
-    int endIndex = text.indexOf("*/", startIndex);
-    int commentLength;
-
-    if (endIndex == -1) {
-      // 未找到 */，注释延伸到下一行，设置跨行状态
+  int pos = 0;
+  if (previousBlockState() == 1) {
+    const int end = text.indexOf(QStringLiteral("*/"));
+    if (end == -1) {
       setCurrentBlockState(1);
-      commentLength = text.length() - startIndex;
+      regions.append({0, static_cast<int>(text.length()), true});
     } else {
-      // 找到 */，注释在本行内结束
-      commentLength = endIndex - startIndex + 2;
+      regions.append({0, end + 2, true});
+      pos = end + 2;
     }
+  }
+  while (pos < text.length()) {
+    const int linePos = text.indexOf(QLatin1String("//"), pos);
+    const int blockPos = text.indexOf(QStringLiteral("/*"), pos);
+    if (linePos == -1 && blockPos == -1) break;
+    if (blockPos != -1 && (linePos == -1 || blockPos < linePos)) {
+      const int end = text.indexOf(QStringLiteral("*/"), blockPos + 2);
+      if (end == -1) {
+        setCurrentBlockState(1);
+        regions.append({blockPos, static_cast<int>(text.length()) - blockPos, true});
+        break;
+      }
+      regions.append({blockPos, end - blockPos + 2, true});
+      pos = end + 2;
+    } else {
+      regions.append({linePos, static_cast<int>(text.length()) - linePos, false});
+      break;
+    }
+  }
 
-    QTextCharFormat commentFormat;
-    commentFormat.setForeground(LightColor::comment());
-    commentFormat.setFontItalic(true);
-    setFormat(startIndex, commentLength, commentFormat);
+  // ── 非注释区间应用语法规则（此前整行应用，规则色会污染注释区间再被覆盖）──
+  int hlPos = 0;
+  for (const auto &r : regions) {
+    if (r.start > hlPos) {
+      for (const HighlightRule &rule : std::as_const(m_rules)) {
+        QRegularExpressionMatchIterator matchIterator =
+            rule.pattern.globalMatch(text, hlPos);
+        while (matchIterator.hasNext()) {
+          QRegularExpressionMatch match = matchIterator.next();
+          if (match.capturedStart() >= r.start) break;  // 只处理本非注释区间内
+          setFormat(match.capturedStart(), match.capturedLength(), rule.format);
+        }
+      }
+    }
+    hlPos = qMax(hlPos, r.start + r.length);
+  }
+  if (hlPos < text.length()) {
+    for (const HighlightRule &rule : std::as_const(m_rules)) {
+      QRegularExpressionMatchIterator matchIterator = rule.pattern.globalMatch(text, hlPos);
+      while (matchIterator.hasNext()) {
+        QRegularExpressionMatch match = matchIterator.next();
+        setFormat(match.capturedStart(), match.capturedLength(), rule.format);
+      }
+    }
+  }
 
-    // 继续查找下一个 /*
-    startIndex = text.indexOf("/*", startIndex + commentLength);
+  // ── 注释格式最后统一施加（覆盖区间内其它规则着色）──
+  QTextCharFormat commentFormat;
+  commentFormat.setForeground(LightColor::comment());
+  commentFormat.setFontItalic(true);
+  for (const auto &r : regions) {
+    setFormat(r.start, r.length, commentFormat);
   }
 }

@@ -230,17 +230,21 @@ void JsonSourceDialog::onOptionDown() {
 }
 
 void JsonSourceDialog::swapRows(int a, int b) {
-  // 交换两行所有单元格的 item 与 cellWidget（类型列为 cellWidget）
-  const int cols = m_optionTable->columnCount();
-  for (int c = 0; c < cols; ++c) {
+  // 交换两行的显示文本/实际值 item（takeItem 解除所有权后再放置，安全）
+  for (int c = 0; c < 2; ++c) {
     QTableWidgetItem *ia = m_optionTable->takeItem(a, c);
     QTableWidgetItem *ib = m_optionTable->takeItem(b, c);
     m_optionTable->setItem(a, c, ib);
     m_optionTable->setItem(b, c, ia);
-    QWidget *wa = m_optionTable->cellWidget(a, c);
-    QWidget *wb = m_optionTable->cellWidget(b, c);
-    m_optionTable->setCellWidget(a, c, wb);
-    m_optionTable->setCellWidget(b, c, wa);
+  }
+  // 类型列是 cellWidget：setCellWidget 会删除目标单元格旧控件，直接交换指针
+  // 会产生悬垂引用（上移/下移后再点添加选项即崩溃），改为交换下拉框当前选中项
+  auto *ca = qobject_cast<QComboBox *>(m_optionTable->cellWidget(a, 2));
+  auto *cb = qobject_cast<QComboBox *>(m_optionTable->cellWidget(b, 2));
+  if (ca && cb) {
+    const int idxA = ca->currentIndex();
+    ca->setCurrentIndex(cb->currentIndex());
+    cb->setCurrentIndex(idxA);
   }
 }
 

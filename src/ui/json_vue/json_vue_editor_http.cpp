@@ -270,7 +270,7 @@ int JsonVueEditor::populateColumnsFromHttp(const QJsonDocument &doc, const QStri
     m_columnTable->setCellWidget(row, ColEditVisible, eVis);
     connectCellWidgetSignals(eVis);
 
-    // 配置按钮（⚙ + 摘要文本，含显示类型/编辑样式/通用配置）
+    // 配置按钮（⚙ + 摘要文本，含取值域/显示类型/编辑样式/通用配置）
     auto *configBtn = new QPushButton(columnConfigSummary(col), this);
     storeColumnConfig(configBtn, col);
     m_columnTable->setCellWidget(row, ColConfig, configBtn);

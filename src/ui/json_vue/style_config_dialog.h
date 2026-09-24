@@ -34,10 +34,13 @@ class QWidget;
 
 /**
  * @class ColumnStyleDialog
- * @brief 列配置样式对话框
+ * @brief 字段设置面板（原"列样式配置"，方案 B 后升级为字段级设置）
  *
- * 配置表格列显示样式 + 编辑表单样式 + 通用配置。
- * 显示类型和编辑样式在此对话框内选择，子控件根据选择动态展示。
+ * 以字段为中心的属性面板（对齐成熟低代码平台的字段面板形态）：
+ * 取值域（字段级数据源声明，三处共享）→ 列表页展示 → 编辑表单 → 通用配置。
+ * 入口：列配置表 ⚙ 按钮或「取值域」列双击。
+ *
+ * 注：类名/文件名保持 ColumnStyleDialog 以控制改动面，概念上即"字段设置"。
  */
 class ColumnStyleDialog : public QDialog {
   Q_OBJECT
@@ -51,6 +54,8 @@ protected:
   void accept() override;
 
 public:
+  /// 显示当前编辑的字段名（面板标题区，只读提示）
+  void setFieldName(const QString &v);
   // ── 编辑样式 ──
   void setEditStyle(EditStyle style);
   EditStyle editStyle() const;
@@ -156,10 +161,23 @@ public:
   void setBoolFalseText(const QString &v);
   QString boolFalseText() const;
 
-  /// boolean 引用的静态数据源（恰好 2 项选项的静态源）；引用时真假文字锁定为数据源值
+  /// boolean 引用的静态数据源（恰好 2 项选项的静态源）；引用时真假文字锁定为数据源值。
+  /// 注：方案 B 后布尔源统一由取值域承担，此接口仅作旧保存路径兼容
   void setBoolSourceRef(const QString &file, const QString &id);
   QString boolSourceFile() const;
   QString boolSourceId() const;
+
+  // ── 字段取值域（方案 B：声明一次，列渲染/编辑控件/查询筛选三处共用）──
+  /// 取值域类型（""/enum/static/remote，见 JsonVueDomain）；空 = 未声明（生成/编辑侧按旧键回退）
+  void setDomainType(const QString &v);
+  QString domainType() const;
+  /// enum/static 引用的数据源（文件基名 + id，全局枚举固定基名 global_enum.jsonsource）
+  void setDomainSourceRef(const QString &file, const QString &id);
+  QString domainSourceFile() const;
+  QString domainSourceId() const;
+  /// remote 手动数据源 URL（复用 selectUrl 缓存，与下拉参数同组）
+  void setDomainUrl(const QString &v);
+  QString domainUrl() const;
 
   /// image 编辑样式引用的上传预设（.jsonupload 文件 + 预设 id）；空 = URL 手工输入
   void setUploadSourceRef(const QString &file, const QString &id);
@@ -193,6 +211,22 @@ private:
   /// 动态重建后自适应对话框大小
   void adjustToContents();
 
+  // ── 字段取值域（方案 B）──
+  /// 构建取值域数据源候选树（类型简化后列出全部静态源；enumOnly 参数保留兼容）
+  void buildDomainCandidates(bool enumOnly = false);
+  /// 按取值域类型显隐子控件、重建候选并恢复选中
+  void rebuildDomainControls();
+  /// 取值域变化时自动推导显示/编辑样式（用户已手动改过样式则不联动）
+  void deriveStylesFromDomain();
+  /// 刷新取值域选项预览
+  void updateDomainPreview();
+  /// 用取值域候选的真/假文字填充并锁定文字框（ref 为空时解锁）
+  void applyDomainBoolTexts(const QString &ref);
+  /// 显隐取值域行（field 与其标签同步）
+  void setDomainRowVisible(QWidget *field, bool visible);
+  /// 当前取值域引用（"文件#id"，未选时为空）
+  QString currentDomainRef() const;
+
   EditStyle m_editStyle = EditStyle::Text;
   bool m_syncing = false;  ///< 显示样式/编辑样式联动同步中（防递归互触）
 
@@ -218,14 +252,27 @@ private:
   QComboBox *m_precisionCombo = nullptr;
   QComboBox *m_dateFormatCombo = nullptr;
   QComboBox *m_textareaRowsCombo = nullptr;
-  // 下拉框数据源配置（显示样式 == select 时显示"数据源"按钮，列表/编辑/查询共享）
-  QPushButton *m_selectSourceBtn = nullptr;
+
+  // ── 字段取值域（方案 B：顶部声明区，列渲染/编辑/查询三处共享）──
+  QLabel *m_fieldNameLabel = nullptr;           ///< 字段名显示（面板顶部，只读）
+  QComboBox *m_domainTypeCombo = nullptr;       ///< 取值域类型（无/枚举/静态源/远程源）
+  AuiTreeCombo *m_domainSourceCombo = nullptr;  ///< enum/static 数据源树形下拉
+  QWidget *m_domainSourceRow = nullptr;         ///< 数据源行容器（整行显隐切换）
+  QLabel *m_domainPreviewLabel = nullptr;       ///< 选项预览（如 开启=1 / 关闭=0）
+  QPushButton *m_domainUrlBtn = nullptr;        ///< remote 配置入口（开 ComboboxConfigDialog）
+  QString m_cachedDomainType;                   ///< 取值域类型缓存
+  QString m_cachedDomainSourceFile;             ///< 取值域选中源文件（恢复选中）
+  QString m_cachedDomainSourceId;               ///< 取值域选中源 id
+  bool m_stylesTouched = false;  ///< 用户已手动改过显示/编辑样式（取值域推导让位）
+  /// 取值域候选的选项预览缓存（ref → "开启=1 / 关闭=0"，超过 4 项截断）
+  QHash<QString, QString> m_domainOptionPreviews;
+  /// 取值域候选的选项数缓存（ref → 选项数；恰 2 项 = 枚举能力，布尔样式可选）
+  QHash<QString, int> m_domainOptionCounts;
 
   // ── 显示样式子控件（按需创建）──
   QTableWidget *m_tagItemsTable = nullptr;  ///< tag 标签映射表（动态增删行）
   QLineEdit *m_boolTrueTextEdit = nullptr;
   QLineEdit *m_boolFalseTextEdit = nullptr;
-  AuiTreeCombo *m_boolSourceCombo = nullptr;  ///< boolean 真假文字的静态数据源下拉（树形分组）
   QComboBox *m_uploadSourceCombo = nullptr;  ///< image 编辑样式的上传预设下拉（.jsonupload）
 
   // ── 通用配置控件 ──

@@ -45,16 +45,105 @@ static void dbgTreeLog(const char *location, const QJsonObject &data) {
 // ════════════════════════════════════════════════════════════
 
 namespace {
+/// 条目委托：行高与 AuiComboItemDelegate 同口径（字体行高 + 8px）。
+/// 高亮自管：全局样式表没有 ::item:selected 规则，选中底色依赖原生主题绘制，
+/// 会被悬停状态干扰。因此与 AuiComboDeleteDelegate 同口径确定性绘制：
+/// 选中行恒用 listSelectionBackground，悬停行用 listHoverBackground，两色不同。
+/// 选中判定取自控件记录的当前选中索引（currentHighlightIndex），不依赖弹层
+/// selection model——悬停引发的视图选择变化不会冲掉选中高亮
 class AuiTreeComboDelegate : public QStyledItemDelegate {
   Q_OBJECT
 
 public:
-  explicit AuiTreeComboDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
+  AuiTreeComboDelegate(const AuiTreeCombo *combo, QObject *parent)
+      : QStyledItemDelegate(parent), m_combo(combo) {}
 
   QSize sizeHint(const QStyleOptionViewItem &opt, const QModelIndex &index) const override {
     Q_UNUSED(index);
     return {0, QFontMetrics(opt.font).height() + 8};
   }
+
+  void paint(QPainter *p, const QStyleOptionViewItem &opt, const QModelIndex &index) const override {
+    QStyleOptionViewItem o = opt;
+    initStyleOption(&o, index);
+    // 背景：选中优先于悬停（选中行被悬停时仍显示选中色）
+    const bool selected = m_combo && m_combo->currentHighlightIndex() == index;
+    p->save();
+    if (selected) {
+      p->fillRect(o.rect, AuiStyle::listSelectionBackground());
+    } else if (o.state & QStyle::State_MouseOver) {
+      p->fillRect(o.rect, AuiStyle::listHoverBackground());
+    }
+    // 文本：与全局样式表 ::item 的 8px 左内边距对齐，超长省略号截断；
+    // 组标题的粗体由条目 FontRole 传入（o.font）
+    const QRect textRect = o.rect.adjusted(8, 0, -4, 0);
+    p->setPen(AuiStyle::textColor());
+    p->setFont(o.font);
+    p->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter,
+                p->fontMetrics().elidedText(o.text, Qt::ElideRight, textRect.width()));
+    p->restore();
+  }
+
+private:
+  const AuiTreeCombo *m_combo = nullptr;  ///< 所属控件（读取当前选中索引）
+};
+
+/// 弹层树视图：分支指示区（缩进/展开箭头列）与条目区用同一套高亮配色绘制。
+/// 原生 drawBranches 在选中时用调色板高亮色填充分支区，与委托绘制的条目底色
+/// 不一致，造成"同一行两种颜色"——这里改为与条目区同色，箭头手动绘制。
+/// 悬停索引由本视图自行跟踪（QAbstractItemView 内部 hover 不暴露给子类）
+class AuiTreePopupView : public QTreeView {
+public:
+  explicit AuiTreePopupView(const AuiTreeCombo *combo, QWidget *parent = nullptr)
+      : QTreeView(parent), m_combo(combo) {}
+
+protected:
+  void mouseMoveEvent(QMouseEvent *e) override {
+    QTreeView::mouseMoveEvent(e);
+    const QModelIndex idx = indexAt(e->position().toPoint());
+    if (idx != m_hover) {
+      m_hover = QPersistentModelIndex(idx);
+      viewport()->update();
+    }
+  }
+
+  void leaveEvent(QEvent *e) override {
+    QTreeView::leaveEvent(e);
+    if (m_hover.isValid()) {
+      m_hover = QPersistentModelIndex();
+      viewport()->update();
+    }
+  }
+
+  void drawBranches(QPainter *p, const QRect &rect, const QModelIndex &index) const override {
+    // 背景：与条目区同色（选中优先于悬停）
+    const bool selected = m_combo && m_combo->currentHighlightIndex() == index;
+    const bool hovered = !selected && m_hover == index;
+    p->save();
+    if (selected) {
+      p->fillRect(rect, AuiStyle::listSelectionBackground());
+    } else if (hovered) {
+      p->fillRect(rect, AuiStyle::listHoverBackground());
+    }
+    // 展开/收起箭头：仅组节点（有子级）绘制；状态不带 Selected/MouseOver，
+    // 防止原生 PE_IndicatorBranch 路径再次填出调色板高亮底色。
+    // 注：不能用 QAbstractItemView::initStyleOption（Qt 6.12 中不可见，会解析到
+    // QFrame 的 1 参重载），分支绘制手工构造选项即可
+    if (model() && model()->hasChildren(index)) {
+      QStyleOptionViewItem opt;
+      opt.palette = palette();
+      opt.direction = layoutDirection();
+      opt.rect = rect;
+      opt.state = QStyle::State_Enabled | QStyle::State_Item | QStyle::State_Children
+                  | (isExpanded(index) ? QStyle::State_Open : QStyle::State_None);
+      style()->drawPrimitive(QStyle::PE_IndicatorBranch, &opt, p, this);
+    }
+    p->restore();
+  }
+
+private:
+  const AuiTreeCombo *m_combo = nullptr;  ///< 所属控件（读取当前选中索引）
+  QPersistentModelIndex m_hover;          ///< 鼠标悬停条目（分支区悬停底色判定）
 };
 }  // namespace
 
@@ -64,11 +153,14 @@ public:
 
 AuiTreeCombo::AuiTreeCombo(QWidget *parent) : QComboBox(parent) {
   m_model = new QStandardItemModel(this);
-  m_treeView = new QTreeView(this);
+  m_treeView = new AuiTreePopupView(this, this);
   m_treeView->setHeaderHidden(true);
   m_treeView->setRootIsDecorated(true);  // 组节点显示展开/收起箭头
   m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
-  m_treeView->setItemDelegate(new AuiTreeComboDelegate(m_treeView));
+  m_treeView->setItemDelegate(new AuiTreeComboDelegate(this, m_treeView));
+  // 悬停高亮需要 viewport 接收鼠标移动事件（委托按 State_MouseOver 绘制悬停底色）。
+  // 本控件未挂任何 selectionChanged/currentChanged 钩子，悬停不会引发选择变化
+  m_treeView->viewport()->setAttribute(Qt::WA_MouseTracking, true);
   setView(m_treeView);
   setModel(m_model);
   // 可编辑 + 只读输入框：树形模型下 QComboBox 的行号显示文本无意义，
@@ -146,6 +238,7 @@ void AuiTreeCombo::selectByData(const QVariant &data) {
   m_treeView->selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect);
   m_internalSelect = false;
   m_currentRef = data;
+  m_currentIdx = idx;
   setEditText(idx.data(Qt::DisplayRole).toString());  // 按钮显示选中条目文字
   // 显式抛出选中信号（程序性选中已屏蔽 selectionChanged）
   emit itemSelected(data);
@@ -173,6 +266,7 @@ void AuiTreeCombo::showPopup() {
     m_treeView->selectionModel()->select(cur, QItemSelectionModel::ClearAndSelect);
     m_internalSelect = false;
     m_treeView->scrollTo(cur, QAbstractItemView::EnsureVisible);
+    m_currentIdx = cur;
   }
   // 测量容器与视图的高度差（弹层窗口钉高度时需要），并按实际内容校准高度
   if (QWidget *w = view()->window()) {
@@ -295,6 +389,7 @@ bool AuiTreeCombo::eventFilter(QObject *obj, QEvent *ev) {
       m_treeView->selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect);
       m_internalSelect = false;
       m_currentRef = idx.data(Qt::UserRole);
+      m_currentIdx = idx;
       setEditText(idx.data(Qt::DisplayRole).toString());
       emit itemSelected(m_currentRef);
       hidePopup();

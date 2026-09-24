@@ -131,6 +131,38 @@ export function processColumns(rawColumns: Object[], sourceMap: Object,
     col["editEditable"] = rawCol.editEditable;
     col["switchEditable"] = rawCol.switchEditable;
 
+    // ── 字段取值域解析（方案 B）─────────────────────────────────
+    // 取值域是字段级声明（列渲染/编辑控件/查询筛选三处共用）：
+    //   "enum"   枚举（恰 2 项静态源，含全局枚举）
+    //   "static" 静态源（任意项静态源）
+    //   "remote" 远程源（手动 URL，domainUrl）
+    // 唯一事实来源是 domain* 键，不做旧键（boolSourceFile/selectSourceFile）回退——
+    // 旧配置由编辑器打开时自动迁移，重新保存后文件里只有 domain 键；
+    // 手动 URL 的旧列无需域声明，仍由下方 selectUrl（effUrl）路径处理
+    let domainKind: String = rawCol.domainType;
+    let domainRefFile: String = rawCol.domainSourceFile;
+    let domainRefId: String = rawCol.domainSourceId;
+    // 域函数名（enum/static 经 sourceMap 查 funcName；查不到时警告并按无域降级）
+    let domainFuncName: String = "";
+    let domainRefSourceName: String = "";
+    if (domainKind == "enum" || domainKind == "static") {
+      let dRef: Object = null;
+      if (sourceMap != null) {
+        dRef = sourceMap[domainRefFile + "#" + domainRefId];
+      }
+      if (dRef != null && dRef["isStatic"]) {
+        domainFuncName = dRef["funcName"];
+        domainRefSourceName = dRef["sourceName"];
+      } else {
+        printError("警告：字段 '" + rawCol.dataName + "' 取值域引用的数据源不存在或非静态（" +
+                   domainRefFile + "#" + domainRefId + "），已按未声明处理");
+        domainKind = "";
+      }
+    }
+    col["domainKind"] = domainKind;
+    col["domainFuncName"] = domainFuncName;
+    col["domainSourceRefFile"] = domainRefSourceName;
+
     // 判断是否为开关样式：(displayType == "boolean" || "tag") && switchEditable
     let isSwitch = false;
     if ((rawCol.displayType == "boolean" || rawCol.displayType == "tag") && rawCol.switchEditable) {
@@ -153,20 +185,15 @@ export function processColumns(rawColumns: Object[], sourceMap: Object,
 
     // ── 布尔列引用 .jsonsource 静态数据源 ────────────────────────
     // 显示样式 boolean 的列（开关 switchEditable=true 或纯文本显示
-    // switchEditable=false）都可引用恰好 2 项的静态数据源（boolSourceFile/
-    // boolSourceId）：write.vue 的 Select 用 optionApi 调 source api 函数，
+    // switchEditable=false）引用恰好 2 项的静态数据源（方案 B：由字段
+    // 取值域声明）：
+    // write.vue 的 Select 用 optionApi 调 source api 函数，
     // user.vue 的开关/文字用 boolSwitchTexts 运行时读取，都不写死文字；
     // 数据源文字修改后只需重新生成 source.ts
     let boolApiName = "";
-    if (rawCol.displayType == "boolean" && sourceMap != null) {
-      let boolRefFile: String = rawCol.boolSourceFile;
-      if (isNotEmpty(boolRefFile)) {
-        let boolRef: Object = sourceMap[boolRefFile + "#" + rawCol.boolSourceId];
-        if (boolRef != null && boolRef["isStatic"]) {
-          boolApiName = boolRef["funcName"];
-          col["sourceRefFile"] = boolRef["sourceName"];
-        }
-      }
+    if (rawCol.displayType == "boolean" && domainKind == "enum") {
+      boolApiName = domainFuncName;
+      col["sourceRefFile"] = domainRefSourceName;
     }
     col["boolApiName"] = boolApiName;
     col["hasBoolApi"] = (boolApiName != "");
@@ -238,17 +265,24 @@ export function processColumns(rawColumns: Object[], sourceMap: Object,
 
     // ── 引用 .jsonsource 数据源 ────────────────────────────────────
     // 从查找表取数据源信息：函数名（funcName）与 source.tpl 生成保持一致，
-    // url / 字段以数据源文件的最新配置为准（jsonvue 里可能保存的是旧值）
+    // url / 字段以数据源文件的最新配置为准（jsonvue 里可能保存的是旧值）。
+    // 已声明 enum/static 取值域时统一从域引用取（含布尔枚举列——
+    // 编辑页 select 与查询下拉共用域函数）；未声明域的手动 URL 列走 selectUrl
     let sourceRef: Object = null;
-    let refFile: String = rawCol.selectSourceFile;
-    if (isNotEmpty(refFile) && sourceMap != null) {
-      sourceRef = sourceMap[refFile + "#" + rawCol.selectSourceId];
+    if (domainKind == "enum" || domainKind == "static") {
+      if (sourceMap != null && isNotEmpty(domainRefFile)) {
+        sourceRef = sourceMap[domainRefFile + "#" + domainRefId];
+      }
     }
     let hasSourceRef = (sourceRef != null);
     col["hasSourceRef"] = hasSourceRef;
 
-    // 生效 url：引用数据源时取数据源 url（已补前导斜杠）
+    // 生效 url：取值域 remote 时用 domainUrl；未声明域时回退旧键 selectUrl
+    // （手动 URL 列不需要域声明）；引用数据源时取数据源 url（已补前导斜杠）
     let effUrl: String = rawCol.selectUrl;
+    if (domainKind == "remote" && isNotEmpty(rawCol.domainUrl)) {
+      effUrl = rawCol.domainUrl;
+    }
     if (hasSourceRef) {
       effUrl = sourceRef["url"];
       // 引用文件基名（write.tpl 生成 import '@/api/source/{sourceRefFile}' 用）
@@ -296,8 +330,8 @@ export function processColumns(rawColumns: Object[], sourceMap: Object,
     if (hasSourceRef) {
       selectApiName = sourceRef["funcName"];
       selectApiUrl = effUrl;
-    } else if (isSelect && isNotEmpty(rawCol.selectUrl)) {
-      let selUrlParts: String[] = rawCol.selectUrl.split("/");
+    } else if (isSelect && isNotEmpty(effUrl)) {
+      let selUrlParts: String[] = effUrl.split("/");
       let selUrlPartsLen: Int = selUrlParts.length;
       for (let si = selUrlPartsLen - 1; si >= 0; si = si - 1) {
         if (selUrlParts[si] != "") {
@@ -305,10 +339,10 @@ export function processColumns(rawColumns: Object[], sourceMap: Object,
           break;
         }
       }
-      if (rawCol.selectUrl.startsWith("/")) {
-        selectApiUrl = rawCol.selectUrl;
+      if (effUrl.startsWith("/")) {
+        selectApiUrl = effUrl;
       } else {
-        selectApiUrl = "/" + rawCol.selectUrl;
+        selectApiUrl = "/" + effUrl;
       }
     }
     col["selectApiName"] = selectApiName;
@@ -532,7 +566,8 @@ export function processColumns(rawColumns: Object[], sourceMap: Object,
 // ---------------------------------------------------------------------------
 // 3) 加工查询字段数据 → 模板友好查询字段数组
 // ---------------------------------------------------------------------------
-export function processQueryFields(rawQueryFields: Object[], columnMap: Object): Object[] {
+export function processQueryFields(rawQueryFields: Object[], columnMap: Object,
+                                   sourceMap: Object): Object[] {
   let queryFields: Object[] = [];
   let rawQfLen = rawQueryFields.length;
   for (let i = 0; i < rawQfLen; i = i + 1) {
@@ -559,17 +594,29 @@ export function processQueryFields(rawQueryFields: Object[], columnMap: Object):
     qf["selectSearchField"] = rawQf.selectSearchField || "";
     qf["selectMethod"] = isNotEmpty(rawQf.selectMethod) ? rawQf.selectMethod : "POST";
 
-    // ── 下拉接口函数推导（查询字段复用列表列的数据源，三处共享）──
-    //   列已配置下拉数据源（selectApiName 非空）→ 直接复用列的函数/字段；
-    //   否则从查询字段自己的 selectUrl 推导（旧数据兼容，函数在本页 api）
+    // ── 下拉接口/选项推导（查询字段按 domainInherit 沿用列表列取值域，三处共享）──
+    //   沿用（domainInherit != false，方案 B 默认）→
+    //     列取值域为 enum/static → selectStaticName（静态选项，模板生成「全部」空选项分支，
+    //     布尔枚举列也能进查询下拉）；列为远程源 → 复用列的 selectApiName
+    //   覆盖（domainInherit == false）→ 用查询字段自身的 selectSourceFile（静态）
+    //     或 selectUrl（远程，旧数据兼容，函数在本页 api）
     let qfApiName: String = "";
     let qfHasSourceRef: Bool = false;
     let qfSourceRefFile: String = "";
+    let qfStaticName: String = "";
+    let qfStaticRefFile: String = "";
     let srcCol: Object = null;
     if (columnMap != null) {
       srcCol = columnMap[rawQf.dataName];
     }
-    if (srcCol != null && srcCol["selectApiName"] != "") {
+    let inheritDomain: Bool = (rawQf.domainInherit != false);
+    if (inheritDomain && srcCol != null &&
+        (srcCol["domainKind"] == "enum" || srcCol["domainKind"] == "static")) {
+      // 列已声明 enum/static 取值域：查询下拉复用同一静态源函数
+      qfStaticName = srcCol["domainFuncName"];
+      qfStaticRefFile = srcCol["domainSourceRefFile"];
+    } else if (inheritDomain && srcCol != null && srcCol["selectApiName"] != "") {
+      // 列为远程源：直接复用列的函数/字段
       qfApiName = srcCol["selectApiName"];
       qf["selectUrl"] = srcCol["selectUrl"];
       qf["selectValueField"] = srcCol["selectValueField"];
@@ -577,6 +624,14 @@ export function processQueryFields(rawQueryFields: Object[], columnMap: Object):
       qfHasSourceRef = (srcCol["hasSourceRef"] == true);
       if (qfHasSourceRef) {
         qfSourceRefFile = srcCol["sourceRefFile"];
+      }
+    } else if (isSelect && !inheritDomain && isNotEmpty(rawQf.selectSourceFile) &&
+               sourceMap != null) {
+      // 覆盖模式：查询字段自身的静态源引用 → selectStaticName
+      let oRef: Object = sourceMap[rawQf.selectSourceFile + "#" + rawQf.selectSourceId];
+      if (oRef != null && oRef["isStatic"]) {
+        qfStaticName = oRef["funcName"];
+        qfStaticRefFile = oRef["sourceName"];
       }
     } else if (isSelect && isNotEmpty(rawQf.selectUrl)) {
       let selUrlParts: String[] = rawQf.selectUrl.split("/");
@@ -591,6 +646,12 @@ export function processQueryFields(rawQueryFields: Object[], columnMap: Object):
     qf["selectApiName"] = qfApiName;
     qf["hasSourceRef"] = qfHasSourceRef;
     qf["sourceRefFile"] = qfSourceRefFile;
+    // 静态选项引用（方案 B）：hasStaticRef 时模板走「全部 + 静态选项」分支，
+    // 并把函数并入 index.vue 的 source import
+    qf["selectStaticName"] = qfStaticName;
+    qf["hasStaticRef"] = (qfStaticName != "");
+    qf["staticRefFile"] = qfStaticRefFile;
+    qf["selectAllowEmpty"] = (qfStaticName != "");
 
     let comp = "Input";
     if (isSelect) {
@@ -1078,7 +1139,8 @@ export function deriveApiBaseFromUrl(dataUrl: String): String {
 }
 
 export function buildAdminTplData(json: Object, file: String, suffixes: Object,
-                                  sourceFiles: String[], uploadFiles: String[]): Object {
+                                  sourceFiles: String[], uploadFiles: String[],
+                                  globalEnumSources: Object[]): Object {
   // ── meta 与原始数据 ──────────────────────────────────────────────
   let meta: Object = json.meta;
   let rawColumns: Object[] = json.columns;
@@ -1130,18 +1192,22 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
     let sourceFileSet: Object = {};
     let preLen = rawColumns.length;
     for (let i = 0; i < preLen; i = i + 1) {
-      // 同时收集 select 引用（selectSourceFile）与布尔开关引用（boolSourceFile）
+      // 收集取值域引用的 .jsonsource 文件（方案 B：唯一引用键 domainSourceFile）。
+      // global_enum.jsonsource 是内存态枚举源（不落盘），不在此读取，
+      // 由 main_admin.ac 传入的 globalEnumSources 在循环外播种进 sourceMap
       let sfList: String[] = [];
-      if (isNotEmpty(rawColumns[i].selectSourceFile)) {
-        sfList.push(rawColumns[i].selectSourceFile);
-      }
-      if (isNotEmpty(rawColumns[i].boolSourceFile)) {
-        sfList.push(rawColumns[i].boolSourceFile);
+      if (isNotEmpty(rawColumns[i].domainSourceFile)) {
+        sfList.push(rawColumns[i].domainSourceFile);
       }
       let sfLen = sfList.length;
       for (let k = 0; k < sfLen; k = k + 1) {
         let sfPre: String = sfList[k];
         if (sourceFileSet[sfPre] != null) {
+          continue;
+        }
+        // 全局枚举引用（方案 B 不落盘）：枚举源由 main_admin.ac 内存转换后
+        // 直接播种进 sourceMap（见本函数末尾），磁盘上没有该文件，跳过读取
+        if (sfPre == "global_enum.jsonsource") {
           continue;
         }
         sourceFileSet[sfPre] = true;
@@ -1169,6 +1235,17 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
         for (let j = 0; j < procLen; j = j + 1) {
           sourceMap[sfPre + "#" + processed[j]["id"]] = processed[j];
         }
+      }
+    }
+    // ── 全局枚举取值域播种（方案 B 不落盘）────────────────────────
+    // main_admin.ac 已在内存中把 *.jsonglobalenum 合并转换为统一静态源
+    // （sourceName=global_enum），这里直接播种进 sourceMap；
+    // 引用键仍为固定基名 global_enum.jsonsource#id，与 .jsonvue 引用一致
+    if (globalEnumSources != null) {
+      let geLen = globalEnumSources.length;
+      for (let gi = 0; gi < geLen; gi = gi + 1) {
+        let geSrc: Object = globalEnumSources[gi];
+        sourceMap["global_enum.jsonsource#" + geSrc["id"]] = geSrc;
       }
     }
   }
@@ -1226,7 +1303,7 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
   for (let i = 0; i < colMapLen; i = i + 1) {
     columnMap[columns[i]["dataName"]] = columns[i];
   }
-  let queryFields = processQueryFields(rawQueryFields, columnMap);
+  let queryFields = processQueryFields(rawQueryFields, columnMap, sourceMap);
 
   // ── 下拉框数据接口：汇总各 select 列的接口函数 ───────────────────
   // 手动 url 列：本页 api.tpl 追加生成（selectApiStr）并导入（selectApiImports）。
@@ -1306,7 +1383,26 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
   let qfLen2 = queryFields.length;
   for (let i = 0; i < qfLen2; i = i + 1) {
     let qfSel: Object = queryFields[i];
-    if (!qfSel["isSelect"] || qfSel["selectApiName"] == "") {
+    if (!qfSel["isSelect"]) {
+      continue;
+    }
+    // 静态选项引用（方案 B：沿用列枚举/静态域或查询字段独立静态源）→
+    // 并入 boolSourceFileMap（index import source api），模板走「全部 + 静态选项」分支
+    if (qfSel["hasStaticRef"]) {
+      let stName: String = qfSel["selectStaticName"];
+      if (boolSourceNameSet[stName] == null) {
+        boolSourceNameSet[stName] = true;
+        let refBaseS: String = qfSel["staticRefFile"];
+        if (boolSourceFileMap[refBaseS] == null) {
+          boolSourceFileMap[refBaseS] = stName;
+          boolSourceFileOrder.push(refBaseS);
+        } else {
+          boolSourceFileMap[refBaseS] = boolSourceFileMap[refBaseS] + ", " + stName;
+        }
+      }
+      continue;  // 静态选项不走远程 optionApi
+    }
+    if (qfSel["selectApiName"] == "") {
       continue;
     }
     let qfName2: String = qfSel["selectApiName"];

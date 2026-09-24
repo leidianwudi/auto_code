@@ -64,7 +64,7 @@ void JsonVueEditor::onAddColumn() {
   m_columnTable->setCellWidget(row, ColEditVisible, eVis);
   connectCellWidgetSignals(eVis);
 
-  // 配置按钮（⚙ + 摘要文本，含显示类型/编辑样式/通用配置）
+  // 配置按钮（⚙ + 摘要文本，含取值域/显示类型/编辑样式/通用配置）
   ColumnConfig emptyCol;
   auto *configBtn = new QPushButton(columnConfigSummary(emptyCol), this);
   storeColumnConfig(configBtn, emptyCol);

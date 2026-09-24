@@ -276,8 +276,35 @@ QJsonObject ColumnConfig::toJson() const {
   // 避免同一个标签在配置里重复出现两个字段
   obj[JsonVueKey::kEditStyle] = editStyleToString(editStyle);
   obj[JsonVueKey::kEditEditable] = editEditable;
-  // 下拉框配置（仅 Select 时序列化）
-  if (editStyle == EditStyle::Select) {
+  // 字段取值域（方案 B：非空才输出；enum/static 写源引用，remote 写手动 URL + 下拉参数）。
+  // 已声明取值域时不再写旧键 boolSourceFile/Id、selectSourceFile/Id、selectUrl，
+  // 生成侧对旧文件按旧键回退（domainType 为空即旧行为）
+  const bool domainManaged = !domainType.isEmpty();
+  if (domainManaged) {
+    obj[JsonVueKey::kDomainType] = domainType;
+    if (domainType == QString::fromLatin1(JsonVueDomain::kEnum) ||
+        domainType == QString::fromLatin1(JsonVueDomain::kStatic)) {
+      if (!domainSourceFile.isEmpty()) obj[JsonVueKey::kDomainSourceFile] = domainSourceFile;
+      if (!domainSourceId.isEmpty()) obj[JsonVueKey::kDomainSourceId] = domainSourceId;
+    }
+    if (domainType == QString::fromLatin1(JsonVueDomain::kRemote)) {
+      obj[JsonVueKey::kDomainUrl] = domainUrl;
+      obj[JsonVueKey::kSelectValueField] = selectValueField;
+      obj[JsonVueKey::kSelectLabelField] = selectLabelField;
+      // 查询分页配置（仅启用分页时输出，保持普通下拉框配置干净）
+      if (selectPaged) {
+        obj[JsonVueKey::kSelectPaged] = true;
+        obj[JsonVueKey::kSelectPageKey] = selectPageKey;
+        obj[JsonVueKey::kSelectPageSizeKey] = selectPageSizeKey;
+        obj[JsonVueKey::kSelectPageSize] = selectPageSize;
+        obj[JsonVueKey::kSelectSearchTitle] = selectSearchTitle;
+        obj[JsonVueKey::kSelectSearchField] = selectSearchField;
+        obj[JsonVueKey::kSelectMethod] = selectMethod;
+      }
+    }
+  }
+  // 下拉框配置（仅 Select 且未声明取值域时序列化——旧格式路径，新配置由 domain 块接管）
+  if (editStyle == EditStyle::Select && !domainManaged) {
     obj[JsonVueKey::kSelectUrl] = selectUrl;
     obj[JsonVueKey::kSelectValueField] = selectValueField;
     obj[JsonVueKey::kSelectLabelField] = selectLabelField;
@@ -340,7 +367,8 @@ QJsonObject ColumnConfig::toJson() const {
     if (displayType == JsonVueStyle::kBoolean) {
       obj[JsonVueKey::kBoolTrueText] = boolTrueText;
       obj[JsonVueKey::kBoolFalseText] = boolFalseText;
-      if (!boolSourceFile.isEmpty()) {
+      // 布尔源引用已由 domain 块接管（domainType 非空时不再写旧键）
+      if (!boolSourceFile.isEmpty() && !domainManaged) {
         obj[JsonVueKey::kBoolSourceFile] = boolSourceFile;
         obj[JsonVueKey::kBoolSourceId] = boolSourceId;
       }
@@ -438,6 +466,29 @@ ColumnConfig ColumnConfig::fromJson(const QJsonObject &obj) {
     c.boolFalseText = QStringLiteral("否");
   c.boolSourceFile = obj.value(JsonVueKey::kBoolSourceFile).toString();
   c.boolSourceId = obj.value(JsonVueKey::kBoolSourceId).toString();
+  // 字段取值域（方案 B）：新键优先读取；缺失时从旧键自动迁移（内存态，
+  // 用户保存后才落新键——迁移不回写旧文件，生成侧对旧键保持回退兼容）
+  c.domainType = obj.value(JsonVueKey::kDomainType).toString();
+  c.domainSourceFile = obj.value(JsonVueKey::kDomainSourceFile).toString();
+  c.domainSourceId = obj.value(JsonVueKey::kDomainSourceId).toString();
+  c.domainUrl = obj.value(JsonVueKey::kDomainUrl).toString();
+  if (c.domainType.isEmpty()) {
+    if (!c.boolSourceFile.isEmpty()) {
+      // 布尔源（恰 2 项静态源，含全局枚举）→ 枚举取值域
+      c.domainType = QString::fromLatin1(JsonVueDomain::kEnum);
+      c.domainSourceFile = c.boolSourceFile;
+      c.domainSourceId = c.boolSourceId;
+    } else if (!c.selectSourceFile.isEmpty()) {
+      // select 引用的静态/动态源 → 静态源/远程引用取值域（生成侧按源 type 细分）
+      c.domainType = QString::fromLatin1(JsonVueDomain::kStatic);
+      c.domainSourceFile = c.selectSourceFile;
+      c.domainSourceId = c.selectSourceId;
+    } else if (!c.selectUrl.isEmpty()) {
+      // 手动远程 URL → 远程取值域
+      c.domainType = QString::fromLatin1(JsonVueDomain::kRemote);
+      c.domainUrl = c.selectUrl;
+    }
+  }
   // 通用配置
   c.defaultValue = obj.value(JsonVueKey::kDefaultValue).toString();
   c.defaultSort = obj.value(JsonVueKey::kDefaultSort).toString();
@@ -462,6 +513,9 @@ QJsonObject QueryFieldConfig::toJson() const {
     // 引用的 .jsonsource 数据源
     if (!selectSourceFile.isEmpty()) obj[JsonVueKey::kSelectSourceFile] = selectSourceFile;
     if (!selectSourceId.isEmpty()) obj[JsonVueKey::kSelectSourceId] = selectSourceId;
+    // 查询筛选是否沿用同名列取值域（方案 B）：select 行始终落盘（true/false）——
+    // 若 true 时不写键，保真合并会把原文的 false 复活到已改回继承的字段上
+    obj[JsonVueKey::kDomainInherit] = domainInherit;
     // 查询分页配置（仅启用分页时输出）
     if (selectPaged) {
       obj[JsonVueKey::kSelectPaged] = true;
@@ -504,6 +558,8 @@ QueryFieldConfig QueryFieldConfig::fromJson(const QJsonObject &obj) {
   q.selectSearchField = obj.value(JsonVueKey::kSelectSearchField).toString();
   q.selectMethod =
       obj.value(JsonVueKey::kSelectMethod).toString(QString::fromLatin1(JsonVueHttp::kPost));
+  // 查询筛选是否沿用同名列取值域（方案 B：旧数据无此键默认 true，行为不变）
+  q.domainInherit = obj.value(JsonVueKey::kDomainInherit).toBool(true);
   q.placeholder = obj.value(JsonVueKey::kPlaceholder).toString();
   q.dateFormat = obj.value(JsonVueKey::kDateFormat).toString();
   return q;

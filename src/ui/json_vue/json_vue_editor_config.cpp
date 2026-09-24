@@ -6,15 +6,22 @@
  * onAddButton / onEditButton / onRemoveButton。
  */
 
+#include <QCheckBox>
 #include <QComboBox>
+#include <QDialog>
+#include <QHBoxLayout>
+#include <QLabel>
 #include <QPushButton>
 #include <QTableWidgetItem>
+#include <QVBoxLayout>
 
 #include "button_config_dialog.h"
 #include "combobox_config_dialog.h"
+#include "config_dialog_common.h"
 #include "json_vue_editor.h"
 #include "json_vue_editor_helpers.h"
 #include "src/util/ui/component/aui_message_box.h"
+#include "src/util/ui/component/aui_tree_combo.h"
 #include "style_config_dialog.h"
 
 // ════════════════════════════════════════════════════════════
@@ -34,6 +41,12 @@ void JsonVueEditor::onConfigureCombobox() {
 
   // 列配置样式：使用 ColumnStyleDialog 配置表格列显示、编辑样式、通用配置等
   ColumnStyleDialog dialog(col.editStyle, this);
+  // 字段设置面板：顶部显示当前编辑的字段名。
+  // 注意 dataName 存在表格「字段名」单元格上（storeColumnConfig 不存它），
+  // 需从表格项读取，col.dataName 恒为空
+  auto *dnItem = m_columnTable->item(row, ColDataName);
+  const QString dataName = dnItem ? dnItem->text().trimmed() : QString();
+  dialog.setFieldName(dataName.isEmpty() ? QStringLiteral("（未填字段名）") : dataName);
   dialog.setHttpConfig(m_baseUrl, m_authHeader, m_postData);
   dialog.setSearchRoot(m_jsonvueDir);
   dialog.setEditStyle(col.editStyle);
@@ -71,6 +84,12 @@ void JsonVueEditor::onConfigureCombobox() {
   dialog.setSelectSearchTitle(col.selectSearchTitle);
   dialog.setSelectSearchField(col.selectSearchField);
   dialog.setSelectMethod(col.selectMethod);
+  // 字段取值域（方案 B：顶部声明区）。必须放在 select 组之后：
+  // setDomainUrl 走 selectUrl 缓存，setDomainSourceRef 同步 select 源缓存，
+  // 后调用者胜出，保证域值不被旧键空值覆盖
+  dialog.setDomainType(col.domainType);
+  dialog.setDomainSourceRef(col.domainSourceFile, col.domainSourceId);
+  dialog.setDomainUrl(col.domainUrl);
   dialog.setDefaultValue(col.defaultValue);
   dialog.setDefaultSort(col.defaultSort);
   if (dialog.exec() == QDialog::Accepted) {
@@ -95,6 +114,11 @@ void JsonVueEditor::onConfigureCombobox() {
     col.boolFalseText = dialog.boolFalseText();
     col.boolSourceFile = dialog.boolSourceFile();
     col.boolSourceId = dialog.boolSourceId();
+    // 字段取值域（方案 B：列渲染/编辑/查询三处共享的字段级声明）
+    col.domainType = dialog.domainType();
+    col.domainSourceFile = dialog.domainSourceFile();
+    col.domainSourceId = dialog.domainSourceId();
+    col.domainUrl = dialog.domainUrl();
     // 图片上传预设（在对话框内已配置完成）
     col.uploadSourceFile = dialog.uploadSourceFile();
     col.uploadSourceId = dialog.uploadSourceId();
@@ -137,11 +161,14 @@ void JsonVueEditor::onConfigureQuerySelect() {
   q.inputStyle = style;
 
   if (style == QueryInputStyle::Select) {
-    // 查询字段复用对应列表列的 select 数据源（dataName 相同，列表/编辑/查询三处共享），
-    // 不再单独配置；列未配置时提示先去列表页配置
+    // 查询筛选取值域设置（方案 B）：
+    //   沿用（默认）→ 生成时从同名列取值域实时推导（含布尔枚举列，自动带「全部」空选项），
+    //                 列配置修改后查询自动跟随；
+    //   覆盖 → 从静态源/全局枚举候选中选择独立数据源（写入查询字段自身引用键）
     auto *dataCombo = qobject_cast<QComboBox *>(m_queryTable->cellWidget(row, QColDataName));
     const QString dataName = dataCombo ? dataCombo->currentText().trimmed() : QString();
 
+    // 找同名列的取值域（摘要展示 + 继承默认值判定）
     ColumnConfig col;
     bool colReady = false;
     for (int r = 0; r < m_columnTable->rowCount(); ++r) {
@@ -154,32 +181,66 @@ void JsonVueEditor::onConfigureQuerySelect() {
       }
       break;
     }
-    const bool colHasSource =
-        colReady && (!col.selectUrl.isEmpty() || !col.selectSourceFile.isEmpty());
-    if (!colHasSource) {
-      AuiMessageBox::show(
-          this, QStringLiteral("未配置数据源"),
-          QStringLiteral("字段「%1」未在列表页配置下拉框数据源，请先在列样式配置里选择「下拉框("
-                         "select)」并配置数据源。")
-              .arg(dataName));
-      return;
+    const bool colHasDomain = colReady && !col.domainType.isEmpty();
+
+    QDialog dlg(configBtn);
+    dlg.setWindowTitle(QStringLiteral("查询数据源设置"));
+    auto *lay = new QVBoxLayout(&dlg);
+    lay->addWidget(new QLabel(QStringLiteral("字段「%1」列取值域：%2")
+                                  .arg(dataName, domainSummary(col)),
+                              &dlg));
+    auto *inheritCheck =
+        new QCheckBox(QStringLiteral("沿用列配置取值域（列修改后查询自动跟随）"), &dlg);
+    inheritCheck->setChecked(q.domainInherit && colHasDomain);
+    lay->addWidget(inheritCheck);
+
+    auto *srcCombo = new AuiTreeCombo(&dlg);
+    srcCombo->setMinimumWidth(360);
+    QHash<QString, QPair<QString, QString>> optionTexts;
+    QHash<QString, QString> optionPreviews;
+    buildDomainSourceCandidates(srcCombo, m_jsonvueDir, false, &optionTexts, &optionPreviews);
+    if (q.selectSourceFile.isEmpty() && q.selectSourceId.isEmpty()) {
+      srcCombo->selectByData(QVariant(QString()));
+    } else {
+      srcCombo->selectByData(QVariant(q.selectSourceFile + QStringLiteral("#") +
+                                      q.selectSourceId));
     }
-    // 复用列表列的数据源（与列表页/编辑页共享）
-    q.selectUrl = col.selectUrl;
-    q.selectSourceFile = col.selectSourceFile;
-    q.selectSourceId = col.selectSourceId;
-    q.selectValueField = col.selectValueField;
-    q.selectLabelField = col.selectLabelField;
-    q.selectPaged = col.selectPaged;
-    q.selectPageKey = col.selectPageKey;
-    q.selectPageSizeKey = col.selectPageSizeKey;
-    q.selectPageSize = col.selectPageSize;
-    q.selectSearchTitle = col.selectSearchTitle;
-    q.selectSearchField = col.selectSearchField;
-    q.selectMethod = col.selectMethod;
-    storeQueryConfig(configBtn, q);
-    configBtn->setText(queryConfigSummary(q));
-    emit configChanged();
+    srcCombo->setEnabled(!inheritCheck->isChecked());
+    lay->addWidget(srcCombo);
+    connect(inheritCheck, &QCheckBox::toggled, srcCombo, &QWidget::setEnabled);
+
+    auto *btnRow = new QHBoxLayout;
+    auto *okBtn = new QPushButton(QStringLiteral("确定"), &dlg);
+    auto *cancelBtn = new QPushButton(QStringLiteral("取消"), &dlg);
+    btnRow->addStretch();
+    btnRow->addWidget(okBtn);
+    btnRow->addWidget(cancelBtn);
+    lay->addLayout(btnRow);
+    connect(okBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+    connect(cancelBtn, &QPushButton::clicked, &dlg, &QDialog::reject);
+
+    if (dlg.exec() == QDialog::Accepted) {
+      q.domainInherit = inheritCheck->isChecked();
+      if (!q.domainInherit) {
+        // 覆盖模式：读取独立数据源引用
+        const QString ref = srcCombo->currentEntryData().toString();
+        q.selectSourceFile.clear();
+        q.selectSourceId.clear();
+        if (!ref.isEmpty()) {
+          const int sep = ref.lastIndexOf(QLatin1Char('#'));
+          q.selectSourceFile = ref.left(sep);
+          q.selectSourceId = ref.mid(sep + 1);
+        }
+        if (q.selectSourceFile.isEmpty()) {
+          AuiMessageBox::show(this, QStringLiteral("未选择数据源"),
+                              QStringLiteral("取消沿用列取值域时必须选择独立数据源"));
+          return;
+        }
+      }
+      storeQueryConfig(configBtn, q);
+      configBtn->setText(queryConfigSummary(q));
+      emit configChanged();
+    }
   } else {
     // text/date 样式使用 QueryStyleDialog
     QueryStyleDialog dialog(style, this);

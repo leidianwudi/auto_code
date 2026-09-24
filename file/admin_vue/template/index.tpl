@@ -153,7 +153,19 @@ ${each q in queryFields}${if q.isRange}  {
     }
   },
 ${else if q.isSelect}
-${if q.selectApiName}  {
+${if q.hasStaticRef}  {
+    field: '${q.dataName}',
+    label: '${q.displayName}',
+    component: 'Select',
+    componentProps: {
+      // 静态选项（方案 B：沿用列取值域）+ 首项「全部」：空值提交时后端自动跳过该条件
+      options: [
+        { label: '全部', value: '' },
+        ...((${q.selectStaticName}() as any)?.data?.list || [])
+      ]
+    }
+  },
+${else if q.selectApiName}  {
     field: '${q.dataName}',
     label: '${q.displayName}',
     component: 'Select',

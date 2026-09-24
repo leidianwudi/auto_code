@@ -52,6 +52,9 @@ public:
   /// 当前选中条目的 UserRole 数据（未选中/组标题返回空 QVariant）
   QVariant currentEntryData() const;
 
+  /// 当前选中条目索引（弹层委托/分支区绘制高亮的依据；与内部选中引用同步维护）
+  QModelIndex currentHighlightIndex() const { return m_currentIdx; }
+
 signals:
   /// 选中某个条目（组标题与展开/收起不触发）；data 为条目 UserRole 数据
   void itemSelected(const QVariant &data);
@@ -72,6 +75,7 @@ private:
 
   QStandardItemModel *m_model = nullptr;
   QTreeView *m_treeView = nullptr;
+  QPersistentModelIndex m_currentIdx;  ///< 当前选中条目索引（模型增删时自动失效）
   QVariant m_currentRef;           ///< 当前选中条目的 UserRole 数据（弹层打开时高亮用）
   int m_containerChrome = 0;       ///< 弹层窗口与视图的高度差（容器边距，弹出时测量）
   bool m_popupOpen = false;        ///< 弹层是否处于展开状态

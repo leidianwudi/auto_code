@@ -156,17 +156,22 @@ void JsonGlobalEnumDialog::onOptionDown() {
 }
 
 void JsonGlobalEnumDialog::swapRows(int a, int b) {
-  // 交换两行所有单元格的 item 与 cellWidget（类型列为 cellWidget）
-  const int cols = m_optionTable->columnCount();
-  for (int c = 0; c < cols; ++c) {
+  // 交换两行的 item（takeItem 解除所有权后再放置，安全）；类型列（cellWidget）单独处理
+  for (int c = 0; c < m_optionTable->columnCount(); ++c) {
+    if (c == GEOColValueType) continue;
     QTableWidgetItem *ia = m_optionTable->takeItem(a, c);
     QTableWidgetItem *ib = m_optionTable->takeItem(b, c);
     m_optionTable->setItem(a, c, ib);
     m_optionTable->setItem(b, c, ia);
-    QWidget *wa = m_optionTable->cellWidget(a, c);
-    QWidget *wb = m_optionTable->cellWidget(b, c);
-    m_optionTable->setCellWidget(a, c, wb);
-    m_optionTable->setCellWidget(b, c, wa);
+  }
+  // cellWidget 不能直接交换指针：setCellWidget 会删除目标单元格旧控件，产生悬垂引用
+  // （上移/下移后再点添加选项即崩溃），改为交换下拉框当前选中项
+  auto *ca = qobject_cast<QComboBox *>(m_optionTable->cellWidget(a, GEOColValueType));
+  auto *cb = qobject_cast<QComboBox *>(m_optionTable->cellWidget(b, GEOColValueType));
+  if (ca && cb) {
+    const int idxA = ca->currentIndex();
+    ca->setCurrentIndex(cb->currentIndex());
+    cb->setCurrentIndex(idxA);
   }
 }
 

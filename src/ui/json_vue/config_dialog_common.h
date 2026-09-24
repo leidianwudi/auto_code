@@ -14,8 +14,10 @@
 #pragma once
 
 #include <QAbstractItemView>
+#include <QHash>
 #include <QHeaderView>
 #include <QMargins>
+#include <QPair>
 #include <QString>
 #include <QVariant>
 #include <initializer_list>
@@ -25,6 +27,7 @@ class QDialog;
 class QPushButton;
 class QTableWidget;
 class QVBoxLayout;
+class AuiTreeCombo;
 class QWidget;
 
 /// 配置对话框框架信息（beginConfigDialog 创建，finishConfigDialog 完成后失效）
@@ -92,6 +95,16 @@ QString sourceUrlToFuncName(const QString &url);
 /// 文件名小驼峰 + "Static" + url名（帕斯卡），
 /// boolean.jsonsource + enableState → booleanStaticEnableState
 QString staticSourceFuncName(const QString &sourceName, const QString &url);
+
+/// 构建取值域数据源候选树（方案 B：列样式配置与查询设置共用）。
+/// 候选 = 作用域内 .jsonsource 静态源（动态源不适合做取值域，跳过）+ 全局枚举；
+/// enumOnly=true 仅列恰好 2 项的源（枚举域），否则列全部静态源；
+/// boolTexts 输出 ref→{真值文字,假值文字}，previews 输出 ref→选项预览，
+/// optionCounts 输出 ref→选项数（供"恰 2 项 = 枚举能力"的推导）
+void buildDomainSourceCandidates(AuiTreeCombo *combo, const QString &searchRoot, bool enumOnly,
+                                 QHash<QString, QPair<QString, QString>> *boolTexts,
+                                 QHash<QString, QString> *previews,
+                                 QHash<QString, int> *optionCounts = nullptr);
 
 /// 配置表格单列定义（供 makeConfigTable 批量设置列头 / 列宽模式 / 固定宽度）
 struct ConfigTableColumn {

@@ -86,6 +86,14 @@ inline constexpr const char *kBoolTrueText = "boolTrueText";
 inline constexpr const char *kBoolFalseText = "boolFalseText";
 inline constexpr const char *kBoolSourceFile = "boolSourceFile";  ///< boolean 引用的静态数据源文件
 inline constexpr const char *kBoolSourceId = "boolSourceId";      ///< boolean 引用的静态数据源 id
+// 字段取值域（方案 B：字段层声明一次选项/数据源，列渲染/编辑控件/查询筛选三处共用）
+inline constexpr const char *kDomainType = "domainType";  ///< 取值域类型（enum/static/remote，空=未声明）
+inline constexpr const char *kDomainSourceFile =
+    "domainSourceFile";  ///< enum/static 引用的数据源文件（全局枚举固定基名 global_enum.jsonsource）
+inline constexpr const char *kDomainSourceId = "domainSourceId";  ///< enum/static 引用的数据源 id
+inline constexpr const char *kDomainUrl = "domainUrl";  ///< remote 手动数据源 URL
+inline constexpr const char *kDomainInherit =
+    "domainInherit";  ///< 查询筛选是否沿用同名列取值域（仅 QueryFieldConfig，缺省 true）
 inline constexpr const char *kUploadSourceFile =
     "uploadSourceFile";  ///< image 引用的 .jsonupload 文件路径
 inline constexpr const char *kUploadSourceId = "uploadSourceId";  ///< image 引用的上传预设 id
@@ -140,6 +148,13 @@ inline constexpr const char *kLink = "link";
 /// 兼容旧名称（"time" → Date 查询输入框）
 inline constexpr const char *kTime = "time";
 }  // namespace JsonVueStyle
+
+/// 字段取值域类型常量（ColumnConfig::domainType 的取值）
+namespace JsonVueDomain {
+inline constexpr const char *kEnum = "enum";      ///< 枚举（恰好 2 项的静态源，含全局枚举）
+inline constexpr const char *kStatic = "static";  ///< 静态源（任意项数的静态源）
+inline constexpr const char *kRemote = "remote";  ///< 远程源（手动 URL + 下拉参数）
+}  // namespace JsonVueDomain
 
 /// 标签 / 按钮配色名称常量（Element Plus 主题色）
 namespace JsonVueColor {
@@ -322,9 +337,20 @@ struct ColumnConfig {
   QString boolTrueText;   ///< boolean: true 时显示的文字（如"显示"）
   QString boolFalseText;  ///< boolean: false 时显示的文字（如"隐藏"）
   /// boolean 引用的静态数据源（恰好 2 项选项的静态源，如 0:禁用/1:启用）。
-  /// 引用时真假文字从数据源读取并锁定不可改；空 = 手动输入
+  /// 引用时真假文字从数据源读取并锁定不可改；空 = 手动输入。
+  /// 注：方案 B 后仅为旧格式兼容字段，新配置统一写 domain* 取值域键
   QString boolSourceFile;
   QString boolSourceId;
+
+  // ── 字段取值域（方案 B：列渲染/编辑控件/查询筛选三处共用，声明一次）──
+  /// 取值域类型（JsonVueDomain 常量；空 = 未声明，生成/编辑侧按旧键回退）
+  QString domainType;
+  /// enum/static 引用的数据源文件基名（全局枚举固定写 global_enum.jsonsource）
+  QString domainSourceFile;
+  /// enum/static 引用的数据源 id
+  QString domainSourceId;
+  /// remote 手动数据源 URL（下拉参数沿用 selectValueField 等键）
+  QString domainUrl;
   /// image 编辑样式引用的上传预设（.jsonupload 文件 + 预设 id）。
   /// 引用时编辑页生成上传组件（el-upload + axios 上传），路径随表单 JSON 提交；
   /// 空 = 保持旧行为（URL 手工输入）
@@ -378,6 +404,10 @@ struct QueryFieldConfig {
   QString selectSearchField;
   /// 查询请求方式（GET/POST，查询分页时使用）
   QString selectMethod = QString::fromLatin1(JsonVueHttp::kPost);
+  /// 查询筛选是否沿用同名列的取值域（方案 B，缺省 true）。
+  /// true 时生成侧从同名列的取值域实时推导（含布尔枚举列，自动带「全部」空选项）；
+  /// false 时使用本字段自身的 selectUrl/selectSourceFile 等覆盖键
+  bool domainInherit = true;
 
   // ── 样式特定配置 ──
   QString placeholder;  ///< text: 占位提示文字

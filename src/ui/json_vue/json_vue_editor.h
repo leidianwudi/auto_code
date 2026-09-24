@@ -214,12 +214,14 @@ private:
 };
 
 /// 列配置表格列索引
+/// 注：取值域不设独立列——摘要并入 ⚙ 配置列最前（取值域:枚举·xx, ...），
+/// 双击 ⚙ 打开字段设置面板（成熟平台形态：列表看渲染、面板配数据）
 enum ColumnTableCols {
   ColDataName = 0,  ///< 字段名
   ColTitle,         ///< 标题（列表页列标题与编辑页标签共用）
   ColQueryVisible,  ///< 列表页显示
   ColEditVisible,   ///< 编辑页显示
-  ColConfig,        ///< 样式配置按钮（⚙，含显示类型/编辑样式/通用配置）
+  ColConfig,        ///< 样式配置按钮（⚙，含取值域/显示类型/编辑样式/通用配置摘要）
   ColCount
 };
 

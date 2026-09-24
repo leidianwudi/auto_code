@@ -21,6 +21,7 @@
 #include <QItemSelectionModel>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QTabWidget>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
@@ -59,18 +60,21 @@ void JsonVueEditor::setupUI() {
   mainLayout->setContentsMargins(2, 2, 2, 2);
   mainLayout->setSpacing(2);
 
-  // 接口配置区
-  mainLayout->addWidget(buildMetaSection());
-
-  // 列配置和查询字段区使用可拖动分隔控件
-  auto *splitter = new QSplitter(Qt::Vertical, this);
-  splitter->addWidget(buildColumnsSection());
-  splitter->addWidget(buildQueryFieldsSection());
-  splitter->addWidget(buildButtonsSection());
-  splitter->setStretchFactor(0, 3);
-  splitter->setStretchFactor(1, 2);
-  splitter->setStretchFactor(2, 1);
-  mainLayout->addWidget(splitter, 1);
+  // 页签（对齐成熟低代码平台）。接口与列合并为一个页签：
+  // 接口是页面数据的来源，列从接口响应推导，两者是同一条工作流
+  // （填 URL → 探测生成列 → 配置列），拆开反而要来回切换
+  auto *tabs = new QTabWidget(this);
+  auto *dataTab = new QWidget(this);
+  auto *dataLay = new QVBoxLayout(dataTab);
+  dataLay->setContentsMargins(0, 0, 0, 0);
+  dataLay->setSpacing(2);
+  dataLay->addWidget(buildMetaSection());
+  dataLay->addWidget(buildColumnsSection(), 1);
+  tabs->addTab(dataTab, QStringLiteral("接口与列"));
+  tabs->addTab(buildQueryFieldsSection(), QStringLiteral("查询设置"));
+  tabs->addTab(buildButtonsSection(), QStringLiteral("操作按钮"));
+  tabs->setTabToolTip(0, QStringLiteral("数据来源（接口 URL）与 HTTP 返回的数据列"));
+  mainLayout->addWidget(tabs, 1);
 
   applyStyle();
 
@@ -131,7 +135,8 @@ void JsonVueEditor::connectCellWidgetSignals(QWidget *widget) {
 
 // 构建接口配置区
 QWidget *JsonVueEditor::buildMetaSection() {
-  auto *group = new QGroupBox(QStringLiteral("接口配置"), this);
+  // 同页签内的子分组：标题恢复（接口与列页签的上半区）
+  auto *group = new QGroupBox(QStringLiteral("接口配置（数据来源）"), this);
   auto *layout = new QVBoxLayout(group);
   layout->setSpacing(2);
   layout->setContentsMargins(4, 2, 4, 2);  // 内边距
@@ -196,6 +201,7 @@ QWidget *JsonVueEditor::buildMetaSection() {
 }
 
 QWidget *JsonVueEditor::buildColumnsSection() {
+  // 同页签内的子分组：标题恢复（接口与列页签的下半区）
   auto *group = new QGroupBox(QStringLiteral("列配置（HTTP 返回的数据列）"), this);
   auto *layout = new QVBoxLayout(group);
   layout->setSpacing(2);
@@ -218,10 +224,17 @@ QWidget *JsonVueEditor::buildColumnsSection() {
   m_columnTable = makeConfigTable(
       {{QStringLiteral("字段名"), QHeaderView::Interactive, 120},
        {QStringLiteral("标题"), QHeaderView::Interactive, 120},
-       {QStringLiteral("列表页显示"), QHeaderView::Interactive, 100},
-       {QStringLiteral("编辑页显示"), QHeaderView::Interactive, 100},
+       {QStringLiteral("列表列"), QHeaderView::Interactive, 70},
+       {QStringLiteral("编辑字段"), QHeaderView::Interactive, 70},
        {QString::fromUtf8(CodeConstants::UiText::kConfig), QHeaderView::Stretch, 0}},
       this, 60, 0, QAbstractItemView::SelectRows);
+  // 可见性列命名消歧：勾选控制"字段是否出现在该页"，不是"如何显示"
+  if (auto *h = m_columnTable->horizontalHeaderItem(ColQueryVisible)) {
+    h->setToolTip(QStringLiteral("勾选：该字段出现在列表页表格中（作为一个列）"));
+  }
+  if (auto *h = m_columnTable->horizontalHeaderItem(ColEditVisible)) {
+    h->setToolTip(QStringLiteral("勾选：该字段出现在编辑表单中（作为一个表单字段）"));
+  }
   m_columnTable->installEventFilter(this);  // 拦截空格键：仅进入编辑，不输入空格
   layout->addWidget(m_columnTable);
 
@@ -234,7 +247,7 @@ QWidget *JsonVueEditor::buildColumnsSection() {
 }
 
 QWidget *JsonVueEditor::buildQueryFieldsSection() {
-  auto *group = new QGroupBox(QStringLiteral("查询设置"), this);
+  auto *group = new QGroupBox(this);
   auto *layout = new QVBoxLayout(group);
   layout->setSpacing(2);
   layout->setContentsMargins(2, 2, 2, 2);
@@ -269,7 +282,7 @@ QWidget *JsonVueEditor::buildQueryFieldsSection() {
 }
 
 QWidget *JsonVueEditor::buildButtonsSection() {
-  auto *group = new QGroupBox(QStringLiteral("操作按钮"), this);
+  auto *group = new QGroupBox(this);
   auto *layout = new QVBoxLayout(group);
   layout->setSpacing(2);
   layout->setContentsMargins(2, 2, 2, 2);
@@ -402,7 +415,7 @@ void JsonVueEditor::loadConfig(const JsonVueConfig &config) {
     m_columnTable->setCellWidget(row, ColEditVisible, eVis);
     connectCellWidgetSignals(eVis);
 
-    // 配置按钮（⚙ + 摘要文本，含显示类型/编辑样式/通用配置）
+    // 配置按钮（⚙ + 摘要文本，含取值域/显示类型/编辑样式/通用配置）
     auto *configBtn = new QPushButton(columnConfigSummary(col), this);
     storeColumnConfig(configBtn, col);
     m_columnTable->setCellWidget(row, ColConfig, configBtn);
@@ -646,6 +659,10 @@ QJsonObject JsonVueEditor::collectMergedObject() const {
       mergeArrayByKey(root.value(JsonVueKey::kColumns).toArray(),
                       m_preserved.value(JsonVueKey::kColumns).toArray(), JsonVueKey::kDataName,
                       allowEmpty);
+  // 先留存新保存的列数组：合并后需逐列对比"新保存是否写了某键"——
+  // UI 把「纯文本」「未声明取值域」表达为不写键（JSON5 写出器跳过空值），
+  // 而保真合并会把原文旧键补回来，导致清空后重开又复活（修改无效的错觉）
+  const QJsonArray newCols = root.value(JsonVueKey::kColumns).toArray();
   // 列标签已归一为 queryName：清除保真合并可能从原文带回来的旧 editName，
   // 保证写盘后的配置只含一个标签字段
   for (int i = 0; i < columns.size(); ++i) {
@@ -655,15 +672,100 @@ QJsonObject JsonVueEditor::collectMergedObject() const {
       columns[i] = col;
     }
   }
+  // 方案 B / 空值语义清理（对照新保存对象逐列判定）：
+  //   - 新保存未写 domain 键 → 用户显式清空取值域 → 剔除 domain* 与旧源键
+  //     （生成器只认 domain* 键，selectUrl 手动路径不依赖域声明故保留）
+  //   - 新保存已写 domain 键 → 剔除旧版数据源键（由 domain* 接管）
+  //   - 新保存未写 displayType → 用户选回纯文本 → 剔除 displayType/tagItems/布尔文字
+  static const char *kLegacyColSourceKeys[] = {
+      JsonVueKey::kBoolSourceFile,   JsonVueKey::kBoolSourceId,
+      JsonVueKey::kSelectSourceFile, JsonVueKey::kSelectSourceId,
+      JsonVueKey::kSelectUrl};
+  for (int i = 0; i < columns.size(); ++i) {
+    if (!columns[i].isObject()) continue;
+    QJsonObject col = columns[i].toObject();
+    const QString dn = col.value(JsonVueKey::kDataName).toString();
+    QJsonObject newCol;
+    for (int j = 0; j < newCols.size(); ++j) {
+      const QJsonObject cand = newCols[j].toObject();
+      if (cand.value(JsonVueKey::kDataName).toString() == dn) {
+        newCol = cand;
+        break;
+      }
+    }
+    if (newCol.contains(JsonVueKey::kDomainType)) {
+      // 已声明取值域：剔除旧版数据源键（由 domain* 接管）
+      for (const char *k : kLegacyColSourceKeys) col.remove(QString::fromLatin1(k));
+    } else {
+      // 未声明：剔除域键与旧源键（显式清空，防止保真合并复活旧取值域）
+      col.remove(JsonVueKey::kDomainType);
+      col.remove(JsonVueKey::kDomainSourceFile);
+      col.remove(JsonVueKey::kDomainSourceId);
+      col.remove(JsonVueKey::kDomainUrl);
+      col.remove(JsonVueKey::kBoolSourceFile);
+      col.remove(JsonVueKey::kBoolSourceId);
+      col.remove(JsonVueKey::kSelectSourceFile);
+      col.remove(JsonVueKey::kSelectSourceId);
+    }
+    if (!newCol.contains(JsonVueKey::kDisplayType)) {
+      // 用户选回纯文本：清掉展示类键，防止旧的 tag/布尔/select 展示配置复活
+      col.remove(JsonVueKey::kDisplayType);
+      col.remove(JsonVueKey::kTagItems);
+      col.remove(JsonVueKey::kBoolTrueText);
+      col.remove(JsonVueKey::kBoolFalseText);
+    }
+    columns[i] = col;
+  }
   root[JsonVueKey::kColumns] = columns;
-  root[JsonVueKey::kQueryFields] =
+  QJsonArray queryFieldsMerged =
       mergeArrayByKey(root.value(JsonVueKey::kQueryFields).toArray(),
                       m_preserved.value(JsonVueKey::kQueryFields).toArray(), JsonVueKey::kDataName,
                       allowEmpty);
-  root[JsonVueKey::kButtons] =
+  // 方案 B：查询字段沿用列取值域（domainInherit 缺省 true）时，剔除保真合并
+  // 带回的历史静态源引用拷贝（生成侧沿用列域，字段自身引用不参与）；
+  // selectUrl 保留——列未配远程源时旧数据的查询下拉仍走自身 url
+  for (int i = 0; i < queryFieldsMerged.size(); ++i) {
+    if (!queryFieldsMerged[i].isObject()) continue;
+    QJsonObject qf = queryFieldsMerged[i].toObject();
+    if (qf.value(JsonVueKey::kInputStyle).toString() ==
+            QString::fromLatin1(JsonVueStyle::kSelect) &&
+        qf.value(JsonVueKey::kDomainInherit).toBool(true)) {
+      qf.remove(JsonVueKey::kSelectSourceFile);
+      qf.remove(JsonVueKey::kSelectSourceId);
+    }
+    queryFieldsMerged[i] = qf;
+  }
+  root[JsonVueKey::kQueryFields] = queryFieldsMerged;
+  QJsonArray buttonsMerged =
       mergeArrayByKey(root.value(JsonVueKey::kButtons).toArray(),
                       m_preserved.value(JsonVueKey::kButtons).toArray(), JsonVueKey::kActionKey,
                       allowEmpty);
+  // 空值语义清理（与列同理，对照新保存对象逐按钮判定）：按钮的可选键在 toJson
+  // 里空值不落盘，用户清空（如确认提示、跳转路径、删光对话框字段、换行为类型）
+  // 后会被保真合并复活。新保存未写的可选键 = 用户清空或该行为类型下不适用 → 剔除
+  static const char *kOptionalBtnKeys[] = {
+      JsonVueKey::kLabel,       JsonVueKey::kIcon,        JsonVueKey::kButtonType,
+      JsonVueKey::kApiName,     JsonVueKey::kConfirmText, JsonVueKey::kDialogTitle,
+      JsonVueKey::kDialogApi,   JsonVueKey::kDialogFields, JsonVueKey::kLinkPath};
+  const QJsonArray newBtns = root.value(JsonVueKey::kButtons).toArray();
+  for (int i = 0; i < buttonsMerged.size(); ++i) {
+    if (!buttonsMerged[i].isObject()) continue;
+    QJsonObject btn = buttonsMerged[i].toObject();
+    const QString ak = btn.value(JsonVueKey::kActionKey).toString();
+    QJsonObject newBtn;
+    for (int j = 0; j < newBtns.size(); ++j) {
+      const QJsonObject cand = newBtns[j].toObject();
+      if (cand.value(JsonVueKey::kActionKey).toString() == ak) {
+        newBtn = cand;
+        break;
+      }
+    }
+    for (const char *k : kOptionalBtnKeys) {
+      if (!newBtn.contains(QString::fromLatin1(k))) btn.remove(QString::fromLatin1(k));
+    }
+    buttonsMerged[i] = btn;
+  }
+  root[JsonVueKey::kButtons] = buttonsMerged;
 
   // 顶层还有保留其它键（界面未表达的结构），一并保留避免丢失
   for (auto it = m_preserved.begin(); it != m_preserved.end(); ++it) {

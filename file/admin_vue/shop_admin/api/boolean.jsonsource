@@ -1,1 +1,1 @@
-{"sources":[{"id":"bdf03ffa","options":[{"label":"开启","value":"1","valueType":"number"},{"label":"关闭","value":"0","valueType":"number"}],"remark":"商店状态","type":"static","url":"status"}]}
+{"sources":[{"id":"bdf03ffa","options":[{"label":"闭店","value":"0","valueType":"number"},{"label":"开店","value":"1","valueType":"number"}],"remark":"商店状态","type":"static","url":"status"}]}

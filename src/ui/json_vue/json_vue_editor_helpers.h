@@ -130,6 +130,11 @@ inline void storeColumnConfig(QPushButton *btn, const ColumnConfig &col) {
   btn->setProperty(JsonVueKey::kBoolFalseText, col.boolFalseText);
   btn->setProperty(JsonVueKey::kBoolSourceFile, col.boolSourceFile);
   btn->setProperty(JsonVueKey::kBoolSourceId, col.boolSourceId);
+  // 字段取值域（方案 B：列渲染/编辑/查询三处共享的字段级数据源声明）
+  btn->setProperty(JsonVueKey::kDomainType, col.domainType);
+  btn->setProperty(JsonVueKey::kDomainSourceFile, col.domainSourceFile);
+  btn->setProperty(JsonVueKey::kDomainSourceId, col.domainSourceId);
+  btn->setProperty(JsonVueKey::kDomainUrl, col.domainUrl);
   btn->setProperty(JsonVueKey::kDefaultValue, col.defaultValue);
   btn->setProperty(JsonVueKey::kDefaultSort, col.defaultSort);
   // 编辑样式/编辑可编辑/开关可编辑（从表格列移入对话框后，存到 property 供读取）
@@ -186,6 +191,11 @@ inline void readColumnConfig(QPushButton *btn, ColumnConfig &col) {
   col.boolFalseText = btn->property(JsonVueKey::kBoolFalseText).toString();
   col.boolSourceFile = btn->property(JsonVueKey::kBoolSourceFile).toString();
   col.boolSourceId = btn->property(JsonVueKey::kBoolSourceId).toString();
+  // 字段取值域（方案 B）
+  col.domainType = btn->property(JsonVueKey::kDomainType).toString();
+  col.domainSourceFile = btn->property(JsonVueKey::kDomainSourceFile).toString();
+  col.domainSourceId = btn->property(JsonVueKey::kDomainSourceId).toString();
+  col.domainUrl = btn->property(JsonVueKey::kDomainUrl).toString();
   col.defaultValue = btn->property(JsonVueKey::kDefaultValue).toString();
   col.defaultSort = btn->property(JsonVueKey::kDefaultSort).toString();
   // 编辑样式/编辑可编辑/开关可编辑
@@ -261,9 +271,29 @@ inline void appendEditStyleSummary(QStringList &parts, const ColumnConfig &col) 
   }
 }
 
+/// 取值域摘要文本（方案 B：字段级数据源声明，供列配置表「取值域」列显示）
+inline QString domainSummary(const ColumnConfig &col) {
+  if (col.domainType == QString::fromLatin1(JsonVueDomain::kEnum)) {
+    return QStringLiteral("枚举·") + QFileInfo(col.domainSourceFile).completeBaseName();
+  }
+  if (col.domainType == QString::fromLatin1(JsonVueDomain::kStatic)) {
+    return QStringLiteral("静态·") + QFileInfo(col.domainSourceFile).completeBaseName();
+  }
+  if (col.domainType == QString::fromLatin1(JsonVueDomain::kRemote)) {
+    return QStringLiteral("远程·") + col.domainUrl;
+  }
+  return QStringLiteral("—");
+}
+
 /// 生成列配置摘要文本
 inline QString columnConfigSummary(const ColumnConfig &col) {
   QStringList parts;
+  // 取值域（方案 B：字段级数据源声明）置于摘要最前——字段级属性优先于展示/编辑样式；
+  // 未声明（"—"）时不显示，保持未配置列的摘要干净
+  const QString dom = domainSummary(col);
+  if (dom != QStringLiteral("—")) {
+    parts << QStringLiteral("取值域:%1").arg(dom);
+  }
   // 关键配置：显示样式、编辑样式始终显示，便于一眼看出列的渲染/编辑方式
   // displayType 为空字符串时表示"纯文本(text)"
   parts << QStringLiteral("显示:%1").arg(
@@ -304,6 +334,7 @@ inline void storeQueryConfig(QPushButton *btn, const QueryFieldConfig &q) {
   btn->setProperty(JsonVueKey::kSelectSearchTitle, q.selectSearchTitle);
   btn->setProperty(JsonVueKey::kSelectSearchField, q.selectSearchField);
   btn->setProperty(JsonVueKey::kSelectMethod, q.selectMethod);
+  btn->setProperty(JsonVueKey::kDomainInherit, q.domainInherit);
   btn->setProperty(JsonVueKey::kPlaceholder, q.placeholder);
   btn->setProperty(JsonVueKey::kDateFormat, q.dateFormat);
 }
@@ -322,6 +353,10 @@ inline void readQueryConfig(QPushButton *btn, QueryFieldConfig &q) {
   q.selectSearchTitle = btn->property(JsonVueKey::kSelectSearchTitle).toString();
   q.selectSearchField = btn->property(JsonVueKey::kSelectSearchField).toString();
   q.selectMethod = btn->property(JsonVueKey::kSelectMethod).toString();
+  // 查询筛选是否沿用同名列取值域（方案 B：无此属性时默认 true，与旧数据行为一致）
+  q.domainInherit = btn->property(JsonVueKey::kDomainInherit).isValid()
+                        ? btn->property(JsonVueKey::kDomainInherit).toBool()
+                        : true;
   q.placeholder = btn->property(JsonVueKey::kPlaceholder).toString();
   q.dateFormat = btn->property(JsonVueKey::kDateFormat).toString();
 }
@@ -348,9 +383,12 @@ inline QString queryConfigSummary(const QueryFieldConfig &q) {
       break;
     }
     case QueryInputStyle::Select:
-      // 查询字段复用列表页列的下拉框数据源（列表/编辑/查询三处共享），不单独配置
-      if (!q.selectUrl.isEmpty() || !q.selectSourceFile.isEmpty()) {
-        parts << QStringLiteral("使用列表的select");
+      // 查询筛选默认沿用同名列的取值域（方案 B，含布尔枚举列自动带「全部」空选项）；
+      // 取消继承时使用字段自身的独立数据源
+      if (q.domainInherit) {
+        parts << QStringLiteral("沿用列取值域");
+      } else if (!q.selectUrl.isEmpty() || !q.selectSourceFile.isEmpty()) {
+        parts << QStringLiteral("独立数据源");
       } else {
         parts << QStringLiteral("未配置");
       }

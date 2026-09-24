@@ -171,99 +171,70 @@ void LightAc::reloadColors() {
 }
 
 // 对单个文本块进行高亮处理
-// 1. 先收集所有块注释 /* ... */ 的区域（支持跨行，使用状态机制）
-// 2. 收集单行注释 // 的区域
-// 3. 只在非注释区域应用其他高亮规则
-// 4. 最后强制恢复注释格式（防止被运算符规则覆盖）
+// 注释区域用单次左→右扫描收集：谁的注释起点更靠前谁生效——
+// 行注释（//）先出现则吞掉到行尾（其中的 "/*" 不开启块注释），
+// 块注释（/*）先出现则跨行延续，直至 "*/" 闭合或行尾（状态 1 传给下一行）。
+// 修复：此前先扫块注释再扫行注释、互不感知，行注释内的 "/*"
+// （如 "crud_nest/*.jsonglobalenum"）会误开块注释且无 "*/" 闭合时
+// 状态级联到文件末尾，后续全部代码被渲染为注释斜体
 void LightAc::highlightBlock(const QString &text) {
-  // ── 收集块注释区域 ──
-  // 状态 1 = 在块注释中（上一行 /* 未闭合）
   setCurrentBlockState(0);
 
   struct CommentRegion {
     int start;
     int length;
+    bool isBlock;  // true=块注释（m_blockCommentFormat），false=行注释（m_commentFormat）
   };
-  QVector<CommentRegion> blockRegions;
+  QVector<CommentRegion> regions;
 
-  int startIndex = 0;
-  if (previousBlockState() != 1) {
-    startIndex = text.indexOf(QStringLiteral("/*"));
-  } else {
-    // 上一行未闭合的块注释，从行首开始
-    int endIndex = text.indexOf(QStringLiteral("*/"));
-    if (endIndex == -1) {
+  int pos = 0;
+  if (previousBlockState() == 1) {
+    // 上一行存在未闭合块注释：从行首继续，先找闭合 "*/"
+    const int end = text.indexOf(QStringLiteral("*/"));
+    if (end == -1) {
       setCurrentBlockState(1);
-      blockRegions.append({0, static_cast<int>(text.length())});
+      regions.append({0, static_cast<int>(text.length()), true});
     } else {
-      blockRegions.append({0, endIndex + 2});
-      startIndex = text.indexOf(QStringLiteral("/*"), endIndex + 2);
+      regions.append({0, end + 2, true});
+      pos = end + 2;
     }
   }
-
-  while (startIndex >= 0) {
-    int endIndex = text.indexOf(QStringLiteral("*/"), startIndex);
-    int commentLength;
-
-    if (endIndex == -1) {
-      setCurrentBlockState(1);
-      commentLength = static_cast<int>(text.length()) - startIndex;
-    } else {
-      commentLength = endIndex - startIndex + 2;
-    }
-
-    blockRegions.append({startIndex, commentLength});
-    startIndex = text.indexOf(QStringLiteral("/*"), startIndex + commentLength);
-  }
-
-  // ── 收集单行注释区域（不在块注释内的 //） ──
-  QVector<CommentRegion> lineRegions;
-  int lineCommentStart = text.indexOf(QLatin1String("//"));
-  while (lineCommentStart >= 0) {
-    // 检查此位置是否在块注释内
-    bool inBlock = false;
-    for (const auto &r : blockRegions) {
-      if (lineCommentStart >= r.start && lineCommentStart < r.start + r.length) {
-        inBlock = true;
+  while (pos < text.length()) {
+    const int linePos = text.indexOf(QLatin1String("//"), pos);
+    const int blockPos = text.indexOf(QStringLiteral("/*"), pos);
+    if (linePos == -1 && blockPos == -1) break;
+    if (blockPos != -1 && (linePos == -1 || blockPos < linePos)) {
+      // 块注释起点更靠前：找闭合；未闭合则延伸到行尾并保持跨行状态
+      const int end = text.indexOf(QStringLiteral("*/"), blockPos + 2);
+      if (end == -1) {
+        setCurrentBlockState(1);
+        regions.append({blockPos, static_cast<int>(text.length()) - blockPos, true});
         break;
       }
-    }
-    if (!inBlock) {
-      lineRegions.append({lineCommentStart, static_cast<int>(text.length()) - lineCommentStart});
-      break;  // 只有一个单行注释区域（到行尾）
-    }
-    lineCommentStart = text.indexOf(QLatin1String("//"), lineCommentStart + 2);
-  }
-
-  // ── 在非注释区域应用高亮规则 ──
-  // 构建非注释区间，逐段应用规则
-  if (blockRegions.isEmpty() && lineRegions.isEmpty()) {
-    highlightNonCommentText(text);
-  } else {
-    // 合并所有注释区域并排序
-    QVector<CommentRegion> allRegions = blockRegions + lineRegions;
-    std::sort(allRegions.begin(), allRegions.end(),
-              [](const CommentRegion &a, const CommentRegion &b) { return a.start < b.start; });
-
-    // 提取非注释区间
-    int pos = 0;
-    for (const auto &r : allRegions) {
-      if (r.start > pos) {
-        highlightNonCommentText(text.mid(pos, r.start - pos), pos);
-      }
-      pos = qMax(pos, r.start + r.length);
-    }
-    if (pos < text.length()) {
-      highlightNonCommentText(text.mid(pos), pos);
+      regions.append({blockPos, end - blockPos + 2, true});
+      pos = end + 2;
+    } else {
+      // 行注释起点更靠前（含块注释闭合后出现 // 的情形）：吞掉到行尾
+      regions.append({linePos, static_cast<int>(text.length()) - linePos, false});
+      break;
     }
   }
 
-  // ── 最后强制设置注释格式（防止被运算符规则覆盖） ──
-  for (const auto &r : blockRegions) {
-    setFormat(r.start, r.length, m_blockCommentFormat);
+  // ── 在非注释区间应用高亮规则 ──
+  int hlPos = 0;
+  for (const auto &r : regions) {
+    if (r.start > hlPos) {
+      highlightNonCommentText(text.mid(hlPos, r.start - hlPos), hlPos);
+    }
+    hlPos = qMax(hlPos, r.start + r.length);
   }
-  for (const auto &r : lineRegions) {
-    setFormat(r.start, r.length, m_commentFormat);
+  if (hlPos < text.length()) {
+    highlightNonCommentText(text.mid(hlPos), hlPos);
+  }
+
+  // ── 最后强制设置注释格式（防止被变量/运算符规则覆盖） ──
+  for (const auto &r : regions) {
+    setFormat(r.start, r.length, r.isBlock ? m_blockCommentFormat : m_commentFormat);
   }
 }
 

@@ -67,6 +67,43 @@ static void invalidateAllLayouts(QWidget *widget) {
 }
 
 // ════════════════════════════════════════════════════════════
+//  静态辅助：取值域候选的布尔文字与选项预览（方案 B）
+// ════════════════════════════════════════════════════════════
+
+/// 真/假文字提取（与 admin_data.ac 的布尔值约定一致）：
+/// value 为 1/true → 真值、0/false → 假值；无法判断时按顺序（第 1 项假、第 2 项真）
+static QPair<QString, QString> boolTextsOfLabelValues(
+    const QList<QPair<QString, QString>> &labelValues) {
+  QString trueText;
+  QString falseText;
+  if (labelValues.size() == 2) {
+    falseText = labelValues.at(0).first;
+    trueText = labelValues.at(1).first;
+  }
+  for (const auto &lv : labelValues) {
+    const QString v = lv.second.trimmed().toLower();
+    if (v == QStringLiteral("1") || v == QStringLiteral("true")) trueText = lv.first;
+    if (v == QStringLiteral("0") || v == QStringLiteral("false")) falseText = lv.first;
+  }
+  return {trueText, falseText};
+}
+
+/// 选项预览文字（"开启=1 / 关闭=0"，超过 4 项截断）
+static QString optionPreviewOfLabelValues(const QList<QPair<QString, QString>> &labelValues) {
+  QStringList parts;
+  int count = 0;
+  for (const auto &lv : labelValues) {
+    if (count >= 4) {
+      parts << QStringLiteral("…");
+      break;
+    }
+    parts << QStringLiteral("%1=%2").arg(lv.first, lv.second);
+    ++count;
+  }
+  return parts.join(QStringLiteral(" / "));
+}
+
+// ════════════════════════════════════════════════════════════
 //  静态数据源函数名推导（与 AC 脚本 tool_str.ac / admin_data.ac 保持一致）
 //  snakeToPascal/snakeToCamel/urlToFuncName 复刻 AC 侧逻辑，
 //  保证 jsonvue 下拉框展示的函数名与 source.tpl 生成的一致
@@ -155,7 +192,7 @@ ColumnStyleDialog::~ColumnStyleDialog() {
 void ColumnStyleDialog::setupUI() {
   setMinimumWidth(520);
   // 不设置 minimumHeight/maximumHeight，让对话框高度随内容自适应
-  auto frame = beginConfigDialog(this, QStringLiteral("列样式配置"));
+  auto frame = beginConfigDialog(this, QStringLiteral("字段设置"));
   auto *mainLayout = frame.contentLayout;
 
   m_formLayout = new QFormLayout;
@@ -164,10 +201,112 @@ void ColumnStyleDialog::setupUI() {
   m_formLayout->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
   mainLayout->addLayout(m_formLayout);
 
+  // 字段名（面板顶部只读提示：本面板是围绕单个字段的属性设置）
+  m_fieldNameLabel = new QLabel(this);
+  m_fieldNameLabel->setStyleSheet(
+      QStringLiteral("font-weight: 600; font-size: 13px;"));
+  m_formLayout->addRow(QStringLiteral("字段:"), m_fieldNameLabel);
+
   // ════════════════════════════════════════
-  //  列表页配置
+  //  字段取值域（方案 B：声明一次，列渲染/编辑控件/查询筛选三处共用）
   // ════════════════════════════════════════
-  auto *tableSep = new QLabel(QStringLiteral("── 列表页配置 ──"), this);
+  auto *domainSep = new QLabel(QStringLiteral("── 字段取值域 ──"), this);
+  domainSep->setAlignment(Qt::AlignCenter);
+  m_formLayout->addRow(QString(), domainSep);
+
+  // 取值域类型只有两个业务选项（方案 B 简化）：
+  //   数据源   → 引用静态源/全局枚举；恰 2 项自动获得"枚举"能力（布尔样式可用）
+  //   远程接口 → 手动 URL
+  // "枚举"不是类型而是能力，由选中源的选项数推导，避免两份高度重叠的候选列表
+  m_domainTypeCombo = AuiComboBox::create(this);
+  m_domainTypeCombo->addItem(QStringLiteral("未声明（沿用旧配置）"), QString());
+  m_domainTypeCombo->addItem(QStringLiteral("数据源（静态源 / 全局枚举）"),
+                             QStringLiteral("source"));
+  m_domainTypeCombo->addItem(QStringLiteral("远程接口（URL）"),
+                             QString::fromLatin1(JsonVueDomain::kRemote));
+  addRow(QStringLiteral("取值域类型:"), m_domainTypeCombo);
+
+  // 数据源树（枚举/静态域时显示）：候选按「右键设为项目」作用域过滤
+  m_domainSourceRow = new QWidget(this);
+  auto *domainSrcLay = new QHBoxLayout(m_domainSourceRow);
+  domainSrcLay->setContentsMargins(0, 0, 0, 0);
+  domainSrcLay->setSpacing(2);
+  domainSrcLay->addWidget(AuiButton::createHelpButton(QStringLiteral("数据源作用域"),
+                                                      jsonVueSourceScopeHelpText(), m_domainSourceRow));
+  m_domainSourceCombo = new AuiTreeCombo(this);
+  domainSrcLay->addWidget(m_domainSourceCombo, 1);
+  addRow(QStringLiteral("取值数据源:"), m_domainSourceRow);
+
+  // 远程源按钮（远程域时显示）：复用 ComboboxConfigDialog 配置 URL/字段/分页
+  m_domainUrlBtn = new QPushButton(QStringLiteral("配置远程数据源..."), this);
+  addRow(QStringLiteral("远程源:"), m_domainUrlBtn);
+  connect(m_domainUrlBtn, &QPushButton::clicked, this, [this]() {
+    ComboboxConfigDialog dlg(this);
+    dlg.setSearchRoot(m_searchRoot);
+    dlg.setSourceRef(m_cachedSelectSourceFile, m_cachedSelectSourceId);
+    dlg.setConfig(m_cachedSelectUrl, m_cachedSelectValueField, m_cachedSelectLabelField);
+    dlg.setPagedConfig(m_cachedSelectPaged, m_cachedSelectPageKey, m_cachedSelectPageSizeKey,
+                       m_cachedSelectPageSize, m_cachedSelectSearchTitle, m_cachedSelectSearchField,
+                       m_cachedSelectMethod);
+    dlg.setHttpConfig(m_baseUrl, m_authHeader, m_postData);
+    if (dlg.exec() == QDialog::Accepted) {
+      m_cachedSelectSourceFile = dlg.sourceFile();
+      m_cachedSelectSourceId = dlg.sourceId();
+      m_cachedSelectUrl = dlg.url();
+      m_cachedSelectValueField = dlg.valueField();
+      m_cachedSelectLabelField = dlg.labelField();
+      m_cachedSelectPaged = dlg.paged();
+      m_cachedSelectPageKey = dlg.pageKey();
+      m_cachedSelectPageSizeKey = dlg.pageSizeKey();
+      m_cachedSelectPageSize = dlg.pageSize();
+      m_cachedSelectSearchTitle = dlg.searchTitle();
+      m_cachedSelectSearchField = dlg.searchField();
+      m_cachedSelectMethod = dlg.method();
+    }
+  });
+
+  // 选项预览（数据源域时显示）
+  m_domainPreviewLabel = new QLabel(this);
+  m_domainPreviewLabel->setStyleSheet(
+      QStringLiteral("color: %1; font-size: 12px;").arg(AuiStyle::mutedTextColor().name()));
+  addRow(QStringLiteral("选项预览:"), m_domainPreviewLabel);
+
+  // 选中数据源 → 更新取值域缓存（同步布尔/select 分支缓存）+ 预览 + 样式推导
+  // （推导规则：恰 2 项 → 布尔文字/布尔编辑可用；其他项数 → 下拉）
+  connect(m_domainSourceCombo, &AuiTreeCombo::itemSelected, this, [this](const QVariant &refVar) {
+    const QString ref = refVar.toString();
+    m_cachedDomainSourceFile.clear();
+    m_cachedDomainSourceId.clear();
+    m_cachedBoolSourceFile.clear();
+    m_cachedBoolSourceId.clear();
+    m_cachedSelectSourceFile.clear();
+    m_cachedSelectSourceId.clear();
+    if (!ref.isEmpty()) {
+      const int sep = ref.lastIndexOf(QLatin1Char('#'));
+      m_cachedDomainSourceFile = ref.left(sep);
+      m_cachedDomainSourceId = ref.mid(sep + 1);
+      m_cachedBoolSourceFile = m_cachedDomainSourceFile;
+      m_cachedBoolSourceId = m_cachedDomainSourceId;
+      m_cachedSelectSourceFile = m_cachedDomainSourceFile;
+      m_cachedSelectSourceId = m_cachedDomainSourceId;
+    }
+    applyDomainBoolTexts(ref);
+    updateDomainPreview();
+    deriveStylesFromDomain();
+  });
+
+  // 取值域类型切换：activated 仅在用户操作时触发——程序性恢复（setDomainType）不重推导样式
+  connect(m_domainTypeCombo, &QComboBox::activated, this, [this](int) {
+    rebuildDomainControls();
+    deriveStylesFromDomain();
+  });
+  // 初始显隐（默认"未声明"：隐藏数据源/远程源/预览行）
+  rebuildDomainControls();
+
+  // ════════════════════════════════════════
+  //  列表页展示
+  // ════════════════════════════════════════
+  auto *tableSep = new QLabel(QStringLiteral("── 列表页展示 ──"), this);
   tableSep->setAlignment(Qt::AlignCenter);
   m_formLayout->addRow(QString(), tableSep);
 
@@ -200,6 +339,7 @@ void ColumnStyleDialog::setupUI() {
 
   // 切换显示样式时重建子控件
   connect(m_displayTypeCombo, &QComboBox::currentTextChanged, this, [this]() {
+    if (!m_syncing) m_stylesTouched = true;  // 用户手动改样式 → 取值域推导让位
     // 缓存当前值
     if (m_tagItemsTable) m_cachedTagItems = collectTagItems();
     if (m_boolTrueTextEdit) m_cachedBoolTrueText = m_boolTrueTextEdit->text().trimmed();
@@ -244,9 +384,9 @@ void ColumnStyleDialog::setupUI() {
   addRow(QStringLiteral("格式化:"), m_formatterCombo);
 
   // ════════════════════════════════════════
-  //  编辑页配置
+  //  编辑表单
   // ════════════════════════════════════════
-  auto *editSep = new QLabel(QStringLiteral("── 编辑页配置 ──"), this);
+  auto *editSep = new QLabel(QStringLiteral("── 编辑表单 ──"), this);
   editSep->setAlignment(Qt::AlignCenter);
   m_formLayout->addRow(QString(), editSep);
 
@@ -287,6 +427,7 @@ void ColumnStyleDialog::setupUI() {
 
   // 切换编辑样式时重建子控件
   connect(m_editStyleCombo, &QComboBox::currentTextChanged, this, [this]() {
+    if (!m_syncing) m_stylesTouched = true;  // 用户手动改样式 → 取值域推导让位
     // 缓存当前值
     if (m_placeholderEdit) m_cachedPlaceholder = m_placeholderEdit->text().trimmed();
     if (m_maxlengthCombo) m_cachedMaxlength = m_maxlengthCombo->currentData().toInt();
@@ -383,6 +524,107 @@ void ColumnStyleDialog::adjustToContents() {
 }
 
 // ════════════════════════════════════════════════════════════
+//  字段取值域（方案 B）
+// ════════════════════════════════════════════════════════════
+
+void ColumnStyleDialog::buildDomainCandidates(bool enumOnly) {
+  if (!m_domainSourceCombo) return;
+  // 候选构建统一在 config_dialog_common（与查询设置共享同一份实现）。
+  // 类型简化后不再按"枚举"过滤候选——数据源域列出全部静态源，选项数随条目显示
+  Q_UNUSED(enumOnly);
+  buildDomainSourceCandidates(m_domainSourceCombo, m_searchRoot, false, &m_boolSourceTexts,
+                              &m_domainOptionPreviews, &m_domainOptionCounts);
+}
+
+void ColumnStyleDialog::rebuildDomainControls() {
+  if (!m_domainTypeCombo) return;
+  const QString t = m_domainTypeCombo->currentData().toString();
+  m_cachedDomainType = t;
+  const bool hasSource = t == QStringLiteral("source");
+  const bool isRemote = t == QString::fromLatin1(JsonVueDomain::kRemote);
+  setDomainRowVisible(m_domainSourceRow, hasSource);
+  setDomainRowVisible(m_domainUrlBtn, isRemote);
+  setDomainRowVisible(m_domainPreviewLabel, hasSource);
+  if (hasSource) {
+    buildDomainCandidates();
+    // 恢复选中项（未选时落到顶层"未选择"条目）
+    const QString ref = currentDomainRef();
+    m_domainSourceCombo->selectByData(ref.isEmpty() ? QVariant(QString()) : QVariant(ref));
+  }
+  updateDomainPreview();
+  adjustToContents();
+}
+
+void ColumnStyleDialog::deriveStylesFromDomain() {
+  if (m_stylesTouched || m_syncing) return;  // 用户手动改过样式 → 推导让位
+  const QString uiType = m_domainTypeCombo ? m_domainTypeCombo->currentData().toString() : QString();
+  QString displayValue;
+  EditStyle edit = m_editStyle;
+  if (uiType == QStringLiteral("source")) {
+    // 按选中源的选项数推导能力：恰 2 项 → 布尔文字（枚举能力）；其他项数 → 下拉
+    const auto it = m_domainOptionCounts.constFind(currentDomainRef());
+    const int n = it == m_domainOptionCounts.constEnd() ? 0 : it.value();
+    if (n == 2) {
+      displayValue = QString::fromLatin1(JsonVueStyle::kBoolean);
+      edit = EditStyle::Boolean;
+    } else if (n > 0) {
+      displayValue = QString::fromLatin1(JsonVueStyle::kSelect);
+      edit = EditStyle::Select;
+    } else {
+      return;  // 尚未选择源：不动样式
+    }
+  } else if (uiType == QString::fromLatin1(JsonVueDomain::kRemote)) {
+    displayValue = QString::fromLatin1(JsonVueStyle::kSelect);
+    edit = EditStyle::Select;
+  } else {
+    return;  // 未声明：不动样式
+  }
+  // 程序性改样式：m_syncing 屏蔽 m_stylesTouched 标记与互触联动，
+  // 组合框 currentTextChanged 处理器内部会按需重建子控件
+  m_syncing = true;
+  if (m_displayTypeCombo) comboSelectData(m_displayTypeCombo, displayValue);
+  if (m_editStyleCombo) comboSelectData(m_editStyleCombo, editStyleToString(edit));
+  m_editStyle = edit;
+  m_syncing = false;
+}
+
+void ColumnStyleDialog::updateDomainPreview() {
+  if (!m_domainPreviewLabel) return;
+  if (m_domainTypeCombo && m_domainTypeCombo->currentData().toString() !=
+                               QStringLiteral("source")) {
+    m_domainPreviewLabel->clear();
+    return;
+  }
+  const auto it = m_domainOptionPreviews.constFind(currentDomainRef());
+  m_domainPreviewLabel->setText(it == m_domainOptionPreviews.constEnd()
+                                    ? QStringLiteral("（未选择数据源）")
+                                    : it.value());
+}
+
+void ColumnStyleDialog::applyDomainBoolTexts(const QString &ref) {
+  if (!m_boolTrueTextEdit || !m_boolFalseTextEdit) return;
+  m_boolTrueTextEdit->setReadOnly(false);
+  m_boolFalseTextEdit->setReadOnly(false);
+  if (ref.isEmpty()) return;  // 未选源：解锁手动输入
+  const auto it = m_boolSourceTexts.constFind(ref);
+  if (it == m_boolSourceTexts.constEnd()) return;
+  m_cachedBoolTrueText = it.value().first;
+  m_cachedBoolFalseText = it.value().second;
+  m_boolTrueTextEdit->setText(it.value().first);
+  m_boolFalseTextEdit->setText(it.value().second);
+  m_boolTrueTextEdit->setReadOnly(true);
+  m_boolFalseTextEdit->setReadOnly(true);
+}
+
+void ColumnStyleDialog::setDomainRowVisible(QWidget *field, bool visible) {
+  if (!field || !m_formLayout) return;
+  field->setVisible(visible);
+  if (QLabel *lab = qobject_cast<QLabel *>(m_formLayout->labelForField(field))) {
+    lab->setVisible(visible);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
 //  动态重建：显示类型子控件
 // ════════════════════════════════════════════════════════════
 
@@ -399,9 +641,7 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
   m_tagItemsTable = nullptr;
   m_boolTrueTextEdit = nullptr;
   m_boolFalseTextEdit = nullptr;
-  m_boolSourceCombo = nullptr;
   m_switchEditableCheck = nullptr;
-  m_selectSourceBtn = nullptr;
 
   QString dtype = m_displayTypeCombo ? m_displayTypeCombo->currentData().toString() : QString();
 
@@ -426,111 +666,8 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
     m_displayTypeWidget->setMaximumHeight(QWIDGETSIZE_MAX);  // 恢复高度限制
     m_displayTypeWidget->setVisible(true);
 
-    // 静态数据源下拉：列出所有恰好 2 项选项的静态数据源 + 全局枚举。
-    // 下拉项显示"说明 - 标识"（数据源显示 url 值，全局枚举显示枚举名），选中后真假文字从数据源实时读取并锁定
-    // 不可改（数据源修改后重开对话框自动同步）；选"手动输入"时解锁，可自由填写真假文字
-    m_boolSourceCombo = new AuiTreeCombo(m_displayTypeWidget);
-    // 顶层"手动输入"条目：未选择时的默认项（真/假文字可自由填写）
-    m_boolSourceCombo->addEntry(nullptr, QStringLiteral("（手动输入真假文字）"), QString());
-    // 真/假文字提取（与 admin_data.ac 的布尔值约定一致）：
-    // value 为 1/true → 真值、0/false → 假值；无法判断时按顺序（第 1 项假、第 2 项真）
-    auto boolTextsOf = [](const QList<QPair<QString, QString>> &labelValues)
-        -> QPair<QString, QString> {
-      QString trueText;
-      QString falseText;
-      if (labelValues.size() == 2) {
-        falseText = labelValues.at(0).first;
-        trueText = labelValues.at(1).first;
-      }
-      for (const auto &lv : labelValues) {
-        const QString v = lv.second.trimmed().toLower();
-        if (v == QStringLiteral("1") || v == QStringLiteral("true")) trueText = lv.first;
-        if (v == QStringLiteral("0") || v == QStringLiteral("false")) falseText = lv.first;
-      }
-      return {trueText, falseText};
-    };
-
-    // 候选一：项目作用域内的 .jsonsource 静态数据源（每个文件一组，可展开/收起）
-    const QStringList srcFiles = findJsonsourceFiles(m_searchRoot);
-    for (const QString &sf : srcFiles) {
-      JsonSourceConfig cfg;
-      {
-        QFile f(sf);
-        if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-          cfg = JsonSourceConfig::fromJsonString(QString::fromUtf8(f.readAll()));
-          f.close();
-        }
-      }
-      QStandardItem *group = nullptr;
-      for (const auto &s : cfg.sources) {
-        // 仅 2 项选项的静态数据源可选（真假文字只有两个状态）
-        if (!s.isStatic() || s.options.size() != 2) continue;
-        if (!group) {
-          group = m_boolSourceCombo->addGroup(QStringLiteral("▍数据源 · ") +
-                                              QFileInfo(sf).fileName());
-        }
-        const QString remark = s.remark.isEmpty() ? QStringLiteral("(未命名)") : s.remark;
-        // 显示：说明 - url 值（如 status），不显示 0/1 具体值；旧数据无 url 时回退为派生函数名
-        const QString funcName = staticSourceFuncName(QFileInfo(sf).baseName(), s.url);
-        QList<QPair<QString, QString>> labelValues;
-        for (const auto &o : s.options) labelValues.append({o.label, o.value});
-        const QPair<QString, QString> texts = boolTextsOf(labelValues);
-        const QString ref = sf + QStringLiteral("#") + s.id;
-        m_boolSourceTexts.insert(ref, texts);
-        m_boolSourceCombo->addEntry(
-            group, QStringLiteral("%1 - %2").arg(remark, s.url.isEmpty() ? funcName : s.url), ref);
-      }
-    }
-
-    // 候选二：全局枚举（.jsonglobalenum，含平台共享层与兄弟后端项目）。
-    // 引用存文件基名而非绝对路径——文件移动后生成侧按基名+id 仍可解析（不断链）；
-    // 同步产物 api/global_enum.jsonsource 的 id 与枚举配置一致，funcName 推导口径
-    // 固定为基名 global_enum，与生成侧 source.ts 完全一致
-    const QStringList enumFiles = findGlobalEnumFiles(m_searchRoot);
-    for (const QString &ef : enumFiles) {
-      JsonGlobalEnumConfig cfg;
-      {
-        QFile f(ef);
-        if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-          cfg = JsonGlobalEnumConfig::fromJsonString(QString::fromUtf8(f.readAll()));
-          f.close();
-        }
-      }
-      // 组标题标注层级：直接位于 crud_nest/ 下为共享层，位于 crud_nest/<项目>/ 下为项目级
-      const QString parentName = QFileInfo(ef).absolutePath().section(QLatin1Char('/'), -1);
-      const bool isShared = parentName == QStringLiteral("crud_nest");
-      QStandardItem *group = nullptr;
-      for (const auto &e : cfg.enums) {
-        if (e.options.size() != 2) continue;  // 布尔只有两个状态
-        if (!group) {
-          group = m_boolSourceCombo->addGroup(
-              isShared ? QStringLiteral("▍全局枚举（共享层） · ") + QFileInfo(ef).fileName()
-                       : QStringLiteral("▍全局枚举（%1） · %2").arg(parentName, QFileInfo(ef).fileName()));
-        }
-        const QString remark = e.remark.isEmpty() ? QStringLiteral("(未命名)") : e.remark;
-        QList<QPair<QString, QString>> labelValues;
-        for (const auto &o : e.options) labelValues.append({o.label, o.value});
-        const QPair<QString, QString> texts = boolTextsOf(labelValues);
-        QString refId = e.id;
-        if (refId.isEmpty()) refId = e.name;  // 与生成侧 buildGlobalEnumJsonSource 兜底一致
-        const QString ref = QStringLiteral("global_enum.jsonsource#") + refId;
-        if (m_boolSourceTexts.contains(ref)) continue;  // 同名枚举去重（跨文件）
-        m_boolSourceTexts.insert(ref, texts);
-        m_boolSourceCombo->addEntry(group, QStringLiteral("%1 - %2").arg(remark, e.name), ref);
-      }
-    }
-    // 静态数据源行：标签后带问号帮助按钮，说明数据源列表受「右键设为项目」作用域过滤。
-    // 注：标签用 QFormLayout 的 QString 形式（复合 widget 作 label 时空间不足会被压缩截断），
-    // 问号按钮放在 field 侧、下拉框之前，视觉上仍紧跟标签文字
-    auto *boolSrcField = new QWidget(m_displayTypeWidget);
-    auto *boolSrcLay = new QHBoxLayout(boolSrcField);
-    boolSrcLay->setContentsMargins(0, 0, 0, 0);
-    boolSrcLay->setSpacing(2);
-    boolSrcLay->addWidget(AuiButton::createHelpButton(QStringLiteral("数据源作用域"),
-                                                      jsonVueSourceScopeHelpText(), boolSrcField));
-    boolSrcLay->addWidget(m_boolSourceCombo, 1);
-    form->addRow(QStringLiteral("  静态数据源:"), boolSrcField);
-
+    // 数据源由顶部「字段取值域」提供（枚举域时选项文字自动锁定）；
+    // 未声明取值域或未选源时真假文字可自由填写（旧行为）
     m_boolTrueTextEdit = new QLineEdit(m_displayTypeWidget);
     m_boolTrueTextEdit->setPlaceholderText(QStringLiteral("如: 显示"));
     m_boolTrueTextEdit->setText(m_cachedBoolTrueText);
@@ -541,38 +678,8 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
     m_boolFalseTextEdit->setText(m_cachedBoolFalseText);
     form->addRow(QStringLiteral("  假值文字:"), m_boolFalseTextEdit);
 
-    // 切换数据源 → 从数据源实时填充真假文字并锁定；
-    // 切回"手动输入" → 解锁（保留当前文字继续编辑）
-    // 选中条目 → 从候选构建时缓存的真/假文字映射查表锁定（不重复读文件，
-    // 同步产物 api/global_enum.jsonsource 缺失时全局枚举候选依然可用）；
-    // 组标题/展开收起不触发 itemSelected
-    connect(m_boolSourceCombo, &AuiTreeCombo::itemSelected, this, [this](const QVariant &refVar) {
-      if (!m_boolTrueTextEdit || !m_boolFalseTextEdit) return;
-      const QString ref = refVar.toString();
-      m_cachedBoolSourceFile.clear();
-      m_cachedBoolSourceId.clear();
-      m_boolTrueTextEdit->setReadOnly(false);
-      m_boolFalseTextEdit->setReadOnly(false);
-      if (ref.isEmpty()) return;  // 手动输入：解锁
-      const int sep = ref.lastIndexOf(QLatin1Char('#'));
-      m_cachedBoolSourceFile = ref.left(sep);
-      m_cachedBoolSourceId = ref.mid(sep + 1);
-      const auto it = m_boolSourceTexts.constFind(ref);
-      if (it == m_boolSourceTexts.constEnd()) return;
-      m_boolTrueTextEdit->setText(it.value().first);
-      m_boolFalseTextEdit->setText(it.value().second);
-      m_boolTrueTextEdit->setReadOnly(true);
-      m_boolFalseTextEdit->setReadOnly(true);
-    });
-    // 恢复上次选中的数据源（自动展开父级链；触发 itemSelected：填充 + 锁定）；
-    // 未选过（新列）时选中"手动输入"
-    const QString expectedRef =
-        m_cachedBoolSourceFile + QStringLiteral("#") + m_cachedBoolSourceId;
-    if (expectedRef == QStringLiteral("#")) {
-      m_boolSourceCombo->selectByData(QString());
-    } else {
-      m_boolSourceCombo->selectByData(expectedRef);
-    }
+    // 取值域为枚举且已选源 → 真假文字从候选缓存填充并锁定；否则解锁（手动输入）
+    applyDomainBoolTexts(currentDomainRef());
 
     // 开关可编辑（仅 boolean/tag 显示）
     m_switchEditableCheck = new QCheckBox(QStringLiteral("列表页可直接切换"), m_displayTypeWidget);
@@ -582,37 +689,15 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
     m_displayTypeWidget->setMaximumHeight(QWIDGETSIZE_MAX);  // 恢复高度限制
     m_displayTypeWidget->setVisible(true);
 
-    auto *hint = new QLabel(QStringLiteral("  下拉框数据源同时用于列表显示、编辑页下拉与查询"),
-                            m_displayTypeWidget);
+    // 数据源统一由顶部「字段取值域」提供（列表/编辑/查询三处共享）；
+    // 未声明取值域时提示先声明，否则生成空下拉
+    auto *hint = new QLabel(
+        domainType().isEmpty()
+            ? QStringLiteral("  下拉框数据源同时用于列表显示、编辑页下拉与查询；"
+                             "尚未声明取值域，请在上方「字段取值域」选择数据源")
+            : QStringLiteral("  下拉框数据源由上方「字段取值域」提供（列表/编辑/查询三处共享）"),
+        m_displayTypeWidget);
     form->addRow(QString(), hint);
-
-    // 数据源按钮：点击弹出 ComboboxConfigDialog（列表/编辑/查询三处共享同一数据源）
-    m_selectSourceBtn = new QPushButton(QStringLiteral("配置数据源..."), m_displayTypeWidget);
-    form->addRow(QStringLiteral("  数据源:"), m_selectSourceBtn);
-    connect(m_selectSourceBtn, &QPushButton::clicked, this, [this]() {
-      ComboboxConfigDialog dlg(this);
-      dlg.setSearchRoot(m_searchRoot);
-      dlg.setSourceRef(m_cachedSelectSourceFile, m_cachedSelectSourceId);
-      dlg.setConfig(m_cachedSelectUrl, m_cachedSelectValueField, m_cachedSelectLabelField);
-      dlg.setPagedConfig(m_cachedSelectPaged, m_cachedSelectPageKey, m_cachedSelectPageSizeKey,
-                         m_cachedSelectPageSize, m_cachedSelectSearchTitle,
-                         m_cachedSelectSearchField, m_cachedSelectMethod);
-      dlg.setHttpConfig(m_baseUrl, m_authHeader, m_postData);
-      if (dlg.exec() == QDialog::Accepted) {
-        m_cachedSelectSourceFile = dlg.sourceFile();
-        m_cachedSelectSourceId = dlg.sourceId();
-        m_cachedSelectUrl = dlg.url();
-        m_cachedSelectValueField = dlg.valueField();
-        m_cachedSelectLabelField = dlg.labelField();
-        m_cachedSelectPaged = dlg.paged();
-        m_cachedSelectPageKey = dlg.pageKey();
-        m_cachedSelectPageSizeKey = dlg.pageSizeKey();
-        m_cachedSelectPageSize = dlg.pageSize();
-        m_cachedSelectSearchTitle = dlg.searchTitle();
-        m_cachedSelectSearchField = dlg.searchField();
-        m_cachedSelectMethod = dlg.method();
-      }
-    });
   } else {
     // 非标签/布尔样式时隐藏容器，避免占用空间
     m_displayTypeWidget->setVisible(false);
@@ -736,7 +821,6 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
   m_precisionCombo = nullptr;
   m_dateFormatCombo = nullptr;
   m_textareaRowsCombo = nullptr;
-  m_selectSourceBtn = nullptr;
 
   switch (m_editStyle) {
     case EditStyle::Text: {
@@ -819,8 +903,9 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
       break;
     }
     case EditStyle::Boolean: {
-      auto *hint =
-          new QLabel(QStringLiteral("  （真假文字在上方显示样式配置）"), m_editStyleWidget);
+      auto *hint = new QLabel(
+          QStringLiteral("  （真假文字在上方显示样式区配置；取值域为枚举时自动锁定）"),
+          m_editStyleWidget);
       form->addRow(QString(), hint);
       break;
     }
@@ -866,8 +951,8 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
       break;
     }
     case EditStyle::Select: {
-      // 下拉框：数据源在列表页（显示样式=下拉框）统一配置，列表/编辑/查询三处共享
-      auto *hint = new QLabel(QStringLiteral("  （数据源与列表页一致，在上方显示样式配置）"),
+      // 下拉框：数据源由顶部「字段取值域」统一提供，列表/编辑/查询三处共享
+      auto *hint = new QLabel(QStringLiteral("  （数据源由上方「字段取值域」提供，列表/编辑/查询共享）"),
                               m_editStyleWidget);
       form->addRow(QString(), hint);
       break;
@@ -893,6 +978,10 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
 // ════════════════════════════════════════════════════════════
 //  ColumnStyleDialog 配置读写
 // ════════════════════════════════════════════════════════════
+
+void ColumnStyleDialog::setFieldName(const QString &v) {
+  if (m_fieldNameLabel) m_fieldNameLabel->setText(v);
+}
 
 void ColumnStyleDialog::setEditStyle(EditStyle style) {
   m_editStyle = style;
@@ -1069,23 +1158,75 @@ QList<TagItem> ColumnStyleDialog::tagItems() const {
 }
 
 void ColumnStyleDialog::setBoolSourceRef(const QString &file, const QString &id) {
+  // 方案 B：布尔源统一由取值域承担，此处仅同步缓存（旧保存路径兼容）
   m_cachedBoolSourceFile = file;
   m_cachedBoolSourceId = id;
-  // 树形下拉：按 UserRole 选中对应条目（树形模型下不能用扁平行号查找）；
-  // 未选择过（file/id 均空）时选中顶层"手动输入"作为默认项
-  if (m_boolSourceCombo) {
-    const QString ref = file + QStringLiteral("#") + id;
-    if (ref == QStringLiteral("#")) {
-      m_boolSourceCombo->selectByData(QString());
-    } else {
-      m_boolSourceCombo->selectByData(ref);
-    }
-  }
 }
 
 QString ColumnStyleDialog::boolSourceFile() const { return m_cachedBoolSourceFile; }
 
 QString ColumnStyleDialog::boolSourceId() const { return m_cachedBoolSourceId; }
+
+// ── 字段取值域（方案 B）──────────────────────────────────────
+
+void ColumnStyleDialog::setDomainType(const QString &v) {
+  // schema 值 → UI 类型：enum/static 统一呈现为「数据源」（枚举是能力不是类型），
+  // remote → 远程接口；"" → 未声明
+  m_cachedDomainType = v;
+  if (m_domainTypeCombo) {
+    QString uiType;
+    if (v == QString::fromLatin1(JsonVueDomain::kEnum) ||
+        v == QString::fromLatin1(JsonVueDomain::kStatic)) {
+      uiType = QStringLiteral("source");
+    } else if (v == QString::fromLatin1(JsonVueDomain::kRemote)) {
+      uiType = QString::fromLatin1(JsonVueDomain::kRemote);
+    }
+    comboSelectData(m_domainTypeCombo, uiType);
+    rebuildDomainControls();  // 类型恢复 → 显隐/候选/选中同步（不触发样式推导）
+  }
+}
+
+QString ColumnStyleDialog::domainType() const {
+  // UI 类型 → schema 值：数据源域按选中源的选项数细分（恰 2 项 → enum，其他 → static）
+  const QString uiType =
+      m_domainTypeCombo ? m_domainTypeCombo->currentData().toString() : m_cachedDomainType;
+  if (uiType == QStringLiteral("source")) {
+    const auto it = m_domainOptionCounts.constFind(currentDomainRef());
+    const int n = it == m_domainOptionCounts.constEnd() ? 0 : it.value();
+    return QString::fromLatin1(n == 2 ? JsonVueDomain::kEnum : JsonVueDomain::kStatic);
+  }
+  if (uiType == QString::fromLatin1(JsonVueDomain::kRemote)) return uiType;
+  return QString();
+}
+
+void ColumnStyleDialog::setDomainSourceRef(const QString &file, const QString &id) {
+  m_cachedDomainSourceFile = file;
+  m_cachedDomainSourceId = id;
+  // 同步布尔/select 分支缓存：三处保存路径引用同一来源（内存态一致）
+  m_cachedBoolSourceFile = file;
+  m_cachedBoolSourceId = id;
+  m_cachedSelectSourceFile = file;
+  m_cachedSelectSourceId = id;
+  if (m_domainSourceCombo) {
+    const QString ref = file + QStringLiteral("#") + id;
+    m_domainSourceCombo->selectByData(ref == QStringLiteral("#") ? QVariant(QString())
+                                                                 : QVariant(ref));
+  }
+  updateDomainPreview();
+}
+
+QString ColumnStyleDialog::domainSourceFile() const { return m_cachedDomainSourceFile; }
+
+QString ColumnStyleDialog::domainSourceId() const { return m_cachedDomainSourceId; }
+
+void ColumnStyleDialog::setDomainUrl(const QString &v) { setSelectUrl(v); }
+
+QString ColumnStyleDialog::domainUrl() const { return selectUrl(); }
+
+QString ColumnStyleDialog::currentDomainRef() const {
+  if (m_cachedDomainSourceFile.isEmpty() && m_cachedDomainSourceId.isEmpty()) return QString();
+  return m_cachedDomainSourceFile + QStringLiteral("#") + m_cachedDomainSourceId;
+}
 
 void ColumnStyleDialog::setUploadSourceRef(const QString &file, const QString &id) {
   m_cachedUploadSourceFile = file;
@@ -1245,6 +1386,14 @@ void ColumnStyleDialog::accept() {
       AuiMessageBox::show(this, QStringLiteral("数据验证失败"), error);
       return;
     }
+  }
+  // 取值域校验（方案 B）：数据源域必须选择数据源
+  const QString uiType =
+      m_domainTypeCombo ? m_domainTypeCombo->currentData().toString() : QString();
+  if (uiType == QStringLiteral("source") && currentDomainRef().isEmpty()) {
+    AuiMessageBox::show(this, QStringLiteral("数据验证失败"),
+                        QStringLiteral("取值域为数据源时必须选择数据源"));
+    return;
   }
   QDialog::accept();
 }
