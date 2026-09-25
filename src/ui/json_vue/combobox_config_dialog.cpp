@@ -159,13 +159,16 @@ void ComboboxConfigDialog::rebuildSourceTree() {
     QStandardItem *group = nullptr;
     for (const auto &s : cfg.sources) {
       if (!group) group = m_sourceTree->addGroup(QStringLiteral("▍数据源 · ") + QFileInfo(f).fileName());
-      // 统一「说明 - 标识」：动态/静态都显示 url 值（静态源的 url 即函数名推导值，
-      // 如 status）；旧静态数据无 url 时回退为「静态 N 项」
+      // 统一「说明 - 标识（N 项）」格式（与字段设置面板的取值数据源树一致）：
+      // 动态源显示接口 url；静态源显示 url 值（函数名推导值，如 status）+ 选项数；
+      // 旧静态数据无 url 时回退为派生函数名
       QString text = s.remark.isEmpty() ? QStringLiteral("(未命名)") : s.remark;
-      if (!s.isDynamic() && s.url.isEmpty()) {
-        text += QStringLiteral(" - 静态 %1 项").arg(s.options.size());
-      } else {
+      if (s.isDynamic()) {
         text += QStringLiteral(" - %1").arg(s.url);
+      } else {
+        const QString ident =
+            s.url.isEmpty() ? staticSourceFuncName(QFileInfo(f).baseName(), s.url) : s.url;
+        text += QStringLiteral(" - %1（%2 项）").arg(ident, QString::number(s.options.size()));
       }
       SourceCandidate c;
       c.fileRef = f;      // 绝对路径（既有行为，生成侧按 basename 匹配真实路径）

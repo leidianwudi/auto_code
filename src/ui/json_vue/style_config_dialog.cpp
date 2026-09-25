@@ -215,14 +215,15 @@ void ColumnStyleDialog::setupUI() {
   m_formLayout->addRow(QString(), domainSep);
 
   // 取值域类型只有两个业务选项（方案 B 简化）：
-  //   数据源   → 引用静态源/全局枚举；恰 2 项自动获得"枚举"能力（布尔样式可用）
-  //   远程接口 → 手动 URL
+  //   数据源   → 引用 .jsonsource（静态源/动态源）或全局枚举；
+  //              恰 2 项静态源自动获得"枚举"能力（布尔样式可用），动态源走接口选项
+  //   远程接口 → 手动 URL（不引用数据源文件）
   // "枚举"不是类型而是能力，由选中源的选项数推导，避免两份高度重叠的候选列表
   m_domainTypeCombo = AuiComboBox::create(this);
-  m_domainTypeCombo->addItem(QStringLiteral("未声明（沿用旧配置）"), QString());
-  m_domainTypeCombo->addItem(QStringLiteral("数据源（静态源 / 全局枚举）"),
+  m_domainTypeCombo->addItem(QStringLiteral("未声明（无数据源）"), QString());
+  m_domainTypeCombo->addItem(QStringLiteral("数据源（.jsonsource / 全局枚举）"),
                              QStringLiteral("source"));
-  m_domainTypeCombo->addItem(QStringLiteral("远程接口（URL）"),
+  m_domainTypeCombo->addItem(QStringLiteral("远程接口（手动 URL）"),
                              QString::fromLatin1(JsonVueDomain::kRemote));
   addRow(QStringLiteral("取值域类型:"), m_domainTypeCombo);
 
@@ -530,10 +531,10 @@ void ColumnStyleDialog::adjustToContents() {
 void ColumnStyleDialog::buildDomainCandidates(bool enumOnly) {
   if (!m_domainSourceCombo) return;
   // 候选构建统一在 config_dialog_common（与查询设置共享同一份实现）。
-  // 类型简化后不再按"枚举"过滤候选——数据源域列出全部静态源，选项数随条目显示
-  Q_UNUSED(enumOnly);
-  buildDomainSourceCandidates(m_domainSourceCombo, m_searchRoot, false, &m_boolSourceTexts,
-                              &m_domainOptionPreviews, &m_domainOptionCounts);
+  // 数据源域涵盖全部数据源文件：静态源（N 项）、动态源（接口）、全局枚举
+  buildDomainSourceCandidates(m_domainSourceCombo, m_searchRoot, enumOnly, &m_boolSourceTexts,
+                              &m_domainOptionPreviews, &m_domainOptionCounts,
+                              &m_domainDynamicFlags);
 }
 
 void ColumnStyleDialog::rebuildDomainControls() {
@@ -561,17 +562,23 @@ void ColumnStyleDialog::deriveStylesFromDomain() {
   QString displayValue;
   EditStyle edit = m_editStyle;
   if (uiType == QStringLiteral("source")) {
-    // 按选中源的选项数推导能力：恰 2 项 → 布尔文字（枚举能力）；其他项数 → 下拉
-    const auto it = m_domainOptionCounts.constFind(currentDomainRef());
-    const int n = it == m_domainOptionCounts.constEnd() ? 0 : it.value();
-    if (n == 2) {
-      displayValue = QString::fromLatin1(JsonVueStyle::kBoolean);
-      edit = EditStyle::Boolean;
-    } else if (n > 0) {
+    // 按选中源的类型推导能力：动态源 → 下拉（选项来自接口）；
+    // 静态源恰 2 项 → 布尔文字（枚举能力）；其他项数 → 下拉
+    if (m_domainDynamicFlags.value(currentDomainRef(), false)) {
       displayValue = QString::fromLatin1(JsonVueStyle::kSelect);
       edit = EditStyle::Select;
     } else {
-      return;  // 尚未选择源：不动样式
+      const auto it = m_domainOptionCounts.constFind(currentDomainRef());
+      const int n = it == m_domainOptionCounts.constEnd() ? 0 : it.value();
+      if (n == 2) {
+        displayValue = QString::fromLatin1(JsonVueStyle::kBoolean);
+        edit = EditStyle::Boolean;
+      } else if (n > 0) {
+        displayValue = QString::fromLatin1(JsonVueStyle::kSelect);
+        edit = EditStyle::Select;
+      } else {
+        return;  // 尚未选择源：不动样式
+      }
     }
   } else if (uiType == QString::fromLatin1(JsonVueDomain::kRemote)) {
     displayValue = QString::fromLatin1(JsonVueStyle::kSelect);

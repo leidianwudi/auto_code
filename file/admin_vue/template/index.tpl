@@ -158,11 +158,10 @@ ${if q.hasStaticRef}  {
     label: '${q.displayName}',
     component: 'Select',
     componentProps: {
-      // 静态选项（方案 B：沿用列取值域）+ 首项「全部」：空值提交时后端自动跳过该条件
-      options: [
-        { label: '全部', value: '' },
-        ...((${q.selectStaticName}() as any)?.data?.list || [])
-      ]
+      // 静态选项（方案 B：沿用列取值域）。值域封闭（选项已覆盖全部取值），
+      // 不设「全部」项：clearable 清空 = 不筛选（后端对空参数自动跳过条件）
+      clearable: true,
+      options: (${q.selectStaticName}() as any)?.data?.list || []
     }
   },
 ${else if q.selectApiName}  {

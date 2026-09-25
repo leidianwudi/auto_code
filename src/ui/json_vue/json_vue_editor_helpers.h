@@ -277,7 +277,8 @@ inline QString domainSummary(const ColumnConfig &col) {
     return QStringLiteral("枚举·") + QFileInfo(col.domainSourceFile).completeBaseName();
   }
   if (col.domainType == QString::fromLatin1(JsonVueDomain::kStatic)) {
-    return QStringLiteral("静态·") + QFileInfo(col.domainSourceFile).completeBaseName();
+    // static 语义 = 引用数据源文件（静态源/动态源均存此值）
+    return QStringLiteral("数据源·") + QFileInfo(col.domainSourceFile).completeBaseName();
   }
   if (col.domainType == QString::fromLatin1(JsonVueDomain::kRemote)) {
     return QStringLiteral("远程·") + col.domainUrl;

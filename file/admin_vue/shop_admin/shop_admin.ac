@@ -20,10 +20,13 @@ main {
   // ── 2. 组装项目参数并调用通用生成逻辑 ────────────────────────────
   //     projectApiPath 指向对应后端 API 项目目录（可选）：全局枚举生成时
   //     会收集其下全部 *.jsonglobalenum 作为项目级配置（就近覆盖平台级）
+  //     genGlobalEnum: false 可跳过全局枚*.jsonglobalenum的代码生成（缺省生成global_enum_.ts）；
+  //     枚举定义稳定、无需每次重写 global_enum_.ts 时使用
   let projectApiPath: String = "D:/work/github/auto_code/file/crud_nest/shop_api";
-  let params: Object = {
+  let params: Object = { 
     basePath: basePath,
-    projectApiPath: projectApiPath
+    projectApiPath: projectApiPath,
+    genGlobalEnum: true
   };
   generateAdminMain(params);
 

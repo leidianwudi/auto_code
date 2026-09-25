@@ -146,9 +146,14 @@ QTableWidget *makeConfigTable(const std::initializer_list<ConfigTableColumn> &co
 
 QString jsonVueSourceScopeHelpText() {
   return QStringLiteral(
-      "下拉框只列出「当前项目」下的 .jsonsource 数据源文件。\n\n"
-      "项目根的判定：从当前 .jsonvue 文件所在目录逐级向上，找到的第一个含 "
-      "project.acproj 标记文件的文件夹即为项目根。\n"
+      "数据源候选包含三类：\n"
+      "  1. .jsonsource 数据源（当前项目作用域内）：静态源带固定选项（条目标注 N 项），"
+      "动态源选项来自接口返回（条目显示接口 url）；\n"
+      "  2. .jsonglobalenum 全局枚举：项目内 + 平台共享层（crud_nest/，逐级向上就近优先）"
+      "+ 兄弟后端项目（crud_nest/<项目>/）；\n"
+      "  3. 全局枚举按枚举名合并展示，同名时项目级覆盖共享层。\n\n"
+      "项目根的判定（.jsonsource 与项目内 .jsonglobalenum 的作用域）：从当前 .jsonvue "
+      "文件所在目录逐级向上，找到的第一个含 project.acproj 标记文件的文件夹即为项目根。\n"
       "（在目录树中右键文件夹「设为项目」可写入标记，取消项目即删除标记，"
       "设为项目后文件夹图标显示为齿轮。）\n\n"
       "未设项目时（如 template 模板目录），回退为列出工作区全部 .jsonsource 数据源。");
@@ -250,17 +255,19 @@ static QString optionPreviewOfLabelValues(const QList<QPair<QString, QString>> &
 void buildDomainSourceCandidates(AuiTreeCombo *combo, const QString &searchRoot, bool enumOnly,
                                  QHash<QString, QPair<QString, QString>> *boolTexts,
                                  QHash<QString, QString> *previews,
-                                 QHash<QString, int> *optionCounts) {
+                                 QHash<QString, int> *optionCounts,
+                                 QHash<QString, bool> *dynamicFlags) {
   if (!combo) return;
   combo->clear();
   if (boolTexts) boolTexts->clear();
   if (previews) previews->clear();
   if (optionCounts) optionCounts->clear();
+  if (dynamicFlags) dynamicFlags->clear();
   // 顶层"未选择"条目：枚举域未选源时真假文字可自由填写（旧行为）
   combo->addEntry(nullptr, QStringLiteral("（未选择数据源）"), QString());
 
-  // 候选一：项目作用域内的 .jsonsource 静态数据源（每个文件一组，可展开/收起）。
-  // 动态源不适合做取值域（选项来自接口），需要时走「远程接口（URL）」类型
+  // 候选一：项目作用域内的 .jsonsource 数据源（每个文件一组，可展开/收起）。
+  // 静态源与动态源都可作为取值域：静态源带选项（N 项），动态源选项来自接口返回
   const QStringList srcFiles = findJsonsourceFiles(searchRoot);
   for (const QString &sf : srcFiles) {
     JsonSourceConfig cfg;
@@ -273,26 +280,36 @@ void buildDomainSourceCandidates(AuiTreeCombo *combo, const QString &searchRoot,
     }
     QStandardItem *group = nullptr;
     for (const auto &s : cfg.sources) {
-      if (!s.isStatic()) continue;                      // 动态源 → remote 域
-      if (enumOnly && s.options.size() != 2) continue;  // 枚举域仅 2 项源
+      const bool isDyn = !s.isStatic();
+      if (enumOnly && (isDyn || s.options.size() != 2)) continue;  // 枚举域仅 2 项静态源
       if (!group) {
         group = combo->addGroup(QStringLiteral("▍数据源 · ") + QFileInfo(sf).fileName());
       }
       const QString remark = s.remark.isEmpty() ? QStringLiteral("(未命名)") : s.remark;
-      // 显示：说明 - url 值（N 项）（与下拉框数据源配置界面一致，选项数供枚举能力判断）；
-      // 旧数据无 url 时回退为派生函数名
-      const QString funcName = staticSourceFuncName(QFileInfo(sf).baseName(), s.url);
       QList<QPair<QString, QString>> labelValues;
       for (const auto &o : s.options) labelValues.append({o.label, o.value});
       const QString ref = sf + QStringLiteral("#") + s.id;
-      if (boolTexts) boolTexts->insert(ref, boolTextsOfLabelValues(labelValues));
-      if (previews) previews->insert(ref, optionPreviewOfLabelValues(labelValues));
-      if (optionCounts) optionCounts->insert(ref, s.options.size());
-      combo->addEntry(group,
-                      QStringLiteral("%1 - %2（%3 项）").arg(
-                          remark, s.url.isEmpty() ? funcName : s.url,
-                          QString::number(s.options.size())),
-                      ref);
+      if (isDyn) {
+        // 动态源：说明 - 接口url（选项来自接口返回，无固定选项数）
+        if (previews) {
+          previews->insert(ref, QStringLiteral("动态数据源：选项来自接口返回"));
+        }
+        if (optionCounts) optionCounts->insert(ref, -1);
+        if (dynamicFlags) dynamicFlags->insert(ref, true);
+        combo->addEntry(group, QStringLiteral("%1 - %2").arg(remark, s.url), ref);
+      } else {
+        // 静态源：说明 - url 值（N 项）；旧数据无 url 时回退为派生函数名
+        const QString funcName = staticSourceFuncName(QFileInfo(sf).baseName(), s.url);
+        if (boolTexts) boolTexts->insert(ref, boolTextsOfLabelValues(labelValues));
+        if (previews) previews->insert(ref, optionPreviewOfLabelValues(labelValues));
+        if (optionCounts) optionCounts->insert(ref, s.options.size());
+        if (dynamicFlags) dynamicFlags->insert(ref, false);
+        combo->addEntry(group,
+                        QStringLiteral("%1 - %2（%3 项）").arg(
+                            remark, s.url.isEmpty() ? funcName : s.url,
+                            QString::number(s.options.size())),
+                        ref);
+      }
     }
   }
 

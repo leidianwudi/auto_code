@@ -142,7 +142,8 @@ export function processColumns(rawColumns: Object[], sourceMap: Object,
     let domainKind: String = rawCol.domainType;
     let domainRefFile: String = rawCol.domainSourceFile;
     let domainRefId: String = rawCol.domainSourceId;
-    // 域函数名（enum/static 经 sourceMap 查 funcName；查不到时警告并按无域降级）
+    // 域函数名（enum/static 经 sourceMap 查 funcName；引用可以是静态源也可以是
+    // 动态源——动态与否由源自身的 isStatic 决定，查不到时警告并按无域降级）
     let domainFuncName: String = "";
     let domainRefSourceName: String = "";
     if (domainKind == "enum" || domainKind == "static") {
@@ -150,11 +151,12 @@ export function processColumns(rawColumns: Object[], sourceMap: Object,
       if (sourceMap != null) {
         dRef = sourceMap[domainRefFile + "#" + domainRefId];
       }
-      if (dRef != null && dRef["isStatic"]) {
+      if (dRef != null) {
         domainFuncName = dRef["funcName"];
         domainRefSourceName = dRef["sourceName"];
+        col["domainIsStatic"] = (dRef["isStatic"] == true);
       } else {
-        printError("警告：字段 '" + rawCol.dataName + "' 取值域引用的数据源不存在或非静态（" +
+        printError("警告：字段 '" + rawCol.dataName + "' 取值域引用的数据源不存在（" +
                    domainRefFile + "#" + domainRefId + "），已按未声明处理");
         domainKind = "";
       }
@@ -611,8 +613,9 @@ export function processQueryFields(rawQueryFields: Object[], columnMap: Object,
     }
     let inheritDomain: Bool = (rawQf.domainInherit != false);
     if (inheritDomain && srcCol != null &&
-        (srcCol["domainKind"] == "enum" || srcCol["domainKind"] == "static")) {
-      // 列已声明 enum/static 取值域：查询下拉复用同一静态源函数
+        (srcCol["domainKind"] == "enum" ||
+         (srcCol["domainKind"] == "static" && srcCol["domainIsStatic"] == true))) {
+      // 列取值域为静态源（含枚举）：查询下拉复用同一静态源函数（模板出静态选项分支）
       qfStaticName = srcCol["domainFuncName"];
       qfStaticRefFile = srcCol["domainSourceRefFile"];
     } else if (inheritDomain && srcCol != null && srcCol["selectApiName"] != "") {

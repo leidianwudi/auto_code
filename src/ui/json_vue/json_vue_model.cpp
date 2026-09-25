@@ -395,13 +395,9 @@ ColumnConfig ColumnConfig::fromJson(const QJsonObject &obj) {
   if (c.queryName.isEmpty()) c.queryName = c.editName;
   c.editStyle = stringToEditStyle(obj.value(JsonVueKey::kEditStyle).toString(JsonVueStyle::kText));
   c.editEditable = obj.value(JsonVueKey::kEditEditable).toBool(true);
-  // 兼容旧字段名 comboboxUrl/comboboxValueField/comboboxLabelField
-  c.selectUrl = obj.value(JsonVueKey::kSelectUrl)
-                    .toString(obj.value(QStringLiteral("comboboxUrl")).toString());
-  c.selectValueField = obj.value(JsonVueKey::kSelectValueField)
-                           .toString(obj.value(QStringLiteral("comboboxValueField")).toString());
-  c.selectLabelField = obj.value(JsonVueKey::kSelectLabelField)
-                           .toString(obj.value(QStringLiteral("comboboxLabelField")).toString());
+  c.selectUrl = obj.value(JsonVueKey::kSelectUrl).toString();
+  c.selectValueField = obj.value(JsonVueKey::kSelectValueField).toString();
+  c.selectLabelField = obj.value(JsonVueKey::kSelectLabelField).toString();
   c.selectSourceFile = obj.value(JsonVueKey::kSelectSourceFile).toString();
   c.selectSourceId = obj.value(JsonVueKey::kSelectSourceId).toString();
   c.selectPaged = obj.value(JsonVueKey::kSelectPaged).toBool(false);
@@ -438,25 +434,7 @@ ColumnConfig ColumnConfig::fromJson(const QJsonObject &obj) {
     c.tagItems.append(TagItem::fromJson(v.toObject()));
   }
   if (c.displayType == JsonVueStyle::kTag && c.tagItems.isEmpty()) {
-    // 旧格式兼容：tagTrueText/tagFalseText → tagItems
-    QString tt = obj.value(QStringLiteral("tagTrueText")).toString();
-    QString tc = obj.value(QStringLiteral("tagTrueColor")).toString();
-    QString ft = obj.value(QStringLiteral("tagFalseText")).toString();
-    QString fc = obj.value(QStringLiteral("tagFalseColor")).toString();
-    if (!tt.isEmpty() || !ft.isEmpty()) {
-      TagItem falseItem;
-      falseItem.value = QStringLiteral("0");
-      falseItem.text = ft.isEmpty() ? QStringLiteral("关闭") : ft;
-      falseItem.color = fc.isEmpty() ? QString::fromLatin1(JsonVueColor::kInfo) : fc;
-      c.tagItems.append(falseItem);
-      TagItem trueItem;
-      trueItem.value = QStringLiteral("1");
-      trueItem.text = tt.isEmpty() ? QStringLiteral("开启") : tt;
-      trueItem.color = tc.isEmpty() ? QString::fromLatin1(JsonVueColor::kSuccess) : tc;
-      c.tagItems.append(trueItem);
-    } else {
-      c.tagItems = defaultTagItems();
-    }
+    c.tagItems = defaultTagItems();  // 未配置标签映射时给默认值（关闭/开启）
   }
   c.boolTrueText = obj.value(JsonVueKey::kBoolTrueText).toString();
   if (c.boolTrueText.isEmpty() && c.displayType == JsonVueStyle::kBoolean)

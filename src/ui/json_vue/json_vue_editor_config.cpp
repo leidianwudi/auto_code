@@ -20,6 +20,7 @@
 #include "config_dialog_common.h"
 #include "json_vue_editor.h"
 #include "json_vue_editor_helpers.h"
+#include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/component/aui_tree_combo.h"
 #include "style_config_dialog.h"
@@ -186,9 +187,15 @@ void JsonVueEditor::onConfigureQuerySelect() {
     QDialog dlg(configBtn);
     dlg.setWindowTitle(QStringLiteral("查询数据源设置"));
     auto *lay = new QVBoxLayout(&dlg);
-    lay->addWidget(new QLabel(QStringLiteral("字段「%1」列取值域：%2")
-                                  .arg(dataName, domainSummary(col)),
-                              &dlg));
+    auto *labelRow = new QHBoxLayout;
+    labelRow->addWidget(new QLabel(QStringLiteral("字段「%1」列取值域：%2")
+                                       .arg(dataName, domainSummary(col)),
+                                   &dlg),
+                        1);
+    // 问号帮助：说明数据源候选的作用域规则（与字段设置面板共用文案）
+    labelRow->addWidget(AuiButton::createHelpButton(QStringLiteral("数据源作用域"),
+                                                    jsonVueSourceScopeHelpText(), &dlg));
+    lay->addLayout(labelRow);
     auto *inheritCheck =
         new QCheckBox(QStringLiteral("沿用列配置取值域（列修改后查询自动跟随）"), &dlg);
     inheritCheck->setChecked(q.domainInherit && colHasDomain);
@@ -198,7 +205,8 @@ void JsonVueEditor::onConfigureQuerySelect() {
     srcCombo->setMinimumWidth(360);
     QHash<QString, QPair<QString, QString>> optionTexts;
     QHash<QString, QString> optionPreviews;
-    buildDomainSourceCandidates(srcCombo, m_jsonvueDir, false, &optionTexts, &optionPreviews);
+    buildDomainSourceCandidates(srcCombo, m_jsonvueDir, false, &optionTexts, &optionPreviews,
+                                nullptr, nullptr);
     if (q.selectSourceFile.isEmpty() && q.selectSourceId.isEmpty()) {
       srcCombo->selectByData(QVariant(QString()));
     } else {

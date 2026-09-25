@@ -266,8 +266,10 @@ private:
   bool m_stylesTouched = false;  ///< 用户已手动改过显示/编辑样式（取值域推导让位）
   /// 取值域候选的选项预览缓存（ref → "开启=1 / 关闭=0"，超过 4 项截断）
   QHash<QString, QString> m_domainOptionPreviews;
-  /// 取值域候选的选项数缓存（ref → 选项数；恰 2 项 = 枚举能力，布尔样式可选）
+  /// 取值域候选的选项数缓存（ref → 选项数；恰 2 项 = 枚举能力，动态源为 -1）
   QHash<QString, int> m_domainOptionCounts;
+  /// 取值域候选的动态源标记（ref → 是否动态数据源，选项来自接口）
+  QHash<QString, bool> m_domainDynamicFlags;
 
   // ── 显示样式子控件（按需创建）──
   QTableWidget *m_tagItemsTable = nullptr;  ///< tag 标签映射表（动态增删行）
