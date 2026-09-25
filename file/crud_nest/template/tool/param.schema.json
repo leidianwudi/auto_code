@@ -40,7 +40,8 @@
           type: 'string',
         },
         fields: {
-          description: '参与多语言的翻译表文本列（如 [\n                        "name",\n                        "intro"\n                    ]）；生成的接口会把当前语言文本平铺进主表返回结构，不能与主表列重名',
+          description: '参与多语言的翻译表文本列（如 [\n                        "name",\n                        "intro"\n
+          ]）；生成的接口会把当前语言文本平铺进主表返回结构，不能与主表列重名',
           items: 'string',
           type: 'array',
         },
@@ -71,7 +72,7 @@
     JoinTable: {
       properties: {
         inverseJoinEnClassPro: {
-          description: '主表在副表中的属性名',
+          description: '主表在副表中的属性名（双向关系时填写；单向关系可省略，实体生成不带反向引用）',
           type: 'string',
         },
         isJoinRelations: {
@@ -119,7 +120,6 @@
         'joinEnClass_Url',
         'joinEnClassPro',
         'joinType',
-        'isJoinRelations',
       ],
     },
     SortConfig: {
@@ -162,11 +162,15 @@
           type: 'array',
         },
         selColsSort: {
-          description: '排序字段，推荐数组格式 [\n                        [\n                            "字段名",\n                            "ASC|DESC"\n                        ],...\n                    ]（保证与书写顺序一致）；兼容旧对象格式 {\n                        "字段名": "ASC|DESC"\n                    }',
+          description: '排序字段，推荐数组格式 [\n                        [\n                            "字段名",\n                            "ASC|DESC"\n
+            ],...\n
+          ]（保证与书写顺序一致）；兼容旧对象格式 {\n                        "字段名": "ASC|DESC"\n
+          }',
           type: 'any',
         },
         globalEnumCols: {
-          description: '引用全局枚举的列名列表（如 [\n                        "is_enable"\n                    ]）：列名需与 .jsonglobalenum 中的枚举 name 一致；命中后该列不生成本表枚举副本/records/接口，前端下拉框改用静态数据源 global_enum',
+          description: '引用全局枚举的列名列表（如 [\n                        "is_enable"\n
+          ]）：列名需与 .jsonglobalenum 中的枚举 name 一致；命中后该列不生成本表枚举副本/records/接口，前端下拉框改用静态数据源 global_enum',
           items: 'string',
           type: 'array',
         },

@@ -93,9 +93,9 @@ export class ${entityClass} {
   ${#   .decoratorType     OneToOne / ManyToOne / OneToMany / ManyToMany            }
   ${#   .targetEntity      目标实体类名，如 EnNewsCategory                          }
   ${#   .propertyName      本端属性名                                               }
-  ${#   .inverseProperty   对方属性名（用于双向关系）                               }
+  ${#   .inverseProperty   对方属性名（双向关系）；为空 = 单向关系，不生成反向引用   }
   ${each rel in relations}
-  @${rel.decoratorType}(() => ${rel.targetEntity}, (${rel.propertyName}) => ${rel.propertyName}.${rel.inverseProperty})
+  ${if rel.inverseProperty}@${rel.decoratorType}(() => ${rel.targetEntity}, (${rel.propertyName}) => ${rel.propertyName}.${rel.inverseProperty})${else}@${rel.decoratorType}(() => ${rel.targetEntity})${/if}
   ${if rel.hasJoinColumn}
   @JoinColumn({ name: '${rel.joinColumnName}', referencedColumnName: '${rel.referencedColumnName}' })
   ${/if}

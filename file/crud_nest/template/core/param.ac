@@ -246,14 +246,14 @@ export class Param {
         rel.decoratorType = jt.joinType;               // 装饰器类型：OneToMany / ManyToOne / OneToOne / ManyToMany
         rel.targetEntity = jt.joinEnClass;             // 目标实体类名，如 EnNewsCategory
         rel.propertyName = jt.joinEnClassPro;          // 本端属性名，如 category
-        rel.inverseProperty = jt.inverseJoinEnClassPro; // 对方属性名，如 newsList
+        rel.inverseProperty = jt.inverseJoinEnClassPro || ""; // 对方属性名（双向关系）；空 = 单向关系
         rel.isArray = jt.joinType == "OneToMany" || jt.joinType == "ManyToMany";
         if (jt.joinType == "ManyToOne" && jt.joinColumn != null) {
           rel.hasJoinColumn = true;
           rel.joinColumnName = jt.joinColumn.name;
           rel.referencedColumnName = jt.joinColumn.referencedColumnName;
         }
-        rel.isJoinRelations = jt.isJoinRelations;      // 是否启用联表查询
+        rel.isJoinRelations = (jt.isJoinRelations == true); // 是否启用联表查询（缺省 false，键可省略）
         this.relations.append(rel);
       }
     }
