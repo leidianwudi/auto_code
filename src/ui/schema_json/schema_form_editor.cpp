@@ -19,6 +19,7 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QTimer>
 #include <QSet>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -770,7 +771,13 @@ QWidget *SchemaFormEditor::makeRawJsonFallback(const QStringList &path, const QJ
     text = cur.toString();
   raw->setPlainText(text);
   raw->setMaximumHeight(120);
-  connect(raw, &QPlainTextEdit::textChanged, this, [this, raw, path]() {
+  // 防抖 300ms：兜底框每键全量解析 + 写回会级联全链同步（序列化/高亮/校验），
+  // 停顿后合并为一次解析；非法 JSON 不写回，等用户修正
+  auto *rawDebounce = new QTimer(raw);
+  rawDebounce->setSingleShot(true);
+  rawDebounce->setInterval(300);
+  connect(raw, &QPlainTextEdit::textChanged, rawDebounce, [rawDebounce]() { rawDebounce->start(); });
+  connect(rawDebounce, &QTimer::timeout, rawDebounce, [this, raw, path]() {
     QJsonParseError err;
     QJsonDocument d = QJsonDocument::fromJson(raw->toPlainText().toUtf8(), &err);
     if (err.error == QJsonParseError::NoError && (d.isObject() || d.isArray())) {
@@ -779,7 +786,6 @@ QWidget *SchemaFormEditor::makeRawJsonFallback(const QStringList &path, const QJ
       else
         setNodeValue(path, d.array());
     }
-    // 非法 JSON：不写回，等用户修正
   });
   v->addWidget(raw);
   return wrap;

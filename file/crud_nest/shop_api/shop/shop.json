@@ -2,6 +2,17 @@
     "$schema": "/crud_nest/template/tool/param.schema.json",
     "tables": [
         {
+            "i18n": {
+                "defaultLang": "zh",
+                "extKey": "ext_id",
+                "fields": [
+                    "name",
+                    "intro"
+                ],
+                "langFrom": "body",
+                "langKey": "lang",
+                "table": "shop0"
+            },
             "modelName": "shop/shop",
             "selCols": [
                 "user_id",
@@ -9,18 +20,7 @@
                 "status",
                 "enable"
             ],
-            "tableName": "shop",
-            "i18n": {
-                "table": "shop0",
-                "extKey": "ext_id",
-                "langKey": "lang",
-                "fields": [
-                    "name",
-                    "intro"
-                ],
-                "defaultLang": "zh",
-                "langFrom": "body"
-            }
+            "tableName": "shop"
         }
     ]
 }

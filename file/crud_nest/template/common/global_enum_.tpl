@@ -26,8 +26,7 @@ ${each enum in globalEnums}
  */
 export enum ${enum.enumName} {
 ${each item in enum.items}
-  /* ${item.label} */
-  ${item.key} = ${item.valueStr}${if !item_last},${/if}
+  ${item.key} = ${item.valueStr}${if !item_last},${/if}  /* ${item.label} */
 ${/each}}
 
 ${/each}

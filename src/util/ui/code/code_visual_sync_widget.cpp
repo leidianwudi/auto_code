@@ -5,6 +5,8 @@
 
 #include "code_visual_sync_widget.h"
 
+#include <QTimer>
+
 #include "code_editor.h"
 #include "src/util/ui/highlighter/light_json.h"
 
@@ -78,8 +80,24 @@ void CodeVisualSyncWidget::syncVisualToCode() {
 
 void CodeVisualSyncWidget::onVisualContentChanged() {
   if (m_syncing) return;
-  syncVisualToCode();
-  emit contentChanged();
+  // 防抖 300ms：可视化侧连续输入（每字符触发）时，全量序列化 + setPlainText
+  // 全文重建 + 全文重高亮的开销是每键 O(文档)，停顿后合并为一次写回。
+  // 顺序必须保持「先写回、后广播 contentChanged」：
+  //   setPlainText 会把文档 modified 重置为 false，若先广播（置修改标记）后写回，
+  //   标记会被清掉——用户看到"未保存"假象（黄点消失/保存按钮回弹），且
+  //   此时 Ctrl+S 可能因文档未标记修改而丢失修改。
+  //   切模式/保存路径直接调 syncVisualToCode() 即时 flush，不受防抖影响。
+  if (!m_syncDebounceTimer) {
+    m_syncDebounceTimer = new QTimer(this);
+    m_syncDebounceTimer->setSingleShot(true);
+    m_syncDebounceTimer->setInterval(300);
+    connect(m_syncDebounceTimer, &QTimer::timeout, this, [this]() {
+      if (m_syncing) return;
+      syncVisualToCode();
+      emit contentChanged();
+    });
+  }
+  m_syncDebounceTimer->start();
 }
 
 void CodeVisualSyncWidget::setPlainTextIfChanged(const QString &text) {

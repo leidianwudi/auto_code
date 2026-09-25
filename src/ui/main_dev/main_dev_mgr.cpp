@@ -452,16 +452,26 @@ void MainDevMgr::connectEditorPanels() {
   m_scanTimer->setSingleShot(true);
   m_scanTimer->setInterval(500);
   connect(m_scanTimer, &QTimer::timeout, this, [this]() { startWorkspaceScan(true); });
-  // 已打开文件重验防抖定时器：合并同一事件循环内的多次 textChanged 为一次重验
-  // （0ms：对单次编辑无感知延迟；防止打开大文件/程序化批量变更触发 N×M 次验证风暴卡死）
+  // 已打开文件重验防抖定时器：合并连续 textChanged 为一次重验
+  // （300ms：单次编辑可感知的延迟极小，但把可视化输入/程序化批量变更引发的
+  // N×M 全量验证风暴压到每 300ms 最多一轮）
   m_revalidateTimer = new QTimer(this);
   m_revalidateTimer->setSingleShot(true);
-  m_revalidateTimer->setInterval(0);
+  m_revalidateTimer->setInterval(300);
   connect(m_revalidateTimer, &QTimer::timeout, this, [this]() {
     CodeEditor *src = m_revalidateSource;
     m_revalidateSource = nullptr;
+    // 重验 = 跨文件传播，仅 ac 有跨文件语义（import 链：a 修改会改变 b 的
+    // 诊断与符号表），因此源是 ac 时重验其它 ac 编辑器（可见与否都验）；
+    // json/jsonvue/tpl 的诊断只属于本文件——本文件的验证由其自身输入即时
+    // 完成（0ms），其它编辑器无需重验 → 整轮跳过
+    if (!src || !src->objectName().endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive)) {
+      return;
+    }
     forEachEditor(m_ui, [src](CodeEditor *ed) {
-      if (ed != src) ed->validate();
+      if (ed == src) return true;
+      if (!ed->objectName().endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive)) return true;
+      ed->validate();
       return true;
     });
   });

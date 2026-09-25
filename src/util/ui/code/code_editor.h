@@ -92,6 +92,9 @@ public:
   // ── 接口：验证相关 ──
 
   void setValidationMode(ValidationMode mode);
+  /// 按文件类型设置验证防抖（毫秒）：json 验证 <1ms 用 0（即时反馈）；
+  /// .ac 验证是引擎级全文解析 + import 链展开，0ms 逐键解析大文件会卡，用 300ms
+  void setValidationDebounce(int ms);
   void validate();
   void formatCode();
 

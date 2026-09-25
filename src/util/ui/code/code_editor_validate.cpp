@@ -44,6 +44,10 @@ void CodeEditor::setValidationMode(ValidationMode mode) {
 
 void CodeEditor::validate() { performValidation(); }
 
+void CodeEditor::setValidationDebounce(int ms) {
+  if (m_validationTimer) m_validationTimer->setInterval(ms);
+}
+
 void CodeEditor::scheduleValidation() {
   if (m_validationMode == NoValidation) return;
   m_validationTimer->start();

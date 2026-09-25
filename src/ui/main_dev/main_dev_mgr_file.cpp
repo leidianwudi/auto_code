@@ -9,6 +9,8 @@
 #include <QFileInfo>
 #include <QRegularExpression>
 #include <QScrollBar>
+
+#include "src/engine/ac_language.h"
 #include <QTextStream>
 
 #include "debug_controller.h"
@@ -231,6 +233,10 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
   // 必须先设置 objectName（文件路径），再触发验证；
   // 否则验证时 m_filePath 为空，import 解析被跳过，导致误报 "class X has no method" 类型错误
   editor->setObjectName(filePath);
+  // 按文件类型设置验证防抖：.ac 验证是引擎级全文解析 + import 链展开，
+  // 逐键即时解析大文件会卡（用 300ms）；json 等验证 <1ms 保持 0ms 即时反馈
+  editor->setValidationDebounce(
+      filePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive) ? 300 : 0);
   // 一次性连接编辑器全部信号（不再随焦点/tab 切换重复连接/断开，避免累积重复触发）
   connectEditorSignals(editor);
   // 验证结果聚合到「问题」面板：每个编辑器永久连接（connectEditor 只连接当前编辑器，

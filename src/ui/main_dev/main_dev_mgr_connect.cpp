@@ -19,6 +19,7 @@
 #include "main_dev_model.h"
 #include "main_dev_ui.h"
 #include "main_dev_ui_ext.h"
+#include "src/engine/ac_language.h"
 #include "src/ui/json_source/json_source_widget.h"
 #include "src/ui/json_vue/json_vue_widget.h"
 #include "src/ui/schema_json/schema_json_widget.h"
@@ -37,17 +38,20 @@ void MainDevMgr::connectEditorSignals(CodeEditor *editor) {
   connect(editor, &QPlainTextEdit::cursorPositionChanged, this,
           &MainDevMgr::updateCursorPosition);
   connect(editor, &CodeEditor::validationMessage, this, &MainDevMgr::onValidationMessage);
-  // 任何文件内容变化后，立即重验其它已打开文件；未打开文件通过防抖合并后的扫描刷新。
+  // 任何文件内容变化后，重验其它已打开文件；未打开文件通过防抖合并后的扫描刷新。
   // 当前文件由自身的防抖验证处理，这里跳过它避免重复校验。
   connect(editor, &QPlainTextEdit::textChanged, this, [this, editor]() {
-    // 合并同一事件循环内的多次触发：打开文件/程序化批量变更可能一次连发多个
-    // textChanged（如整篇行高格式批量应用），直接同步重验会造成 N×M 次全量验证
-    // 风暴卡死界面。改用 0ms 单次定时器：对单次编辑无感知延迟，仅把同一 burst
-    // 合并为一次重验，仍即时刷新其它已打开文件。
+    // 合并连续触发的多次 textChanged：直接同步重验会造成 N×M 次全量验证风暴。
+    // 300ms 单次定时器把同一 burst 合并为一轮重验（重验时还会跳过被可视化
+    // 视图遮住的隐藏编辑器，见 MainDevMgr 构造）
     m_revalidateSource = editor;
     if (m_revalidateTimer) m_revalidateTimer->start();
-    // 扫描请求统一进防抖定时器：与保存/重命名触发共用，合并为一次，不会重复全量扫描
-    if (m_scanTimer) m_scanTimer->start();
+    // 工作区扫描仅 .ac 编辑触发：ac 有跨文件 import 链（一个文件的修改会传播到
+    // import 它的其它文件的诊断）；json/jsonvue/tpl 的诊断均限于本文件，
+    // 打开中文件的实时验证已覆盖，未打开文件未变化无需每 500ms 全工作区重扫
+    if (editor->objectName().endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive) && m_scanTimer) {
+      m_scanTimer->start();
+    }
   });
   // 跨文件跳转信号
   connect(editor, &CodeEditor::requestGoToLine, this, &MainDevMgr::onGoToLine);

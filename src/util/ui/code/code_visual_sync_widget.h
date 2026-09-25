@@ -89,4 +89,9 @@ protected:
 
 private:
   bool m_syncing = false;  ///< 同步中标志，避免信号回环
+  /// 可视化 → 代码写回的防抖定时器：可视化侧连续输入（每字符触发）时，
+  /// 全量序列化 + setPlainText 全文重建 + 全文重高亮的开销是每键 O(文档)，
+  /// 大文件明显卡顿；停顿 300ms 后合并为一次写回（切模式/保存路径直接调
+  /// syncVisualToCode() 即时 flush，不受防抖影响）
+  QTimer *m_syncDebounceTimer = nullptr;
 };
