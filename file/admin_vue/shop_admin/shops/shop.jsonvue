@@ -17,8 +17,9 @@
     {
       columnWidth: 0,
       dataName: 'logo_img',
+      displayType: 'image',
       editEditable: true,
-      editStyle: 'text',
+      editStyle: 'image',
       editVisible: true,
       formSpan: 12,
       maxlength: 0,
@@ -27,6 +28,8 @@
       queryVisible: true,
       required: false,
       switchEditable: false,
+      uploadSourceFile: 'D:/work/github/auto_code/file/admin_vue/shop_admin/api/img.jsonupload',
+      uploadSourceId: 'a94e90a4',
     },
     {
       columnWidth: 0,

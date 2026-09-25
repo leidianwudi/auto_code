@@ -268,7 +268,10 @@ watch(() => props.currentRow, (row: any) => {
 const upload${col.dataNamePascal} = async (opt: any) => {
   const fd = new FormData();
   fd.append('${col.uploadFileField}', opt.file);
-${col.uploadParamsStr}  try {
+${if col.uploadMulti}${else}  // 单图换图：带上旧图地址，后端删除旧文件避免垃圾图片残留（新增记录无旧图不传）
+  const oldImgUrl = props.currentRow?.['${col.dataName}'];
+  if (oldImgUrl) fd.append('oldImgUrl', String(oldImgUrl));
+${/if}${col.uploadParamsStr}  try {
     const res: any = await request.post({ url: '${col.uploadAction}', data: fd });
     const url: string = ${col.uploadResChain} ?? '';
     if (!url) throw new Error('上传响应中未找到图片地址');
