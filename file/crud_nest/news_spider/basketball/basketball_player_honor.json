@@ -1,0 +1,36 @@
+{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 篮球球员荣誉查询配置。
+  tables: [
+    {
+      "modelName": "basketball\\basketball_player_honor",
+      "tableName": "basketball_player_honor",
+      "selCols": [
+        "player_pid",
+      ],
+      "selColsLike": [
+        "name",
+        "year"
+      ],
+      "selColsSort": {
+        "year": "DESC",
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnBasketballPlayer",
+          "joinEnClass_Url": "src/basketball/basketball_player/entities/en_basketball_player",
+          "joinEnClassPro": "player",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "honors",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "player_pid",
+            "referencedColumnName": "pid"
+          }
+        }
+      ]
+    }
+  ],
+}

@@ -1,0 +1,65 @@
+{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 篮球球员详情查询配置。
+  tables: [
+    {
+      "modelName": "basketball\\basketball_player",
+      "tableName": "basketball_player",
+      "selCols": [
+        "pid",
+        "team_tid",
+        "number",
+        "age",
+        "market_value",
+        "birthday"
+      ],
+      "selColsLike": [
+        "name_zh",
+        "name_en",
+        "team_name",
+        "position",
+        "foot",
+        "market_value_unit",
+        "nation"
+      ],
+      "selColsSort": {
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnBasketballPlayerRank",
+          "joinEnClass_Url": "src/basketball/basketball_player_rank/entities/en_basketball_player_rank",
+          "joinEnClassPro": "playerRanks",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "playerInfo",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnBasketballPlayerHonor",
+          "joinEnClass_Url": "src/basketball/basketball_player_honor/entities/en_basketball_player_honor",
+          "joinEnClassPro": "honors",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "player",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnBasketballMatchPosition",
+          "joinEnClass_Url": "src/basketball/basketball_match_position/entities/en_basketball_match_position",
+          "joinEnClassPro": "matchPositions",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "player",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnBasketballMatchLog",
+          "joinEnClass_Url": "src/basketball/basketball_match_log/entities/en_basketball_match_log",
+          "joinEnClassPro": "matchLogs",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "player",
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ],
+}

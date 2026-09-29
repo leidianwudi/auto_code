@@ -1,0 +1,59 @@
+{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 篮球比赛文字直播事件查询配置。
+  tables: [
+    {
+      "modelName": "basketball\\basketball_match_log",
+      "tableName": "basketball_match_log",
+      "selCols": [
+        "schedule_mid",
+        "minute",
+        "minute_extra",
+        "team_side",
+        "team_tid",
+        "player_pid",
+        "event_index"
+      ],
+      "selColsLike": [
+        "player_name",
+        "event_code",
+        "reason",
+        "score"
+      ],
+      "selColsSort": {
+        "schedule_mid": "ASC",
+        "minute": "ASC",
+        "minute_extra": "ASC",
+        "event_index": "ASC",
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnBasketballTeam",
+          "joinEnClass_Url": "src/basketball/basketball_team/entities/en_basketball_team",
+          "joinEnClassPro": "team",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "matchLogs",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "team_tid",
+            "referencedColumnName": "tid"
+          }
+        },
+        {
+          "joinEnClass": "EnBasketballPlayer",
+          "joinEnClass_Url": "src/basketball/basketball_player/entities/en_basketball_player",
+          "joinEnClassPro": "player",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "matchLogs",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "player_pid",
+            "referencedColumnName": "pid"
+          }
+        }
+      ]
+    }
+  ],
+}

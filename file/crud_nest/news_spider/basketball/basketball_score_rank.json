@@ -1,0 +1,47 @@
+{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 篮球联赛积分榜查询配置。
+  tables: [
+    {
+      "modelName": "basketball\\basketball_score_rank",
+      "tableName": "basketball_score_rank",
+      "selCols": [
+        "league_cid",
+        "team_tid",
+        "team"
+      ],
+      "selColsLike": [],
+      "selColsSort": {
+        "score": "DESC",
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnBasketballLeague",
+          "joinEnClass_Url": "src/basketball/basketball_league/entities/en_basketball_league",
+          "joinEnClassPro": "league",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "scoreRanks",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "league_cid",
+            "referencedColumnName": "cid"
+          }
+        },
+        {
+          "joinEnClass": "EnBasketballTeam",
+          "joinEnClass_Url": "src/basketball/basketball_team/entities/en_basketball_team",
+          "joinEnClassPro": "teamInfo",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "scoreRanks",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "team_tid",
+            "referencedColumnName": "tid"
+          }
+        }
+      ]
+    }
+  ],
+}

@@ -1,0 +1,38 @@
+{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 篮球比赛赔率查询配置。
+  tables: [
+    {
+      "modelName": "basketball\\basketball_match_odd",
+      "tableName": "basketball_match_odd",
+      "selCols": [
+        "schedule_mid"
+      ],
+      "selColsLike": [
+        "odd_hdp",
+        "odd_asia",
+        "odd_total",
+        "odd_ou"
+      ],
+      "selColsSort": {
+        "schedule_mid": "ASC",
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnBasketballSchedule",
+          "joinEnClass_Url": "src/basketball/basketball_schedule/entities/en_basketball_schedule",
+          "joinEnClassPro": "schedule",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "matchOdds",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "schedule_mid",
+            "referencedColumnName": "mid"
+          }
+        }
+      ]
+    }
+  ],
+}

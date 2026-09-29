@@ -1,0 +1,21 @@
+{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 篮球比赛趋势点查询配置。
+  tables: [
+    {
+      "modelName": "basketball\\basketball_match_trend",
+      "tableName": "basketball_match_trend",
+      "selCols": [
+        "mid",
+        "minute"
+      ],
+      "selColsLike": [],
+      "selColsSort": {
+        "minute": "ASC",
+        "id": "ASC"
+      },
+      "joinTable": []
+    }
+  ],
+}

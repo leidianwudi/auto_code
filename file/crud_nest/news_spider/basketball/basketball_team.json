@@ -1,0 +1,26 @@
+{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 篮球球队详情查询配置（篮球暂无榜单/技术统计表，无关联关系）。
+  tables: [
+    {
+      "modelName": "basketball\\basketball_team",
+      "tableName": "basketball_team",
+      "selCols": [
+        "tid",
+        "year"
+      ],
+      "selColsLike": [
+        "name_zh",
+        "name_en",
+        "location",
+        "stadium",
+        "capacity",
+        "market_value"
+      ],
+      "selColsSort": {
+        "id": "ASC"
+      }
+    }
+  ],
+}

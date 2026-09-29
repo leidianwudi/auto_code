@@ -1,0 +1,46 @@
+{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 篮球赛程及比赛赔率反向关系查询配置。
+  tables: [
+    {
+      "modelName": "basketball\\basketball_schedule",
+      "tableName": "basketball_schedule",
+      "selCols": [
+        "league_cid",
+        "mid",
+        "begin_time"
+      ],
+      "selColsLike": [
+        "home_team",
+        "away_team"
+      ],
+      "selColsSort": {
+        "begin_time": "DESC",
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnBasketballLeague",
+          "joinEnClass_Url": "src/basketball/basketball_league/entities/en_basketball_league",
+          "joinEnClassPro": "league",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "schedules",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "league_cid",
+            "referencedColumnName": "cid"
+          }
+        },
+        {
+          "joinEnClass": "EnBasketballMatchOdd",
+          "joinEnClass_Url": "src/basketball/basketball_match_odd/entities/en_basketball_match_odd",
+          "joinEnClassPro": "matchOdds",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "schedule",
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ],
+}
