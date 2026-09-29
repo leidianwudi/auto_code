@@ -97,6 +97,11 @@ inline constexpr const char *kDomainInherit =
 inline constexpr const char *kUploadSourceFile =
     "uploadSourceFile";  ///< image 引用的 .jsonupload 文件路径
 inline constexpr const char *kUploadSourceId = "uploadSourceId";  ///< image 引用的上传预设 id
+// 图片缩略图尺寸（字段级覆盖；0=未配置 → 回退上传预设尺寸 → 模板默认）
+inline constexpr const char *kListThumbWidth = "listThumbWidth";    ///< 列表缩略图宽 px；0=跟随预设（默认 80）
+inline constexpr const char *kListThumbHeight = "listThumbHeight";  ///< 列表缩略图高 px；0=跟随预设（默认 40）
+inline constexpr const char *kEditThumbWidth = "editThumbWidth";    ///< 编辑/详情卡片宽 px；0=跟随预设（默认 160）
+inline constexpr const char *kEditThumbHeight = "editThumbHeight";  ///< 编辑/详情卡片高 px；0=跟随预设（默认 80）
 inline constexpr const char *kDefaultValue = "defaultValue";
 inline constexpr const char *kDefaultSort = "defaultSort";
 
@@ -356,6 +361,12 @@ struct ColumnConfig {
   /// 空 = 保持旧行为（URL 手工输入）
   QString uploadSourceFile;
   QString uploadSourceId;
+  /// 图片缩略图尺寸（字段级覆盖；0=未配置 → 回退上传预设尺寸 → 模板默认）。
+  /// 与同名上传预设键解耦：同一预设被多个字段引用时可有不同显示尺寸
+  int listThumbWidth = 0;   ///< 列表页缩略图宽（成对 >0 时生效）
+  int listThumbHeight = 0;  ///< 列表页缩略图高
+  int editThumbWidth = 0;   ///< 编辑/详情卡片宽（成对 >0 时生效）
+  int editThumbHeight = 0;  ///< 编辑/详情卡片高
 
   // ── 通用配置（3-6）──
   QString defaultValue;  ///< 新增记录时的默认值（如 "1" / "0" / ""）

@@ -15,7 +15,7 @@
       switchEditable: false,
     },
     {
-      columnWidth: 0,
+      columnWidth: 100,
       dataName: 'logo_img',
       displayType: 'image',
       editEditable: true,
@@ -29,7 +29,7 @@
       required: false,
       switchEditable: false,
       uploadSourceFile: 'D:/work/github/auto_code/file/admin_vue/shop_admin/api/img.jsonupload',
-      uploadSourceId: 'a94e90a4',
+      uploadSourceId: 'e6227c2c',
     },
     {
       columnWidth: 0,

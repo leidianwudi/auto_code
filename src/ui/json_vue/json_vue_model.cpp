@@ -350,6 +350,15 @@ QJsonObject ColumnConfig::toJson() const {
   if (editStyle == EditStyle::Image) {
     if (!uploadSourceFile.isEmpty()) obj[JsonVueKey::kUploadSourceFile] = uploadSourceFile;
     if (!uploadSourceId.isEmpty()) obj[JsonVueKey::kUploadSourceId] = uploadSourceId;
+    // 缩略图尺寸：仅成对 >0（显式配置）时写出，未配置不落键（0=跟随预设/默认）
+    if (listThumbWidth > 0 && listThumbHeight > 0) {
+      obj[JsonVueKey::kListThumbWidth] = listThumbWidth;
+      obj[JsonVueKey::kListThumbHeight] = listThumbHeight;
+    }
+    if (editThumbWidth > 0 && editThumbHeight > 0) {
+      obj[JsonVueKey::kEditThumbWidth] = editThumbWidth;
+      obj[JsonVueKey::kEditThumbHeight] = editThumbHeight;
+    }
   }
   // 通用配置（所有样式都输出）
   obj[JsonVueKey::kRequired] = required;
@@ -412,6 +421,10 @@ ColumnConfig ColumnConfig::fromJson(const QJsonObject &obj) {
   // 图片上传预设引用（无条件读取，与 selectSourceFile 一致）
   c.uploadSourceFile = obj.value(JsonVueKey::kUploadSourceFile).toString();
   c.uploadSourceId = obj.value(JsonVueKey::kUploadSourceId).toString();
+  c.listThumbWidth = qMax(0, obj.value(JsonVueKey::kListThumbWidth).toInt(0));
+  c.listThumbHeight = qMax(0, obj.value(JsonVueKey::kListThumbHeight).toInt(0));
+  c.editThumbWidth = qMax(0, obj.value(JsonVueKey::kEditThumbWidth).toInt(0));
+  c.editThumbHeight = qMax(0, obj.value(JsonVueKey::kEditThumbHeight).toInt(0));
   // 样式特定配置
   c.placeholder = obj.value(JsonVueKey::kPlaceholder).toString();
   c.maxlength = obj.value(JsonVueKey::kMaxlength).toInt(0);

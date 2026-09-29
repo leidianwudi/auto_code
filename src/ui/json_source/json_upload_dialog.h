@@ -3,7 +3,7 @@
  * @brief .jsonupload 单条上传预设编辑对话框
  *
  * 编辑一条上传预设：说明 / 上传地址 / 请求方式 / 文件字段名 /
- * 响应提取路径 / 最多张数 / 提交值形态 / 附加 form 参数表格。
+ * 响应提取路径 / 最多张数 / 提交值形态 / 缩略图尺寸 / 附加 form 参数表格。
  * 通过 setUpload() 预填，upload() 取回编辑结果（getter 模式，无信号回写）。
  */
 
@@ -16,6 +16,7 @@
 class QComboBox;
 class QLineEdit;
 class QPushButton;
+class QSpinBox;
 class QTableWidget;
 
 /**
@@ -46,8 +47,12 @@ private:
   QComboBox *m_methodCombo = nullptr;       ///< 请求方式
   QLineEdit *m_fileFieldEdit = nullptr;     ///< form-data 文件字段名
   QLineEdit *m_responsePathEdit = nullptr;  ///< 响应提取路径
-  QComboBox *m_maxCountCombo = nullptr;     ///< 最多张数（可编辑）
-  QComboBox *m_valueTypeCombo = nullptr;    ///< 提交值形态
-  QTableWidget *m_paramsTable = nullptr;    ///< 附加 form 参数表格
+  QComboBox *m_maxCountCombo = nullptr;      ///< 最多张数（可编辑）
+  QComboBox *m_valueTypeCombo = nullptr;     ///< 提交值形态
+  QSpinBox *m_listThumbWidthSpin = nullptr;  ///< 列表缩略图宽 px（0=默认 80）
+  QSpinBox *m_listThumbHeightSpin = nullptr; ///< 列表缩略图高 px（0=默认 40）
+  QSpinBox *m_editThumbWidthSpin = nullptr;  ///< 编辑/详情缩略图宽 px（0=默认 160）
+  QSpinBox *m_editThumbHeightSpin = nullptr; ///< 编辑/详情缩略图高 px（0=默认 80）
+  QTableWidget *m_paramsTable = nullptr;     ///< 附加 form 参数表格
   QPushButton *m_addParamBtn = nullptr;     ///< 添加参数按钮
 };

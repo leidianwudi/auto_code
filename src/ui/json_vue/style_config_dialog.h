@@ -23,6 +23,7 @@ class QFormLayout;
 class QLineEdit;
 class QLabel;
 class QPushButton;
+class QSpinBox;
 class QTableWidget;
 class QVBoxLayout;
 class AuiTreeCombo;
@@ -184,6 +185,13 @@ public:
   QString uploadSourceFile() const;
   QString uploadSourceId() const;
 
+  // ── 图片缩略图尺寸（字段级覆盖；0=跟随上传预设，预设未配置时用模板默认）──
+  void setThumbSizes(int listW, int listH, int editW, int editH);
+  int listThumbWidth() const;
+  int listThumbHeight() const;
+  int editThumbWidth() const;
+  int editThumbHeight() const;
+
   // ── 通用配置（默认值/排序）──
   void setDefaultValue(const QString &v);
   QString defaultValue() const;
@@ -276,6 +284,10 @@ private:
   QLineEdit *m_boolTrueTextEdit = nullptr;
   QLineEdit *m_boolFalseTextEdit = nullptr;
   QComboBox *m_uploadSourceCombo = nullptr;  ///< image 编辑样式的上传预设下拉（.jsonupload）
+  QSpinBox *m_listThumbWidthSpin = nullptr;  ///< 列表缩略图宽（0=跟随预设）
+  QSpinBox *m_listThumbHeightSpin = nullptr; ///< 列表缩略图高
+  QSpinBox *m_editThumbWidthSpin = nullptr;  ///< 编辑/详情卡片宽（0=跟随预设）
+  QSpinBox *m_editThumbHeightSpin = nullptr; ///< 编辑/详情卡片高
 
   // ── 通用配置控件 ──
   QCheckBox *m_requiredCheck = nullptr;
@@ -307,6 +319,10 @@ private:
   QHash<QString, QPair<QString, QString>> m_boolSourceTexts;
   QString m_cachedUploadSourceFile;  ///< image 选中的上传预设文件（恢复选中）
   QString m_cachedUploadSourceId;    ///< image 选中的上传预设 id
+  int m_cachedListThumbWidth = 0;    ///< 列表缩略图宽缓存（0=跟随预设）
+  int m_cachedListThumbHeight = 0;   ///< 列表缩略图高缓存
+  int m_cachedEditThumbWidth = 0;    ///< 编辑/详情卡片宽缓存
+  int m_cachedEditThumbHeight = 0;   ///< 编辑/详情卡片高缓存
   bool m_cachedSwitchEditable = true;
   // 下拉框数据源缓存
   QString m_cachedSelectUrl;

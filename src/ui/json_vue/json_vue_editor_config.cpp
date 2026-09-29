@@ -72,6 +72,9 @@ void JsonVueEditor::onConfigureCombobox() {
   dialog.setBoolSourceRef(col.boolSourceFile, col.boolSourceId);
   // 图片上传预设（Image 编辑样式时在对话框内配置）
   dialog.setUploadSourceRef(col.uploadSourceFile, col.uploadSourceId);
+  // 图片缩略图尺寸（字段级覆盖，0=跟随预设）
+  dialog.setThumbSizes(col.listThumbWidth, col.listThumbHeight, col.editThumbWidth,
+                       col.editThumbHeight);
   // 下拉框数据源（Select 编辑样式时在对话框内配置）
   dialog.setSelectUrl(col.selectUrl);
   dialog.setSelectSourceFile(col.selectSourceFile);
@@ -123,6 +126,11 @@ void JsonVueEditor::onConfigureCombobox() {
     // 图片上传预设（在对话框内已配置完成）
     col.uploadSourceFile = dialog.uploadSourceFile();
     col.uploadSourceId = dialog.uploadSourceId();
+    // 图片缩略图尺寸（字段级覆盖；0=跟随预设）
+    col.listThumbWidth = dialog.listThumbWidth();
+    col.listThumbHeight = dialog.listThumbHeight();
+    col.editThumbWidth = dialog.editThumbWidth();
+    col.editThumbHeight = dialog.editThumbHeight();
     // 下拉框数据源（在对话框内已配置完成）
     col.selectUrl = dialog.selectUrl();
     col.selectSourceFile = dialog.selectSourceFile();
@@ -184,24 +192,28 @@ void JsonVueEditor::onConfigureQuerySelect() {
     }
     const bool colHasDomain = colReady && !col.domainType.isEmpty();
 
+    // 框架封装对话框：无边框标题栏 + 内容区 + 统一样式的确定/取消
     QDialog dlg(configBtn);
-    dlg.setWindowTitle(QStringLiteral("查询数据源设置"));
-    auto *lay = new QVBoxLayout(&dlg);
+    ConfigDialogFrame frame =
+        beginConfigDialog(&dlg, QStringLiteral("查询数据源设置"), QMargins(12, 10, 12, 10), 6);
+    auto *lay = frame.contentLayout;
     auto *labelRow = new QHBoxLayout;
     labelRow->addWidget(new QLabel(QStringLiteral("字段「%1」列取值域：%2")
                                        .arg(dataName, domainSummary(col)),
-                                   &dlg),
+                                   frame.contentWidget),
                         1);
     // 问号帮助：说明数据源候选的作用域规则（与字段设置面板共用文案）
     labelRow->addWidget(AuiButton::createHelpButton(QStringLiteral("数据源作用域"),
-                                                    jsonVueSourceScopeHelpText(), &dlg));
+                                                    jsonVueSourceScopeHelpText(),
+                                                    frame.contentWidget));
     lay->addLayout(labelRow);
     auto *inheritCheck =
-        new QCheckBox(QStringLiteral("沿用列配置取值域（列修改后查询自动跟随）"), &dlg);
+        new QCheckBox(QStringLiteral("沿用列配置取值域（列修改后查询自动跟随）"),
+                      frame.contentWidget);
     inheritCheck->setChecked(q.domainInherit && colHasDomain);
     lay->addWidget(inheritCheck);
 
-    auto *srcCombo = new AuiTreeCombo(&dlg);
+    auto *srcCombo = new AuiTreeCombo(frame.contentWidget);
     srcCombo->setMinimumWidth(360);
     QHash<QString, QPair<QString, QString>> optionTexts;
     QHash<QString, QString> optionPreviews;
@@ -217,15 +229,9 @@ void JsonVueEditor::onConfigureQuerySelect() {
     lay->addWidget(srcCombo);
     connect(inheritCheck, &QCheckBox::toggled, srcCombo, &QWidget::setEnabled);
 
-    auto *btnRow = new QHBoxLayout;
-    auto *okBtn = new QPushButton(QStringLiteral("确定"), &dlg);
-    auto *cancelBtn = new QPushButton(QStringLiteral("取消"), &dlg);
-    btnRow->addStretch();
-    btnRow->addWidget(okBtn);
-    btnRow->addWidget(cancelBtn);
-    lay->addLayout(btnRow);
-    connect(okBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
-    connect(cancelBtn, &QPushButton::clicked, &dlg, &QDialog::reject);
+    // 确认/取消按钮与窗口框架由 finishConfigDialog 统一添加
+    finishConfigDialog(&dlg, frame);
+    dlg.setMinimumWidth(460);
 
     if (dlg.exec() == QDialog::Accepted) {
       q.domainInherit = inheritCheck->isChecked();

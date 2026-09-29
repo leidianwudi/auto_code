@@ -61,6 +61,15 @@ QJsonObject JsonUpload::toJson() const {
 
   obj[QString::fromLatin1(JsonUploadKey::kResponsePath)] = responsePath;
   obj[QString::fromLatin1(JsonUploadKey::kMaxCount)] = maxCount;
+  // 缩略图尺寸仅 >0（显式配置）时写出，未配置不落键（空值=默认值语义）
+  if (listThumbWidth > 0 && listThumbHeight > 0) {
+    obj[QString::fromLatin1(JsonUploadKey::kListThumbWidth)] = listThumbWidth;
+    obj[QString::fromLatin1(JsonUploadKey::kListThumbHeight)] = listThumbHeight;
+  }
+  if (editThumbWidth > 0 && editThumbHeight > 0) {
+    obj[QString::fromLatin1(JsonUploadKey::kEditThumbWidth)] = editThumbWidth;
+    obj[QString::fromLatin1(JsonUploadKey::kEditThumbHeight)] = editThumbHeight;
+  }
   // valueType 仅非空（显式覆盖）时写出
   if (!valueType.isEmpty()) {
     obj[QString::fromLatin1(JsonUploadKey::kValueType)] = valueType;
@@ -87,6 +96,10 @@ JsonUpload JsonUpload::fromJson(const QJsonObject &obj) {
                        .toString(QStringLiteral("data.url"));
   u.maxCount = obj.value(QString::fromLatin1(JsonUploadKey::kMaxCount)).toInt(1);
   if (u.maxCount < 1) u.maxCount = 1;
+  u.listThumbWidth = qMax(0, obj.value(QString::fromLatin1(JsonUploadKey::kListThumbWidth)).toInt(0));
+  u.listThumbHeight = qMax(0, obj.value(QString::fromLatin1(JsonUploadKey::kListThumbHeight)).toInt(0));
+  u.editThumbWidth = qMax(0, obj.value(QString::fromLatin1(JsonUploadKey::kEditThumbWidth)).toInt(0));
+  u.editThumbHeight = qMax(0, obj.value(QString::fromLatin1(JsonUploadKey::kEditThumbHeight)).toInt(0));
   u.valueType = obj.value(QString::fromLatin1(JsonUploadKey::kValueType)).toString();
   return u;
 }

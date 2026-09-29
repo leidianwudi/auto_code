@@ -714,6 +714,16 @@ QJsonObject JsonVueEditor::collectMergedObject() const {
       col.remove(JsonVueKey::kBoolTrueText);
       col.remove(JsonVueKey::kBoolFalseText);
     }
+    // 图片缩略图尺寸（字段级覆盖）：toJson 仅成对 >0 时落键；新保存未写 =
+    // 用户清回「跟随预设」→ 剔除保真合并带回的旧尺寸键
+    if (!newCol.contains(JsonVueKey::kListThumbWidth)) {
+      col.remove(JsonVueKey::kListThumbWidth);
+      col.remove(JsonVueKey::kListThumbHeight);
+    }
+    if (!newCol.contains(JsonVueKey::kEditThumbWidth)) {
+      col.remove(JsonVueKey::kEditThumbWidth);
+      col.remove(JsonVueKey::kEditThumbHeight);
+    }
     columns[i] = col;
   }
   root[JsonVueKey::kColumns] = columns;

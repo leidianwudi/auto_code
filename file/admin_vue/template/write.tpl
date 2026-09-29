@@ -5,7 +5,9 @@ ${# 作用：                                                                   
 ${#   根据 .jsonvue 配置生成 Vue3 编辑页（write.vue），包含：                    }
 ${#   - 表单字段定义（formSchema）                                               }
 ${#   - 不同输入样式（文本/整型/浮点/日期/下拉/多行文本/开关）                   }
-${#   - 图片上传区（引用 .jsonupload 上传预设的图片字段：axios 上传 + 预览）      }
+${#   - 图片上传字段以插槽嵌入 formSchema 对应位置（顺序跟列配置一致，         }
+${#     label 左侧对齐；卡片墙样式：图片悬停出 × 删除、尾部 + 卡片添加；       }
+${#     详情模式仅预览）                                                        }
 ${#   - 表单验证规则                                                             }
 ${# 数据来源（tplData）：                                                        }
 ${#   columns       - 列配置数组                                                 }
@@ -14,9 +16,14 @@ ${#      isInt, isFloat, isDate, selectUrl, selectValueField, selectLabelField, 
 ${#      selectApiName, selectErrorText, hasSourceRef（引用 .jsonsource 时       }
 ${#      函数来自 source api 文件，由 sourceImportLines 导入）,                   }
 ${#      hasBoolApi/boolApiName（布尔开关引用静态数据源时 optionApi 使用）,       }
-${#      hasUpload（引用 .jsonupload 上传预设时生成上传组件）,                    }
-${#      uploadAction/uploadFileField/uploadLimit/uploadMulti/                   }
-${#      uploadParamsStr（fd.append 片段）/uploadResChain（响应提取可选链）,      }
+${#      hasUpload（引用 .jsonupload 上传预设：formSchema 里以 formItemProps     }
+${#      插槽渲染上传控件，值经 setValues 注入 formModel、getFormData 收集）,    }
+${#      uploadFuncName（共享上传函数名，函数由 upload.tpl 生成于                }
+${#      src/api/upload/{uploadName}.ts，多页面 import 复用）,                    }
+${#      uploadLimit/uploadMulti/hasUploadLabel,                                   }
+${#      listThumbWidth/listThumbHeight/hasListThumbSize（列表缩略图尺寸，      }
+${#      0=默认 80×40）/ editThumbWidth/editThumbHeight/hasEditThumbSize         }
+${#      （编辑/详情卡片尺寸，0=默认 160×80）,                                    }
 ${#      placeholder, maxlength, minValue, maxValue, precision, dateFormat,      }
 ${#      textareaRows, required, formSpan, editComponent,                        }
 ${#      hasDefaultValue, defaultValue}]                                         }
@@ -30,7 +37,7 @@ import { PropType, reactive, ref, computed${if hasWatch}, watch${/if}${if hasDef
 import { useValidator } from '@/hooks/web/use_validator';
 import { uiWriteLogic } from '@/utils/ui_write_logic';
 ${if hasUploadFields}import { ElUpload, ElImage } from 'element-plus';
-import request from '@/axios';
+${/if}${if hasUploadImports}${uploadImportLines}
 ${/if}${if hasSelectApi}import { ${selectApiImports} } from '@/api/${apiModule}/${pageName}';
 ${/if}${if hasSourceImports}${sourceImportLines}
 ${/if}${if hasSelectFields}import { onceSelect } from '@/utils/once_select';
@@ -50,6 +57,38 @@ const props = defineProps({
 });
 
 const isDetail = computed(() => props.actionType === 'detail');
+
+const { formRegister, formMethods } = useForm();
+${if hasUploadFields}
+// ==================== 图片上传（引用 .jsonupload 上传预设）====================
+// 上传逻辑需在 formSchema 之前定义：schema 的插槽渲染会引用这些函数
+${each col in columns}${if col.hasUpload}${if col.editVisible}
+// ── ${col.editName}${if col.hasUploadLabel}（${col.uploadLabel}）${/if}：上传后路径写入表单字段，随保存接口一起提交
+const ${col.dataName}FileList = reactive<any[]>([]);
+watch(() => props.currentRow, (row: any) => {
+  const v = row?.['${col.dataName}'];
+  ${col.dataName}FileList.length = 0;
+  const list: any[] = v == null || v === '' ? [] : (Array.isArray(v) ? v : [v]);
+  list.forEach((u: any) => { ${col.dataName}FileList.push({ name: String(u), url: String(u) }); });
+}, { immediate: true });
+
+const upload${col.dataNamePascal} = async (opt: any) => {
+  // 换图时带上旧图地址，后端删除旧文件避免垃圾图片残留（新增记录无旧图不传）
+  const oldImgUrl = props.currentRow?.['${col.dataName}'] || undefined;
+  const url: string = await ${col.uploadFuncName}(opt.file, oldImgUrl);
+  if (!url) throw new Error('上传响应中未找到图片地址');
+${if col.uploadMulti}  ${col.dataName}FileList.push({ name: url, url });
+  formMethods.setValues({ ${col.dataName}: ${col.dataName}FileList.map((f: any) => f.url) });
+${else}  ${col.dataName}FileList.splice(0, ${col.dataName}FileList.length, { name: url, url });
+  formMethods.setValues({ ${col.dataName}: url });
+${/if}};
+
+const remove${col.dataNamePascal} = (idx: number) => {
+  ${col.dataName}FileList.splice(idx, 1);
+  formMethods.setValues({ ${col.dataName}: ${col.uploadRemoveValueExpr} });
+};
+${/if}${/if}${/each}
+${/if}
 
 // 表单字段定义
 const formSchema = ref<FormSchema[]>([
@@ -149,7 +188,45 @@ ${else}  {
   },
 ${/if}
 ${else if col.isImageEdit}
-  {
+${if col.hasUpload}  {
+    field: '${col.dataName}',
+    label: '${col.editName}',
+${if col.hasFormSpan}    colProps: { span: ${col.formSpan} },
+${/if}    // 上传控件嵌在表单字段位置（顺序跟列配置一致，label 左侧对齐）；详情模式仅预览。
+    // 卡片墙样式：图片悬停出 × 删除，尾部 + 卡片添加
+    formItemProps: {
+      slots: {
+        default: () => (
+          <div class="ac-up-cards">
+            {${col.dataName}FileList.map((f: any, idx: number) => (
+              <div key={f.url} class="ac-up-card"${if col.hasEditThumbSize} style={{ width: '${col.editThumbWidth}px', height: '${col.editThumbHeight}px' }}${/if}>
+                <ElImage src={f.url} fit="contain" class="ac-up-thumb" previewSrcList={[f.url]} previewTeleported={true} />
+                {!isDetail.value && (
+                  <div class="ac-up-mask">
+                    <span class="ac-up-del" onClick={() => remove${col.dataNamePascal}(idx)}>×</span>
+                  </div>
+                )}
+              </div>
+            ))}
+            {!isDetail.value && (
+              <ElUpload
+                action="#"
+                accept="image/*"
+                showFileList={false}
+                multiple={${col.uploadMulti}}
+                limit={${col.uploadLimit}}
+                httpRequest={upload${col.dataNamePascal}}
+                class="ac-up-trigger"
+              >
+                <span class="ac-up-plus">+</span>
+              </ElUpload>
+            )}
+          </div>
+        )
+      }
+    }
+  },
+${else}  {
     field: '${col.dataName}',
     label: '${col.editName}',
     component: 'Input'${if col.hasPlaceholder},
@@ -158,6 +235,7 @@ ${else if col.isImageEdit}
     }${/if}${if col.hasFormSpan},
     colProps: { span: ${col.formSpan} }${/if}
   },
+${/if}
 ${else if col.isMoney}
   {
     field: '${col.dataName}',
@@ -252,45 +330,6 @@ const rules = reactive({
 ${each col in columns}${if col.required}${if col.editVisible}  ${col.dataName}: [required()],
 ${/if}${/if}${/each}});
 
-const { formRegister, formMethods } = useForm();
-${if hasUploadFields}
-// ==================== 图片上传（引用 .jsonupload 上传预设）====================
-${each col in columns}${if col.hasUpload}${if col.editVisible}
-// ── ${col.editName}${if col.hasUploadLabel}（${col.uploadLabel}）${/if}：上传后路径写入表单字段，随保存接口一起提交
-const ${col.dataName}FileList = reactive<any[]>([]);
-watch(() => props.currentRow, (row: any) => {
-  const v = row?.['${col.dataName}'];
-  ${col.dataName}FileList.length = 0;
-  const list: any[] = v == null || v === '' ? [] : (Array.isArray(v) ? v : [v]);
-  list.forEach((u: any) => { ${col.dataName}FileList.push({ name: String(u), url: String(u) }); });
-}, { immediate: true });
-
-const upload${col.dataNamePascal} = async (opt: any) => {
-  const fd = new FormData();
-  fd.append('${col.uploadFileField}', opt.file);
-${if col.uploadMulti}${else}  // 单图换图：带上旧图地址，后端删除旧文件避免垃圾图片残留（新增记录无旧图不传）
-  const oldImgUrl = props.currentRow?.['${col.dataName}'];
-  if (oldImgUrl) fd.append('oldImgUrl', String(oldImgUrl));
-${/if}${col.uploadParamsStr}  try {
-    const res: any = await request.post({ url: '${col.uploadAction}', data: fd });
-    const url: string = ${col.uploadResChain} ?? '';
-    if (!url) throw new Error('上传响应中未找到图片地址');
-${if col.uploadMulti}    ${col.dataName}FileList.push({ name: url, url });
-    formMethods.setValues({ ${col.dataName}: ${col.dataName}FileList.map((f: any) => f.url) });
-${else}    ${col.dataName}FileList.splice(0, ${col.dataName}FileList.length, { name: url, url });
-    formMethods.setValues({ ${col.dataName}: url });
-${/if}  } catch (e: any) {
-    console.error('${col.dataName} 上传失败:', e?.message ?? e);
-  }
-};
-
-const remove${col.dataNamePascal} = (idx: number) => {
-  ${col.dataName}FileList.splice(idx, 1);
-  formMethods.setValues({ ${col.dataName}: ${col.uploadRemoveValueExpr} });
-};
-${/if}${/if}${/each}
-${/if}
-
 // 使用 useWriteLogic 钩子，仅使用其 submit 方法
 const { submit } = uiWriteLogic(
   computed(() => props.currentRow),
@@ -320,45 +359,18 @@ defineExpose({
 
 <template>
   <Form :rules="isDetail ? {} : rules" @register="formRegister" :schema="formSchemaComputed" />
-${if hasUploadFields}
-  <!-- 图片上传区（引用 .jsonupload 上传预设的图片字段） -->
-  <div v-if="!isDetail" class="upload-section">
-${each col in columns}${if col.hasUpload}${if col.editVisible}    <div class="upload-item">
-      <div class="upload-label">${col.editName}</div>
-      <div class="upload-cards">
-        <div v-for="(f, idx) in ${col.dataName}FileList" :key="f.url" class="upload-card">
-          <ElImage :src="f.url" fit="cover" class="upload-thumb" :preview-src-list="[f.url]" />
-          <div class="upload-card-mask">
-            <span class="upload-card-del" @click="remove${col.dataNamePascal}(idx)">×</span>
-          </div>
-        </div>
-        <ElUpload
-          action="#"
-          accept="image/*"
-          :show-file-list="false"
-          :multiple="${col.uploadMulti}"
-          :limit="${col.uploadLimit}"
-          :http-request="upload${col.dataNamePascal}"
-          class="upload-trigger"
-        >
-          <span class="upload-plus">+</span>
-        </ElUpload>
-      </div>
-    </div>
-${/if}${/if}${/each}  </div>
-${/if}
 </template>
 
-<style scoped>
-.upload-section { padding: 0 12px; }
-.upload-item { margin-bottom: 14px; }
-.upload-label { font-size: 14px; color: #606266; margin-bottom: 8px; }
-.upload-cards { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.upload-card { position: relative; width: 80px; height: 80px; border: 1px solid #dcdfe6; border-radius: 6px; overflow: hidden; }
-.upload-thumb { width: 100%; height: 100%; display: block; }
-.upload-card-mask { position: absolute; top: 0; right: 0; left: 0; bottom: 0; display: none; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.4); }
-.upload-card:hover .upload-card-mask { display: flex; }
-.upload-card-del { color: #fff; font-size: 20px; cursor: pointer; line-height: 1; }
-.upload-trigger :deep(.el-upload--picture-card) { width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; }
-.upload-plus { font-size: 24px; color: #909399; }
+<style>
+/* 上传控件由 formSchema 的插槽（JSX）渲染：VNode 不携带 SFC 的 scope 属性，
+   scoped 选择器（.xxx[data-v-xxx]）匹配不到，故用全局样式；
+   类名统一 ac-up- 前缀避免与页面样式冲突。各生成页面的这份规则完全相同，
+   同名全局规则重复加载无副作用 */
+.ac-up-cards { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ac-up-card { position: relative; width: 160px; height: 80px; border: 1px solid #dcdfe6; border-radius: 6px; overflow: hidden; }
+.ac-up-thumb { width: 100%; height: 100%; display: block; }
+.ac-up-mask { position: absolute; top: 0; right: 0; left: 0; bottom: 0; display: none; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.4); }
+.ac-up-card:hover .ac-up-mask { display: flex; }
+.ac-up-del { color: #fff; font-size: 20px; cursor: pointer; line-height: 1; }
+.ac-up-plus { font-size: 24px; color: #909399; }
 </style>

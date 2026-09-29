@@ -13,6 +13,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
@@ -92,6 +93,44 @@ void JsonUploadDialog::setupUI() {
   m_valueTypeCombo->addItem(QStringLiteral("字符串数组（多图）"),
                             QString::fromLatin1(JsonUploadValueType::kArray));
   form->addRow(QStringLiteral("提交值形态:"), m_valueTypeCombo);
+
+  // ── 缩略图显示尺寸（0=默认）──
+  // 列表页与编辑/详情页的图片缩略图各自独立配置（宽高需同时 >0 才生效）
+  auto makeThumbSpin = [this](QWidget *row, const QString &tip) {
+    auto *spin = new QSpinBox(row);
+    spin->setRange(0, 999);
+    spin->setSpecialValueText(QStringLiteral("默认"));
+    spin->setToolTip(tip);
+    return spin;
+  };
+  const QString thumbTip = QStringLiteral("0=默认尺寸；宽高都为 0 时生效。建议 2:1 比例如 80×40");
+  {
+    // 列表缩略图行
+    auto *listRow = new QWidget(this);
+    auto *listLayout = new QHBoxLayout(listRow);
+    listLayout->setContentsMargins(0, 0, 0, 0);
+    listLayout->setSpacing(4);
+    m_listThumbWidthSpin = makeThumbSpin(listRow, QStringLiteral("列表页图片缩略图宽度，") + thumbTip);
+    m_listThumbHeightSpin = makeThumbSpin(listRow, QStringLiteral("列表页图片缩略图高度，") + thumbTip);
+    listLayout->addWidget(m_listThumbWidthSpin);
+    listLayout->addWidget(new QLabel(QStringLiteral("×"), listRow));
+    listLayout->addWidget(m_listThumbHeightSpin);
+    listLayout->addStretch();
+    form->addRow(QStringLiteral("列表缩略图宽高(px):"), listRow);
+
+    // 编辑/详情缩略图行
+    auto *editRow = new QWidget(this);
+    auto *editLayout = new QHBoxLayout(editRow);
+    editLayout->setContentsMargins(0, 0, 0, 0);
+    editLayout->setSpacing(4);
+    m_editThumbWidthSpin = makeThumbSpin(editRow, QStringLiteral("编辑/详情页图片卡片宽度，") + thumbTip);
+    m_editThumbHeightSpin = makeThumbSpin(editRow, QStringLiteral("编辑/详情页图片卡片高度，") + thumbTip);
+    editLayout->addWidget(m_editThumbWidthSpin);
+    editLayout->addWidget(new QLabel(QStringLiteral("×"), editRow));
+    editLayout->addWidget(m_editThumbHeightSpin);
+    editLayout->addStretch();
+    form->addRow(QStringLiteral("编辑缩略图宽高(px):"), editRow);
+  }
 
   // ── 附加 form 参数表格 ──
   auto *paramHeader = new QHBoxLayout;
@@ -179,6 +218,10 @@ void JsonUploadDialog::setUpload(const JsonUpload &u) {
   // maxCount：可编辑下拉，未命中预设值时填入编辑框
   m_maxCountCombo->setEditText(QString::number(u.maxCount < 1 ? 1 : u.maxCount));
   comboSelectData(m_valueTypeCombo, u.valueType);
+  m_listThumbWidthSpin->setValue(qMax(0, u.listThumbWidth));
+  m_listThumbHeightSpin->setValue(qMax(0, u.listThumbHeight));
+  m_editThumbWidthSpin->setValue(qMax(0, u.editThumbWidth));
+  m_editThumbHeightSpin->setValue(qMax(0, u.editThumbHeight));
   fillParams(u.params);
 }
 
@@ -193,6 +236,10 @@ JsonUpload JsonUploadDialog::upload() const {
   if (u.responsePath.isEmpty()) u.responsePath = QStringLiteral("data.url");
   u.maxCount = qMax(1, qRound(m_maxCountCombo->currentText().toDouble()));
   u.valueType = m_valueTypeCombo->currentData().toString();
+  u.listThumbWidth = m_listThumbWidthSpin->value();
+  u.listThumbHeight = m_listThumbHeightSpin->value();
+  u.editThumbWidth = m_editThumbWidthSpin->value();
+  u.editThumbHeight = m_editThumbHeightSpin->value();
   u.params = collectParams();
   return u;
 }

@@ -7,7 +7,7 @@
 
 #include <QColorDialog>
 #include <QComboBox>
-#include <QDialogButtonBox>
+#include <QDialog>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -25,6 +25,7 @@
 #include <QVBoxLayout>
 
 #include "setting_model.h"
+#include "src/ui/json_vue/config_dialog_common.h"
 #include "src/util/common/code_constants.h"
 #include "src/util/ui/aui_window.h"
 #include "src/util/ui/component/aui_button.h"
@@ -675,29 +676,30 @@ QWidget *SettingUi::createKeyBadge(const QString &text) {
 }
 
 bool SettingUi::captureShortcut(const QString &current, QString *out) {
+  // 框架封装对话框：无边框标题栏 + 内容区 + 统一样式的确定/取消
   QDialog dlg(this);
-  dlg.setWindowTitle(QStringLiteral("设置快捷键"));
-  dlg.setModal(true);
-  auto *layout = new QVBoxLayout(&dlg);
-  layout->setSpacing(10);
+  ConfigDialogFrame frame =
+      beginConfigDialog(&dlg, QStringLiteral("设置快捷键"), QMargins(12, 10, 12, 10), 8);
+  auto *layout = frame.contentLayout;
 
-  auto *hint = new QLabel(QStringLiteral("按下新的组合键，或点击「清除」移除快捷键。"), &dlg);
+  auto *hint = new QLabel(QStringLiteral("按下新的组合键，或点击「清除」移除快捷键。"),
+                          frame.contentWidget);
   layout->addWidget(hint);
 
-  auto *edit = new QKeySequenceEdit(&dlg);
+  auto *edit = new QKeySequenceEdit(frame.contentWidget);
   if (!current.isEmpty()) edit->setKeySequence(QKeySequence(current));
   layout->addWidget(edit);
 
-  auto *clearBtn = new QPushButton(QStringLiteral("清除"), &dlg);
+  auto *clearBtn = new QPushButton(QStringLiteral("清除"), frame.contentWidget);
   AuiButton::applyDialogButtonStyle(clearBtn);
-  layout->addWidget(clearBtn);
+  layout->addWidget(clearBtn, 0, Qt::AlignLeft);
 
-  auto *box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
-  layout->addWidget(box);
+  // 确认/取消按钮与窗口框架由 finishConfigDialog 统一添加
+  finishConfigDialog(&dlg, frame);
+  dlg.setModal(true);
+  dlg.setMinimumWidth(360);
 
   connect(clearBtn, &QPushButton::clicked, edit, &QKeySequenceEdit::clear);
-  connect(box, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
-  connect(box, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
 
   if (dlg.exec() != QDialog::Accepted) return false;
   *out = edit->keySequence().toString();

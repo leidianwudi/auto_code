@@ -138,6 +138,11 @@ inline void storeColumnConfig(QPushButton *btn, const ColumnConfig &col) {
   // 图片上传预设引用（editStyle == Image 时使用）
   btn->setProperty(JsonVueKey::kUploadSourceFile, col.uploadSourceFile);
   btn->setProperty(JsonVueKey::kUploadSourceId, col.uploadSourceId);
+  // 图片缩略图尺寸（字段级覆盖；0=跟随预设）
+  btn->setProperty(JsonVueKey::kListThumbWidth, col.listThumbWidth);
+  btn->setProperty(JsonVueKey::kListThumbHeight, col.listThumbHeight);
+  btn->setProperty(JsonVueKey::kEditThumbWidth, col.editThumbWidth);
+  btn->setProperty(JsonVueKey::kEditThumbHeight, col.editThumbHeight);
   btn->setProperty(JsonVueKey::kDefaultValue, col.defaultValue);
   btn->setProperty(JsonVueKey::kDefaultSort, col.defaultSort);
   // 编辑样式/编辑可编辑/开关可编辑（从表格列移入对话框后，存到 property 供读取）
@@ -202,6 +207,11 @@ inline void readColumnConfig(QPushButton *btn, ColumnConfig &col) {
   // 图片上传预设引用（editStyle == Image 时使用）
   col.uploadSourceFile = btn->property(JsonVueKey::kUploadSourceFile).toString();
   col.uploadSourceId = btn->property(JsonVueKey::kUploadSourceId).toString();
+  // 图片缩略图尺寸（字段级覆盖；0=跟随预设）
+  col.listThumbWidth = qMax(0, btn->property(JsonVueKey::kListThumbWidth).toInt());
+  col.listThumbHeight = qMax(0, btn->property(JsonVueKey::kListThumbHeight).toInt());
+  col.editThumbWidth = qMax(0, btn->property(JsonVueKey::kEditThumbWidth).toInt());
+  col.editThumbHeight = qMax(0, btn->property(JsonVueKey::kEditThumbHeight).toInt());
   col.defaultValue = btn->property(JsonVueKey::kDefaultValue).toString();
   col.defaultSort = btn->property(JsonVueKey::kDefaultSort).toString();
   // 编辑样式/编辑可编辑/开关可编辑
@@ -276,6 +286,13 @@ inline void appendEditStyleSummary(QStringList &parts, const ColumnConfig &col) 
       // 图片上传预设（引用 .jsonupload 时显示预设文件名）
       if (!col.uploadSourceFile.isEmpty()) {
         parts << QStringLiteral("预设:%1").arg(QFileInfo(col.uploadSourceFile).completeBaseName());
+      }
+      // 字段级缩略图尺寸（显式覆盖时显示，未配置=跟随预设）
+      if (col.listThumbWidth > 0 && col.listThumbHeight > 0) {
+        parts << QStringLiteral("列表%1×%2").arg(col.listThumbWidth).arg(col.listThumbHeight);
+      }
+      if (col.editThumbWidth > 0 && col.editThumbHeight > 0) {
+        parts << QStringLiteral("编辑%1×%2").arg(col.editThumbWidth).arg(col.editThumbHeight);
       }
       break;
     default:

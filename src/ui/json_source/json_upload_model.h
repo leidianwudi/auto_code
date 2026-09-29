@@ -45,6 +45,11 @@ inline constexpr const char *kValueType = "valueType";  ///< ""=字符串 / "num
 // 响应提取与张数
 inline constexpr const char *kResponsePath = "responsePath";  ///< 点分提取路径，如 data.url
 inline constexpr const char *kMaxCount = "maxCount";          ///< 最多张数；1=单图 / >1=多图
+// 缩略图显示尺寸（可选；列表页与编辑/详情页各自独立配置）
+inline constexpr const char *kListThumbWidth = "listThumbWidth";    ///< 列表缩略图宽 px；0/缺省=默认 80
+inline constexpr const char *kListThumbHeight = "listThumbHeight";  ///< 列表缩略图高 px；0/缺省=默认 40
+inline constexpr const char *kEditThumbWidth = "editThumbWidth";    ///< 编辑/详情缩略图宽 px；0/缺省=默认 160
+inline constexpr const char *kEditThumbHeight = "editThumbHeight";  ///< 编辑/详情缩略图高 px；0/缺省=默认 80
 }  // namespace JsonUploadKey
 
 /// 上传预设的提交值形态常量（预设级 valueType）
@@ -93,6 +98,14 @@ struct JsonUpload {
   int maxCount = 1;
   /// 提交值形态覆盖（""=按 maxCount 推导 / "string" / "array"）
   QString valueType;
+  /// 列表页缩略图宽 px（0=默认 80），与 listThumbHeight 同 >0 时生效
+  int listThumbWidth = 0;
+  /// 列表页缩略图高 px（0=默认 40）
+  int listThumbHeight = 0;
+  /// 编辑/详情页缩略图宽 px（0=默认 160），与 editThumbHeight 同 >0 时生效
+  int editThumbWidth = 0;
+  /// 编辑/详情页缩略图高 px（0=默认 80）
+  int editThumbHeight = 0;
 
   /// 是否为多图上传（表单值为字符串数组）
   bool isMulti() const {

@@ -228,6 +228,12 @@ void JsonUploadEditor::refreshSummary(int row) {
   parts << u.method;
   if (!u.url.isEmpty()) parts << u.url;
   parts << QStringLiteral("%1张").arg(u.maxCount);
+  if (u.listThumbWidth > 0 && u.listThumbHeight > 0) {
+    parts << QStringLiteral("列表%1×%2").arg(u.listThumbWidth).arg(u.listThumbHeight);
+  }
+  if (u.editThumbWidth > 0 && u.editThumbHeight > 0) {
+    parts << QStringLiteral("编辑%1×%2").arg(u.editThumbWidth).arg(u.editThumbHeight);
+  }
   if (!u.params.isEmpty()) {
     QStringList kv;
     for (const auto &p : u.params) kv << QStringLiteral("%1=%2").arg(p.name, p.value);

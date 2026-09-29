@@ -19,6 +19,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QStandardItem>
 #include <QStandardItemModel>
 #include <QTableWidget>
@@ -649,6 +650,8 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
   m_boolTrueTextEdit = nullptr;
   m_boolFalseTextEdit = nullptr;
   m_switchEditableCheck = nullptr;
+  m_listThumbWidthSpin = nullptr;
+  m_listThumbHeightSpin = nullptr;
 
   QString dtype = m_displayTypeCombo ? m_displayTypeCombo->currentData().toString() : QString();
 
@@ -705,6 +708,33 @@ void ColumnStyleDialog::rebuildDisplayTypeControls() {
             : QStringLiteral("  下拉框数据源由上方「字段取值域」提供（列表/编辑/查询三处共享）"),
         m_displayTypeWidget);
     form->addRow(QString(), hint);
+  } else if (dtype == JsonVueStyle::kImage) {
+    m_displayTypeWidget->setMaximumHeight(QWIDGETSIZE_MAX);  // 恢复高度限制
+    m_displayTypeWidget->setVisible(true);
+    // 列表缩略图宽高（字段级覆盖）：0=跟随上传预设；预设也未配置时用模板默认 80×40。
+    // 列表显示图片（displayType=image）即可配，不依赖编辑样式是否为图片
+    auto makeListThumbSpin = [this](QWidget *row, const QString &tip) {
+      auto *spin = new QSpinBox(row);
+      spin->setRange(0, 999);
+      spin->setSpecialValueText(QStringLiteral("跟随预设"));
+      spin->setToolTip(tip);
+      return spin;
+    };
+    const QString thumbTip =
+        QStringLiteral("0=跟随上传预设；预设也未配置时用模板默认（80×40）。建议 2:1 比例如 80×40");
+    auto *listThumbRow = new QWidget(m_displayTypeWidget);
+    auto *listThumbLay = new QHBoxLayout(listThumbRow);
+    listThumbLay->setContentsMargins(0, 0, 0, 0);
+    listThumbLay->setSpacing(4);
+    m_listThumbWidthSpin =
+        makeListThumbSpin(listThumbRow, QStringLiteral("列表页图片缩略图宽度，") + thumbTip);
+    m_listThumbHeightSpin =
+        makeListThumbSpin(listThumbRow, QStringLiteral("列表页图片缩略图高度，") + thumbTip);
+    listThumbLay->addWidget(m_listThumbWidthSpin);
+    listThumbLay->addWidget(new QLabel(QStringLiteral("×"), listThumbRow));
+    listThumbLay->addWidget(m_listThumbHeightSpin);
+    listThumbLay->addStretch();
+    form->addRow(QStringLiteral("  缩略图宽高(px):"), listThumbRow);
   } else {
     // 非标签/布尔样式时隐藏容器，避免占用空间
     m_displayTypeWidget->setVisible(false);
@@ -828,6 +858,9 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
   m_precisionCombo = nullptr;
   m_dateFormatCombo = nullptr;
   m_textareaRowsCombo = nullptr;
+  m_uploadSourceCombo = nullptr;
+  m_editThumbWidthSpin = nullptr;
+  m_editThumbHeightSpin = nullptr;
 
   switch (m_editStyle) {
     case EditStyle::Text: {
@@ -955,6 +988,32 @@ void ColumnStyleDialog::rebuildEditStyleControls() {
           QStringLiteral("上传预设作用域"), jsonVueUploadScopeHelpText(), uploadSrcField));
       uploadSrcLay->addWidget(m_uploadSourceCombo, 1);
       form->addRow(QStringLiteral("  上传预设:"), uploadSrcField);
+
+      // 编辑/详情缩略图宽高（字段级覆盖）：0=跟随上传预设的尺寸；预设也未配置时用
+      // 模板默认 160×80（列表缩略图在上方「列表页展示」区配置）
+      auto makeThumbSpin = [this](QWidget *row, const QString &tip) {
+        auto *spin = new QSpinBox(row);
+        spin->setRange(0, 999);
+        spin->setSpecialValueText(QStringLiteral("跟随预设"));
+        spin->setToolTip(tip);
+        return spin;
+      };
+      const QString thumbTip =
+          QStringLiteral("0=跟随上传预设；预设也未配置时用模板默认（160×80）。"
+                         "建议 2:1 比例如 160×80");
+      auto *editThumbRow = new QWidget(m_editStyleWidget);
+      auto *editThumbLay = new QHBoxLayout(editThumbRow);
+      editThumbLay->setContentsMargins(0, 0, 0, 0);
+      editThumbLay->setSpacing(4);
+      m_editThumbWidthSpin =
+          makeThumbSpin(editThumbRow, QStringLiteral("编辑/详情页图片卡片宽度，") + thumbTip);
+      m_editThumbHeightSpin =
+          makeThumbSpin(editThumbRow, QStringLiteral("编辑/详情页图片卡片高度，") + thumbTip);
+      editThumbLay->addWidget(m_editThumbWidthSpin);
+      editThumbLay->addWidget(new QLabel(QStringLiteral("×"), editThumbRow));
+      editThumbLay->addWidget(m_editThumbHeightSpin);
+      editThumbLay->addStretch();
+      form->addRow(QStringLiteral("  缩略图宽高(px):"), editThumbRow);
       break;
     }
     case EditStyle::Select: {
@@ -1262,6 +1321,34 @@ QString ColumnStyleDialog::uploadSourceId() const {
   const QString ref = m_uploadSourceCombo->currentData().toString();
   if (ref.isEmpty()) return QString();
   return ref.section(QStringLiteral("#"), 1, -1);
+}
+
+void ColumnStyleDialog::setThumbSizes(int listW, int listH, int editW, int editH) {
+  m_cachedListThumbWidth = listW;
+  m_cachedListThumbHeight = listH;
+  m_cachedEditThumbWidth = editW;
+  m_cachedEditThumbHeight = editH;
+  // 控件已存在时直接写入（0 = 跟随预设）
+  if (m_listThumbWidthSpin) m_listThumbWidthSpin->setValue(qMax(0, listW));
+  if (m_listThumbHeightSpin) m_listThumbHeightSpin->setValue(qMax(0, listH));
+  if (m_editThumbWidthSpin) m_editThumbWidthSpin->setValue(qMax(0, editW));
+  if (m_editThumbHeightSpin) m_editThumbHeightSpin->setValue(qMax(0, editH));
+}
+
+int ColumnStyleDialog::listThumbWidth() const {
+  return m_listThumbWidthSpin ? m_listThumbWidthSpin->value() : m_cachedListThumbWidth;
+}
+
+int ColumnStyleDialog::listThumbHeight() const {
+  return m_listThumbHeightSpin ? m_listThumbHeightSpin->value() : m_cachedListThumbHeight;
+}
+
+int ColumnStyleDialog::editThumbWidth() const {
+  return m_editThumbWidthSpin ? m_editThumbWidthSpin->value() : m_cachedEditThumbWidth;
+}
+
+int ColumnStyleDialog::editThumbHeight() const {
+  return m_editThumbHeightSpin ? m_editThumbHeightSpin->value() : m_cachedEditThumbHeight;
 }
 
 void ColumnStyleDialog::setBoolTrueText(const QString &v) {

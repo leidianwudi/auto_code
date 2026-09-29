@@ -382,8 +382,9 @@ export function processColumns(rawColumns: Object[], sourceMap: Object,
 
     // ── 图片上传预设引用 ──────────────────────────────────────────
     // editStyle==image 且引用了 .jsonupload 上传预设（uploadSourceFile/
-    // uploadSourceId）时，编辑页生成上传组件：axios 上传（form-data）+
-    // 响应提取路径写回表单字段，路径随表单 JSON 提交；
+    // uploadSourceId）时，编辑页生成上传组件（ElUpload + 预览卡片），上传
+    // 动作瘦包装调用共享上传函数（src/api/upload/{uploadName}.ts，由
+    // upload.tpl 生成），上传返回的图片地址写回表单字段，随保存接口一起提交；
     // 未引用 → hasUpload=false，保持旧行为（图片 URL 手工输入）
     let uploadRef: Object = null;
     if (rawCol.editStyle == "image" && isNotEmpty(rawCol.uploadSourceFile) && uploadMap != null) {
@@ -398,14 +399,26 @@ export function processColumns(rawColumns: Object[], sourceMap: Object,
     }
     col["hasUpload"] = hasUpload;
     if (hasUpload) {
-      // 上传地址（补前导斜杠，与 selectApiUrl 归一规则一致）
-      let upUrl: String = uploadRef["url"];
-      if (isNotEmpty(upUrl) && !upUrl.startsWith("/")) {
-        upUrl = "/" + upUrl;
+      // 上传函数名与所属文件基名（共享上传函数 src/api/upload/{uploadName}.ts）
+      col["uploadFuncName"] = uploadRef["funcName"];
+      col["uploadSourceRefFile"] = uploadRef["uploadName"];
+      // 编辑/详情缩略图尺寸（字段级覆盖优先，回退上传预设，最后模板默认 160×80；
+      // 列表缩略图在下方 displayType==image 分支解析）
+      let editW: Int = 0;
+      if (rawCol.editThumbWidth != null && rawCol.editThumbWidth > 0) {
+        editW = rawCol.editThumbWidth;
+      } else if (uploadRef["editThumbWidth"] > 0) {
+        editW = uploadRef["editThumbWidth"];
       }
-      col["uploadAction"] = upUrl;
-      // form-data 文件字段名（预设未填时默认 file）
-      col["uploadFileField"] = isNotEmpty(uploadRef["fileField"]) ? uploadRef["fileField"] : "file";
+      let editH: Int = 0;
+      if (rawCol.editThumbHeight != null && rawCol.editThumbHeight > 0) {
+        editH = rawCol.editThumbHeight;
+      } else if (uploadRef["editThumbHeight"] > 0) {
+        editH = uploadRef["editThumbHeight"];
+      }
+      col["editThumbWidth"] = editW;
+      col["editThumbHeight"] = editH;
+      col["hasEditThumbSize"] = (editW > 0 && editH > 0);
       // 最多张数（1=单图 / >1=多图）
       let upLimit: Int = 1;
       if (uploadRef["maxCount"] != null && uploadRef["maxCount"] > 0) {
@@ -430,29 +443,6 @@ export function processColumns(rawColumns: Object[], sourceMap: Object,
       } else {
         col["uploadRemoveValueExpr"] = "''";
       }
-      // 附加 form 参数片段：fd.append('type', 0);（数字字面量不加引号，字符串加引号）
-      let paramsArr: Object[] = [];
-      if (uploadRef["params"] != null) {
-        paramsArr = uploadRef["params"];
-      }
-      let paramsStr = "";
-      let pLen = paramsArr.length;
-      for (let pi = 0; pi < pLen; pi = pi + 1) {
-        let p: Object = paramsArr[pi];
-        if (!isNotEmpty(p.name)) {
-          continue;
-        }
-        let lit: String = "";
-        if (p.valueType == "number" && isNumericStr(p.value)) {
-          lit = p.value;
-        } else {
-          lit = "'" + escapeJsStr(p.value) + "'";
-        }
-        paramsStr = paramsStr + "    fd.append('" + escapeJsStr(p.name) + "', " + lit + ");\n";
-      }
-      col["uploadParamsStr"] = paramsStr;
-      // 响应提取路径：点分段 → res?.data?.url 可选链（不合法段名时 buildResChain 回退默认）
-      col["uploadResChain"] = buildResChain(uploadRef["responsePath"]);
     }
 
     // 样式特定配置值
@@ -497,6 +487,26 @@ export function processColumns(rawColumns: Object[], sourceMap: Object,
     col["isImageDisplay"] = isImageDisplay;
     col["isSelectDisplay"] = isSelectDisplay;
     col["hasDisplayType"] = hasDisplayType;
+
+    // 列表缩略图尺寸（displayType==image 时的字段级覆盖，回退上传预设，
+    // 最后模板默认 80×40；不依赖编辑样式是否为图片，未引用预设也能配）
+    let listW: Int = 0;
+    let listH: Int = 0;
+    if (isImageDisplay) {
+      if (rawCol.listThumbWidth != null && rawCol.listThumbWidth > 0) {
+        listW = rawCol.listThumbWidth;
+      } else if (uploadRef != null && uploadRef["listThumbWidth"] > 0) {
+        listW = uploadRef["listThumbWidth"];
+      }
+      if (rawCol.listThumbHeight != null && rawCol.listThumbHeight > 0) {
+        listH = rawCol.listThumbHeight;
+      } else if (uploadRef != null && uploadRef["listThumbHeight"] > 0) {
+        listH = uploadRef["listThumbHeight"];
+      }
+    }
+    col["listThumbWidth"] = listW;
+    col["listThumbHeight"] = listH;
+    col["hasListThumbSize"] = (listW > 0 && listH > 0);
 
     // tagItems 转换为模板友好的格式（数组 + 映射字符串）
     let rawTagItems: Object[] = [];
@@ -1117,6 +1127,115 @@ export function buildSourceTplData(json: Object, file: String): Object {
   return tplData;
 }
 
+// ---------------------------------------------------------------------------
+// 5-4) 上传预设加工：.jsonupload 的 uploads 转换为共享上传函数的 tplData
+// ---------------------------------------------------------------------------
+// 每条预设生成一个上传函数（funcName 由 url 派生：upload/image → uploadImage，
+// 同文件重名追加序号），生成 src/api/upload/{uploadName}.ts 供多页面 import 复用
+export function processUploads(rawUploads: Object[], uploadName: String): Object[] {
+  let uploads: Object[] = [];
+  let rawLen = rawUploads.length;
+  let nameSet: Object = {};
+  let sourceCamel = snakeToPascal(uploadName);
+  for (let i = 0; i < rawLen; i = i + 1) {
+    let raw: Object = rawUploads[i];
+    let up: Object = {};
+    up["id"] = raw.id;
+    up["remark"] = raw.remark || "";
+    // 上传地址（补前导斜杠，与接口归一规则一致）
+    let upUrl: String = raw.url;
+    if (isNotEmpty(upUrl) && !upUrl.startsWith("/")) {
+      upUrl = "/" + upUrl;
+    }
+    up["url"] = upUrl;
+    // 所属文件基名（write.vue 生成 import '@/api/upload/{uploadName}' 用）
+    up["uploadName"] = uploadName;
+    // 函数名：url 驼峰派生（upload/image → uploadImage）——用补斜杠前的原始 url
+    let funcName = urlToFuncName(raw.url);
+    if (funcName == "") {
+      funcName = "upload" + sourceCamel + (i + 1);
+    }
+    if (nameSet[funcName] != null) {
+      let n = 2;
+      while (nameSet[funcName + n] != null) {
+        n = n + 1;
+      }
+      funcName = funcName + n;
+    }
+    nameSet[funcName] = true;
+    up["funcName"] = funcName;
+    // form-data 文件字段名（缺省 file）
+    up["fileField"] = isNotEmpty(raw.fileField) ? raw.fileField : "file";
+    // 最多张数（1=单图 / >1=多图，仅作前端 limit/multiple 的 UI 约束）
+    let upLimit: Int = 1;
+    if (raw.maxCount != null && raw.maxCount > 0) {
+      upLimit = raw.maxCount;
+    }
+    up["maxCount"] = upLimit;
+    // 缩略图显示尺寸（0=默认：列表 80×40 / 编辑 160×80），列表与编辑各自独立配置
+    let tw: Int = 0;
+    if (raw.listThumbWidth != null && raw.listThumbWidth > 0) {
+      tw = raw.listThumbWidth;
+    }
+    up["listThumbWidth"] = tw;
+    let th: Int = 0;
+    if (raw.listThumbHeight != null && raw.listThumbHeight > 0) {
+      th = raw.listThumbHeight;
+    }
+    up["listThumbHeight"] = th;
+    let ew: Int = 0;
+    if (raw.editThumbWidth != null && raw.editThumbWidth > 0) {
+      ew = raw.editThumbWidth;
+    }
+    up["editThumbWidth"] = ew;
+    let eh: Int = 0;
+    if (raw.editThumbHeight != null && raw.editThumbHeight > 0) {
+      eh = raw.editThumbHeight;
+    }
+    up["editThumbHeight"] = eh;
+    // 提交值形态（""=按 maxCount 推导 / "string" / "array"，供 processColumns 的多图判定）
+    up["valueType"] = raw.valueType || "";
+    // 附加 form 参数（如 type=0）：统一按字符串字面量生成（FormData.append
+    // 只接受字符串，后端 ValidationPipe 的隐式转换会转回数字）
+    let params: Object[] = [];
+    if (raw.params != null) {
+      params = raw.params;
+    }
+    let paramItems: Object[] = [];
+    let paramLen = params.length;
+    for (let pi = 0; pi < paramLen; pi = pi + 1) {
+      let p: Object = params[pi];
+      if (!isNotEmpty(p.name)) {
+        continue;
+      }
+      let item: Object = {};
+      item["name"] = escapeJsStr(p.name);
+      item["value"] = escapeJsStr(p.value);
+      paramItems.append(item);
+    }
+    up["params"] = paramItems;
+    // 响应提取链（点分段 → 可选链，如 res?.data?.img_url）
+    up["resChain"] = buildResChain(raw.responsePath);
+    uploads.append(up);
+  }
+  return uploads;
+}
+
+/// 汇总加工：把单个 .jsonupload 配置转换为 upload.tpl 的 tplData
+export function buildUploadTplData(json: Object, file: String): Object {
+  let uploadName = basename(file);  // .jsonupload 文件基名（import 路径使用）
+  let rawUploads: Object[] = [];
+  if (json != null && json.uploads != null) {
+    rawUploads = json.uploads;
+  }
+  let uploads = processUploads(rawUploads, uploadName);
+  let tplData: Object = {};
+  tplData["uploadName"] = uploadName;   // ${uploadName} 文件基名
+  tplData["uploads"] = uploads;         // ${each up in uploads} 预设循环
+  tplData["hasUploads"] = (uploads.length > 0);
+  return tplData;
+}
+
 // ============================================================================
 // 6) 汇总加工：把单个 .jsonvue 配置转换为完整 tplData
 // ----------------------------------------------------------------------------
@@ -1285,12 +1404,16 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
         }
       }
       let upJson: Object = readJson(upReadPath);
+      // 上传预设加工（方案 B：与 processSources 对称）——加工后的预设含
+      // funcName（url 驼峰派生），供生成共享上传函数 src/api/upload/{uploadName}.ts
+      let rawUploads: Object[] = [];
       if (upJson != null && upJson.uploads != null) {
-        let rawUploads: Object[] = upJson.uploads;
-        let upLen = rawUploads.length;
-        for (let j = 0; j < upLen; j = j + 1) {
-          uploadMap[ufPre + "#" + rawUploads[j]["id"]] = rawUploads[j];
-        }
+        rawUploads = upJson.uploads;
+      }
+      let processedUploads = processUploads(rawUploads, basename(ufPre));
+      let upProcLen = processedUploads.length;
+      for (let j = 0; j < upProcLen; j = j + 1) {
+        uploadMap[ufPre + "#" + processedUploads[j]["id"]] = processedUploads[j];
       }
     }
   }
@@ -1478,6 +1601,46 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
   }
   let hasBoolSourceImports = (boolSourceImportLines != "");
 
+  // 上传预设函数导入行（write.vue 使用：列上传函数调用共享上传 api，方案 B）
+  // 同文件多预设已由 processUploads 去重；跨文件同名（url 相同）按"文件#函数"分组，
+  // 各自 import 自己的 upload 文件
+  let uploadImportFileMap: Object = {};
+  let uploadImportOrder: String[] = [];
+  let uploadImportNameSet: Object = {};
+  let upImpLen = columns.length;
+  for (let i = 0; i < upImpLen; i = i + 1) {
+    let upCol: Object = columns[i];
+    if (upCol["hasUpload"] != true) {
+      continue;
+    }
+    let upFunc: String = upCol["uploadFuncName"];
+    let upFile: String = upCol["uploadSourceRefFile"];
+    if (upFunc == "" || upFile == "") {
+      continue;
+    }
+    let upKey: String = upFile + "#" + upFunc;
+    if (uploadImportNameSet[upKey] == null) {
+      uploadImportNameSet[upKey] = true;
+      if (uploadImportFileMap[upFile] == null) {
+        uploadImportFileMap[upFile] = upFunc;
+        uploadImportOrder.push(upFile);
+      } else {
+        uploadImportFileMap[upFile] = uploadImportFileMap[upFile] + ", " + upFunc;
+      }
+    }
+  }
+  let uploadImportLines = "";
+  let uifoLen = uploadImportOrder.length;
+  for (let i = 0; i < uifoLen; i = i + 1) {
+    let uf: String = uploadImportOrder[i];
+    if (uploadImportLines != "") {
+      uploadImportLines = uploadImportLines + "\n";
+    }
+    uploadImportLines = uploadImportLines + "import { " + uploadImportFileMap[uf] +
+                        " } from '@/api/upload/" + uf + "';";
+  }
+  let hasUploadImports = (uploadImportLines != "");
+
   let buttons: Object[] = btnResult["buttons"];
   let rowButtons: Object[] = btnResult["rowButtons"];
   let toolbarButtons: Object[] = btnResult["toolbarButtons"];
@@ -1622,6 +1785,9 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
   // 图片上传预设（write.tpl 上传组件区）
   tplData["hasUploadFields"] = hasUploadFields;
   tplData["hasWatch"] = hasWatch;
+  // 上传预设函数导入行（write.vue 的列上传函数调用共享上传 api，方案 B）
+  tplData["uploadImportLines"] = uploadImportLines;
+  tplData["hasUploadImports"] = hasUploadImports;
   // 编辑表单隐藏/只读字段
   tplData["hasHiddenFields"] = hasHiddenFields;
   tplData["hiddenFieldsStr"] = "";

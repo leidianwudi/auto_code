@@ -67,6 +67,16 @@ export function generateAdminMain(params: Object): Void {
     ];
   }
 
+  // ── 2.3 上传预设模板配置：勾选的 .jsonupload 文件 → 共享上传 api 文件 ──
+  //    out 支持的占位符：{basePath}、{uploadName}（.jsonupload 文件基名）
+  //    每条预设一个上传函数，供多页面 import 复用（方案 B：与 sourceTemplates 对称）
+  let uploadTemplates: TemplateConfig[] = params["uploadTemplates"];
+  if (uploadTemplates == null) {
+    uploadTemplates = [
+      { tpl: "../template/upload.tpl", out: "{basePath}/src/api/upload/{uploadName}.ts" },
+    ];
+  }
+
   let apiSelectSuffix: String = "selectByIn"; //查询api的后缀
   let apiUpdateSuffix: String = "update"; //修改api的后缀
   let apiDeleteSuffix: String = "delete"; //删除api的后缀
@@ -208,6 +218,29 @@ export function generateAdminMain(params: Object): Void {
           sourceName: srcData["sourceName"]
         });
         let result = renderTpl(cfg.tpl, srcData);
+        if (result) {
+          let writeOk = writeFile(outPath, result);
+          if (writeOk) {
+            generatedFileCount = generatedFileCount + 1;
+          }
+          printLog("生成文件: " + outPath);
+        }
+      }
+      continue;
+    }
+
+    // ── 4.0.1 .jsonupload 上传预设文件：渲染 upload 模板生成共享上传 api ──
+    //      与 .jsonsource → source.ts 对称（方案 B）：每条预设一个上传函数，
+    //      多页面 import 复用（上传 url 改动只改 jsonupload 一处）
+    if (file.endsWith(".jsonupload")) {
+      let upJson = readJson(file);
+      let upData = buildUploadTplData(upJson, file);
+      for (cfg in uploadTemplates) {
+        let outPath = formatPath(cfg.out, {
+          basePath: basePath,
+          uploadName: upData["uploadName"]
+        });
+        let result = renderTpl(cfg.tpl, upData);
         if (result) {
           let writeOk = writeFile(outPath, result);
           if (writeOk) {
