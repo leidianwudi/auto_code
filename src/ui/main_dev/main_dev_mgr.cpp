@@ -240,6 +240,22 @@ void MainDevMgr::connectSaveActions() {
   auto *forwardShortcut = new QShortcut(QKeySequence(QStringLiteral("Alt+Right")), m_ui);
   connect(forwardShortcut, &QShortcut::activated, this, &MainDevMgr::navigateForward);
 
+  // ── F5 启动/继续调试 + Ctrl+F5 执行脚本（序列取自设置界面，编辑后即时生效；
+  //    F5 与编辑器内按键同路径，直连控制器不经按钮禁用态）──
+  auto *debugShortcut =
+      new QShortcut(SettingStore::ins().shortcut(QStringLiteral("sc.debugStart")), m_ui);
+  connect(debugShortcut, &QShortcut::activated, debugController(),
+          &DebugController::startOrContinue);
+  connect(&SettingStore::ins(), &SettingStore::shortcutsChanged, debugShortcut, [debugShortcut]() {
+    debugShortcut->setKey(SettingStore::ins().shortcut(QStringLiteral("sc.debugStart")));
+  });
+
+  auto *runShortcut = new QShortcut(SettingStore::ins().shortcut(QStringLiteral("sc.run")), m_ui);
+  connect(runShortcut, &QShortcut::activated, m_ui->buildBtn(), &QPushButton::click);
+  connect(&SettingStore::ins(), &SettingStore::shortcutsChanged, runShortcut, [runShortcut]() {
+    runShortcut->setKey(SettingStore::ins().shortcut(QStringLiteral("sc.run")));
+  });
+
   // ── 保存全部按钮 ──
   connect(m_ui->saveAllBtn(), &QPushButton::clicked, this, [this]() {
     saveAllEditors();

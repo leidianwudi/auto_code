@@ -5,7 +5,6 @@
 
 #include "main_dev_ui.h"
 
-#include <algorithm>
 #include <QApplication>
 #include <QCloseEvent>
 #include <QCollator>
@@ -39,6 +38,7 @@
 #include <QTextStream>
 #include <QToolButton>
 #include <QVBoxLayout>
+#include <algorithm>
 
 #include "main_dev_ui_ext.h"
 #include "src/ui/demo/demo_mgr.h"
@@ -53,6 +53,7 @@
 #include "src/util/ui/component/aui_combo_delete.h"
 #include "src/util/ui/component/aui_style.h"
 #include "src/util/ui/setting_store.h"
+
 
 //  构造
 // ════════════════════════════════════════════════════════════
@@ -150,7 +151,10 @@ void MainDevUi::setupTitleBar() {
 
   // ── 执行按钮 ──
   m_buildBtn = AuiButton::createBuildButton();
-  m_buildBtn->setToolTip(QStringLiteral("执行 (F5)"));
+  m_buildBtn->setToolTip(QStringLiteral("执行 (%1)")
+                             .arg(SettingStore::ins()
+                                      .shortcut(QStringLiteral("sc.run"))
+                                      .toString(QKeySequence::NativeText)));
   titleLayout->insertWidget(tb.contentInsertIndex, m_buildBtn);
   tb.contentInsertIndex++;
 
@@ -278,11 +282,10 @@ void MainDevUi::setupLeftPanel() {
           });
 
   // 删除按钮：从启动项集合中移除该项
-  connect(m_startupCombo, &AuiComboDelete::itemDeleteRequested, this,
-          [this](int index) {
-            const QString path = m_startupCombo->itemData(index).toString();
-            if (!path.isEmpty()) m_fileTree->removeStartup(path);
-          });
+  connect(m_startupCombo, &AuiComboDelete::itemDeleteRequested, this, [this](int index) {
+    const QString path = m_startupCombo->itemData(index).toString();
+    if (!path.isEmpty()) m_fileTree->removeStartup(path);
+  });
 }
 
 void MainDevUi::setupEditorSplitter() {

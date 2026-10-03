@@ -82,6 +82,7 @@ inline const char *kSC_Save = "sc.save";
 inline const char *kSC_SaveAll = "sc.saveAll";
 inline const char *kSC_Find = "sc.find";
 inline const char *kSC_DebugStart = "sc.debugStart";
+inline const char *kSC_Run = "sc.run";
 inline const char *kSC_DebugStepOver = "sc.debugStepOver";
 inline const char *kSC_DebugStepInto = "sc.debugStepInto";
 inline const char *kSC_DebugStepOut = "sc.debugStepOut";
@@ -260,6 +261,8 @@ SettingStore::SettingStore() : QObject(nullptr) {
                    QStringLiteral("编辑"), QStringLiteral("Ctrl+F"));
   registerShortcut(QString::fromLatin1(kSC_DebugStart), QStringLiteral("启动/继续调试"),
                    QStringLiteral("调试"), QStringLiteral("F5"));
+  registerShortcut(QString::fromLatin1(kSC_Run), QStringLiteral("执行脚本"), QStringLiteral("调试"),
+                   QStringLiteral("Ctrl+F5"));
   registerShortcut(QString::fromLatin1(kSC_DebugStepOver), QStringLiteral("单步跳过"),
                    QStringLiteral("调试"), QStringLiteral("F10"));
   registerShortcut(QString::fromLatin1(kSC_DebugStepInto), QStringLiteral("单步进入"),
