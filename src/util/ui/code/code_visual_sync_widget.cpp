@@ -101,5 +101,11 @@ void CodeVisualSyncWidget::onVisualContentChanged() {
 }
 
 void CodeVisualSyncWidget::setPlainTextIfChanged(const QString &text) {
-  if (text != m_editor->toPlainText()) m_editor->setPlainText(text);
+  if (text != m_editor->toPlainText()) {
+    m_editor->setPlainText(text);
+    // 可视化写回产生的格式化文本可能与磁盘原文（如压缩单行 JSON）形态不同：
+    // setPlainText 会重置修改标记，需重新置位——否则"看着变了却提示未修改"，
+    // 规范化结果永远无法持久化，文件形态在单行/多行间反复摇摆
+    m_editor->document()->setModified(true);
+  }
 }

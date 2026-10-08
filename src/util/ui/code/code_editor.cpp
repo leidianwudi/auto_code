@@ -385,10 +385,25 @@ void CodeEditor::paintEvent(QPaintEvent *event) {
     int tabW = qRound(tabStopDistance() / spaceW);
     if (tabW <= 0) tabW = 4;
 
-    // 文档缩进粒度（revision 缓存：文档变化后首帧重扫，O(文档行数)）
+    // 文档缩进粒度：防抖扫描（revision 变化只启动/重启 200ms 单发定时器）。
+    // 全文档扫描含每行字符串拷贝，键入场景每帧触发会成为卡顿源（Debug 配置的
+    // 堆分配放大尤甚）；键入期间沿用上次粒度（缩进规则在编辑中几乎不变），
+    // 停顿后一次性修正
     if (m_indentGranRev != document()->revision()) {
-      m_indentGran = IndentGuide::detectGranularity(document(), tabW, tabW);
-      m_indentGranRev = document()->revision();
+      if (!m_indentGranTimer) {
+        m_indentGranTimer = new QTimer(this);
+        m_indentGranTimer->setSingleShot(true);
+        m_indentGranTimer->setInterval(200);
+        connect(m_indentGranTimer, &QTimer::timeout, this, [this]() {
+          const qreal sw = QFontMetricsF(font()).horizontalAdvance(QLatin1Char(' '));
+          int tw = qRound(tabStopDistance() / sw);
+          if (tw <= 0) tw = 4;
+          m_indentGran = IndentGuide::detectGranularity(document(), tw, tw);
+          m_indentGranRev = document()->revision();
+          viewport()->update();
+        });
+      }
+      m_indentGranTimer->start();
     }
     const int gran = qMax(1, m_indentGran);
 

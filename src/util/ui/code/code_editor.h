@@ -31,7 +31,6 @@
 #include <QTextBlock>
 #include <QTimer>
 #include <QVector>
-
 #include <functional>
 
 #include "bracket_matcher.h"
@@ -83,7 +82,9 @@ public:
   /// 文件内容提供器类型：输入文件绝对路径，返回其实时内存内容（空=回落磁盘读取）
   using ContentProvider = std::function<QString(const QString &filePath)>;
   /// 注册全局内容提供器（由主窗口在启动时设置；未注册时回落磁盘读取）
-  static void setGlobalContentProvider(const ContentProvider &provider) { s_contentProvider = provider; }
+  static void setGlobalContentProvider(const ContentProvider &provider) {
+    s_contentProvider = provider;
+  }
   /// 取指定文件实时内容；无提供器或未打开该文件时返回空字符串
   static QString provideFileContent(const QString &filePath) {
     return s_contentProvider ? s_contentProvider(filePath) : QString();
@@ -281,12 +282,12 @@ signals:
                                 const QString &symbolName);
   void requestRenameSymbol(const QString &filePath, int line, int column,
                            const QString &name);  ///< F2 重命名符号请求（AC/TPL）
-  void requestWorkspaceSymbols();                            ///< 工作区符号搜索 (Ctrl+T)
-  void breakpointsChanged();                                 ///< 断点集合发生变化
-  void requestDebugStart();                                  ///< F5：启动调试/继续
-  void requestDebugStepOver();                               ///< F10：单步执行
-  void requestDebugStepInto();                               ///< F11：单步进入
-  void requestDebugStepOut();                                ///< Shift+F11：单步跳出
+  void requestWorkspaceSymbols();                 ///< 工作区符号搜索 (Ctrl+T)
+  void breakpointsChanged();                      ///< 断点集合发生变化
+  void requestDebugStart();                       ///< F5：启动调试/继续
+  void requestDebugStepOver();                    ///< F10：单步执行
+  void requestDebugStepInto();                    ///< F11：单步进入
+  void requestDebugStepOut();                     ///< Shift+F11：单步跳出
 
 protected:
   void resizeEvent(QResizeEvent *event) override;
@@ -316,12 +317,13 @@ private:
   int calculateNewLineIndent(const QString &linePrefix) const;
 
   // ── highlightCurrentLine 的各高亮来源（拆分为独立小函数，便于维护）──
-  void appendCurrentLineHighlight(QList<QTextEdit::ExtraSelection> &extra);   ///< 当前行背景
+  void appendCurrentLineHighlight(QList<QTextEdit::ExtraSelection> &extra);      ///< 当前行背景
   void appendRainbowBracketHighlights(QList<QTextEdit::ExtraSelection> &extra);  ///< 彩虹括号
-  void appendCursorContextHighlights(QList<QTextEdit::ExtraSelection> &extra);  ///< 模板标签 + 括号匹配
-  void appendErrorLineHighlights(QList<QTextEdit::ExtraSelection> &extra);      ///< 错误行背景
-  void appendDebugLineHighlight(QList<QTextEdit::ExtraSelection> &extra);       ///< 调试当前行
-  void appendLayerHighlights(QList<QTextEdit::ExtraSelection> &extra);          ///< 统一高亮层
+  void appendCursorContextHighlights(
+      QList<QTextEdit::ExtraSelection> &extra);                             ///< 模板标签 + 括号匹配
+  void appendErrorLineHighlights(QList<QTextEdit::ExtraSelection> &extra);  ///< 错误行背景
+  void appendDebugLineHighlight(QList<QTextEdit::ExtraSelection> &extra);   ///< 调试当前行
+  void appendLayerHighlights(QList<QTextEdit::ExtraSelection> &extra);      ///< 统一高亮层
 
   // ── 高亮层填充（由 HighlightLayer::filler 回调调用）──
   /// 依据符号名填充引用高亮选区（注释/字符串中的出现不高亮）
@@ -392,9 +394,10 @@ private:
   BracketMatcher m_bracketMatcher;    ///< 括号匹配器
   SymbolNavigator m_symbolNavigator;  ///< 符号导航器
 
-  /// 缩进参考线：文档缩进粒度缓存（逐行判定方案，按文档 revision 失效）
+  /// 缩进参考线：文档缩进粒度缓存（逐行判定方案，防抖扫描——键入期间沿用上次粒度）
   int m_indentGran = 4;
   int m_indentGranRev = -1;
+  QTimer *m_indentGranTimer = nullptr;  ///< 粒度重扫防抖（单发 200ms）
 
   // 符号表（用于补全和导航）
   QHash<QString, AcSymbolEntry> m_symbolTable;  ///< 当前文件的符号表
@@ -417,11 +420,11 @@ private:
   QSet<int> m_errorLines;
 
   // 悬停提示相关
-  QTimer *m_hoverTimer = nullptr;       ///< 悬停防抖定时器
-  QTimer *m_validationTimer = nullptr;  ///< 验证防抖定时器
-  QTimer *m_completerTimer = nullptr;   ///< 补全防抖定时器（JSON+schema 全量扫描开销大）
+  QTimer *m_hoverTimer = nullptr;         ///< 悬停防抖定时器
+  QTimer *m_validationTimer = nullptr;    ///< 验证防抖定时器
+  QTimer *m_completerTimer = nullptr;     ///< 补全防抖定时器（JSON+schema 全量扫描开销大）
   QTimer *m_refHighlightTimer = nullptr;  ///< 引用高亮重算防抖定时器
-  QString m_currentHoverSymbol;         ///< 当前悬停的符号名
+  QString m_currentHoverSymbol;           ///< 当前悬停的符号名
 
   // 查找/替换栏
   CodeFindBar *m_findBar = nullptr;  ///< 查找/替换栏控件
@@ -438,13 +441,13 @@ private:
   // 两者均以文档 revision 为首次失效依据；revision 未变时复用上次计算结果，
   // 把每次切面板对每个可见编辑器的扫描从 O(n) 降到 O(1)。
   // 光标上下文（括号配对 + 模板标签）选区缓存：按 (revision, 光标位置) 复用
-  qint64 m_cursorCtxRev = -1;  ///< 生成缓存的文档 revision（-1=未缓存）
-  int m_cursorCtxPos = -1;     ///< 生成缓存时的光标位置（-1=未缓存）
+  qint64 m_cursorCtxRev = -1;                        ///< 生成缓存的文档 revision（-1=未缓存）
+  int m_cursorCtxPos = -1;                           ///< 生成缓存时的光标位置（-1=未缓存）
   QList<QTextEdit::ExtraSelection> m_cursorCtxSels;  ///< 光标上下文选区
   // 错误行背景选区缓存：文档变化或错误集变化（置脏）时才重建
   qint64 m_errorLineRev = -1;                        ///< 生成缓存的文档 revision
   QList<QTextEdit::ExtraSelection> m_errorLineSels;  ///< 错误行背景选区
-  bool m_errorLineDirty = true;  ///< 错误集变化时置位，强制重建错误行缓存
+  bool m_errorLineDirty = true;                      ///< 错误集变化时置位，强制重建错误行缓存
   /// 主题/颜色变化时，本编辑器处于隐藏（后台标签页）被跳过重建语法高亮，
   /// 置位后待 showEvent（变为可见）时补做 reloadColors
   bool m_needsThemeReload = false;
@@ -459,15 +462,15 @@ private:
 
   // 统一行高布局（消除中英文混排时行高随内容抖动）
   FixedLineHeightLayout *m_fixedLineHeightLayout = nullptr;
-  qreal m_fixedBlockLineHeight = 0;  ///< 文本布局层统一行高（px），整篇重载后重应用依据
+  qreal m_fixedBlockLineHeight = 0;     ///< 文本布局层统一行高（px），整篇重载后重应用依据
   QTimer *m_lineHeightTimer = nullptr;  ///< 整篇重载后延后重应用块统一行高
 
   // 代码折叠（VSCode 风格）
-  QHash<int, int> m_foldRanges;   ///< 可折叠起始 block → 结束 block（含），折叠区域内的块被折叠
-  QSet<int> m_collapsedStarts;    ///< 当前处于折叠态的起始 block 号集合
-  int m_foldHoverBlock = -1;      ///< 行号区悬停的折叠起始 block（-1=无），仅供高亮
-  bool m_foldShowAll = false;     ///< 鼠标位于行号区（灰色区）：显示全部可折叠图标
-  bool m_foldValid = false;       ///< m_foldRanges 是否已随文档重建
+  QHash<int, int> m_foldRanges;  ///< 可折叠起始 block → 结束 block（含），折叠区域内的块被折叠
+  QSet<int> m_collapsedStarts;   ///< 当前处于折叠态的起始 block 号集合
+  int m_foldHoverBlock = -1;     ///< 行号区悬停的折叠起始 block（-1=无），仅供高亮
+  bool m_foldShowAll = false;    ///< 鼠标位于行号区（灰色区）：显示全部可折叠图标
+  bool m_foldValid = false;      ///< m_foldRanges 是否已随文档重建
   QTimer *m_foldRebuildTimer = nullptr;  ///< 文档变化后延后重建折叠区间
   bool m_applyingFold = false;           ///< 折叠 visible 应用中的防重入标志
 

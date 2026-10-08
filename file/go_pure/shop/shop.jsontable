@@ -1,176 +1,398 @@
 {
-    "$schema": "/crud_gin/template/tool/param.schema.json",
-    "meta": {
-        "project": "shop",
-        "db": {
-            "host": "192.168.5.103",
-            "port": 3306,
-            "user": "root",
-            "password": "123456",
-            "database": "shop"
-        },
-        "goBasePath": "D:/work/github/shop/shop_api",
-        "webBasePath": "D:/work/github/shop/shop_admin"
+  $schema: '/crud_gin/template/tool/param.schema.json',
+  meta: {
+    db: {
+      database: '',
+      host: '',
+      password: '',
+      port: 3306,
+      user: '',
     },
-    "tables": [
+    goBasePath: '',
+    project: '',
+    webBasePath: '',
+  },
+  tables: [
+    {
+      columns: [
         {
-            "tableName": "shop",
-            "modelName": "shop",
-            "tableComment": "商店",
-            "manualUpdateTime": false,
-            "selColsLike": ["desc"],
-            "selColsGap": ["create_time"],
-            "selColsSort": [["id", "DESC"]],
-            "columns": [
-                {
-                    "name": "id", "mysqlType": "int", "unsigned": true,
-                    "nullable": false, "isPrimary": true, "isAutoInc": true,
-                    "default": null, "comment": "主键",
-                    "list": true, "search": false, "form": "none", "required": false
-                },
-                {
-                    "name": "logo_img", "mysqlType": "varchar(255)",
-                    "nullable": false, "default": "", "comment": "店铺logo",
-                    "list": true, "search": false, "form": "image", "required": false
-                },
-                {
-                    "name": "user_id", "mysqlType": "int", "unsigned": true,
-                    "nullable": false, "comment": "商店所有人,user.id",
-                    "list": true, "search": true, "form": "input", "required": true
-                },
-                {
-                    "name": "level", "mysqlType": "int",
-                    "nullable": false, "comment": "星级。一共10星",
-                    "list": true, "search": false, "form": "number", "required": true
-                },
-                {
-                    "name": "create_time", "mysqlType": "datetime",
-                    "nullable": false, "comment": "创建时间",
-                    "list": true, "search": true, "form": "none", "required": false
-                },
-                {
-                    "name": "sell_count", "mysqlType": "int",
-                    "nullable": false, "default": "0", "comment": "全店总售件数",
-                    "list": true, "search": false, "form": "number", "required": false
-                },
-                {
-                    "name": "sell_money", "mysqlType": "decimal(20,2)",
-                    "nullable": false, "default": "0.00", "comment": "总营业额",
-                    "list": true, "search": false, "form": "number", "required": false
-                },
-                {
-                    "name": "dis_like", "mysqlType": "int",
-                    "nullable": false, "default": "0", "comment": "差评",
-                    "list": true, "search": false, "form": "number", "required": false
-                },
-                {
-                    "name": "like", "mysqlType": "int",
-                    "nullable": false, "default": "0", "comment": "好评",
-                    "list": true, "search": false, "form": "number", "required": false
-                },
-                {
-                    "name": "follow", "mysqlType": "int",
-                    "nullable": false, "default": "0", "comment": "关注数量",
-                    "list": true, "search": false, "form": "number", "required": false
-                },
-                {
-                    "name": "is_open", "mysqlType": "int",
-                    "nullable": false, "default": "0", "comment": "是否开店，掌柜操作",
-                    "list": true, "search": true, "form": "boolean", "required": false
-                },
-                {
-                    "name": "status", "mysqlType": "int",
-                    "nullable": false, "default": "0", "comment": "状态",
-                    "list": true, "search": true, "form": "number", "required": false
-                },
-                {
-                    "name": "enable", "mysqlType": "int",
-                    "nullable": false, "default": "1", "comment": "是否启用，管理员操作",
-                    "list": true, "search": true, "form": "boolean", "required": false
-                },
-                {
-                    "name": "desc", "mysqlType": "varchar(255)",
-                    "nullable": false, "default": "", "comment": "管理员备注",
-                    "list": false, "search": false, "form": "textarea", "required": false
-                }
-            ],
-            "indexes": [
-                { "name": "uk_user_id", "cols": ["user_id"], "unique": true }
-            ],
-            "enums": [
-                {
-                    "column": "status",
-                    "comment": "状态; 0:审核中;1:正常;2:关闭",
-                    "items": [
-                        { "key": "Auditing", "label": "审核中", "value": "0", "valueType": "number" },
-                        { "key": "Normal", "label": "正常", "value": "1", "valueType": "number" },
-                        { "key": "Closed", "label": "关闭", "value": "2", "valueType": "number" }
-                    ]
-                }
-            ],
-            "globalEnumCols": [],
-            "i18n": {
-                "table": "shop0",
-                "extKey": "ext_id",
-                "langKey": "lang",
-                "fields": ["name", "intro"],
-                "defaultLang": "zh",
-                "langFrom": "body"
-            }
+          comment: '主键',
+          form: 'none',
+          isAutoInc: true,
+          isPrimary: true,
+          list: true,
+          mysqlType: 'int',
+          name: 'id',
+          nullable: false,
+          required: false,
+          search: false,
+          unsigned: true,
         },
         {
-            "tableName": "shop0",
-            "modelName": "shop0",
-            "tableComment": "商店多语言表",
-            "manualUpdateTime": false,
-            "columns": [
-                {
-                    "name": "id", "mysqlType": "int", "unsigned": true,
-                    "nullable": false, "isPrimary": true, "isAutoInc": true,
-                    "default": null, "comment": "自增主键",
-                    "list": true, "search": false, "form": "none", "required": false
-                },
-                {
-                    "name": "ext_id", "mysqlType": "int", "unsigned": true,
-                    "nullable": false, "comment": "扩展ID，关联shop.id",
-                    "list": true, "search": true, "form": "input", "required": true
-                },
-                {
-                    "name": "lang", "mysqlType": "varchar(8)",
-                    "nullable": false, "comment": "语言编码：zh、en、ja",
-                    "list": true, "search": true, "form": "input", "required": true
-                },
-                {
-                    "name": "name", "mysqlType": "varchar(255)",
-                    "nullable": false, "default": "", "comment": "商店名称",
-                    "list": true, "search": false, "form": "input", "required": true
-                },
-                {
-                    "name": "intro", "mysqlType": "varchar(255)",
-                    "nullable": false, "default": "", "comment": "简介",
-                    "list": false, "search": false, "form": "textarea", "required": false
-                },
-                {
-                    "name": "desc", "mysqlType": "varchar(255)",
-                    "nullable": false, "default": "", "comment": "备注",
-                    "list": false, "search": false, "form": "textarea", "required": false
-                },
-                {
-                    "name": "created_at", "mysqlType": "datetime",
-                    "nullable": true, "comment": "创建时间",
-                    "list": false, "search": false, "form": "none", "required": false
-                },
-                {
-                    "name": "updated_at", "mysqlType": "datetime",
-                    "nullable": true, "comment": "更新时间",
-                    "list": false, "search": false, "form": "none", "required": false
-                }
-            ],
-            "indexes": [
-                { "name": "uk_ext_lang", "cols": ["ext_id", "lang"], "unique": true }
-            ],
-            "enums": [],
-            "globalEnumCols": []
-        }
-    ]
+          comment: '店铺logo',
+          form: 'image',
+          isAutoInc: false,
+          isPrimary: false,
+          list: true,
+          mysqlType: 'varchar(255)',
+          name: 'logo_img',
+          nullable: false,
+          required: false,
+          search: false,
+          unsigned: false,
+        },
+        {
+          comment: '商店所有人,user.id',
+          form: 'input',
+          isAutoInc: false,
+          isPrimary: false,
+          list: true,
+          mysqlType: 'int',
+          name: 'user_id',
+          nullable: false,
+          required: true,
+          search: true,
+          unsigned: true,
+        },
+        {
+          comment: '星级。一共10星',
+          form: 'number',
+          isAutoInc: false,
+          isPrimary: false,
+          list: true,
+          mysqlType: 'int',
+          name: 'level',
+          nullable: false,
+          required: true,
+          search: false,
+          unsigned: false,
+        },
+        {
+          comment: '创建时间',
+          form: 'none',
+          isAutoInc: false,
+          isPrimary: false,
+          list: true,
+          mysqlType: 'datetime',
+          name: 'create_time',
+          nullable: false,
+          required: false,
+          search: true,
+          unsigned: false,
+        },
+        {
+          comment: '全店总售件数',
+          default: '0',
+          form: 'number',
+          isAutoInc: false,
+          isPrimary: false,
+          list: true,
+          mysqlType: 'int',
+          name: 'sell_count',
+          nullable: false,
+          required: false,
+          search: false,
+          unsigned: false,
+        },
+        {
+          comment: '总营业额',
+          default: '0.00',
+          form: 'number',
+          isAutoInc: false,
+          isPrimary: false,
+          list: true,
+          mysqlType: 'decimal(20,2)',
+          name: 'sell_money',
+          nullable: false,
+          required: false,
+          search: false,
+          unsigned: false,
+        },
+        {
+          comment: '差评',
+          default: '0',
+          form: 'number',
+          isAutoInc: false,
+          isPrimary: false,
+          list: true,
+          mysqlType: 'int',
+          name: 'dis_like',
+          nullable: false,
+          required: false,
+          search: false,
+          unsigned: false,
+        },
+        {
+          comment: '好评',
+          default: '0',
+          form: 'number',
+          isAutoInc: false,
+          isPrimary: false,
+          list: true,
+          mysqlType: 'int',
+          name: 'like',
+          nullable: false,
+          required: false,
+          search: false,
+          unsigned: false,
+        },
+        {
+          comment: '关注数量',
+          default: '0',
+          form: 'number',
+          isAutoInc: false,
+          isPrimary: false,
+          list: true,
+          mysqlType: 'int',
+          name: 'follow',
+          nullable: false,
+          required: false,
+          search: false,
+          unsigned: false,
+        },
+        {
+          comment: '是否开店，掌柜操作',
+          default: '0',
+          form: 'boolean',
+          isAutoInc: false,
+          isPrimary: false,
+          list: true,
+          mysqlType: 'int',
+          name: 'is_open',
+          nullable: false,
+          required: false,
+          search: true,
+          unsigned: false,
+        },
+        {
+          comment: '状态',
+          default: '0',
+          form: 'number',
+          isAutoInc: false,
+          isPrimary: false,
+          list: true,
+          mysqlType: 'int',
+          name: 'status',
+          nullable: false,
+          required: false,
+          search: true,
+          unsigned: false,
+        },
+        {
+          comment: '是否启用，管理员操作',
+          default: '1',
+          form: 'boolean',
+          isAutoInc: false,
+          isPrimary: false,
+          list: true,
+          mysqlType: 'int',
+          name: 'enable',
+          nullable: false,
+          required: false,
+          search: true,
+          unsigned: false,
+        },
+        {
+          comment: '管理员备注',
+          form: 'textarea',
+          isAutoInc: false,
+          isPrimary: false,
+          list: false,
+          mysqlType: 'varchar(255)',
+          name: 'desc',
+          nullable: false,
+          required: false,
+          search: false,
+          unsigned: false,
+        },
+      ],
+      enums: [
+        {
+          column: 'status',
+          comment: '状态; 0:审核中;1:正常;2:关闭',
+          items: [
+            {
+              key: 'Auditing',
+              label: '审核中',
+              value: '0',
+              valueType: 'number',
+            },
+            {
+              key: 'Normal',
+              label: '正常',
+              value: '1',
+              valueType: 'number',
+            },
+            {
+              key: 'Closed',
+              label: '关闭',
+              value: '2',
+              valueType: 'number',
+            },
+          ],
+        },
+      ],
+      globalEnumCols: [],
+      i18n: {
+        defaultLang: 'zh',
+        extKey: 'ext_id',
+        fields: [
+          'name',
+          'intro',
+        ],
+        langFrom: 'body',
+        langKey: 'lang',
+        table: 'shop0',
+      },
+      indexes: [
+        {
+          cols: [
+            'user_id',
+          ],
+          name: 'uk_user_id',
+          unique: true,
+        },
+      ],
+      manualUpdateTime: false,
+      modelName: 'shop',
+      selColsGap: [
+        'create_time',
+      ],
+      selColsLike: [
+        'desc',
+      ],
+      selColsSort: [
+        [
+          'id',
+          'DESC',
+        ],
+      ],
+      tableComment: '商店',
+      tableName: 'shop',
+    },
+    {
+      columns: [
+        {
+          comment: '自增主键',
+          form: 'none',
+          isAutoInc: true,
+          isPrimary: true,
+          list: true,
+          mysqlType: 'int',
+          name: 'id',
+          nullable: false,
+          required: false,
+          search: false,
+          unsigned: true,
+        },
+        {
+          comment: '扩展ID，关联shop.id',
+          form: 'input',
+          isAutoInc: false,
+          isPrimary: false,
+          list: true,
+          mysqlType: 'int',
+          name: 'ext_id',
+          nullable: false,
+          required: true,
+          search: true,
+          unsigned: true,
+        },
+        {
+          comment: '语言编码：zh、en、ja',
+          form: 'input',
+          isAutoInc: false,
+          isPrimary: false,
+          list: true,
+          mysqlType: 'varchar(8)',
+          name: 'lang',
+          nullable: false,
+          required: true,
+          search: true,
+          unsigned: false,
+        },
+        {
+          comment: '商店名称',
+          form: 'input',
+          isAutoInc: false,
+          isPrimary: false,
+          list: true,
+          mysqlType: 'varchar(255)',
+          name: 'name',
+          nullable: false,
+          required: true,
+          search: false,
+          unsigned: false,
+        },
+        {
+          comment: '简介',
+          form: 'textarea',
+          isAutoInc: false,
+          isPrimary: false,
+          list: false,
+          mysqlType: 'varchar(255)',
+          name: 'intro',
+          nullable: false,
+          required: false,
+          search: false,
+          unsigned: false,
+        },
+        {
+          comment: '备注',
+          form: 'textarea',
+          isAutoInc: false,
+          isPrimary: false,
+          list: false,
+          mysqlType: 'varchar(255)',
+          name: 'desc',
+          nullable: false,
+          required: false,
+          search: false,
+          unsigned: false,
+        },
+        {
+          comment: '创建时间',
+          form: 'none',
+          isAutoInc: false,
+          isPrimary: false,
+          list: false,
+          mysqlType: 'datetime',
+          name: 'created_at',
+          nullable: true,
+          required: false,
+          search: false,
+          unsigned: false,
+        },
+        {
+          comment: '更新时间',
+          form: 'none',
+          isAutoInc: false,
+          isPrimary: false,
+          list: false,
+          mysqlType: 'datetime',
+          name: 'updated_at',
+          nullable: true,
+          required: false,
+          search: false,
+          unsigned: false,
+        },
+      ],
+      enums: [],
+      globalEnumCols: [],
+      indexes: [
+        {
+          cols: [
+            'ext_id',
+            'lang',
+          ],
+          name: 'uk_ext_lang',
+          unique: true,
+        },
+      ],
+      manualUpdateTime: false,
+      modelName: 'shop0',
+      tableComment: '商店多语言表',
+      tableName: 'shop0',
+    },
+  ],
 }

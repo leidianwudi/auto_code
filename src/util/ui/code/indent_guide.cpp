@@ -33,7 +33,7 @@ int IndentGuide::detectGranularity(const QTextDocument *doc, int tabWidth, int f
   int best = -1;
   for (QTextBlock b = doc->firstBlock(); b.isValid(); b = b.next()) {
     const QString t = b.text();
-    if (t.trimmed().isEmpty()) continue;
+    if (t.trimmed().isEmpty()) continue;  // 低频路径（防抖后调用），trimmed 拷贝可接受
     const int ind = lineIndentLevel(t, tabWidth);
     if (prev >= 0 && ind != prev) {
       const int d = qAbs(ind - prev);
@@ -55,7 +55,17 @@ QVector<int> IndentGuide::guideColumnsForLine(const QTextBlock &blk, int granula
   if (granularity <= 0 || !blk.isValid()) return cols;
 
   const QString text = blk.text();
-  if (!text.trimmed().isEmpty()) {
+  // 空白行判定：所有字符均为空白（手写小循环避免 trimmed() 整行拷贝；
+  // 不可用 lineIndentLevel >= length 判定——tab 折算宽大于字符数会误判）
+  bool blank = true;
+  for (int i = 0; i < text.size(); ++i) {
+    const QChar ch = text[i];
+    if (ch != QLatin1Char(' ') && ch != QLatin1Char('\t')) {
+      blank = false;
+      break;
+    }
+  }
+  if (!blank) {
     // 非空行：{0, gran, 2×gran, ... < 行缩进}——guide 在列 C 显示 ⟺ 行缩进 > C
     // （VS Code 语义：最深一条对齐父级内容列，比本行内容浅一级）
     const int ind = lineIndentLevel(text, tabWidth);
