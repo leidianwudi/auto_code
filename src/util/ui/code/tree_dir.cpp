@@ -1096,6 +1096,7 @@ QIcon TreeDir::iconForSuffix(const QString &suffix) const {
   if (suf == QStringLiteral("jsonvue")) return m_jsonVueIcon;
   if (suf == QStringLiteral("jsonsource")) return m_jsonSourceIcon;
   if (suf == QStringLiteral("jsonupload")) return m_jsonUploadIcon;
+  if (suf == QStringLiteral("jsontable")) return m_jsonTableIcon;
   return m_tplIcon;  // tpl 及未知后缀
 }
 
@@ -1106,6 +1107,7 @@ void TreeDir::refreshIcons() {
   m_jsonVueIcon = AuiIcon::createFileTypeIcon(QStringLiteral("jsonvue"));
   m_jsonSourceIcon = AuiIcon::createFileTypeIcon(QStringLiteral("jsonsource"));
   m_jsonUploadIcon = AuiIcon::createFileTypeIcon(QStringLiteral("jsonupload"));
+  m_jsonTableIcon = AuiIcon::createFileTypeIcon(QStringLiteral("jsontable"));
   m_tplIcon = AuiIcon::createFileTypeIcon(QStringLiteral("tpl"));
   m_folderIcon = AuiIcon::createFolderIcon(false);
   m_folderOpenIcon = AuiIcon::createFolderIcon(true);

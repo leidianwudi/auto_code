@@ -9,8 +9,6 @@
 #include <QFileInfo>
 #include <QRegularExpression>
 #include <QScrollBar>
-
-#include "src/engine/ac_language.h"
 #include <QTextStream>
 
 #include "debug_controller.h"
@@ -22,6 +20,7 @@
 #include "src/engine/schema_validator.h"
 #include "src/ui/json_global_enum/json_global_enum_widget.h"
 #include "src/ui/json_source/json_source_widget.h"
+#include "src/ui/json_source/json_table_widget.h"
 #include "src/ui/json_source/json_upload_widget.h"
 #include "src/ui/json_vue/json_vue_editor.h"
 #include "src/ui/json_vue/json_vue_widget.h"
@@ -91,11 +90,12 @@ QWidget *MainDevMgr::createEditorTab(const QString &filePath, const QString &con
   CodeEditor *editor = nullptr;
   QWidget *tabWidget = nullptr;
 
-  // .jsonvue / .jsonsource / .jsonupload / .jsonglobalenum 文件使用可视化包装器
+  // .jsonvue / .jsonsource / .jsonupload / .jsontable / .jsonglobalenum 文件使用可视化包装器
   // （CodeEditor + 可视化编辑器）
   const bool isJsonVue = filePath.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive);
   const bool isJsonSource = filePath.endsWith(AcFileSuffix::kJsonsource, Qt::CaseInsensitive);
   const bool isJsonUpload = filePath.endsWith(AcFileSuffix::kJsonupload, Qt::CaseInsensitive);
+  const bool isJsonTable = filePath.endsWith(AcFileSuffix::kJsontable, Qt::CaseInsensitive);
   const bool isJsonGlobalEnum =
       filePath.endsWith(AcFileSuffix::kJsonglobalenum, Qt::CaseInsensitive);
   const QString acPath = resolveHttpConfigAcPath(filePath);
@@ -136,6 +136,15 @@ QWidget *MainDevMgr::createEditorTab(const QString &filePath, const QString &con
     // 注：上传预设无"测试请求"按钮，不需要 HTTP 配置
     // 可视化按钮生效时，自动以可视化方式打开
     if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) juw->switchToVisual();
+  } else if (isJsonTable) {
+    auto *jtw = new JsonTableWidget;
+    editor = jtw->codeEditor();
+    editor->setPlainText(content);
+    jtw->setPreservedSource(content);
+    tabWidget = jtw;
+    // 注：表结构配置无"测试请求"按钮，不需要 HTTP 配置
+    // 可视化按钮生效时，自动以可视化方式打开
+    if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) jtw->switchToVisual();
   } else if (isJsonGlobalEnum) {
     auto *gew = new JsonGlobalEnumWidget;
     editor = gew->codeEditor();
@@ -233,10 +242,14 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
   // 必须先设置 objectName（文件路径），再触发验证；
   // 否则验证时 m_filePath 为空，import 解析被跳过，导致误报 "class X has no method" 类型错误
   editor->setObjectName(filePath);
-  // 按文件类型设置验证防抖：.ac 验证是引擎级全文解析 + import 链展开，
-  // 逐键即时解析大文件会卡（用 300ms）；json 等验证 <1ms 保持 0ms 即时反馈
+  // 按文件类型/大小设置验证防抖：.ac 验证是引擎级全文解析 + import 链展开，
+  // 逐键即时解析大文件会卡（用 300ms）；json 族验证本身很快，但超大文档
+  // （如压缩单行 JSON，数百 KB、数千节点）逐键全量 schema 校验仍有可感知卡顿——
+  // 超过 100KB 时自适应降为 300ms 防抖
   editor->setValidationDebounce(
-      filePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive) ? 300 : 0);
+      filePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive) || content.size() > 100 * 1024
+          ? 300
+          : 0);
   // 一次性连接编辑器全部信号（不再随焦点/tab 切换重复连接/断开，避免累积重复触发）
   connectEditorSignals(editor);
   // 验证结果聚合到「问题」面板：每个编辑器永久连接（connectEditor 只连接当前编辑器，

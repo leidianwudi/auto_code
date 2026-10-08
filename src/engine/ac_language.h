@@ -213,6 +213,10 @@ inline constexpr const char *kTableSchema = "tableSchema";
 inline constexpr const char *kTableInfo = "tableInfo";
 /// @brief 执行 SQL：db.query({sql: "SELECT * FROM t"})
 inline constexpr const char *kQuery = "query";
+/// @brief 列出当前库全部基表：db.listTables() → [{name, comment}, ...]
+inline constexpr const char *kListTables = "listTables";
+/// @brief 执行 DDL/写操作：db.exec({sql: "..."}) → 受影响行数
+inline constexpr const char *kExec = "exec";
 /// @brief 断开连接：db.disconnect()
 inline constexpr const char *kDisconnect = "disconnect";
 
@@ -237,6 +241,8 @@ inline constexpr const char *kColComment = "comment";
 /// @brief tableInfo 返回的表信息 JSON 键名
 inline constexpr const char *kTblComment = "comment";
 inline constexpr const char *kTblEngine = "engine";
+/// @brief listTables 返回的表信息 JSON 键名（comment 复用 kTblComment）
+inline constexpr const char *kTblName = "name";
 
 /// @brief 数据库连接配置 — 对应 new DB({host, port, user, password, database})
 struct DbConfig {
@@ -391,10 +397,12 @@ inline constexpr const char *kSchemaJson = ".schema.json";
 inline constexpr const char *kJsonvue = ".jsonvue";
 inline constexpr const char *kJsonsource = ".jsonsource";
 inline constexpr const char *kJsonupload = ".jsonupload";
+/// 统一 API 配置（表结构 + 字段前端角色，双端代码生成与表设计器的事实源）
+inline constexpr const char *kJsontable = ".jsontable";
 /// 全局枚举配置（跨表/跨项目共用的枚举定义，生成公共枚举文件与前端静态数据源）
 inline constexpr const char *kJsonglobalenum = ".jsonglobalenum";
 /// JSON 族后缀清单（.json 及其派生配置类型）；新增 json 族类型只需在此追加，
 /// 消费方（目录树可见性 isJsonLike / nameFilters 等）自动跟随
-inline constexpr const char *const kJsonFamily[] = {kJson, kJsonvue, kJsonsource, kJsonupload,
-                                                    kJsonglobalenum};
+inline constexpr const char *const kJsonFamily[] = {kJson,       kJsonvue,        kJsonsource,
+                                                    kJsonupload, kJsonglobalenum, kJsontable};
 }  // namespace AcFileSuffix

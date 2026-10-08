@@ -7,6 +7,7 @@
 
 #include "json_upload_editor.h"
 #include "src/util/ui/code/code_editor.h"
+#include "src/util/ui/code/format_code.h"
 
 // ════════════════════════════════════════════════════════════
 //  构造
@@ -40,7 +41,10 @@ void JsonUploadWidget::syncCodeToVisualImpl() {
 }
 
 void JsonUploadWidget::syncVisualToCodeImpl() {
-  setPlainTextIfChanged(JsonUploadConfig::toJsonString(m_visual->collectMergedObject()));
+  // 格式化写回（JSON5 风格）：紧凑单行会让代码视图退化为超长行（缩进竖线错位/重高亮卡顿）
+  const QString jsonStr = FormatCode::format(
+      JsonUploadConfig::toJsonString(m_visual->collectMergedObject()), FormatCode::FormatJson5);
+  setPlainTextIfChanged(jsonStr);
 }
 
 // ════════════════════════════════════════════════════════════

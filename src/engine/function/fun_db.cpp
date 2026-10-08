@@ -49,6 +49,8 @@ void FunDb::init() {
                                           {QString::fromLatin1(AcDB::kTableSchema), tableSchema},
                                           {QString::fromLatin1(AcDB::kTableInfo), tableInfo},
                                           {QString::fromLatin1(AcDB::kQuery), query},
+                                          {QString::fromLatin1(AcDB::kListTables), listTables},
+                                          {QString::fromLatin1(AcDB::kExec), exec},
                                           {QString::fromLatin1(AcDB::kDisconnect), disconnect},
                                           {QString::fromLatin1(AcKeyword::kDispose), disconnect},
                                       });
@@ -354,4 +356,79 @@ accore::AcJsonValue FunDb::query(const accore::AcJsonValue &thisObj,
 
   mysql_free_result(result);
   return rows;
+}
+
+// listTables — 列出当前库全部基表（INFORMATION_SCHEMA，含表注释）
+accore::AcJsonValue FunDb::listTables(const accore::AcJsonValue &thisObj,
+                                      const accore::AcJsonValue &args) {
+  if (!thisObj.isObject()) {
+    FunMgr::setError(QStringLiteral("DB::listTables() requires a DB instance"));
+    return accore::AcJsonValue();
+  }
+
+  MYSQL *conn = getConnection(thisObj);
+  if (!conn) {
+    FunMgr::setError(QStringLiteral("DB::listTables() not connected, call new DB() first"));
+    return accore::AcJsonValue();
+  }
+
+  // 只列基表（排除视图），注释一并带出供表设计器展示
+  const QString sql = QStringLiteral(
+      "SELECT TABLE_NAME, TABLE_COMMENT FROM INFORMATION_SCHEMA.TABLES "
+      "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME");
+
+  if (mysql_query(conn, sql.toUtf8().constData()) != 0) {
+    FunMgr::setError(
+        QStringLiteral("DB::listTables() failed: %1").arg(QString::fromUtf8(mysql_error(conn))));
+    return accore::AcJsonValue();
+  }
+
+  MYSQL_RES *result = mysql_store_result(conn);
+  if (!result) {
+    return accore::AcJsonValue::makeArray();
+  }
+
+  accore::AcJsonValue rows = accore::AcJsonValue::makeArray();
+  MYSQL_ROW row;
+  while ((row = mysql_fetch_row(result))) {
+    accore::AcJsonValue tbl = accore::AcJsonValue::makeObject();
+    tbl.set(QString::fromLatin1(AcDB::kTblName),
+            accore::AcJsonValue(row[0] ? QString::fromUtf8(row[0]) : QString()));
+    tbl.set(QString::fromLatin1(AcDB::kTblComment),
+            accore::AcJsonValue(row[1] ? QString::fromUtf8(row[1]) : QString()));
+    rows.append(tbl);
+  }
+
+  mysql_free_result(result);
+  return rows;
+}
+
+// exec — 执行 DDL / 写操作 SQL，返回受影响行数
+accore::AcJsonValue FunDb::exec(const accore::AcJsonValue &thisObj,
+                                const accore::AcJsonValue &args) {
+  if (!thisObj.isObject() || args.size() == 0 || !args.at(0).isObject()) {
+    FunMgr::setError(QStringLiteral("DB::exec() requires a DB instance and params object"));
+    return accore::AcJsonValue();
+  }
+
+  MYSQL *conn = getConnection(thisObj);
+  if (!conn) {
+    FunMgr::setError(QStringLiteral("DB::exec() not connected, call new DB() first"));
+    return accore::AcJsonValue();
+  }
+
+  const QString sql = args.at(0).value(QString::fromLatin1(AcDB::kSql)).toString();
+  if (sql.isEmpty()) {
+    FunMgr::setError(QStringLiteral("DB::exec() requires 'sql' in params"));
+    return accore::AcJsonValue();
+  }
+
+  if (mysql_query(conn, sql.toUtf8().constData()) != 0) {
+    FunMgr::setError(
+        QStringLiteral("DB::exec() failed: %1").arg(QString::fromUtf8(mysql_error(conn))));
+    return accore::AcJsonValue();
+  }
+
+  // DDL 的 affected_rows 恒为 0，写操作返回实际行数；单次仅一条语句（不开 MULTI_STATEMENTS）
+  return accore::AcJsonValue(static_cast<double>(mysql_affected_rows(conn)));
 }

@@ -323,6 +323,14 @@ qt_add_executable(auto_code
     src/ui/json_source/json_upload_editor.cpp
     src/ui/json_source/json_upload_widget.h
     src/ui/json_source/json_upload_widget.cpp
+    src/ui/json_source/json_table_model.h
+    src/ui/json_source/json_table_model.cpp
+    src/ui/json_source/json_table_dialog.h
+    src/ui/json_source/json_table_dialog.cpp
+    src/ui/json_source/json_table_editor.h
+    src/ui/json_source/json_table_editor.cpp
+    src/ui/json_source/json_table_widget.h
+    src/ui/json_source/json_table_widget.cpp
     src/ui/json_global_enum/json_global_enum_model.h
     src/ui/json_global_enum/json_global_enum_model.cpp
     src/ui/json_global_enum/json_global_enum_dialog.h
@@ -446,6 +454,8 @@ add_executable(auto_code_tests EXCLUDE_FROM_ALL
     tests/test_golden_script.cpp
     # JSON 上传模型测试所需（UI 层纯模型文件，测试直接编译）
     src/ui/json_source/json_upload_model.cpp
+    # JSON 表结构模型测试所需（UI 层纯模型文件，测试直接编译）
+    src/ui/json_source/json_table_model.cpp
     # JSON/JSON5 格式化测试所需（UI 层纯 QtCore 工具，测试直接编译）
     src/util/ui/code/format_code.cpp
 )

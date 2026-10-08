@@ -44,10 +44,12 @@
 
 #pragma once
 
+#include <QDateTime>
 #include <QHash>
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QMap>
+#include <QMutex>
 #include <QPair>
 #include <QString>
 #include <QStringList>
@@ -225,4 +227,15 @@ private:
 
   QMap<QString, ClassDef> m_classes;
   QString m_rootClass;  // 根入口类名
+
+  /// 进程级解析缓存：实时校验（每键触发）都会新建 SchemaValidator 并 load()，
+  /// 读盘 + 重新解析 O(schema) 是大 schema 文件打字卡顿的来源。
+  /// 以文件 mtime 做失效键：schema 被外部修改后自动重新加载。
+  struct CachedSchema {
+    QMap<QString, ClassDef> classes;
+    QString rootClass;
+    QDateTime mtime;
+  };
+  static QMutex s_cacheMutex;
+  static QHash<QString, CachedSchema> s_cache;
 };

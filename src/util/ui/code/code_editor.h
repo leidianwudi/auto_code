@@ -390,8 +390,11 @@ private:
 
   // 专职模块（组合模式）
   BracketMatcher m_bracketMatcher;    ///< 括号匹配器
-  IndentGuide m_indentGuide;          ///< 缩进参考线
   SymbolNavigator m_symbolNavigator;  ///< 符号导航器
+
+  /// 缩进参考线：文档缩进粒度缓存（逐行判定方案，按文档 revision 失效）
+  int m_indentGran = 4;
+  int m_indentGranRev = -1;
 
   // 符号表（用于补全和导航）
   QHash<QString, AcSymbolEntry> m_symbolTable;  ///< 当前文件的符号表

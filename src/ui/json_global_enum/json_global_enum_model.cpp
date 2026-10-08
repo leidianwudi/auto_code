@@ -8,6 +8,8 @@
 #include <QJsonDocument>
 #include <QJsonParseError>
 
+#include "src/util/common/util_json.h"
+
 // ════════════════════════════════════════════════════════════
 //  JsonGlobalEnumOption
 // ════════════════════════════════════════════════════════════
@@ -99,8 +101,10 @@ JsonGlobalEnumConfig JsonGlobalEnumConfig::fromJson(const QJsonObject &obj) {
 }
 
 JsonGlobalEnumConfig JsonGlobalEnumConfig::fromJsonString(const QString &jsonStr) {
+  // 必须用 JSON5 兼容解析（UtilJson）：可视化写回/手写的 .jsonglobalenum 含无引号键、
+  // 单引号字符串、尾逗号，严格 QJsonDocument 会解析失败导致有数据的文件显示为空
   QJsonParseError perr;
-  QJsonDocument doc = QJsonDocument::fromJson(jsonStr.toUtf8(), &perr);
+  QJsonDocument doc = UtilJson::fromJson(jsonStr, &perr);
   if (perr.error != QJsonParseError::NoError || !doc.isObject()) {
     return JsonGlobalEnumConfig();
   }

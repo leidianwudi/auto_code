@@ -1,61 +1,60 @@
 /**
  * @file indent_guide.h
- * @brief 缩进参考线模块（VS Code 风格）
+ * @brief 缩进参考线模块（VS Code 逐行判定方案）
  *
- * 基于 VS Code 的 IndentRange 栈扫描算法，
- * 通过缩进层级变化确定每条参考线的起止行，
- * 支持当前行高亮和文档版本缓存。
- *
- * 职责分离：
- * - compute(): 纯数据计算，不依赖 Qt 控件
- * - 绘制由 CodeEditor 在 paintEvent 中完成
- *   （因为 blockBoundingGeometry/contentOffset 是 protected）
+ * 架构（参照 VS Code indentation guides）：
+ * - 不做 range 闭包/栈扫描——每行独立判定其 guide 列集合，从根源消除
+ *   "区间断裂/超长/闭合行缺口"类 bug（旧栈扫描方案的边界条件无底洞）
+ * - guide 列 C = L × granularity（L=1,2,...），在行 i 显示 ⟺ 行有效缩进 ≥ C
+ * - 空白行继承前后最近非空行缩进的较小值（上下文延续）
+ * - 粒度从文档相邻非空行缩进差的最小正值自动推断（2/4 空格等距缩进均适配）
+ * - X 坐标由调用方从各行 QTextLayout::cursorToX 取（渲染事实源，
+ *   字体/字号/缩放变化自动正确，严禁"空格宽 × 列数"估算）
  */
 
 #pragma once
 
+#include <QTextBlock>
 #include <QVector>
+
 
 /**
  * @class IndentGuide
- * @brief 缩进参考线计算模块
- *
- * 采用 VS Code 的 computeIndentRanges 栈扫描算法：
- * - 逐行计算缩进层级
- * - 缩进增加时入栈，减少时弹出形成 IndentRange
- * - 结果缓存，文档不变时直接复用
+ * @brief 缩进参考线计算（纯静态工具，无状态）
  */
 class IndentGuide {
 public:
-  /// 一条缩进参考线的数据
-  struct IndentRange {
-    int startLine;  ///< 起始行号（1-based）
-    int endLine;    ///< 结束行号（1-based，含）
-    int indent;     ///< 缩进空格数
-  };
-
-  IndentGuide() = default;
-
-  /**
-   * @brief 计算缩进参考线数据（带缓存）
-   * @param text 文档文本内容
-   * @param revision 文档版本号（用于缓存失效检测）
-   * @param tabWidth 一个 tab 对应的空格数
-   */
-  void compute(const QString &text, int revision, int tabWidth);
-
-  /// 获取计算结果
-  const QVector<IndentRange> &ranges() const { return m_ranges; }
-
   /**
    * @brief 计算单行的缩进空格数
    * @param line 行文本内容
-   * @param tabWidth tab 对应空格数
-   * @return 缩进空格数
+   * @param tabWidth tab 展开的空格数
+   * @return 前导空白宽度（空格数；tab 按展开宽折算）
    */
   static int lineIndentLevel(const QString &line, int tabWidth);
 
-private:
-  QVector<IndentRange> m_ranges;  ///< 缩进参考线数据
-  int m_cacheRevision = -1;       ///< 缓存对应的文档版本号
+  /**
+   * @brief 检测文档的缩进粒度
+   *
+   * 取相邻非空行缩进差的最小正值（等距缩进文档即为每级缩进宽）；
+   * 无差值（单行/全同缩进）时返回 fallback。
+   *
+   * @param doc 文档
+   * @param tabWidth tab 展开空格数（缩进计算用）
+   * @param fallback 推断失败时的兜底粒度
+   * @return 缩进粒度（≥1）
+   */
+  static int detectGranularity(const QTextDocument *doc, int tabWidth, int fallback);
+
+  /**
+   * @brief 计算单个块的 guide 列集合（块内列号，0-based 字符位置）
+   *
+   * 规则：非空行返回 {gran, 2×gran, ... ≤ 行缩进}；
+   * 空白行继承前后最近非空行缩进的较小值后再展开。
+   *
+   * @param blk 目标块
+   * @param granularity 缩进粒度
+   * @param tabWidth tab 展开空格数
+   * @return guide 列号数组（升序）；调用方用各行 QTextLayout::cursorToX(列) 取像素
+   */
+  static QVector<int> guideColumnsForLine(const QTextBlock &blk, int granularity, int tabWidth);
 };

@@ -5,6 +5,8 @@
 
 #include "schema_validator.h"
 
+#include <QDir>
+#include <QFileInfo>
 #include <QSet>
 
 #include "src/core/json/ac_json_value.h"
@@ -38,7 +40,20 @@ inline bool isMetaKey(const QString &key) { return key.startsWith(QLatin1Char('$
 }  // namespace
 
 // load — 加载 schema 定义文件（支持新格式 root/definitions 与旧格式类名）
+// 命中进程级缓存（mtime 未变）时直接拷贝类定义表（QMap COW，O(1)），
+// 跳过读盘与解析——实时校验每键触发，缓存消除大 schema 的打字卡顿。
 bool SchemaValidator::load(const QString &filePath) {
+  const QDateTime mtime = QFileInfo(filePath).lastModified();
+  {
+    QMutexLocker lock(&s_cacheMutex);
+    const auto it = s_cache.constFind(filePath);
+    if (it != s_cache.constEnd() && it->mtime == mtime) {
+      m_classes = it->classes;
+      m_rootClass = it->rootClass;
+      return true;
+    }
+  }
+
   // 直接用 accore 键保序解析器读取 schema（原生支持 JSON5：注释/无引号键/单引号/尾逗号）：
   // 类与属性的定义顺序即解析顺序，无需再从文本单独扫描声明序（原 KeyOrderScanner 已删）
   const QString raw = UtilJson::readTextFile(filePath);
@@ -61,18 +76,27 @@ bool SchemaValidator::load(const QString &filePath) {
       m_classes[m.key] = def;
     }
     if (m_rootClass.isEmpty() && !m_classes.isEmpty()) m_rootClass = m_classes.begin().key();
-    return true;
+  } else {
+    // ── 旧格式：根对象 key 为类名 ──
+    for (const auto &m : root.members()) {
+      ClassDef def;
+      parseClassDef(m.value, def);
+      m_classes[m.key] = def;
+    }
+    if (!m_classes.isEmpty()) m_rootClass = m_classes.begin().key();
   }
 
-  // ── 旧格式：根对象 key 为类名 ──
-  for (const auto &m : root.members()) {
-    ClassDef def;
-    parseClassDef(m.value, def);
-    m_classes[m.key] = def;
+  // 解析成功后写入缓存（失败不缓存，schema 修复后可重试）
+  {
+    QMutexLocker lock(&s_cacheMutex);
+    s_cache.insert(filePath, {m_classes, m_rootClass, mtime});
   }
-  if (!m_classes.isEmpty()) m_rootClass = m_classes.begin().key();
   return true;
 }
+
+// 静态成员定义：schema 解析缓存（后台校验线程与主线程并发访问，互斥保护）
+QMutex SchemaValidator::s_cacheMutex;
+QHash<QString, SchemaValidator::CachedSchema> SchemaValidator::s_cache;
 
 // 解析单个类的定义（properties / required / additionalProperties）
 // 属性表按 schema 声明顺序直填（accore 解析保序）

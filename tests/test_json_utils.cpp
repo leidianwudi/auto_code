@@ -12,6 +12,7 @@
  */
 
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -21,10 +22,12 @@
 
 #include "src/engine/schema_validator.h"
 #include "src/ui/json_source/json_source_finder.h"
+#include "src/ui/json_source/json_table_model.h"
 #include "src/ui/json_source/json_upload_model.h"
 #include "src/util/common/path_resolver.h"
 #include "src/util/common/util_json.h"
 #include "src/util/ui/code/format_code.h"
+
 
 static int g_total = 0;
 static int g_failed = 0;
@@ -389,6 +392,241 @@ static void testFormatCodeJsonRoundTrip() {
   CHECK(arrDoc.array().size() == 2);
 }
 
+/// .jsontable 作用域查找：与 jsonsource/jsonupload 共用实现，验证后缀参数化后行为一致
+static void testProjectScopedJsontableFinder() {
+  const QString fileRoot =
+      QDir::cleanPath(QStringLiteral(PROJECT_SOURCE_DIR) + QStringLiteral("/file"));
+
+  // 构造临时项目：file/__test_proj__/{project.acproj, api/a.jsontable, sub/b.jsontable}
+  const QString proj = fileRoot + QStringLiteral("/__test_proj__");
+  QDir().mkpath(proj + QStringLiteral("/api"));
+  QDir().mkpath(proj + QStringLiteral("/sub"));
+  QFile marker(proj + QStringLiteral("/project.acproj"));
+  CHECK(marker.open(QIODevice::WriteOnly | QIODevice::Text));
+  marker.write("{}");
+  marker.close();
+  QFile f1(proj + QStringLiteral("/api/a.jsontable"));
+  f1.open(QIODevice::WriteOnly | QIODevice::Text);
+  f1.close();
+  QFile f2(proj + QStringLiteral("/sub/b.jsontable"));
+  f2.open(QIODevice::WriteOnly | QIODevice::Text);
+  f2.close();
+
+  // 1) 项目作用域：只收集该项目根下的 .jsontable
+  const QStringList scoped = findJsontableFiles(proj + QStringLiteral("/sub"));
+  CHECK(scoped.size() == 2);
+  CHECK(scoped.contains(QDir::cleanPath(proj + QStringLiteral("/api/a.jsontable"))));
+  CHECK(scoped.contains(QDir::cleanPath(proj + QStringLiteral("/sub/b.jsontable"))));
+
+  // 2) 查找结果互不混入：jsonsource 查找不含 .jsontable 文件
+  const QStringList srcScoped = findJsonsourceFiles(proj + QStringLiteral("/sub"));
+  CHECK(!srcScoped.contains(QDir::cleanPath(proj + QStringLiteral("/api/a.jsontable"))));
+
+  // 3) 无标记目录（file/ 根未设项目时）→ 回退全局：能找到临时项目的 .jsontable
+  if (!PathResolver::isProjectRoot(fileRoot)) {
+    const QStringList all = findJsontableFiles(fileRoot + QStringLiteral("/news_admin"));
+    CHECK(all.contains(QDir::cleanPath(proj + QStringLiteral("/api/a.jsontable"))));
+  }
+
+  // 清理临时项目目录
+  QDir(proj).removeRecursively();
+}
+
+/// JsonTableConfig 序列化往返：逐字段保真 + 未知键（i18n / meta 未知键）不丢失
+static void testJsonTableConfigRoundTrip() {
+  // 构造 meta + 2 张表（覆盖主键/自增/unsigned/nullable/默认值/前端角色/唯一索引）
+  JsonTableConfig cfg;
+  cfg.metaProject = QStringLiteral("shop");
+  cfg.dbHost = QStringLiteral("127.0.0.1");
+  cfg.dbPort = 3307;
+  cfg.dbUser = QStringLiteral("root");
+  cfg.dbPassword = QStringLiteral("secret");
+  cfg.dbDatabase = QStringLiteral("shop_db");
+  cfg.goBasePath = QStringLiteral("D:/work/github/shop/shop_api");
+  cfg.webBasePath = QStringLiteral("D:/work/github/shop/shop_admin");
+
+  JsonTableTable t1;
+  t1.tableName = QStringLiteral("shop");
+  t1.modelName = QStringLiteral("shop");
+  t1.tableComment = QStringLiteral("商品表");
+  t1.manualUpdateTime = true;
+
+  JsonTableColumn id;
+  id.name = QStringLiteral("id");
+  id.mysqlType = QStringLiteral("bigint");
+  id.isUnsigned = true;
+  id.isPrimary = true;
+  id.isAutoInc = true;
+  id.comment = QStringLiteral("主键");
+  id.form = QStringLiteral("none");
+  t1.columns.append(id);
+
+  JsonTableColumn name;
+  name.name = QStringLiteral("name");
+  name.mysqlType = QStringLiteral("varchar(64)");
+  name.nullable = true;  // 边界：nullable/unsigned 与主键列取反
+  name.comment = QStringLiteral("商品名");
+  name.search = true;
+  name.required = true;
+  t1.columns.append(name);
+
+  JsonTableColumn price;
+  price.name = QStringLiteral("price");
+  price.mysqlType = QStringLiteral("decimal(10,2)");
+  price.isUnsigned = true;
+  price.defaultValue = QStringLiteral("0.00");
+  price.form = QStringLiteral("number");
+  t1.columns.append(price);
+
+  JsonTableIndex ukName;
+  ukName.name = QStringLiteral("uk_name");
+  ukName.cols = QStringList{QStringLiteral("name")};
+  ukName.unique = true;
+  t1.indexes.append(ukName);
+  cfg.tables.append(t1);
+
+  JsonTableTable t2;
+  t2.tableName = QStringLiteral("category");
+  t2.modelName = QStringLiteral("category");
+  JsonTableColumn cid;
+  cid.name = QStringLiteral("id");
+  cid.mysqlType = QStringLiteral("int");
+  cid.isPrimary = true;
+  t2.columns.append(cid);
+  JsonTableColumn cname;
+  cname.name = QStringLiteral("title");
+  cname.list = false;  // 边界：前端角色翻转
+  t2.columns.append(cname);
+  cfg.tables.append(t2);
+
+  const QString jsonStr = cfg.toJsonString();
+  const JsonTableConfig back = JsonTableConfig::fromJsonString(jsonStr);
+
+  CHECK(back.metaProject == QStringLiteral("shop"));
+  CHECK(back.dbHost == QStringLiteral("127.0.0.1"));
+  CHECK(back.dbPort == 3307);
+  CHECK(back.dbUser == QStringLiteral("root"));
+  CHECK(back.dbPassword == QStringLiteral("secret"));
+  CHECK(back.dbDatabase == QStringLiteral("shop_db"));
+  CHECK(back.goBasePath == QStringLiteral("D:/work/github/shop/shop_api"));
+  CHECK(back.webBasePath == QStringLiteral("D:/work/github/shop/shop_admin"));
+  CHECK(back.tables.size() == 2);
+
+  // 表 1：逐字段保真（operator== 覆盖全部列字段）
+  const JsonTableTable &r1 = back.tables[0];
+  CHECK(r1.tableName == QStringLiteral("shop"));
+  CHECK(r1.modelName == QStringLiteral("shop"));
+  CHECK(r1.tableComment == QStringLiteral("商品表"));
+  CHECK(r1.manualUpdateTime);
+  CHECK(r1.columns.size() == 3);
+  CHECK(r1.columns[0] == id);
+  CHECK(r1.columns[1] == name);
+  CHECK(r1.columns[1].defaultValue.isEmpty());  // 边界：空 default 往返后仍为空（无默认值）
+  CHECK(r1.columns[2] == price);
+  CHECK(r1.indexes.size() == 1);
+  CHECK(r1.indexes[0].name == QStringLiteral("uk_name"));
+  CHECK(r1.indexes[0].cols == QStringList{QStringLiteral("name")});
+  CHECK(r1.indexes[0].unique);
+
+  // 列顺序保持（建表顺序语义）
+  CHECK(r1.columns[0].name == QStringLiteral("id"));
+  CHECK(r1.columns[1].name == QStringLiteral("name"));
+  CHECK(r1.columns[2].name == QStringLiteral("price"));
+
+  // 表 2：list=false 翻转保持，其余走默认值
+  const JsonTableTable &r2 = back.tables[1];
+  CHECK(r2.tableName == QStringLiteral("category"));
+  CHECK(r2.columns.size() == 2);
+  CHECK(r2.columns[1].list == false);
+  CHECK(r2.columns[1].search == false);
+  CHECK(r2.columns[1].form == QStringLiteral("input"));
+  CHECK(r2.indexes.isEmpty());
+
+  // 未知键保真：表级 i18n 进阶节点 + meta 未知键，往返后原样写回
+  QJsonObject raw = cfg.toJsonObject();
+  QJsonObject meta = raw.value(QStringLiteral("meta")).toObject();
+  meta.insert(QStringLiteral("customFutureKey"), QStringLiteral("kept"));
+  raw[QStringLiteral("meta")] = meta;
+  QJsonObject t1Obj = raw.value(QStringLiteral("tables")).toArray().at(0).toObject();
+  t1Obj.insert(QStringLiteral("i18n"),
+               QJsonObject{{QStringLiteral("table"), QStringLiteral("shop0")},
+                           {QStringLiteral("extKey"), QStringLiteral("ext_id")}});
+  QJsonArray arr = raw.value(QStringLiteral("tables")).toArray();
+  arr[0] = t1Obj;
+  raw[QStringLiteral("tables")] = arr;
+  const JsonTableConfig back2 = JsonTableConfig::fromJsonString(JsonTableConfig::toJsonString(raw));
+  CHECK(back2.tables.size() == 2);
+  CHECK(back2.tables[0].tableName == QStringLiteral("shop"));  // 已知字段正常解析
+  const QJsonObject i18n = back2.tables[0].extra.value(QStringLiteral("i18n")).toObject();
+  CHECK(i18n.value(QStringLiteral("table")).toString() == QStringLiteral("shop0"));
+  CHECK(i18n.value(QStringLiteral("extKey")).toString() == QStringLiteral("ext_id"));
+  CHECK(back2.extra.value(QStringLiteral("customFutureKey")).toString() == QStringLiteral("kept"));
+
+  // 边界：db 缺省 port → 默认 3306；列 default 为 null/数字字面量的兼容
+  const JsonTableConfig minimal = JsonTableConfig::fromJsonString(
+      QStringLiteral("{\"meta\":{\"project\":\"p\",\"db\":{\"host\":\"h\"}},"
+                     "\"tables\":[{\"tableName\":\"t\",\"columns\":["
+                     "{\"name\":\"c\",\"default\":null,\"mysqlType\":\"int\"},"
+                     "{\"name\":\"n\",\"default\":0}]}]}"));
+  CHECK(minimal.dbPort == 3306);
+  CHECK(minimal.tables.size() == 1);
+  CHECK(minimal.tables[0].columns[0].defaultValue.isEmpty());  // null → 无默认值
+  CHECK(minimal.tables[0].columns[0].list);                    // 缺省 true
+  CHECK(minimal.tables[0].columns[0].form == QStringLiteral("input"));
+  CHECK(minimal.tables[0].columns[1].defaultValue == QStringLiteral("0"));  // 数字默认值显式转串
+}
+
+/// 性能探针（诊断 .jsontable 编辑卡顿）：对真实 shop.jsontable + 其 schema，
+/// 分别计时 load / validateDocument / completions 的批量耗时，
+/// 输出每次操作的平均毫秒数——定位"每键全量重验"卡顿的真实热点。
+static void testSchemaValidatePerfProbe() {
+  const QString jsonPath = QDir::cleanPath(QStringLiteral(PROJECT_SOURCE_DIR) +
+                                           QStringLiteral("/file/go_pure/shop/shop.jsontable"));
+  const QString schemaPath =
+      QDir::cleanPath(QStringLiteral(PROJECT_SOURCE_DIR) +
+                      QStringLiteral("/file/crud_gin/template/tool/param.schema.json"));
+  QFile f(jsonPath);
+  if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    std::printf("[perf-probe] shop.jsontable 不存在，跳过\n");
+    return;
+  }
+  const QString text = QString::fromUtf8(f.readAll());
+  f.close();
+
+  QElapsedTimer timer;
+  // 1) load（缓存命中路径，模拟每键校验）
+  timer.start();
+  for (int i = 0; i < 200; ++i) {
+    SchemaValidator v;
+    if (!v.load(schemaPath)) {
+      std::printf("[perf-probe] schema load 失败\n");
+      return;
+    }
+  }
+  std::printf("[perf-probe] load x200: %lld ms（平均 %.3f ms/次）\n", timer.elapsed(),
+              timer.elapsed() / 200.0);
+
+  // 2) validateDocument（模拟每键全量校验）
+  SchemaValidator v;
+  v.load(schemaPath);
+  const QJsonDocument doc = UtilJson::fromJson(text);
+  timer.start();
+  int totalErrs = 0;
+  for (int i = 0; i < 200; ++i) {
+    totalErrs = v.validateDocument(accore::AcJsonValue::fromQJsonValue(doc.object())).size();
+  }
+  std::printf("[perf-probe] validateDocument x200: %lld ms（平均 %.3f ms/次，错误数 %d）\n",
+              timer.elapsed(), timer.elapsed() / 200.0, totalErrs);
+
+  // 3) completions（模拟每键补全扫描）
+  timer.start();
+  for (int i = 0; i < 200; ++i) {
+    v.completions(text, text.size() - 2);
+  }
+  std::printf("[perf-probe] completions x200: %lld ms（平均 %.3f ms/次）\n", timer.elapsed(),
+              timer.elapsed() / 200.0);
+}
+
 int main() {
   // 无缓冲输出：崩溃前也能看到进度（stdout 重定向到文件是块缓冲，崩溃会丢缓冲）
   std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -400,6 +638,9 @@ int main() {
   testProjectScopedJsonsourceFinder();
   testProjectScopedJsonuploadFinder();
   testJsonUploadConfigRoundTrip();
+  testProjectScopedJsontableFinder();
+  testJsonTableConfigRoundTrip();
+  testSchemaValidatePerfProbe();
   const int extraFailed = runAcParamDefaultTests();
   const int jsonValueFailed = runAcJsonValueTests();
   const int identPoolFailed = runAcIdentPoolTests();

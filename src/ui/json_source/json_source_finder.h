@@ -79,6 +79,11 @@ inline QStringList findJsonuploadFiles(const QString &baseDir = QString()) {
   return findConfigFilesBySuffix(baseDir, AcFileSuffix::kJsonupload);
 }
 
+/// 查找工作区中的所有 .jsontable 统一 API 配置文件（去重、排序）
+inline QStringList findJsontableFiles(const QString &baseDir = QString()) {
+  return findConfigFilesBySuffix(baseDir, AcFileSuffix::kJsontable);
+}
+
 /// 查找工作区中的所有 .jsonglobalenum 全局枚举文件（去重、排序）。
 /// 作用域在 findConfigFilesBySuffix 之上追加「共享层」：从 baseDir 逐级向上，
 /// 每级探测 <dir>/crud_nest/*.jsonglobalenum——与生成侧 tool_global_enum.ac

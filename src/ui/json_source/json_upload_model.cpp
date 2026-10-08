@@ -7,6 +7,8 @@
 
 #include <QJsonDocument>
 
+#include "src/util/common/util_json.h"
+
 // ════════════════════════════════════════════════════════════
 //  JsonUploadParam
 // ════════════════════════════════════════════════════════════
@@ -82,10 +84,10 @@ JsonUpload JsonUpload::fromJson(const QJsonObject &obj) {
   u.id = obj.value(QString::fromLatin1(JsonUploadKey::kId)).toString();
   u.remark = obj.value(QString::fromLatin1(JsonUploadKey::kRemark)).toString();
   u.url = obj.value(QString::fromLatin1(JsonUploadKey::kUrl)).toString();
-  u.method = obj.value(QString::fromLatin1(JsonUploadKey::kMethod))
-                 .toString(QStringLiteral("POST"));
-  u.fileField = obj.value(QString::fromLatin1(JsonUploadKey::kFileField))
-                    .toString(QStringLiteral("file"));
+  u.method =
+      obj.value(QString::fromLatin1(JsonUploadKey::kMethod)).toString(QStringLiteral("POST"));
+  u.fileField =
+      obj.value(QString::fromLatin1(JsonUploadKey::kFileField)).toString(QStringLiteral("file"));
 
   const QJsonArray paramArr = obj.value(QString::fromLatin1(JsonUploadKey::kParams)).toArray();
   for (const auto &v : paramArr) {
@@ -96,10 +98,14 @@ JsonUpload JsonUpload::fromJson(const QJsonObject &obj) {
                        .toString(QStringLiteral("data.url"));
   u.maxCount = obj.value(QString::fromLatin1(JsonUploadKey::kMaxCount)).toInt(1);
   if (u.maxCount < 1) u.maxCount = 1;
-  u.listThumbWidth = qMax(0, obj.value(QString::fromLatin1(JsonUploadKey::kListThumbWidth)).toInt(0));
-  u.listThumbHeight = qMax(0, obj.value(QString::fromLatin1(JsonUploadKey::kListThumbHeight)).toInt(0));
-  u.editThumbWidth = qMax(0, obj.value(QString::fromLatin1(JsonUploadKey::kEditThumbWidth)).toInt(0));
-  u.editThumbHeight = qMax(0, obj.value(QString::fromLatin1(JsonUploadKey::kEditThumbHeight)).toInt(0));
+  u.listThumbWidth =
+      qMax(0, obj.value(QString::fromLatin1(JsonUploadKey::kListThumbWidth)).toInt(0));
+  u.listThumbHeight =
+      qMax(0, obj.value(QString::fromLatin1(JsonUploadKey::kListThumbHeight)).toInt(0));
+  u.editThumbWidth =
+      qMax(0, obj.value(QString::fromLatin1(JsonUploadKey::kEditThumbWidth)).toInt(0));
+  u.editThumbHeight =
+      qMax(0, obj.value(QString::fromLatin1(JsonUploadKey::kEditThumbHeight)).toInt(0));
   u.valueType = obj.value(QString::fromLatin1(JsonUploadKey::kValueType)).toString();
   return u;
 }
@@ -146,7 +152,9 @@ JsonUploadConfig JsonUploadConfig::fromJson(const QJsonObject &obj) {
 JsonUploadConfig JsonUploadConfig::fromJsonString(const QString &jsonStr, QString *error) {
   Q_UNUSED(error)  // 与 JsonSourceConfig 保持一致；解析失败时返回空配置
   QJsonParseError perr;
-  QJsonDocument doc = QJsonDocument::fromJson(jsonStr.toUtf8(), &perr);
+  // JSON5 兼容解析（UtilJson）：手写/既有 .jsonupload 可能含无引号键、单引号、注释、
+  // 尾逗号，严格 QJsonDocument 会解析失败导致有数据的文件可视化显示为空
+  QJsonDocument doc = UtilJson::fromJson(jsonStr, &perr);
   if (perr.error != QJsonParseError::NoError || !doc.isObject()) {
     return JsonUploadConfig();
   }

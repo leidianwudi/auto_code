@@ -22,10 +22,10 @@
 #include <QRegularExpression>
 #include <QScrollBar>
 #include <QShortcut>
-#include <QWheelEvent>
 #include <QStringListModel>
 #include <QToolTip>
 #include <QVBoxLayout>
+#include <QWheelEvent>
 
 #include "code_find_bar.h"
 #include "src/engine/ac_language.h"
@@ -187,14 +187,14 @@ CodeEditor::CodeEditor(QWidget *parent) : QPlainTextEdit(parent) {
   // 统一高亮层：引用 / 查找面板 / 内嵌查找三套高亮收敛为统一结构。
   // 引用与查找面板层由本类 filler 依据关键词填充；内嵌查找层由 CodeFindBar
   // 通过 setLayerSelections 直接写入（无 filler）。
-  m_highlightLayers.insert(
-      QStringLiteral("reference"),
-      {QStringLiteral("reference"), {}, QString(),
-       [this](const QString &key) { return buildReferenceHighlights(key); }});
-  m_highlightLayers.insert(
-      QStringLiteral("search"),
-      {QStringLiteral("search"), {}, QString(),
-       [this](const QString &key) { return buildSearchHighlights(key); }});
+  m_highlightLayers.insert(QStringLiteral("reference"),
+                           {QStringLiteral("reference"), {}, QString(), [this](const QString &key) {
+                              return buildReferenceHighlights(key);
+                            }});
+  m_highlightLayers.insert(QStringLiteral("search"),
+                           {QStringLiteral("search"), {}, QString(), [this](const QString &key) {
+                              return buildSearchHighlights(key);
+                            }});
   m_highlightLayers.insert(QStringLiteral("find"),
                            {QStringLiteral("find"), {}, QString(), nullptr});
 
@@ -376,77 +376,50 @@ void CodeEditor::paintEvent(QPaintEvent *event) {
   // 先调用标准绘制（背景、文本、默认波浪下划线等）
   QPlainTextEdit::paintEvent(event);
 
-  // 绘制缩进参考线（在文本之下、错误波浪线之下）
+  // 绘制缩进参考线（VS Code 逐行判定方案：每行独立计算 guide 列集合，
+  // 无区间闭包——不存在断裂/超长类 bug；X 取自各行 QTextLayout，
+  // 字体/字号/缩放变化自动正确）
   {
-    int charWidth = fontMetrics().horizontalAdvance(QLatin1Char(' '));
-    int tabW = tabStopDistance() / charWidth;
+    // 空格宽用浮点：QFontMetrics 取整像素，非等宽字体下与实际渲染漂移
+    const qreal spaceW = QFontMetricsF(font()).horizontalAdvance(QLatin1Char(' '));
+    int tabW = qRound(tabStopDistance() / spaceW);
     if (tabW <= 0) tabW = 4;
-    m_indentGuide.compute(cachedText(), document()->revision(), tabW);
 
-    const auto &guideRanges = m_indentGuide.ranges();
-    if (!guideRanges.isEmpty()) {
-      QPainter guidePainter(viewport());
+    // 文档缩进粒度（revision 缓存：文档变化后首帧重扫，O(文档行数)）
+    if (m_indentGranRev != document()->revision()) {
+      m_indentGran = IndentGuide::detectGranularity(document(), tabW, tabW);
+      m_indentGranRev = document()->revision();
+    }
+    const int gran = qMax(1, m_indentGran);
 
-      // 可见行范围
-      QTextBlock firstBlock = firstVisibleBlock();
-      int firstLine = firstBlock.blockNumber() + 1;
-      int lastLine = firstLine;
-      {
-        QTextBlock blk = firstBlock;
-        while (blk.isValid()) {
-          QRectF br = blockBoundingGeometry(blk).translated(contentOffset());
-          if (br.top() > viewport()->rect().bottom()) break;
-          lastLine = blk.blockNumber() + 1;
-          blk = blk.next();
-        }
-      }
+    const QColor normalColor = AuiStyle::indentGuideColor();
+    const QColor activeColor = AuiStyle::indentGuideActiveColor();
+    QPainter guidePainter(viewport());
+    const int cursorLine = textCursor().blockNumber();
 
-      // 当前行号和缩进
-      int cursorLine = textCursor().blockNumber() + 1;
-      int cursorIndent = IndentGuide::lineIndentLevel(textCursor().block().text(), tabW);
+    // 逐可见行绘制：每行独立判定 guide 列（判定规则见 indent_guide.h）
+    for (QTextBlock blk = firstVisibleBlock(); blk.isValid(); blk = blk.next()) {
+      const QRectF geo = blockBoundingGeometry(blk).translated(contentOffset());
+      if (geo.top() > viewport()->rect().bottom()) break;
 
-      // 光标矩形（视口坐标）：引导线在光标所在列让位，保证光标始终可见不被覆盖
-      const QRect cr = cursorRect();
-      const qreal caretX = cr.x() + cr.width() * 0.5;
+      const auto cols = IndentGuide::guideColumnsForLine(blk, gran, tabW);
+      if (cols.isEmpty()) continue;
+      QTextLayout *layout = blk.layout();
+      if (!layout || layout->lineCount() == 0) continue;
+      const QTextLine tl = layout->lineAt(0);
 
-      QColor normalColor = AuiStyle::indentGuideColor();
-      QColor activeColor = AuiStyle::indentGuideActiveColor();
+      const bool blank = blk.text().trimmed().isEmpty();
+      const bool isActive = (blk.blockNumber() == cursorLine);
+      guidePainter.setPen(QPen(isActive ? activeColor : normalColor, 1, Qt::SolidLine));
 
-      for (const auto &range : guideRanges) {
-        if (range.endLine < firstLine || range.startLine > lastLine) continue;
-
-        int drawStart = qMax(range.startLine, firstLine);
-        int drawEnd = qMin(range.endLine, lastLine);
-
-        QTextBlock startBlk = document()->findBlockByNumber(drawStart - 1);
-        QTextBlock endBlk = document()->findBlockByNumber(drawEnd - 1);
-        if (!startBlk.isValid() || !endBlk.isValid()) continue;
-
-        qreal y1 = blockBoundingGeometry(startBlk).translated(contentOffset()).top();
-        qreal y2 = blockBoundingGeometry(endBlk).translated(contentOffset()).bottom();
-
-        // 使用 QTextLayout::cursorToX 获取精确像素位置，避免 charWidth 估算误差；
-        // 竖线相对缩进列左移 2 列（落在缩进空白处），避免紧贴/压住代码首字符
-        qreal x = 0;
-        const int guideCol = qMax(0, range.indent - 2);
-        QTextLayout *layout = startBlk.layout();
-        if (layout && layout->lineCount() > 0) {
-          x = layout->lineAt(0).cursorToX(guideCol) + contentOffset().x();
-        } else {
-          x = guideCol * charWidth + contentOffset().x();
-        }
-
-        bool isActive = (cursorLine >= range.startLine && cursorLine <= range.endLine &&
-                         cursorIndent >= range.indent);
-        guidePainter.setPen(QPen(isActive ? activeColor : normalColor, 1, Qt::SolidLine));
-        // 引导线与光标同列时，在光标所在行让位（断开一小段），避免覆盖光标
-        if (qAbs(x - caretX) < 1.0 && cr.top() < y2 && cr.bottom() > y1) {
-          if (y1 < cr.top()) guidePainter.drawLine(qRound(x), qRound(y1), qRound(x), cr.top());
-          if (cr.bottom() < y2)
-            guidePainter.drawLine(qRound(x), cr.bottom(), qRound(x), qRound(y2));
-        } else {
-          guidePainter.drawLine(qRound(x), qRound(y1), qRound(x), qRound(y2));
-        }
+      const qreal yTop = geo.top();
+      const qreal yBot = geo.top() + blockBoundingRect(blk).height();
+      for (int col : cols) {
+        // 非空行：cursorToX(列) 精确贴该列字符左缘（渲染事实源）；
+        // 空白行：无文本布局，按浮点空格宽定位（与相邻行渲染宽度一致）
+        const qreal x =
+            blank ? col * spaceW + contentOffset().x() : tl.cursorToX(col) + contentOffset().x();
+        guidePainter.drawLine(qRound(x), qRound(yTop), qRound(x), qRound(yBot));
       }
     }
   }
@@ -700,8 +673,7 @@ void CodeEditor::appendLayerHighlights(QList<QTextEdit::ExtraSelection> &extra) 
   for (auto it = m_highlightLayers.begin(); it != m_highlightLayers.end(); ++it) {
     const HighlightLayer &layer = it.value();
     if (layer.selections.isEmpty()) continue;
-    if (it.key() == QLatin1String("find") &&
-        !(m_findBar && m_findBar->isFindBarVisible())) {
+    if (it.key() == QLatin1String("find") && !(m_findBar && m_findBar->isFindBarVisible())) {
       continue;
     }
     extra.append(layer.selections);
@@ -777,8 +749,8 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
     QTextCursor cursor = textCursor();
     QString identifier = identifierAtCursor(cursor.position());
     if (!identifier.isEmpty()) {
-      emit requestFindReferencesAll(objectName(), cursor.blockNumber() + 1,
-                                    cursor.columnNumber(), identifier);
+      emit requestFindReferencesAll(objectName(), cursor.blockNumber() + 1, cursor.columnNumber(),
+                                    identifier);
       event->accept();
       return;
     }
@@ -958,8 +930,8 @@ void CodeEditor::contextMenuEvent(QContextMenuEvent *event) {
         QAction *renameAction = menu->addAction(QStringLiteral("重命名符号"));
         renameAction->setShortcut(QKeySequence(QStringLiteral("F2")));
         connect(renameAction, &QAction::triggered, this, [this, cursor, identifier]() {
-          emit requestRenameSymbol(objectName(), cursor.blockNumber() + 1,
-                                   cursor.columnNumber(), identifier);
+          emit requestRenameSymbol(objectName(), cursor.blockNumber() + 1, cursor.columnNumber(),
+                                   identifier);
         });
       }
     }
@@ -1085,15 +1057,13 @@ QPointF CodeEditor::snapClickToText(const QPointF &pos) const {
 
 void CodeEditor::mousePressEvent(QMouseEvent *event) {
   // 仅对“普通左键单击”做纵向校正（不处理 Ctrl/Shift/中指等，避免干扰其他能力）
-  const bool plainClick =
-      event->button() == Qt::LeftButton &&
-      (event->modifiers() &
-       (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier)) == 0;
+  const bool plainClick = event->button() == Qt::LeftButton &&
+                          (event->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier |
+                                                 Qt::AltModifier | Qt::MetaModifier)) == 0;
   if (plainClick) {
     const QPointF corrected = snapClickToText(event->position());
-    QMouseEvent me(event->type(), corrected, corrected, event->globalPosition(),
-                   event->button(), event->buttons(), event->modifiers(),
-                   event->pointingDevice());
+    QMouseEvent me(event->type(), corrected, corrected, event->globalPosition(), event->button(),
+                   event->buttons(), event->modifiers(), event->pointingDevice());
     QPlainTextEdit::mousePressEvent(&me);
     event->accept();
     return;

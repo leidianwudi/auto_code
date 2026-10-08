@@ -1,0 +1,326 @@
+// ============================================================================
+// query_data.ac — Go(gin+gorm) 查询场景数据构建器
+// ----------------------------------------------------------------------------
+// 作用（复刻 crud_nest/template/core/query_data.ac 的产出形态，类型换 goType）：
+//   从 .jsontable 的列角色（search=true）与表级扩展键（selColsLike/selColsGap/
+//   selColsSort）构建查询场景数据：
+//     selFields[]       - SelectParams 查询字段（精确/模糊/范围）
+//     whereConditions[] - repo getWhereByIn 的 Go 条件块（gorm Where）
+//     sortInfo          - 排序信息（sortDesc / orderByDef / 默认排序字段方向）
+//
+// 数据来源说明：
+//   精确查询字段来自列级 search 角色（gva 式字段级配置）；
+//   模糊/范围/排序为表级扩展键（.jsontable 未知键保真，手补即可）：
+//     "selColsLike": ["name"],                         // 模糊查询
+//     "selColsGap":  ["create_time"],                  // 范围查询（展开 _min/_max）
+//     "selColsSort": [["id","DESC"],["create_time","DESC"]]  // 排序（推荐数组格式）
+// ============================================================================
+
+import { FieldDef, Param, zeroKindOfGoType } from "param_go.ac";
+import { snakeToPascal } from "../../../tool/tool_str.ac";
+
+/// @brief 查询字段定义（SelectParams 字段列表元素）
+export class SelFieldDef {
+  let name: String = "";        // 查询参数名（gap 字段为 col_min / col_max）
+  let baseName: String = "";    // 基础列名（gap 展开后 where 用原列名）
+  let comment: String = "";     // 字段注释
+  let goName: String = "";      // 导出驼峰（如 create_time_min → CreateTimeMin）
+  let goType: String = "";      // Go 基础类型
+  let declType: String = "";    // SelectParams 声明类型（time→*time.Time、bool→*bool）
+  let kind: String = "";        // 零值判断类别：string / number / ptr
+  let isLike: Bool = false;     // 是否模糊查询（LIKE %x%）
+  let isGap: Bool = false;      // 是否范围查询（selColsGap 生成 base_min/base_max 两个字段）
+}
+
+/// @brief 排序信息结果（buildSortInfo 的返回值）
+export class SortInfoResult {
+  let sortDesc: String = "";            // 排序描述，如 "排序字段:id, create_time"
+  let orderByDef: String = "";          // 排序字面量串，如 "'id': 'DESC', 'create_time': 'DESC'"（预留）
+  let defaultOrderField: String = "";   // 默认排序字段，如 "id"
+  let defaultOrderDir: String = "";     // 默认排序方向，如 "DESC"
+}
+
+/// @brief 查询场景数据构建器（无 DB，全部来自 .jsontable 配置）
+export class QueryData {
+
+  // ------------------------------------------------------------------------
+  // 构建 selFields 数组（SelectParams 查询字段列表）
+  //
+  // 逻辑（顺序与 Nest 版一致，先到先得，重复字段跳过）：
+  //   1. param.fields 中 search=true 的列 → 精确查询（isLike=false）
+  //   2. json.selColsLike 列 → 模糊查询（isLike=true）
+  //   3. json.selColsGap 列 → 范围查询，每列展开为 _min/_max 两个字段
+  // 说明：
+  //   - 查询参数声明类型：time.Time → *time.Time、bool → *bool（零值无法区分
+  //     "未传"），其余类型保持原样（零值即"未过滤"）
+  //   - datatypes.JSON 列不支持普通条件查询，跳过并提示
+  // ------------------------------------------------------------------------
+  function buildSelFields(json: Object, param: Param): SelFieldDef[] {
+    let selFields: SelFieldDef[] = [];
+    let selFieldNames: String[] = [];
+
+    // ── 1. 精确查询：列级 search 角色 ──────────────────────────────────
+    for (field in param.fields) {
+      if (!field.isSearch) {
+        continue;
+      }
+      if (field.zeroKind == "skip") {
+        printLog("提示：列 '" + field.name + "' 为 JSON 类型，不支持普通条件查询，已跳过查询字段生成");
+        continue;
+      }
+      let sf: SelFieldDef = this.makeSelField(field.name, field);
+      selFields.append(sf);
+      selFieldNames.append(field.name);
+    }
+
+    // ── 2. 模糊查询：表级 selColsLike（已添加的字段跳过，精确优先）─────
+    if (json.selColsLike != null) {
+      for (colName in json.selColsLike) {
+        if (this.containsName(selFieldNames, colName)) {
+          continue;
+        }
+        let field: FieldDef = this.findField(param, colName);
+        if (field == null) {
+          printLog("警告：selColsLike 引用的列 '" + colName + "' 在表 " + param.tableName + " 中不存在，已跳过");
+          continue;
+        }
+        if (field.zeroKind == "skip" || field.goType != "string") {
+          printLog("提示：列 '" + colName + "' 非字符串类型，不支持模糊查询，已按精确查询生成");
+        }
+        let sf: SelFieldDef = this.makeSelField(field.name, field);
+        sf.isLike = field.goType == "string";
+        selFields.append(sf);
+        selFieldNames.append(field.name);
+      }
+    }
+
+    // ── 3. 范围查询：表级 selColsGap，每列展开 _min/_max 两个字段 ──────
+    //      仅支持时间（*time.Time）与数值类型；说明同 Nest 版：不生成 base 字段，
+    //      若还需精确查询请把该列同时配置 search=true
+    if (json.selColsGap != null) {
+      for (colName in json.selColsGap) {
+        if (this.containsName(selFieldNames, colName)) {
+          continue;
+        }
+        let field: FieldDef = this.findField(param, colName);
+        if (field == null) {
+          printLog("警告：selColsGap 引用的列 '" + colName + "' 在表 " + param.tableName + " 中不存在，已跳过");
+          continue;
+        }
+        let isTime = field.goType == "time.Time";
+        let isNum = field.zeroKind == "number";
+        if (!isTime && !isNum) {
+          printLog("提示：列 '" + colName + "' 非时间/数值类型，不支持范围查询，已跳过");
+          continue;
+        }
+        // 起始字段：create_time_min
+        let sfMin: SelFieldDef = this.makeSelField(field.name + "_min", field);
+        sfMin.baseName = field.name;
+        sfMin.comment = field.comment + "（起始）";
+        sfMin.isGap = true;
+        if (isTime) {
+          sfMin.declType = "*time.Time";
+        }
+        selFields.append(sfMin);
+        selFieldNames.append(sfMin.name);
+
+        // 结束字段：create_time_max
+        let sfMax: SelFieldDef = this.makeSelField(field.name + "_max", field);
+        sfMax.baseName = field.name;
+        sfMax.comment = field.comment + "（结束）";
+        sfMax.isGap = true;
+        if (isTime) {
+          sfMax.declType = "*time.Time";
+        }
+        selFields.append(sfMax);
+        selFieldNames.append(sfMax.name);
+      }
+    }
+
+    return selFields;
+  }
+
+  // ------------------------------------------------------------------------
+  // 构建 sortInfo（排序信息）
+  //
+  // 输入：json.selColsSort
+  //   - 推荐数组格式：[["id","DESC"],["create_time","DESC"]]（保证书写顺序）
+  //   - 兼容对象格式：{"id":"DESC","create_time":"DESC"}
+  // 输出：sortDesc / orderByDef / defaultOrderField / defaultOrderDir
+  //   无配置时默认按主键 DESC（primaryName 传入，避免表主键不叫 id 时排序失效）
+  // ------------------------------------------------------------------------
+  function buildSortInfo(json: Object, primaryName: String): SortInfoResult {
+    let sortKeys: String[] = [];
+    let sortVals: String[] = [];
+    if (json.selColsSort != null) {
+      let sortArr: Object = json.selColsSort;
+      if (sortArr.length) {
+        // 数组格式：[["id","DESC"],...]
+        for (pair in sortArr) {
+          sortKeys.append(pair[0]);
+          sortVals.append(pair[1]);
+        }
+      } else {
+        // 对象格式（兼容旧配置）：{"id":"DESC"}
+        for (sortKey in sortArr) {
+          sortKeys.append(sortKey);
+          sortVals.append(sortArr[sortKey]);
+        }
+      }
+    }
+
+    let result: SortInfoResult = new SortInfoResult();
+    // 排序描述：排序字段:id, create_time
+    let desc: String = "排序字段:";
+    let keyLen = sortKeys.length;
+    for (let i = 0; i < keyLen; i = i + 1) {
+      if (i > 0) {
+        desc = desc + ",";
+      }
+      desc = desc + " " + sortKeys[i];
+    }
+    result.sortDesc = desc;
+
+    // 排序字面量串（预留数据，形态与 Nest orderByDef 一致）
+    let parts: String[] = [];
+    for (let j = 0; j < keyLen; j = j + 1) {
+      parts.append("'" + sortKeys[j] + "': '" + sortVals[j] + "'");
+    }
+    result.orderByDef = parts.join(", ");
+
+    // 默认排序（取第一个键值对；无配置回退主键 DESC）
+    if (keyLen > 0) {
+      result.defaultOrderField = sortKeys[0];
+      result.defaultOrderDir = sortVals[0];
+    } else {
+      result.defaultOrderField = primaryName;
+      result.defaultOrderDir = "DESC";
+    }
+    return result;
+  }
+
+  // ------------------------------------------------------------------------
+  // 构建 whereConditions 数组（repo getWhereByIn 的 Go 条件块）
+  //
+  // 每个元素为一段完整 Go 代码（含缩进，多行字符串），模板逐段原样输出：
+  //   精确：  if sel.Name != "" {
+  //             db = db.Where("`name` = ?", sel.Name)
+  //           }
+  //   模糊：  if sel.Name != "" {
+  //             db = db.Where("`name` LIKE ?", "%"+sel.Name+"%")
+  //           }
+  //   范围：  由 _min 字段生成 >= / <= 两条（_max 不单独生成，同 Nest 版）
+  // ------------------------------------------------------------------------
+  function buildWhereConditions(selFields: SelFieldDef[]): String[] {
+    let conditions: String[] = [];
+    for (sf in selFields) {
+      // 范围查询：只由 _min 字段生成一对 >= / <= 条件
+      if (sf.isGap) {
+        if (!sf.name.endsWith("_min")) {
+          continue;
+        }
+        let col: String = sf.baseName;
+        if (sf.kind == "ptr") {
+          // 时间范围：*time.Time 判 nil
+          conditions.append("  if sel." + sf.goName + " != nil {\n"
+            + "    db = db.Where(\"`" + col + "` >= ?\", sel." + sf.goName + ")\n"
+            + "  }");
+          conditions.append("  if sel." + this.goNameMaxOf(sf) + " != nil {\n"
+            + "    db = db.Where(\"`" + col + "` <= ?\", sel." + this.goNameMaxOf(sf) + ")\n"
+            + "  }");
+        } else {
+          // 数值范围：零值即未过滤
+          conditions.append("  if sel." + sf.goName + " != 0 {\n"
+            + "    db = db.Where(\"`" + col + "` >= ?\", sel." + sf.goName + ")\n"
+            + "  }");
+          conditions.append("  if sel." + this.goNameMaxOf(sf) + " != 0 {\n"
+            + "    db = db.Where(\"`" + col + "` <= ?\", sel." + this.goNameMaxOf(sf) + ")\n"
+            + "  }");
+        }
+        continue;
+      }
+
+      let col: String = sf.baseName;
+      if (sf.isLike) {
+        // 模糊查询（仅字符串字段会置 isLike）
+        conditions.append("  if sel." + sf.goName + " != \"\" {\n"
+          + "    db = db.Where(\"`" + col + "` LIKE ?\", \"%\"+sel." + sf.goName + "+\"%\")\n"
+          + "  }");
+        continue;
+      }
+      // 精确查询：按零值类别生成
+      if (sf.kind == "string") {
+        conditions.append("  if sel." + sf.goName + " != \"\" {\n"
+          + "    db = db.Where(\"`" + col + "` = ?\", sel." + sf.goName + ")\n"
+          + "  }");
+      } else if (sf.kind == "number") {
+        conditions.append("  if sel." + sf.goName + " != 0 {\n"
+          + "    db = db.Where(\"`" + col + "` = ?\", sel." + sf.goName + ")\n"
+          + "  }");
+      } else if (sf.kind == "ptr") {
+        if (sf.goType == "bool") {
+          // *bool 解引用传值
+          conditions.append("  if sel." + sf.goName + " != nil {\n"
+            + "    db = db.Where(\"`" + col + "` = ?\", *sel." + sf.goName + ")\n"
+            + "  }");
+        } else {
+          // *time.Time 直接传指针
+          conditions.append("  if sel." + sf.goName + " != nil {\n"
+            + "    db = db.Where(\"`" + col + "` = ?\", sel." + sf.goName + ")\n"
+            + "  }");
+        }
+      }
+    }
+    return conditions;
+  }
+
+  // ------------------------------------------------------------------------
+  // 内部工具：由列 FieldDef 构建 SelFieldDef（查询参数声明类型在此定型）
+  // ------------------------------------------------------------------------
+  function makeSelField(name: String, field: FieldDef): SelFieldDef {
+    let sf: SelFieldDef = new SelFieldDef();
+    sf.name = name;
+    sf.baseName = field.name;
+    sf.comment = field.comment;
+    sf.goType = field.goType;
+    sf.goName = snakeToPascal(name);
+    sf.kind = zeroKindOfGoType(field.goType);
+    // 查询参数声明类型：time/bool 用指针（零值无法区分"未传"），其余保持
+    sf.declType = field.goType;
+    if (field.goType == "time.Time" || field.goType == "bool") {
+      sf.declType = "*" + field.goType;
+    }
+    return sf;
+  }
+
+  // ------------------------------------------------------------------------
+  // 内部工具：按列名查找 FieldDef（找不到返回 null）
+  // ------------------------------------------------------------------------
+  function findField(param: Param, colName: String): FieldDef {
+    for (field in param.fields) {
+      if (field.name == colName) {
+        return field;
+      }
+    }
+    return null;
+  }
+
+  // ------------------------------------------------------------------------
+  // 内部工具：判断名字列表是否已包含某列名
+  // ------------------------------------------------------------------------
+  function containsName(names: String[], colName: String): Bool {
+    for (n in names) {
+      if (n == colName) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // ------------------------------------------------------------------------
+  // 内部工具：由 _min 字段推导 _max 字段的 Go 参数名（CreateTimeMin → CreateTimeMax）
+  // ------------------------------------------------------------------------
+  function goNameMaxOf(sf: SelFieldDef): String {
+    return sf.goName.substring(0, sf.goName.length - 3) + "Max";
+  }
+}

@@ -30,6 +30,8 @@ QString CreateModel::fileTypeLabel(FileType type) {
       return QStringLiteral(".jsonsource 文件");
     case Jsonupload:
       return QStringLiteral(".jsonupload 文件");
+    case Jsontable:
+      return QStringLiteral(".jsontable 文件");
     case Jsonglobalenum:
       return QStringLiteral(".jsonglobalenum 文件");
     default:
@@ -51,6 +53,8 @@ QString CreateModel::suffix(FileType type) {
       return QString::fromLatin1(AcFileSuffix::kJsonsource);
     case Jsonupload:
       return QString::fromLatin1(AcFileSuffix::kJsonupload);
+    case Jsontable:
+      return QString::fromLatin1(AcFileSuffix::kJsontable);
     case Jsonglobalenum:
       return QString::fromLatin1(AcFileSuffix::kJsonglobalenum);
     default:

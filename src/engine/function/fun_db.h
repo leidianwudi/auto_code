@@ -95,6 +95,23 @@ public:
   static accore::AcJsonValue query(const accore::AcJsonValue &thisObj,
                                    const accore::AcJsonValue &args);
 
+  /**
+   * @brief 列出当前库全部基表（供表设计器加载表清单）
+   * thisObj: DB 实例对象
+   * @return [{ name: "表名", comment: "表注释" }, ...]（按表名排序）
+   */
+  static accore::AcJsonValue listTables(const accore::AcJsonValue &thisObj,
+                                        const accore::AcJsonValue &args);
+
+  /**
+   * @brief 执行 DDL / 写操作 SQL（CREATE/ALTER/DROP/INSERT/UPDATE/DELETE）
+   * thisObj: DB 实例对象
+   * args[0] JSON: { sql }
+   * @return 成功返回受影响行数（DDL 通常为 0）；失败返回 null 并 setError
+   */
+  static accore::AcJsonValue exec(const accore::AcJsonValue &thisObj,
+                                  const accore::AcJsonValue &args);
+
 private:
   /// 获取实例的连接（根据 this.obj 中的 connId）
   static MYSQL *getConnection(const accore::AcJsonValue &instance);

@@ -14,6 +14,7 @@
 #include "src/engine/ac_language.h"
 #include "src/ui/json_global_enum/json_global_enum_widget.h"
 #include "src/ui/json_source/json_source_widget.h"
+#include "src/ui/json_source/json_table_widget.h"
 #include "src/ui/json_source/json_upload_widget.h"
 #include "src/ui/json_vue/json_vue_editor.h"
 #include "src/ui/json_vue/json_vue_widget.h"
@@ -257,6 +258,7 @@ void MainDevMgr::onSplitRight() {
     bool isJsonVue = filePath.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive);
     bool isJsonSource = filePath.endsWith(AcFileSuffix::kJsonsource, Qt::CaseInsensitive);
     bool isJsonUpload = filePath.endsWith(AcFileSuffix::kJsonupload, Qt::CaseInsensitive);
+    bool isJsonTable = filePath.endsWith(AcFileSuffix::kJsontable, Qt::CaseInsensitive);
     bool isJsonGlobalEnum = filePath.endsWith(AcFileSuffix::kJsonglobalenum, Qt::CaseInsensitive);
     QFileInfo fi(filePath);
     QString tabLabel = filePath.isEmpty() ? QStringLiteral("拆分副本") : fi.fileName();
@@ -330,6 +332,24 @@ void MainDevMgr::onSplitRight() {
       if (!filePath.isEmpty()) editor->setObjectName(filePath);
 
       connect(juw, &JsonUploadWidget::contentChanged, this, [this, editor]() {
+        editor->document()->setModified(true);
+        updateSaveButtonState();
+      });
+    } else if (isJsonTable) {
+      // .jsontable 文件拆分时创建 JsonTableWidget，保持可视化能力
+      auto *jtw = new JsonTableWidget;
+      auto *editor = jtw->codeEditor();
+      editor->setPlainText(current->toPlainText());
+      jtw->setPreservedSource(current->toPlainText());
+      // 注：表结构配置无"测试请求"按钮，不需要 HTTP 配置
+      if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) jtw->switchToVisual();
+
+      tabIdx = newPanel->addTab(jtw, tabLabel);
+      newPanel->setTabToolTip(tabIdx, filePath);
+      newPanel->setCurrentIndex(tabIdx);
+      if (!filePath.isEmpty()) editor->setObjectName(filePath);
+
+      connect(jtw, &JsonTableWidget::contentChanged, this, [this, editor]() {
         editor->document()->setModified(true);
         updateSaveButtonState();
       });

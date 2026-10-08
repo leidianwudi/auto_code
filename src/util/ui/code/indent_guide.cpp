@@ -1,6 +1,6 @@
 /**
  * @file indent_guide.cpp
- * @brief 缩进参考线模块实现（VS Code 风格）
+ * @brief 缩进参考线模块实现（VS Code 逐行判定方案）
  */
 
 #include "indent_guide.h"
@@ -25,52 +25,68 @@ int IndentGuide::lineIndentLevel(const QString &line, int tabWidth) {
 }
 
 // ──────────────────────────────────────────────────────────────
-//  computeIndentRanges 栈扫描算法
+//  缩进粒度检测
 // ──────────────────────────────────────────────────────────────
 
-void IndentGuide::compute(const QString &text, int revision, int tabWidth) {
-  if (revision == m_cacheRevision) return;
-
-  m_ranges.clear();
-
-  QStringList lines = text.split(QLatin1Char('\n'));
-  int lineCount = lines.size();
-
-  struct StackEntry {
-    int indent;
-    int startLine;
-  };
-  QVector<StackEntry> stack;
-  stack.reserve(32);
-
-  for (int i = 0; i < lineCount; ++i) {
-    const QString &line = lines[i];
-    int indent = lineIndentLevel(line, tabWidth);
-
-    // 空行或仅含空白行的缩进视为与上下文相同，跳过入栈/出栈
-    if (line.trimmed().isEmpty()) continue;
-
-    // 弹出栈中缩进 >= 当前的项，形成 IndentRange
-    while (!stack.isEmpty() && stack.last().indent >= indent) {
-      StackEntry top = stack.takeLast();
-      if (top.startLine < i) {
-        m_ranges.append({top.startLine + 1, i, top.indent});
-      }
+int IndentGuide::detectGranularity(const QTextDocument *doc, int tabWidth, int fallback) {
+  int prev = -1;
+  int best = -1;
+  for (QTextBlock b = doc->firstBlock(); b.isValid(); b = b.next()) {
+    const QString t = b.text();
+    if (t.trimmed().isEmpty()) continue;
+    const int ind = lineIndentLevel(t, tabWidth);
+    if (prev >= 0 && ind != prev) {
+      const int d = qAbs(ind - prev);
+      if (best < 0 || d < best) best = d;
+      if (best == 1) break;  // 最小可能值，提前结束
     }
+    prev = ind;
+  }
+  return best > 0 ? best : fallback;
+}
 
-    // 当前行缩进增加，入栈
-    if (indent > 0 && (stack.isEmpty() || stack.last().indent < indent)) {
-      stack.append({indent, i});
+// ──────────────────────────────────────────────────────────────
+//  单行 guide 列集合
+// ──────────────────────────────────────────────────────────────
+
+QVector<int> IndentGuide::guideColumnsForLine(const QTextBlock &blk, int granularity,
+                                              int tabWidth) {
+  QVector<int> cols;
+  if (granularity <= 0 || !blk.isValid()) return cols;
+
+  const QString text = blk.text();
+  if (!text.trimmed().isEmpty()) {
+    // 非空行：{0, gran, 2×gran, ... < 行缩进}——guide 在列 C 显示 ⟺ 行缩进 > C
+    // （VS Code 语义：最深一条对齐父级内容列，比本行内容浅一级）
+    const int ind = lineIndentLevel(text, tabWidth);
+    for (int c = 0; c < ind; c += granularity) {
+      cols.append(c);
     }
+    return cols;
   }
 
-  // 处理栈中剩余项（到文件末尾）
-  while (!stack.isEmpty()) {
-    StackEntry top = stack.takeLast();
-    if (top.startLine < lineCount - 1) {
-      m_ranges.append({top.startLine + 1, lineCount, top.indent});
+  // 空白行：继承前后最近非空行缩进的较大值（只要任一侧层级覆盖该列，线就穿过
+  // 空行，保证块内空行处竖线连续；扫描设上限防退化）
+  int before = -1;
+  int after = -1;
+  int walked = 0;
+  for (QTextBlock b = blk.previous(); b.isValid() && walked < 500; b = b.previous(), ++walked) {
+    if (!b.text().trimmed().isEmpty()) {
+      before = lineIndentLevel(b.text(), tabWidth);
+      break;
     }
   }
-
-  m_cacheRevision = revision;
+  walked = 0;
+  for (QTextBlock b = blk.next(); b.isValid() && walked < 500; b = b.next(), ++walked) {
+    if (!b.text().trimmed().isEmpty()) {
+      after = lineIndentLevel(b.text(), tabWidth);
+      break;
+    }
+  }
+  int ind = qMax(before, after);
+  if (ind < 0) return cols;
+  for (int c = 0; c < ind; c += granularity) {
+    cols.append(c);
+  }
+  return cols;
 }

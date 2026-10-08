@@ -1,0 +1,323 @@
+{
+  definitions: {
+    JsontableConfig: {
+      properties: {
+        meta: {
+          class: 'MetaConfig',
+          description: '项目元信息：项目名、数据库连接（表设计器 DDL 用，生成期不连库）与双端项目根路径',
+          type: 'object',
+        },
+        tables: {
+          description: '表定义列表，每项为一张表的完整配置（含翻译表——被 i18n.table 引用的表只生成实体文件）',
+          items: 'TableConfig',
+          type: 'array',
+        },
+      },
+      required: [
+        'meta',
+        'tables',
+      ],
+    },
+    MetaConfig: {
+      properties: {
+        project: {
+          description: '项目名（如 shop）',
+          type: 'string',
+        },
+        db: {
+          class: 'DbConfig',
+          description: '数据库连接四件套（表设计器 DDL 预览/执行用；代码生成期不连库）',
+          type: 'object',
+        },
+        goBasePath: {
+          description: 'Go 项目根目录（如 D:/work/github/shop/shop_api）；生成入口 params.goBasePath 缺省时使用',
+          type: 'string',
+        },
+        webBasePath: {
+          description: 'pure-admin 前端项目根目录（admin_pure 链使用，Go 链不用）',
+          type: 'string',
+        },
+      },
+      required: [
+        'goBasePath',
+      ],
+    },
+    DbConfig: {
+      properties: {
+        database: {
+          description: '数据库名',
+          type: 'string',
+        },
+        host: {
+          description: '主机地址',
+          type: 'string',
+        },
+        password: {
+          description: '密码',
+          type: 'string',
+        },
+        port: {
+          description: '端口（缺省 3306）',
+          type: 'int',
+        },
+        user: {
+          description: '用户名',
+          type: 'string',
+        },
+      },
+      required: [
+        'host',
+        'user',
+        'database',
+      ],
+    },
+    ColumnConfig: {
+      properties: {
+        comment: {
+          description: '列注释（生成 Go 行注释；换行会被折叠为空格）',
+          type: 'string',
+        },
+        default: {
+          description: '默认值（空串/缺省/null = 无默认值；建表与生成同源）',
+        },
+        form: {
+          description: '表单角色（前端用，后端透传）',
+          enum: [
+            'none',
+            'input',
+            'textarea',
+            'select',
+            'date',
+            'number',
+            'image',
+            'upload',
+            'boolean',
+          ],
+          type: 'string',
+        },
+        isAutoInc: {
+          description: '自增（gorm tag 追加 autoIncrement；自增主键不入 InsertParams）',
+          type: 'bool',
+        },
+        isPrimary: {
+          description: '主键（gorm tag 追加 primaryKey；无主键的表跳过 CRUD 生成）',
+          type: 'bool',
+        },
+        list: {
+          description: '列表页显示（前端角色，缺省 true）',
+          type: 'bool',
+        },
+        mysqlType: {
+          description: 'MySQL 类型（如 bigint、varchar(64)、decimal(10,2)、tinyint(1)、datetime、json）；生成期映射 goType，建表 DDL 同源',
+          type: 'string',
+        },
+        name: {
+          description: '列名（snake_case）',
+          type: 'string',
+        },
+        nullable: {
+          description: '允许 NULL（→ Go 指针类型，如 *string；主键与 json 列除外）',
+          type: 'bool',
+        },
+        required: {
+          description: '表单必填（→ InsertParams 生成 binding:"required"）',
+          type: 'bool',
+        },
+        search: {
+          description: '查询项（true → SelectParams 字段 + repo getWhereByIn 精确条件）',
+          type: 'bool',
+        },
+        unsigned: {
+          description: '无符号（bigint → uint64 等；gorm type 追加 unsigned）',
+          type: 'bool',
+        },
+      },
+      required: [
+        'name',
+        'mysqlType',
+      ],
+    },
+    IndexConfig: {
+      properties: {
+        cols: {
+          description: '索引列名列表',
+          items: 'string',
+          type: 'array',
+        },
+        name: {
+          description: '索引名（如 uk_name）',
+          type: 'string',
+        },
+        unique: {
+          description: '是否唯一索引（i18n 翻译表需含 uk(extKey, langKey) 唯一索引，upsert 依赖它）',
+          type: 'bool',
+        },
+      },
+      required: [
+        'name',
+        'cols',
+      ],
+    },
+    EnumConfig: {
+      properties: {
+        column: {
+          description: '枚举对应的列名（枚举名 = Enum + 表帕斯卡 + 列帕斯卡，如 shop.status → EnumShopStatus）',
+          type: 'string',
+        },
+        comment: {
+          description: '枚举说明（缺省回退列注释）',
+          type: 'string',
+        },
+        items: {
+          description: '枚举选项列表（格式与 .jsonglobalenum 的 options 一致）',
+          items: 'EnumOptionConfig',
+          type: 'array',
+        },
+      },
+      required: [
+        'column',
+        'items',
+      ],
+    },
+    EnumOptionConfig: {
+      properties: {
+        key: {
+          description: '枚举成员名（snake_case，生成 Go const 时转帕斯卡；缺省按序号兜底 opt_1）',
+          type: 'string',
+        },
+        label: {
+          description: '枚举项说明（Go 注释与 Map 值）',
+          type: 'string',
+        },
+        value: {
+          description: '枚举值（valueType=number 时为数字字面量，其余为字符串）',
+          type: 'string',
+        },
+        valueType: {
+          description: '值类型：number → 数字字面量（Map 键 int）；缺省 string → 双引号字符串',
+          enum: [
+            'number',
+            'string',
+          ],
+          type: 'string',
+        },
+      },
+      required: [
+        'value',
+      ],
+    },
+    I18nConfig: {
+      properties: {
+        defaultLang: {
+          default: 'zh',
+          description: '默认语言（回退目标）：查询不到当前语言文本时使用它的翻译',
+          type: 'string',
+        },
+        extKey: {
+          description: '翻译表中关联主表主键的外键列名（如 ext_id）',
+          type: 'string',
+        },
+        fields: {
+          description: '参与多语言的翻译表文本列（如 ["name", "intro"]）；生成的接口会把当前语言文本平铺进主表返回结构，不能与主表列重名',
+          items: 'string',
+          type: 'array',
+        },
+        langFrom: {
+          description: '语言码来源：body=请求体 lang 字段（第一版仅支持）；header=请求头（预留，当前按 body 生成）',
+          enum: [
+            'body',
+            'header',
+          ],
+          type: 'string',
+        },
+        langKey: {
+          description: '翻译表的语言码列名（如 lang）',
+          type: 'string',
+        },
+        table: {
+          description: '翻译表表名（如 shop0）；Go 链翻译表必须也在 tables[] 中（生成期不连库，列定义来自配置），只生成实体文件',
+          type: 'string',
+        },
+      },
+      required: [
+        'table',
+        'extKey',
+        'langKey',
+        'fields',
+      ],
+    },
+    SortConfig: {
+      additionalProperties: {
+        enum: [
+          'ASC',
+          'DESC',
+        ],
+        type: 'string',
+      },
+    },
+    TableConfig: {
+      properties: {
+        columns: {
+          description: '列定义数组（顺序即建表顺序；生成期不连库，这里是唯一事实源）',
+          items: 'ColumnConfig',
+          type: 'array',
+        },
+        enums: {
+          description: '表级枚举列表（Go 链生成 {model}_enum.go 的 Go const 块 + Map；与 globalEnumCols 二选一配置来源）',
+          items: 'EnumConfig',
+          type: 'array',
+        },
+        globalEnumCols: {
+          description: '引用全局枚举的列名列表（如 ["is_enable"]）：列名需与 .jsonglobalenum 中的枚举 name 一致；命中后该列在 {model}_enum.go 生成对应 Go const 块（同一全局枚举跨表只生成一份）',
+          items: 'string',
+          type: 'array',
+        },
+        indexes: {
+          description: '索引定义（表设计器 DDL 用；生成期不消费）',
+          items: 'IndexConfig',
+          type: 'array',
+        },
+        i18n: {
+          class: 'I18nConfig',
+          description: '多语言翻译表配置：主表 + 翻译表（如 shop + shop0），生成联合查询（当前语言平铺/回退默认语言）、事务写入（clause.OnConflict upsert 翻译行）与级联删除',
+          type: 'object',
+        },
+        manualUpdateTime: {
+          description: 'update_time 是否由业务代码维护（true → update_time 入 UpdateParams；缺省由 DB ON UPDATE 维护）',
+          type: 'bool',
+        },
+        modelName: {
+          description: '模型名（生成代码用的标识，缺省回退 tableName）',
+          type: 'string',
+        },
+        selColsGap: {
+          description: '范围查询的列（每列展开为 col_min/col_max 两个查询参数与 >=/<= 条件；仅时间/数值列）',
+          items: 'string',
+          type: 'array',
+        },
+        selColsLike: {
+          description: '模糊查询的列（LIKE %x%；仅字符串列生效，与 search 精确配置重复时精确优先）',
+          items: 'string',
+          type: 'array',
+        },
+        selColsSort: {
+          description: '排序配置，推荐数组格式 [["id", "DESC"], ...]（保证与书写顺序一致，首项为默认排序）；兼容对象格式 {"id": "DESC"}；缺省按主键 DESC',
+          type: 'any',
+        },
+        tableComment: {
+          description: '表注释（生成 Go 注释）',
+          type: 'string',
+        },
+        tableName: {
+          description: '物理表名（生成文件名与路由分组名）',
+          type: 'string',
+        },
+      },
+      required: [
+        'tableName',
+        'columns',
+      ],
+    },
+  },
+  root: 'JsontableConfig',
+}

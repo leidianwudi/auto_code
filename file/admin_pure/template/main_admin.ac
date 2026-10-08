@@ -1,0 +1,752 @@
+/// @file main_admin.ac — vue-pure-admin 后台管理界面代码生成主逻辑（plan 阶段三）
+/// ----------------------------------------------------------------------------
+/// 说明：
+///   本文件是 admin_pure（vue-pure-admin）前端代码生成的**通用主逻辑**，
+///   数据加工层直接 import 复用 admin_vue 的 admin_data.ac（不 fork 副本，
+///   两框架共享一份数据加工器，改一处两框架受益，plan 6.2）。
+///
+///   与 admin_vue 的核心差异：
+///     1. 页面配置双轨制（plan 3.3）：
+///        - 目标页面目录存在同名 .jsonvue → 完全按 .jsonvue 走（高级页，
+///          上传预设/数据源/弹窗/按钮组等全部既有能力直接可用）；
+///        - 不存在 → 从 .jsontable 列角色（list/search/form/required）合成
+///          jsonvue 形状的对象（标准页，零额外配置）。
+///        两种来源殊途同归进入 buildAdminTplData（同一条加工管线）。
+///     2. http 封装：@/utils/http 的 http.request（pure-admin 标准），
+///        响应统一 { code, msg, data }（与 crud_gin handler 约定一致）。
+///     3. URL 路由约定（POST 后缀式，与 admin_vue 链及 NestJS/crud_gin router
+///        对齐，api.ts 函数集/URL/参数与 admin_vue api.tpl 产物完全同构）：
+///          POST /{model}/selectByIn  分页列表（page/pageSize + 查询参数走 data）
+///          POST /{model}/selectById  详情（本链路行内直接用列表行数据，暂不发请求）
+///          POST /{model}/update      新增/更新（无 id 新增、有 id 更新，同 NestJS）
+///          POST /{model}/delete      删除（{ ids } 支持批量）
+///        apiBase 取 meta.dataUrl 首段（合成页 dataUrl="{modelName}/selectByIn"，
+///        .jsonvue 高级页取其 dataUrl 首段），URL 由共用加工器拼成后缀式
+///        selectUrl/updateUrl/deleteUrl，api.tpl 与 admin_vue 一样消费这三个
+///        URL 键，仅 http 层换 pure-admin 写法。
+///
+///   整体流程：
+///     .jsontable ──读表──► 每表双轨判定 ──┬─ 同名 .jsonvue（读文件）
+///                                         └─ 无（合成 jsonvue 形状）
+///               ──► buildAdminTplData（共用加工器）─► enrichPureTplData
+///               ──► renderTpl index/write/api ──► 写入 webBasePath 下
+///                   src/views/{pagePath}/、src/api/{apiModule}/
+///
+/// 接收的项目参数（params 对象）：
+///   - jsonTablePath  必填，.jsontable 统一配置文件绝对路径
+///   - webBasePath    必填，pure-admin 项目根（产物写其 src/api、src/views）
+///   - checkedPages   可选，高级页 .jsonvue 路径数组（基名 == modelName 时生效）
+///   - projectApiPath 可选，对应后端 API 项目目录（如 file/crud_gin/shop_api），
+///     其下全部 *.jsonglobalenum 作为项目级枚举参与合并（就近覆盖）
+///   - genGlobalEnum  可选，false 跳过全局枚举数据源同步（缺省/true 同步）
+///   - templates / sourceTemplates / uploadTemplates 可选，模板配置数组
+///     （tpl 路径相对入口脚本目录，省略时使用本文件默认模板）
+/// ----------------------------------------------------------------------------
+
+import { buildAdminTplData, buildSourceTplData, buildUploadTplData } from "../../admin_vue/template/core/admin_data.ac";
+import { findGlobalEnumFiles, mergeGlobalEnumFiles, buildGlobalEnumJsonSource } from "../../tool/tool_global_enum.ac";
+import { snakeToPascal, snakeToCamel, escapeJsStr } from "../../tool/tool_str.ac";
+
+/// @brief 模板配置（一个模板对应一个生成的代码文件）
+class TemplateConfig {
+  let tpl: String = "";  // 模板文件路径（相对入口脚本目录）
+  let out: String = "";  // 输出文件路径模板，用 {key} 占位符从 tplData 取值
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 一、.jsontable → jsonvue 形状合成（plan 3.3 双轨制·标准页）
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// @brief MySQL 类型 → 前端日期控件格式推导
+/// @param mysqlType MySQL 类型（如 datetime/date/time/timestamp/varchar(64)）
+/// @return "datetime" / "date" / "time"，非时间类型返回 ""
+export function deriveDateFormat(mysqlType: String): String {
+  let t: String = mysqlType.toLowerCase();
+  if (t.startsWith("datetime") || t.startsWith("timestamp")) {
+    return "datetime";
+  }
+  if (t.startsWith("date")) {
+    return "date";
+  }
+  if (t.startsWith("time")) {
+    return "time";
+  }
+  return "";
+}
+
+/// @brief .jsontable 列 → jsonvue 列对象（表单角色 → editStyle 映射）
+/// @param rawCol .jsontable 列对象（name/mysqlType/comment/list/search/form/required）
+/// @return jsonvue 形状的列对象（喂给共用加工器的 processColumns）
+///   映射表（form 角色 → editStyle / displayType）：
+///     input    → text
+///     textarea → textarea（rows=4）
+///     number   → int
+///     date     → date（dateFormat 由 mysqlType 推导）
+///     boolean  → boolean + displayType=boolean（列表开关 + 编辑 0/1 下拉）
+///     image    → image + displayType=image（列表缩略图；上传预设需配
+///                .jsonvue 高级页引用 .jsonupload，标准页回退 URL 手输）
+///     select/upload → 降级 text 并 printLog 提示（引用型数据需配 .jsonvue
+///                高级页引用 .jsonsource/.jsonupload 才有下拉/上传，双轨兜底）
+export function buildJsonvueColumn(rawCol: Object): Object {
+  let name: String = rawCol["name"];
+  let comment: String = rawCol["comment"];
+  if (comment == null || comment == "") {
+    comment = name;
+  }
+  let formRole: String = rawCol["form"];
+  if (formRole == null || formRole == "") {
+    formRole = "none";
+  }
+
+  // 列基础键（jsonvue 编辑器保存的全键形状，避免加工器读到 null）
+  let col: Object = {
+    dataName: name,
+    queryName: comment,
+    editName: comment,
+    queryVisible: (rawCol["list"] == true),
+    editVisible: (formRole != "none"),
+    editEditable: true,
+    switchEditable: (formRole == "boolean"),
+    required: (rawCol["required"] == true),
+    formSpan: 12,
+    columnWidth: 0,
+    maxlength: 0,
+    placeholder: "",
+    textareaRows: 4,
+    boolTrueText: "启用",
+    boolFalseText: "禁用",
+    tagItems: [],
+    dateFormat: ""
+  };
+
+  let mysqlType: String = rawCol["mysqlType"];
+  if (mysqlType == null) {
+    mysqlType = "";
+  }
+  let timeFormat: String = deriveDateFormat(mysqlType);
+
+  if (formRole == "input") {
+    col["editStyle"] = "text";
+  } else if (formRole == "textarea") {
+    col["editStyle"] = "textarea";
+  } else if (formRole == "number") {
+    col["editStyle"] = "int";
+  } else if (formRole == "date") {
+    col["editStyle"] = "date";
+    if (timeFormat != "") {
+      col["dateFormat"] = timeFormat;
+    } else {
+      col["dateFormat"] = "date";
+    }
+  } else if (formRole == "boolean") {
+    col["editStyle"] = "boolean";
+    col["displayType"] = "boolean";
+  } else if (formRole == "image") {
+    col["editStyle"] = "image";
+    col["displayType"] = "image";
+  } else if (formRole == "select" || formRole == "upload") {
+    // 引用型角色降级：标准页没有 .jsonsource/.jsonupload 引用通道（plan 11.3），
+    // 按文本输入生成并提示走 .jsonvue 高级页双轨补配
+    col["editStyle"] = "text";
+    printLog("提示：字段 '" + name + "' 表单角色为 " + formRole +
+             "，标准页按文本输入生成；如需下拉/上传，请配置同名 .jsonvue 高级页（双轨制）");
+  } else {
+    col["editStyle"] = "text";
+  }
+  return col;
+}
+
+/// @brief .jsontable 表 → jsonvue 形状对象（标准页合成，殊途同归进 buildAdminTplData）
+/// @param table .jsontable 表对象（tableName/modelName/tableComment/columns[]）
+/// @return {meta, columns, queryFields} 形状对象
+///   meta 约定（与 admin_vue .jsonvue 实例同构，如 shop.jsonvue 的 POST 风格）：
+///   dataUrl="{modelName}/selectByIn"（首段经 deriveApiBaseFromUrl 消费为
+///   apiBase=modelName）、queryApi="get{Pascal}List"、updateApi="upd{Pascal}List"
+///   （POST /update 承接，无 id 新增/有 id 更新）、deleteApi="del{Pascal}List"；
+///   查询项合成：数值→文本输入、时间→日期选择（dateFormat 按 mysqlType）、
+///   其余→文本输入（查询侧无 Int 样式，数值统一 Input）
+export function buildJsonvueFromTable(table: Object): Object {
+  let modelName: String = table["modelName"];
+  if (modelName == null || modelName == "") {
+    modelName = table["tableName"];
+  }
+  let tableComment: String = table["tableComment"];
+  if (tableComment == null || tableComment == "") {
+    tableComment = modelName;
+  }
+
+  let cols: Object[] = [];
+  let queryFields: Object[] = [];
+  let rawCols: Object[] = [];
+  if (table["columns"] != null) {
+    rawCols = table["columns"];
+  }
+  let rcLen = rawCols.length;
+  for (let i = 0; i < rcLen; i = i + 1) {
+    let rc: Object = rawCols[i];
+    cols.append(buildJsonvueColumn(rc));
+    // 查询项（search=true → queryFields）
+    if (rc["search"] == true) {
+      let colName: String = rc["name"];
+      let colComment: String = rc["comment"];
+      if (colComment == null || colComment == "") {
+        colComment = colName;
+      }
+      let qf: Object = {
+        dataName: colName,
+        displayName: colComment,
+        inputStyle: "text",
+        relation: "="
+      };
+      let mt: String = rc["mysqlType"];
+      if (mt == null) {
+        mt = "";
+      }
+      let fmt: String = deriveDateFormat(mt);
+      if (fmt != "") {
+        // 时间类型 → 日期选择控件（dateFormat 供 value-format/type 用）
+        qf["inputStyle"] = "date";
+        qf["dateFormat"] = fmt;
+      }
+      queryFields.push(qf);
+    }
+  }
+
+  let pascal: String = snakeToPascal(modelName);
+  return {
+    meta: {
+      // dataUrl 首段经 deriveApiBaseFromUrl 消费为 apiBase=modelName，带
+      // /selectByIn 后缀与 admin_vue .jsonvue 实例（如 shop.jsonvue）同构，
+      // 加工器据此拼出 POST 后缀式 URL（/shop/selectByIn|update|delete）
+      dataUrl: modelName + "/selectByIn",
+      // 接口函数名沿用 admin_vue 链约定：get/upd/del + Pascal + List
+      queryApi: "get" + pascal + "List",
+      updateApi: "upd" + pascal + "List",
+      deleteApi: "del" + pascal + "List",
+      noDelete: false,
+      noEdit: false,
+      noDetail: false,
+      description: tableComment
+    },
+    columns: cols,
+    queryFields: queryFields
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 二、pure-admin 派生标记补全（渲染前的最后一跳，模板便捷键）
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// @brief 为 tplData 补充 pure-admin 模板专用派生键（不改动共用加工器）
+/// @param tplData buildAdminTplData 返回的完整模板数据（原地补全）
+///   补充内容：
+///   - 列级：isDatetimeFormat（日期 value-format 分支）、金额/浮点 precision
+///     缺省兜底 2、textarea rows 缺省兜底 4、开关文字表达式改单引号字面量
+///     （模板属性双引号内安全的 JS 表达式）
+///   - 查询字段级：isDatetimeFormat、dataNameCamel（选项加载函数名合法标识）
+///   - 弹窗按钮级：keyPascal、字段 fieldNameCamel、select url 归一与方法小写
+///   - 顶层：hasQueryFields/hasMoneyDisplay/hasRemoteDialogSelect/needMessageBox
+export function enrichPureTplData(tplData: Object): Void {
+  // ── 列级派生 ──
+  let cols: Object[] = tplData["columns"];
+  let hasMoneyDisplay: Bool = false;
+  let colsLen = cols.length;
+  for (let i = 0; i < colsLen; i = i + 1) {
+    let col: Object = cols[i];
+    // 日期选择器 value-format 分支（datetime 带时分秒，date 仅日期）
+    col["isDatetimeFormat"] = (col["dateFormat"] == "datetime");
+    // 金额/浮点 precision 缺省兜底（避免生成 minimumFractionDigits: 空参语法错误）
+    if (col["isMoneyDisplay"] == true) {
+      hasMoneyDisplay = true;
+      if (col["precision"] == null) {
+        col["precision"] = 2;
+      }
+    }
+    if ((col["isMoney"] == true || col["isFloat"] == true) && col["precision"] == null) {
+      col["precision"] = 2;
+    }
+    // 多行文本 rows 缺省兜底
+    if (col["isTextArea"] == true && col["textareaRows"] == null) {
+      col["textareaRows"] = 4;
+    }
+    // 开关文字表达式改单引号字面量（未引用数据源时）：
+    // 引用静态数据源的表达式（boolSwitchTexts['x'].active）保持不变
+    if (col["hasBoolApi"] != true) {
+      col["switchActiveTextExpr"] = "'" + escapeJsStr(col["switchActiveText"]) + "'";
+      col["switchInactiveTextExpr"] = "'" + escapeJsStr(col["switchInactiveText"]) + "'";
+    }
+  }
+  tplData["hasMoneyDisplay"] = hasMoneyDisplay;
+
+  // ── 查询字段级派生 ──
+  let queryFields: Object[] = tplData["queryFields"];
+  let qfLen = queryFields.length;
+  for (let j = 0; j < qfLen; j = j + 1) {
+    let qf: Object = queryFields[j];
+    qf["isDatetimeFormat"] = (qf["dateFormat"] == "datetime");
+    // 远程下拉选项加载函数名需要合法标识（dataName 可能是 snake_case）
+    qf["dataNameCamel"] = snakeToCamel(qf["dataName"]);
+  }
+  tplData["hasQueryFields"] = (qfLen > 0);
+
+  // ── 弹窗按钮字段级派生（自定义 Dialog 按钮的远程下拉支持）──
+  let dialogBtns: Object[] = tplData["dialogButtons"];
+  let hasRemoteDialogSelect: Bool = false;
+  let btnLen = dialogBtns.length;
+  for (let b = 0; b < btnLen; b = b + 1) {
+    let btn: Object = dialogBtns[b];
+    btn["keyPascal"] = snakeToPascal(btn["key"]);
+    let fields: Object[] = btn["dialogFields"];
+    let fieldLen = fields.length;
+    for (let k = 0; k < fieldLen; k = k + 1) {
+      let df: Object = fields[k];
+      df["fieldNameCamel"] = snakeToCamel(df["fieldName"]);
+      if (df["isSelect"] == true) {
+        // select url 归一（补前导斜杠）+ 请求方法小写（http.request 用）
+        let selUrl: String = df["selectUrl"];
+        if (selUrl != null && selUrl != "" && selUrl.startsWith("/") == false) {
+          df["selectUrl"] = "/" + selUrl;
+        }
+        let selMethod: String = df["selectMethod"];
+        if (selMethod == null || selMethod == "") {
+          selMethod = "POST";
+        }
+        df["selectMethodLower"] = selMethod.toLowerCase();
+        hasRemoteDialogSelect = true;
+      }
+    }
+  }
+  tplData["hasRemoteDialogSelect"] = hasRemoteDialogSelect;
+  // ElMessageBox 导入条件：删除确认或 Confirm 行为按钮（模板 ${if} 不支持 ||，
+  // 在脚本侧预计算合并标记）
+  tplData["needMessageBox"] =
+    ((tplData["noDelete"] != true) || (tplData["hasConfirmButtons"] == true));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 三、双轨判定：解析某表的 .jsonvue 高级页路径
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// @brief 双轨判定（plan 3.3）：命中 .jsonvue → 高级页；未命中 → 标准页合成
+/// @param pageName 页面名（= modelName）
+/// @param webBasePath pure-admin 项目根
+/// @param checkedVueFiles 可用的 .jsonvue 候选（树勾选 + params.checkedPages，已归一）
+/// @return 命中的 .jsonvue 绝对路径；无（走标准页合成）返回 ""
+///   解析顺序：
+///     1. 候选列表中基名 == 页面名的 .jsonvue（显式指定/项目树勾选，admin_vue 同交互）
+///     2. webBasePath/src/views/{pageName}/{pageName}/{pageName}.jsonvue（页面目录同名）
+///     3. webBasePath/src/views/{pageName}/{pageName}.jsonvue（页面目录）
+///   路径 2/3 经 derivePage 推导的 pagePath 均为 "{pageName}/{pageName}"，
+///   与标准页合成的虚拟路径一致，两种来源输出位置完全相同
+export function resolveJsonvuePath(pageName: String, webBasePath: String,
+                                   checkedVueFiles: String[]): String {
+  let found: String = "";
+  // 1) 候选列表同名 .jsonvue（先到先得，文件名全项目应唯一）
+  let vueLen = checkedVueFiles.length;
+  for (let i = 0; i < vueLen; i = i + 1) {
+    let p: String = checkedVueFiles[i];
+    if (found == "" && basename(p) == pageName) {
+      found = p;
+    }
+  }
+  if (found != "") {
+    return found;
+  }
+  // 2) pure-admin 页面目录同名（与生成产物同目录）
+  let pageDir: String = webBasePath + "/src/views/" + pageName + "/" + pageName;
+  let p2: String = pageDir + "/" + pageName + ".jsonvue";
+  if (fileExists(p2)) {
+    return p2;
+  }
+  // 3) 页面目录上级（.jsonvue 与页面目录平级放置）
+  let p3: String = webBasePath + "/src/views/" + pageName + "/" + pageName + ".jsonvue";
+  if (fileExists(p3)) {
+    return p3;
+  }
+  return "";
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 四、生成主入口
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// @brief 生成 vue-pure-admin 后台管理界面代码
+/// @param params 项目参数对象（见文件头说明）
+export function generateAdminMain(params: Object): Void {
+  // 统计实际写入磁盘的文件数量（writeFile 成功时 +1），结束日志汇总输出
+  let generatedFileCount = 0;
+
+  // ── 1. 必填参数：输出根目录（pure-admin 项目根）与 .jsontable 路径 ──
+  let basePath: String = params["webBasePath"];
+  if (basePath == null || basePath == "") {
+    printError("错误：缺少必填参数 webBasePath（pure-admin 项目根目录）");
+    return;
+  }
+  basePath = basePath.replace("\\", "/");
+
+  let jsonTablePath: String = params["jsonTablePath"];
+  if (jsonTablePath == null || jsonTablePath == "") {
+    printError("错误：缺少必填参数 jsonTablePath（.jsontable 统一配置文件路径）");
+    return;
+  }
+
+  // ── 2. 模板配置：一个模板对应一个生成的代码文件 ───────────────────
+  //    字段说明：
+  //      tpl  - 模板文件路径（相对入口脚本目录，即 scriptDir()）
+  //      out  - 输出文件路径模板，用 {key} 占位符从 tplData 取值
+  //             支持的占位符：{basePath}、{pagePath}、{apiModule}、{pageName}
+  let templates: TemplateConfig[] = params["templates"];
+  if (templates == null) {
+    templates = [
+      { tpl: "../template/index.tpl", out: "{basePath}/src/views/{pagePath}/{pageName}.vue" },
+      { tpl: "../template/write.tpl", out: "{basePath}/src/views/{pagePath}/components/write.vue" },
+      { tpl: "../template/api.tpl", out: "{basePath}/src/api/{apiModule}/{pageName}.ts" }
+    ];
+  }
+
+  // ── 2.1 数据源模板配置：勾选的 .jsonsource 文件 → 数据源 api 文件 ──
+  //    out 支持的占位符：{basePath}、{sourceName}（.jsonsource 文件基名）
+  let sourceTemplates: TemplateConfig[] = params["sourceTemplates"];
+  if (sourceTemplates == null) {
+    sourceTemplates = [
+      { tpl: "../template/source.tpl", out: "{basePath}/src/api/source/{sourceName}.ts" }
+    ];
+  }
+
+  // ── 2.2 上传预设模板配置：勾选的 .jsonupload 文件 → 共享上传 api 文件 ──
+  //    out 支持的占位符：{basePath}、{uploadName}（.jsonupload 文件基名）
+  let uploadTemplates: TemplateConfig[] = params["uploadTemplates"];
+  if (uploadTemplates == null) {
+    uploadTemplates = [
+      { tpl: "../template/upload.tpl", out: "{basePath}/src/api/upload/{uploadName}.ts" }
+    ];
+  }
+
+  // ── 3. 读取 .jsontable 统一配置（事实源，生成期不连库）────────────
+  let tableJson: Object = readJson(jsonTablePath);
+  if (tableJson == null || tableJson["tables"] == null) {
+    printError("错误：.jsontable 配置读取失败或无 tables 节点：" + jsonTablePath);
+    return;
+  }
+  let tables: Object[] = tableJson["tables"];
+  printLog("jsontable tables count: " + tables.length);
+
+  // 同名表检查：两个 modelName 相同会生成到同一目录互相覆盖
+  let seenModels: Object = {};
+  let tblLen = tables.length;
+  for (let tc = 0; tc < tblLen; tc = tc + 1) {
+    let m: String = tables[tc]["modelName"];
+    if (m == null || m == "") {
+      m = tables[tc]["tableName"];
+    }
+    if (seenModels[m] == true) {
+      printError("错误：.jsontable 存在重复 modelName（" + m +
+                 "），生成结果会互相覆盖，请修正后重新执行");
+      return;
+    }
+    seenModels[m] = true;
+  }
+
+  // ── 4. 收集勾选文件（.jsonvue 高级页 / .jsonsource / .jsonupload）──
+  //    传入 scriptDir() 确保只处理本项目下的勾选文件，
+  //    其它项目的勾选文件即使被选中也不会被执行
+  let rawFiles: String[] = getCheckedFiles(scriptDir());
+  let allFiles: String[] = [];
+  let rfLen = rawFiles.length;
+  for (let fi = 0; fi < rfLen; fi = fi + 1) {
+    allFiles.append(rawFiles[fi].replace("\\", "/"));
+  }
+  // params.checkedPages：显式指定的 .jsonvue 高级页（与项目树勾选合并去重）
+  let checkedPages: String[] = params["checkedPages"];
+  if (checkedPages == null) {
+    checkedPages = [];
+  }
+  let cpLen = checkedPages.length;
+  for (let ci = 0; ci < cpLen; ci = ci + 1) {
+    let cpNorm: String = checkedPages[ci].replace("\\", "/");
+    let seenCp: Bool = false;
+    let afLen = allFiles.length;
+    for (let cj = 0; cj < afLen; cj = cj + 1) {
+      if (allFiles[cj] == cpNorm) {
+        seenCp = true;
+      }
+    }
+    if (seenCp == false) {
+      allFiles.push(cpNorm);
+    }
+  }
+
+  // 按后缀分组：.jsonvue 高级页 / .jsonsource 数据源 / .jsonupload 上传预设
+  let checkedVueFiles: String[] = [];
+  let sourceFiles: String[] = [];
+  let uploadFiles: String[] = [];
+  let afLen2 = allFiles.length;
+  for (let fk = 0; fk < afLen2; fk = fk + 1) {
+    let f: String = allFiles[fk];
+    if (f.endsWith(".jsonvue")) {
+      checkedVueFiles.push(f);
+    } else if (f.endsWith(".jsonsource")) {
+      sourceFiles.push(f);
+    } else if (f.endsWith(".jsonupload")) {
+      uploadFiles.push(f);
+    }
+  }
+
+  // ── 4.1 检查勾选文件是否同名不同路径（文件重复）────────────────
+  //    两个 basename 相同的文件同时存在会导致数据源查找/生成结果互相覆盖
+  let seenBases: String[] = [];
+  let dupFiles: String[] = [];
+  let abLen = allFiles.length;
+  for (let di = 0; di < abLen; di = di + 1) {
+    let base: String = basename(allFiles[di]);
+    let seen: Bool = false;
+    let sbLen = seenBases.length;
+    for (let dj = 0; dj < sbLen; dj = dj + 1) {
+      if (seenBases[dj] == base) {
+        seen = true;
+      }
+    }
+    if (seen == true) {
+      dupFiles.push(base);
+    } else {
+      seenBases.push(base);
+    }
+  }
+  if (dupFiles.length > 0) {
+    printError("错误：勾选文件存在同名不同路径（文件重复），请取消勾选其中一个后重新执行：");
+    let dupLen = dupFiles.length;
+    for (let dn = 0; dn < dupLen; dn = dn + 1) {
+      printError("  - " + dupFiles[dn]);
+    }
+    return;
+  }
+
+  // ── 5. 全局枚举同步（沿用 admin_vue 链路，方案 B：内存转换不落盘）──
+  //    两级作用域收集合并（就近在前）：
+  //      1. params.projectApiPath 指定的后端 API 项目目录（可选，项目级枚举；
+  //         如 file/crud_gin/<项目>，前端目录树够不到后端项目子目录）
+  //      2. 查找链上的共享层配置（如 file/crud_nest/*.jsonglobalenum）
+  //    合并后转成与 .jsonsource 同构的静态数据源：既播种 sourceMap（页面
+  //    枚举列引用），也照常渲染 src/api/source/global_enum.ts
+  let globalEnumSources: Object[] = null;
+  if (params["genGlobalEnum"] != false) {
+    let geFiles: String[] = [];
+    let projDir: String = params["projectApiPath"];
+    if (projDir != null && projDir != "") {
+      if (fileExists(projDir)) {
+        // 目录下全部 *.jsonglobalenum（按文件名序）作为项目级配置收集
+        let projNames: String[] = listFiles(projDir, ".jsonglobalenum");
+        let pnLen = projNames.length;
+        for (let pi = 0; pi < pnLen; pi = pi + 1) {
+          geFiles.append(projDir.replace("\\", "/") + "/" + projNames[pi]);
+        }
+      } else {
+        printLog("警告：projectApiPath 不存在: " + projDir);
+      }
+    }
+    let sharedFiles: String[] = findGlobalEnumFiles(scriptDir());
+    let shLen = sharedFiles.length;
+    for (let si = 0; si < shLen; si = si + 1) {
+      geFiles.append(sharedFiles[si]);
+    }
+    if (geFiles.length > 0) {
+      printLog("global enum files: " + geFiles.length + " 份（就近优先合并）");
+      let geJson: Object = mergeGlobalEnumFiles(geFiles);
+      let srcObj: Object = buildGlobalEnumJsonSource(geJson);
+      let srcList: Object[] = srcObj["sources"];
+      if (srcList != null && srcList.length > 0) {
+        // 方案 B 不落盘：枚举源仅在内存中转换为统一静态源格式，
+        // jsonSourcePath 是虚拟路径（仅供 basename 推导 sourceName=global_enum）
+        let srcData: Object = buildSourceTplData(srcObj, scriptDir() + "/api/global_enum.jsonsource");
+        globalEnumSources = srcData["sources"];
+        // 渲染 source 链路（与勾选 .jsonsource 的处理一致）→ src/api/source/global_enum.ts
+        let stLen = sourceTemplates.length;
+        for (let gi = 0; gi < stLen; gi = gi + 1) {
+          let geOutPath: String = formatPath(sourceTemplates[gi].out, {
+            basePath: basePath,
+            sourceName: srcData["sourceName"]
+          });
+          let geResult: String = renderTpl(sourceTemplates[gi].tpl, srcData);
+          if (geResult) {
+            let geWriteOk: Bool = writeFile(geOutPath, geResult);
+            if (geWriteOk == true) {
+              generatedFileCount = generatedFileCount + 1;
+            }
+            printLog("生成文件: " + geOutPath);
+          }
+        }
+      } else {
+        printLog("全局枚举配置为空，跳过数据源同步");
+      }
+    } else {
+      printLog("未找到 global_enum.jsonglobalenum，跳过全局枚举数据源同步");
+    }
+  } else {
+    printLog("genGlobalEnum=false，跳过全局枚举数据源同步");
+  }
+
+  // ── 6. 渲染勾选的 .jsonsource / .jsonupload（数据源/上传 api 文件）──
+  //    每个 .jsonsource 生成一个 api 文件（src/api/source/{sourceName}.ts），
+  //    每个 .jsonupload 生成一个共享上传文件（src/api/upload/{uploadName}.ts），
+  //    供各页面下拉框/上传组件 import 引用
+  let fileLen = allFiles.length;
+  for (let ui = 0; ui < fileLen; ui = ui + 1) {
+    let file: String = allFiles[ui];
+    if (file.endsWith(".jsonsource")) {
+      let srcJson: Object = readJson(file);
+      let srcData: Object = buildSourceTplData(srcJson, file);
+      let stLen2 = sourceTemplates.length;
+      for (let sj = 0; sj < stLen2; sj = sj + 1) {
+        let srcOutPath: String = formatPath(sourceTemplates[sj].out, {
+          basePath: basePath,
+          sourceName: srcData["sourceName"]
+        });
+        let srcResult: String = renderTpl(sourceTemplates[sj].tpl, srcData);
+        if (srcResult) {
+          let srcWriteOk: Bool = writeFile(srcOutPath, srcResult);
+          if (srcWriteOk == true) {
+            generatedFileCount = generatedFileCount + 1;
+          }
+          printLog("生成文件: " + srcOutPath);
+        }
+      }
+      continue;
+    }
+    if (file.endsWith(".jsonupload")) {
+      let upJson: Object = readJson(file);
+      let upData: Object = buildUploadTplData(upJson, file);
+      let utLen = uploadTemplates.length;
+      for (let uj = 0; uj < utLen; uj = uj + 1) {
+        let upOutPath: String = formatPath(uploadTemplates[uj].out, {
+          basePath: basePath,
+          uploadName: upData["uploadName"]
+        });
+        let upResult: String = renderTpl(uploadTemplates[uj].tpl, upData);
+        if (upResult) {
+          let upWriteOk: Bool = writeFile(upOutPath, upResult);
+          if (upWriteOk == true) {
+            generatedFileCount = generatedFileCount + 1;
+          }
+          printLog("生成文件: " + upOutPath);
+        }
+      }
+      continue;
+    }
+  }
+
+  // ── 7. 每表双轨判定，收集待渲染页面 ─────────────────────────────
+  //    .jsonvue 存在 → 高级页（读文件）；不存在 → 标准页（合成 jsonvue 形状）。
+  //    合成页用"虚拟 .jsonvue 路径"喂给加工器：derivePage 从路径推导
+  //    pagePath/apiModule/pageName，与真实 .jsonvue 命中时的推导结果一致，
+  //    保证两种来源输出位置相同（src/views/{module}/{pageName}/）
+  let pages: Object[] = [];
+  let consumedVue: Object = {};
+  // 先收集全部 i18n 翻译表名（与 crud_gin 同规则）：翻译表只随主表实体/接口联动，
+  // 不生成独立管理页
+  let i18nTables: Object = {};
+  let tblLen1 = tables.length;
+  for (let ti0 = 0; ti0 < tblLen1; ti0 = ti0 + 1) {
+    let t0: Object = tables[ti0];
+    let i18nNode: Object = t0["i18n"];
+    if (i18nNode != null) {
+      let i18nTbl: String = i18nNode["table"];
+      if (i18nTbl != null && i18nTbl != "") {
+        i18nTables[i18nTbl] = true;
+      }
+    }
+  }
+  let tblLen2 = tables.length;
+  for (let ti = 0; ti < tblLen2; ti = ti + 1) {
+    let table: Object = tables[ti];
+    let modelName: String = table["modelName"];
+    if (modelName == null || modelName == "") {
+      modelName = table["tableName"];
+    }
+    // 翻译表跳过页面生成（printLog 说明，与后端"只生成实体"对齐）
+    if (i18nTables[table["tableName"]] == true) {
+      printLog("表 '" + table["tableName"] + "' 为 i18n 翻译表（被引用），跳过页面生成");
+      continue;
+    }
+    let vuePath: String = resolveJsonvuePath(modelName, basePath, checkedVueFiles);
+    let pageJson: Object = null;
+    let filePath: String = "";
+    if (vuePath != "") {
+      // 双轨·高级页：同名 .jsonvue 存在，完全按 .jsonvue 走（可视化编辑全能力）
+      pageJson = readJson(vuePath);
+      filePath = vuePath;
+      consumedVue[vuePath] = true;
+      printLog("高级页（.jsonvue 双轨）：" + vuePath);
+    } else {
+      // 双轨·标准页：从 .jsontable 列角色合成 jsonvue 形状（零额外配置）
+      pageJson = buildJsonvueFromTable(table);
+      filePath = basePath + "/src/views/" + modelName + "/" + modelName + "/" + modelName + ".jsonvue";
+      printLog("标准页（.jsontable 合成）：" + modelName);
+    }
+    if (pageJson == null) {
+      printError("错误：页面配置读取失败，跳过：" + filePath);
+      continue;
+    }
+    pages.push({ filePath: filePath, json: pageJson });
+  }
+
+  // 未对应任何表的勾选 .jsonvue：按其所在目录推导输出路径（与 admin_vue 对等，
+  // 保证非 .jsontable 管理的页面也能在新框架下生成）
+  let cvLen = checkedVueFiles.length;
+  for (let vi = 0; vi < cvLen; vi = vi + 1) {
+    let cvPath: String = checkedVueFiles[vi];
+    if (consumedVue[cvPath] == true) {
+      continue;
+    }
+    let cvJson: Object = readJson(cvPath);
+    if (cvJson == null) {
+      printError("错误：.jsonvue 读取失败，跳过：" + cvPath);
+      continue;
+    }
+    printLog("高级页（.jsonvue 独立勾选，未对应 .jsontable 表）：" + cvPath);
+    pages.push({ filePath: cvPath, json: cvJson });
+  }
+
+  // ── 8. 统一渲染：buildAdminTplData → enrichPureTplData → 三模板写盘 ──
+  //    请求后缀供加工器拼后缀式 URL（selectUrl/updateUrl/deleteUrl），与
+  //    admin_vue 主链的 apiSelectSuffix/apiUpdateSuffix/apiDeleteSuffix 一致；
+  //    api.tpl 与 admin_vue 同样消费这三个 URL 键（仅 http 层换 pure-admin 写法）
+  //    （逐键赋值而非字面量，避开 delete 保留字作字面量键名）
+  let suffixes: Object = {};
+  suffixes["select"] = "selectByIn";
+  suffixes["update"] = "update";
+  suffixes["delete"] = "delete";
+  let pgLen = pages.length;
+  for (let pg = 0; pg < pgLen; pg = pg + 1) {
+    let tplData: Object = buildAdminTplData(pages[pg]["json"], pages[pg]["filePath"],
+                                            suffixes, sourceFiles, uploadFiles,
+                                            globalEnumSources);
+    // pure-admin 专用派生键补全（isDatetimeFormat/needMessageBox 等）
+    enrichPureTplData(tplData);
+    let pagePath: String = tplData["pagePath"];
+    printLog("processing page: " + pagePath);
+
+    let tplLen = templates.length;
+    for (let ct = 0; ct < tplLen; ct = ct + 1) {
+      // 用 formatPath 替换 {basePath}/{pagePath}/{apiModule}/{pageName} 占位符
+      let outPath: String = formatPath(templates[ct].out, {
+        basePath: basePath,
+        pagePath: pagePath,
+        apiModule: tplData["apiModule"],
+        pageName: tplData["pageName"]
+      });
+      tplData["outputPath"] = outPath;  // 供模板内的 fileExists(outputPath) 守卫使用
+
+      // 核心：调用模板引擎，把 tpl 中的 ${变量名} 替换为实际值
+      let result: String = renderTpl(templates[ct].tpl, tplData);
+      if (result) {
+        let writeOk: Bool = writeFile(outPath, result);
+        if (writeOk == true) {
+          generatedFileCount = generatedFileCount + 1;
+        }
+        printLog("生成文件: " + outPath);
+      }
+    }
+  }
+
+  printLog("--- pure-admin 代码生成结束，共生成 " + generatedFileCount + " 个文件 ---");
+}

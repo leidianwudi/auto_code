@@ -1,0 +1,323 @@
+// ============================================================================
+// param_go.ac — Go(gin+gorm) 数据加工器：.jsontable 列定义 → 模板数据结构
+// ----------------------------------------------------------------------------
+// 作用（对应 crud_nest/template/core/param.ac 的 Go 版本）：
+//   crud_gin 生成期**不连数据库**，.jsontable 是唯一事实源（与 Nest 链的本质
+//   区别：Nest 生成期调 db.tableSchema 读列，Go 链直接读 .jsontable 的 columns）。
+//   本文件把 .jsontable 的表/列配置加工成模板可直接取值的结构：
+//     - mysqlType → goType（unsigned 前缀 uint；tinyint(1)=bool；json=datatypes.JSON）
+//     - 可空列 → 指针类型（如 *string），json 列保持 datatypes.JSON（自带可空语义）
+//     - gormTag / jsonTag / bindingTag 全量预拼，模板直接输出
+//     - isInsParam / isUpdParam 决定 InsertParams / UpdateParams 的字段集合
+//
+// 类型映射表（plan 5.2）：
+//   bigint → int64（unsigned → uint64）    int → int
+//   tinyint(1) → bool（其余 tinyint → int8）
+//   varchar/text → string                  decimal → float64
+//   datetime/timestamp → time.Time         json → datatypes.JSON（gorm.io/datatypes）
+// ============================================================================
+
+import { snakeToPascal } from "../../../tool/tool_str.ac";
+
+/// @brief MySQL 列类型 → Go 基础类型
+/// @param colType 原始 MySQL 类型，如 varchar(64)、bigint、tinyint(1)、decimal(10,2)
+/// @param unsigned 是否无符号（bigint → uint64 等）
+/// @return Go 类型名（int64/string/bool/time.Time/datatypes.JSON 等）
+export function mapTypeToGo(colType: String, unsigned: Bool): String {
+  let t: String = colType.toLowerCase();
+  // 布尔：tinyint(1) / boolean / bool（须在 tinyint / int 判断之前）
+  if (t.includes("tinyint(1)") || t.includes("boolean") || t.includes("bool")) {
+    return "bool";
+  }
+  // 整数族：长类型先判（bigint / tinyint 都包含 "int" 子串）
+  if (t.includes("bigint")) {
+    return unsigned ? "uint64" : "int64";
+  }
+  if (t.includes("tinyint")) {
+    return unsigned ? "uint8" : "int8";
+  }
+  if (t.includes("smallint")) {
+    return unsigned ? "uint16" : "int16";
+  }
+  if (t.includes("mediumint")) {
+    return unsigned ? "uint32" : "int32";
+  }
+  if (t.includes("int")) {
+    return unsigned ? "uint" : "int";
+  }
+  // 浮点/小数类型
+  if (t.includes("decimal") || t.includes("float") || t.includes("double")) {
+    return "float64";
+  }
+  // 日期时间类型
+  if (t.includes("datetime") || t.includes("timestamp") || t.includes("date")) {
+    return "time.Time";
+  }
+  // JSON 类型：gorm.io/datatypes（[]byte 语义天然可空，不加指针）
+  if (t.includes("json")) {
+    return "datatypes.JSON";
+  }
+  // 字符串（varchar/char/text）与未知类型兜底
+  return "string";
+}
+
+/// @brief 转义 Go 字符串字面量中的反斜杠与双引号（用于生成 Go 代码内的字符串）
+/// @param s 原始字符串
+/// @return 转义后的字符串（\ → \\，" → \"，换行 → 空格）
+export function escapeGoStr(s: String): String {
+  if (s == null) {
+    return "";
+  }
+  let result: String = "";
+  let len = s.length;
+  for (let i = 0; i < len; i = i + 1) {
+    let c: String = s[i];
+    if (c == "\\") {
+      result = result + "\\\\";
+    } else if (c == "\"") {
+      result = result + "\\\"";
+    } else if (c == "\n" || c == "\r") {
+      result = result + " ";
+    } else {
+      result = result + c;
+    }
+  }
+  return result;
+}
+
+/// @brief 清理 Go 行注释文本（去换行，防止注释撕裂到代码行）
+/// @param s 原始注释文本
+/// @return 单行化的注释文本
+export function sanitizeGoComment(s: String): String {
+  if (s == null) {
+    return "";
+  }
+  let result: String = "";
+  let len = s.length;
+  for (let i = 0; i < len; i = i + 1) {
+    let c: String = s[i];
+    if (c == "\n" || c == "\r") {
+      result = result + " ";
+    } else {
+      result = result + c;
+    }
+  }
+  return result;
+}
+
+/// @brief 判断 Go 类型对应的查询零值判断类别（query_data 构建条件用）
+/// @param goType Go 类型名
+/// @return string（!= ""）/ number（!= 0）/ ptr（!= nil）/ skip（不生成条件）
+export function zeroKindOfGoType(goType: String): String {
+  if (goType.includes("datatypes.JSON")) {
+    return "skip";  // JSON 列不做普通条件查询
+  }
+  if (goType == "time.Time" || goType == "bool") {
+    return "ptr";   // 查询参数声明为指针（*time.Time / *bool）
+  }
+  if (goType == "string") {
+    return "string";
+  }
+  if (goType.includes("int") || goType.includes("float")) {
+    return "number";
+  }
+  return "string";
+}
+
+/// @brief 构建带分组的 Go import 块（stdlib 组 + 第三方/本项目组，空行分隔）
+/// @param stdLines stdlib 导入行数组（裸路径，如 "time"，函数内部加引号）
+/// @param extLines 第三方/本项目导入行数组（裸路径，如 "gorm.io/gorm"）
+/// @return 完整 import 块文本（无导入时返回空串，模板按空判断跳过）
+export function buildGoImports(stdLines: String[], extLines: String[]): String {
+  if (stdLines.length == 0 && extLines.length == 0) {
+    return "";
+  }
+  let s: String = "import (";
+  for (let i = 0; i < stdLines.length; i = i + 1) {
+    s = s + "\n  \"" + stdLines[i] + "\"";
+  }
+  if (extLines.length > 0) {
+    if (stdLines.length > 0) {
+      s = s + "\n";
+    }
+    for (let j = 0; j < extLines.length; j = j + 1) {
+      s = s + "\n  \"" + extLines[j] + "\"";
+    }
+  }
+  s = s + "\n)";
+  return s;
+}
+
+// ============================================================================
+// FieldDef — 加工后的列定义（模板 fields 循环直接取值）
+// ============================================================================
+export class FieldDef {
+  let name: String = "";           // 列名（原样，json tag / gorm column 用）
+  let comment: String = "";        // 列注释（已单行化，Go 行注释安全）
+  let colType: String = "";        // 原始 MySQL 类型，如 "varchar(64)"
+  let unsigned: Bool = false;      // 是否无符号
+  let goType: String = "";         // Go 基础类型（int64/string/time.Time/...）
+  let declType: String = "";       // 声明类型（可空 → 指针；json 类型保持原样）
+  let isPtr: Bool = false;         // ptrType 是否为指针（模板解引用行为分支）
+  let ptrType: String = "";        // 指针声明类型（UpdateParams 用，全部指针）
+  let goName: String = "";         // 导出驼峰（snakeToPascal），如 user_name → UserName
+  let gormTag: String = "";        // gorm:"column:xx;type:...[;primaryKey][;autoIncrement]"
+  let jsonTag: String = "";        // json:"name"
+  let bindingTag: String = "";     // binding:"required" / binding:"omitempty"（含前导空格）
+  let nullable: Bool = false;      // 是否可空（→ 指针类型）
+  let isPrimary: Bool = false;     // 是否主键
+  let isAutoInc: Bool = false;     // 是否自增
+  let isCoin: Bool = false;        // 是否金额类型（decimal/float/double）
+  let isSearch: Bool = false;      // 是否查询项（.jsontable 列 search=true → where 条件）
+  let form: String = "";           // 表单角色（前端用，后端透传：none/input/...）
+  let required: Bool = false;      // 表单必填（→ binding:"required"）
+  let zeroKind: String = "";       // 查询零值判断类别（zeroKindOfGoType）
+  let isCreateDate: Bool = false;  // create_time 时间列（DB 默认值维护，不入增改参数）
+  let isUpdateDate: Bool = false;  // update_time 时间列且未配 manualUpdateTime（DB ON UPDATE 维护）
+  let isAutoTime: Bool = false;    // 由 DB 自动维护的时间列（不入 InsertParams/UpdateParams）
+  let isInsParam: Bool = false;    // 是否进 InsertParams（排除自动维护时间列与自增主键）
+  let isUpdParam: Bool = false;    // 是否进 UpdateParams（排除自动维护时间列与主键）
+}
+
+// ============================================================================
+// Param — .jsontable 表配置 → Go 模板数据的转换器
+// ----------------------------------------------------------------------------
+// 用法：
+//   let param = new Param();
+//   param.setTableData(tableJson);   // tableJson 为 .jsontable tables[] 的一项
+//   param.fields / param.insFields / param.updFields → 模板循环
+// ============================================================================
+export class Param {
+  let entityClass: String = "";      // Go 结构体名，如 Shop（snakeToPascal(tableName)）
+  let tableName: String = "";        // 物理表名，如 shop
+  let tableDesc: String = "";        // 表注释（tableComment，已单行化）
+  let modelName: String = "";        // 模型名（.jsontable 原样透传）
+  let fields: FieldDef[] = [];       // 全部列（含自动维护时间列）
+  let insFields: FieldDef[] = [];    // InsertParams 字段集（排除自动时间列与自增主键）
+  let updFields: FieldDef[] = [];    // UpdateParams 字段集（排除自动时间列与主键）
+  let primaryField: FieldDef = null; // 主键列（SelectById/Update/Delete 依赖；无主键时报错跳表）
+  let hasTimeField: Bool = false;    // 是否有 time.Time 列（实体 import "time"）
+  let hasJsonField: Bool = false;    // 是否有 datatypes.JSON 列（实体 import gorm.io/datatypes）
+
+  /// @brief 拼接单列的 gorm tag
+  ///   形如 gorm:"column:name;type:varchar(64)"，主键追加 ;primaryKey，
+  ///   自增追加 ;autoIncrement；unsigned 附加到 type 后（type:bigint unsigned）
+  function buildGormTag(field: FieldDef): String {
+    let tag: String = "column:" + field.name + ";type:" + field.colType;
+    // 无符号：列配置 unsigned=true 且类型串未自带 unsigned 时附加
+    if (field.unsigned && !field.colType.toLowerCase().includes("unsigned")) {
+      tag = tag + " unsigned";
+    }
+    if (field.isPrimary) {
+      tag = tag + ";primaryKey";
+    }
+    if (field.isAutoInc) {
+      tag = tag + ";autoIncrement";
+    }
+    return "gorm:\"" + tag + "\"";
+  }
+
+  /// @brief 主入口：处理一张表的 .jsontable 配置，填充 fields/insFields/updFields
+  /// @param data .jsontable tables[] 的一项：
+  ///   {
+  ///     tableName: "shop", modelName: "shop", tableComment: "商品表",
+  ///     manualUpdateTime: false,
+  ///     columns: [
+  ///       { name: "id", mysqlType: "bigint", unsigned: true, nullable: false,
+  ///         isPrimary: true, isAutoInc: true, default: null, comment: "主键",
+  ///         list: true, search: false, form: "none", required: false },
+  ///       ...
+  ///     ]
+  ///   }
+  function setTableData(data: Object): Void {
+    this.tableName = data.tableName;
+    this.modelName = data.modelName;
+    this.tableDesc = sanitizeGoComment(data.tableComment);
+    let manualUpdateTime: Bool = (data.manualUpdateTime == true);
+
+    // ── 结构体名：snakeToPascal(tableName)，如 shop → Shop、shop_order → ShopOrder ──
+    this.entityClass = snakeToPascal(this.tableName);
+
+    // ── 逐列加工 ──────────────────────────────────────────────────────────
+    this.fields = [];
+    this.insFields = [];
+    this.updFields = [];
+    let columns: Object[] = data.columns;
+    let colLen = columns.length;
+    for (let i = 0; i < colLen; i = i + 1) {
+      let col: Object = columns[i];
+      let field: FieldDef = new FieldDef();
+      field.name = col.name;
+      field.comment = sanitizeGoComment(col.comment);
+      field.colType = col.mysqlType;
+      field.unsigned = (col.unsigned == true);
+      field.nullable = (col.nullable == true);
+      field.isPrimary = (col.isPrimary == true);
+      field.isAutoInc = (col.isAutoInc == true);
+      field.isSearch = (col.search == true);
+      field.form = col.form;
+      field.required = (col.required == true);
+      field.goType = mapTypeToGo(field.colType, field.unsigned);
+      field.goName = snakeToPascal(field.name);
+      field.isCoin = field.goType == "float64";
+
+      // 声明类型：可空 → 指针；json 类型（datatypes.JSON）天然可空不加指针；
+      // 主键语义上不为 NULL，保持值类型（Insert 返回值/Update 定位依赖此约定）
+      field.declType = field.goType;
+      field.ptrType = field.goType;
+      if (field.nullable && !field.isPrimary && field.goType != "datatypes.JSON") {
+        field.declType = "*" + field.goType;
+      }
+      if (field.goType != "datatypes.JSON") {
+        field.ptrType = "*" + field.goType;
+      }
+      // UpdateParams 用 ptrType（全指针）；isPtr 标记模板解引用行为
+      // （JSON 类型非指针，赋值不解引用）
+      field.isPtr = (field.ptrType != field.goType);
+
+      // 标签拼装
+      field.gormTag = this.buildGormTag(field);
+      field.jsonTag = "json:\"" + field.name + "\"";
+      if (field.required) {
+        field.bindingTag = " binding:\"required\"";
+      } else {
+        field.bindingTag = " binding:\"omitempty\"";
+      }
+      field.zeroKind = zeroKindOfGoType(field.goType);
+
+      // 自动维护时间列：create_time 恒自动（DB 默认值）；update_time 未配
+      // manualUpdateTime 时由 DB ON UPDATE 维护——两者均不入增改参数
+      let isDateTime = field.colType.toLowerCase().includes("datetime")
+        || field.colType.toLowerCase().includes("timestamp");
+      field.isCreateDate = (field.name == "create_time") && isDateTime;
+      field.isUpdateDate = (field.name == "update_time") && isDateTime && !manualUpdateTime;
+      field.isAutoTime = field.isCreateDate || field.isUpdateDate;
+
+      // 参数字段集合：InsertParams 排除自动时间列与自增主键；
+      // UpdateParams 排除自动时间列与主键（主键单独作为 Id 定位字段）
+      field.isInsParam = !field.isAutoTime && !(field.isPrimary && field.isAutoInc);
+      field.isUpdParam = !field.isAutoTime && !field.isPrimary;
+
+      // import 探测：实体文件是否需要 time / datatypes
+      if (field.goType == "time.Time") {
+        this.hasTimeField = true;
+      }
+      if (field.goType == "datatypes.JSON") {
+        this.hasJsonField = true;
+      }
+
+      // 主键记录（取第一个主键列）
+      if (field.isPrimary && this.primaryField == null) {
+        this.primaryField = field;
+      }
+
+      this.fields.append(field);
+      if (field.isInsParam) {
+        this.insFields.append(field);
+      }
+      if (field.isUpdParam) {
+        this.updFields.append(field);
+      }
+    }
+  }
+}

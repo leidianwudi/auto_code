@@ -11,6 +11,7 @@
 #include "json_vue_model.h"
 #include "src/util/common/util_json.h"
 #include "src/util/ui/code/code_editor.h"
+#include "src/util/ui/code/format_code.h"
 
 // ════════════════════════════════════════════════════════════
 //  构造
@@ -50,9 +51,12 @@ void JsonVueWidget::syncCodeToVisualImpl() {
 
 void JsonVueWidget::syncVisualToCodeImpl() {
   // 以界面配置为主、磁盘原文为底做保真合并，再序列化写回代码编辑器：
-  // 避免可视化未表达的字段被丢弃 / 界面未加载时把整份配置清空
+  // 避免可视化未表达的字段被丢弃 / 界面未加载时把整份配置清空。
+  // 序列化后格式化（JSON5 风格）写回：紧凑单行会让代码视图退化为超长行
+  // （缩进竖线错位 / 高亮与校验对超长块全量重算导致切换卡顿），与其它 json 族一致
   QJsonObject merged = m_visual->collectMergedObject();
-  QString jsonStr = JsonVueConfig::toJsonString(merged);
+  const QString jsonStr =
+      FormatCode::format(JsonVueConfig::toJsonString(merged), FormatCode::FormatJson5);
   setPlainTextIfChanged(jsonStr);
   // 同步可视化页内容指纹（下次切回时据此跳过重载）
   m_lastVisualHash = UtilJson::fingerprint(merged);

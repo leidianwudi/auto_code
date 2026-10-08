@@ -1,0 +1,149 @@
+/// @file go_module.ac — internal/router/router_.go 增量更新工具
+/// ----------------------------------------------------------------------------
+/// 说明（复刻 crud_nest/template/app_module.ac 的幂等注入模式）：
+///   router_.go 是"生成器与开发者共用"的路由注册文件，不能整文件覆盖：
+///   每张表生成一个注册函数 Register{Model}Routes，按整行匹配去重后
+///   追加进 needle 标记区：
+///
+///     // {autocode:routes}   ... // {/autocode:routes}
+///
+///   幂等策略（全文件级）：
+///     - 注册函数是否已存在：整个文件逐行匹配函数签名行
+///       （行 trim 后以 "func RegisterXxxRoutes(" 开头即视为已注册）；
+///       手写同名注册函数时请让签名独占一行，否则会重复插入导致编译错误。
+///   文件不存在时自动创建（含 package/import/标记区）；存在但缺标记时
+///   报错请人修复（标记被删说明文件结构被破坏，静默追加会污染文件）。
+/// ----------------------------------------------------------------------------
+
+/// @brief 在行数组中查找包含指定子串的第一行索引
+/// @param lines 行数组
+/// @param needle 子串
+/// @return 行索引（0 起），找不到返回 -1
+export function findLineWith(lines: String[], needle: String): Number {
+  for (let i = 0; i < lines.length; i = i + 1) {
+    if (lines[i].indexOf(needle) >= 0) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/// @brief 把路由注册函数增量写入 router_.go（幂等：已存在的函数自动跳过）
+/// @param routerFilePath internal/router/router_.go 绝对路径；空串/null 时跳过
+/// @param routes 路由信息数组，每项 {funcName, rendered, hdlPath}：
+///   funcName - 注册函数名，如 RegisterShopRoutes（签名行幂等匹配用）
+///   rendered - router.tpl 渲染出的完整函数文本（不含 package/import）
+///   hdlPath  - handler 包 import 路径（仅首次创建文件时写入 import 块用）
+/// @return 本次新追加的函数数量（0 = 无变化/跳过）
+export function updateRouterFile(routerFilePath: String, routes: Object[]): Number {
+
+  // ── 1. needle 标记常量（识别用裸标记；创建文件时附加说明文字）──
+  let nBegin: String = "// {autocode:routes}";
+  let nEnd: String = "// {/autocode:routes}";
+  let note: String = " ← AutoCode 增量更新（幂等收敛）占位标记，请勿删除";
+
+  // ── 2. 参数守卫 ────────────────────────────────────────────────
+  if (routerFilePath == null || routerFilePath.length == 0) {
+    printLog("未配置 routerFilePath，跳过路由注册注入");
+    return 0;
+  }
+  if (routes == null || routes.length == 0) {
+    return 0;
+  }
+
+  // ── 3. 读取或初始化 router_.go ────────────────────────────────
+  let exists: Bool = fileExists(routerFilePath);
+  let lines: String[] = [];
+  if (exists) {
+    let content: String = readFile(routerFilePath);
+    if (content == null || content.length == 0) {
+      printError("错误：router_.go 读取失败或为空: " + routerFilePath);
+      return 0;
+    }
+    lines = content.split("\n");
+  } else {
+    // 首次创建：package + import 块（hdlPath 取自首条路由）+ 标记区
+    let hdlPath: String = routes[0].hdlPath;
+    lines.push("// 此代码为AutoCode编译器生成（增量维护：路由注册函数按表追加，请勿手改标记区以外的生成内容）");
+    lines.push("package router");
+    lines.push("");
+    lines.push("import (");
+    lines.push("  \"github.com/gin-gonic/gin\"");
+    lines.push("");
+    if (hdlPath != null && hdlPath.length > 0) {
+      lines.push("  \"" + hdlPath + "\"");
+    }
+    lines.push(")");
+    lines.push(nBegin + note);
+    lines.push(nEnd + note);
+  }
+
+  // ── 4. 标记检查（必需区域；缺失时报警不静默追加）───────────────
+  let beginIdx: Number = findLineWith(lines, nBegin);
+  let endIdx: Number = findLineWith(lines, nEnd);
+  if (beginIdx < 0 || endIdx < 0) {
+    printError("错误：router_.go 缺少 {autocode:routes} 标记，请手工补齐标记对后重新生成");
+    printError("      （格式参见 template/go_module.ac 文件头说明）: " + routerFilePath);
+    return 0;
+  }
+
+  // ── 5. 逐函数检查，收集待插入内容（全文件级幂等）───────────────
+  //     查重：整个文件按整行匹配函数签名行（行 trim 后以
+  //     "func RegisterXxxRoutes(" 开头即视为已注册）
+  let newLines: String[] = [];
+  let added: Number = 0;
+  for (rt in routes) {
+    let funcName: String = rt.funcName;
+    if (funcName == null || funcName.length == 0) {
+      continue;
+    }
+    let sigPrefix: String = "func " + funcName + "(";
+    let hasRoute: Bool = false;
+    for (let i = 0; i < lines.length; i = i + 1) {
+      if (lines[i].trim().startsWith(sigPrefix)) {
+        hasRoute = true;
+      }
+    }
+    if (hasRoute) {
+      printLog("路由注册函数 " + funcName + " 已存在，跳过");
+      continue;
+    }
+    let block: String = rt.rendered;
+    if (block == null || block.length == 0) {
+      continue;
+    }
+    // 函数文本拆行追加（块间空行分隔）
+    if (newLines.length > 0) {
+      newLines.push("");
+    }
+    let blockLines: String[] = block.split("\n");
+    for (bl in blockLines) {
+      newLines.push(bl);
+    }
+    added = added + 1;
+  }
+
+  if (added == 0) {
+    printLog("router_.go 无需更新（路由函数均已注册）");
+    return 0;
+  }
+
+  // ── 6. 写回（新函数插到 end 标记行前）─────────────────────────
+  let out: String[] = [];
+  for (let i = 0; i < lines.length; i = i + 1) {
+    if (i == endIdx) {
+      for (s in newLines) {
+        out.push(s);
+      }
+    }
+    out.push(lines[i]);
+  }
+
+  let ok: Bool = writeFile(routerFilePath, out.join("\n"));
+  if (ok) {
+    printLog("router_.go 增量注册 " + added + " 个路由函数: " + routerFilePath);
+  } else {
+    printError("错误：router_.go 写入失败: " + routerFilePath);
+  }
+  return added;
+}

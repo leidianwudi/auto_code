@@ -7,6 +7,8 @@
 
 #include <QJsonDocument>
 
+#include "src/util/common/util_json.h"
+
 // ════════════════════════════════════════════════════════════
 //  JsonSourceOption
 // ════════════════════════════════════════════════════════════
@@ -56,8 +58,7 @@ QJsonObject JsonSourceTag::toJson() const {
 JsonSourceTag JsonSourceTag::fromJson(const QJsonObject &obj) {
   JsonSourceTag t;
   const QJsonValue v = obj.value(QString::fromLatin1(JsonSourceKey::kValue));
-  t.value = v.isDouble() ? QString::number(v.toDouble())
-                         : v.toString();
+  t.value = v.isDouble() ? QString::number(v.toDouble()) : v.toString();
   t.label = obj.value(QString::fromLatin1(JsonSourceKey::kLabel)).toString();
   t.color = obj.value(QString::fromLatin1(JsonSourceKey::kColor)).toString();
   return t;
@@ -118,8 +119,8 @@ JsonSource JsonSource::fromJson(const QJsonObject &obj) {
     s.labelField = obj.value(QString::fromLatin1(JsonSourceKey::kLabelField)).toString();
     s.valueField = obj.value(QString::fromLatin1(JsonSourceKey::kValueField)).toString();
     s.paged = obj.value(QString::fromLatin1(JsonSourceKey::kPaged)).toBool(false);
-    s.pageKey = obj.value(QString::fromLatin1(JsonSourceKey::kPageKey))
-                    .toString(QStringLiteral("page"));
+    s.pageKey =
+        obj.value(QString::fromLatin1(JsonSourceKey::kPageKey)).toString(QStringLiteral("page"));
     s.pageSizeKey = obj.value(QString::fromLatin1(JsonSourceKey::kPageSizeKey))
                         .toString(QStringLiteral("pageSize"));
     s.pageSize = obj.value(QString::fromLatin1(JsonSourceKey::kPageSize)).toInt(20);
@@ -184,7 +185,9 @@ JsonSourceConfig JsonSourceConfig::fromJson(const QJsonObject &obj) {
 JsonSourceConfig JsonSourceConfig::fromJsonString(const QString &jsonStr, QString *error) {
   Q_UNUSED(error)  // 与 JsonVueConfig 保持一致；解析失败时返回空配置
   QJsonParseError perr;
-  QJsonDocument doc = QJsonDocument::fromJson(jsonStr.toUtf8(), &perr);
+  // JSON5 兼容解析（UtilJson）：手写/既有 .jsonsource 可能含无引号键、单引号、注释、
+  // 尾逗号，严格 QJsonDocument 会解析失败导致有数据的文件可视化显示为空
+  QJsonDocument doc = UtilJson::fromJson(jsonStr, &perr);
   if (perr.error != QJsonParseError::NoError || !doc.isObject()) {
     return JsonSourceConfig();
   }
