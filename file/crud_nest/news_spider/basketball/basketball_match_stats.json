@@ -8,6 +8,7 @@
       "tableName": "basketball_match_stats",
       "selCols": [
         "schedule_mid",
+        "team_side",
         "type",
         "score"
       ],
@@ -18,7 +19,20 @@
         "schedule_mid": "ASC",
         "id": "ASC"
       },
-      "joinTable": []
+      "joinTable": [
+        {
+          "joinEnClass": "EnBasketballSchedule",
+          "joinEnClass_Url": "src/basketball/basketball_schedule/entities/en_basketball_schedule",
+          "joinEnClassPro": "schedule",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "matchStats",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "schedule_mid",
+            "referencedColumnName": "mid"
+          }
+        }
+      ]
     }
   ],
 }

@@ -52,6 +52,18 @@
             "name": "player_pid",
             "referencedColumnName": "pid"
           }
+        },
+        {
+          "joinEnClass": "EnBasketballSchedule",
+          "joinEnClass_Url": "src/basketball/basketball_schedule/entities/en_basketball_schedule",
+          "joinEnClassPro": "schedule",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "matchLogs",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "schedule_mid",
+            "referencedColumnName": "mid"
+          }
         }
       ]
     }

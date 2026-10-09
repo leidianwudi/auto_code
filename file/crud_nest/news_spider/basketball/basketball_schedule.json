@@ -33,9 +33,65 @@
           }
         },
         {
+          "joinEnClass": "EnBasketballTeam",
+          "joinEnClass_Url": "src/basketball/basketball_team/entities/en_basketball_team",
+          "joinEnClassPro": "home_team_info",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "homeSchedules",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "home_team_tid",
+            "referencedColumnName": "tid"
+          }
+        },
+        {
+          "joinEnClass": "EnBasketballTeam",
+          "joinEnClass_Url": "src/basketball/basketball_team/entities/en_basketball_team",
+          "joinEnClassPro": "away_team_info",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "awaySchedules",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "away_team_tid",
+            "referencedColumnName": "tid"
+          }
+        },
+        {
           "joinEnClass": "EnBasketballMatchOdd",
           "joinEnClass_Url": "src/basketball/basketball_match_odd/entities/en_basketball_match_odd",
           "joinEnClassPro": "matchOdds",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "schedule",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnBasketballMatchLog",
+          "joinEnClass_Url": "src/basketball/basketball_match_log/entities/en_basketball_match_log",
+          "joinEnClassPro": "matchLogs",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "schedule",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnBasketballMatchPosition",
+          "joinEnClass_Url": "src/basketball/basketball_match_position/entities/en_basketball_match_position",
+          "joinEnClassPro": "matchPositions",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "schedule",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnBasketballMatchStats",
+          "joinEnClass_Url": "src/basketball/basketball_match_stats/entities/en_basketball_match_stats",
+          "joinEnClassPro": "matchStats",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "schedule",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnBasketballMatchTrend",
+          "joinEnClass_Url": "src/basketball/basketball_match_trend/entities/en_basketball_match_trend",
+          "joinEnClassPro": "matchTrends",
           "joinType": "OneToMany",
           "inverseJoinEnClassPro": "schedule",
           "isJoinRelations": true

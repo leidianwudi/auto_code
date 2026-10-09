@@ -1,7 +1,7 @@
 {
   // 指定 AutoCode schema，便于拆分后的单表配置校验。
   $schema: '/crud_nest/template/tool/param.schema.json',
-  // 篮球球队详情查询配置（篮球暂无榜单/技术统计表，无关联关系）。
+  // 篮球球队详情查询配置。
   tables: [
     {
       "modelName": "basketball\\basketball_team",
@@ -20,7 +20,73 @@
       ],
       "selColsSort": {
         "id": "ASC"
-      }
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnBasketballScoreRank",
+          "joinEnClass_Url": "src/basketball/basketball_score_rank/entities/en_basketball_score_rank",
+          "joinEnClassPro": "scoreRanks",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "teamInfo",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnBasketballPlayerRank",
+          "joinEnClass_Url": "src/basketball/basketball_player_rank/entities/en_basketball_player_rank",
+          "joinEnClassPro": "playerRanks",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "teamInfo",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnBasketballTeamRank",
+          "joinEnClass_Url": "src/basketball/basketball_team_rank/entities/en_basketball_team_rank",
+          "joinEnClassPro": "teamRanks",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "team",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnBasketballMatchPosition",
+          "joinEnClass_Url": "src/basketball/basketball_match_position/entities/en_basketball_match_position",
+          "joinEnClassPro": "matchPositions",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "team",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnBasketballMatchLog",
+          "joinEnClass_Url": "src/basketball/basketball_match_log/entities/en_basketball_match_log",
+          "joinEnClassPro": "matchLogs",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "team",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnBasketballSchedule",
+          "joinEnClass_Url": "src/basketball/basketball_schedule/entities/en_basketball_schedule",
+          "joinEnClassPro": "homeSchedules",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "home_team_info",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnBasketballSchedule",
+          "joinEnClass_Url": "src/basketball/basketball_schedule/entities/en_basketball_schedule",
+          "joinEnClassPro": "awaySchedules",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "away_team_info",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnBasketballCoach",
+          "joinEnClass_Url": "src/basketball/basketball_coach/entities/en_basketball_coach",
+          "joinEnClassPro": "coaches",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "team",
+          "isJoinRelations": true
+        }
+      ]
     }
   ],
 }

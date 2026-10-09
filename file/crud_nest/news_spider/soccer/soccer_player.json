@@ -58,6 +58,14 @@
           "joinType": "OneToMany",
           "inverseJoinEnClassPro": "player",
           "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSoccerPlayerTransfer",
+          "joinEnClass_Url": "src/soccer/soccer_player_transfer/entities/en_soccer_player_transfer",
+          "joinEnClassPro": "transfers",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "player",
+          "isJoinRelations": true
         }
       ]
     }

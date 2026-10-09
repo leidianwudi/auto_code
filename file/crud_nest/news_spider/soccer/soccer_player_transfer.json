@@ -17,7 +17,20 @@
         "date": "DESC",
         "id": "ASC"
       },
-      "joinTable": []
+      "joinTable": [
+        {
+          "joinEnClass": "EnSoccerPlayer",
+          "joinEnClass_Url": "src/soccer/soccer_player/entities/en_soccer_player",
+          "joinEnClassPro": "player",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "transfers",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "player_pid",
+            "referencedColumnName": "pid"
+          }
+        }
+      ]
     }
   ],
 }
