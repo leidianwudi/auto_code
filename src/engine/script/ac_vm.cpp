@@ -407,17 +407,6 @@ void AcVm::dispatch(const AcInstr &ins, int unitIdx) {
         else st.append(accore::AcJsonValue());
         break;
       }
-      // ── 临时探针（定位链式赋值，验证后移除）：报错处 dump 栈与指令 ──
-      if (m_trace) {
-        QString stDump;
-        for (const auto &v : st) {
-          stDump += QStringLiteral("[%1]").arg(AcValueStr::toString(v));
-        }
-        std::printf("[vm-debug] GetIndex error pc=%d op=%d a=%d stack(%d): %s\n",
-                    pc, int(ins.op), ins.a, int(st.size()), stDump.toUtf8().constData());
-        std::fflush(stdout);
-      }
-      // ── 临时探针结束 ──
       setError(QStringLiteral("cannot access index on value"), ins.line);
       break;
     }
