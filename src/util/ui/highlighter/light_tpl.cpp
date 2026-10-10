@@ -111,29 +111,18 @@ void LightTpl::highlightBlock(const QString &text) {
     int start = text.indexOf(QString::fromLatin1(AcTemplate::kExprOpen), idx);
     if (start == -1) break;
     if (start + 2 < text.length() && text[start + 2] == QChar('#')) {
-      // 用深度计数找到正确的闭合 }
-      int depth = 1;
-      int cursor = start + 3;
-      while (cursor < text.length()) {
-        if (text.mid(cursor, 2) == QString::fromLatin1(AcTemplate::kExprOpen)) {
-          depth++;
-          cursor += 2;
-        } else if (text[cursor] == QChar('}')) {
-          depth--;
-          if (depth == 0) break;
-          cursor++;
-        } else {
-          cursor++;
-        }
-      }
-      if (depth == 0) {
-        // 整个 ${# ... } 标记为灰色斜体
-        int end = cursor + 1;
+      // 闭合语义与 tpl_lexer.cpp 的渲染器保持一致：贪婪匹配到行内最后一个 }
+      // （注释内容中的 }，如代码示例 import { A } from 'x'，不会被误判为闭合）。
+      // 此前用 {/} 深度计数配对，注释含嵌套括号时会提前闭合，导致注释色
+      // 中断、后半段按普通文本显示——高亮与实际渲染语义不一致
+      const int lastClose = text.lastIndexOf(QChar('}'));
+      if (lastClose > start + 2) {
+        const int end = lastClose + 1;
         setFormat(start, end - start, commentFormat);
         for (int j = start; j < end && j < text.size(); ++j) formatted[j] = true;
         idx = end;
       } else {
-        idx = start + 2;  // 未闭合，继续扫描
+        idx = start + 2;  // 行内无闭合 }（未闭合注释，渲染器会报错，高亮从简）
       }
     } else {
       idx = start + 2;  // 非注释，让后续规则处理
