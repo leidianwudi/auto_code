@@ -26,6 +26,45 @@ namespace {
 /// 运行时错误消息常量（多处复用，统一文案与维护）
 const QString kErrUndefinedVariable = QStringLiteral("undefined variable '%1'");
 const QString kErrUndefinedClass = QStringLiteral("undefined class '%1'");
+
+/// 链式赋值后缀（prop / index 混合，按求值顺序）
+struct InterpAssignSuffix {
+  bool isIndex;
+  QString prop;      ///< prop 后缀的属性名
+  const Expr *index; ///< index 后缀的下标表达式
+};
+
+/// 展开链式 LHS：root 变量 + ≥2 级 prop/index 后缀时返回 true（单级走既有路径）。
+/// 规则与编译器 collectAssignChain 一致；root 仅支持标识符（this 等根不识别）
+bool collectInterpAssignChain(const Expr &lv, QString &root,
+                              QVector<InterpAssignSuffix> &out) {
+  const Expr *cur = &lv;
+  while (true) {
+    if (cur->kind == Expr::kIndexAccess) {
+      if (!cur->left || !cur->right) return false;
+      out.prepend(InterpAssignSuffix{true, QString(), cur->right.get()});
+      cur = cur->left.get();
+      continue;
+    }
+    if (cur->kind == Expr::kPropAccess) {
+      if (cur->propObject) {
+        out.prepend(InterpAssignSuffix{false, cur->prop, nullptr});
+        cur = cur->propObject.get();
+        continue;
+      }
+      if (cur->ident.isEmpty()) return false;
+      out.prepend(InterpAssignSuffix{false, cur->prop, nullptr});
+      root = cur->ident;
+      break;
+    }
+    if (cur->kind == Expr::kIdent) {
+      root = cur->ident;
+      break;
+    }
+    return false;
+  }
+  return !root.isEmpty() && out.size() >= 2;
+}
 }  // namespace
 
 accore::AcJsonValue AcInterpreter::resolveClassAccess(const QString &className,
@@ -338,6 +377,116 @@ accore::AcJsonValue AcInterpreter::evalExpr(const Expr &expr) {
     case Expr::kAssign: {
       accore::AcJsonValue value = evalExpr(*expr.right);
       if (!m_error.isEmpty()) return accore::AcJsonValue();
+      // ── 链式赋值目标（root=ident，≥2 级 prop/index 混合）────────────
+      // 语义与 VM compileChainedAssign 展开一致：下标求值一次、逐层取容器
+      // （副本）、末级写入、逐层整份容器替换写回
+      {
+        QString chainRoot;
+        QVector<InterpAssignSuffix> chain;
+        if (collectInterpAssignChain(*expr.left, chainRoot, chain)) {
+          const int n = chain.size();
+          accore::AcJsonValue cur = resolveVar(chainRoot);
+          QVector<accore::AcJsonValue> containers;  // containers[d] = 第 d 层容器（写回用）
+          QVector<accore::AcJsonValue> idxVals;     // index 后缀的下标值（求值一次）
+          containers.append(cur);
+          for (int d = 0; d < n - 1; ++d) {
+            const InterpAssignSuffix &s = chain[d];
+            if (s.isIndex) {
+              const accore::AcJsonValue idxVal = evalExpr(*s.index);
+              if (!m_error.isEmpty()) return accore::AcJsonValue();
+              idxVals.append(idxVal);
+              // 读下一层（语义与本函数 kIndexAccess 求值一致）
+              const accore::AcJsonValue &obj = containers.last();
+              if (obj.isObject()) {
+                QString key;
+                if (idxVal.isString()) {
+                  key = idxVal.toString();
+                } else {
+                  key = idxVal.isDouble() ? QString::number(idxVal.toDouble())
+                                          : idxVal.toString();
+                }
+                cur = obj.value(key);
+              } else if (obj.isArray()) {
+                const int idx = safeJsonToInt(idxVal.toQJsonValue());
+                cur = (idx >= 0 && idx < obj.size()) ? obj.at(idx) : accore::AcJsonValue();
+              } else {
+                setError(QStringLiteral("cannot access index on value"), expr.loc.line);
+                return accore::AcJsonValue();
+              }
+            } else {
+              // prop 读（VM kGetProp 语义：对象取属性）
+              if (!containers.last().isObject()) {
+                setError(QStringLiteral("cannot access property '%1' on value").arg(s.prop),
+                         expr.loc.line);
+                return accore::AcJsonValue();
+              }
+              cur = containers.last().value(s.prop);
+            }
+            containers.append(cur);
+          }
+          // 末级写入：直接在本地副本 inner 上修改（不调用 assignToIndex，
+          // 因其 writeBackVar 需要容器变量表达式，而链式场景只有下标表达式）
+          auto setIndexLocal = [&](accore::AcJsonValue &obj, const accore::AcJsonValue &idxVal,
+                                   const accore::AcJsonValue &newVal) -> bool {
+            if (obj.isObject()) {
+              QString key =
+                  idxVal.isString() ? idxVal.toString() : QString::number(idxVal.toDouble());
+              if (obj.has(key)) releaseIfInstanceWithDestruct(obj.value(key));
+              obj.set(key, newVal);
+              return true;
+            }
+            if (obj.isArray()) {
+              int idx = safeJsonToInt(idxVal.toQJsonValue());
+              if (idx >= 0 && idx < obj.size()) {
+                releaseIfInstanceWithDestruct(obj.at(idx));
+                obj.replace(idx, newVal);
+              } else if (idx == obj.size()) {
+                obj.append(newVal);
+              } else {
+                setError(QStringLiteral("cannot index-assign on value"), expr.loc.line);
+                return false;
+              }
+              return true;
+            }
+            setError(QStringLiteral("cannot index-assign on value"), expr.loc.line);
+            return false;
+          };
+          const InterpAssignSuffix &last = chain[n - 1];
+          accore::AcJsonValue inner = containers.last();
+          if (last.isIndex) {
+            // 末级下标单独求值（循环只覆盖中间层 d < n-1）
+            accore::AcJsonValue lastIdx = evalExpr(*last.index);
+            if (!m_error.isEmpty()) return accore::AcJsonValue();
+            if (!setIndexLocal(inner, lastIdx, value)) return accore::AcJsonValue();
+          } else {
+            if (!inner.isObject()) {
+              setError(QStringLiteral("cannot set property '%1' on value").arg(last.prop),
+                       expr.loc.line);
+              return accore::AcJsonValue();
+            }
+            inner.set(last.prop, value);
+          }
+          // 逐层写回（containers[d] 的 s_d = 深层更新后的容器）
+          for (int d = n - 2; d >= 0; --d) {
+            const InterpAssignSuffix &s = chain[d];
+            accore::AcJsonValue c = containers[d];
+            if (s.isIndex) {
+              if (!setIndexLocal(c, idxVals[d], inner)) return accore::AcJsonValue();
+            } else {
+              if (!c.isObject()) {
+                setError(QStringLiteral("cannot set property '%1' on value").arg(s.prop),
+                         expr.loc.line);
+                return accore::AcJsonValue();
+              }
+              c.set(s.prop, inner);
+            }
+            inner = c;
+          }
+          setVar(chainRoot, inner);
+          // 链式赋值表达式值 = nil（与 VM 一致；不支持作为右值取值）
+          return accore::AcJsonValue();
+        }
+      }
       // 左值为标识符：直接设置变量
       if (expr.left->kind == Expr::kIdent) {
         setVar(expr.left->ident, value);
@@ -356,7 +505,7 @@ accore::AcJsonValue AcInterpreter::evalExpr(const Expr &expr) {
           obj.set(expr.left->prop, value);
           setVar(baseName, obj);
         } else {
-          // 链式基（a.b.c = value）：语句级解析器走 kPropAssign/kIndexAssign，表达式级不支持
+          // 链式基（a.b.c = value）：root=this 等未识别形态
           setError(QStringLiteral("unsupported assignment target"), expr.loc.line);
         }
       }
@@ -367,6 +516,9 @@ accore::AcJsonValue AcInterpreter::evalExpr(const Expr &expr) {
           accore::AcJsonValue idxVal = evalExpr(*expr.left->right);
           if (!m_error.isEmpty()) return accore::AcJsonValue();
           assignToIndex(target, idxVal, value, *expr.left->left);
+        } else {
+          // 非标识符根的索引链（this[i][k] = v 等）：v1 不支持
+          setError(QStringLiteral("unsupported assignment target"), expr.loc.line);
         }
       }
       return value;

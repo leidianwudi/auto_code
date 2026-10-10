@@ -117,6 +117,9 @@ private:
   void compilePropChain(const Expr &e);
   void compileIncDec(const Expr &e, double delta, bool post);
   void compileAssignExpr(const Expr &e);
+  /// 链式赋值目标（a[i][k]=v / a[i].p=v / a.p.q=v，root=ident）：编译期展开为
+  /// 「逐层取容器（保留写回操作数）→ 末级写入 → 逐层 SetIndex/SetProp 写回」
+  void compileChainedAssign(const Expr &lv, const Expr &valueExpr);
   void compileFuncExprInner(const Expr &e);
 
   // ── 单元生成 ──

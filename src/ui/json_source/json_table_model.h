@@ -21,6 +21,7 @@
 
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QPair>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -70,6 +71,27 @@ inline constexpr const char *kRequired = "required";  ///< 表单必填
 // 索引键
 inline constexpr const char *kCols = "cols";
 inline constexpr const char *kUnique = "unique";
+// 表级进阶键（v2 结构化；此前走 extra 未知键保真）
+inline constexpr const char *kSelColsGap = "selColsGap";        ///< 范围查询列（展开 _min/_max）
+inline constexpr const char *kSelColsLike = "selColsLike";      ///< 模糊查询列（LIKE %x%）
+inline constexpr const char *kSelColsSort = "selColsSort";      ///< 默认排序（[["id","DESC"]]）
+inline constexpr const char *kEnums = "enums";                  ///< 表内枚举
+inline constexpr const char *kGlobalEnumCols = "globalEnumCols";  ///< 引用全局枚举的列名
+inline constexpr const char *kI18n = "i18n";                    ///< 多语言翻译表配置
+// 枚举键（kName 复用列名常量；kComment 复用列注释常量）
+inline constexpr const char *kColumn = "column";  ///< 枚举对应列名
+inline constexpr const char *kItems = "items";    ///< 枚举选项数组
+inline constexpr const char *kKey = "key";        ///< 枚举成员名（缺省按序号兜底）
+inline constexpr const char *kLabel = "label";    ///< 枚举项说明
+inline constexpr const char *kValue = "value";    ///< 枚举值
+inline constexpr const char *kValueType = "valueType";  ///< ""=string / "number"
+// i18n 键
+inline constexpr const char *kI18nTable = "table";        ///< 翻译表表名（空=未启用）
+inline constexpr const char *kExtKey = "extKey";          ///< 翻译表外键列
+inline constexpr const char *kLangKey = "langKey";        ///< 语言码列
+inline constexpr const char *kFields = "fields";          ///< 参与多语言的文本列
+inline constexpr const char *kDefaultLang = "defaultLang";  ///< 默认语言（缺省 zh）
+inline constexpr const char *kLangFrom = "langFrom";      ///< 语言码来源 body/header
 }  // namespace JsonTableKey
 
 /**
@@ -118,11 +140,58 @@ struct JsonTableIndex {
 };
 
 /**
+ * @struct JsonTableEnumOption
+ * @brief 表内枚举的一个选项（形状与 .jsonglobalenum 的 options 一致）
+ */
+struct JsonTableEnumOption {
+  QString key;        ///< 枚举成员名（snake_case，生成 Go const 转帕斯卡；空=生成侧按序号兜底）
+  QString label;      ///< 说明（Go 注释与前端标签文字）
+  QString value;      ///< 枚举值（valueType=number 时数字字面量，其余字符串）
+  QString valueType;  ///< ""=string / "number"
+
+  QJsonObject toJsonObject() const;
+  static JsonTableEnumOption fromJsonObject(const QJsonObject &obj);
+  bool operator==(const JsonTableEnumOption &other) const;
+};
+
+/**
+ * @struct JsonTableEnum
+ * @brief 表内枚举（某列的封闭值域：Go const + Map 与前端标签/下拉同源）
+ */
+struct JsonTableEnum {
+  QString column;  ///< 枚举对应的列名
+  QString comment;  ///< 说明（缺省回退列注释）
+  QVector<JsonTableEnumOption> options;  ///< 选项列表
+
+  QJsonObject toJsonObject() const;
+  static JsonTableEnum fromJsonObject(const QJsonObject &obj);
+  bool operator==(const JsonTableEnum &other) const;
+};
+
+/**
+ * @struct JsonTableI18n
+ * @brief 多语言翻译表配置（主表 + 翻译表联合查询/upsert/级联删除）
+ */
+struct JsonTableI18n {
+  QString table;                ///< 翻译表表名（空 = 未启用）
+  QString extKey;               ///< 翻译表中关联主表主键的外键列（如 ext_id）
+  QString langKey;              ///< 语言码列（如 lang）
+  QStringList fields;           ///< 参与多语言的翻译表文本列（如 ["name","intro"]）
+  QString defaultLang = QStringLiteral("zh");  ///< 默认语言（回退目标）
+  QString langFrom = QStringLiteral("body");   ///< 语言码来源：body / header
+
+  bool isEnabled() const { return !table.isEmpty(); }
+  QJsonObject toJsonObject() const;
+  static JsonTableI18n fromJsonObject(const QJsonObject &obj);
+  bool operator==(const JsonTableI18n &other) const;
+};
+
+/**
  * @struct JsonTableTable
  * @brief .jsontable 中的一张表
  *
- * extra 为未知键保真存储：i18n/globalEnumCols/joinTable 等进阶节点
- * v1 不结构化，反序列化时整体保留（剔除已知键），序列化时原样写回。
+ * extra 为未知键保真存储：未结构化的进阶节点（如 joinTable）反序列化时
+ * 整体保留（剔除已知键），序列化时原样写回。
  */
 struct JsonTableTable {
   QString tableName;               ///< 物理表名
@@ -131,7 +200,14 @@ struct JsonTableTable {
   bool manualUpdateTime = false;   ///< 手动维护更新时间（不走 DB ON UPDATE）
   QVector<JsonTableColumn> columns;  ///< 列定义（顺序即建表顺序）
   QVector<JsonTableIndex> indexes;   ///< 索引定义
-  QJsonObject extra;               ///< 未知键保真（进阶节点/未来扩展键原样写回）
+  // ── 表级进阶键（v2 结构化，此前走 extra）──
+  QStringList selColsGap;   ///< 范围查询列（每列展开 _min/_max 两个查询参数；仅时间/数值列）
+  QStringList selColsLike;  ///< 模糊查询列（LIKE %x%；仅字符串列，与 search 精确重复时精确优先）
+  QVector<QPair<QString, QString>> selColsSort;  ///< 默认排序（列名+ASC/DESC，首项为默认排序）
+  QVector<JsonTableEnum> enums;    ///< 表内枚举（与 globalEnumCols 二选一配置来源）
+  QStringList globalEnumCols;      ///< 引用全局枚举的列名（列名 = .jsonglobalenum 枚举 name）
+  JsonTableI18n i18n;              ///< 多语言翻译表配置（table 空 = 未启用）
+  QJsonObject extra;               ///< 未知键保真（未结构化节点/未来扩展键原样写回）
 
   /// 序列化为 JSON 对象（extra 铺底 + 已知键覆盖）
   QJsonObject toJsonObject() const;

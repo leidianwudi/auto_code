@@ -95,11 +95,104 @@ bool JsonTableIndex::operator==(const JsonTableIndex &other) const {
 }
 
 // ════════════════════════════════════════════════════════════
+//  JsonTableEnumOption / JsonTableEnum / JsonTableI18n
+// ════════════════════════════════════════════════════════════
+
+QJsonObject JsonTableEnumOption::toJsonObject() const {
+  QJsonObject obj;
+  // key 空串不落键（生成侧按序号兜底 opt_N）
+  if (!key.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kKey)] = key;
+  obj[QString::fromLatin1(JsonTableKey::kLabel)] = label;
+  obj[QString::fromLatin1(JsonTableKey::kValue)] = value;
+  if (!valueType.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kValueType)] = valueType;
+  return obj;
+}
+
+JsonTableEnumOption JsonTableEnumOption::fromJsonObject(const QJsonObject &obj) {
+  JsonTableEnumOption o;
+  o.key = obj.value(QString::fromLatin1(JsonTableKey::kKey)).toString();
+  o.label = obj.value(QString::fromLatin1(JsonTableKey::kLabel)).toString();
+  // value 兼容数字字面量（Qt6 的 toString 不转换数值，需显式处理）
+  const QJsonValue v = obj.value(QString::fromLatin1(JsonTableKey::kValue));
+  if (v.isString()) {
+    o.value = v.toString();
+  } else if (v.isDouble()) {
+    o.value = QString::number(v.toDouble());
+  }
+  o.valueType = obj.value(QString::fromLatin1(JsonTableKey::kValueType)).toString();
+  return o;
+}
+
+bool JsonTableEnumOption::operator==(const JsonTableEnumOption &other) const {
+  return key == other.key && label == other.label && value == other.value &&
+         valueType == other.valueType;
+}
+
+QJsonObject JsonTableEnum::toJsonObject() const {
+  QJsonObject obj;
+  obj[QString::fromLatin1(JsonTableKey::kColumn)] = column;
+  if (!comment.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kComment)] = comment;
+  QJsonArray itemArr;
+  for (const auto &o : options) itemArr.append(o.toJsonObject());
+  obj[QString::fromLatin1(JsonTableKey::kItems)] = itemArr;
+  return obj;
+}
+
+JsonTableEnum JsonTableEnum::fromJsonObject(const QJsonObject &obj) {
+  JsonTableEnum e;
+  e.column = obj.value(QString::fromLatin1(JsonTableKey::kColumn)).toString();
+  e.comment = obj.value(QString::fromLatin1(JsonTableKey::kComment)).toString();
+  const QJsonArray itemArr = obj.value(QString::fromLatin1(JsonTableKey::kItems)).toArray();
+  for (const auto &v : itemArr) {
+    if (v.isObject()) e.options.append(JsonTableEnumOption::fromJsonObject(v.toObject()));
+  }
+  return e;
+}
+
+bool JsonTableEnum::operator==(const JsonTableEnum &other) const {
+  return column == other.column && comment == other.comment && options == other.options;
+}
+
+QJsonObject JsonTableI18n::toJsonObject() const {
+  QJsonObject obj;
+  obj[QString::fromLatin1(JsonTableKey::kI18nTable)] = table;
+  obj[QString::fromLatin1(JsonTableKey::kExtKey)] = extKey;
+  obj[QString::fromLatin1(JsonTableKey::kLangKey)] = langKey;
+  QJsonArray fieldArr;
+  for (const QString &f : fields) fieldArr.append(f);
+  obj[QString::fromLatin1(JsonTableKey::kFields)] = fieldArr;
+  obj[QString::fromLatin1(JsonTableKey::kDefaultLang)] = defaultLang;
+  obj[QString::fromLatin1(JsonTableKey::kLangFrom)] = langFrom;
+  return obj;
+}
+
+JsonTableI18n JsonTableI18n::fromJsonObject(const QJsonObject &obj) {
+  JsonTableI18n i;
+  i.table = obj.value(QString::fromLatin1(JsonTableKey::kI18nTable)).toString();
+  i.extKey = obj.value(QString::fromLatin1(JsonTableKey::kExtKey)).toString();
+  i.langKey = obj.value(QString::fromLatin1(JsonTableKey::kLangKey)).toString();
+  const QJsonArray fieldArr = obj.value(QString::fromLatin1(JsonTableKey::kFields)).toArray();
+  for (const auto &v : fieldArr) {
+    if (v.isString()) i.fields.append(v.toString());
+  }
+  i.defaultLang =
+      obj.value(QString::fromLatin1(JsonTableKey::kDefaultLang)).toString(QStringLiteral("zh"));
+  i.langFrom =
+      obj.value(QString::fromLatin1(JsonTableKey::kLangFrom)).toString(QStringLiteral("body"));
+  return i;
+}
+
+bool JsonTableI18n::operator==(const JsonTableI18n &other) const {
+  return table == other.table && extKey == other.extKey && langKey == other.langKey &&
+         fields == other.fields && defaultLang == other.defaultLang && langFrom == other.langFrom;
+}
+
+// ════════════════════════════════════════════════════════════
 //  JsonTableTable
 // ════════════════════════════════════════════════════════════
 
 QJsonObject JsonTableTable::toJsonObject() const {
-  // 未知键保真：先以 extra 铺底（i18n/globalEnumCols/joinTable 等原样写回），
+  // 未知键保真：先以 extra 铺底（joinTable 等未结构化节点原样写回），
   // 已知键随后覆盖写入（extra 中不含已知键，见 fromJsonObject）
   QJsonObject obj = extra;
   obj[QString::fromLatin1(JsonTableKey::kTableName)] = tableName;
@@ -116,6 +209,40 @@ QJsonObject JsonTableTable::toJsonObject() const {
     for (const auto &ix : indexes) idxArr.append(ix.toJsonObject());
     obj[QString::fromLatin1(JsonTableKey::kIndexes)] = idxArr;
   }
+
+  // ── 表级进阶键（v2 结构化；空值不落键，空值=未配置语义）──
+  auto writeStringList = [&obj](const QStringList &list, const char *key) {
+    if (!list.isEmpty()) {
+      QJsonArray arr;
+      for (const QString &s : list) arr.append(s);
+      obj.insert(QString::fromLatin1(key), arr);
+    }
+  };
+  writeStringList(selColsGap, JsonTableKey::kSelColsGap);
+  writeStringList(selColsLike, JsonTableKey::kSelColsLike);
+  writeStringList(globalEnumCols, JsonTableKey::kGlobalEnumCols);
+
+  if (!selColsSort.isEmpty()) {
+    // 推荐数组格式 [["id","DESC"],...]（与书写顺序一致，首项为默认排序）
+    QJsonArray sortArr;
+    for (const auto &p : selColsSort) {
+      QJsonArray pair;
+      pair.append(p.first);
+      pair.append(p.second);
+      sortArr.append(pair);
+    }
+    obj.insert(QString::fromLatin1(JsonTableKey::kSelColsSort), sortArr);
+  }
+
+  if (!enums.isEmpty()) {
+    QJsonArray enumArr;
+    for (const auto &e : enums) enumArr.append(e.toJsonObject());
+    obj.insert(QString::fromLatin1(JsonTableKey::kEnums), enumArr);
+  }
+
+  if (i18n.isEnabled()) {
+    obj.insert(QString::fromLatin1(JsonTableKey::kI18n), i18n.toJsonObject());
+  }
   return obj;
 }
 
@@ -129,6 +256,12 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
   t.extra.remove(QString::fromLatin1(JsonTableKey::kManualUpdateTime));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kColumns));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kIndexes));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kSelColsGap));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kSelColsLike));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kSelColsSort));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kEnums));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kGlobalEnumCols));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kI18n));
 
   t.tableName = obj.value(QString::fromLatin1(JsonTableKey::kTableName)).toString();
   t.modelName = obj.value(QString::fromLatin1(JsonTableKey::kModelName)).toString();
@@ -145,13 +278,56 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
   for (const auto &v : idxArr) {
     if (v.isObject()) t.indexes.append(JsonTableIndex::fromJsonObject(v.toObject()));
   }
+
+  // ── 表级进阶键（v2 结构化）──
+  auto readStringList = [&obj](const char *key) {
+    QStringList list;
+    const QJsonArray arr = obj.value(QString::fromLatin1(key)).toArray();
+    for (const auto &v : arr) {
+      if (v.isString()) list.append(v.toString());
+    }
+    return list;
+  };
+  t.selColsGap = readStringList(JsonTableKey::kSelColsGap);
+  t.selColsLike = readStringList(JsonTableKey::kSelColsLike);
+  t.globalEnumCols = readStringList(JsonTableKey::kGlobalEnumCols);
+
+  // 排序：推荐数组格式 [["id","DESC"]]；兼容旧对象格式 {"id":"DESC"}
+  const QJsonValue sortVal = obj.value(QString::fromLatin1(JsonTableKey::kSelColsSort));
+  if (sortVal.isArray()) {
+    const QJsonArray sortArr = sortVal.toArray();
+    for (const auto &v : sortArr) {
+      const QJsonArray pair = v.toArray();
+      if (pair.size() >= 2) {
+        t.selColsSort.append({pair.at(0).toString(), pair.at(1).toString()});
+      } else if (pair.size() == 1 && pair.at(0).isString()) {
+        t.selColsSort.append({pair.at(0).toString(), QStringLiteral("DESC")});
+      }
+    }
+  } else if (sortVal.isObject()) {
+    const QJsonObject sortObj = sortVal.toObject();
+    for (auto it = sortObj.begin(); it != sortObj.end(); ++it) {
+      t.selColsSort.append({it.key(), it.value().toString()});
+    }
+  }
+
+  const QJsonArray enumArr = obj.value(QString::fromLatin1(JsonTableKey::kEnums)).toArray();
+  for (const auto &v : enumArr) {
+    if (v.isObject()) t.enums.append(JsonTableEnum::fromJsonObject(v.toObject()));
+  }
+
+  t.i18n = JsonTableI18n::fromJsonObject(
+      obj.value(QString::fromLatin1(JsonTableKey::kI18n)).toObject());
   return t;
 }
 
 bool JsonTableTable::operator==(const JsonTableTable &other) const {
   return tableName == other.tableName && modelName == other.modelName &&
          tableComment == other.tableComment && manualUpdateTime == other.manualUpdateTime &&
-         columns == other.columns && indexes == other.indexes && extra == other.extra;
+         columns == other.columns && indexes == other.indexes && selColsGap == other.selColsGap &&
+         selColsLike == other.selColsLike && selColsSort == other.selColsSort &&
+         enums == other.enums && globalEnumCols == other.globalEnumCols && i18n == other.i18n &&
+         extra == other.extra;
 }
 
 // ════════════════════════════════════════════════════════════

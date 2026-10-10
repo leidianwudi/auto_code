@@ -209,6 +209,19 @@ static const DualCase kCases[] = {
     {"enumDef", kEnumDef},
     {"constDecl", kConstDecl},
     {"nestedBlockScope", kNestedBlockScope},
+    // ── 链式赋值（a[i][k]=v / a[i].p=v / a.p.q=v：编译期展开逐层写回）──
+    {"chainedIndexAssign",
+     "let a = [[1,2],[3,4]]; a[1][0] = 9; return a;"},
+    {"chainedMixedAssign",
+     "let o = {list: [{v: 1}]}; o.list[0].v = 7; return o.list[0].v;"},
+    {"chainedPropChain",
+     "let o = {sub: {x: 1}}; o.sub.x = 5; return o.sub.x;"},
+    // COW 独立性：改 a[0] 不得影响兄弟元素 a[1]
+    {"chainedCowSibling",
+     "let a = [[1],[1]]; a[0][0] = 9; return a[1][0];"},
+    // 赋值表达式值 = nil（链式赋值不支持作为右值取值，两模式一致）
+    {"chainedAssignExprResult",
+     "let a = [[0]]; let r = a[0][0] = 3; return r;"},
 };
 
 static void testAll() {

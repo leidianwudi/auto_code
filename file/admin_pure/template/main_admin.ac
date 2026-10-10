@@ -33,7 +33,10 @@
 ///                   src/views/{pagePath}/、src/api/{apiModule}/
 ///
 /// 接收的项目参数（params 对象）：
-///   - jsonTablePath  必填，.jsontable 统一配置文件绝对路径
+///   - jsonTablePaths 可选，.jsontable 文件路径数组（推荐：按业务模块拆分多份文件）
+///   - jsonTablePath  可选，.jsontable 单文件路径（兼容旧写法）
+///     两者都省略时收集勾选文件中的 .jsontable（与 Go 链对称）；
+///     多份文件的 tables[] 合并处理，跨文件重复 modelName 仍会被检查拦截
 ///   - webBasePath    必填，pure-admin 项目根（产物写其 src/api、src/views）
 ///   - checkedPages   可选，高级页 .jsonvue 路径数组（基名 == modelName 时生效）
 ///   - projectApiPath 可选，对应后端 API 项目目录（如 file/crud_gin/shop_api），
@@ -87,7 +90,15 @@ export function deriveDateFormat(mysqlType: String): String {
 ///                .jsonvue 高级页引用 .jsonupload，标准页回退 URL 手输）
 ///     select/upload → 降级 text 并 printLog 提示（引用型数据需配 .jsonvue
 ///                高级页引用 .jsonsource/.jsonupload 才有下拉/上传，双轨兜底）
-export function buildJsonvueColumn(rawCol: Object): Object {
+/// @brief 标签颜色轮转（表内枚举合成 tagItems 时按选项序号取色）
+/// @param idx 选项序号（0 起）
+/// @return ElTag 颜色名（与 index.tpl 的标签渲染约定一致）
+export function tagColorOf(idx: Number): String {
+  let colors: String[] = ["primary", "success", "info", "warning", "danger"];
+  return colors[idx % colors.length];
+}
+
+export function buildJsonvueColumn(rawCol: Object, enumDef: Object): Object {
   let name: String = rawCol["name"];
   let comment: String = rawCol["comment"];
   if (comment == null || comment == "") {
@@ -153,19 +164,48 @@ export function buildJsonvueColumn(rawCol: Object): Object {
   } else {
     col["editStyle"] = "text";
   }
+
+  // 表内枚举命中（enums[].column == 列名）：列表标签显示 + 编辑下拉。
+  // tagItems 通道无需数据源文件（加工器 isTagEdit/isTagSwitch 分支直接消费），
+  // 覆盖 form 角色的编辑样式映射——枚举值域封闭，下拉比 number/input 更合理
+  if (enumDef != null) {
+    col["editStyle"] = "tag";
+    col["displayType"] = "tag";
+    col["switchEditable"] = false;
+    let items: Object[] = [];
+    let opts: Object[] = enumDef["items"];
+    if (opts != null) {
+      let oLen = opts.length;
+      for (let oi = 0; oi < oLen; oi = oi + 1) {
+        let opt: Object = opts[oi];
+        let item: Object = {
+          value: opt["value"],
+          text: opt["label"],
+          color: tagColorOf(oi)
+        };
+        items.append(item);
+      }
+    }
+    col["tagItems"] = items;
+  }
   return col;
 }
 
 /// @brief .jsontable 表 → jsonvue 形状对象（标准页合成，殊途同归进 buildAdminTplData）
-/// @param table .jsontable 表对象（tableName/modelName/tableComment/columns[]）
+/// @param table .jsontable 表对象（tableName/modelName/tableComment/columns[]/
+///              enums[]/selColsGap/selColsLike/globalEnumCols）
+/// @param globalEnumNames 全局枚举名集合（name → true，供 globalEnumCols 引用校验；
+///              null/缺省 = 全局枚举链未启用，globalEnumCols 按未命中处理）
 /// @return {meta, columns, queryFields} 形状对象
 ///   meta 约定（与 admin_vue .jsonvue 实例同构，如 shop.jsonvue 的 POST 风格）：
 ///   dataUrl="{modelName}/selectByIn"（首段经 deriveApiBaseFromUrl 消费为
 ///   apiBase=modelName）、queryApi="get{Pascal}List"、updateApi="upd{Pascal}List"
 ///   （POST /update 承接，无 id 新增/有 id 更新）、deleteApi="del{Pascal}List"；
-///   查询项合成：数值→文本输入、时间→日期选择（dateFormat 按 mysqlType）、
-///   其余→文本输入（查询侧无 Int 样式，数值统一 Input）
-export function buildJsonvueFromTable(table: Object): Object {
+///   查询项合成：search=true 列 → 查询字段（时间→日期选择，其余→文本）；
+///   selColsGap 命中列 → 范围查询（relation=range，前端生成 _min/_max 两个输入，
+///   与 Go/Nest 后端参数名对齐）；selColsLike 中 search=false 的列 → 补文本查询字段；
+///   globalEnumCols 命中列 → 全局枚举取值域（domainType=enum，三处共享）
+export function buildJsonvueFromTable(table: Object, globalEnumNames: Object): Object {
   let modelName: String = table["modelName"];
   if (modelName == null || modelName == "") {
     modelName = table["tableName"];
@@ -175,8 +215,34 @@ export function buildJsonvueFromTable(table: Object): Object {
     tableComment = modelName;
   }
 
+  // 表内枚举按列名索引（列名 → 枚举定义）
+  let tableEnums: Object[] = [];
+  if (table["enums"] != null) {
+    tableEnums = table["enums"];
+  }
+  // 范围/模糊查询列集合与原始列表（供 search=false 的列补查询字段）
+  let gapCols: String[] = [];
+  let likeCols: String[] = [];
+  let gapSet: Object = {};
+  let likeSet: Object = {};
+  if (table["selColsGap"] != null) {
+    gapCols = table["selColsGap"];
+    let gLen = gapCols.length;
+    for (let gi = 0; gi < gLen; gi = gi + 1) {
+      gapSet[gapCols[gi]] = true;
+    }
+  }
+  if (table["selColsLike"] != null) {
+    likeCols = table["selColsLike"];
+    let lLen = likeCols.length;
+    for (let li = 0; li < lLen; li = li + 1) {
+      likeSet[likeCols[li]] = true;
+    }
+  }
+
   let cols: Object[] = [];
   let queryFields: Object[] = [];
+  let handled: Object = {};  // 已生成查询字段的列名（gap 优先 range，like 普通输入即可）
   let rawCols: Object[] = [];
   if (table["columns"] != null) {
     rawCols = table["columns"];
@@ -184,10 +250,19 @@ export function buildJsonvueFromTable(table: Object): Object {
   let rcLen = rawCols.length;
   for (let i = 0; i < rcLen; i = i + 1) {
     let rc: Object = rawCols[i];
-    cols.append(buildJsonvueColumn(rc));
-    // 查询项（search=true → queryFields）
+    let colName: String = rc["name"];
+    // 表内枚举命中该列？（enums[].column == 列名）
+    let enumDef: Object = null;
+    let eLen = tableEnums.length;
+    for (let ei = 0; ei < eLen; ei = ei + 1) {
+      if (tableEnums[ei]["column"] == colName) {
+        enumDef = tableEnums[ei];
+        break;
+      }
+    }
+    cols.append(buildJsonvueColumn(rc, enumDef));
+    // 查询项（search=true → queryFields；selColsGap 命中 → 范围查询）
     if (rc["search"] == true) {
-      let colName: String = rc["name"];
       let colComment: String = rc["comment"];
       if (colComment == null || colComment == "") {
         colComment = colName;
@@ -208,7 +283,102 @@ export function buildJsonvueFromTable(table: Object): Object {
         qf["inputStyle"] = "date";
         qf["dateFormat"] = fmt;
       }
+      if (gapSet[colName] == true) {
+        // 范围查询：前端生成 {col}_min/{col}_max 两个输入（与后端参数名对齐）
+        qf["relation"] = "range";
+        handled[colName] = true;
+      } else if (likeSet[colName] == true) {
+        // 模糊匹配由后端按列名处理，前端普通文本输入即可
+        handled[colName] = true;
+      }
       queryFields.push(qf);
+    }
+  }
+
+  // selColsGap/selColsLike 中 search=false 的列 → 补查询字段
+  //（后端已生成对应条件，缺前端入口即成死配置）
+  let gLen2 = gapCols.length;
+  for (let gj = 0; gj < gLen2; gj = gj + 1) {
+    let gName: String = gapCols[gj];
+    if (handled[gName] == true) {
+      continue;
+    }
+    let gComment: String = gName;
+    let gFmt: String = "";
+    for (let ri = 0; ri < rcLen; ri = ri + 1) {
+      if (rawCols[ri]["name"] == gName) {
+        if (rawCols[ri]["comment"] != null && rawCols[ri]["comment"] != "") {
+          gComment = rawCols[ri]["comment"];
+        }
+        gFmt = deriveDateFormat(rawCols[ri]["mysqlType"]);
+        break;
+      }
+    }
+    let gqf: Object = {
+      dataName: gName,
+      displayName: gComment,
+      inputStyle: (gFmt != "" ? "date" : "text"),
+      relation: "range"
+    };
+    if (gFmt != "") {
+      gqf["dateFormat"] = gFmt;
+    }
+    queryFields.push(gqf);
+  }
+  let lLen2 = likeCols.length;
+  for (let lj = 0; lj < lLen2; lj = lj + 1) {
+    let lName: String = likeCols[lj];
+    if (handled[lName] == true) {
+      continue;
+    }
+    let lComment: String = lName;
+    for (let ri2 = 0; ri2 < rcLen; ri2 = ri2 + 1) {
+      if (rawCols[ri2]["name"] == lName) {
+        if (rawCols[ri2]["comment"] != null && rawCols[ri2]["comment"] != "") {
+          lComment = rawCols[ri2]["comment"];
+        }
+        break;
+      }
+    }
+    queryFields.push({
+      dataName: lName,
+      displayName: lComment,
+      inputStyle: "text",
+      relation: "="
+    });
+  }
+
+  // globalEnumCols 命中列 → 全局枚举取值域（domainType=enum，列渲染/编辑/查询三处共享）。
+  // 引用键固定基名 global_enum.jsonsource + 枚举名（与 .jsonvue 高级页同构，路径无关）
+  let geCols: String[] = [];
+  if (table["globalEnumCols"] != null) {
+    geCols = table["globalEnumCols"];
+  }
+  let geLen = geCols.length;
+  for (let gi = 0; gi < geLen; gi = gi + 1) {
+    let geName: String = geCols[gi];
+    let matched: Bool = false;
+    let cLen = cols.length;
+    for (let ci = 0; ci < cLen; ci = ci + 1) {
+      if (cols[ci]["dataName"] == geName) {
+        matched = true;
+        if (globalEnumNames != null && globalEnumNames[geName] == true) {
+          // AC 不支持链式下标赋值（cols[ci]["k"]=v）→ 局部变量中转；
+          // AcJsonValue 值拷贝 + 写时分离，改完必须显式写回数组元素
+          let hitCol: Object = cols[ci];
+          hitCol["domainType"] = "enum";
+          hitCol["domainSourceFile"] = "global_enum.jsonsource";
+          hitCol["domainSourceId"] = geName;
+          cols[ci] = hitCol;
+        } else {
+          printLog("提示：列 '" + geName +
+                   "' 引用的全局枚举未找到（globalEnumCols 需与 .jsonglobalenum 的枚举 name 一致），标准页按无取值域生成");
+        }
+        break;
+      }
+    }
+    if (matched == false) {
+      printLog("提示：globalEnumCols 中的 '" + geName + "' 不在本表字段中，已忽略");
     }
   }
 
@@ -384,11 +554,36 @@ export function generateAdminMain(params: Object): Void {
   }
   basePath = basePath.replace("\\", "/");
 
-  let jsonTablePath: String = params["jsonTablePath"];
-  if (jsonTablePath == null || jsonTablePath == "") {
-    printError("错误：缺少必填参数 jsonTablePath（.jsontable 统一配置文件路径）");
+  // ── 1.1 .jsontable 配置文件收集（多文件支持）──────────────────────
+  //    优先级：params.jsonTablePaths（文件数组）> params.jsonTablePath（单文件）
+  //          > 收集勾选文件中的 .jsontable（与 Go 链对称）
+  let jsontableFiles: String[] = [];
+  let jtpArr: String[] = params["jsonTablePaths"];
+  if (jtpArr != null) {
+    let jaLen = jtpArr.length;
+    for (let ja = 0; ja < jaLen; ja = ja + 1) {
+      jsontableFiles.append(jtpArr[ja].replace("\\", "/"));
+    }
+  }
+  let jtpSingle: String = params["jsonTablePath"];
+  if (jsontableFiles.length == 0 && jtpSingle != null && jtpSingle != "") {
+    jsontableFiles.append(jtpSingle.replace("\\", "/"));
+  }
+  if (jsontableFiles.length == 0) {
+    let checkedAll: String[] = getCheckedFiles(scriptDir());
+    let caLen = checkedAll.length;
+    for (let ca = 0; ca < caLen; ca = ca + 1) {
+      let cf: String = checkedAll[ca].replace("\\", "/");
+      if (cf.endsWith(".jsontable")) {
+        jsontableFiles.append(cf);
+      }
+    }
+  }
+  if (jsontableFiles.length == 0) {
+    printError("错误：未找到 .jsontable 配置（请配置 params.jsonTablePaths / jsonTablePath，或在项目目录勾选 .jsontable 文件）");
     return;
   }
+  printLog("jsontable files: " + jsontableFiles.length + " 份");
 
   // ── 2. 模板配置：一个模板对应一个生成的代码文件 ───────────────────
   //    字段说明：
@@ -422,13 +617,25 @@ export function generateAdminMain(params: Object): Void {
     ];
   }
 
-  // ── 3. 读取 .jsontable 统一配置（事实源，生成期不连库）────────────
-  let tableJson: Object = readJson(jsonTablePath);
-  if (tableJson == null || tableJson["tables"] == null) {
-    printError("错误：.jsontable 配置读取失败或无 tables 节点：" + jsonTablePath);
-    return;
+  // ── 3. 读取多份 .jsontable：合并 tables[]（事实源，生成期不连库）────
+  //    单文件失败即中止（配置不完整时生成的双端代码会互相矛盾）；
+  //    跨文件重复 modelName 由下方统一检查拦截
+  let tables: Object[] = [];
+  let jtfLen = jsontableFiles.length;
+  for (let tj = 0; tj < jtfLen; tj = tj + 1) {
+    let jtf: String = jsontableFiles[tj];
+    let tableJson: Object = readJson(jtf);
+    if (tableJson == null || tableJson["tables"] == null) {
+      printError("错误：.jsontable 配置读取失败或无 tables 节点：" + jtf);
+      return;
+    }
+    let partTables: Object[] = tableJson["tables"];
+    let ptLen = partTables.length;
+    for (let pk = 0; pk < ptLen; pk = pk + 1) {
+      tables.append(partTables[pk]);
+    }
+    printLog("jsontable: " + jtf + "（tables +" + ptLen + "）");
   }
-  let tables: Object[] = tableJson["tables"];
   printLog("jsontable tables count: " + tables.length);
 
   // 同名表检查：两个 modelName 相同会生成到同一目录互相覆盖
@@ -585,6 +792,15 @@ export function generateAdminMain(params: Object): Void {
     printLog("genGlobalEnum=false，跳过全局枚举数据源同步");
   }
 
+  // ── 5.1 全局枚举名集合（供标准页合成 globalEnumCols 引用校验）────────
+  let globalEnumNames: Object = {};
+  if (globalEnumSources != null) {
+    let gesLen = globalEnumSources.length;
+    for (let gn = 0; gn < gesLen; gn = gn + 1) {
+      globalEnumNames[globalEnumSources[gn]["id"]] = true;
+    }
+  }
+
   // ── 6. 渲染勾选的 .jsonsource / .jsonupload（数据源/上传 api 文件）──
   //    每个 .jsonsource 生成一个 api 文件（src/api/source/{sourceName}.ts），
   //    每个 .jsonupload 生成一个共享上传文件（src/api/upload/{uploadName}.ts），
@@ -678,7 +894,7 @@ export function generateAdminMain(params: Object): Void {
       printLog("高级页（.jsonvue 双轨）：" + vuePath);
     } else {
       // 双轨·标准页：从 .jsontable 列角色合成 jsonvue 形状（零额外配置）
-      pageJson = buildJsonvueFromTable(table);
+      pageJson = buildJsonvueFromTable(table, globalEnumNames);
       filePath = basePath + "/src/views/" + modelName + "/" + modelName + "/" + modelName + ".jsonvue";
       printLog("标准页（.jsontable 合成）：" + modelName);
     }

@@ -239,6 +239,129 @@ void JsonTableDialog::setupUI() {
                                  this, 64, 110, QAbstractItemView::SelectItems);
   layout->addWidget(m_indexTable);
 
+  // ── 查询配置区（范围/模糊列，表级进阶键）──
+  auto *queryRow = new QHBoxLayout;
+  queryRow->setSpacing(6);
+  queryRow->addWidget(new QLabel(QStringLiteral("范围查询列:"), this));
+  m_selGapEdit = new QLineEdit(this);
+  m_selGapEdit->setPlaceholderText(QStringLiteral("逗号分隔，如 create_time（仅时间/数值列）"));
+  m_selGapEdit->setToolTip(
+      QStringLiteral("每列展开为 列名_min/列名_max 两个查询参数与 >=/<= 范围条件"));
+  queryRow->addWidget(m_selGapEdit, 1);
+  queryRow->addWidget(new QLabel(QStringLiteral("模糊查询列:"), this));
+  m_selLikeEdit = new QLineEdit(this);
+  m_selLikeEdit->setPlaceholderText(QStringLiteral("逗号分隔，如 desc（仅字符串列）"));
+  m_selLikeEdit->setToolTip(
+      QStringLiteral("LIKE %x% 模糊匹配；该列同时 search=true 时精确优先"));
+  queryRow->addWidget(m_selLikeEdit, 1);
+  layout->addLayout(queryRow);
+
+  // ── 默认排序表格 ──
+  auto *sortHeader = new QHBoxLayout;
+  sortHeader->addWidget(new QLabel(QStringLiteral("默认排序:"), this));
+  sortHeader->addStretch();
+  auto *addSortBtn = makeCompactButton(QStringLiteral("+ 加排序"), this);
+  auto *delSortBtn = makeCompactButton(QStringLiteral("- 删排序"), this);
+  sortHeader->addWidget(addSortBtn);
+  sortHeader->addWidget(delSortBtn);
+  layout->addLayout(sortHeader);
+
+  m_sortTable = makeConfigTable({{QStringLiteral("排序列"), QHeaderView::Stretch, 0},
+                                 {QStringLiteral("方向"), QHeaderView::Interactive, 100}},
+                                this, 56, 96, QAbstractItemView::SelectItems);
+  layout->addWidget(m_sortTable);
+
+  // ── 表内枚举区（主从表：主表选枚举行，从表编辑选项）──
+  auto *enumHeader = new QHBoxLayout;
+  enumHeader->addWidget(new QLabel(QStringLiteral("表内枚举:"), this));
+  enumHeader->addStretch();
+  auto *addEnumBtn = makeCompactButton(QStringLiteral("+ 加枚举"), this);
+  auto *delEnumBtn = makeCompactButton(QStringLiteral("- 删枚举"), this);
+  enumHeader->addWidget(addEnumBtn);
+  enumHeader->addWidget(delEnumBtn);
+  layout->addLayout(enumHeader);
+
+  m_enumTable = makeConfigTable({{QStringLiteral("枚举列"), QHeaderView::Interactive, 150},
+                                 {QStringLiteral("说明"), QHeaderView::Stretch, 0}},
+                                this, 54, 96, QAbstractItemView::SelectRows);
+  m_enumTable->setToolTip(QStringLiteral("枚举列需与字段表格中的列名一致（如 status）"));
+  layout->addWidget(m_enumTable);
+
+  auto *optHeader = new QHBoxLayout;
+  optHeader->addWidget(new QLabel(QStringLiteral("枚举选项（选中上方枚举后编辑）:"), this));
+  optHeader->addStretch();
+  auto *addOptBtn = makeCompactButton(QStringLiteral("+ 加选项"), this);
+  auto *delOptBtn = makeCompactButton(QStringLiteral("- 删选项"), this);
+  optHeader->addWidget(addOptBtn);
+  optHeader->addWidget(delOptBtn);
+  layout->addLayout(optHeader);
+
+  m_enumOptTable = makeConfigTable({{QStringLiteral("成员名(key)"), QHeaderView::Interactive, 120},
+                                    {QStringLiteral("说明(label)"), QHeaderView::Stretch, 0},
+                                    {QStringLiteral("值(value)"), QHeaderView::Interactive, 90},
+                                    {QStringLiteral("值类型"), QHeaderView::Interactive, 96}},
+                                   this, 54, 96, QAbstractItemView::SelectItems);
+  layout->addWidget(m_enumOptTable);
+
+  // ── 全局枚举列 ──
+  auto *geRow = new QHBoxLayout;
+  geRow->setSpacing(6);
+  geRow->addWidget(new QLabel(QStringLiteral("全局枚举列:"), this));
+  m_globalEnumEdit = new QLineEdit(this);
+  m_globalEnumEdit->setPlaceholderText(
+      QStringLiteral("逗号分隔，如 is_enable（列名 = .jsonglobalenum 中的枚举名）"));
+  m_globalEnumEdit->setToolTip(
+      QStringLiteral("命中列在 Go 侧生成对应 const 块，前端标准页合成全局枚举取值域；与表内枚举二选一"));
+  geRow->addWidget(m_globalEnumEdit, 1);
+  layout->addLayout(geRow);
+
+  // ── 多语言翻译表配置 ──
+  m_i18nCheck =
+      new QCheckBox(QStringLiteral("启用多语言（主表 + 翻译表联合查询/事务写入/级联删除）"), this);
+  layout->addWidget(m_i18nCheck);
+  auto *i18nRow1 = new QHBoxLayout;
+  i18nRow1->setSpacing(6);
+  i18nRow1->addWidget(new QLabel(QStringLiteral("翻译表:"), this));
+  m_i18nTableEdit = new QLineEdit(this);
+  m_i18nTableEdit->setPlaceholderText(QStringLiteral("如 shop0"));
+  i18nRow1->addWidget(m_i18nTableEdit, 1);
+  i18nRow1->addWidget(new QLabel(QStringLiteral("外键列:"), this));
+  m_i18nExtEdit = new QLineEdit(this);
+  m_i18nExtEdit->setPlaceholderText(QStringLiteral("如 ext_id"));
+  i18nRow1->addWidget(m_i18nExtEdit, 1);
+  i18nRow1->addWidget(new QLabel(QStringLiteral("语言列:"), this));
+  m_i18nLangKeyEdit = new QLineEdit(this);
+  m_i18nLangKeyEdit->setPlaceholderText(QStringLiteral("如 lang"));
+  i18nRow1->addWidget(m_i18nLangKeyEdit, 1);
+  layout->addLayout(i18nRow1);
+  auto *i18nRow2 = new QHBoxLayout;
+  i18nRow2->setSpacing(6);
+  i18nRow2->addWidget(new QLabel(QStringLiteral("默认语言:"), this));
+  m_i18nDefaultLangEdit = new QLineEdit(this);
+  m_i18nDefaultLangEdit->setMaximumWidth(80);
+  m_i18nDefaultLangEdit->setPlaceholderText(QStringLiteral("zh"));
+  i18nRow2->addWidget(m_i18nDefaultLangEdit);
+  i18nRow2->addWidget(new QLabel(QStringLiteral("语言来源:"), this));
+  m_i18nLangFromCombo = AuiComboBox::create(this);
+  m_i18nLangFromCombo->addItem(QStringLiteral("body（请求体 lang 字段）"), QStringLiteral("body"));
+  m_i18nLangFromCombo->addItem(QStringLiteral("header（请求头，预留）"), QStringLiteral("header"));
+  i18nRow2->addWidget(m_i18nLangFromCombo);
+  i18nRow2->addWidget(new QLabel(QStringLiteral("多语言字段:"), this));
+  m_i18nFieldsEdit = new QLineEdit(this);
+  m_i18nFieldsEdit->setPlaceholderText(
+      QStringLiteral("逗号分隔，如 name,intro（翻译表的文本列，不能与主表列重名）"));
+  i18nRow2->addWidget(m_i18nFieldsEdit, 1);
+  layout->addLayout(i18nRow2);
+  auto applyI18nEnabled = [this](bool on) {
+    m_i18nTableEdit->setEnabled(on);
+    m_i18nExtEdit->setEnabled(on);
+    m_i18nLangKeyEdit->setEnabled(on);
+    m_i18nDefaultLangEdit->setEnabled(on);
+    m_i18nLangFromCombo->setEnabled(on);
+    m_i18nFieldsEdit->setEnabled(on);
+  };
+  applyI18nEnabled(false);
+
   // ── DDL 预览 + 执行区 ──
   auto *ddlHeader = new QHBoxLayout;
   ddlHeader->addWidget(new QLabel(QStringLiteral("DDL:"), this));
@@ -279,10 +402,53 @@ void JsonTableDialog::setupUI() {
   connect(m_importBtn, &QPushButton::clicked, this, &JsonTableDialog::importFromDatabase);
   connect(previewBtn, &QPushButton::clicked, this, &JsonTableDialog::previewDdl);
   connect(execBtn, &QPushButton::clicked, this, &JsonTableDialog::executeCreateTable);
+  connect(addSortBtn, &QPushButton::clicked, this,
+          [this]() { appendSortRow(QString(), QStringLiteral("DESC")); });
+  connect(delSortBtn, &QPushButton::clicked, this, [this]() {
+    const int row = m_sortTable->currentRow();
+    if (row >= 0) m_sortTable->removeRow(row);
+  });
+  connect(addEnumBtn, &QPushButton::clicked, this, [this]() {
+    syncEnumDrafts();
+    JsonTableEnum e;
+    m_enums.append(e);
+    rebuildEnumMaster();
+    const int newRow = m_enumTable->rowCount() - 1;
+    m_enumTable->selectRow(newRow);
+    m_enumTable->setCurrentCell(newRow, 0);
+    m_enumTable->editItem(m_enumTable->item(newRow, 0));  // 直接进入枚举列编辑
+  });
+  connect(delEnumBtn, &QPushButton::clicked, this, [this]() {
+    const int row = m_enumTable->currentRow();
+    if (row < 0 || row >= m_enums.size()) return;
+    syncEnumDrafts();
+    m_enums.removeAt(row);
+    rebuildEnumMaster();
+    const int next = qMin(row, m_enumTable->rowCount() - 1);
+    if (next >= 0) m_enumTable->selectRow(next);
+  });
+  connect(addOptBtn, &QPushButton::clicked, this, [this]() {
+    if (m_enumCurRow < 0) return;
+    appendEnumOptRow();
+  });
+  connect(delOptBtn, &QPushButton::clicked, this, [this]() {
+    const int row = m_enumOptTable->currentRow();
+    if (row >= 0) m_enumOptTable->removeRow(row);
+  });
+  // 枚举主从表联动：行切换前把主表/选项表的编辑内容存回 m_enums
+  connect(m_enumTable, &QTableWidget::currentCellChanged, this,
+          [this](int cur, int, int prev, int) {
+            if (m_enumSyncing) return;
+            syncEnumDrafts();
+            fillEnumOptions(cur);
+          });
+  connect(m_i18nCheck, &QCheckBox::toggled, this, [this, applyI18nEnabled](bool on) {
+    applyI18nEnabled(on);
+  });
 
   finishConfigDialog(this, frame);
-  setMinimumSize(880, 720);
-  resize(960, 780);
+  setMinimumSize(900, 940);
+  resize(980, 1010);
 
   // ── 预填 ──
   m_nameEdit->setText(m_table.tableName);
@@ -291,6 +457,21 @@ void JsonTableDialog::setupUI() {
   m_manualUpdateCheck->setChecked(m_table.manualUpdateTime);
   fillColumns(m_table.columns);
   fillIndexes(m_table.indexes);
+  m_selGapEdit->setText(joinCsv(m_table.selColsGap));
+  m_selLikeEdit->setText(joinCsv(m_table.selColsLike));
+  fillSortTable(m_table.selColsSort);
+  m_enums = m_table.enums;
+  rebuildEnumMaster();
+  if (m_enumTable->rowCount() > 0) m_enumTable->selectRow(0);
+  m_globalEnumEdit->setText(joinCsv(m_table.globalEnumCols));
+  m_i18nCheck->setChecked(m_table.i18n.isEnabled());
+  m_i18nTableEdit->setText(m_table.i18n.table);
+  m_i18nExtEdit->setText(m_table.i18n.extKey);
+  m_i18nLangKeyEdit->setText(m_table.i18n.langKey);
+  m_i18nDefaultLangEdit->setText(m_table.i18n.defaultLang);
+  comboSelectData(m_i18nLangFromCombo, m_table.i18n.langFrom);
+  m_i18nFieldsEdit->setText(joinCsv(m_table.i18n.fields));
+  applyI18nEnabled(m_i18nCheck->isChecked());
 }
 
 // ════════════════════════════════════════════════════════════
@@ -425,6 +606,147 @@ QVector<JsonTableIndex> JsonTableDialog::collectIndexes() const {
     const QTableWidgetItem *uniqIt = m_indexTable->item(r, IndexColUnique);
     ix.unique = uniqIt && uniqIt->checkState() == Qt::Checked;
     out.append(ix);
+  }
+  return out;
+}
+
+// ════════════════════════════════════════════════════════════
+//  表级进阶键：查询配置 / 排序 / 表内枚举 / i18n
+// ════════════════════════════════════════════════════════════
+
+QStringList JsonTableDialog::splitCsv(const QString &text) {
+  QStringList out;
+  for (const QString &part : text.split(QLatin1Char(','))) {
+    const QString item = part.trimmed();
+    if (!item.isEmpty()) out.append(item);
+  }
+  return out;
+}
+
+QString JsonTableDialog::joinCsv(const QStringList &list) {
+  return list.join(QStringLiteral(","));
+}
+
+void JsonTableDialog::fillSortTable(const QVector<QPair<QString, QString>> &sort) {
+  m_sortTable->setRowCount(0);
+  for (const auto &p : sort) appendSortRow(p.first, p.second);
+}
+
+void JsonTableDialog::appendSortRow(const QString &col, const QString &dir) {
+  const int row = m_sortTable->rowCount();
+  m_sortTable->insertRow(row);
+  m_sortTable->setItem(row, 0, new QTableWidgetItem(col));
+  auto *dirCombo = AuiComboBox::create(this);
+  dirCombo->addItem(QStringLiteral("ASC"), QStringLiteral("ASC"));
+  dirCombo->addItem(QStringLiteral("DESC"), QStringLiteral("DESC"));
+  comboSelectData(dirCombo, dir.isEmpty() ? QStringLiteral("DESC") : dir);
+  m_sortTable->setCellWidget(row, 1, dirCombo);
+}
+
+QVector<QPair<QString, QString>> JsonTableDialog::collectSort() const {
+  QVector<QPair<QString, QString>> out;
+  for (int r = 0; r < m_sortTable->rowCount(); ++r) {
+    const QTableWidgetItem *colIt = m_sortTable->item(r, 0);
+    const QString col = colIt ? colIt->text().trimmed() : QString();
+    if (col.isEmpty()) continue;  // 跳过排序列为空的行
+    auto *dirCombo = qobject_cast<QComboBox *>(m_sortTable->cellWidget(r, 1));
+    QString dir = dirCombo ? dirCombo->currentData().toString() : QString();
+    if (dir.isEmpty()) dir = QStringLiteral("DESC");
+    out.append({col, dir});
+  }
+  return out;
+}
+
+void JsonTableDialog::syncEnumDrafts() {
+  // 主表编辑内容 → m_enums（列名/说明直接读表格条目）
+  for (int r = 0; r < m_enumTable->rowCount() && r < m_enums.size(); ++r) {
+    const QTableWidgetItem *colIt = m_enumTable->item(r, 0);
+    const QTableWidgetItem *cmtIt = m_enumTable->item(r, 1);
+    if (colIt) m_enums[r].column = colIt->text().trimmed();
+    if (cmtIt) m_enums[r].comment = cmtIt->text().trimmed();
+  }
+  // 选项表格 → 当前行
+  if (m_enumCurRow >= 0 && m_enumCurRow < m_enums.size()) {
+    m_enums[m_enumCurRow].options = collectEnumOptions();
+  }
+}
+
+void JsonTableDialog::rebuildEnumMaster() {
+  m_enumSyncing = true;
+  m_enumTable->setRowCount(0);
+  for (const auto &e : m_enums) {
+    const int row = m_enumTable->rowCount();
+    m_enumTable->insertRow(row);
+    m_enumTable->setItem(row, 0, new QTableWidgetItem(e.column));
+    m_enumTable->setItem(row, 1, new QTableWidgetItem(e.comment));
+  }
+  m_enumSyncing = false;
+}
+
+void JsonTableDialog::fillEnumOptions(int row) {
+  m_enumSyncing = true;
+  m_enumCurRow = (row >= 0 && row < m_enums.size()) ? row : -1;
+  m_enumOptTable->setRowCount(0);
+  if (m_enumCurRow >= 0) {
+    for (const auto &o : m_enums[m_enumCurRow].options) {
+      const int r = m_enumOptTable->rowCount();
+      m_enumOptTable->insertRow(r);
+      m_enumOptTable->setItem(r, 0, new QTableWidgetItem(o.key));
+      m_enumOptTable->setItem(r, 1, new QTableWidgetItem(o.label));
+      m_enumOptTable->setItem(r, 2, new QTableWidgetItem(o.value));
+      auto *typeCombo = AuiComboBox::create(this);
+      typeCombo->addItem(QStringLiteral("string"), QStringLiteral("string"));
+      typeCombo->addItem(QStringLiteral("number"), QStringLiteral("number"));
+      comboSelectData(typeCombo, o.valueType.isEmpty() ? QStringLiteral("string")
+                                                       : o.valueType);
+      m_enumOptTable->setCellWidget(r, 3, typeCombo);
+    }
+  }
+  m_enumSyncing = false;
+}
+
+void JsonTableDialog::appendEnumOptRow() {
+  const int row = m_enumOptTable->rowCount();
+  m_enumOptTable->insertRow(row);
+  m_enumOptTable->setItem(row, 0, new QTableWidgetItem(QString()));
+  m_enumOptTable->setItem(row, 1, new QTableWidgetItem(QString()));
+  m_enumOptTable->setItem(row, 2, new QTableWidgetItem(QString()));
+  auto *typeCombo = AuiComboBox::create(this);
+  typeCombo->addItem(QStringLiteral("string"), QStringLiteral("string"));
+  typeCombo->addItem(QStringLiteral("number"), QStringLiteral("number"));
+  m_enumOptTable->setCellWidget(row, 3, typeCombo);
+  m_enumOptTable->setCurrentCell(row, 0);
+}
+
+QVector<JsonTableEnumOption> JsonTableDialog::collectEnumOptions() const {
+  QVector<JsonTableEnumOption> out;
+  for (int r = 0; r < m_enumOptTable->rowCount(); ++r) {
+    JsonTableEnumOption o;
+    const QTableWidgetItem *keyIt = m_enumOptTable->item(r, 0);
+    const QTableWidgetItem *labelIt = m_enumOptTable->item(r, 1);
+    const QTableWidgetItem *valIt = m_enumOptTable->item(r, 2);
+    o.key = keyIt ? keyIt->text().trimmed() : QString();
+    o.label = labelIt ? labelIt->text().trimmed() : QString();
+    o.value = valIt ? valIt->text().trimmed() : QString();
+    auto *typeCombo = qobject_cast<QComboBox *>(m_enumOptTable->cellWidget(r, 3));
+    o.valueType = typeCombo ? typeCombo->currentData().toString() : QString();
+    if (o.value.isEmpty()) continue;  // 跳过未填 value 的行（value 是必填键）
+    out.append(o);
+  }
+  return out;
+}
+
+QVector<JsonTableEnum> JsonTableDialog::collectEnums() const {
+  QVector<JsonTableEnum> out = m_enums;
+  // 主表编辑内容 → out；当前行选项表格内容 → out（const 下按值修正副本）
+  for (int r = 0; r < m_enumTable->rowCount() && r < out.size(); ++r) {
+    const QTableWidgetItem *colIt = m_enumTable->item(r, 0);
+    const QTableWidgetItem *cmtIt = m_enumTable->item(r, 1);
+    if (colIt) out[r].column = colIt->text().trimmed();
+    if (cmtIt) out[r].comment = cmtIt->text().trimmed();
+  }
+  if (m_enumCurRow >= 0 && m_enumCurRow < out.size()) {
+    out[m_enumCurRow].options = collectEnumOptions();
   }
   return out;
 }
@@ -614,12 +936,30 @@ void JsonTableDialog::executeCreateTable() {
 // ════════════════════════════════════════════════════════════
 
 JsonTableTable JsonTableDialog::resultTable() const {
-  JsonTableTable t = m_table;  // extra 未知键保真（i18n/globalEnumCols/joinTable 等原样写回）
+  JsonTableTable t = m_table;  // extra 未知键保真（joinTable 等未结构化节点原样写回）
   t.tableName = m_nameEdit->text().trimmed();
   t.modelName = m_modelEdit->text().trimmed();
   t.tableComment = m_commentEdit->text().trimmed();
   t.manualUpdateTime = m_manualUpdateCheck->isChecked();
   t.columns = collectColumns();
   t.indexes = collectIndexes();
+  // ── 表级进阶键 ──
+  t.selColsGap = splitCsv(m_selGapEdit->text());
+  t.selColsLike = splitCsv(m_selLikeEdit->text());
+  t.selColsSort = collectSort();
+  t.enums = collectEnums();
+  t.globalEnumCols = splitCsv(m_globalEnumEdit->text());
+  if (m_i18nCheck->isChecked()) {
+    t.i18n.table = m_i18nTableEdit->text().trimmed();
+    t.i18n.extKey = m_i18nExtEdit->text().trimmed();
+    t.i18n.langKey = m_i18nLangKeyEdit->text().trimmed();
+    t.i18n.fields = splitCsv(m_i18nFieldsEdit->text());
+    t.i18n.defaultLang = m_i18nDefaultLangEdit->text().trimmed();
+    if (t.i18n.defaultLang.isEmpty()) t.i18n.defaultLang = QStringLiteral("zh");
+    t.i18n.langFrom = m_i18nLangFromCombo->currentData().toString();
+    if (t.i18n.langFrom.isEmpty()) t.i18n.langFrom = QStringLiteral("body");
+  } else {
+    t.i18n = JsonTableI18n();  // 未启用：清空（table 空 → toJson 不落键）
+  }
   return t;
 }
