@@ -15,7 +15,20 @@
         "minute": "ASC",
         "id": "ASC"
       },
-      "joinTable": []
+      "joinTable": [
+        {
+          "joinEnClass": "EnBasketballSchedule",
+          "joinEnClass_Url": "src/basketball/basketball_schedule/entities/en_basketball_schedule",
+          "joinEnClassPro": "schedule",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "matchTrends",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "mid",
+            "referencedColumnName": "mid"
+          }
+        }
+      ]
     }
   ],
 }

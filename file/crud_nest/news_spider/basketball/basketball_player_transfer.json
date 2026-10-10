@@ -17,7 +17,20 @@
         "date": "DESC",
         "id": "ASC"
       },
-      "joinTable": []
+      "joinTable": [
+        {
+          "joinEnClass": "EnBasketballPlayer",
+          "joinEnClass_Url": "src/basketball/basketball_player/entities/en_basketball_player",
+          "joinEnClassPro": "player",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "transfers",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "player_pid",
+            "referencedColumnName": "pid"
+          }
+        }
+      ]
     }
   ],
 }

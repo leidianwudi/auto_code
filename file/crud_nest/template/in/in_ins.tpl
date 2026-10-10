@@ -78,7 +78,7 @@ ${/if}  }
   toEntity(): ${entityClass} {
        const entity = new ${entityClass}();
 ${each field in insFields}
-${if field.isCoin}       entity.${field.name} = Coin.getCoinByStr(this.${field.name});${else}       entity.${field.name} = this.${field.name};${/if}
+${if field.isCoin}       entity.${field.name} = new Coin(this.${field.name});${else}       entity.${field.name} = this.${field.name};${/if}
 ${/each}
 ${if hasI18n}       entity.i18n = this.i18n;
 ${/if}       return entity;

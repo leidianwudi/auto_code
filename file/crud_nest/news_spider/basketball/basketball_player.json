@@ -19,7 +19,6 @@
         "name_en",
         "team_name",
         "position",
-        "foot",
         "market_value_unit",
         "nation"
       ],
@@ -55,6 +54,14 @@
           "joinEnClass": "EnBasketballMatchLog",
           "joinEnClass_Url": "src/basketball/basketball_match_log/entities/en_basketball_match_log",
           "joinEnClassPro": "matchLogs",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "player",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnBasketballPlayerTransfer",
+          "joinEnClass_Url": "src/basketball/basketball_player_transfer/entities/en_basketball_player_transfer",
+          "joinEnClassPro": "transfers",
           "joinType": "OneToMany",
           "inverseJoinEnClassPro": "player",
           "isJoinRelations": true

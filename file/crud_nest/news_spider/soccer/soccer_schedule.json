@@ -33,9 +33,65 @@
           }
         },
         {
+          "joinEnClass": "EnSoccerTeam",
+          "joinEnClass_Url": "src/soccer/soccer_team/entities/en_soccer_team",
+          "joinEnClassPro": "home_team_info",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "homeSchedules",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "home_team_tid",
+            "referencedColumnName": "tid"
+          }
+        },
+        {
+          "joinEnClass": "EnSoccerTeam",
+          "joinEnClass_Url": "src/soccer/soccer_team/entities/en_soccer_team",
+          "joinEnClassPro": "away_team_info",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "awaySchedules",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "away_team_tid",
+            "referencedColumnName": "tid"
+          }
+        },
+        {
           "joinEnClass": "EnSoccerMatchOdd",
           "joinEnClass_Url": "src/soccer/soccer_match_odd/entities/en_soccer_match_odd",
           "joinEnClassPro": "matchOdds",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "schedule",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSoccerMatchLog",
+          "joinEnClass_Url": "src/soccer/soccer_match_log/entities/en_soccer_match_log",
+          "joinEnClassPro": "matchLogs",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "schedule",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSoccerMatchPosition",
+          "joinEnClass_Url": "src/soccer/soccer_match_position/entities/en_soccer_match_position",
+          "joinEnClassPro": "matchPositions",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "schedule",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSoccerMatchStats",
+          "joinEnClass_Url": "src/soccer/soccer_match_stats/entities/en_soccer_match_stats",
+          "joinEnClassPro": "matchStats",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "schedule",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSoccerMatchTrend",
+          "joinEnClass_Url": "src/soccer/soccer_match_trend/entities/en_soccer_match_trend",
+          "joinEnClassPro": "matchTrends",
           "joinType": "OneToMany",
           "inverseJoinEnClassPro": "schedule",
           "isJoinRelations": true

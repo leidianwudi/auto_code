@@ -1,7 +1,7 @@
 {
   // 指定 AutoCode schema，便于拆分后的单表配置校验。
   $schema: '/crud_nest/template/tool/param.schema.json',
-  // 篮球比赛阵型与球员位置查询配置。
+  // 篮球比赛阵容查询配置（篮球无阵型图，只有首发/替补分组）。
   tables: [
     {
       "modelName": "basketball\\basketball_match_position",
@@ -11,17 +11,17 @@
         "team_side",
         "team_tid",
         "player_pid",
-        "formation_place"
+        "lineup_no",
+        "shirt_number"
       ],
       "selColsLike": [
         "player_name",
-        "position_name",
-        "formation"
+        "position_name"
       ],
       "selColsSort": {
         "schedule_mid": "ASC",
         "team_side": "ASC",
-        "formation_place": "ASC",
+        "lineup_no": "ASC",
         "id": "ASC"
       },
       "joinTable": [
@@ -47,6 +47,18 @@
           "joinColumn": {
             "name": "player_pid",
             "referencedColumnName": "pid"
+          }
+        },
+        {
+          "joinEnClass": "EnBasketballSchedule",
+          "joinEnClass_Url": "src/basketball/basketball_schedule/entities/en_basketball_schedule",
+          "joinEnClassPro": "schedule",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "matchPositions",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "schedule_mid",
+            "referencedColumnName": "mid"
           }
         }
       ]

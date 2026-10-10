@@ -1,0 +1,41 @@
+{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 教练详情查询配置。
+  tables: [
+    {
+      "modelName": "soccer\\soccer_coach",
+      "tableName": "soccer_coach",
+      "selCols": [
+        "id",
+        "cid",
+        "team_tid",
+        "age"
+      ],
+      "selColsLike": [
+        "team_name",
+        "name_zh",
+        "name_en",
+        "nationality",
+        "role"
+      ],
+      "selColsSort": {
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSoccerTeam",
+          "joinEnClass_Url": "src/soccer/soccer_team/entities/en_soccer_team",
+          "joinEnClassPro": "team",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "coaches",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "team_tid",
+            "referencedColumnName": "tid"
+          }
+        }
+      ]
+    }
+  ],
+}

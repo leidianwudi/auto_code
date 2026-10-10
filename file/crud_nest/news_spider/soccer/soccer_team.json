@@ -61,6 +61,30 @@
           "joinType": "OneToMany",
           "inverseJoinEnClassPro": "team",
           "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSoccerSchedule",
+          "joinEnClass_Url": "src/soccer/soccer_schedule/entities/en_soccer_schedule",
+          "joinEnClassPro": "homeSchedules",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "home_team_info",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSoccerSchedule",
+          "joinEnClass_Url": "src/soccer/soccer_schedule/entities/en_soccer_schedule",
+          "joinEnClassPro": "awaySchedules",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "away_team_info",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSoccerCoach",
+          "joinEnClass_Url": "src/soccer/soccer_coach/entities/en_soccer_coach",
+          "joinEnClassPro": "coaches",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "team",
+          "isJoinRelations": true
         }
       ]
     }

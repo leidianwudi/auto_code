@@ -15,7 +15,20 @@
         "minute": "ASC",
         "id": "ASC"
       },
-      "joinTable": []
+      "joinTable": [
+        {
+          "joinEnClass": "EnSoccerSchedule",
+          "joinEnClass_Url": "src/soccer/soccer_schedule/entities/en_soccer_schedule",
+          "joinEnClassPro": "schedule",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "matchTrends",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "mid",
+            "referencedColumnName": "mid"
+          }
+        }
+      ]
     }
   ],
 }

@@ -30,6 +30,18 @@
       },
       "joinTable": [
         {
+          "joinEnClass": "EnSoccerSchedule",
+          "joinEnClass_Url": "src/soccer/soccer_schedule/entities/en_soccer_schedule",
+          "joinEnClassPro": "schedule",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "matchLogs",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "schedule_mid",
+            "referencedColumnName": "mid"
+          }
+        },
+        {
           "joinEnClass": "EnSoccerTeam",
           "joinEnClass_Url": "src/soccer/soccer_team/entities/en_soccer_team",
           "joinEnClassPro": "team",

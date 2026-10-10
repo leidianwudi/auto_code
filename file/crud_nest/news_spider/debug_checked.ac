@@ -1,0 +1,7 @@
+// debug: 验证 getCheckedFiles 在无头模式下的实际返回
+main {
+  let out = "scriptDir=" + scriptDir() + "\n";
+  let files = getCheckedFiles(scriptDir());
+  out += "checked count=" + files.length + "\n";
+  writeFile("D:/work/github/auto_code/build/Release/debug_checked.txt", out);
+}
