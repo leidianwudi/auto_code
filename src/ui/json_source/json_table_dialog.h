@@ -87,28 +87,15 @@ private:
   void appendJoinRow();
   /// 从表格收集全部联表声明（跳过引用名与目标均未填的行）
   QVector<JsonTableJoin> collectJoins() const;
-  // ── 表级进阶键：列表读模型（selCols）──
-  /// 用列表列定义全量重建列表列表格
-  void fillSelCols(const QVector<JsonTableSelCol> &cols);
-  /// 追加一行空列表列
-  void appendSelColRow();
-  /// 从表格收集全部列表列（跳过 ref 为空的行）
-  QVector<JsonTableSelCol> collectSelCols() const;
-  // ── 表级进阶键：查询视图（三键合一表格，mode 拆分）──
-  /// 用查询定义全量重建查询条件表格（eq/like/gap 合并填充）
-  void fillQueryTable(const QVector<JsonTableQueryCol> &eq, const QVector<JsonTableQueryCol> &like,
-                      const QVector<JsonTableQueryCol> &gap);
-  /// 追加一行空查询条件（模式缺省精确）
-  void appendQueryRow(const QString &ref, const QString &mode, bool visible);
-  /// 收集指定模式的查询列（visible 随行勾选）
-  QVector<JsonTableQueryCol> collectQueryRows(const QString &mode) const;
-  // ── 表级进阶键：编辑视图（editCols）──
-  /// 用编辑视图定义全量重建编辑表格
-  void fillEditCols(const QVector<JsonTableEditCol> &cols);
-  /// 追加一行空编辑列
-  void appendEditColRow(const QString &ref);
-  /// 从表格收集全部编辑列（跳过 ref 为空的行）
-  QVector<JsonTableEditCol> collectEditCols() const;
+  // ── 字段呈现（统一表格：一行 = 一个字段，列表/查询/编辑三视图合一）──
+  /// 用三视图配置全量重建统一字段表格（物理列 + 联表 ref 行）
+  void fillViewTable();
+  /// 追加一行联表列（ref 形如 引用名.目标列）
+  void appendViewJoinRow(const QString &ref);
+  /// 收集统一表格 → 三视图结构（写回 out 的 selCols/eq/like/gap/editCols）
+  void collectViewTable(JsonTableTable *out) const;
+  /// 打开 ⚙ 字段设置面板（列宽/控件类型/编辑标题，UserRole 读写）
+  void openViewFieldConfig(int row);
   // ── 表级进阶键：表内枚举（主从表联动）──
   /// 把主表/选项表格的当前编辑内容同步回 m_enums（结构变化前调用）
   void syncEnumDrafts();
@@ -160,9 +147,7 @@ private:
   // ── 表级进阶键 ──
   QTableWidget *m_sortTable = nullptr;        ///< 默认排序表格（列名 + 方向）
   QTableWidget *m_joinTable = nullptr;        ///< 联表声明表格（joinTable）
-  QTableWidget *m_selColsTable = nullptr;     ///< 列表视图表格（selCols：ref + label + width）
-  QTableWidget *m_queryTable = nullptr;       ///< 查询视图表格（ref + 模式 + 前端显示）
-  QTableWidget *m_editColsTable = nullptr;    ///< 编辑视图表格（ref/标题/控件/必填/前端显示）
+  QTableWidget *m_viewTable = nullptr;        ///< 字段呈现统一表格（一行=一字段，三视图合一）
   QTableWidget *m_enumTable = nullptr;        ///< 表内枚举主表（枚举列 + 说明）
   QTableWidget *m_enumOptTable = nullptr;     ///< 选中枚举的选项表格（key/label/value/valueType）
   QLineEdit *m_globalEnumEdit = nullptr;      ///< 全局枚举列（逗号分隔）
@@ -179,9 +164,7 @@ private:
   QStyledItemDelegate *m_enumColDelegate = nullptr;   ///< 枚举列下拉委托（预设=字段列名）
   QStyledItemDelegate *m_joinFkDelegate = nullptr;    ///< 联表外键列下拉委托（预设=字段列名）
   QStyledItemDelegate *m_joinClassDelegate = nullptr; ///< 联表目标下拉委托（预设=tables[].modelName）
-  QStyledItemDelegate *m_selColsRefDelegate = nullptr; ///< 列表列 ref 下拉委托（字段列+联表 ref）
-  QStyledItemDelegate *m_queryRefDelegate = nullptr;   ///< 查询条件 ref 下拉委托（字段列+联表 ref）
-  QStyledItemDelegate *m_editRefDelegate = nullptr;    ///< 编辑列 ref 下拉委托（预设=字段列名）
+  QStyledItemDelegate *m_viewRefDelegate = nullptr;   ///< 字段呈现 ref 下拉委托（字段列+联表 ref）
   QStyledItemDelegate *m_sortRefDelegate = nullptr;    ///< 排序列 ref 下拉委托（字段列+联表 ref）
   QVector<JsonTableEnum> m_enums;             ///< 表内枚举编辑态（主从表联动的数据侧）
   int m_enumCurRow = -1;                      ///< 当前编辑的枚举行（-1=无）
