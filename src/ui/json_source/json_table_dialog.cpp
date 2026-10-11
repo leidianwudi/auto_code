@@ -6,8 +6,11 @@
 #include "json_table_dialog.h"
 
 #include <QAbstractItemView>
+#include <QBrush>
 #include <QCheckBox>
+#include <QColor>
 #include <QComboBox>
+#include <QCompleter>
 #include <QHBoxLayout>
 #include <QHash>
 #include <QHeaderView>
@@ -15,10 +18,14 @@
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QSet>
+#include <QStringListModel>
 #include <QStyledItemDelegate>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QTabWidget>
 #include <QVBoxLayout>
+#include <QWidget>
 
 #include "src/engine/ac_language.h"
 #include "src/engine/function/fun_db.h"
@@ -34,7 +41,8 @@
 
 namespace {
 
-/// 字段表格列索引
+/// 字段表格列索引（页面呈现全部由三视图接管，字段表格只留纯物理属性；
+/// 历史 列表/搜索/表单角色/必填 列均已退役）
 enum ColCols {
   ColColName = 0,  ///< 列名
   ColColType,      ///< MySQL 类型（可编辑下拉）
@@ -44,11 +52,44 @@ enum ColCols {
   ColColAutoInc,   ///< 自增 复选框
   ColColDefault,   ///< 默认值
   ColColComment,   ///< 注释
-  ColColList,      ///< 列表 复选框
-  ColColSearch,    ///< 搜索 复选框
-  ColColForm,      ///< 表单角色（可编辑下拉）
-  ColColRequired,  ///< 必填 复选框
   ColColCount
+};
+
+/// 联表声明表格列索引（joinTable）
+enum JoinCols {
+  JoinColPro = 0,    ///< 联查引用名（joinEnClassPro：别名前缀 + ref 前缀）
+  JoinColClass,      ///< join 目标（joinEnClass：目标表 modelName，可编辑下拉）
+  JoinColFk,         ///< 本表外键列（joinFk，可编辑下拉）
+  JoinColPk,         ///< 目标主键列（joinPk，缺省 id）
+  JoinColType,       ///< joinType（ManyToOne/OneToMany 下拉）
+  JoinColActive,     ///< isJoinRelations 复选框（true=有效声明）
+  JoinColCount
+};
+
+/// 列表视图表格列索引（selCols）
+enum SelColCols {
+  SelColColRef = 0,  ///< 列引用（本表列名 或 引用名.目标列，可编辑下拉）
+  SelColColLabel,    ///< 显示名（标题回退：label > 列注释 > 列名）
+  SelColColWidth,    ///< 列宽 px（空 = 自适应）
+  SelColColCount
+};
+
+/// 查询视图表格列索引（三键合一，模式拆分回 eq/like/gap）
+enum QueryCols {
+  QueryColRef = 0,   ///< 列引用（本表列名 或 引用名.目标列，可编辑下拉）
+  QueryColMode,      ///< 查询模式（精确/模糊/范围 下拉）
+  QueryColVisible,   ///< 前端显示复选框（false=仅后端生成条件）
+  QueryColCount
+};
+
+/// 编辑视图表格列索引（editCols；显式列出=进编辑表单）
+enum EditCols {
+  EditColRef = 0,     ///< 列引用（仅物理列，可编辑下拉）
+  EditColLabel,       ///< 编辑标题（空 = 回退列注释/列名）
+  EditColWidget,      ///< 控件类型（可编辑下拉，空 = 按 mysqlType 推导）
+  EditColRequired,    ///< 必填 复选框（→ InsertParams binding:"required"）
+  EditColVisible,     ///< 前端显示复选框（false=参数仍生成，UI 不渲染）
+  EditColCount
 };
 
 /// 索引表格列索引
@@ -64,6 +105,9 @@ class EditableComboDelegate : public QStyledItemDelegate {
 public:
   EditableComboDelegate(QStringList options, QObject *parent = nullptr)
       : QStyledItemDelegate(parent), m_options(std::move(options)) {}
+
+  /// 动态更新下拉预设（如枚举列候选跟随字段表格列名变化）
+  void setOptions(const QStringList &options) { m_options = options; }
 
   QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &,
                         const QModelIndex &) const override {
@@ -93,6 +137,37 @@ private:
   QStringList m_options;  ///< 下拉预设项（仍可自由输入）
 };
 
+/// 逗号分隔多值补全器：按最后一个逗号后的片段匹配，选中后拼回前缀
+/// （全局枚举列 / 多语言字段等 "a,b,c" 形态输入框共用）
+class CsvCompleter : public QCompleter {
+public:
+  explicit CsvCompleter(QLineEdit *edit) : QCompleter(edit), m_model(new QStringListModel(this)) {
+    setModel(m_model);
+  }
+
+  /// 更新候选列表
+  void setCandidates(const QStringList &items) { m_model->setStringList(items); }
+
+  /// 匹配片段 = 最后一个逗号之后的文本（去空格）
+  QStringList splitPath(const QString &path) const override {
+    return QStringList{path.mid(path.lastIndexOf(QLatin1Char(',')) + 1).trimmed()};
+  }
+
+  /// 选中候选后拼回逗号前缀（"a,b," + 候选）
+  QString pathFromIndex(const QModelIndex &index) const override {
+    const QString tail = index.data(Qt::EditRole).toString();
+    QString prefix;
+    if (auto *edit = qobject_cast<QLineEdit *>(widget())) {
+      const int pos = edit->text().lastIndexOf(QLatin1Char(','));
+      if (pos >= 0) prefix = edit->text().left(pos + 1) + QStringLiteral(" ");
+    }
+    return prefix + tail;
+  }
+
+private:
+  QStringListModel *m_model;  ///< 候选模型（父对象为本补全器，随构造销毁）
+};
+
 /// 复选框列条目（无可编辑文本，点击勾选框直接切换）
 QTableWidgetItem *makeCheckItem(bool on) {
   auto *it = new QTableWidgetItem;
@@ -100,6 +175,12 @@ QTableWidgetItem *makeCheckItem(bool on) {
   it->setCheckState(on ? Qt::Checked : Qt::Unchecked);
   it->setTextAlignment(Qt::AlignCenter);
   return it;
+}
+
+/// 通用表格单元格文本（空表/缺条目返回空串；截断空白）
+QString cellOf(const QTableWidget *table, int row, int col) {
+  const QTableWidgetItem *it = table ? table->item(row, col) : nullptr;
+  return it ? it->text().trimmed() : QString();
 }
 
 /// 反引号包裹标识符（内嵌反引号双写转义）
@@ -158,7 +239,23 @@ void JsonTableDialog::setupUI() {
   ConfigDialogFrame frame = beginConfigDialog(this, title, QMargins(12, 10, 12, 10), 6);
   auto *layout = frame.contentLayout;
 
-  // ── 顶部：表名 / 模型名 / 表注释 / manualUpdateTime ──
+  // ── 页签容器：字段 / 索引与查询 / 枚举 / 多语言 / DDL ──
+  auto *tabs = new QTabWidget(this);
+  auto makeTab = [tabs](const QString &title) {
+    auto *w = new QWidget(tabs);
+    auto *lay = new QVBoxLayout(w);
+    lay->setContentsMargins(4, 8, 4, 4);
+    lay->setSpacing(6);
+    tabs->addTab(w, title);
+    return lay;
+  };
+  auto *fieldTab = makeTab(QStringLiteral("字段"));
+  auto *queryTab = makeTab(QStringLiteral("关联与查询"));
+  auto *enumTab = makeTab(QStringLiteral("枚举"));
+  auto *i18nTab = makeTab(QStringLiteral("多语言"));
+  auto *ddlTab = makeTab(QStringLiteral("DDL"));
+
+  // ── 顶部：表名 / 模型名 / 表注释 / manualUpdateTime（字段页）──
   auto *topRow = new QHBoxLayout;
   topRow->setSpacing(6);
   auto addField = [&topRow](const QString &label, QLineEdit **edit, const QString &placeholder) {
@@ -175,7 +272,7 @@ void JsonTableDialog::setupUI() {
   m_manualUpdateCheck->setToolTip(
       QStringLiteral("勾选后生成端不由数据库 ON UPDATE 维护更新时间字段"));
   topRow->addWidget(m_manualUpdateCheck);
-  layout->addLayout(topRow);
+  fieldTab->addLayout(topRow);
 
   // ── 字段表格工具行 ──
   auto *colHeader = new QHBoxLayout;
@@ -189,9 +286,9 @@ void JsonTableDialog::setupUI() {
   colHeader->addWidget(delColBtn);
   colHeader->addWidget(upColBtn);
   colHeader->addWidget(downColBtn);
-  layout->addLayout(colHeader);
+  fieldTab->addLayout(colHeader);
 
-  // ── 字段表格（核心编辑区）──
+  // ── 字段表格（纯物理属性；页面呈现由三视图接管）──
   m_colsTable = makeConfigTable({{QStringLiteral("列名"), QHeaderView::Stretch, 0},
                                  {QStringLiteral("MySQL类型"), QHeaderView::Interactive, 120},
                                  {QStringLiteral("unsigned"), QHeaderView::Interactive, 62},
@@ -199,15 +296,11 @@ void JsonTableDialog::setupUI() {
                                  {QStringLiteral("主键"), QHeaderView::Interactive, 50},
                                  {QStringLiteral("自增"), QHeaderView::Interactive, 50},
                                  {QStringLiteral("默认值"), QHeaderView::Interactive, 90},
-                                 {QStringLiteral("注释"), QHeaderView::Stretch, 0},
-                                 {QStringLiteral("列表"), QHeaderView::Interactive, 50},
-                                 {QStringLiteral("搜索"), QHeaderView::Interactive, 50},
-                                 {QStringLiteral("表单角色"), QHeaderView::Interactive, 100},
-                                 {QStringLiteral("必填"), QHeaderView::Interactive, 50}},
-                                this, 180, 0, QAbstractItemView::SelectItems);
-  layout->addWidget(m_colsTable, 1);
+                                 {QStringLiteral("注释"), QHeaderView::Stretch, 0}},
+                                this, 200, 0, QAbstractItemView::SelectItems);
+  fieldTab->addWidget(m_colsTable, 1);
 
-  // MySQL 类型列 / 表单角色列：可编辑下拉委托（预设 + 自由输入）
+  // MySQL 类型列：可编辑下拉委托（预设 + 自由输入）
   m_colsTable->setItemDelegateForColumn(
       ColColType,
       new EditableComboDelegate(
@@ -215,13 +308,116 @@ void JsonTableDialog::setupUI() {
            QStringLiteral("varchar(64)"), QStringLiteral("text"), QStringLiteral("decimal(10,2)"),
            QStringLiteral("datetime"), QStringLiteral("json"), QStringLiteral("boolean")},
           m_colsTable));
-  m_colsTable->setItemDelegateForColumn(
-      ColColForm,
+
+  // ── 编辑表单呈现（editCols：显式列出=进编辑表单；仅物理列）──
+  auto *editHeader = new QHBoxLayout;
+  editHeader->addWidget(new QLabel(QStringLiteral("编辑表单呈现(editCols):"), this));
+  editHeader->addStretch();
+  auto *addEditBtn = makeCompactButton(QStringLiteral("+ 加行"), this);
+  auto *delEditBtn = makeCompactButton(QStringLiteral("- 删行"), this);
+  editHeader->addWidget(addEditBtn);
+  editHeader->addWidget(delEditBtn);
+  fieldTab->addLayout(editHeader);
+
+  m_editColsTable = makeConfigTable({{QStringLiteral("列引用"), QHeaderView::Interactive, 110},
+                                     {QStringLiteral("标题"), QHeaderView::Stretch, 0},
+                                     {QStringLiteral("控件"), QHeaderView::Interactive, 92},
+                                     {QStringLiteral("必填"), QHeaderView::Interactive, 46},
+                                     {QStringLiteral("前端显示"), QHeaderView::Interactive, 64}},
+                                    this, 96, 0, QAbstractItemView::SelectItems);
+  m_editColsTable->setToolTip(
+      QStringLiteral("显式列出的列才进编辑表单（未列出=不进，参数也不生成）；标题/控件缺省按"
+                     "列注释/mysqlType 推导；前端显示关闭=表单不渲染但 Insert/Update 参数保留"));
+  fieldTab->addWidget(m_editColsTable, 1);
+  m_editRefDelegate = new EditableComboDelegate(QStringList(), m_editColsTable);
+  m_editColsTable->setItemDelegateForColumn(EditColRef, m_editRefDelegate);
+  m_editColsTable->setItemDelegateForColumn(
+      EditColWidget,
       new EditableComboDelegate(
-          {QStringLiteral("none"), QStringLiteral("input"), QStringLiteral("textarea"),
-           QStringLiteral("select"), QStringLiteral("date"), QStringLiteral("number"),
-           QStringLiteral("image"), QStringLiteral("upload"), QStringLiteral("boolean")},
-          m_colsTable));
+          {QStringLiteral("input"), QStringLiteral("textarea"), QStringLiteral("select"),
+           QStringLiteral("date"), QStringLiteral("number"), QStringLiteral("image"),
+           QStringLiteral("upload"), QStringLiteral("boolean")},
+          m_editColsTable));
+
+  // ── 联表声明表格（joinTable：多对一列表联查/一对多详情聚合声明）──
+  auto *joinHeader = new QHBoxLayout;
+  joinHeader->addWidget(new QLabel(QStringLiteral("联表(joinTable):"), this));
+  joinHeader->addStretch();
+  auto *addJoinBtn = makeCompactButton(QStringLiteral("+ 加联表"), this);
+  auto *delJoinBtn = makeCompactButton(QStringLiteral("- 删联表"), this);
+  joinHeader->addWidget(addJoinBtn);
+  joinHeader->addWidget(delJoinBtn);
+  queryTab->addLayout(joinHeader);
+
+  m_joinTable = makeConfigTable({{QStringLiteral("引用名"), QHeaderView::Interactive, 90},
+                                 {QStringLiteral("目标表"), QHeaderView::Interactive, 110},
+                                 {QStringLiteral("外键列"), QHeaderView::Interactive, 100},
+                                 {QStringLiteral("主键列"), QHeaderView::Interactive, 84},
+                                 {QStringLiteral("joinType"), QHeaderView::Interactive, 96},
+                                 {QStringLiteral("启用"), QHeaderView::Interactive, 48}},
+                                this, 88, 0, QAbstractItemView::SelectItems);
+  m_joinTable->setToolTip(
+      QStringLiteral("引用名=joinEnClassPro（别名前缀+前端 ref 前缀）；目标表=joinEnClass"
+                     "（本文件其它表的模型名）；外键列=joinFk（本表列）；主键列=joinPk（缺省 id）。\n"
+                     "ManyToOne=列表联查（联表列以 引用名_列名 平铺返回）；OneToMany=详情聚合"
+                     "（生成端暂跳过并提示）。启用=isJoinRelations，未勾选条目不生效"));
+  queryTab->addWidget(m_joinTable, 3);
+  // 目标表下拉候选 = 同文件 tables[].modelName（构造期固定）；外键列候选 = 字段列名（动态刷新）
+  m_joinClassDelegate = new EditableComboDelegate(QStringList(), m_joinTable);
+  m_joinTable->setItemDelegateForColumn(JoinColClass, m_joinClassDelegate);
+  {
+    QStringList modelNames;
+    for (const auto &t : m_config.tables) {
+      if (!t.modelName.isEmpty()) modelNames.append(t.modelName);
+    }
+    static_cast<EditableComboDelegate *>(m_joinClassDelegate)->setOptions(modelNames);
+  }
+  m_joinFkDelegate = new EditableComboDelegate(QStringList(), m_joinTable);
+  m_joinTable->setItemDelegateForColumn(JoinColFk, m_joinFkDelegate);
+
+  // ── 列表视图表格（selCols：ref 支持联表路径 引用名.目标列）──
+  auto *selHeader = new QHBoxLayout;
+  selHeader->addWidget(new QLabel(QStringLiteral("列表列(selCols):"), this));
+  selHeader->addStretch();
+  auto *addSelBtn = makeCompactButton(QStringLiteral("+ 加列"), this);
+  auto *delSelBtn = makeCompactButton(QStringLiteral("- 删列"), this);
+  selHeader->addWidget(addSelBtn);
+  selHeader->addWidget(delSelBtn);
+  queryTab->addLayout(selHeader);
+
+  m_selColsTable = makeConfigTable({{QStringLiteral("列引用(ref)"), QHeaderView::Stretch, 0},
+                                    {QStringLiteral("显示名(label)"), QHeaderView::Stretch, 0},
+                                    {QStringLiteral("列宽(px)"), QHeaderView::Interactive, 72}},
+                                   this, 80, 0, QAbstractItemView::SelectItems);
+  m_selColsTable->setToolTip(
+      QStringLiteral("列引用=本表列名 或 「引用名.目标列」（如 user.name，"
+                     "返回键平铺为 user_name）；显示名缺省回退目标列注释/列名；"
+                     "列宽空 = 自适应"));
+  queryTab->addWidget(m_selColsTable, 2);
+  m_selColsRefDelegate = new EditableComboDelegate(QStringList(), m_selColsTable);
+  m_selColsTable->setItemDelegateForColumn(SelColColRef, m_selColsRefDelegate);
+
+  // ── 查询视图表格（三键合一：模式拆分回 selColsEq/Like/Gap）──
+  auto *queryHeader = new QHBoxLayout;
+  queryHeader->addWidget(new QLabel(QStringLiteral("查询条件:"), this));
+  queryHeader->addStretch();
+  auto *addQueryBtn = makeCompactButton(QStringLiteral("+ 加条件"), this);
+  auto *delQueryBtn = makeCompactButton(QStringLiteral("- 删条件"), this);
+  queryHeader->addWidget(addQueryBtn);
+  queryHeader->addWidget(delQueryBtn);
+  queryTab->addLayout(queryHeader);
+
+  m_queryTable = makeConfigTable({{QStringLiteral("列引用(ref)"), QHeaderView::Stretch, 0},
+                                  {QStringLiteral("模式"), QHeaderView::Interactive, 88},
+                                  {QStringLiteral("前端显示"), QHeaderView::Interactive, 70}},
+                                 this, 96, 0, QAbstractItemView::SelectItems);
+  m_queryTable->setToolTip(
+      QStringLiteral("输入框标题统一取 列表列显示名 > 列注释 > 引用（无需单独设置）；"
+                     "前端显示关闭 = 后端条件照常生成（API 能力保留），仅前端不渲染输入框；"
+                     "枚举列查询自动生成下拉，联表外键列查询自动生成目标表下拉"));
+  queryTab->addWidget(m_queryTable, 2);
+  m_queryRefDelegate = new EditableComboDelegate(QStringList(), m_queryTable);
+  m_queryTable->setItemDelegateForColumn(QueryColRef, m_queryRefDelegate);
 
   // ── 索引表格工具行 ──
   auto *idxHeader = new QHBoxLayout;
@@ -231,30 +427,15 @@ void JsonTableDialog::setupUI() {
   auto *delIdxBtn = makeCompactButton(QStringLiteral("- 删索引"), this);
   idxHeader->addWidget(addIdxBtn);
   idxHeader->addWidget(delIdxBtn);
-  layout->addLayout(idxHeader);
+  queryTab->addLayout(idxHeader);
 
   m_indexTable = makeConfigTable({{QStringLiteral("索引名"), QHeaderView::Stretch, 0},
                                   {QStringLiteral("列(逗号分隔)"), QHeaderView::Stretch, 0},
                                   {QStringLiteral("unique"), QHeaderView::Interactive, 70}},
-                                 this, 64, 110, QAbstractItemView::SelectItems);
-  layout->addWidget(m_indexTable);
-
-  // ── 查询配置区（范围/模糊列，表级进阶键）──
-  auto *queryRow = new QHBoxLayout;
-  queryRow->setSpacing(6);
-  queryRow->addWidget(new QLabel(QStringLiteral("范围查询列:"), this));
-  m_selGapEdit = new QLineEdit(this);
-  m_selGapEdit->setPlaceholderText(QStringLiteral("逗号分隔，如 create_time（仅时间/数值列）"));
-  m_selGapEdit->setToolTip(
-      QStringLiteral("每列展开为 列名_min/列名_max 两个查询参数与 >=/<= 范围条件"));
-  queryRow->addWidget(m_selGapEdit, 1);
-  queryRow->addWidget(new QLabel(QStringLiteral("模糊查询列:"), this));
-  m_selLikeEdit = new QLineEdit(this);
-  m_selLikeEdit->setPlaceholderText(QStringLiteral("逗号分隔，如 desc（仅字符串列）"));
-  m_selLikeEdit->setToolTip(
-      QStringLiteral("LIKE %x% 模糊匹配；该列同时 search=true 时精确优先"));
-  queryRow->addWidget(m_selLikeEdit, 1);
-  layout->addLayout(queryRow);
+                                 this, 72, 0, QAbstractItemView::SelectItems);
+  m_indexTable->setToolTip(
+      QStringLiteral("unique 索引自动生成 Insert/Update 唯一性预检（后端）"));
+  queryTab->addWidget(m_indexTable, 2);
 
   // ── 默认排序表格 ──
   auto *sortHeader = new QHBoxLayout;
@@ -264,12 +445,14 @@ void JsonTableDialog::setupUI() {
   auto *delSortBtn = makeCompactButton(QStringLiteral("- 删排序"), this);
   sortHeader->addWidget(addSortBtn);
   sortHeader->addWidget(delSortBtn);
-  layout->addLayout(sortHeader);
+  queryTab->addLayout(sortHeader);
 
   m_sortTable = makeConfigTable({{QStringLiteral("排序列"), QHeaderView::Stretch, 0},
                                  {QStringLiteral("方向"), QHeaderView::Interactive, 100}},
-                                this, 56, 96, QAbstractItemView::SelectItems);
-  layout->addWidget(m_sortTable);
+                                this, 64, 0, QAbstractItemView::SelectItems);
+  queryTab->addWidget(m_sortTable, 2);
+  m_sortRefDelegate = new EditableComboDelegate(QStringList(), m_sortTable);
+  m_sortTable->setItemDelegateForColumn(0, m_sortRefDelegate);
 
   // ── 表内枚举区（主从表：主表选枚举行，从表编辑选项）──
   auto *enumHeader = new QHBoxLayout;
@@ -279,13 +462,16 @@ void JsonTableDialog::setupUI() {
   auto *delEnumBtn = makeCompactButton(QStringLiteral("- 删枚举"), this);
   enumHeader->addWidget(addEnumBtn);
   enumHeader->addWidget(delEnumBtn);
-  layout->addLayout(enumHeader);
+  enumTab->addLayout(enumHeader);
 
   m_enumTable = makeConfigTable({{QStringLiteral("枚举列"), QHeaderView::Interactive, 150},
                                  {QStringLiteral("说明"), QHeaderView::Stretch, 0}},
-                                this, 54, 96, QAbstractItemView::SelectRows);
+                                this, 72, 0, QAbstractItemView::SelectRows);
   m_enumTable->setToolTip(QStringLiteral("枚举列需与字段表格中的列名一致（如 status）"));
-  layout->addWidget(m_enumTable);
+  enumTab->addWidget(m_enumTable, 1);
+  // 枚举列下拉候选：预设 = 字段表格列名（refreshColumnCandidates 动态更新）
+  m_enumColDelegate = new EditableComboDelegate(QStringList(), m_enumTable);
+  m_enumTable->setItemDelegateForColumn(0, m_enumColDelegate);
 
   auto *optHeader = new QHBoxLayout;
   optHeader->addWidget(new QLabel(QStringLiteral("枚举选项（选中上方枚举后编辑）:"), this));
@@ -294,14 +480,14 @@ void JsonTableDialog::setupUI() {
   auto *delOptBtn = makeCompactButton(QStringLiteral("- 删选项"), this);
   optHeader->addWidget(addOptBtn);
   optHeader->addWidget(delOptBtn);
-  layout->addLayout(optHeader);
+  enumTab->addLayout(optHeader);
 
   m_enumOptTable = makeConfigTable({{QStringLiteral("成员名(key)"), QHeaderView::Interactive, 120},
                                     {QStringLiteral("说明(label)"), QHeaderView::Stretch, 0},
                                     {QStringLiteral("值(value)"), QHeaderView::Interactive, 90},
                                     {QStringLiteral("值类型"), QHeaderView::Interactive, 96}},
-                                   this, 54, 96, QAbstractItemView::SelectItems);
-  layout->addWidget(m_enumOptTable);
+                                   this, 100, 0, QAbstractItemView::SelectItems);
+  enumTab->addWidget(m_enumOptTable, 2);
 
   // ── 全局枚举列 ──
   auto *geRow = new QHBoxLayout;
@@ -313,12 +499,17 @@ void JsonTableDialog::setupUI() {
   m_globalEnumEdit->setToolTip(
       QStringLiteral("命中列在 Go 侧生成对应 const 块，前端标准页合成全局枚举取值域；与表内枚举二选一"));
   geRow->addWidget(m_globalEnumEdit, 1);
-  layout->addLayout(geRow);
+  enumTab->addLayout(geRow);
+  // 全局枚举列补全：候选 = 字段列名（约定列名 = .jsonglobalenum 枚举名）
+  m_globalEnumCompleter = new CsvCompleter(m_globalEnumEdit);
+  m_globalEnumCompleter->setCaseSensitivity(Qt::CaseInsensitive);
+  m_globalEnumCompleter->setFilterMode(Qt::MatchContains);
+  m_globalEnumEdit->setCompleter(m_globalEnumCompleter);
 
-  // ── 多语言翻译表配置 ──
+  // ── 多语言翻译表配置（多语言页）──
   m_i18nCheck =
       new QCheckBox(QStringLiteral("启用多语言（主表 + 翻译表联合查询/事务写入/级联删除）"), this);
-  layout->addWidget(m_i18nCheck);
+  i18nTab->addWidget(m_i18nCheck);
   auto *i18nRow1 = new QHBoxLayout;
   i18nRow1->setSpacing(6);
   i18nRow1->addWidget(new QLabel(QStringLiteral("翻译表:"), this));
@@ -333,7 +524,7 @@ void JsonTableDialog::setupUI() {
   m_i18nLangKeyEdit = new QLineEdit(this);
   m_i18nLangKeyEdit->setPlaceholderText(QStringLiteral("如 lang"));
   i18nRow1->addWidget(m_i18nLangKeyEdit, 1);
-  layout->addLayout(i18nRow1);
+  i18nTab->addLayout(i18nRow1);
   auto *i18nRow2 = new QHBoxLayout;
   i18nRow2->setSpacing(6);
   i18nRow2->addWidget(new QLabel(QStringLiteral("默认语言:"), this));
@@ -351,7 +542,13 @@ void JsonTableDialog::setupUI() {
   m_i18nFieldsEdit->setPlaceholderText(
       QStringLiteral("逗号分隔，如 name,intro（翻译表的文本列，不能与主表列重名）"));
   i18nRow2->addWidget(m_i18nFieldsEdit, 1);
-  layout->addLayout(i18nRow2);
+  i18nTab->addLayout(i18nRow2);
+  // 多语言字段补全：候选 = 翻译表列名（随翻译表名输入实时切换）
+  m_i18nFieldsCompleter = new CsvCompleter(m_i18nFieldsEdit);
+  m_i18nFieldsCompleter->setCaseSensitivity(Qt::CaseInsensitive);
+  m_i18nFieldsCompleter->setFilterMode(Qt::MatchContains);
+  m_i18nFieldsEdit->setCompleter(m_i18nFieldsCompleter);
+  i18nTab->addStretch(1);
   auto applyI18nEnabled = [this](bool on) {
     m_i18nTableEdit->setEnabled(on);
     m_i18nExtEdit->setEnabled(on);
@@ -362,7 +559,7 @@ void JsonTableDialog::setupUI() {
   };
   applyI18nEnabled(false);
 
-  // ── DDL 预览 + 执行区 ──
+  // ── DDL 预览 + 执行区（DDL 页）──
   auto *ddlHeader = new QHBoxLayout;
   ddlHeader->addWidget(new QLabel(QStringLiteral("DDL:"), this));
   ddlHeader->addStretch();
@@ -372,14 +569,13 @@ void JsonTableDialog::setupUI() {
   ddlHeader->addWidget(m_importBtn);
   ddlHeader->addWidget(previewBtn);
   ddlHeader->addWidget(execBtn);
-  layout->addLayout(ddlHeader);
+  ddlTab->addLayout(ddlHeader);
 
   m_ddlView = new QPlainTextEdit(this);
   m_ddlView->setReadOnly(true);
   m_ddlView->setPlaceholderText(QStringLiteral("点击「DDL 预览」生成 CREATE TABLE 语句"));
-  m_ddlView->setMinimumHeight(84);
-  m_ddlView->setMaximumHeight(130);
-  layout->addWidget(m_ddlView);
+  m_ddlView->setMinimumHeight(160);
+  ddlTab->addWidget(m_ddlView, 1);
 
   // meta.db 四件套齐全才允许从数据库导入
   const bool dbReady = !m_config.dbHost.isEmpty() && !m_config.dbUser.isEmpty() &&
@@ -407,6 +603,27 @@ void JsonTableDialog::setupUI() {
   connect(delSortBtn, &QPushButton::clicked, this, [this]() {
     const int row = m_sortTable->currentRow();
     if (row >= 0) m_sortTable->removeRow(row);
+  });
+  connect(addJoinBtn, &QPushButton::clicked, this, [this]() { appendJoinRow(); });
+  connect(delJoinBtn, &QPushButton::clicked, this, [this]() {
+    const int row = m_joinTable->currentRow();
+    if (row >= 0) m_joinTable->removeRow(row);
+  });
+  connect(addSelBtn, &QPushButton::clicked, this, [this]() { appendSelColRow(); });
+  connect(delSelBtn, &QPushButton::clicked, this, [this]() {
+    const int row = m_selColsTable->currentRow();
+    if (row >= 0) m_selColsTable->removeRow(row);
+  });
+  connect(addQueryBtn, &QPushButton::clicked, this,
+          [this]() { appendQueryRow(QString(), QStringLiteral("eq"), true); });
+  connect(delQueryBtn, &QPushButton::clicked, this, [this]() {
+    const int row = m_queryTable->currentRow();
+    if (row >= 0) m_queryTable->removeRow(row);
+  });
+  connect(addEditBtn, &QPushButton::clicked, this, [this]() { appendEditColRow(QString()); });
+  connect(delEditBtn, &QPushButton::clicked, this, [this]() {
+    const int row = m_editColsTable->currentRow();
+    if (row >= 0) m_editColsTable->removeRow(row);
   });
   connect(addEnumBtn, &QPushButton::clicked, this, [this]() {
     syncEnumDrafts();
@@ -445,10 +662,19 @@ void JsonTableDialog::setupUI() {
   connect(m_i18nCheck, &QCheckBox::toggled, this, [this, applyI18nEnabled](bool on) {
     applyI18nEnabled(on);
   });
+  // 字段表格编辑 → 列名候选刷新（枚举列下拉/联表外键列/编辑列等）
+  connect(m_colsTable, &QTableWidget::itemChanged, this, [this](QTableWidgetItem *it) {
+    if (!it) return;
+    refreshColumnCandidates();
+  });
+  // 翻译表名输入 → 多语言字段候选切换
+  connect(m_i18nTableEdit, &QLineEdit::textChanged, this,
+          [this]() { refreshI18nFieldCandidates(); });
 
+  layout->addWidget(tabs, 1);
   finishConfigDialog(this, frame);
-  setMinimumSize(900, 940);
-  resize(980, 1010);
+  setMinimumSize(860, 600);
+  resize(980, 740);
 
   // ── 预填 ──
   m_nameEdit->setText(m_table.tableName);
@@ -457,8 +683,10 @@ void JsonTableDialog::setupUI() {
   m_manualUpdateCheck->setChecked(m_table.manualUpdateTime);
   fillColumns(m_table.columns);
   fillIndexes(m_table.indexes);
-  m_selGapEdit->setText(joinCsv(m_table.selColsGap));
-  m_selLikeEdit->setText(joinCsv(m_table.selColsLike));
+  fillJoins(m_table.joinTable);
+  fillSelCols(m_table.selCols);
+  fillQueryTable(m_table.selColsEq, m_table.selColsLike, m_table.selColsGap);
+  fillEditCols(m_table.editCols);
   fillSortTable(m_table.selColsSort);
   m_enums = m_table.enums;
   rebuildEnumMaster();
@@ -472,6 +700,8 @@ void JsonTableDialog::setupUI() {
   comboSelectData(m_i18nLangFromCombo, m_table.i18n.langFrom);
   m_i18nFieldsEdit->setText(joinCsv(m_table.i18n.fields));
   applyI18nEnabled(m_i18nCheck->isChecked());
+  refreshColumnCandidates();
+  refreshI18nFieldCandidates();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -494,10 +724,6 @@ void JsonTableDialog::appendColumnRow(const JsonTableColumn &c) {
   m_colsTable->setItem(row, ColColAutoInc, makeCheckItem(c.isAutoInc));
   m_colsTable->setItem(row, ColColDefault, new QTableWidgetItem(c.defaultValue));
   m_colsTable->setItem(row, ColColComment, new QTableWidgetItem(c.comment));
-  m_colsTable->setItem(row, ColColList, makeCheckItem(c.list));
-  m_colsTable->setItem(row, ColColSearch, makeCheckItem(c.search));
-  m_colsTable->setItem(row, ColColForm, new QTableWidgetItem(c.form));
-  m_colsTable->setItem(row, ColColRequired, makeCheckItem(c.required));
 }
 
 QString JsonTableDialog::cellText(int row, int col) const {
@@ -521,11 +747,6 @@ JsonTableColumn JsonTableDialog::columnFromRow(int row) const {
   c.isAutoInc = cellChecked(row, ColColAutoInc);
   c.defaultValue = cellText(row, ColColDefault);
   c.comment = cellText(row, ColColComment);
-  c.list = cellChecked(row, ColColList);
-  c.search = cellChecked(row, ColColSearch);
-  c.form = cellText(row, ColColForm);
-  if (c.form.isEmpty()) c.form = QStringLiteral("input");
-  c.required = cellChecked(row, ColColRequired);
   return c;
 }
 
@@ -549,6 +770,7 @@ void JsonTableDialog::addColumn() {
 void JsonTableDialog::deleteColumn() {
   const int row = m_colsTable->currentRow();
   if (row >= 0) m_colsTable->removeRow(row);
+  refreshColumnCandidates();  // 行删除不触发 itemChanged，显式刷新候选
 }
 
 void JsonTableDialog::moveColumn(int delta) {
@@ -563,6 +785,7 @@ void JsonTableDialog::moveColumn(int delta) {
   m_colsTable->insertRow(target);
   for (int c = 0; c < ColColCount; ++c) m_colsTable->setItem(target, c, items[c]);
   m_colsTable->setCurrentCell(target, ColColName);
+  refreshColumnCandidates();  // 行搬运不触发 itemChanged，显式刷新候选
 }
 
 // ════════════════════════════════════════════════════════════
@@ -606,6 +829,185 @@ QVector<JsonTableIndex> JsonTableDialog::collectIndexes() const {
     const QTableWidgetItem *uniqIt = m_indexTable->item(r, IndexColUnique);
     ix.unique = uniqIt && uniqIt->checkState() == Qt::Checked;
     out.append(ix);
+  }
+  return out;
+}
+
+// ════════════════════════════════════════════════════════════
+//  联表声明（joinTable）/ 列表读模型（selCols）
+// ════════════════════════════════════════════════════════════
+
+void JsonTableDialog::fillJoins(const QVector<JsonTableJoin> &joins) {
+  m_joinTable->setRowCount(0);
+  for (const auto &j : joins) appendJoinRow();
+  // 逐行回填（appendJoinRow 建的是空行）
+  for (int r = 0; r < joins.size() && r < m_joinTable->rowCount(); ++r) {
+    const JsonTableJoin &j = joins[r];
+    m_joinTable->setItem(r, JoinColPro, new QTableWidgetItem(j.joinEnClassPro));
+    m_joinTable->setItem(r, JoinColClass, new QTableWidgetItem(j.joinEnClass));
+    m_joinTable->setItem(r, JoinColFk, new QTableWidgetItem(j.joinFk));
+    // joinPk 缺省 id 显示为空（空 = id 语义），非缺省值才回显
+    if (!j.joinPk.isEmpty() && j.joinPk != QStringLiteral("id")) {
+      m_joinTable->setItem(r, JoinColPk, new QTableWidgetItem(j.joinPk));
+    }
+    auto *typeCombo = qobject_cast<QComboBox *>(m_joinTable->cellWidget(r, JoinColType));
+    if (typeCombo) comboSelectData(typeCombo, j.joinType);
+    m_joinTable->setItem(r, JoinColActive, makeCheckItem(j.isJoinRelations));
+  }
+}
+
+void JsonTableDialog::appendJoinRow() {
+  const int row = m_joinTable->rowCount();
+  m_joinTable->insertRow(row);
+  m_joinTable->setItem(row, JoinColPro, new QTableWidgetItem(QString()));
+  m_joinTable->setItem(row, JoinColClass, new QTableWidgetItem(QString()));
+  m_joinTable->setItem(row, JoinColFk, new QTableWidgetItem(QString()));
+  m_joinTable->setItem(row, JoinColPk, new QTableWidgetItem(QString()));
+  auto *typeCombo = AuiComboBox::create(this);
+  typeCombo->addItem(QStringLiteral("ManyToOne"), QStringLiteral("ManyToOne"));
+  typeCombo->addItem(QStringLiteral("OneToMany"), QStringLiteral("OneToMany"));
+  m_joinTable->setCellWidget(row, JoinColType, typeCombo);
+  m_joinTable->setItem(row, JoinColActive, makeCheckItem(true));
+  m_joinTable->setCurrentCell(row, JoinColPro);
+}
+
+QVector<JsonTableJoin> JsonTableDialog::collectJoins() const {
+  QVector<JsonTableJoin> out;
+  for (int r = 0; r < m_joinTable->rowCount(); ++r) {
+    JsonTableJoin j;
+    j.joinEnClassPro = cellOf(m_joinTable, r, JoinColPro);
+    j.joinEnClass = cellOf(m_joinTable, r, JoinColClass);
+    j.joinFk = cellOf(m_joinTable, r, JoinColFk);
+    j.joinPk = cellOf(m_joinTable, r, JoinColPk);
+    if (j.joinPk.isEmpty()) j.joinPk = QStringLiteral("id");
+    auto *typeCombo = qobject_cast<QComboBox *>(m_joinTable->cellWidget(r, JoinColType));
+    j.joinType = typeCombo ? typeCombo->currentData().toString() : QStringLiteral("ManyToOne");
+    if (j.joinType.isEmpty()) j.joinType = QStringLiteral("ManyToOne");
+    const QTableWidgetItem *activeIt = m_joinTable->item(r, JoinColActive);
+    j.isJoinRelations = activeIt && activeIt->checkState() == Qt::Checked;
+    // 引用名与目标均未填的行视为空行，跳过
+    if (j.joinEnClassPro.isEmpty() && j.joinEnClass.isEmpty() && j.joinFk.isEmpty()) continue;
+    out.append(j);
+  }
+  return out;
+}
+
+void JsonTableDialog::fillSelCols(const QVector<JsonTableSelCol> &cols) {
+  m_selColsTable->setRowCount(0);
+  for (const auto &c : cols) {
+    const int row = m_selColsTable->rowCount();
+    m_selColsTable->insertRow(row);
+    m_selColsTable->setItem(row, SelColColRef, new QTableWidgetItem(c.ref));
+    m_selColsTable->setItem(row, SelColColLabel, new QTableWidgetItem(c.label));
+    m_selColsTable->setItem(row, SelColColWidth,
+                            new QTableWidgetItem(c.width > 0 ? QString::number(c.width)
+                                                             : QString()));
+  }
+}
+
+void JsonTableDialog::appendSelColRow() {
+  const int row = m_selColsTable->rowCount();
+  m_selColsTable->insertRow(row);
+  m_selColsTable->setItem(row, SelColColRef, new QTableWidgetItem(QString()));
+  m_selColsTable->setItem(row, SelColColLabel, new QTableWidgetItem(QString()));
+  m_selColsTable->setItem(row, SelColColWidth, new QTableWidgetItem(QString()));
+  m_selColsTable->setCurrentCell(row, SelColColRef);
+}
+
+QVector<JsonTableSelCol> JsonTableDialog::collectSelCols() const {
+  QVector<JsonTableSelCol> out;
+  for (int r = 0; r < m_selColsTable->rowCount(); ++r) {
+    JsonTableSelCol c;
+    c.ref = cellOf(m_selColsTable, r, SelColColRef);
+    c.label = cellOf(m_selColsTable, r, SelColColLabel);
+    c.width = cellOf(m_selColsTable, r, SelColColWidth).toInt();
+    if (c.ref.isEmpty()) continue;  // 跳过未填 ref 的行
+    out.append(c);
+  }
+  return out;
+}
+
+// ════════════════════════════════════════════════════════════
+//  查询视图（三键合一表格，mode 拆分）/ 编辑视图（editCols）
+// ════════════════════════════════════════════════════════════
+
+void JsonTableDialog::fillQueryTable(const QVector<JsonTableQueryCol> &eq,
+                                     const QVector<JsonTableQueryCol> &like,
+                                     const QVector<JsonTableQueryCol> &gap) {
+  m_queryTable->setRowCount(0);
+  for (const auto &c : eq) appendQueryRow(c.ref, QStringLiteral("eq"), c.visible);
+  for (const auto &c : like) appendQueryRow(c.ref, QStringLiteral("like"), c.visible);
+  for (const auto &c : gap) appendQueryRow(c.ref, QStringLiteral("gap"), c.visible);
+}
+
+void JsonTableDialog::appendQueryRow(const QString &ref, const QString &mode, bool visible) {
+  const int row = m_queryTable->rowCount();
+  m_queryTable->insertRow(row);
+  m_queryTable->setItem(row, QueryColRef, new QTableWidgetItem(ref));
+  auto *modeCombo = AuiComboBox::create(this);
+  modeCombo->addItem(QStringLiteral("精确"), QStringLiteral("eq"));
+  modeCombo->addItem(QStringLiteral("模糊"), QStringLiteral("like"));
+  modeCombo->addItem(QStringLiteral("范围"), QStringLiteral("gap"));
+  comboSelectData(modeCombo, mode);
+  m_queryTable->setCellWidget(row, QueryColMode, modeCombo);
+  m_queryTable->setItem(row, QueryColVisible, makeCheckItem(visible));
+  m_queryTable->setCurrentCell(row, QueryColRef);
+}
+
+QVector<JsonTableQueryCol> JsonTableDialog::collectQueryRows(const QString &mode) const {
+  QVector<JsonTableQueryCol> out;
+  for (int r = 0; r < m_queryTable->rowCount(); ++r) {
+    auto *modeCombo = qobject_cast<QComboBox *>(m_queryTable->cellWidget(r, QueryColMode));
+    const QString rowMode =
+        modeCombo ? modeCombo->currentData().toString() : QStringLiteral("eq");
+    if (rowMode != mode) continue;  // 按模式拆分收集
+    JsonTableQueryCol c;
+    c.ref = cellOf(m_queryTable, r, QueryColRef);
+    const QTableWidgetItem *visIt = m_queryTable->item(r, QueryColVisible);
+    c.visible = visIt && visIt->checkState() == Qt::Checked;
+    if (c.ref.isEmpty()) continue;  // 跳过未填 ref 的行
+    out.append(c);
+  }
+  return out;
+}
+
+void JsonTableDialog::fillEditCols(const QVector<JsonTableEditCol> &cols) {
+  m_editColsTable->setRowCount(0);
+  for (const auto &c : cols) appendEditColRow(QString());  // 先建空行
+  for (int r = 0; r < cols.size() && r < m_editColsTable->rowCount(); ++r) {
+    const JsonTableEditCol &c = cols[r];
+    m_editColsTable->setItem(r, EditColRef, new QTableWidgetItem(c.ref));
+    m_editColsTable->setItem(r, EditColLabel, new QTableWidgetItem(c.label));
+    m_editColsTable->setItem(r, EditColWidget, new QTableWidgetItem(c.widget));
+    m_editColsTable->setItem(r, EditColRequired, makeCheckItem(c.required));
+    m_editColsTable->setItem(r, EditColVisible, makeCheckItem(c.visible));
+  }
+}
+
+void JsonTableDialog::appendEditColRow(const QString &ref) {
+  const int row = m_editColsTable->rowCount();
+  m_editColsTable->insertRow(row);
+  m_editColsTable->setItem(row, EditColRef, new QTableWidgetItem(ref));
+  m_editColsTable->setItem(row, EditColLabel, new QTableWidgetItem(QString()));
+  m_editColsTable->setItem(row, EditColWidget, new QTableWidgetItem(QString()));
+  m_editColsTable->setItem(row, EditColRequired, makeCheckItem(false));
+  m_editColsTable->setItem(row, EditColVisible, makeCheckItem(true));
+  m_editColsTable->setCurrentCell(row, EditColRef);
+}
+
+QVector<JsonTableEditCol> JsonTableDialog::collectEditCols() const {
+  QVector<JsonTableEditCol> out;
+  for (int r = 0; r < m_editColsTable->rowCount(); ++r) {
+    JsonTableEditCol c;
+    c.ref = cellOf(m_editColsTable, r, EditColRef);
+    c.label = cellOf(m_editColsTable, r, EditColLabel);
+    c.widget = cellOf(m_editColsTable, r, EditColWidget);
+    const QTableWidgetItem *reqIt = m_editColsTable->item(r, EditColRequired);
+    const QTableWidgetItem *visIt = m_editColsTable->item(r, EditColVisible);
+    c.required = reqIt && reqIt->checkState() == Qt::Checked;
+    c.visible = visIt && visIt->checkState() == Qt::Checked;
+    if (c.ref.isEmpty()) continue;  // 跳过未填 ref 的行
+    out.append(c);
   }
   return out;
 }
@@ -773,6 +1175,249 @@ bool JsonTableDialog::validateForDdl(QString *err) const {
   return true;
 }
 
+// ════════════════════════════════════════════════════════════
+//  交叉校验 / 列名候选刷新
+// ════════════════════════════════════════════════════════════
+
+void JsonTableDialog::accept() {
+  QString err;
+  if (!validateCrossRefs(&err)) {
+    AuiMessageBox::show(this, QStringLiteral("无法保存"), err);
+    return;
+  }
+  QDialog::accept();
+}
+
+bool JsonTableDialog::validateCrossRefs(QString *err) const {
+  auto fail = [err](const QString &msg) {
+    if (err) *err = msg;
+    return false;
+  };
+
+  // ── 基础项（与 validateForDdl 同源）──
+  const QString tableName = m_nameEdit->text().trimmed();
+  if (tableName.isEmpty()) return fail(QStringLiteral("表名不能为空"));
+  const QVector<JsonTableColumn> cols = collectColumns();
+  if (cols.isEmpty()) return fail(QStringLiteral("请先添加字段列"));
+
+  // 列名集合（重复列名会让 DDL/生成产生歧义）
+  QSet<QString> colNames;
+  for (const auto &c : cols) {
+    if (colNames.contains(c.name)) return fail(QStringLiteral("列名 '%1' 重复").arg(c.name));
+    colNames.insert(c.name);
+  }
+
+  // 表名与同文件其它表重复（生成期同名表会被跳过并报错）
+  for (const auto &t : m_config.tables) {
+    if (t.tableName == tableName && t.tableName != m_table.tableName)
+      return fail(QStringLiteral("表名 '%1' 与文件中其它表重复").arg(tableName));
+  }
+
+  // ── 表内枚举：枚举列须在字段列表中且互不重复 ──
+  const QVector<JsonTableEnum> enums = collectEnums();
+  QSet<QString> enumCols;
+  for (int i = 0; i < enums.size(); ++i) {
+    const JsonTableEnum &e = enums[i];
+    if (e.column.isEmpty())
+      return fail(QStringLiteral("第 %1 个表内枚举未填枚举列").arg(i + 1));
+    if (!colNames.contains(e.column))
+      return fail(QStringLiteral("表内枚举列 '%1' 不在字段列表中").arg(e.column));
+    if (enumCols.contains(e.column))
+      return fail(QStringLiteral("列 '%1' 重复配置表内枚举").arg(e.column));
+    enumCols.insert(e.column);
+  }
+
+  // ── 全局枚举列：列名=枚举名，须在字段列表中；与表内枚举二选一 ──
+  // （.jsonglobalenum 文件中枚举是否存在由生成期校验，设计器无文件上下文）
+  for (const QString &ge : splitCsv(m_globalEnumEdit->text())) {
+    if (!colNames.contains(ge))
+      return fail(QStringLiteral("全局枚举列 '%1' 不在字段列表中（列名须与 .jsonglobalenum "
+                                 "枚举名一致）")
+                      .arg(ge));
+    if (enumCols.contains(ge))
+      return fail(QStringLiteral("列 '%1' 同时配置了表内枚举与全局枚举（二选一）").arg(ge));
+  }
+
+  // ── 联表声明（joinTable）：引用名去重、joinType 合法、目标/外键/主键可解析 ──
+  const QVector<JsonTableJoin> joins = collectJoins();
+  QSet<QString> joinPros;                          // 有效 ManyToOne 条目的引用名
+  QHash<QString, const JsonTableTable *> joinsByPro;  // 引用名 → 目标表（ref 解析用）
+  for (int i = 0; i < joins.size(); ++i) {
+    const JsonTableJoin &j = joins[i];
+    if (!j.isJoinRelations) continue;  // 未启用条目不生效，不参与校验
+    if (j.joinEnClassPro.isEmpty())
+      return fail(QStringLiteral("第 %1 条联表未填引用名(joinEnClassPro)").arg(i + 1));
+    if (joinPros.contains(j.joinEnClassPro))
+      return fail(QStringLiteral("联表引用名 '%1' 重复").arg(j.joinEnClassPro));
+    if (j.joinType != QStringLiteral("ManyToOne") && j.joinType != QStringLiteral("OneToMany"))
+      return fail(QStringLiteral("联表 '%1' 的 joinType 仅支持 ManyToOne/OneToMany")
+                      .arg(j.joinEnClassPro));
+    // 目标表按 modelName 定位（joinEnClass 填目标表模型名）
+    const JsonTableTable *target = nullptr;
+    for (const auto &t : m_config.tables) {
+      if (t.modelName == j.joinEnClass) {
+        target = &t;
+        break;
+      }
+    }
+    if (!target)
+      return fail(QStringLiteral("联表 '%1' 的目标 '%2' 不在本文件 tables[] 中"
+                                 "（joinEnClass 填目标表模型名）")
+                      .arg(j.joinEnClassPro, j.joinEnClass));
+    if (j.joinType == QStringLiteral("ManyToOne")) {
+      if (j.joinFk.isEmpty() || !colNames.contains(j.joinFk))
+        return fail(QStringLiteral("联表 '%1' 的外键列 '%2' 不在字段列表中")
+                        .arg(j.joinEnClassPro, j.joinFk.isEmpty() ? QStringLiteral("(空)")
+                                                                  : j.joinFk));
+      joinsByPro.insert(j.joinEnClassPro, target);  // 仅 ManyToOne 供读模型 ref 解析
+    }
+    joinPros.insert(j.joinEnClassPro);
+  }
+
+  // ── 读模型 ref 可解析（本表列名 或 引用名.目标列；别名 pro_col 不得撞主表列名）──
+  auto refOk = [&](const QString &ref, QString *aliasOut) -> bool {
+    const int dot = ref.indexOf(QLatin1Char('.'));
+    if (dot <= 0) return colNames.contains(ref);  // 本表列
+    const QString pro = ref.left(dot).trimmed();
+    const QString col = ref.mid(dot + 1).trimmed();
+    if (col.isEmpty() || !joinsByPro.contains(pro)) return false;
+    bool has = false;
+    for (const auto &c : joinsByPro.value(pro)->columns) {
+      if (c.name == col) {
+        has = true;
+        break;
+      }
+    }
+    if (has && aliasOut) *aliasOut = pro + QLatin1Char('_') + col;
+    return has;
+  };
+  auto checkRef = [&](const QString &kind, const QString &ref) -> bool {
+    QString alias;
+    if (!refOk(ref, &alias))
+      return fail(QStringLiteral("%1 '%2' 无法解析（须为本表列名或已启用 ManyToOne 联表的"
+                                 "「引用名.目标列」）")
+                      .arg(kind, ref));
+    if (!alias.isEmpty() && colNames.contains(alias))
+      return fail(QStringLiteral("联表别名 '%1' 与主表列名冲突（ref %2）").arg(alias, ref));
+    return true;
+  };
+  for (const auto &c : collectSelCols())
+    if (!checkRef(QStringLiteral("列表列"), c.ref)) return false;
+  for (const auto &c : collectQueryRows(QStringLiteral("eq")))
+    if (!checkRef(QStringLiteral("精确查询列"), c.ref)) return false;
+  for (const auto &c : collectQueryRows(QStringLiteral("gap")))
+    if (!checkRef(QStringLiteral("范围查询列"), c.ref)) return false;
+  for (const auto &c : collectQueryRows(QStringLiteral("like")))
+    if (!checkRef(QStringLiteral("模糊查询列"), c.ref)) return false;
+
+  // ── 编辑视图（editCols）：ref 仅物理列、去重、required 与 invisible 互斥 ──
+  const QVector<JsonTableEditCol> editRows = collectEditCols();
+  QSet<QString> editRefs;
+  for (int i = 0; i < editRows.size(); ++i) {
+    const JsonTableEditCol &ec = editRows[i];
+    if (!colNames.contains(ec.ref))
+      return fail(QStringLiteral("编辑列 '%1' 不在字段列表中（联表列只读，不可编辑）").arg(ec.ref));
+    if (editRefs.contains(ec.ref))
+      return fail(QStringLiteral("编辑列 '%1' 重复配置").arg(ec.ref));
+    editRefs.insert(ec.ref);
+    if (ec.required && !ec.visible)
+      return fail(QStringLiteral("编辑列 '%1' 必填但前端显示关闭（矛盾配置）").arg(ec.ref));
+  }
+  for (const auto &p : collectSort())
+    if (!checkRef(QStringLiteral("默认排序列"), p.first)) return false;
+
+  // ── 索引列存在性 ──
+  for (const auto &ix : collectIndexes())
+    for (const QString &c : ix.cols)
+      if (!colNames.contains(c))
+        return fail(QStringLiteral("索引 '%1' 的列 '%2' 不在字段列表中").arg(ix.name, c));
+
+  // ── i18n 引用完整性（对齐生成期 main_api 校验）──
+  if (m_i18nCheck->isChecked()) {
+    const QString i18nTable = m_i18nTableEdit->text().trimmed();
+    if (i18nTable.isEmpty()) return fail(QStringLiteral("启用多语言后翻译表不能为空"));
+    const JsonTableTable *trans = nullptr;
+    for (const auto &t : m_config.tables) {
+      if (t.tableName == i18nTable) {
+        trans = &t;
+        break;
+      }
+    }
+    if (!trans)
+      return fail(QStringLiteral("翻译表 '%1' 不在本 .jsontable 文件的 tables[] 中").arg(i18nTable));
+    QSet<QString> transCols;
+    for (const auto &c : trans->columns) transCols.insert(c.name);
+    const QString extKey = m_i18nExtEdit->text().trimmed();
+    const QString langKey = m_i18nLangKeyEdit->text().trimmed();
+    if (extKey.isEmpty() || !transCols.contains(extKey))
+      return fail(
+          QStringLiteral("i18n 外键列 '%1' 不在翻译表 '%2' 的列中")
+              .arg(extKey.isEmpty() ? QStringLiteral("(空)") : extKey, i18nTable));
+    if (langKey.isEmpty() || !transCols.contains(langKey))
+      return fail(
+          QStringLiteral("i18n 语言列 '%1' 不在翻译表 '%2' 的列中")
+              .arg(langKey.isEmpty() ? QStringLiteral("(空)") : langKey, i18nTable));
+    for (const QString &f : splitCsv(m_i18nFieldsEdit->text())) {
+      if (!transCols.contains(f))
+        return fail(QStringLiteral("多语言字段 '%1' 不在翻译表 '%2' 的列中").arg(f, i18nTable));
+      if (colNames.contains(f))
+        return fail(QStringLiteral("多语言字段 '%1' 与主表列重名").arg(f));
+    }
+  }
+  return true;
+}
+
+void JsonTableDialog::refreshColumnCandidates() {
+  // 本表列名（枚举列/全局枚举列/联表外键列/编辑列候选）
+  QStringList names;
+  for (int r = 0; r < m_colsTable->rowCount(); ++r) {
+    const QString n = cellText(r, ColColName);
+    if (!n.isEmpty()) names.append(n);
+  }
+  // 读模型 ref 候选 = 本表列名 + 有效 ManyToOne 联表的「引用名.目标列」
+  QStringList refCands = names;
+  for (const auto &j : collectJoins()) {
+    if (!j.isJoinRelations || j.joinType != QStringLiteral("ManyToOne") ||
+        j.joinEnClassPro.isEmpty())
+      continue;
+    for (const auto &t : m_config.tables) {
+      if (t.modelName != j.joinEnClass) continue;
+      for (const auto &c : t.columns) {
+        if (!c.name.isEmpty()) refCands.append(j.joinEnClassPro + QLatin1Char('.') + c.name);
+      }
+      break;
+    }
+  }
+  if (m_enumColDelegate)
+    static_cast<EditableComboDelegate *>(m_enumColDelegate)->setOptions(names);
+  if (m_joinFkDelegate)
+    static_cast<EditableComboDelegate *>(m_joinFkDelegate)->setOptions(names);
+  if (m_selColsRefDelegate)
+    static_cast<EditableComboDelegate *>(m_selColsRefDelegate)->setOptions(refCands);
+  if (m_queryRefDelegate)
+    static_cast<EditableComboDelegate *>(m_queryRefDelegate)->setOptions(refCands);
+  if (m_editRefDelegate)
+    static_cast<EditableComboDelegate *>(m_editRefDelegate)->setOptions(names);
+  if (m_sortRefDelegate)
+    static_cast<EditableComboDelegate *>(m_sortRefDelegate)->setOptions(refCands);
+  if (m_globalEnumCompleter)
+    static_cast<CsvCompleter *>(m_globalEnumCompleter)->setCandidates(names);
+}
+
+void JsonTableDialog::refreshI18nFieldCandidates() {
+  QStringList names;
+  const QString trans = m_i18nTableEdit->text().trimmed();
+  if (!trans.isEmpty()) {
+    for (const auto &t : m_config.tables) {
+      if (t.tableName != trans) continue;
+      for (const auto &c : t.columns) names.append(c.name);
+      break;
+    }
+  }
+  if (m_i18nFieldsCompleter)
+    static_cast<CsvCompleter *>(m_i18nFieldsCompleter)->setCandidates(names);
+}
+
 QString JsonTableDialog::toCreateDdl() const {
   const QString tableName = m_nameEdit->text().trimmed();
   const QVector<JsonTableColumn> cols = collectColumns();
@@ -843,11 +1488,8 @@ void JsonTableDialog::importFromDatabase() {
     return;
   }
 
-  // 合并模式：以 DB 列为基础，前端角色（list/search/form/required）按列名回填
-  // .jsontable 已有值（取当前界面状态，未改过即 .jsontable 原值）
-  QHash<QString, JsonTableColumn> oldCols;
-  for (const auto &c : collectColumns()) oldCols.insert(c.name, c);
-
+  // 导入为纯物理结构：DB 列为基础重建（列级呈现角色已退役，列表/查询/编辑
+  // 三个视图的配置不随导入变化，仅物理列定义被替换）
   QVector<JsonTableColumn> cols;
   for (const auto &v : schema.items()) {
     JsonTableColumn col;
@@ -874,13 +1516,7 @@ void JsonTableDialog::importFromDatabase() {
     }
     col.comment = v.value(QString::fromLatin1(AcDB::kColComment)).toString();
 
-    const auto it = oldCols.constFind(col.name);
-    if (it != oldCols.constEnd()) {
-      col.list = it->list;
-      col.search = it->search;
-      col.form = it->form;
-      col.required = it->required;
-    }
+    // 导入为纯物理结构（列级呈现角色已退役，编辑/查询/列表视图不受影响）
     cols.append(col);
   }
 
@@ -944,8 +1580,12 @@ JsonTableTable JsonTableDialog::resultTable() const {
   t.columns = collectColumns();
   t.indexes = collectIndexes();
   // ── 表级进阶键 ──
-  t.selColsGap = splitCsv(m_selGapEdit->text());
-  t.selColsLike = splitCsv(m_selLikeEdit->text());
+  t.joinTable = collectJoins();
+  t.selCols = collectSelCols();
+  t.selColsEq = collectQueryRows(QStringLiteral("eq"));
+  t.selColsLike = collectQueryRows(QStringLiteral("like"));
+  t.selColsGap = collectQueryRows(QStringLiteral("gap"));
+  t.editCols = collectEditCols();
   t.selColsSort = collectSort();
   t.enums = collectEnums();
   t.globalEnumCols = splitCsv(m_globalEnumEdit->text());

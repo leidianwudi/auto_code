@@ -9,7 +9,7 @@
 ///     1. 页面配置双轨制（plan 3.3）：
 ///        - 目标页面目录存在同名 .jsonvue → 完全按 .jsonvue 走（高级页，
 ///          上传预设/数据源/弹窗/按钮组等全部既有能力直接可用）；
-///        - 不存在 → 从 .jsontable 列角色（list/search/form/required）合成
+///        - 不存在 → 从 .jsontable 读模型（selCols/selColsEq/Like/Gap + form/required）合成
 ///          jsonvue 形状的对象（标准页，零额外配置）。
 ///        两种来源殊途同归进入 buildAdminTplData（同一条加工管线）。
 ///     2. http 封装：@/utils/http 的 http.request（pure-admin 标准），
@@ -78,7 +78,9 @@ export function deriveDateFormat(mysqlType: String): String {
 }
 
 /// @brief .jsontable 列 → jsonvue 列对象（表单角色 → editStyle 映射）
-/// @param rawCol .jsontable 列对象（name/mysqlType/comment/list/search/form/required）
+/// @param rawCol .jsontable 列对象（name/mysqlType/comment/form/required；
+///        列表显隐由表级 selCols 决定，本函数缺省 queryVisible=true，
+///        由 buildJsonvueFromTable 按 selCols 收敛）
 /// @return jsonvue 形状的列对象（喂给共用加工器的 processColumns）
 ///   映射表（form 角色 → editStyle / displayType）：
 ///     input    → text
@@ -98,27 +100,36 @@ export function tagColorOf(idx: Number): String {
   return colors[idx % colors.length];
 }
 
-export function buildJsonvueColumn(rawCol: Object, enumDef: Object): Object {
+/// @brief .jsontable 列 → jsonvue 列对象（editCols 驱动编辑样式映射）
+/// @param rawCol .jsontable 列对象（name/mysqlType/comment；列级 form/required 已退役）
+/// @param enumDef 表内枚举定义（enums[].column 命中时非 null → tag 渲染/编辑）
+/// @param editCol 编辑视图配置（ref/label/visible/widget/required；null=不进编辑表单）
+///        widget 已由调用方推导（显式配置 > joinFk 下拉 > mysqlType 推导）
+/// @return jsonvue 形状的列对象（喂给共用加工器的 processColumns）
+///   widget → editStyle 映射：
+///     input→text、textarea→textarea、number→int、date→date、boolean→boolean
+///     （displayType=boolean 列表开关）、image→image（displayType=image）、
+///     select→select（配合调用方注入 domainType=remote 远程取值域）、
+///     upload→降级 text 并提示（上传预设需配 .jsonvue 高级页引用 .jsonupload）
+export function buildJsonvueColumn(rawCol: Object, enumDef: Object, editCol: Object): Object {
   let name: String = rawCol["name"];
   let comment: String = rawCol["comment"];
   if (comment == null || comment == "") {
     comment = name;
   }
-  let formRole: String = rawCol["form"];
-  if (formRole == null || formRole == "") {
-    formRole = "none";
-  }
 
   // 列基础键（jsonvue 编辑器保存的全键形状，避免加工器读到 null）
+  // queryVisible 缺省 true：未配 selCols 时全列展示；配置后由调用方按 selCols 收敛。
+  // editVisible/editStyle/required 缺省 false/text/false：由 editCol 收敛（调用方注入）
   let col: Object = {
     dataName: name,
     queryName: comment,
     editName: comment,
-    queryVisible: (rawCol["list"] == true),
-    editVisible: (formRole != "none"),
+    queryVisible: true,
+    editVisible: false,
     editEditable: true,
-    switchEditable: (formRole == "boolean"),
-    required: (rawCol["required"] == true),
+    switchEditable: false,
+    required: false,
     formSpan: 12,
     columnWidth: 0,
     maxlength: 0,
@@ -127,7 +138,8 @@ export function buildJsonvueColumn(rawCol: Object, enumDef: Object): Object {
     boolTrueText: "启用",
     boolFalseText: "禁用",
     tagItems: [],
-    dateFormat: ""
+    dateFormat: "",
+    editStyle: "text"
   };
 
   let mysqlType: String = rawCol["mysqlType"];
@@ -136,38 +148,40 @@ export function buildJsonvueColumn(rawCol: Object, enumDef: Object): Object {
   }
   let timeFormat: String = deriveDateFormat(mysqlType);
 
-  if (formRole == "input") {
-    col["editStyle"] = "text";
-  } else if (formRole == "textarea") {
-    col["editStyle"] = "textarea";
-  } else if (formRole == "number") {
-    col["editStyle"] = "int";
-  } else if (formRole == "date") {
-    col["editStyle"] = "date";
-    if (timeFormat != "") {
-      col["dateFormat"] = timeFormat;
+  // 编辑视图收敛（editCol 非空才进编辑表单；widget 由调用方推导）
+  if (editCol != null) {
+    let widget: String =
+        (editCol["widget"] != null && editCol["widget"] != "") ? editCol["widget"] : "input";
+    col["editVisible"] = (editCol["visible"] != false);
+    col["required"] = (editCol["required"] == true);
+    if (widget == "textarea") {
+      col["editStyle"] = "textarea";
+    } else if (widget == "number") {
+      col["editStyle"] = "int";
+    } else if (widget == "date") {
+      col["editStyle"] = "date";
+      col["dateFormat"] = (timeFormat != "" ? timeFormat : "date");
+    } else if (widget == "boolean") {
+      col["editStyle"] = "boolean";
+      col["displayType"] = "boolean";
+      col["switchEditable"] = true;
+    } else if (widget == "image") {
+      col["editStyle"] = "image";
+      col["displayType"] = "image";
+    } else if (widget == "upload") {
+      // 上传预设降级：标准页没有 .jsonupload 引用通道，按文本生成并提示
+      col["editStyle"] = "text";
+      printLog("提示：字段 '" + name + "' 编辑控件为 upload，标准页按文本输入生成；" +
+               "如需上传，请配置同名 .jsonvue 高级页（双轨制）");
     } else {
-      col["dateFormat"] = "date";
+      // input / select（select 配合 domainType=remote 远程取值域）
+      col["editStyle"] = (widget == "select" ? "select" : "text");
     }
-  } else if (formRole == "boolean") {
-    col["editStyle"] = "boolean";
-    col["displayType"] = "boolean";
-  } else if (formRole == "image") {
-    col["editStyle"] = "image";
-    col["displayType"] = "image";
-  } else if (formRole == "select" || formRole == "upload") {
-    // 引用型角色降级：标准页没有 .jsonsource/.jsonupload 引用通道（plan 11.3），
-    // 按文本输入生成并提示走 .jsonvue 高级页双轨补配
-    col["editStyle"] = "text";
-    printLog("提示：字段 '" + name + "' 表单角色为 " + formRole +
-             "，标准页按文本输入生成；如需下拉/上传，请配置同名 .jsonvue 高级页（双轨制）");
-  } else {
-    col["editStyle"] = "text";
   }
 
   // 表内枚举命中（enums[].column == 列名）：列表标签显示 + 编辑下拉。
   // tagItems 通道无需数据源文件（加工器 isTagEdit/isTagSwitch 分支直接消费），
-  // 覆盖 form 角色的编辑样式映射——枚举值域封闭，下拉比 number/input 更合理
+  // 覆盖 widget 的编辑样式映射——枚举值域封闭，下拉比 number/input 更合理
   if (enumDef != null) {
     col["editStyle"] = "tag";
     col["displayType"] = "tag";
@@ -193,19 +207,162 @@ export function buildJsonvueColumn(rawCol: Object, enumDef: Object): Object {
 
 /// @brief .jsontable 表 → jsonvue 形状对象（标准页合成，殊途同归进 buildAdminTplData）
 /// @param table .jsontable 表对象（tableName/modelName/tableComment/columns[]/
-///              enums[]/selColsGap/selColsLike/globalEnumCols）
+///              joinTable[]/selCols[]/selColsEq/selColsGap/selColsLike/selColsSort/
+///              enums[]/globalEnumCols）
 /// @param globalEnumNames 全局枚举名集合（name → true，供 globalEnumCols 引用校验；
 ///              null/缺省 = 全局枚举链未启用，globalEnumCols 按未命中处理）
+/// @param joinContext 联表上下文（引用名 → {tableName, comments: 列名→注释,
+///              types: 列名→mysqlType}，由主流程按 joinTable 预构造；
+///              null/缺省 = 无联表，联表 ref 查询字段按文本输入合成）
 /// @return {meta, columns, queryFields} 形状对象
 ///   meta 约定（与 admin_vue .jsonvue 实例同构，如 shop.jsonvue 的 POST 风格）：
 ///   dataUrl="{modelName}/selectByIn"（首段经 deriveApiBaseFromUrl 消费为
 ///   apiBase=modelName）、queryApi="get{Pascal}List"、updateApi="upd{Pascal}List"
 ///   （POST /update 承接，无 id 新增/有 id 更新）、deleteApi="del{Pascal}List"；
-///   查询项合成：search=true 列 → 查询字段（时间→日期选择，其余→文本）；
-///   selColsGap 命中列 → 范围查询（relation=range，前端生成 _min/_max 两个输入，
-///   与 Go/Nest 后端参数名对齐）；selColsLike 中 search=false 的列 → 补文本查询字段；
-///   globalEnumCols 命中列 → 全局枚举取值域（domainType=enum，三处共享）
-export function buildJsonvueFromTable(table: Object, globalEnumNames: Object): Object {
+///   读模型合成（列级 list/search 角色已退役，全部由表级读模型键驱动）：
+///   - 列表列：selCols[].ref 命中 → queryVisible=true（未配 selCols 全列展示）；
+///     联表 ref（pro.col）→ 虚拟列 dataName=别名 pro_col，只读（editVisible=false）
+///   - 查询字段：selColsEq（精确，时间→日期选择）/ selColsGap（范围 range）/
+///     selColsLike（文本）→ queryFields；联表 ref 的查询参数名 = 别名 pro_col，
+///     与后端 SelectParams/返回键对齐
+///   - globalEnumCols 命中列 → 全局枚举取值域（domainType=enum，三处共享）
+/// @brief 查询字段参数名（联表 ref pro.col → 别名 pro_col，与后端返回键对齐）
+function qfNameOf(ref: String): String {
+  if (ref.indexOf(".") > 0) {
+    let d: Number = ref.indexOf(".");
+    return ref.substring(0, d) + "_" + ref.substring(d + 1);
+  }
+  return ref;
+}
+
+/// @brief 查询字段显示名（selCols label > 联表目标列注释 > 本表列注释 > ref 原样）
+function qfLabelOf(ref: String, selLabelOf: Object, joinContext: Object, rawCols: Object[]): String {
+  if (selLabelOf[ref] != null && selLabelOf[ref] != "") {
+    return selLabelOf[ref];
+  }
+  if (ref.indexOf(".") > 0) {
+    let d: Number = ref.indexOf(".");
+    let pro: String = ref.substring(0, d);
+    let cn: String = ref.substring(d + 1);
+    let ctx: Object = null;
+    if (joinContext != null) { ctx = joinContext[pro]; }
+    if (ctx != null && ctx["comments"] != null && ctx["comments"][cn] != null) {
+      return ctx["comments"][cn];
+    }
+    return pro + "_" + cn;
+  }
+  // 本表列：回退列注释
+  let rcLen = rawCols.length;
+  for (let ri = 0; ri < rcLen; ri = ri + 1) {
+    if (rawCols[ri]["name"] == ref && rawCols[ri]["comment"] != null && rawCols[ri]["comment"] != "") {
+      return rawCols[ri]["comment"];
+    }
+  }
+  return ref;
+}
+
+/// @brief 查询字段是否日期控件（本表列按 mysqlType 推导；联表 ref 一律文本输入）
+function qfIsDate(ref: String, rawCols: Object[]): Bool {
+  if (ref.indexOf(".") > 0) {
+    return false;  // 联表 ref 查询一律文本输入（时间联表列场景少，后续按需扩展）
+  }
+  let rcLen = rawCols.length;
+  for (let ri = 0; ri < rcLen; ri = ri + 1) {
+    if (rawCols[ri]["name"] == ref) {
+      return deriveDateFormat(rawCols[ri]["mysqlType"]) != "";
+    }
+  }
+  return false;
+}
+
+/// @brief 查询字段日期格式（本表列按 mysqlType 推导，非时间列返回空串）
+function qfDateFmt(ref: String, rawCols: Object[]): String {
+  let rcLen = rawCols.length;
+  for (let ri = 0; ri < rcLen; ri = ri + 1) {
+    if (rawCols[ri]["name"] == ref) {
+      return deriveDateFormat(rawCols[ri]["mysqlType"]);
+    }
+  }
+  return "";
+}
+
+/// @brief 构造查询字段对象（控件自动推导：联表 ref/外键列/全局枚举列 → select）
+/// @param relation "=" 精确与模糊 / "range" 范围
+/// @param isDate 本表时间列（调用方按 ref 推导；联表 ref 恒 false）
+/// @param dateFmt 日期格式（非时间列空串）
+function makeQueryField(ref: String, relation: String, selLabelOf: Object, joinContext: Object,
+                        rawCols: Object[], geSet: Object, fkMap: Object,
+                        isDate: Bool, dateFmt: String): Object {
+  let qf: Object = {
+    dataName: qfNameOf(ref),
+    displayName: qfLabelOf(ref, selLabelOf, joinContext, rawCols),
+    inputStyle: "text",
+    relation: (relation == "range" ? "range" : "=")
+  };
+  if (ref.indexOf(".") > 0) {
+    // 联表 ref → 远程下拉（选项 = 目标表列表接口，显示列按目标表推导）
+    let d: Number = ref.indexOf(".");
+    let pro: String = ref.substring(0, d);
+    let ctx: Object = null;
+    if (joinContext != null) { ctx = joinContext[pro]; }
+    if (ctx != null) {
+      qf["inputStyle"] = "select";
+      qf["selectUrl"] = "/" + ctx["tableName"] + "/selectByIn";
+      qf["selectValueField"] = (ctx["pk"] != null && ctx["pk"] != "" ? ctx["pk"] : "id");
+      qf["selectLabelField"] = labelColOfTarget(ctx["types"]);
+    }
+    return qf;
+  }
+  if (fkMap[ref] != null) {
+    // 本表外键列 → 远程下拉（与编辑页外键下拉同源）
+    let fk: Object = fkMap[ref];
+    qf["inputStyle"] = "select";
+    qf["selectUrl"] = "/" + fk["targetTable"] + "/selectByIn";
+    qf["selectValueField"] = fk["pk"];
+    qf["selectLabelField"] = labelColOfTarget(
+        joinContext != null ? joinContext[fk["pro"]]["types"] : null);
+    return qf;
+  }
+  if (geSet[ref] == true) {
+    // 全局枚举列 → select（列合成已带 domainType=enum，查询域继承出静态选项分支）
+    qf["inputStyle"] = "select";
+    return qf;
+  }
+  if (isDate) {
+    qf["inputStyle"] = "date";
+    qf["dateFormat"] = dateFmt;
+  }
+  return qf;
+}
+
+/// @brief 编辑控件类型缺省推导（editCols.widget 显式配置优先，此为兜底）
+function widgetFromMysqlType(mysqlType: String): String {
+  let t: String = (mysqlType == null ? "" : mysqlType.toLowerCase());
+  if (t.indexOf("datetime") >= 0 || t.indexOf("timestamp") >= 0) {
+    return "date";
+  }
+  if (t.indexOf("tinyint(1)") >= 0) {
+    return "boolean";
+  }
+  if (t.indexOf("int") >= 0 || t.indexOf("decimal") >= 0 || t.indexOf("float") >= 0 ||
+      t.indexOf("double") >= 0) {
+    return "number";
+  }
+  return "input";
+}
+
+/// @brief 联表目标表显示列推导（第一个 varchar/char 列，缺省 name）
+function labelColOfTarget(types: Object): String {
+  for (colName in types) {
+    let t: String = types[colName];
+    if (t != null && (t.indexOf("varchar") >= 0 || t.indexOf("char") >= 0 || t.indexOf("text") >= 0)) {
+      return colName;
+    }
+  }
+  return "name";
+}
+
+export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, joinContext: Object): Object {
   let modelName: String = table["modelName"];
   if (modelName == null || modelName == "") {
     modelName = table["tableName"];
@@ -220,29 +377,82 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object): O
   if (table["enums"] != null) {
     tableEnums = table["enums"];
   }
-  // 范围/模糊查询列集合与原始列表（供 search=false 的列补查询字段）
-  let gapCols: String[] = [];
-  let likeCols: String[] = [];
-  let gapSet: Object = {};
-  let likeSet: Object = {};
+  // ── 读模型键集合（[{ref,visible}]；ref = 本表列名 或 联表路径 pro.col）──
+  let eqRefs: Object[] = [];
+  let gapRefs: Object[] = [];
+  let likeRefs: Object[] = [];
+  if (table["selColsEq"] != null) {
+    eqRefs = table["selColsEq"];
+  }
   if (table["selColsGap"] != null) {
-    gapCols = table["selColsGap"];
-    let gLen = gapCols.length;
-    for (let gi = 0; gi < gLen; gi = gi + 1) {
-      gapSet[gapCols[gi]] = true;
-    }
+    gapRefs = table["selColsGap"];
   }
   if (table["selColsLike"] != null) {
-    likeCols = table["selColsLike"];
-    let lLen = likeCols.length;
-    for (let li = 0; li < lLen; li = li + 1) {
-      likeSet[likeCols[li]] = true;
+    likeRefs = table["selColsLike"];
+  }
+  // selCols 列表读模型（ref → label；联表 ref 单独收集）
+  let selColCfgs: Object[] = [];
+  if (table["selCols"] != null) {
+    selColCfgs = table["selCols"];
+  }
+  let selRefSet: Object = {};      // 本表列 ref（queryVisible 收敛用）
+  let selJoinRefs: String[] = [];  // 联表 ref（虚拟列生成用）
+  let selLabelOf: Object = {};     // ref → 显示名
+  for (sc in selColCfgs) {
+    let r: String = sc["ref"];
+    if (r == null || r == "") { continue; }
+    selLabelOf[r] = sc["label"];
+    if (r.indexOf(".") > 0) {
+      selJoinRefs.append(r);
+    } else {
+      selRefSet[r] = true;
     }
   }
+  let hasSelCols: Bool = (selColCfgs.length > 0);
+  // selCols 元数据（本表列 ref → {label, width}：标题/列宽收敛用）
+  let selMeta: Object = {};
+  for (sc2 in selColCfgs) {
+    if (sc2["ref"] == null || sc2["ref"] == "" || sc2["ref"].indexOf(".") > 0) { continue; }
+    selMeta[sc2["ref"]] = { label: sc2["label"], width: sc2["width"] };
+  }
+  // ── 编辑视图（editCols：显式列出=进表单）──
+  let editColCfgs: Object[] = [];
+  if (table["editCols"] != null) {
+    editColCfgs = table["editCols"];
+  }
+  let editColMap: Object = {};
+  for (ec0 in editColCfgs) {
+    if (ec0["ref"] != null && ec0["ref"] != "") {
+      editColMap[ec0["ref"]] = ec0;
+    }
+  }
+  let hasEditCols: Bool = (editColCfgs.length > 0);
+  // ── 联表外键列自动下拉推导（fkMap：本表外键列 → 目标表信息）──
+  let fkMap: Object = {};
+  if (joinContext != null) {
+    for (pro0 in joinContext) {
+      let jctx: Object = joinContext[pro0];
+      if (jctx["fk"] != null && jctx["fk"] != "") {
+        fkMap[jctx["fk"]] = {
+          targetTable: jctx["tableName"],
+          pk: (jctx["pk"] != null && jctx["pk"] != "" ? jctx["pk"] : "id"),
+          pro: pro0
+        };
+      }
+    }
+  }
+  // ── 全局枚举列集合（查询自动 select：域继承走列的 enum 取值域）──
+  let geSet: Object = {};
+  let geRaw: String[] = [];
+  if (table["globalEnumCols"] != null) {
+    geRaw = table["globalEnumCols"];
+  }
+  for (g0 in geRaw) { geSet[g0] = true; }
+  let manualUpdate: Bool = (table["manualUpdateTime"] == true);
 
   let cols: Object[] = [];
   let queryFields: Object[] = [];
-  let handled: Object = {};  // 已生成查询字段的列名（gap 优先 range，like 普通输入即可）
+  let handled: Object = {};  // 已生成查询字段的 ref（gap 优先 range，like 普通输入即可）
   let rawCols: Object[] = [];
   if (table["columns"] != null) {
     rawCols = table["columns"];
@@ -260,92 +470,141 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object): O
         break;
       }
     }
-    cols.append(buildJsonvueColumn(rc, enumDef));
-    // 查询项（search=true → queryFields；selColsGap 命中 → 范围查询）
-    if (rc["search"] == true) {
-      let colComment: String = rc["comment"];
-      if (colComment == null || colComment == "") {
-        colComment = colName;
-      }
-      let qf: Object = {
-        dataName: colName,
-        displayName: colComment,
-        inputStyle: "text",
-        relation: "="
-      };
-      let mt: String = rc["mysqlType"];
-      if (mt == null) {
-        mt = "";
-      }
-      let fmt: String = deriveDateFormat(mt);
-      if (fmt != "") {
-        // 时间类型 → 日期选择控件（dateFormat 供 value-format/type 用）
-        qf["inputStyle"] = "date";
-        qf["dateFormat"] = fmt;
-      }
-      if (gapSet[colName] == true) {
-        // 范围查询：前端生成 {col}_min/{col}_max 两个输入（与后端参数名对齐）
-        qf["relation"] = "range";
-        handled[colName] = true;
-      } else if (likeSet[colName] == true) {
-        // 模糊匹配由后端按列名处理，前端普通文本输入即可
-        handled[colName] = true;
-      }
-      queryFields.push(qf);
+
+    // ── 编辑视图收敛：显式配置 > 外键下拉 > mysqlType 推导 ──
+    let ec: Object = editColMap[colName];
+    let widget: String = "";
+    if (ec != null && ec["widget"] != null && ec["widget"] != "") {
+      widget = ec["widget"];
+    } else {
+      widget = widgetFromMysqlType(rc["mysqlType"]);
     }
+    // 联表外键列 → 自动下拉（joinTable 红利：编辑不再手填外键数字）
+    let fkInfo: Object = fkMap[colName];
+    if (fkInfo != null && widget != "boolean" && widget != "date" && widget != "image") {
+      widget = "select";
+    }
+    let editCol: Object = null;
+    if (ec != null) {
+      editCol = {
+        widget: widget,
+        visible: (ec["visible"] != false),
+        required: (ec["required"] == true)
+      };
+    } else if (!hasEditCols) {
+      // 零配置缺省：非主键/非自增/非自动维护时间列全部进表单（等价旧 form 行为）
+      let mt: String = rc["mysqlType"] ?? "";
+      let mtLow: String = mt.toLowerCase();
+      let isDateTime: Bool = (mtLow.indexOf("datetime") >= 0 || mtLow.indexOf("timestamp") >= 0);
+      let isAutoTimeCol: Bool =
+          (isDateTime && (colName == "create_time" || (colName == "update_time" && !manualUpdate)));
+      if (!rc["isPrimary"] && !rc["isAutoInc"] && !isAutoTimeCol) {
+        editCol = { widget: widget, visible: true, required: false };
+      }
+    }
+    let col: Object = buildJsonvueColumn(rc, enumDef, editCol);
+    // 编辑标题覆盖（editCols.label > 列注释）+ 联表外键远程取值域注入
+    if (ec != null && ec["label"] != null && ec["label"] != "") {
+      col["editName"] = ec["label"];
+    }
+    if (fkInfo != null && col["editStyle"] == "select") {
+      col["domainType"] = "remote";
+      col["domainUrl"] = "/" + fkInfo["targetTable"] + "/selectByIn";
+      col["selectValueField"] = fkInfo["pk"];
+      col["selectLabelField"] = labelColOfTarget(
+          joinContext != null ? joinContext[fkInfo["pro"]]["types"] : null);
+    }
+    cols.append(col);
+  }
+  // 列表收敛：配了 selCols 时，未命中的本表列 queryVisible=false；
+  // 命中列应用 selCols 的 label（标题）与 width（列宽）
+  if (hasSelCols) {
+    let cLen2 = cols.length;
+    for (let ci = 0; ci < cLen2; ci = ci + 1) {
+      let cn: Object = cols[ci];
+      let meta: Object = selMeta[cn["dataName"]];
+      if (meta == null) {
+        cn["queryVisible"] = false;
+      } else {
+        if (meta["label"] != null && meta["label"] != "") {
+          cn["queryName"] = meta["label"];
+        }
+        if (meta["width"] != null && meta["width"] > 0) {
+          cn["columnWidth"] = meta["width"];
+        }
+      }
+      cols[ci] = cn;
+    }
+  }
+  // 联表 ref → 虚拟列（dataName=别名 pro_col，只读不进编辑表单；label>注释>别名）
+  for (jr in selJoinRefs) {
+    let dot: Number = jr.indexOf(".");
+    let pro: String = jr.substring(0, dot);
+    let tcolName: String = jr.substring(dot + 1);
+    let alias: String = pro + "_" + tcolName;
+    let label: String = selLabelOf[jr];
+    if (label == null || label == "") {
+      let ctx: Object = null;
+      if (joinContext != null) { ctx = joinContext[pro]; }
+      if (ctx != null && ctx["comments"] != null && ctx["comments"][tcolName] != null) {
+        label = ctx["comments"][tcolName];
+      } else {
+        label = alias;
+      }
+    }
+    cols.push({
+      dataName: alias,
+      queryName: label,
+      editName: label,
+      queryVisible: true,
+      editVisible: false,
+      editEditable: false,
+      switchEditable: false,
+      required: false,
+      formSpan: 12,
+      columnWidth: 0,
+      maxlength: 0,
+      placeholder: "",
+      textareaRows: 4,
+      boolTrueText: "启用",
+      boolFalseText: "禁用",
+      tagItems: [],
+      dateFormat: "",
+      editStyle: "text"
+    });
   }
 
-  // selColsGap/selColsLike 中 search=false 的列 → 补查询字段
-  //（后端已生成对应条件，缺前端入口即成死配置）
-  let gLen2 = gapCols.length;
-  for (let gj = 0; gj < gLen2; gj = gj + 1) {
-    let gName: String = gapCols[gj];
-    if (handled[gName] == true) {
-      continue;
-    }
-    let gComment: String = gName;
-    let gFmt: String = "";
-    for (let ri = 0; ri < rcLen; ri = ri + 1) {
-      if (rawCols[ri]["name"] == gName) {
-        if (rawCols[ri]["comment"] != null && rawCols[ri]["comment"] != "") {
-          gComment = rawCols[ri]["comment"];
-        }
-        gFmt = deriveDateFormat(rawCols[ri]["mysqlType"]);
-        break;
-      }
-    }
-    let gqf: Object = {
-      dataName: gName,
-      displayName: gComment,
-      inputStyle: (gFmt != "" ? "date" : "text"),
-      relation: "range"
-    };
-    if (gFmt != "") {
-      gqf["dateFormat"] = gFmt;
-    }
-    queryFields.push(gqf);
+  // ── 查询字段合成（ref 通用流程；联表 ref 参数名=别名，与后端对齐）──────
+  //  精确 selColsEq：本表时间列 → 日期选择；范围 selColsGap → relation=range；
+  //  模糊 selColsLike → 文本。控件自动推导：
+  //    - globalEnumCols 命中列 / 联表 ref / 本表外键列 → select（域继承或远程）
+  //    - visible=false 的条件只生成后端，前端不渲染（此处 continue）
+  // 精确查询（selColsEq）
+  for (qc0 in eqRefs) {
+    let r2: String = qc0["ref"];
+    if (r2 == null || r2 == "" || handled[r2] == true) { continue; }
+    handled[r2] = true;
+    if (qc0["visible"] == false) { continue; }  // 仅后端生成条件，前端不渲染
+    queryFields.push(makeQueryField(r2, "eq", selLabelOf, joinContext, rawCols, geSet,
+                                    fkMap, qfIsDate(r2, rawCols), qfDateFmt(r2, rawCols)));
   }
-  let lLen2 = likeCols.length;
-  for (let lj = 0; lj < lLen2; lj = lj + 1) {
-    let lName: String = likeCols[lj];
-    if (handled[lName] == true) {
-      continue;
-    }
-    let lComment: String = lName;
-    for (let ri2 = 0; ri2 < rcLen; ri2 = ri2 + 1) {
-      if (rawCols[ri2]["name"] == lName) {
-        if (rawCols[ri2]["comment"] != null && rawCols[ri2]["comment"] != "") {
-          lComment = rawCols[ri2]["comment"];
-        }
-        break;
-      }
-    }
-    queryFields.push({
-      dataName: lName,
-      displayName: lComment,
-      inputStyle: "text",
-      relation: "="
-    });
+  // 范围查询（selColsGap → relation=range，前端生成 _min/_max 两个输入）
+  for (qc1 in gapRefs) {
+    let r3: String = qc1["ref"];
+    if (r3 == null || r3 == "" || handled[r3] == true) { continue; }
+    handled[r3] = true;
+    if (qc1["visible"] == false) { continue; }
+    queryFields.push(makeQueryField(r3, "range", selLabelOf, joinContext, rawCols, geSet,
+                                    fkMap, qfIsDate(r3, rawCols), qfDateFmt(r3, rawCols)));
+  }
+  // 模糊查询（selColsLike → 文本输入；联表/枚举/外键命中同样自动下拉）
+  for (qc2 in likeRefs) {
+    let r4: String = qc2["ref"];
+    if (r4 == null || r4 == "" || handled[r4] == true) { continue; }
+    handled[r4] = true;
+    if (qc2["visible"] == false) { continue; }
+    queryFields.push(makeQueryField(r4, "eq", selLabelOf, joinContext, rawCols, geSet,
+                                    fkMap, false, ""));
   }
 
   // globalEnumCols 命中列 → 全局枚举取值域（domainType=enum，列渲染/编辑/查询三处共享）。
@@ -654,6 +913,51 @@ export function generateAdminMain(params: Object): Void {
     seenModels[m] = true;
   }
 
+  // ── 3.1 联表上下文（joinContext）：引用名 → {tableName, comments, types} ──
+  //    供标准页合成虚拟列与查询字段时解析联表 ref（pro.col → 目标列注释/类型）；
+  //    joinEnClass 按modelName 线性定位目标表，未声明/未启用条目不进上下文
+  let joinContext: Object = {};
+  for (let jc = 0; jc < tblLen; jc = jc + 1) {
+    let jtCfgs: Object[] = tables[jc]["joinTable"];
+    if (jtCfgs == null) { continue; }
+    for (jci in jtCfgs) {
+      if (jci["isJoinRelations"] == false) { continue; }
+      let jtp: String = jci["joinType"];
+      if (jtp == null || jtp == "") { jtp = "ManyToOne"; }
+      if (jtp != "ManyToOne") { continue; }  // OneToMany 详情聚合 v1 未支持
+      let pro: String = jci["joinEnClassPro"];
+      let cls: String = jci["joinEnClass"];
+      if (pro == null || pro == "" || cls == null || cls == "") { continue; }
+      let target: Object = null;
+      for (let tk = 0; tk < tblLen; tk = tk + 1) {
+        let tm: String = tables[tk]["modelName"];
+        if (tm == null || tm == "") { tm = tables[tk]["tableName"]; }
+        if (tm == cls) { target = tables[tk]; break; }
+      }
+      if (target == null) {
+        printLog("提示：表联表 '" + pro + "' 的目标 '" + cls + "' 不在 tables[] 中，标准页按无上下文合成");
+        continue;
+      }
+      let comments: Object = {};
+      let types: Object = {};
+      let tCols: Object[] = target["columns"];
+      for (tcol in tCols) {
+        comments[tcol["name"]] = tcol["comment"];
+        types[tcol["name"]] = tcol["mysqlType"];
+      }
+      // fk/pk：本表外键列与目标主键列（供编辑/查询外键列自动下拉推导）
+      let jFk: String = jci["joinFk"];
+      let jPk: String = (jci["joinPk"] != null && jci["joinPk"] != "") ? jci["joinPk"] : "id";
+      joinContext[pro] = {
+        tableName: target["tableName"],
+        fk: jFk,
+        pk: jPk,
+        comments: comments,
+        types: types
+      };
+    }
+  }
+
   // ── 4. 收集勾选文件（.jsonvue 高级页 / .jsonsource / .jsonupload）──
   //    传入 scriptDir() 确保只处理本项目下的勾选文件，
   //    其它项目的勾选文件即使被选中也不会被执行
@@ -893,8 +1197,8 @@ export function generateAdminMain(params: Object): Void {
       consumedVue[vuePath] = true;
       printLog("高级页（.jsonvue 双轨）：" + vuePath);
     } else {
-      // 双轨·标准页：从 .jsontable 列角色合成 jsonvue 形状（零额外配置）
-      pageJson = buildJsonvueFromTable(table, globalEnumNames);
+      // 双轨·标准页：从 .jsontable 读模型合成 jsonvue 形状（零额外配置）
+      pageJson = buildJsonvueFromTable(table, globalEnumNames, joinContext);
       filePath = basePath + "/src/views/" + modelName + "/" + modelName + "/" + modelName + ".jsonvue";
       printLog("标准页（.jsontable 合成）：" + modelName);
     }

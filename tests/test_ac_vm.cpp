@@ -147,6 +147,10 @@ static const char *kIncPropWriteBack =
     "let o: Object = {n: 5}; o.n++; return o.n;";
 static const char *kIncIndex = "let a: Number[] = [1, 2]; a[1]++; return a[1];";
 static const char *kTernary = "let c: Boolean = true; return c ? \"y\" : \"n\";";
+static const char *kTernaryInArgs =
+    "function pick(a: Number, b: Number): Number { return a * 10 + b; } "
+    "return pick(2 > 1 ? 5 : 9, 1 < 2 ? 6 : 0);";
+static const char *kTernaryInIndex = "let a: Number[] = [10, 20]; return a[1 > 0 ? 1 : 0];";
 static const char *kLogicalShortCircuit =
     "let a: Object = null; let r: String = \"s\"; if (a != null && a.x == 1) { r = \"bad\"; } return r;";
 static const char *kCoalesce = "let a: Any = null; let b: Number = a ?? 42; return b;";
@@ -198,6 +202,8 @@ static const DualCase kCases[] = {
     {"incPropWriteBack", kIncPropWriteBack},
     {"incIndex", kIncIndex},
     {"ternary", kTernary},
+    {"ternaryInArgs", kTernaryInArgs},
+    {"ternaryInIndex", kTernaryInIndex},
     {"logicalShortCircuit", kLogicalShortCircuit},
     {"coalesce", kCoalesce},
     {"objectBuiltins", kObjectBuiltins},

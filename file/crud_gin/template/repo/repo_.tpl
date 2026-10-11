@@ -35,11 +35,24 @@ func (r *${repoClass}) SelectByIn(db *gorm.DB, sel *model.${selClass}) ([]model.
   if sel.PageSize <= 0 {
     sel.PageSize = 10
   }
+${if hasJoin}
+  // 联表查询：主表别名 t + JOIN，SELECT 平铺联表列（${joinSelectStr}）
+  base := db.Table("\`${tableName}\` AS \`t\`").Select("${joinSelectStr}")
+${each jc in joinClauses}
+  base = base.Joins("${jc}")
+${/each}
+  // 总记录数与数据列表分别构建查询，避免 gorm 语句复用相互污染
+  if err := r.getWhereByIn(base, sel).Count(&total).Error; err != nil {
+    return nil, 0, err
+  }
+  query := r.getOrderBy(r.getWhereByIn(base, sel), sel)
+${else}
   // 总记录数与数据列表分别构建查询，避免 gorm 语句复用相互污染
   if err := r.getWhereByIn(db.Model(&model.${entityClass}{}), sel).Count(&total).Error; err != nil {
     return nil, 0, err
   }
   query := r.getOrderBy(r.getWhereByIn(db.Model(&model.${entityClass}{}), sel), sel)
+${/if}
   if err := query.Offset((sel.Page - 1) * sel.PageSize).Limit(sel.PageSize).Find(&list).Error; err != nil {
     return nil, 0, err
   }
@@ -54,7 +67,7 @@ ${/if}
 
 // getOrderBy 应用默认排序（${sortDesc}）
 func (r *${repoClass}) getOrderBy(db *gorm.DB, sel *model.${selClass}) *gorm.DB {
-  return db.Order("`${defaultOrderField}` ${defaultOrderDir}")
+  return db.Order("${defaultOrderSql} ${defaultOrderDir}")
 }
 
 // getWhereByIn 根据查询参数构建查询条件
@@ -89,6 +102,12 @@ ${/if}
 
 // Insert 新增一条记录，返回新记录主键
 func (r *${repoClass}) Insert(db *gorm.DB, data *model.${insClass}) (${idGoType}, error) {
+${if hasUniqCheck}
+${# 唯一性预检（unique 索引自动推导；并发窗口由 DB 唯一索引兜底）──────────      }
+${each uc in uniqInsChecks}
+${uc}
+${/each}
+${/if}
   var newId ${idGoType}
   entity := model.${entityClass}{
 ${each field in insFields}
@@ -103,6 +122,12 @@ ${/each}
 
 // Update 更新记录（UpdateParams 指针字段 nil 不更新），返回受影响行数
 func (r *${repoClass}) Update(db *gorm.DB, data *model.${updClass}) (int64, error) {
+${if hasUniqCheck}
+${# 唯一性预检（排除自身主键；nil 指针列 → NULL 比较永假，天然跳过未传值）──      }
+${each uc in uniqUpdChecks}
+${uc}
+${/each}
+${/if}
   // 逐字段判空组装更新集：nil = 未传 = 保持原值（gorm Updates(map) 全量更新 map 内字段）
   updates := map[string]interface{}{}
 ${each field in updFields}

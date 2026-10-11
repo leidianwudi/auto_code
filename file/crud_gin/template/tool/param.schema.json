@@ -80,10 +80,124 @@
         default: {
           description: '默认值（空串/缺省/null = 无默认值；建表与生成同源）',
         },
-        form: {
-          description: '表单角色（前端用，后端透传）',
+        isAutoInc: {
+          description: '自增（gorm tag 追加 autoIncrement；自增主键不入 InsertParams）',
+          type: 'bool',
+        },
+        isPrimary: {
+          description: '主键（gorm tag 追加 primaryKey；无主键的表跳过 CRUD 生成）',
+          type: 'bool',
+        },
+        mysqlType: {
+          description: 'MySQL 类型（如 bigint、varchar(64)、decimal(10,
+          2)、tinyint(1)、datetime、json）；生成期映射 goType，建表 DDL 同源',
+          type: 'string',
+        },
+        name: {
+          description: '列名（snake_case）',
+          type: 'string',
+        },
+        nullable: {
+          description: '允许 NULL（→ Go 指针类型，如 *string；主键与 json 列除外）',
+          type: 'bool',
+        },
+        unsigned: {
+          description: '无符号（bigint → uint64 等；gorm type 追加 unsigned）',
+          type: 'bool',
+        },
+      },
+      required: [
+        'name',
+        'mysqlType',
+      ],
+    },
+    JoinConfig: {
+      properties: {
+        joinEnClass: {
+          description: 'join 目标实体/模型名（= 目标表 modelName，同文件 tables[] 内定位）',
+          type: 'string',
+        },
+        joinEnClassPro: {
+          description: '联查引用名（SQL 别名前缀 + 前端 ref 前缀，如 user；联表列返回键 = 引用名_目标列名）',
+          type: 'string',
+        },
+        joinFk: {
+          description: '本表外键列（ManyToOne 必填，∈ 本表 columns.name）',
+          type: 'string',
+        },
+        joinPk: {
+          description: '目标表主键列（缺省 id）',
+          type: 'string',
+        },
+        joinType: {
+          description: '关联类型：ManyToOne=列表联查（LEFT JOIN 平铺）；OneToMany=详情聚合（生成端暂跳过并提示）',
           enum: [
-            'none',
+            'ManyToOne',
+            'OneToMany',
+          ],
+          type: 'string',
+        },
+        isJoinRelations: {
+          description: 'true=有效声明；false=该条目不生效（生成端跳过）',
+          type: 'bool',
+        },
+      },
+      required: [
+        'joinEnClass',
+        'joinEnClassPro',
+      ],
+    },
+    SelColConfig: {
+      properties: {
+        ref: {
+          description: '列引用：本表列名 或 「joinEnClassPro.目标列」（联表路径，如 user.name → 返回键 user_name）',
+          type: 'string',
+        },
+        label: {
+          description: '显示名（缺省回退目标列注释/列名）',
+          type: 'string',
+        },
+        width: {
+          description: '列宽 px（0/缺省 = 自适应）',
+          type: 'number',
+        },
+      },
+      required: [
+        'ref',
+      ],
+    },
+    QueryColConfig: {
+      properties: {
+        ref: {
+          description: '列引用：本表列名 或 「joinEnClassPro.目标列」（联表路径）',
+          type: 'string',
+        },
+        visible: {
+          description: '前端是否渲染查询输入框（false=后端条件照常生成，仅前端不渲染；缺省 true）',
+          type: 'bool',
+        },
+      },
+      required: [
+        'ref',
+      ],
+    },
+    EditColConfig: {
+      properties: {
+        ref: {
+          description: '列引用（仅本表物理列；显式列出=进编辑表单，未列出=不进）',
+          type: 'string',
+        },
+        label: {
+          description: '编辑标题（缺省回退列注释/列名）',
+          type: 'string',
+        },
+        visible: {
+          description: '前端是否渲染表单项（false=Insert/Update 参数仍生成，仅 UI 不渲染；缺省 true）',
+          type: 'bool',
+        },
+        widget: {
+          description: '编辑控件类型（缺省按 mysqlType 推导：datetime→date、tinyint(1)→boolean、数值→number、其余→input；joinFk 列自动 select）',
+          enum: [
             'input',
             'textarea',
             'select',
@@ -95,46 +209,13 @@
           ],
           type: 'string',
         },
-        isAutoInc: {
-          description: '自增（gorm tag 追加 autoIncrement；自增主键不入 InsertParams）',
-          type: 'bool',
-        },
-        isPrimary: {
-          description: '主键（gorm tag 追加 primaryKey；无主键的表跳过 CRUD 生成）',
-          type: 'bool',
-        },
-        list: {
-          description: '列表页显示（前端角色，缺省 true）',
-          type: 'bool',
-        },
-        mysqlType: {
-          description: 'MySQL 类型（如 bigint、varchar(64)、decimal(10,2)、tinyint(1)、datetime、json）；生成期映射 goType，建表 DDL 同源',
-          type: 'string',
-        },
-        name: {
-          description: '列名（snake_case）',
-          type: 'string',
-        },
-        nullable: {
-          description: '允许 NULL（→ Go 指针类型，如 *string；主键与 json 列除外）',
-          type: 'bool',
-        },
         required: {
-          description: '表单必填（→ InsertParams 生成 binding:"required"）',
-          type: 'bool',
-        },
-        search: {
-          description: '查询项（true → SelectParams 字段 + repo getWhereByIn 精确条件）',
-          type: 'bool',
-        },
-        unsigned: {
-          description: '无符号（bigint → uint64 等；gorm type 追加 unsigned）',
+          description: '必填（→ InsertParams 生成 binding: "required"；与 visible=false 互斥）',
           type: 'bool',
         },
       },
       required: [
-        'name',
-        'mysqlType',
+        'ref',
       ],
     },
     IndexConfig: {
@@ -218,7 +299,10 @@
           type: 'string',
         },
         fields: {
-          description: '参与多语言的翻译表文本列（如 ["name", "intro"]）；生成的接口会把当前语言文本平铺进主表返回结构，不能与主表列重名',
+          description: '参与多语言的翻译表文本列（如 [
+            "name",
+            "intro"
+          ]）；生成的接口会把当前语言文本平铺进主表返回结构，不能与主表列重名',
           items: 'string',
           type: 'array',
         },
@@ -262,13 +346,22 @@
           items: 'ColumnConfig',
           type: 'array',
         },
+        editCols: {
+          description: '编辑视图（显式列出=进编辑表单与 Insert/Update 参数；空=全列按 mysqlType 推导控件）',
+          items: 'EditColConfig',
+          type: 'array',
+        },
         enums: {
-          description: '表级枚举列表（Go 链生成 {model}_enum.go 的 Go const 块 + Map；与 globalEnumCols 二选一配置来源）',
+          description: '表级枚举列表（Go 链生成 {model
+          }_enum.go 的 Go const 块 + Map；与 globalEnumCols 二选一配置来源）',
           items: 'EnumConfig',
           type: 'array',
         },
         globalEnumCols: {
-          description: '引用全局枚举的列名列表（如 ["is_enable"]）：列名需与 .jsonglobalenum 中的枚举 name 一致；命中后该列在 {model}_enum.go 生成对应 Go const 块（同一全局枚举跨表只生成一份）',
+          description: '引用全局枚举的列名列表（如 [
+            "is_enable"
+          ]）：列名需与 .jsonglobalenum 中的枚举 name 一致；命中后该列在 {model
+          }_enum.go 生成对应 Go const 块（同一全局枚举跨表只生成一份）',
           items: 'string',
           type: 'array',
         },
@@ -282,6 +375,11 @@
           description: '多语言翻译表配置：主表 + 翻译表（如 shop + shop0），生成联合查询（当前语言平铺/回退默认语言）、事务写入（clause.OnConflict upsert 翻译行）与级联删除',
           type: 'object',
         },
+        joinTable: {
+          description: '联表声明（多对一列表联查/一对多详情聚合，旧 .json 同名参数族）',
+          items: 'JoinConfig',
+          type: 'array',
+        },
         manualUpdateTime: {
           description: 'update_time 是否由业务代码维护（true → update_time 入 UpdateParams；缺省由 DB ON UPDATE 维护）',
           type: 'bool',
@@ -290,18 +388,38 @@
           description: '模型名（生成代码用的标识，缺省回退 tableName）',
           type: 'string',
         },
+        selCols: {
+          description: '列表读模型（[
+            {ref,label
+            }
+          ]；ref = 本表列名 或 joinEnClassPro.目标列，联表列返回键 = 引用名_列名；缺省全列返回）',
+          items: 'SelColConfig',
+          type: 'array',
+        },
+        selColsEq: {
+          description: '精确查询的列（= 条件；支持联表 ref；visible=false 仅后端生成，前端不渲染）',
+          items: 'QueryColConfig',
+          type: 'array',
+        },
         selColsGap: {
-          description: '范围查询的列（每列展开为 col_min/col_max 两个查询参数与 >=/<= 条件；仅时间/数值列）',
-          items: 'string',
+          description: '范围查询的列（每列展开为 col_min/col_max 两个查询参数与 >=/<= 条件；仅时间/数值列；支持联表 ref）',
+          items: 'QueryColConfig',
           type: 'array',
         },
         selColsLike: {
-          description: '模糊查询的列（LIKE %x%；仅字符串列生效，与 search 精确配置重复时精确优先）',
-          items: 'string',
+          description: '模糊查询的列（LIKE %x%；仅字符串列生效；支持联表 ref）',
+          items: 'QueryColConfig',
           type: 'array',
         },
         selColsSort: {
-          description: '排序配置，推荐数组格式 [["id", "DESC"], ...]（保证与书写顺序一致，首项为默认排序）；兼容对象格式 {"id": "DESC"}；缺省按主键 DESC',
+          description: '排序配置，推荐数组格式 [
+            [
+              "id",
+              "DESC"
+            ], ...
+          ]（保证与书写顺序一致，首项为默认排序）；兼容对象格式 {
+            "id": "DESC"
+          }；缺省按主键 DESC',
           type: 'any',
         },
         tableComment: {

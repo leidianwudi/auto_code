@@ -172,11 +172,12 @@ export function generateApiMain(params: Object): Number {
     printLog("genGlobalEnum=false，跳过全局枚举收集");
   }
 
-  // ── 4. 预扫描：i18n 引用标记 + 表名去重 ────────────────────────────
+  // ── 4. 预扫描：i18n 引用标记 + 表名/模型名去重 ──────────────────────
   //      被某表 i18n.table 引用的表（如 shop0）只生成实体文件，
   //      跳过 repo/service/handler/router 生成（翻译表是主表从属）
   let i18nRefs: Object = {};
   let tablesByName: Object = {};   // tableName → 表配置（i18n 翻译表列定义查找用）
+  let tablesByModel: Object = {};  // modelName → 表配置（joinTable 联表目标定位用）
   let genTables: Object[] = [];    // 去重后的待生成表配置
   for (t in tables) {
     let tn: String = t["tableName"];
@@ -189,6 +190,16 @@ export function generateApiMain(params: Object): Number {
       continue;
     }
     tablesByName[tn] = t;
+    // modelName 缺省回退 tableName（与 6.1 主循环推导一致）；重复 modelName 报错
+    let mn: String = t["modelName"];
+    if (mn == null || mn.length == 0) {
+      mn = tn;
+    }
+    if (tablesByModel[mn] != null) {
+      printError("错误：modelName '" + mn + "' 重复定义，联表 joinEnClass 无法唯一定位，后者已跳过");
+      continue;
+    }
+    tablesByModel[mn] = t;
     genTables.append(t);
     let i18nCfg: Object = t["i18n"];
     if (i18nCfg != null && i18nCfg["table"] != null) {
@@ -282,14 +293,268 @@ export function generateApiMain(params: Object): Number {
     }
     printLog("[" + tableName + "] fields count: " + param.fields.length);
 
-    // ── 6.4 查询场景数据（复刻 query_data.ac 产出形态，类型换 goType）──
-    //      selFields       - SelectParams 查询字段（列 search 角色 + selColsLike/Gap）
-    //      sortInfo        - 排序信息（selColsSort，缺省主键 DESC）
+    // ── 6.4 联表加工（joinTable → joinDefs + 平铺字段 + JOIN/SELECT 片段）──
+    //      joinEnClass/joinEnClassPro/joinType/isJoinRelations 沿用旧 .json 命名；
+    //      joinFk=本表外键列，joinPk=目标主键列（缺省 id）。
+    //      ManyToOne → 列表 LEFT/INNER JOIN + 联表列平铺（返回键 = 引用名_列名）；
+    //      OneToMany → 详情聚合 v1 未支持，打印提示跳过。
+    let joinDefs: Object[] = [];   // 有效 ManyToOne 条目 {pro, fk, pk, target, joinEnClass}
+    let joinCfgs: Object[] = json["joinTable"];
+    if (joinCfgs != null) {
+      for (jc in joinCfgs) {
+        if (jc["isJoinRelations"] == false) {
+          continue;  // 未启用条目不生效（旧 .json 同名约定）
+        }
+        let jt: String = (jc["joinType"] != null && jc["joinType"] != "") ? jc["joinType"] : "ManyToOne";
+        let pro: String = jc["joinEnClassPro"];
+        let cls: String = jc["joinEnClass"];
+        if (pro == null || pro == "" || cls == null || cls == "") {
+          printError("错误：表 '" + tableName + "' 联表缺少 joinEnClassPro/joinEnClass，该条目已跳过");
+          continue;
+        }
+        if (jt == "OneToMany") {
+          printLog("提示：表 '" + tableName + "' 联表 '" + pro + "' 为 OneToMany（详情聚合），" +
+                   "第一版未支持，已跳过（详情子列表请用子表独立接口）");
+          continue;
+        }
+        if (jt != "ManyToOne") {
+          printError("错误：表 '" + tableName + "' 联表 '" + pro + "' 的 joinType '" + jt +
+                     "' 仅支持 ManyToOne/OneToMany，该条目已跳过");
+          continue;
+        }
+        // 引用名不得与主表列名冲突（平铺返回键 pro_col 与主表列冲突在 ref 收集时校验）
+        let proClash: Bool = false;
+        for (pf in param.fields) {
+          if (pf.name == pro) { proClash = true; }
+        }
+        if (proClash) {
+          printError("错误：表 '" + tableName + "' 联表引用名 '" + pro +
+                     "' 与主表列名冲突，该条目已跳过");
+          continue;
+        }
+        // 引用名去重（Go 同结构体字段/SQL 别名禁重复）
+        let proDup: Bool = false;
+        for (jd in joinDefs) {
+          if (jd["pro"] == pro) { proDup = true; }
+        }
+        if (proDup) {
+          printError("错误：表 '" + tableName + "' 联表引用名 '" + pro + "' 重复，该条目已跳过");
+          continue;
+        }
+        // 外键列（ManyToOne 必填，∈ 主表列）
+        let fk: String = jc["joinFk"];
+        let fkField: FieldDef = null;
+        for (pf in param.fields) {
+          if (pf.name == fk) { fkField = pf; }
+        }
+        if (fkField == null) {
+          printError("错误：表 '" + tableName + "' 联表 '" + pro + "' 的外键列 joinFk('" +
+                     (fk == null ? "" : fk) + "') 不在主表列中，该条目已跳过");
+          continue;
+        }
+        // 目标表按 modelName 定位（joinEnClass 填目标表模型名）
+        let target: Object = tablesByModel[cls];
+        if (target == null) {
+          printError("错误：表 '" + tableName + "' 联表 '" + pro + "' 的目标 '" + cls +
+                     "' 不在本文件 tables[] 中（joinEnClass 填目标表模型名），该条目已跳过");
+          continue;
+        }
+        // 主键列（缺省 id，∈ 目标表列）
+        let pk: String = (jc["joinPk"] != null && jc["joinPk"] != "") ? jc["joinPk"] : "id";
+        let pkOk: Bool = false;
+        let tcols: Object[] = target["columns"];
+        for (tc in tcols) {
+          if (tc["name"] == pk) { pkOk = true; }
+        }
+        if (!pkOk) {
+          printError("错误：表 '" + tableName + "' 联表 '" + pro + "' 的主键列 joinPk('" +
+                     pk + "') 不在目标表 " + cls + " 中，该条目已跳过");
+          continue;
+        }
+        joinDefs.append({ pro: pro, fk: fk, pk: pk, target: target, joinEnClass: cls });
+      }
+    }
+    let hasJoin: Bool = (joinDefs.length > 0);
+
+    // ── 6.4b 查询场景数据（复刻 query_data.ac 产出形态，类型换 goType）──
+    //      selFields       - SelectParams 查询字段（selColsEq + selColsLike/Gap，支持联表 ref）
+    //      sortInfo        - 排序信息（selColsSort，缺省主键 DESC；联表 ref → `pro`.`col`）
     //      whereConditions - repo getWhereByIn 的 Go 条件块
     let queryData: QueryData = new QueryData();
-    let selFields: SelFieldDef[] = queryData.buildSelFields(json, param);
-    let sortInfo = queryData.buildSortInfo(json, param.primaryField.name);
+    let selFields: SelFieldDef[] = queryData.buildSelFields(json, param, joinDefs, hasJoin);
+    let sortInfo = queryData.buildSortInfo(json, param.primaryField.name, joinDefs, hasJoin);
     let whereConditions: String[] = queryData.buildWhereConditions(selFields);
+
+    // ── 6.4c 联表平铺字段与 JOIN/SELECT 片段（按 ref 使用集按需生成）─────
+    //      被 selCols/selColsEq/Like/Gap/Sort 引用的联表 ref 才生成平铺字段
+    //      （实体非 DB 列 gorm:"column:别名;->" 只读，SELECT 时 AS 别名自动扫描）；
+    //      LEFT JOIN 无匹配为 NULL → 平铺字段一律指针类型
+    let joinFlatFields: FieldDef[] = [];   // 实体平铺字段（返回键 = 引用名_列名）
+    let joinSelectParts: String[] = [];    // SELECT 片段（`pro`.`col` AS `pro_col`）
+    let joinClauses: String[] = [];        // JOIN 子句（每有效联表一条）
+    for (jd in joinDefs) {
+      let joinKind: String = "LEFT JOIN";
+      // joinKind 固定 LEFT（inner 语义未开放配置；LEFT 保证主表数据不丢）
+      joinClauses.append(joinKind + " `" + jd["target"]["tableName"] + "` `" + jd["pro"] +
+                         "` ON `" + jd["pro"] + "`.`" + jd["pk"] + "` = `t`.`" + jd["fk"] + "`");
+    }
+    // ref 收集：selCols[].ref + selColsEq/Like/Gap（[{ref,visible}]）+ selColsSort 键中带点的
+    let usedJoinRefs: String[] = [];
+    let selColCfgs: Object[] = json["selCols"];
+    if (selColCfgs != null) {
+      for (sc in selColCfgs) {
+        let r: String = sc["ref"];
+        if (r != null && r.indexOf(".") > 0 && !usedJoinRefs.includes(r)) {
+          usedJoinRefs.append(r);
+        }
+      }
+    }
+    let eqCfgs: Object[] = json["selColsEq"];
+    let gapCfgs: Object[] = json["selColsGap"];
+    let likeCfgs: Object[] = json["selColsLike"];
+    let sortCfg: Object = json["selColsSort"];
+    for (qc in eqCfgs) {
+      let r: String = qc["ref"];
+      if (r != null && r.indexOf(".") > 0 && !usedJoinRefs.includes(r)) { usedJoinRefs.append(r); }
+    }
+    for (qc in gapCfgs) {
+      let r: String = qc["ref"];
+      if (r != null && r.indexOf(".") > 0 && !usedJoinRefs.includes(r)) { usedJoinRefs.append(r); }
+    }
+    for (qc in likeCfgs) {
+      let r: String = qc["ref"];
+      if (r != null && r.indexOf(".") > 0 && !usedJoinRefs.includes(r)) { usedJoinRefs.append(r); }
+    }
+    if (sortCfg != null && sortCfg.length) {
+      for (pair in sortCfg) {
+        let r: String = pair[0];
+        if (r != null && r.indexOf(".") > 0 && !usedJoinRefs.includes(r)) { usedJoinRefs.append(r); }
+      }
+    }
+    // 解析使用集 → 平铺字段（别名冲突/目标列缺失报错跳过，与设计器校验同源）
+    for (ref in usedJoinRefs) {
+      let dot: Number = ref.indexOf(".");
+      let pro: String = ref.substring(0, dot);
+      let col: String = ref.substring(dot + 1);
+      let jd: Object = null;
+      for (d in joinDefs) {
+        if (d["pro"] == pro) { jd = d; }
+      }
+      if (jd == null) {
+        printError("错误：表 '" + tableName + "' 读模型引用 '" + ref +
+                   "' 的引用名未声明为启用的 ManyToOne 联表，该列已跳过");
+        continue;
+      }
+      let tcol: Object = null;
+      let tcols2: Object[] = jd["target"]["columns"];
+      for (tc in tcols2) {
+        if (tc["name"] == col) { tcol = tc; }
+      }
+      if (tcol == null) {
+        printError("错误：表 '" + tableName + "' 读模型引用 '" + ref + "' 的目标列在联表 " +
+                   jd["joinEnClass"] + " 中不存在，该列已跳过");
+        continue;
+      }
+      let alias: String = pro + "_" + col;
+      // 别名不得与主表列名/已生成别名冲突（同键覆盖会静默错数据）
+      let aliasClash: Bool = false;
+      for (pf in param.fields) {
+        if (pf.name == alias) { aliasClash = true; }
+      }
+      for (ff in joinFlatFields) {
+        if (ff.name == alias) { aliasClash = true; }
+      }
+      if (aliasClash) {
+        printError("错误：表 '" + tableName + "' 联表别名 '" + alias + "'（ref " + ref +
+                   "）与主表列名或其它联表别名冲突，该列已跳过");
+        continue;
+      }
+      let ff: FieldDef = new FieldDef();
+      ff.name = alias;
+      ff.comment = sanitizeGoComment(tcol["comment"]);
+      ff.colType = tcol["mysqlType"];
+      ff.unsigned = (tcol["unsigned"] == true);
+      ff.goType = mapTypeToGo(ff.colType, ff.unsigned);
+      ff.goName = snakeToPascal(alias);
+      // LEFT JOIN 无匹配为 NULL → 一律指针类型；只读列（JOIN SELECT 自动扫描填充）
+      ff.declType = "*" + ff.goType;
+      ff.ptrType = "*" + ff.goType;
+      ff.isPtr = true;
+      ff.gormTag = "gorm:\"column:" + alias + ";->\"";
+      ff.jsonTag = "json:\"" + alias + "\"";
+      joinFlatFields.append(ff);
+      joinSelectParts.append("`" + pro + "`.`" + col + "` AS `" + alias + "`");
+    }
+    let hasJoinFlat: Bool = (joinSelectParts.length > 0);
+    let joinSelectStr: String = "`t`.*";
+    if (hasJoinFlat) {
+      joinSelectStr = joinSelectStr + ", " + joinSelectParts.join(", ");
+    }
+
+    // ── 6.4d 唯一性预检（indexes[].unique 自动推导）───────────────────
+    //      每个 unique 索引组生成 Insert/Update 前置查重块（Update 排除自身主键）；
+    //      并发窗口由 DB 唯一索引兜底，此处提升错误可读性。可空列 NULL 不互斥
+    //      （NULL = NULL 永假），天然跳过未传值。
+    let uniqInsChecks: String[] = [];
+    let uniqUpdChecks: String[] = [];
+    let idxCfgs: Object[] = json["indexes"];
+    if (idxCfgs != null) {
+      for (ix in idxCfgs) {
+        if (ix["unique"] != true) { continue; }
+        let ucols: String[] = ix["cols"];
+        if (ucols == null || ucols.length == 0) { continue; }
+        // 组内列须都在主表（跨表/缺列的唯一索引组跳过）
+        let allExist: Bool = true;
+        for (c in ucols) {
+          let found: Bool = false;
+          for (pf in param.fields) {
+            if (pf.name == c) { found = true; }
+          }
+          if (!found) { allExist = false; }
+        }
+        if (!allExist) {
+          printLog("警告：唯一索引 '" + ix["name"] + "' 含主表不存在的列，跳过唯一性预检生成");
+          continue;
+        }
+        let whereStr: String = "";
+        let argsStr: String = "";
+        let firstC: Bool = true;
+        for (c in ucols) {
+          if (!firstC) {
+            whereStr = whereStr + " AND ";
+            argsStr = argsStr + ", ";
+          }
+          firstC = false;
+          whereStr = whereStr + "`" + c + "` = ?";
+          argsStr = argsStr + "data." + snakeToPascal(c);
+        }
+        let dupMsg: String = "duplicate: " + ix["name"] + "(" + ucols.join(",") + ")";
+        // Insert 前置查重（返回签名 0, err）
+        uniqInsChecks.append(
+          "  {\n"
+          + "    var cnt int64\n"
+          + "    if err := db.Model(&model." + param.entityClass + "{}).Where(\"" + whereStr + "\", " + argsStr + ").Count(&cnt).Error; err != nil {\n"
+          + "      return 0, err\n"
+          + "    }\n"
+          + "    if cnt > 0 {\n"
+          + "      return 0, errors.New(\"" + escapeGoStr(dupMsg) + "\")\n"
+          + "    }\n"
+          + "  }");
+        // Update 前置查重（额外排除自身主键）
+        uniqUpdChecks.append(
+          "  {\n"
+          + "    var cnt int64\n"
+          + "    if err := db.Model(&model." + param.entityClass + "{}).Where(\"" + whereStr + "\", " + argsStr + ").Where(\"`" + param.primaryField.name + "` <> ?\", data." + param.primaryField.goName + ").Count(&cnt).Error; err != nil {\n"
+          + "      return 0, err\n"
+          + "    }\n"
+          + "    if cnt > 0 {\n"
+          + "      return 0, errors.New(\"" + escapeGoStr(dupMsg) + "\")\n"
+          + "    }\n"
+          + "  }");
+        printLog("[" + tableName + "] 唯一索引 '" + ix["name"] + "' 生成 Insert/Update 唯一性预检");
+      }
+    }
+    let hasUniqCheck: Bool = (uniqInsChecks.length > 0);
 
     // ── 6.5 枚举数据（表级 enums 节点 + globalEnumCols 全局枚举列）──
     let enums: Object[] = buildTableEnums(json, param, globalEnumDefs, emittedGlobalEnums);
@@ -440,8 +705,19 @@ export function generateApiMain(params: Object): Number {
     tplData["whereConditions"] = whereConditions;  // getWhereByIn 条件块循环
     tplData["sortDesc"] = sortInfo.sortDesc;              // 排序描述（注释用）
     tplData["orderByDef"] = sortInfo.orderByDef;          // 排序字面量串（预留）
-    tplData["defaultOrderField"] = sortInfo.defaultOrderField;  // 默认排序字段
+    tplData["defaultOrderField"] = sortInfo.defaultOrderField;  // 默认排序 ref
+    tplData["defaultOrderSql"] = sortInfo.defaultOrderSql;      // 默认排序 SQL 列限定
     tplData["defaultOrderDir"] = sortInfo.defaultOrderDir;      // 默认排序方向
+    // 联表数据（hasJoin 时 SelectByIn 走 Table+Joins+Select 平铺）
+    tplData["hasJoin"] = hasJoin;
+    tplData["joinClauses"] = joinClauses;      // JOIN 子句循环（LEFT JOIN ... ON ...）
+    tplData["joinSelectStr"] = joinSelectStr;  // SELECT 串（`t`.*, `pro`.`col` AS `pro_col`...）
+    tplData["hasJoinFlat"] = hasJoinFlat;
+    tplData["joinFlatFields"] = joinFlatFields;  // 实体平铺只读字段循环
+    // 唯一性预检（indexes[].unique 自动推导；Insert/Update 各一组前置查重块）
+    tplData["hasUniqCheck"] = hasUniqCheck;
+    tplData["uniqInsChecks"] = uniqInsChecks;
+    tplData["uniqUpdChecks"] = uniqUpdChecks;
     // 枚举数据
     tplData["enums"] = enums;              // ${each enum in enums} 循环
     tplData["hasEnums"] = hasEnums;        // ${if hasEnums} 是否生成枚举文件
@@ -460,7 +736,7 @@ export function generateApiMain(params: Object): Number {
     tplData["i18nColsStr"] = i18nColsStr;
 
     // import 块（文本预拼，模板直接 ${xxxImports} 输出）
-    tplData["entityImports"] = buildEntityImports(param, i18nFlatFields);
+    tplData["entityImports"] = buildEntityImports(param, i18nFlatFields, joinFlatFields);
     tplData["inImports"] = buildInImports(param, selFields);
     let repoExt: String[] = [];
     repoExt.append("gorm.io/gorm");
@@ -468,7 +744,11 @@ export function generateApiMain(params: Object): Number {
       repoExt.append("gorm.io/gorm/clause");
     }
     repoExt.append(modulePath);
-    tplData["repoImports"] = buildGoImports([], repoExt);
+    let repoStd: String[] = [];
+    if (hasUniqCheck) {
+      repoStd.append("errors");
+    }
+    tplData["repoImports"] = buildGoImports(repoStd, repoExt);
     let svcExt: String[] = [];
     svcExt.append("gorm.io/gorm");
     svcExt.append(modulePath);
@@ -585,14 +865,19 @@ export function entityTplPath(templates: TemplateConfig[]): String {
   return "";
 }
 
-/// @brief 构建主表实体文件的 import 块（含 i18n 平铺字段的类型探测）
+/// @brief 构建主表实体文件的 import 块（含 i18n/联表平铺字段的类型探测）
 /// @param param 已加工的表参数
 /// @param flatFields i18n 平铺字段（可能引入 time/datatypes 类型）
+/// @param joinFlat 联表平铺字段（可能引入 time/datatypes 类型）
 /// @return 完整 import 块文本（无导入时为空串）
-export function buildEntityImports(param: Param, flatFields: FieldDef[]): String {
+export function buildEntityImports(param: Param, flatFields: FieldDef[], joinFlat: FieldDef[]): String {
   let needTime: Bool = param.hasTimeField;
   let needDatatypes: Bool = param.hasJsonField;
   for (ff in flatFields) {
+    if (ff.goType == "time.Time") { needTime = true; }
+    if (ff.goType == "datatypes.JSON") { needDatatypes = true; }
+  }
+  for (ff in joinFlat) {
     if (ff.goType == "time.Time") { needTime = true; }
     if (ff.goType == "datatypes.JSON") { needDatatypes = true; }
   }
