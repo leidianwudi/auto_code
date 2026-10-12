@@ -458,7 +458,6 @@ static void testJsonTableConfigRoundTrip() {
   id.isPrimary = true;
   id.isAutoInc = true;
   id.comment = QStringLiteral("主键");
-  id.form = QStringLiteral("none");
   t1.columns.append(id);
 
   JsonTableColumn name;
@@ -466,8 +465,6 @@ static void testJsonTableConfigRoundTrip() {
   name.mysqlType = QStringLiteral("varchar(64)");
   name.nullable = true;  // 边界：nullable/unsigned 与主键列取反
   name.comment = QStringLiteral("商品名");
-  name.search = true;
-  name.required = true;
   t1.columns.append(name);
 
   JsonTableColumn price;
@@ -475,7 +472,6 @@ static void testJsonTableConfigRoundTrip() {
   price.mysqlType = QStringLiteral("decimal(10,2)");
   price.isUnsigned = true;
   price.defaultValue = QStringLiteral("0.00");
-  price.form = QStringLiteral("number");
   t1.columns.append(price);
 
   JsonTableIndex ukName;
@@ -483,6 +479,36 @@ static void testJsonTableConfigRoundTrip() {
   ukName.cols = QStringList{QStringLiteral("name")};
   ukName.unique = true;
   t1.indexes.append(ukName);
+
+  // ── 表级进阶键：联表声明 + 三视图读模型（v3/v4 新键往返覆盖）──
+  JsonTableJoin j;
+  j.joinEnClass = QStringLiteral("user");
+  j.joinEnClassPro = QStringLiteral("user");
+  j.joinType = QStringLiteral("ManyToOne");
+  j.joinFk = QStringLiteral("user_id");  // 往返测试不做交叉校验，列可不在 columns 中
+  t1.joinTable.append(j);
+  JsonTableSelCol sc;
+  sc.ref = QStringLiteral("user.name");
+  sc.label = QStringLiteral("店主");
+  sc.width = 120;
+  t1.selCols.append(sc);
+  JsonTableQueryCol qEq;
+  qEq.ref = QStringLiteral("user.name");
+  t1.selColsEq.append(qEq);
+  JsonTableQueryCol qGap;
+  qGap.ref = QStringLiteral("create_time");
+  qGap.visible = false;  // 边界：前端显示关闭（仅后端生成条件）
+  t1.selColsGap.append(qGap);
+  JsonTableQueryCol qLike;
+  qLike.ref = QStringLiteral("name");
+  t1.selColsLike.append(qLike);
+  JsonTableEditCol ec;
+  ec.ref = QStringLiteral("name");
+  ec.label = QStringLiteral("商品名称");
+  ec.widget = QStringLiteral("input");
+  ec.required = true;
+  t1.editCols.append(ec);
+  t1.selColsSort.append({QStringLiteral("id"), QStringLiteral("DESC")});
   cfg.tables.append(t1);
 
   JsonTableTable t2;
@@ -495,7 +521,6 @@ static void testJsonTableConfigRoundTrip() {
   t2.columns.append(cid);
   JsonTableColumn cname;
   cname.name = QStringLiteral("title");
-  cname.list = false;  // 边界：前端角色翻转
   t2.columns.append(cname);
   cfg.tables.append(t2);
 
@@ -527,19 +552,36 @@ static void testJsonTableConfigRoundTrip() {
   CHECK(r1.indexes[0].name == QStringLiteral("uk_name"));
   CHECK(r1.indexes[0].cols == QStringList{QStringLiteral("name")});
   CHECK(r1.indexes[0].unique);
+  // 联表声明 + 三视图往返（joinPk 缺省 id 不落键后仍还原 "id"；width/visible/required）
+  CHECK(r1.joinTable.size() == 1);
+  CHECK(r1.joinTable[0] == j);
+  CHECK(r1.joinTable[0].joinPk == QStringLiteral("id"));
+  CHECK(r1.selCols.size() == 1);
+  CHECK(r1.selCols[0] == sc);
+  CHECK(r1.selCols[0].width == 120);
+  CHECK(r1.selColsEq.size() == 1);
+  CHECK(r1.selColsEq[0] == qEq);
+  CHECK(r1.selColsGap.size() == 1);
+  CHECK(r1.selColsGap[0] == qGap);
+  CHECK(r1.selColsGap[0].visible == false);
+  CHECK(r1.selColsLike.size() == 1);
+  CHECK(r1.selColsLike[0] == qLike);
+  CHECK(r1.editCols.size() == 1);
+  CHECK(r1.editCols[0] == ec);
+  CHECK(r1.selColsSort.size() == 1);
+  CHECK(r1.selColsSort[0].first == QStringLiteral("id"));
+  CHECK(r1.selColsSort[0].second == QStringLiteral("DESC"));
 
   // 列顺序保持（建表顺序语义）
   CHECK(r1.columns[0].name == QStringLiteral("id"));
   CHECK(r1.columns[1].name == QStringLiteral("name"));
   CHECK(r1.columns[2].name == QStringLiteral("price"));
 
-  // 表 2：list=false 翻转保持，其余走默认值
+  // 表 2：全部走默认值（列级呈现角色全退役，视图空 = 缺省推导）
   const JsonTableTable &r2 = back.tables[1];
   CHECK(r2.tableName == QStringLiteral("category"));
   CHECK(r2.columns.size() == 2);
-  CHECK(r2.columns[1].list == false);
-  CHECK(r2.columns[1].search == false);
-  CHECK(r2.columns[1].form == QStringLiteral("input"));
+  CHECK(r2.editCols.isEmpty());
   CHECK(r2.indexes.isEmpty());
 
   // 未知键保真：表级 i18n 进阶节点 + meta 未知键，往返后原样写回
@@ -557,9 +599,9 @@ static void testJsonTableConfigRoundTrip() {
   const JsonTableConfig back2 = JsonTableConfig::fromJsonString(JsonTableConfig::toJsonString(raw));
   CHECK(back2.tables.size() == 2);
   CHECK(back2.tables[0].tableName == QStringLiteral("shop"));  // 已知字段正常解析
-  const QJsonObject i18n = back2.tables[0].extra.value(QStringLiteral("i18n")).toObject();
-  CHECK(i18n.value(QStringLiteral("table")).toString() == QStringLiteral("shop0"));
-  CHECK(i18n.value(QStringLiteral("extKey")).toString() == QStringLiteral("ext_id"));
+  // i18n 已结构化（v2）：进 t.i18n 字段而非 extra（此处 extra 不含已知键）
+  CHECK(back2.tables[0].i18n.table == QStringLiteral("shop0"));
+  CHECK(back2.tables[0].i18n.extKey == QStringLiteral("ext_id"));
   CHECK(back2.extra.value(QStringLiteral("customFutureKey")).toString() == QStringLiteral("kept"));
 
   // 边界：db 缺省 port → 默认 3306；列 default 为 null/数字字面量的兼容
@@ -571,8 +613,7 @@ static void testJsonTableConfigRoundTrip() {
   CHECK(minimal.dbPort == 3306);
   CHECK(minimal.tables.size() == 1);
   CHECK(minimal.tables[0].columns[0].defaultValue.isEmpty());  // null → 无默认值
-  CHECK(minimal.tables[0].columns[0].list);                    // 缺省 true
-  CHECK(minimal.tables[0].columns[0].form == QStringLiteral("input"));
+  CHECK(minimal.tables[0].editCols.isEmpty());  // 无 editCols → 缺省全列推导
   CHECK(minimal.tables[0].columns[1].defaultValue == QStringLiteral("0"));  // 数字默认值显式转串
 }
 

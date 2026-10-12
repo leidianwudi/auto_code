@@ -1,4 +1,4 @@
-{
+﻿{
     "clang-format.executable": "D:\\tool\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\Llvm\\x64\\bin\\clang-format.exe",
     "[cpp]": {
         "editor.defaultFormatter": "xaver.clang-format",
@@ -8,6 +8,7 @@
         "editor.defaultFormatter": "xaver.clang-format",
         "editor.formatOnSave": true
     },
+    "cmake.useCMakePresets": "never",
     "cmake.defaultVariants": {
         "buildType": {
             "default": "reldeb",

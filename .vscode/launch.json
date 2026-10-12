@@ -1,6 +1,22 @@
-{
+﻿{
     "version": "0.2.0",
     "configurations": [
+        {
+            "name": "RelWithDebInfo auto_code",
+            "type": "lldb-dap",
+            "request": "launch",
+            "preLaunchTask": "Build RelWithDebInfo",
+            "program": "${workspaceFolder}/build/RelWithDebInfo/auto_code.exe",
+            "args": [
+                "D:/work/github/auto_code/file/crud_nest/news_api/news_main.ac"
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopOnEntry": false,
+            "env": {
+                "PATH": "C:\\WINDOWS\\system32;C:\\WINDOWS;D:\\tool\\Qt\\6.12.0\\msvc2022_64\\bin;D:\\tool\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.43.34808\\bin\\Hostx64\\x64;${workspaceFolder}\\build\\RelWithDebInfo",
+                "CMAKE_PREFIX_PATH": "D:/tool/Qt/6.12.0/msvc2022_64"
+            }
+        },
         {
             "name": "Debug auto_code",
             "type": "lldb-dap",

@@ -79,7 +79,7 @@ bool AcParser::parseTernary(Expr &expr) {
     advance();
     auto cond = std::make_unique<Expr>(std::move(expr));
     auto trueExpr = std::make_unique<Expr>();
-    if (!parseLogicalOr(*trueExpr)) {
+    if (!parseTernary(*trueExpr)) {
       return false;
     }
     if (!expect(TokenType::kColon, QStringLiteral("expected ':' in ternary expression"))) {
@@ -251,7 +251,7 @@ bool AcParser::parsePostfix(Expr &expr) {
         chained.methodCall.object = std::make_unique<Expr>(std::move(expr));
         while (peek().type != TokenType::kRParen && peek().type != TokenType::kEof) {
           auto arg = std::make_unique<Expr>();
-          if (!parseLogicalOr(*arg)) {
+          if (!parseTernary(*arg)) {
             return false;
           }
           chained.methodCall.args.push_back(std::move(arg));
@@ -289,7 +289,7 @@ bool AcParser::parsePostfix(Expr &expr) {
         chained.methodCall.object = std::make_unique<Expr>(std::move(expr));
         while (peek().type != TokenType::kRParen && peek().type != TokenType::kEof) {
           auto arg = std::make_unique<Expr>();
-          if (!parseLogicalOr(*arg)) {
+          if (!parseTernary(*arg)) {
             return false;
           }
           chained.methodCall.args.push_back(std::move(arg));
@@ -312,7 +312,7 @@ bool AcParser::parsePostfix(Expr &expr) {
     } else if (peek().type == TokenType::kLBracket) {
       advance();
       auto idxExpr = std::make_unique<Expr>();
-      if (!parseLogicalOr(*idxExpr)) {
+      if (!parseTernary(*idxExpr)) {
         return false;
       }
       if (!expect(TokenType::kRBracket, QStringLiteral("expected ']' after index expression"))) {
@@ -352,7 +352,7 @@ bool AcParser::parsePrimary(Expr &expr) {
         advance();
         while (peek().type != TokenType::kRParen && peek().type != TokenType::kEof) {
           auto arg = std::make_unique<Expr>();
-          if (!parseLogicalOr(*arg)) {
+          if (!parseTernary(*arg)) {
             return false;
           }
           expr.methodCall.args.push_back(std::move(arg));
@@ -389,7 +389,7 @@ bool AcParser::parsePrimary(Expr &expr) {
       advance();
       while (peek().type != TokenType::kRParen && peek().type != TokenType::kEof) {
         auto arg = std::make_unique<Expr>();
-        if (!parseLogicalOr(*arg)) {
+        if (!parseTernary(*arg)) {
           return false;
         }
         expr.methodCall.args.push_back(std::move(arg));
@@ -417,7 +417,7 @@ bool AcParser::parsePrimary(Expr &expr) {
       advance();
       while (peek().type != TokenType::kRParen && peek().type != TokenType::kEof) {
         auto arg = std::make_unique<Expr>();
-        if (!parseLogicalOr(*arg)) {
+        if (!parseTernary(*arg)) {
           return false;
         }
         expr.methodCall.args.push_back(std::move(arg));
@@ -447,7 +447,7 @@ bool AcParser::parsePrimary(Expr &expr) {
     if (peek().type != TokenType::kRParen) {
       do {
         auto arg = std::make_unique<Expr>();
-        if (!parseLogicalOr(*arg)) {
+        if (!parseTernary(*arg)) {
           return false;
         }
         expr.constructorArgs.push_back(std::move(arg));
@@ -520,7 +520,7 @@ bool AcParser::parsePrimary(Expr &expr) {
           advance();
           while (peek().type != TokenType::kRParen && peek().type != TokenType::kEof) {
             auto arg = std::make_unique<Expr>();
-            if (!parseLogicalOr(*arg)) {
+            if (!parseTernary(*arg)) {
               return false;
             }
             expr.funcCall.args.push_back(std::move(arg));
@@ -547,7 +547,7 @@ bool AcParser::parsePrimary(Expr &expr) {
           advance();
           while (peek().type != TokenType::kRParen && peek().type != TokenType::kEof) {
             auto arg = std::make_unique<Expr>();
-            if (!parseLogicalOr(*arg)) {
+            if (!parseTernary(*arg)) {
               return false;
             }
             expr.methodCall.args.push_back(std::move(arg));
@@ -665,7 +665,7 @@ bool AcParser::parseFuncCall(const QString &name, Expr &expr) {
   advance();
   while (peek().type != TokenType::kRParen && peek().type != TokenType::kEof) {
     auto arg = std::make_unique<Expr>();
-    if (!parseLogicalOr(*arg)) {
+    if (!parseTernary(*arg)) {
       return false;
     }
     expr.funcCall.args.push_back(std::move(arg));

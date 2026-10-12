@@ -147,6 +147,10 @@ static const char *kIncPropWriteBack =
     "let o: Object = {n: 5}; o.n++; return o.n;";
 static const char *kIncIndex = "let a: Number[] = [1, 2]; a[1]++; return a[1];";
 static const char *kTernary = "let c: Boolean = true; return c ? \"y\" : \"n\";";
+static const char *kTernaryInArgs =
+    "function pick(a: Number, b: Number): Number { return a * 10 + b; } "
+    "return pick(2 > 1 ? 5 : 9, 1 < 2 ? 6 : 0);";
+static const char *kTernaryInIndex = "let a: Number[] = [10, 20]; return a[1 > 0 ? 1 : 0];";
 static const char *kLogicalShortCircuit =
     "let a: Object = null; let r: String = \"s\"; if (a != null && a.x == 1) { r = \"bad\"; } return r;";
 static const char *kCoalesce = "let a: Any = null; let b: Number = a ?? 42; return b;";
@@ -198,6 +202,8 @@ static const DualCase kCases[] = {
     {"incPropWriteBack", kIncPropWriteBack},
     {"incIndex", kIncIndex},
     {"ternary", kTernary},
+    {"ternaryInArgs", kTernaryInArgs},
+    {"ternaryInIndex", kTernaryInIndex},
     {"logicalShortCircuit", kLogicalShortCircuit},
     {"coalesce", kCoalesce},
     {"objectBuiltins", kObjectBuiltins},
@@ -209,6 +215,19 @@ static const DualCase kCases[] = {
     {"enumDef", kEnumDef},
     {"constDecl", kConstDecl},
     {"nestedBlockScope", kNestedBlockScope},
+    // ── 链式赋值（a[i][k]=v / a[i].p=v / a.p.q=v：编译期展开逐层写回）──
+    {"chainedIndexAssign",
+     "let a = [[1,2],[3,4]]; a[1][0] = 9; return a;"},
+    {"chainedMixedAssign",
+     "let o = {list: [{v: 1}]}; o.list[0].v = 7; return o.list[0].v;"},
+    {"chainedPropChain",
+     "let o = {sub: {x: 1}}; o.sub.x = 5; return o.sub.x;"},
+    // COW 独立性：改 a[0] 不得影响兄弟元素 a[1]
+    {"chainedCowSibling",
+     "let a = [[1],[1]]; a[0][0] = 9; return a[1][0];"},
+    // 赋值表达式值 = nil（链式赋值不支持作为右值取值，两模式一致）
+    {"chainedAssignExprResult",
+     "let a = [[0]]; let r = a[0][0] = 3; return r;"},
 };
 
 static void testAll() {

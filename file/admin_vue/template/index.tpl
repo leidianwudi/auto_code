@@ -137,7 +137,7 @@ ${/if}${/each}${/if}
 // 搜索表单
 const searchSchema = reactive<FormSchema[]>([
 ${each q in queryFields}${if q.isRange}  {
-    field: '${q.dataName}Start',
+    field: '${q.dataName}_min',
     label: '${q.displayName}开始',
     component: '${q.rangeComp}',
     componentProps: {
@@ -145,7 +145,7 @@ ${each q in queryFields}${if q.isRange}  {
     }
   },
   {
-    field: '${q.dataName}End',
+    field: '${q.dataName}_max',
     label: '${q.displayName}结束',
     component: '${q.rangeComp}',
     componentProps: {

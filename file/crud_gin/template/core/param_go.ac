@@ -168,9 +168,7 @@ export class FieldDef {
   let isPrimary: Bool = false;     // 是否主键
   let isAutoInc: Bool = false;     // 是否自增
   let isCoin: Bool = false;        // 是否金额类型（decimal/float/double）
-  let isSearch: Bool = false;      // 是否查询项（.jsontable 列 search=true → where 条件）
-  let form: String = "";           // 表单角色（前端用，后端透传：none/input/...）
-  let required: Bool = false;      // 表单必填（→ binding:"required"）
+  let required: Bool = false;      // 必填（来源 editCols.required → binding:"required"）
   let zeroKind: String = "";       // 查询零值判断类别（zeroKindOfGoType）
   let isCreateDate: Bool = false;  // create_time 时间列（DB 默认值维护，不入增改参数）
   let isUpdateDate: Bool = false;  // update_time 时间列且未配 manualUpdateTime（DB ON UPDATE 维护）
@@ -222,12 +220,8 @@ export class Param {
   ///   {
   ///     tableName: "shop", modelName: "shop", tableComment: "商品表",
   ///     manualUpdateTime: false,
-  ///     columns: [
-  ///       { name: "id", mysqlType: "bigint", unsigned: true, nullable: false,
-  ///         isPrimary: true, isAutoInc: true, default: null, comment: "主键",
-  ///         list: true, search: false, form: "none", required: false },
-  ///       ...
-  ///     ]
+  ///     columns: [ { name: "id", mysqlType: "bigint", unsigned: true, ... }, ... ],
+  ///     editCols: [ { ref: "name", required: true, ... } ]  // 编辑视图：列出=进增改参数
   ///   }
   function setTableData(data: Object): Void {
     this.tableName = data.tableName;
@@ -237,6 +231,21 @@ export class Param {
 
     // ── 结构体名：snakeToPascal(tableName)，如 shop → Shop、shop_order → ShopOrder ──
     this.entityClass = snakeToPascal(this.tableName);
+
+    // ── 编辑视图 editCols：显式列出 = 进增改参数与编辑表单 ────────────
+    //    空/缺省 = 全部可写列进参数（排除自动维护时间/自增主键，零配置等价旧行为）；
+    //    visible=false 参数仍生成（API 能力保留），仅前端表单不渲染；
+    //    required 从 editCols.required 读取（列级 form/required 键已退役）
+    let editColMap: Object = {};
+    let editCfgs: Object[] = data.editCols;
+    if (editCfgs != null) {
+      for (ec in editCfgs) {
+        if (ec["ref"] != null && ec["ref"] != "") {
+          editColMap[ec["ref"]] = ec;
+        }
+      }
+    }
+    let hasEditCols: Bool = (editCfgs != null && editCfgs.length > 0);
 
     // ── 逐列加工 ──────────────────────────────────────────────────────────
     this.fields = [];
@@ -254,23 +263,18 @@ export class Param {
       field.nullable = (col.nullable == true);
       field.isPrimary = (col.isPrimary == true);
       field.isAutoInc = (col.isAutoInc == true);
-      field.isSearch = (col.search == true);
-      field.form = col.form;
-      field.required = (col.required == true);
+      let ec: Object = editColMap[field.name];
+      field.required = (ec != null && ec["required"] == true);
       field.goType = mapTypeToGo(field.colType, field.unsigned);
       field.goName = snakeToPascal(field.name);
       field.isCoin = field.goType == "float64";
 
       // 声明类型：可空 → 指针；json 类型（datatypes.JSON）天然可空不加指针；
       // 主键语义上不为 NULL，保持值类型（Insert 返回值/Update 定位依赖此约定）
-      field.declType = field.goType;
-      field.ptrType = field.goType;
-      if (field.nullable && !field.isPrimary && field.goType != "datatypes.JSON") {
-        field.declType = "*" + field.goType;
-      }
-      if (field.goType != "datatypes.JSON") {
-        field.ptrType = "*" + field.goType;
-      }
+      field.declType = (field.nullable && !field.isPrimary && field.goType != "datatypes.JSON")
+                           ? "*" + field.goType
+                           : field.goType;
+      field.ptrType = (field.goType != "datatypes.JSON") ? "*" + field.goType : field.goType;
       // UpdateParams 用 ptrType（全指针）；isPtr 标记模板解引用行为
       // （JSON 类型非指针，赋值不解引用）
       field.isPtr = (field.ptrType != field.goType);
@@ -293,10 +297,12 @@ export class Param {
       field.isUpdateDate = (field.name == "update_time") && isDateTime && !manualUpdateTime;
       field.isAutoTime = field.isCreateDate || field.isUpdateDate;
 
-      // 参数字段集合：InsertParams 排除自动时间列与自增主键；
-      // UpdateParams 排除自动时间列与主键（主键单独作为 Id 定位字段）
-      field.isInsParam = !field.isAutoTime && !(field.isPrimary && field.isAutoInc);
-      field.isUpdParam = !field.isAutoTime && !field.isPrimary;
+      // 参数字段集合：editCols 显式列出 = 可写字段进增改参数（visible=false
+      // 参数仍生成，仅前端表单不渲染）；未配 editCols 时缺省全部可写列
+      // （InsertParams 排除自动时间列与自增主键；UpdateParams 排除自动时间列与主键）
+      let inEdit: Bool = (!hasEditCols) || (ec != null);
+      field.isInsParam = inEdit && !field.isAutoTime && !(field.isPrimary && field.isAutoInc);
+      field.isUpdParam = inEdit && !field.isAutoTime && !field.isPrimary;
 
       // import 探测：实体文件是否需要 time / datatypes
       if (field.goType == "time.Time") {

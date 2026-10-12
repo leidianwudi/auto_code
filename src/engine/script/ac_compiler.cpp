@@ -1006,8 +1006,108 @@ void AcCompiler::compileIncDec(const Expr &e, double delta, bool post) {
   }
 }
 
+// ── 链式赋值目标（a[i][k] = v / a[i].p = v / a.p.q = v）──────────────────
+
+/// 链式后缀（prop / index 混合，按求值顺序）
+struct AcAssignSuffix {
+  bool isIndex;
+  QString prop;      ///< prop 后缀的属性名
+  const Expr *index; ///< index 后缀的下标表达式
+};
+
+/// 展开链式 LHS：root 变量 + ≥2 级 prop/index 后缀时返回 true（单级走既有路径）。
+/// root 仅支持标识符（this/括号表达式等根不识别 → 调用方编译期报错）
+static bool collectAssignChain(const Expr &lv, QString &root,
+                               QVector<AcAssignSuffix> &out) {
+  const Expr *cur = &lv;
+  while (true) {
+    if (cur->kind == Expr::kIndexAccess) {
+      if (!cur->left || !cur->right) return false;
+      out.prepend(AcAssignSuffix{true, QString(), cur->right.get()});
+      cur = cur->left.get();
+      continue;
+    }
+    if (cur->kind == Expr::kPropAccess) {
+      if (cur->propObject) {
+        out.prepend(AcAssignSuffix{false, cur->prop, nullptr});
+        cur = cur->propObject.get();
+        continue;
+      }
+      // 扁平 prop：ident 容器（ident.prop 形状）
+      if (cur->ident.isEmpty()) return false;
+      out.prepend(AcAssignSuffix{false, cur->prop, nullptr});
+      root = cur->ident;
+      break;
+    }
+    if (cur->kind == Expr::kIdent) {
+      root = cur->ident;
+      break;
+    }
+    return false;  // this / 字面量 / 括号表达式等根：v1 不支持链式
+  }
+  return !root.isEmpty() && out.size() >= 2;
+}
+
+/// 链式赋值编译展开（栈语义与 VM 一致，全部复用现有 opcode）：
+///   1. 逐层下探：每层「Dup 容器副本 → 压下标（index）→ GetIndex/GetProp」，
+///      栈上保留写回所需的操作数（index=下标副本 / prop=父容器副本）
+///   2. 末级：压下标（index）→ 压右值 → SetIndex/SetProp
+///   3. 逐层写回：栈序恰好是 SetIndex/SetProp 的 [obj(, idx), val] 布局
+///   4. 根变量 StoreName 写回；表达式值压 nil（链式赋值不支持作为右值取值）
+void AcCompiler::compileChainedAssign(const Expr &lv, const Expr &valueExpr) {
+  QString root;
+  QVector<AcAssignSuffix> chain;
+  collectAssignChain(lv, root, chain);
+  const int n = chain.size();
+  const int line = valueExpr.loc.line;
+
+  emitLoadName(root, line);  // [root]
+  // 中间层下探（s1..s(n-1)）
+  for (int d = 0; d < n - 1; ++d) {
+    const AcAssignSuffix &s = chain[d];
+    emitInstr(AcOpcode::kDup);  // [.., 容器, 容器副本]（写回用）
+    if (s.isIndex) {
+      compileExpr(*s.index);                 // [.., 容器副本, idx]
+      emitInstr(AcOpcode::kDup);             // [.., 容器副本, idx, idx副本]（写回用）
+      // 旋转使 GetIndex 取到「容器副本」而非「idx」：
+      //   [.., 容器副本, idx, idx副本] →(Swap3)→ [.., idx副本, 容器副本, idx]
+      emitInstr(AcOpcode::kSwap3);
+      emitInstr(AcOpcode::kGetIndex, 0, 0, 0, line);  // → [.., idx副本, 子容器]
+    } else {
+      emitInstr(AcOpcode::kGetProp, identOf(s.prop));  // → [.., 容器副本, 容器]
+    }
+  }
+  // 末级：压下标（index）+ 右值，写入
+  const AcAssignSuffix &last = chain[n - 1];
+  if (last.isIndex) compileExpr(*last.index);  // [.., idx_n]
+  compileExpr(valueExpr);                      // [.., (idx_n,) V]
+  if (last.isIndex) {
+    emitInstr(AcOpcode::kSetIndex, 0, 0, 0, line);  // → [.., 容器']
+  } else {
+    emitInstr(AcOpcode::kSetProp, identOf(last.prop));
+  }
+  // 逐层写回（中间层：栈顶恰好是 [obj(, idx), 子容器']）
+  for (int d = n - 2; d >= 0; --d) {
+    const AcAssignSuffix &s = chain[d];
+    if (s.isIndex) {
+      emitInstr(AcOpcode::kSetIndex, 0, 0, 0, line);
+    } else {
+      emitInstr(AcOpcode::kSetProp, identOf(s.prop));
+    }
+  }
+  emitStoreName(root, line);  // 根变量写回 → 栈空
+  emitInstr(AcOpcode::kNil);  // 赋值表达式值 = nil（链式赋值不支持作为右值取值）
+}
+
 void AcCompiler::compileAssignExpr(const Expr &e) {
   const Expr &lv = *e.left;
+  // 链式赋值目标（root=ident + ≥2 级 prop/index 后缀）：编译期展开逐层写回
+  QString chainRoot;
+  QVector<AcAssignSuffix> chainSuffixes;
+  if (collectAssignChain(lv, chainRoot, chainSuffixes)) {
+    compileChainedAssign(lv, *e.right);
+    return;
+  }
   compileExpr(*e.right);  // [val]
   // 赋值表达式结果 = 右值（留在栈顶供外层使用）：存储前复制一份
   emitInstr(AcOpcode::kDup);  // [val, val]
@@ -1026,6 +1126,11 @@ void AcCompiler::compileAssignExpr(const Expr &e) {
     emitInstr(AcOpcode::kSetIndex, 0, 0, 0, e.loc.line);      // → [val, obj']
     emitInstr(AcOpcode::kPop);                                // → [val]
   } else {
-    emitInstr(AcOpcode::kPop);  // 不支持的目标：丢弃副本，保留右值
+    // 不支持的赋值目标（如括号表达式容器等）：此前静默丢弃副本（赋值变成无声
+    // 空操作，数据悄悄丢失），现在编译期明确报错
+    reportCompileError(
+        QStringLiteral("不支持的赋值目标表达式（赋值已被忽略，请改用局部变量中转）"),
+        e.loc.line);
+    emitInstr(AcOpcode::kPop);  // 丢弃副本，保留右值（保持栈平衡）
   }
 }

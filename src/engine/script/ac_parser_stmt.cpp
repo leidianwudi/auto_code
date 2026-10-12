@@ -387,6 +387,29 @@ bool AcParser::parseIdentStmt(Block::Stmt &stmt, const Token &t) {
       stmt.kind = Block::Stmt::kExpr;
       return parseExpr(stmt.exprStmt);
     }
+    // 链式后缀（ident[i][k] = v / ident[i].p = v / ident[i].m()）：路由到表达式
+    // 路径（kAssignExpr 编译期展开逐层写回；kIndexAssign 仅支持单级 = / 复合赋值）
+    {
+      int depth = 0;
+      int i = m_pos + 1;
+      for (; i < m_tokens.size(); ++i) {
+        const TokenType ty = m_tokens[i].type;
+        if (ty == TokenType::kLBracket) {
+          ++depth;
+        } else if (ty == TokenType::kRBracket) {
+          --depth;
+          if (depth == 0) break;
+        } else if (ty == TokenType::kEof) {
+          break;
+        }
+      }
+      const TokenType after =
+          (i + 1 < m_tokens.size()) ? m_tokens[i + 1].type : TokenType::kEof;
+      if (after == TokenType::kLBracket || after == TokenType::kDot) {
+        stmt.kind = Block::Stmt::kExpr;
+        return parseExpr(stmt.exprStmt);
+      }
+    }
     stmt.kind = Block::Stmt::kIndexAssign;
     return parseIndexAssignStmt(stmt.indexAssign);
   }
