@@ -1,0 +1,36 @@
+{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 篮球球队荣誉查询配置。
+  tables: [
+    {
+      "modelName": "basketball\\basketball_team_honor",
+      "tableName": "basketball_team_honor",
+      "selCols": [
+        "team_tid",
+      ],
+      "selColsLike": [
+        "name",
+        "season"
+      ],
+      "selColsSort": {
+        "season": "DESC",
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnBasketballTeam",
+          "joinEnClass_Url": "src/basketball/basketball_team/entities/en_basketball_team",
+          "joinEnClassPro": "team",
+          "joinType": "ManyToOne",
+          "inverseJoinEnClassPro": "honors",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "team_tid",
+            "referencedColumnName": "tid"
+          }
+        }
+      ]
+    }
+  ],
+}

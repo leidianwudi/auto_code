@@ -1,7 +1,7 @@
 {
   // 指定 AutoCode schema，便于拆分后的单表配置校验。
   $schema: '/crud_nest/template/tool/param.schema.json',
-  // 篮球联赛基础信息及其赛程反向关系。
+  // 篮球联赛基础信息及其榜单、赛程反向关系。
   tables: [
     {
       "modelName": "basketball\\basketball_league",
@@ -16,6 +16,30 @@
         "id": "ASC"
       },
       "joinTable": [
+        {
+          "joinEnClass": "EnBasketballScoreRank",
+          "joinEnClass_Url": "src/basketball/basketball_score_rank/entities/en_basketball_score_rank",
+          "joinEnClassPro": "scoreRanks",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "league",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnBasketballPlayerRank",
+          "joinEnClass_Url": "src/basketball/basketball_player_rank/entities/en_basketball_player_rank",
+          "joinEnClassPro": "playerRanks",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "league",
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnBasketballTeamRank",
+          "joinEnClass_Url": "src/basketball/basketball_team_rank/entities/en_basketball_team_rank",
+          "joinEnClassPro": "teamRanks",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "league",
+          "isJoinRelations": true
+        },
         {
           "joinEnClass": "EnBasketballSchedule",
           "joinEnClass_Url": "src/basketball/basketball_schedule/entities/en_basketball_schedule",

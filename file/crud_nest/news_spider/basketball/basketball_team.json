@@ -85,6 +85,14 @@
           "joinType": "OneToMany",
           "inverseJoinEnClassPro": "team",
           "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnBasketballTeamHonor",
+          "joinEnClass_Url": "src/basketball/basketball_team_honor/entities/en_basketball_team_honor",
+          "joinEnClassPro": "honors",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "team",
+          "isJoinRelations": true
         }
       ]
     }
