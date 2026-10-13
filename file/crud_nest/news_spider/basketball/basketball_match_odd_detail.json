@@ -1,0 +1,37 @@
+{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 篮球比赛指数明细（分博彩公司）查询配置。
+  // 注意：ManyToOne 故意不配 inverseJoinEnClassPro —— 生成单向关联，避免与赛程实体互相依赖。
+  tables: [
+    {
+      "modelName": "basketball\\basketball_match_odd_detail",
+      "tableName": "basketball_match_odd_detail",
+      "selCols": [
+        "mid",
+        "market"
+      ],
+      "selColsLike": [
+        "company_name",
+        "company_abbr"
+      ],
+      "selColsSort": {
+        "mid": "ASC",
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnBasketballSchedule",
+          "joinEnClass_Url": "src/basketball/basketball_schedule/entities/en_basketball_schedule",
+          "joinEnClassPro": "schedule",
+          "joinType": "ManyToOne",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "mid",
+            "referencedColumnName": "mid"
+          }
+        }
+      ]
+    }
+  ],
+}
