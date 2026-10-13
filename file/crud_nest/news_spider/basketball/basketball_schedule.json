@@ -49,7 +49,6 @@
           "joinEnClass_Url": "src/basketball/basketball_team/entities/en_basketball_team",
           "joinEnClassPro": "away_team_info",
           "joinType": "ManyToOne",
-          "inverseJoinEnClassPro": "awaySchedules",
           "isJoinRelations": true,
           "joinColumn": {
             "name": "away_team_tid",
