@@ -49,6 +49,7 @@
 import { buildAdminTplData, buildSourceTplData, buildUploadTplData } from "../../admin_vue/template/core/admin_data.ac";
 import { findGlobalEnumFiles, mergeGlobalEnumFiles, buildGlobalEnumJsonSource } from "../../tool/tool_global_enum.ac";
 import { snakeToPascal, snakeToCamel, escapeJsStr } from "../../tool/tool_str.ac";
+import { dirnameOf, findProjPath } from "../../tool/tool_jsontable.ac";
 
 /// @brief 模板配置（一个模板对应一个生成的代码文件）
 class TemplateConfig {
@@ -227,7 +228,7 @@ export function buildJsonvueColumn(rawCol: Object, enumDef: Object, editCol: Obj
 ///     与后端 SelectParams/返回键对齐
 ///   - globalEnumCols 命中列 → 全局枚举取值域（domainType=enum，三处共享）
 /// @brief 查询字段参数名（联表 ref pro.col → 别名 pro_col，与后端返回键对齐）
-function qfNameOf(ref: String): String {
+export function qfNameOf(ref: String): String {
   if (ref.indexOf(".") > 0) {
     let d: Number = ref.indexOf(".");
     return ref.substring(0, d) + "_" + ref.substring(d + 1);
@@ -236,7 +237,7 @@ function qfNameOf(ref: String): String {
 }
 
 /// @brief 查询字段显示名（selCols label > 联表目标列注释 > 本表列注释 > ref 原样）
-function qfLabelOf(ref: String, selLabelOf: Object, joinContext: Object, rawCols: Object[]): String {
+export function qfLabelOf(ref: String, selLabelOf: Object, joinContext: Object, rawCols: Object[]): String {
   if (selLabelOf[ref] != null && selLabelOf[ref] != "") {
     return selLabelOf[ref];
   }
@@ -262,7 +263,7 @@ function qfLabelOf(ref: String, selLabelOf: Object, joinContext: Object, rawCols
 }
 
 /// @brief 查询字段是否日期控件（本表列按 mysqlType 推导；联表 ref 一律文本输入）
-function qfIsDate(ref: String, rawCols: Object[]): Bool {
+export function qfIsDate(ref: String, rawCols: Object[]): Bool {
   if (ref.indexOf(".") > 0) {
     return false;  // 联表 ref 查询一律文本输入（时间联表列场景少，后续按需扩展）
   }
@@ -276,7 +277,7 @@ function qfIsDate(ref: String, rawCols: Object[]): Bool {
 }
 
 /// @brief 查询字段日期格式（本表列按 mysqlType 推导，非时间列返回空串）
-function qfDateFmt(ref: String, rawCols: Object[]): String {
+export function qfDateFmt(ref: String, rawCols: Object[]): String {
   let rcLen = rawCols.length;
   for (let ri = 0; ri < rcLen; ri = ri + 1) {
     if (rawCols[ri]["name"] == ref) {
@@ -290,7 +291,7 @@ function qfDateFmt(ref: String, rawCols: Object[]): String {
 /// @param relation "=" 精确与模糊 / "range" 范围
 /// @param isDate 本表时间列（调用方按 ref 推导；联表 ref 恒 false）
 /// @param dateFmt 日期格式（非时间列空串）
-function makeQueryField(ref: String, relation: String, selLabelOf: Object, joinContext: Object,
+export function makeQueryField(ref: String, relation: String, selLabelOf: Object, joinContext: Object,
                         rawCols: Object[], geSet: Object, fkMap: Object,
                         isDate: Bool, dateFmt: String): Object {
   let qf: Object = {
@@ -336,7 +337,7 @@ function makeQueryField(ref: String, relation: String, selLabelOf: Object, joinC
 }
 
 /// @brief 编辑控件类型缺省推导（editCols.widget 显式配置优先，此为兜底）
-function widgetFromMysqlType(mysqlType: String): String {
+export function widgetFromMysqlType(mysqlType: String): String {
   let t: String = (mysqlType == null ? "" : mysqlType.toLowerCase());
   if (t.indexOf("datetime") >= 0 || t.indexOf("timestamp") >= 0) {
     return "date";
@@ -352,7 +353,7 @@ function widgetFromMysqlType(mysqlType: String): String {
 }
 
 /// @brief 联表目标表显示列推导（第一个 varchar/char 列，缺省 name）
-function labelColOfTarget(types: Object): String {
+export function labelColOfTarget(types: Object): String {
   for (colName in types) {
     let t: String = types[colName];
     if (t != null && (t.indexOf("varchar") >= 0 || t.indexOf("char") >= 0 || t.indexOf("text") >= 0)) {
@@ -409,11 +410,15 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
     }
   }
   let hasSelCols: Bool = (selColCfgs.length > 0);
-  // selCols 元数据（本表列 ref → {label, width}：标题/列宽收敛用）
+  // selCols 元数据（本表列 ref → {label, width, displayType, listThumb*}：
+  // 标题/列宽收敛 + 列表展示类型/缩略图注入）
   let selMeta: Object = {};
   for (sc2 in selColCfgs) {
     if (sc2["ref"] == null || sc2["ref"] == "" || sc2["ref"].indexOf(".") > 0) { continue; }
-    selMeta[sc2["ref"]] = { label: sc2["label"], width: sc2["width"] };
+    selMeta[sc2["ref"]] = { label: sc2["label"], width: sc2["width"],
+                            displayType: sc2["displayType"],
+                            listThumbWidth: sc2["listThumbWidth"],
+                            listThumbHeight: sc2["listThumbHeight"] };
   }
   // ── 编辑视图（editCols：显式列出=进表单）──
   let editColCfgs: Object[] = [];
@@ -507,7 +512,60 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
     if (ec != null && ec["label"] != null && ec["label"] != "") {
       col["editName"] = ec["label"];
     }
-    if (fkInfo != null && col["editStyle"] == "select") {
+    // 列级取值域（方案 B 中心化：物理列声明一次，列渲染/编辑/查询三处共享；
+    // 联表虚拟列无列定义不涉及。声明优先于外键自动推导，见下方 guard）
+    if (rc["domainType"] != null && rc["domainType"] != "") {
+      col["domainType"] = rc["domainType"];
+      if (rc["domainSourceFile"] != null) { col["domainSourceFile"] = rc["domainSourceFile"]; }
+      if (rc["domainSourceId"] != null) { col["domainSourceId"] = rc["domainSourceId"]; }
+      if (rc["domainUrl"] != null) { col["domainUrl"] = rc["domainUrl"]; }
+    }
+    // 编辑表单上传绑定与编辑缩略图（editCols 级键，image/upload 控件生效）
+    if (ec != null) {
+      if (ec["uploadSourceFile"] != null && ec["uploadSourceFile"] != "") {
+        col["uploadSourceFile"] = ec["uploadSourceFile"];
+      }
+      if (ec["uploadSourceId"] != null && ec["uploadSourceId"] != "") {
+        col["uploadSourceId"] = ec["uploadSourceId"];
+      }
+      if (ec["editThumbWidth"] != null && ec["editThumbWidth"] > 0) {
+        col["editThumbWidth"] = ec["editThumbWidth"];
+      }
+      if (ec["editThumbHeight"] != null && ec["editThumbHeight"] > 0) {
+        col["editThumbHeight"] = ec["editThumbHeight"];
+      }
+      // 编辑表单精细参数（键名与 .jsonvue 一致；write.tpl 按控件类型消费）
+      if (ec["placeholder"] != null && ec["placeholder"] != "") {
+        col["placeholder"] = ec["placeholder"];
+      }
+      if (ec["maxlength"] != null && ec["maxlength"] > 0) {
+        col["maxlength"] = ec["maxlength"];
+      }
+      if (ec["textareaRows"] != null && ec["textareaRows"] > 0) {
+        col["textareaRows"] = ec["textareaRows"];
+      }
+      if (ec["minValue"] != null && ec["minValue"] != 0) {
+        col["minValue"] = ec["minValue"];
+      }
+      if (ec["maxValue"] != null && ec["maxValue"] != 0) {
+        col["maxValue"] = ec["maxValue"];
+      }
+      if (ec["precision"] != null && ec["precision"] > 0) {
+        col["precision"] = ec["precision"];
+      }
+      if (ec["dateFormat"] != null && ec["dateFormat"] != "") {
+        col["dateFormat"] = ec["dateFormat"];
+      }
+      if (ec["formSpan"] != null && ec["formSpan"] > 0) {
+        col["formSpan"] = ec["formSpan"];
+      }
+      if (ec["defaultValue"] != null && ec["defaultValue"] != "") {
+        col["defaultValue"] = ec["defaultValue"];
+      }
+    }
+    // 联表外键列 → 自动下拉（列级取值域已声明时尊重用户配置，不覆盖）
+    if (fkInfo != null && col["editStyle"] == "select" &&
+        (col["domainType"] == null || col["domainType"] == "")) {
       col["domainType"] = "remote";
       col["domainUrl"] = "/" + fkInfo["targetTable"] + "/selectByIn";
       col["selectValueField"] = fkInfo["pk"];
@@ -517,7 +575,7 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
     cols.append(col);
   }
   // 列表收敛：配了 selCols 时，未命中的本表列 queryVisible=false；
-  // 命中列应用 selCols 的 label（标题）与 width（列宽）
+  // 命中列应用 selCols 的 label（标题）、width（列宽）与 displayType/listThumb*
   if (hasSelCols) {
     let cLen2 = cols.length;
     for (let ci = 0; ci < cLen2; ci = ci + 1) {
@@ -531,6 +589,16 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
         }
         if (meta["width"] != null && meta["width"] > 0) {
           cn["columnWidth"] = meta["width"];
+        }
+        // 列表展示类型/缩略图（显式配置覆盖 buildJsonvueColumn 的按控件推导）
+        if (meta["displayType"] != null && meta["displayType"] != "") {
+          cn["displayType"] = meta["displayType"];
+        }
+        if (meta["listThumbWidth"] != null && meta["listThumbWidth"] > 0) {
+          cn["listThumbWidth"] = meta["listThumbWidth"];
+        }
+        if (meta["listThumbHeight"] != null && meta["listThumbHeight"] > 0) {
+          cn["listThumbHeight"] = meta["listThumbHeight"];
         }
       }
       cols[ci] = cn;
@@ -608,7 +676,8 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
   }
 
   // globalEnumCols 命中列 → 全局枚举取值域（domainType=enum，列渲染/编辑/查询三处共享）。
-  // 引用键固定基名 global_enum.jsonsource + 枚举名（与 .jsonvue 高级页同构，路径无关）
+  // 引用键固定基名 global_enum.jsonsource + 枚举名（与 .jsonvue 高级页同构，路径无关）。
+  // 列级取值域已声明（方案 B 中心化）时 globalEnumCols 仅作回退，不覆盖
   let geCols: String[] = [];
   if (table["globalEnumCols"] != null) {
     geCols = table["globalEnumCols"];
@@ -621,6 +690,9 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
     for (let ci = 0; ci < cLen; ci = ci + 1) {
       if (cols[ci]["dataName"] == geName) {
         matched = true;
+        if (cols[ci]["domainType"] != null && cols[ci]["domainType"] != "") {
+          break;  // 列级域声明优先
+        }
         if (globalEnumNames != null && globalEnumNames[geName] == true) {
           // AC 不支持链式下标赋值（cols[ci]["k"]=v）→ 局部变量中转；
           // AcJsonValue 值拷贝 + 写时分离，改完必须显式写回数组元素
@@ -658,7 +730,10 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
       description: tableComment
     },
     columns: cols,
-    queryFields: queryFields
+    queryFields: queryFields,
+    // 操作按钮（键名与 .jsonvue buttons 完全一致；无按钮时为 null，
+    // 加工器 processButtons 对空/缺失键防御性处理）
+    buttons: table["buttons"]
   };
 }
 
@@ -805,12 +880,9 @@ export function generateAdminMain(params: Object): Void {
   // 统计实际写入磁盘的文件数量（writeFile 成功时 +1），结束日志汇总输出
   let generatedFileCount = 0;
 
-  // ── 1. 必填参数：输出根目录（pure-admin 项目根）与 .jsontable 路径 ──
+  // ── 1. 输出根目录（pure-admin 项目根）：params.webBasePath，
+  //      缺省回退 project.jsontableproj 的 meta.webBasePath（见 1.2 节）──
   let basePath: String = params["webBasePath"];
-  if (basePath == null || basePath == "") {
-    printError("错误：缺少必填参数 webBasePath（pure-admin 项目根目录）");
-    return;
-  }
   basePath = basePath.replace("\\", "/");
 
   // ── 1.1 .jsontable 配置文件收集（多文件支持）──────────────────────
@@ -844,6 +916,35 @@ export function generateAdminMain(params: Object): Void {
   }
   printLog("jsontable files: " + jsontableFiles.length + " 份");
 
+  // ── 1.2 项目 meta（project.jsontableproj）：webBasePath 回退来源 ────
+  //    params.projPath 显式指定优先，否则从第一份 .jsontable 所在目录向上查找
+  let metaWebBasePath: String = "";
+  let projPath: String = params["projPath"];
+  if (projPath == null || projPath.length == 0) {
+    projPath = findProjPath(dirnameOf(jsontableFiles[0]), 3);
+  }
+  if (projPath != null && projPath.length > 0) {
+    let projJson: Object = readJson(projPath);
+    if (projJson == null) {
+      printError("错误：项目 meta 文件读取失败: " + projPath);
+      return;
+    }
+    let projMeta: Object = projJson["meta"];
+    if (projMeta != null && projMeta["webBasePath"] != null) {
+      metaWebBasePath = projMeta["webBasePath"];
+    }
+    printLog("项目 meta: " + projPath);
+  }
+
+  // webBasePath：params 优先，回退项目 meta
+  if (basePath == null || basePath == "") {
+    basePath = metaWebBasePath;
+  }
+  if (basePath == null || basePath == "") {
+    printError("错误：未配置 webBasePath（params.webBasePath 与 project.jsontableproj meta.webBasePath 均为空）");
+    return;
+  }
+
   // ── 2. 模板配置：一个模板对应一个生成的代码文件 ───────────────────
   //    字段说明：
   //      tpl  - 模板文件路径（相对入口脚本目录，即 scriptDir()）
@@ -876,7 +977,9 @@ export function generateAdminMain(params: Object): Void {
     ];
   }
 
-  // ── 3. 读取多份 .jsontable：合并 tables[]（事实源，生成期不连库）────
+  // ── 3. 读取多份 .jsontable：单表新格式逐文件收集（事实源，不连库）──
+  //    一文件一表：{ table: {...} }，翻译表内嵌在表的 i18n 配置；
+  //    旧多表格式（tables 键）明确报错指路拆分脚本；
   //    单文件失败即中止（配置不完整时生成的双端代码会互相矛盾）；
   //    跨文件重复 modelName 由下方统一检查拦截
   let tables: Object[] = [];
@@ -884,16 +987,22 @@ export function generateAdminMain(params: Object): Void {
   for (let tj = 0; tj < jtfLen; tj = tj + 1) {
     let jtf: String = jsontableFiles[tj];
     let tableJson: Object = readJson(jtf);
-    if (tableJson == null || tableJson["tables"] == null) {
-      printError("错误：.jsontable 配置读取失败或无 tables 节点：" + jtf);
+    if (tableJson == null) {
+      printError("错误：.jsontable 配置读取失败：" + jtf);
       return;
     }
-    let partTables: Object[] = tableJson["tables"];
-    let ptLen = partTables.length;
-    for (let pk = 0; pk < ptLen; pk = pk + 1) {
-      tables.append(partTables[pk]);
+    if (tableJson["tables"] != null) {
+      printError("错误：旧多表格式（含 tables 键）：" + jtf);
+      printError("      请先运行 file/tools/split_jsontable.ac 拆分为一文件一表新格式");
+      return;
     }
-    printLog("jsontable: " + jtf + "（tables +" + ptLen + "）");
+    let t: Object = tableJson["table"];
+    if (t == null) {
+      printError("错误：.jsontable 缺少顶层 table 键：" + jtf);
+      return;
+    }
+    tables.append(t);
+    printLog("jsontable: " + jtf + "（" + t["tableName"] + "）");
   }
   printLog("jsontable tables count: " + tables.length);
 
@@ -1185,6 +1294,12 @@ export function generateAdminMain(params: Object): Void {
     // 翻译表跳过页面生成（printLog 说明，与后端"只生成实体"对齐）
     if (i18nTables[table["tableName"]] == true) {
       printLog("表 '" + table["tableName"] + "' 为 i18n 翻译表（被引用），跳过页面生成");
+      continue;
+    }
+    // 纯 API 模块开关：frontend 仅显式 false 生效（键缺失=null ≠ false，缺省生成）；
+    // 后端链照常生成 API，这里只裁剪前端产物
+    if (table["frontend"] == false) {
+      printLog("表 '" + table["tableName"] + "' frontend=false（纯 API 模块），跳过页面生成");
       continue;
     }
     let vuePath: String = resolveJsonvuePath(modelName, basePath, checkedVueFiles);

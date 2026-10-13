@@ -9,10 +9,12 @@
  * 支持联表路径）及编辑表单角色（form/required，gva 式字段级配置），
  * 供表设计器编辑、DDL 同步建表与双端模板渲染共用，字段只配一遍。
  *
- * 顶层结构（plan 3.1 + 联表/读模型 v3）：
- *   meta（project + db 连接四件套/port/goBasePath/webBasePath）
- *   + tables[]（tableName/modelName/columns[]/indexes[]/joinTable[]/
- *   selCols[]/selColsEq/Like/Gap/Sort/enums[]/globalEnumCols[]/i18n）。
+ * 单表新格式（一文件一表）：每个 .jsontable 文件 = { table: {...} } 一张表
+ * （含内嵌翻译表配置 i18n）；共享 meta（project + db 连接四件套/port/
+ * goBasePath/webBasePath）抽到同目录 project.jsontableproj 项目级文件。
+ * 表级含 frontend 前端开关（false=纯 API 模块）与 buttons 操作按钮；
+ * 列级含取值域（domainType/...，方案 B 中心化），视图列含展示类型/
+ * 上传绑定/缩略图尺寸（键名与 .jsonvue 一致）。
  *
  * 未知键保真：进阶节点未结构化部分表级整体存入 JsonTableTable::extra；
  * meta 下未知键存入 JsonTableConfig::extra；序列化时原样写回，
@@ -27,6 +29,8 @@
 #include <QString>
 #include <QStringList>
 #include <QVector>
+
+#include "../common/button_types.h"  // ButtonConfig/DialogFieldConfig（操作按钮共享类型）
 
 // ════════════════════════════════════════════════════════════
 //  .jsontable 序列化键名常量
@@ -47,6 +51,13 @@ inline constexpr const char *kPassword = "password";
 inline constexpr const char *kDatabase = "database";
 inline constexpr const char *kGoBasePath = "goBasePath";    ///< Go 项目根（父目录分组）
 inline constexpr const char *kWebBasePath = "webBasePath";  ///< pure-admin 项目根
+// 单表新格式（一文件一表）顶层键与表级新键
+inline constexpr const char *kTable = "table";  ///< 单表文件顶层键（{ table: {...} }）
+inline constexpr const char *kProjFile =
+    "project.jsontableproj";  ///< 项目级 meta 文件名（与 .jsontable 同目录）
+inline constexpr const char *kFrontend =
+    "frontend";  ///< 生成前端页面开关（缺省 true；仅 false 落键 = 纯 API 模块）
+inline constexpr const char *kButtons = "buttons";  ///< 操作按钮（ButtonConfig[]，键名与 .jsonvue 一致）
 // tables 键
 inline constexpr const char *kTables = "tables";
 inline constexpr const char *kTableName = "tableName";
@@ -90,6 +101,39 @@ inline constexpr const char *kVisible = "visible";  ///< 前端显示（true=渲
 inline constexpr const char *kWidth = "width";      ///< 列表列宽 px（0/缺省 = 自适应）
 inline constexpr const char *kWidget = "widget";    ///< 编辑控件类型（空=按 mysqlType 推导）
 inline constexpr const char *kRequired = "required";  ///< 编辑视图必填（→ InsertParams binding）
+// 视图列新键（键名与 .jsonvue 保持一致，便于两套配置心智统一）
+inline constexpr const char *kDisplayType =
+    "displayType";  ///< 列表展示类型（空=按类型自动 / "image"=图片缩略图）
+inline constexpr const char *kUploadSourceFile =
+    "uploadSourceFile";  ///< image/upload 编辑控件引用的 .jsonupload 文件
+inline constexpr const char *kUploadSourceId = "uploadSourceId";  ///< 引用的上传预设 id
+inline constexpr const char *kListThumbWidth =
+    "listThumbWidth";  ///< 列表缩略图宽 px（0=未配置 → 预设/模板默认）
+inline constexpr const char *kListThumbHeight =
+    "listThumbHeight";  ///< 列表缩略图高 px（0=未配置）
+inline constexpr const char *kEditThumbWidth =
+    "editThumbWidth";  ///< 编辑缩略图宽 px（0=未配置）
+inline constexpr const char *kEditThumbHeight =
+    "editThumbHeight";  ///< 编辑缩略图高 px（0=未配置）
+// 编辑表单精细参数（键名与 .jsonvue 一致；空/0=未配置，合成页由模板按类型缺省）
+inline constexpr const char *kPlaceholder = "placeholder";    ///< 占位提示（input/textarea/image）
+inline constexpr const char *kMaxlength = "maxlength";        ///< 最大长度（input，0=不限）
+inline constexpr const char *kTextareaRows = "textareaRows";  ///< 行数（textarea，0=缺省 4）
+inline constexpr const char *kMinValue = "minValue";          ///< 最小值（int/float，0=不限）
+inline constexpr const char *kMaxValue = "maxValue";          ///< 最大值（int/float，0=不限）
+inline constexpr const char *kPrecision = "precision";        ///< 小数位（float，0=缺省 2）
+inline constexpr const char *kDateFormat = "dateFormat";      ///< 日期格式覆盖（空=按类型推导）
+inline constexpr const char *kFormSpan = "formSpan";          ///< 编辑表单栅格 span（0=缺省 12）
+inline constexpr const char *kFormFieldDefault =
+    "defaultValue";  ///< 表单新建预填值（前端语义，非 DB 默认）
+// 列级取值域（jsonvue 方案 B 列级中心化；单处存储三视图共用，
+// enums/globalEnumCols 保留为旧机制回退）
+inline constexpr const char *kDomainType =
+    "domainType";  ///< 取值域类型（""/enum/static/remote，空=未声明）
+inline constexpr const char *kDomainSourceFile =
+    "domainSourceFile";  ///< enum/static 引用的数据源文件（全局枚举固定基名 global_enum.jsonsource）
+inline constexpr const char *kDomainSourceId = "domainSourceId";  ///< enum/static 引用的数据源 id
+inline constexpr const char *kDomainUrl = "domainUrl";  ///< remote 手动数据源 URL
 inline constexpr const char *kEnums = "enums";                  ///< 表内枚举
 inline constexpr const char *kGlobalEnumCols = "globalEnumCols";  ///< 引用全局枚举的列名
 inline constexpr const char *kI18n = "i18n";                    ///< 多语言翻译表配置
@@ -126,6 +170,13 @@ struct JsonTableColumn {
   bool isAutoInc = false;   ///< 自增
   QString defaultValue;     ///< 默认值（JSON 键 "default"；空串=无默认值）
   QString comment;          ///< 列注释
+
+  // ── 字段取值域（jsonvue 方案 B 列级中心化；空=未声明）──
+  // 单处存储三视图共用；生成侧列级域优先，enums/globalEnumCols 旧机制回退
+  QString domainType;        ///< ""/enum/static/remote
+  QString domainSourceFile;  ///< enum/static 引用的数据源文件（全局枚举固定基名）
+  QString domainSourceId;    ///< enum/static 引用的数据源 id
+  QString domainUrl;         ///< remote 手动数据源 URL
 
   /// 序列化为 JSON 对象
   QJsonObject toJsonObject() const;
@@ -165,6 +216,11 @@ struct JsonTableSelCol {
   QString label;  ///< 显示名（空 = 生成侧回退列注释/列名）
   int width = 0;  ///< 列宽 px（0/缺省 = 自适应）
 
+  // ── 列表展示（键名与 .jsonvue 一致）──
+  QString displayType;      ///< 展示类型（空=按类型自动 / "image"=图片缩略图）
+  int listThumbWidth = 0;   ///< 列表缩略图宽 px（0=未配置 → 预设/模板默认 80）
+  int listThumbHeight = 0;  ///< 列表缩略图高 px（0=未配置 → 预设/模板默认 40）
+
   QJsonObject toJsonObject() const;
   static JsonTableSelCol fromJsonObject(const QJsonObject &obj);
   bool operator==(const JsonTableSelCol &other) const;
@@ -201,6 +257,23 @@ struct JsonTableEditCol {
   bool visible = true;  ///< 前端是否渲染表单项（false=参数仍生成，仅 UI 不渲染）
   QString widget;       ///< 控件类型：input/textarea/select/date/number/image/upload/boolean
   bool required = false;  ///< 必填（→ InsertParams binding:"required"）
+
+  // ── 上传绑定与编辑缩略图（键名与 .jsonvue 一致；image/upload 控件生效）──
+  QString uploadSourceFile;  ///< 引用的 .jsonupload 文件（空=未绑定）
+  QString uploadSourceId;    ///< 引用的上传预设 id
+  int editThumbWidth = 0;    ///< 编辑缩略图宽 px（0=未配置 → 预设/模板默认 160）
+  int editThumbHeight = 0;   ///< 编辑缩略图高 px（0=未配置 → 预设/模板默认 80）
+
+  // ── 编辑表单精细参数（键名与 .jsonvue 一致；空/0=未配置，模板按类型缺省）──
+  QString placeholder;       ///< 占位提示（input/textarea/image）
+  int maxlength = 0;         ///< 最大长度（input，0=不限）
+  int textareaRows = 0;      ///< 行数（textarea，0=缺省 4）
+  double minValue = 0;       ///< 最小值（int/float，0=不限）
+  double maxValue = 0;       ///< 最大值（int/float，0=不限）
+  int precision = 0;         ///< 小数位（float，0=缺省 2）
+  QString dateFormat;        ///< 日期格式覆盖（date/datetime/month/year/daterange，空=按类型推导）
+  int formSpan = 0;          ///< 编辑表单栅格 span（0=缺省 12）
+  QString formDefaultValue;  ///< 表单新建预填值（前端语义，非 DB 默认）
 
   QJsonObject toJsonObject() const;
   static JsonTableEditCol fromJsonObject(const QJsonObject &obj);
@@ -273,11 +346,14 @@ struct JsonTableI18n {
 
 /**
  * @struct JsonTableTable
- * @brief .jsontable 中的一张表
+ * @brief .jsontable 中的一张表（一文件一表新格式的 "table" 节点，内嵌翻译表）
  *
- * 读模型三层：物理列（columns，DDL + 编辑表单来源）、联表声明
- * （joinTable，多对一/一对多关系）、查询读模型（selCols 列表列 +
- * selColsEq/Like/Gap/Sort 查询条件，列引用支持联表路径）。
+ * 读模型三层：物理列（columns，DDL + 编辑表单来源 + 取值域）、联表声明
+ * （joinTable，多对一/一对多关系；目标表按 modelName 跨文件定位）、
+ * 查询读模型（selCols 列表列 + selColsEq/Like/Gap/Sort 查询条件，列引用
+ * 支持联表路径）。
+ * frontend=false = 纯 API 模块（后端链照常生成，前端链跳过）；
+ * buttons = 操作按钮（键名与 .jsonvue ButtonConfig 完全一致）。
  * extra 为未知键保真存储：未结构化的进阶节点反序列化时整体保留
  * （剔除已知键），序列化时原样写回。
  */
@@ -286,7 +362,8 @@ struct JsonTableTable {
   QString modelName;               ///< 模型名（生成代码用的标识）
   QString tableComment;            ///< 表注释
   bool manualUpdateTime = false;   ///< 手动维护更新时间（不走 DB ON UPDATE）
-  QVector<JsonTableColumn> columns;  ///< 列定义（顺序即建表顺序）
+  bool frontend = true;            ///< 生成前端页面（缺省 true；仅 false 落键 = 纯 API 模块）
+  QVector<JsonTableColumn> columns;  ///< 列定义（顺序即建表顺序；含列级取值域）
   QVector<JsonTableIndex> indexes;   ///< 索引定义
   // ── 表级进阶键（v2 结构化，此前走 extra）──
   QVector<JsonTableJoin> joinTable;  ///< 联表声明（多对一列表联查/一对多详情聚合）
@@ -299,6 +376,7 @@ struct JsonTableTable {
   QVector<JsonTableEnum> enums;    ///< 表内枚举（与 globalEnumCols 二选一配置来源）
   QStringList globalEnumCols;      ///< 引用全局枚举的列名（列名 = .jsonglobalenum 枚举 name）
   JsonTableI18n i18n;              ///< 多语言翻译表配置（table 空 = 未启用）
+  QVector<ButtonConfig> buttons;   ///< 操作按钮（键名与 .jsonvue 完全一致）
   QJsonObject extra;               ///< 未知键保真（未结构化节点/未来扩展键原样写回）
 
   /// 序列化为 JSON 对象（extra 铺底 + 已知键覆盖）
@@ -339,3 +417,31 @@ public:
   /// 从 JSON 对象反序列化
   static JsonTableConfig fromJson(const QJsonObject &obj);
 };
+
+// ════════════════════════════════════════════════════════════
+//  一文件一表（单表新格式）文件读写与项目上下文辅助
+// ════════════════════════════════════════════════════════════
+
+/// 从文本解析单表 .jsontable（新格式 { table: {...} }；JSON5 兼容解析）
+/// 供可视化编辑器同步编辑器文本使用（不依赖文件已保存/路径已知）；
+/// 失败时返回空表并写 *error；旧多表格式（含 tables 键）会给出跑拆分脚本的提示
+JsonTableTable jsonTableFromString(const QString &text, QString *error = nullptr);
+
+/// 读取单表 .jsontable 文件（新格式 { table: {...} }；JSON5 兼容解析）
+/// 失败时返回空表并写 *error；旧多表格式（含 tables 键）会给出跑拆分脚本的提示
+JsonTableTable jsonTableFromFile(const QString &path, QString *error = nullptr);
+
+/// 写单表 .jsontable（紧凑 JSON，UTF-8；成功返回 true）
+bool jsonTableToFile(const JsonTableTable &table, const QString &path);
+
+/// 从 fromDir 起向上查找 project.jsontableproj（含 fromDir 本身，最多 maxUpLevels 级）；
+/// 未找到返回空串
+QString findJsontableProjPath(const QString &fromDir, int maxUpLevels = 3);
+
+/// 读取项目级 meta 文件（project.jsontableproj）为 JsonTableConfig（仅 meta 有效，tables 为空）
+/// 失败时返回空配置并写 *error
+JsonTableConfig jsontableProjFromFile(const QString &path, QString *error = nullptr);
+
+/// 递归收集 baseDir 下全部单表 .jsontable 的完整表定义（跳过解析失败文件，
+/// 按 modelName 排序；供表设计器联表下拉/交叉校验跨文件解析目标表）
+QVector<JsonTableTable> listProjectTables(const QString &baseDir);

@@ -176,7 +176,7 @@ export class QueryData {
   // 输出：sortDesc / orderByDef / defaultOrderField / defaultOrderSql / defaultOrderDir
   //   无配置时默认按主键 DESC（primaryName 传入，避免表主键不叫 id 时排序失效）
   // ------------------------------------------------------------------------
-  function buildSortInfo(json: Object, primaryName: String, joinDefs: Object[], hasJoin: Bool): SortInfoResult {
+  function buildSortInfo(json: Object, param: Param, primaryName: String, joinDefs: Object[], hasJoin: Bool): SortInfoResult {
     let sortRefs: String[] = [];
     let sortVals: String[] = [];
     if (json.selColsSort != null) {

@@ -1,5 +1,5 @@
 /**
- * @file json_table_dialog.h
+ * @file json_table_designer.h
  * @brief .jsontable 单张表设计器对话框
  *
  * 编辑一张 JsonTableTable：界面按页签分区（字段 / 索引与查询 / 枚举 / 多语言 /
@@ -29,26 +29,41 @@ class QStyledItemDelegate;
 class QTableWidget;
 
 /**
- * @class JsonTableDialog
- * @brief .jsontable 表设计器对话框
+ * @class JsonTableDesigner
+ * @brief .jsontable 表设计器面板（可视化编辑器内嵌，逐编辑广播）
  */
-class JsonTableDialog : public QDialog {
+class JsonTableDesigner : public QWidget {
   Q_OBJECT
 
 public:
-  /// 传入待编辑表与完整配置（meta.db 连接信息供"从数据库导入/执行建表"）
-  explicit JsonTableDialog(const JsonTableTable &table, const JsonTableConfig &config,
-                         QWidget *parent = nullptr);
+  /// 传入待编辑表、项目配置（proj meta.db 供"从数据库导入/执行建表"）与文件路径
+  /// （联表目标跨文件解析 + .jsonsource/.jsonupload 搜索根）
+  explicit JsonTableDesigner(const JsonTableTable &table, const JsonTableConfig &config,
+                             const QString &filePath = QString(), QWidget *parent = nullptr);
 
   /// 取回编辑结果（未编辑字段沿用构造入参，extra 未知键保真）
-  JsonTableTable resultTable() const;
+  JsonTableTable collectTable() const;
 
-  /// 确定：先做交叉引用校验（不过则弹窗拦截），通过才接受关闭
-  void accept() override;
+  /// 换表重建：重新绑定表/项目上下文并全量回填界面（代码侧变更后由宿主调用）
+  void load(const JsonTableTable &table, const JsonTableConfig &config, const QString &filePath);
+
+signals:
+  /// 编辑发生变化（逐编辑广播；写回防抖由 CodeVisualSyncWidget 基类处理）
+  void configChanged();
 
 private:
   /// 构建界面
   void setupUI();
+  /// 用 m_table/m_config 全量回填界面（setupUI 构建后与 load 换表时共用）
+  void refill();
+  /// 逐编辑信号接线（表格模型变更 + 全部静态输入控件；行内下拉在创建点接线）
+  void connectChangeSignals();
+  /// 被动交叉校验：随编辑刷新底部状态行（无按钮，结果内联展示）
+  void updateValidateStatus();
+  /// 多语言启用态联动（翻译表配置区整体显隐）
+  void applyI18nEnabled(bool on);
+  /// 面板样式（内嵌后不再经 ConfigDialogFrame，自行应用主题）
+  void applyStyle();
   // ── 字段表格 ──
   /// 用列定义全量重建字段表格
   void fillColumns(const QVector<JsonTableColumn> &cols);
@@ -94,8 +109,19 @@ private:
   void appendViewJoinRow(const QString &ref);
   /// 收集统一表格 → 三视图结构（写回 out 的 selCols/eq/like/gap/editCols）
   void collectViewTable(JsonTableTable *out) const;
-  /// 打开 ⚙ 字段设置面板（列宽/控件类型/编辑标题，UserRole 读写）
+  /// 打开 ⚙ 字段设置面板（ViewFieldConfigDialog：取值域/列表展示/编辑表单）
   void openViewFieldConfig(int row);
+  // ── 操作按钮（buttons：键名与 .jsonvue ButtonConfig 一致）──
+  /// 用 m_buttons 全量重建按钮表格
+  void fillButtons();
+  /// 追加一行按钮摘要（label/位置/行为）
+  void appendButtonRow(int idx);
+  /// 添加按钮（ButtonConfigDialog 新建模式）
+  void onAddButton();
+  /// 编辑按钮（ButtonConfigDialog 编辑模式）
+  void onEditButton(int row);
+  /// 删除按钮
+  void onRemoveButton();
   // ── 表级进阶键：表内枚举（主从表联动）──
   /// 把主表/选项表格的当前编辑内容同步回 m_enums（结构变化前调用）
   void syncEnumDrafts();
@@ -140,10 +166,14 @@ private:
   QLineEdit *m_modelEdit = nullptr;           ///< 模型名
   QLineEdit *m_commentEdit = nullptr;         ///< 表注释
   QCheckBox *m_manualUpdateCheck = nullptr;   ///< 手动维护更新时间
+  QCheckBox *m_frontendCheck = nullptr;       ///< 生成前端页面（false = 纯 API 模块）
   QTableWidget *m_colsTable = nullptr;        ///< 字段表格（核心编辑区）
   QTableWidget *m_indexTable = nullptr;       ///< 索引表格
   QPlainTextEdit *m_ddlView = nullptr;        ///< DDL 预览（只读）
   QPushButton *m_importBtn = nullptr;         ///< 从数据库导入按钮
+  // ── 操作按钮（字段呈现页签底部区块）──
+  QTableWidget *m_buttonTable = nullptr;      ///< 按钮摘要表格（label/位置/行为）
+  QVector<ButtonConfig> m_buttons;            ///< 按钮编辑态
   // ── 表级进阶键 ──
   QTableWidget *m_sortTable = nullptr;        ///< 默认排序表格（列名 + 方向）
   QTableWidget *m_joinTable = nullptr;        ///< 联表声明表格（joinTable）
@@ -166,9 +196,12 @@ private:
   QStyledItemDelegate *m_joinClassDelegate = nullptr; ///< 联表目标下拉委托（预设=tables[].modelName）
   QStyledItemDelegate *m_viewRefDelegate = nullptr;   ///< 字段呈现 ref 下拉委托（字段列+联表 ref）
   QStyledItemDelegate *m_sortRefDelegate = nullptr;    ///< 排序列 ref 下拉委托（字段列+联表 ref）
+  QLabel *m_validateLabel = nullptr;          ///< 交叉校验状态行（随编辑被动刷新）
   QVector<JsonTableEnum> m_enums;             ///< 表内枚举编辑态（主从表联动的数据侧）
   int m_enumCurRow = -1;                      ///< 当前编辑的枚举行（-1=无）
   bool m_enumSyncing = false;                 ///< 主从表联动中（防 currentCellChange 递归）
+  bool m_loading = false;                     ///< load/refill 回填中（抑制 configChanged）
   JsonTableTable m_table;                       ///< 构造入参（extra/未编辑字段保真基底）
-  JsonTableConfig m_config;                     ///< 完整配置（meta.db 连接信息）
+  JsonTableConfig m_config;                     ///< 项目配置（proj meta.db 连接信息 + 跨文件表清单）
+  QString m_filePath;                           ///< 当前 .jsontable 文件路径（数据源搜索根）
 };

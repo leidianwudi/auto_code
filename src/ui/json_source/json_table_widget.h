@@ -4,7 +4,8 @@
  *
  * 继承 CodeVisualSyncWidget（index 0 = 代码编辑器，index 1 = 可视化编辑器），
  * 模式切换/焦点/防循环同步由基类统一处理，这里只实现 .jsontable 的数据搬运：
- * 代码 ↔ JsonTableConfig 双向转换，写回时以磁盘原文为底保真合并。
+ * 代码 ↔ JsonTableTable（单表新格式 { table: {...} }）双向转换，
+ * 写回时以磁盘原文为底保真合并。
  */
 
 #pragma once

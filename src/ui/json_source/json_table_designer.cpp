@@ -1,9 +1,9 @@
 /**
- * @file json_table_dialog.cpp
- * @brief .jsontable 表设计器对话框实现
+ * @file json_table_designer.cpp
+ * @brief .jsontable 表设计器面板实现（可视化编辑器内嵌，逐编辑广播）
  */
 
-#include "json_table_dialog.h"
+#include "json_table_designer.h"
 
 #include <QAbstractItemView>
 #include <QBrush>
@@ -11,6 +11,7 @@
 #include <QColor>
 #include <QComboBox>
 #include <QCompleter>
+#include <QFileInfo>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QHash>
@@ -32,9 +33,13 @@
 #include "src/engine/ac_language.h"
 #include "src/engine/function/fun_db.h"
 #include "src/engine/function/fun_mgr.h"
+#include "src/ui/json_vue/button_config_dialog.h"
 #include "src/ui/json_vue/config_dialog_common.h"
+#include "src/ui/json_vue/json_vue_model.h"
 #include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_message_box.h"
+#include "src/util/ui/component/aui_style.h"
+#include "view_field_config_dialog.h"
 
 
 // ════════════════════════════════════════════════════════════
@@ -215,17 +220,21 @@ bool connectDb(const JsonTableConfig &config, accore::AcJsonValue *instance, QWi
 //  构造 / 界面构建
 // ════════════════════════════════════════════════════════════
 
-JsonTableDialog::JsonTableDialog(const JsonTableTable &table, const JsonTableConfig &config,
-                             QWidget *parent)
-    : QDialog(parent), m_table(table), m_config(config) {
+JsonTableDesigner::JsonTableDesigner(const JsonTableTable &table, const JsonTableConfig &config,
+                                     const QString &filePath, QWidget *parent)
+    : QWidget(parent), m_table(table), m_config(config), m_filePath(filePath) {
+  m_buttons = table.buttons;
   setupUI();
+  refill();
+  connectChangeSignals();
 }
 
-void JsonTableDialog::setupUI() {
-  QString title = QStringLiteral("表设计器");
-  if (!m_table.tableName.isEmpty()) title += QStringLiteral("：%1").arg(m_table.tableName);
-  ConfigDialogFrame frame = beginConfigDialog(this, title, QMargins(12, 10, 12, 10), 6);
-  auto *layout = frame.contentLayout;
+void JsonTableDesigner::setupUI() {
+  // 外围间距对齐 jsonvue 可视化编辑器（margins 2 / spacing 2）
+  auto *rootLayout = new QVBoxLayout(this);
+  rootLayout->setContentsMargins(2, 2, 2, 2);
+  rootLayout->setSpacing(2);
+  auto *layout = rootLayout;
 
   // ── 页签容器（对齐 jsonvue「一行=一字段」心智）：
   //    字段(物理) / 字段呈现(三视图合一+排序) / 联表与索引 / 枚举 / 多语言 / DDL ──
@@ -233,8 +242,8 @@ void JsonTableDialog::setupUI() {
   auto makeTab = [tabs](const QString &title) {
     auto *w = new QWidget(tabs);
     auto *lay = new QVBoxLayout(w);
-    lay->setContentsMargins(4, 8, 4, 4);
-    lay->setSpacing(6);
+    lay->setContentsMargins(2, 2, 2, 2);
+    lay->setSpacing(2);
     tabs->addTab(w, title);
     return lay;
   };
@@ -262,6 +271,11 @@ void JsonTableDialog::setupUI() {
   m_manualUpdateCheck->setToolTip(
       QStringLiteral("勾选后生成端不由数据库 ON UPDATE 维护更新时间字段"));
   topRow->addWidget(m_manualUpdateCheck);
+  m_frontendCheck = new QCheckBox(QStringLiteral("生成前端页面"), this);
+  m_frontendCheck->setChecked(m_table.frontend);
+  m_frontendCheck->setToolTip(
+      QStringLiteral("取消勾选 = 纯 API 模块：后端链照常生成 API，前端链跳过此表"));
+  topRow->addWidget(m_frontendCheck);
   fieldTab->addLayout(topRow);
 
   // ── 字段表格工具行 ──
@@ -344,6 +358,33 @@ void JsonTableDialog::setupUI() {
   presentTab->addWidget(m_sortTable, 0);
   m_sortRefDelegate = new EditableComboDelegate(QStringList(), m_sortTable);
   m_sortTable->setItemDelegateForColumn(0, m_sortRefDelegate);
+
+  // ── 操作按钮（buttons：键名与 .jsonvue ButtonConfig 完全一致）──
+  auto *btnHeader = new QHBoxLayout;
+  btnHeader->addWidget(new QLabel(QStringLiteral("操作按钮:"), this));
+  btnHeader->addStretch();
+  auto *addBtnBtn = makeCompactButton(QStringLiteral("+ 加按钮"), this);
+  auto *delBtnBtn = makeCompactButton(QStringLiteral("- 删按钮"), this);
+  btnHeader->addWidget(addBtnBtn);
+  btnHeader->addWidget(delBtnBtn);
+  presentTab->addLayout(btnHeader);
+
+  m_buttonTable = makeConfigTable({{QStringLiteral("按钮文字"), QHeaderView::Stretch, 0},
+                                   {QStringLiteral("位置"), QHeaderView::Interactive, 90},
+                                   {QStringLiteral("行为"), QHeaderView::Interactive, 90},
+                                   {QStringLiteral("动作"), QHeaderView::Interactive, 120}},
+                                  this, 90, 0, QAbstractItemView::SelectRows);
+  m_buttonTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+  m_buttonTable->setToolTip(
+      QStringLiteral("列表页自定义按钮（工具栏/行操作列），行为支持 直接调 API / 二次确认 / "
+                     "对话框表单 / 跳转；\n双击数据行或「+ 加按钮」打开按钮配置对话框"));
+  presentTab->addWidget(m_buttonTable, 0);
+  connect(addBtnBtn, &QPushButton::clicked, this, &JsonTableDesigner::onAddButton);
+  connect(delBtnBtn, &QPushButton::clicked, this, &JsonTableDesigner::onRemoveButton);
+  connect(m_buttonTable, &QTableWidget::cellDoubleClicked, this, [this](int row, int) {
+    onEditButton(row);
+  });
+  fillButtons();
 
   // ── 联表声明表格（joinTable：多对一列表联查/一对多详情聚合声明）──
   auto *joinHeader = new QHBoxLayout;
@@ -495,14 +536,6 @@ void JsonTableDialog::setupUI() {
   m_i18nFieldsCompleter->setFilterMode(Qt::MatchContains);
   m_i18nFieldsEdit->setCompleter(m_i18nFieldsCompleter);
   i18nTab->addStretch(1);
-  auto applyI18nEnabled = [this](bool on) {
-    m_i18nTableEdit->setEnabled(on);
-    m_i18nExtEdit->setEnabled(on);
-    m_i18nLangKeyEdit->setEnabled(on);
-    m_i18nDefaultLangEdit->setEnabled(on);
-    m_i18nLangFromCombo->setEnabled(on);
-    m_i18nFieldsEdit->setEnabled(on);
-  };
   applyI18nEnabled(false);
 
   // ── DDL 预览 + 执行区（DDL 页）──
@@ -541,9 +574,9 @@ void JsonTableDialog::setupUI() {
     const int row = m_indexTable->currentRow();
     if (row >= 0) m_indexTable->removeRow(row);
   });
-  connect(m_importBtn, &QPushButton::clicked, this, &JsonTableDialog::importFromDatabase);
-  connect(previewBtn, &QPushButton::clicked, this, &JsonTableDialog::previewDdl);
-  connect(execBtn, &QPushButton::clicked, this, &JsonTableDialog::executeCreateTable);
+  connect(m_importBtn, &QPushButton::clicked, this, &JsonTableDesigner::importFromDatabase);
+  connect(previewBtn, &QPushButton::clicked, this, &JsonTableDesigner::previewDdl);
+  connect(execBtn, &QPushButton::clicked, this, &JsonTableDesigner::executeCreateTable);
   connect(addSortBtn, &QPushButton::clicked, this,
           [this]() { appendSortRow(QString(), QStringLiteral("DESC")); });
   connect(delSortBtn, &QPushButton::clicked, this, [this]() {
@@ -628,7 +661,7 @@ void JsonTableDialog::setupUI() {
             syncEnumDrafts();
             fillEnumOptions(cur);
           });
-  connect(m_i18nCheck, &QCheckBox::toggled, this, [this, applyI18nEnabled](bool on) {
+  connect(m_i18nCheck, &QCheckBox::toggled, this, [this](bool on) {
     applyI18nEnabled(on);
   });
   // 字段表格编辑 → 列名候选刷新（枚举列下拉/联表外键列/编辑列等）
@@ -645,20 +678,28 @@ void JsonTableDialog::setupUI() {
           [this]() { refreshI18nFieldCandidates(); });
 
   layout->addWidget(tabs, 1);
-  finishConfigDialog(this, frame);
-  setMinimumSize(860, 600);
-  resize(980, 740);
 
-  // ── 预填 ──
+  // ── 交叉校验状态行（被动：随编辑自动刷新，替代原弹窗确定拦截与校验按钮）──
+  m_validateLabel = new QLabel(this);
+  m_validateLabel->setContentsMargins(4, 0, 4, 0);
+  layout->addWidget(m_validateLabel);
+  applyStyle();
+}
+
+void JsonTableDesigner::refill() {
+  m_loading = true;
   m_nameEdit->setText(m_table.tableName);
   m_modelEdit->setText(m_table.modelName);
   m_commentEdit->setText(m_table.tableComment);
   m_manualUpdateCheck->setChecked(m_table.manualUpdateTime);
+  m_frontendCheck->setChecked(m_table.frontend);
   fillColumns(m_table.columns);
   fillIndexes(m_table.indexes);
   fillJoins(m_table.joinTable);
   fillViewTable();
   fillSortTable(m_table.selColsSort);
+  m_buttons = m_table.buttons;
+  fillButtons();
   m_enums = m_table.enums;
   rebuildEnumMaster();
   if (m_enumTable->rowCount() > 0) m_enumTable->selectRow(0);
@@ -673,18 +714,113 @@ void JsonTableDialog::setupUI() {
   applyI18nEnabled(m_i18nCheck->isChecked());
   refreshColumnCandidates();
   refreshI18nFieldCandidates();
+  m_loading = false;
+  updateValidateStatus();
+}
+
+void JsonTableDesigner::load(const JsonTableTable &table, const JsonTableConfig &config,
+                             const QString &filePath) {
+  m_table = table;
+  m_config = config;
+  m_filePath = filePath;
+  m_buttons = table.buttons;
+  refill();
+}
+
+void JsonTableDesigner::updateValidateStatus() {
+  if (!m_validateLabel) return;
+  QString err;
+  if (validateCrossRefs(&err)) {
+    m_validateLabel->setText(QStringLiteral("✓ 交叉引用校验通过"));
+    m_validateLabel->setStyleSheet(
+        QStringLiteral("color: %1; font-size: 12px;").arg(AuiStyle::mutedTextColor().name()));
+  } else {
+    m_validateLabel->setText(QStringLiteral("⚠ %1").arg(err));
+    m_validateLabel->setStyleSheet(
+        QStringLiteral("color: %1; font-size: 12px;").arg(AuiStyle::warningColor().name()));
+  }
+}
+
+void JsonTableDesigner::applyI18nEnabled(bool on) {
+  m_i18nTableEdit->setEnabled(on);
+  m_i18nExtEdit->setEnabled(on);
+  m_i18nLangKeyEdit->setEnabled(on);
+  m_i18nDefaultLangEdit->setEnabled(on);
+  m_i18nLangFromCombo->setEnabled(on);
+  m_i18nFieldsEdit->setEnabled(on);
+}
+
+void JsonTableDesigner::connectChangeSignals() {
+  // 表格：模型级变更（条目编辑/行增删/搬运）全部覆盖；行内下拉在创建点单独接线
+  auto onChange = [this]() {
+    if (m_loading) return;
+    emit configChanged();
+    updateValidateStatus();
+  };
+  for (QTableWidget *tw : findChildren<QTableWidget *>()) {
+    connect(tw->model(), &QAbstractItemModel::dataChanged, this, onChange);
+    connect(tw->model(), &QAbstractItemModel::rowsInserted, this, onChange);
+    connect(tw->model(), &QAbstractItemModel::rowsRemoved, this, onChange);
+  }
+  // 静态输入控件（setupUI 构建的顶层控件；setupUI 结束时已全部存在）
+  for (QLineEdit *le : findChildren<QLineEdit *>()) {
+    connect(le, &QLineEdit::textChanged, this, onChange);
+  }
+  for (QCheckBox *cb : findChildren<QCheckBox *>()) {
+    connect(cb, &QCheckBox::toggled, this, onChange);
+  }
+  for (QComboBox *combo : findChildren<QComboBox *>()) {
+    connect(combo, &QComboBox::currentIndexChanged, this, onChange);
+  }
+}
+
+void JsonTableDesigner::applyStyle() {
+  const auto fontPx = QString::number(AuiStyle::dialogFontSize());
+  const auto text = AuiStyle::textColor().name();
+  const auto border = AuiStyle::borderColor().name();
+  const auto bg = AuiStyle::panelBackground().name();
+  const auto headerBg = AuiStyle::background().name();
+  const auto alt = AuiStyle::listAlternateBackground().name();
+
+
+  QString qss = QStringLiteral(
+                    "QLabel { font-size: %1px; color: %2; background: transparent; }"
+                    "QPushButton { padding: 2px 8px; font-size: %1px; color: %2; }"
+                    "QCheckBox { font-size: %1px; color: %2; }"
+                    "QTabWidget::pane { border: 1px solid %3; border-radius: 4px;"
+                    "  background: %4; top: -1px; }"
+                    "QTabBar::tab { font-size: %1px; color: %2; padding: 4px 10px;"
+                    "  border: 1px solid %3; border-bottom: none;"
+                    "  background: transparent; border-top-left-radius: 4px;"
+                    "  border-top-right-radius: 4px; }"
+                    "QTabBar::tab:selected { background: %4; color: %2; }"
+                    "QTableWidget { font-size: %1px; background: %4; color: %2;"
+                    "  gridline-color: %3; alternate-background-color: %5; }"
+                    "QTableWidget::item { color: %2; }"
+                    "QHeaderView::section { padding: 2px; font-size: %1px;"
+                    "  background: %6; color: %2; border: none;"
+                    "  border-right: 1px solid %3; border-bottom: 1px solid %3; }"
+                    "QComboBox { font-size: %1px; color: %2; background: %4;"
+                    "  border: 1px solid %3; border-radius: 3px; padding: 1px 4px; }"
+                    "QLineEdit { font-size: %1px; color: %2; background: %4;"
+                    "  border: 1px solid %3; border-radius: 3px; padding: 1px 4px; }"
+                    "QPlainTextEdit { font-size: %1px; color: %2; background: %4;"
+                    "  border: 1px solid %3; }"
+                    "QScrollBar:vertical, QScrollBar:horizontal { background: %4; }")
+                    .arg(fontPx, text, border, bg, alt, headerBg);
+  setStyleSheet(qss);
 }
 
 // ════════════════════════════════════════════════════════════
 //  字段表格填充 / 收集 / 行操作
 // ════════════════════════════════════════════════════════════
 
-void JsonTableDialog::fillColumns(const QVector<JsonTableColumn> &cols) {
+void JsonTableDesigner::fillColumns(const QVector<JsonTableColumn> &cols) {
   m_colsTable->setRowCount(0);
   for (const auto &c : cols) appendColumnRow(c);
 }
 
-void JsonTableDialog::appendColumnRow(const JsonTableColumn &c) {
+void JsonTableDesigner::appendColumnRow(const JsonTableColumn &c) {
   const int row = m_colsTable->rowCount();
   m_colsTable->insertRow(row);
   m_colsTable->setItem(row, ColColName, new QTableWidgetItem(c.name));
@@ -697,17 +833,17 @@ void JsonTableDialog::appendColumnRow(const JsonTableColumn &c) {
   m_colsTable->setItem(row, ColColComment, new QTableWidgetItem(c.comment));
 }
 
-QString JsonTableDialog::cellText(int row, int col) const {
+QString JsonTableDesigner::cellText(int row, int col) const {
   const QTableWidgetItem *it = m_colsTable->item(row, col);
   return it ? it->text().trimmed() : QString();
 }
 
-bool JsonTableDialog::cellChecked(int row, int col) const {
+bool JsonTableDesigner::cellChecked(int row, int col) const {
   const QTableWidgetItem *it = m_colsTable->item(row, col);
   return it && it->checkState() == Qt::Checked;
 }
 
-JsonTableColumn JsonTableDialog::columnFromRow(int row) const {
+JsonTableColumn JsonTableDesigner::columnFromRow(int row) const {
   JsonTableColumn c;
   c.name = cellText(row, ColColName);
   c.mysqlType = cellText(row, ColColType);
@@ -721,7 +857,7 @@ JsonTableColumn JsonTableDialog::columnFromRow(int row) const {
   return c;
 }
 
-QVector<JsonTableColumn> JsonTableDialog::collectColumns() const {
+QVector<JsonTableColumn> JsonTableDesigner::collectColumns() const {
   QVector<JsonTableColumn> out;
   for (int r = 0; r < m_colsTable->rowCount(); ++r) {
     JsonTableColumn c = columnFromRow(r);
@@ -731,20 +867,20 @@ QVector<JsonTableColumn> JsonTableDialog::collectColumns() const {
   return out;
 }
 
-void JsonTableDialog::addColumn() {
+void JsonTableDesigner::addColumn() {
   appendColumnRow(JsonTableColumn());  // 模型缺省：bigint / list=true / form=input
   const int row = m_colsTable->rowCount() - 1;
   m_colsTable->setCurrentCell(row, ColColName);
   m_colsTable->editItem(m_colsTable->item(row, ColColName));  // 直接进入列名编辑
 }
 
-void JsonTableDialog::deleteColumn() {
+void JsonTableDesigner::deleteColumn() {
   const int row = m_colsTable->currentRow();
   if (row >= 0) m_colsTable->removeRow(row);
   refreshColumnCandidates();  // 行删除不触发 itemChanged，显式刷新候选
 }
 
-void JsonTableDialog::moveColumn(int delta) {
+void JsonTableDesigner::moveColumn(int delta) {
   const int row = m_colsTable->currentRow();
   const int target = row + delta;
   if (row < 0 || target < 0 || target >= m_colsTable->rowCount()) return;
@@ -763,7 +899,7 @@ void JsonTableDialog::moveColumn(int delta) {
 //  索引表格
 // ════════════════════════════════════════════════════════════
 
-void JsonTableDialog::fillIndexes(const QVector<JsonTableIndex> &indexes) {
+void JsonTableDesigner::fillIndexes(const QVector<JsonTableIndex> &indexes) {
   m_indexTable->setRowCount(0);
   for (const auto &ix : indexes) {
     const int row = m_indexTable->rowCount();
@@ -775,7 +911,7 @@ void JsonTableDialog::fillIndexes(const QVector<JsonTableIndex> &indexes) {
   }
 }
 
-void JsonTableDialog::appendIndexRow() {
+void JsonTableDesigner::appendIndexRow() {
   const int row = m_indexTable->rowCount();
   m_indexTable->insertRow(row);
   m_indexTable->setItem(row, IndexColName, new QTableWidgetItem(QString()));
@@ -784,7 +920,7 @@ void JsonTableDialog::appendIndexRow() {
   m_indexTable->setCurrentCell(row, IndexColName);
 }
 
-QVector<JsonTableIndex> JsonTableDialog::collectIndexes() const {
+QVector<JsonTableIndex> JsonTableDesigner::collectIndexes() const {
   QVector<JsonTableIndex> out;
   for (int r = 0; r < m_indexTable->rowCount(); ++r) {
     JsonTableIndex ix;
@@ -808,7 +944,7 @@ QVector<JsonTableIndex> JsonTableDialog::collectIndexes() const {
 //  联表声明（joinTable）/ 列表读模型（selCols）
 // ════════════════════════════════════════════════════════════
 
-void JsonTableDialog::fillJoins(const QVector<JsonTableJoin> &joins) {
+void JsonTableDesigner::fillJoins(const QVector<JsonTableJoin> &joins) {
   m_joinTable->setRowCount(0);
   for (const auto &j : joins) appendJoinRow();
   // 逐行回填（appendJoinRow 建的是空行）
@@ -827,7 +963,7 @@ void JsonTableDialog::fillJoins(const QVector<JsonTableJoin> &joins) {
   }
 }
 
-void JsonTableDialog::appendJoinRow() {
+void JsonTableDesigner::appendJoinRow() {
   const int row = m_joinTable->rowCount();
   m_joinTable->insertRow(row);
   m_joinTable->setItem(row, JoinColPro, new QTableWidgetItem(QString()));
@@ -842,7 +978,7 @@ void JsonTableDialog::appendJoinRow() {
   m_joinTable->setCurrentCell(row, JoinColPro);
 }
 
-QVector<JsonTableJoin> JsonTableDialog::collectJoins() const {
+QVector<JsonTableJoin> JsonTableDesigner::collectJoins() const {
   QVector<JsonTableJoin> out;
   for (int r = 0; r < m_joinTable->rowCount(); ++r) {
     JsonTableJoin j;
@@ -867,7 +1003,7 @@ QVector<JsonTableJoin> JsonTableDialog::collectJoins() const {
 //  字段呈现（统一表格：三视图双向映射 + ⚙ 字段设置面板）
 // ════════════════════════════════════════════════════════════
 
-void JsonTableDialog::fillViewTable() {
+void JsonTableDesigner::fillViewTable() {
   m_viewTable->setRowCount(0);
   // 联表上下文：引用名 → {目标表名, 主键, 列类型, 列注释}（行填充/⚙面板共用）
   struct JoinCtx {
@@ -942,6 +1078,43 @@ void JsonTableDialog::fillViewTable() {
     const auto editMeta = editOf.value(ref);
     refItem->setData(Qt::UserRole + 2, editMeta.widget);                          // 控件类型
     refItem->setData(Qt::UserRole + 3, editMeta.label);                           // 编辑标题
+    // 列表展示/上传绑定/缩略图（⚙ 面板读写；collectViewTable 落三视图）
+    refItem->setData(Qt::UserRole + 4, selMeta.displayType);                      // 展示类型
+    refItem->setData(Qt::UserRole + 5,
+                     selMeta.listThumbWidth > 0 ? selMeta.listThumbWidth : 0);    // 列表缩略图宽
+    refItem->setData(Qt::UserRole + 6,
+                     selMeta.listThumbHeight > 0 ? selMeta.listThumbHeight : 0);  // 列表缩略图高
+    refItem->setData(Qt::UserRole + 7, editMeta.uploadSourceFile);                // 上传预设文件
+    refItem->setData(Qt::UserRole + 8, editMeta.uploadSourceId);                  // 上传预设 id
+    refItem->setData(Qt::UserRole + 9,
+                     editMeta.editThumbWidth > 0 ? editMeta.editThumbWidth : 0);  // 编辑缩略图宽
+    refItem->setData(Qt::UserRole + 10,
+                     editMeta.editThumbHeight > 0 ? editMeta.editThumbHeight : 0);  // 编辑缩略图高
+    // 列级取值域（物理列；+11..+14 暂存，collectTable 回写 columns）
+    QString dType, dFile, dId, dUrl;
+    for (const auto &c : m_table.columns) {
+      if (c.name == ref) {
+        dType = c.domainType;
+        dFile = c.domainSourceFile;
+        dId = c.domainSourceId;
+        dUrl = c.domainUrl;
+        break;
+      }
+    }
+    refItem->setData(Qt::UserRole + 11, dType);
+    refItem->setData(Qt::UserRole + 12, dFile);
+    refItem->setData(Qt::UserRole + 13, dId);
+    refItem->setData(Qt::UserRole + 14, dUrl);
+    // 编辑表单精细参数（+15..+23；⚙ 面板读写，collectViewTable 落 editCols）
+    refItem->setData(Qt::UserRole + 15, editMeta.placeholder);
+    refItem->setData(Qt::UserRole + 16, editMeta.maxlength > 0 ? editMeta.maxlength : 0);
+    refItem->setData(Qt::UserRole + 17, editMeta.textareaRows > 0 ? editMeta.textareaRows : 0);
+    refItem->setData(Qt::UserRole + 18, editMeta.minValue != 0 ? editMeta.minValue : 0);
+    refItem->setData(Qt::UserRole + 19, editMeta.maxValue != 0 ? editMeta.maxValue : 0);
+    refItem->setData(Qt::UserRole + 20, editMeta.precision > 0 ? editMeta.precision : 0);
+    refItem->setData(Qt::UserRole + 21, editMeta.dateFormat);
+    refItem->setData(Qt::UserRole + 22, editMeta.formSpan > 0 ? editMeta.formSpan : 0);
+    refItem->setData(Qt::UserRole + 23, editMeta.formDefaultValue);
     m_viewTable->setItem(row, UColRef, refItem);
     m_viewTable->setItem(row, UColTitle, new QTableWidgetItem(title));
     // 列表勾选
@@ -965,7 +1138,9 @@ void JsonTableDialog::fillViewTable() {
     }
     if (!qVisible) mode = QStringLiteral("api");
     comboSelectData(modeCombo, mode);
-    m_viewTable->setCellWidget(row, UColQuery, modeCombo);
+    connect(modeCombo, &QComboBox::currentIndexChanged, this,
+                     [this](int) { if (!m_loading) emit configChanged(); });
+  m_viewTable->setCellWidget(row, UColQuery, modeCombo);
     // 编辑三态勾（联表行只读禁用；三态用 ItemIsUserTristate flag）
     auto *editItem = new QTableWidgetItem;
     editItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable |
@@ -1006,12 +1181,34 @@ void JsonTableDialog::fillViewTable() {
   for (const QString &ref : joinRefList) appendRow(ref, true);
 }
 
-void JsonTableDialog::appendViewJoinRow(const QString &ref) {
+void JsonTableDesigner::appendViewJoinRow(const QString &ref) {
   // 联表行：列表/查询默认开，编辑只读禁用（联表列只读）
   const int row = m_viewTable->rowCount();
   m_viewTable->insertRow(row);
   auto *refItem = new QTableWidgetItem(ref);
   refItem->setData(Qt::UserRole + 1, 0);
+  refItem->setData(Qt::UserRole + 2, QString());
+  refItem->setData(Qt::UserRole + 3, QString());
+  refItem->setData(Qt::UserRole + 4, QString());
+  refItem->setData(Qt::UserRole + 5, 0);
+  refItem->setData(Qt::UserRole + 6, 0);
+  refItem->setData(Qt::UserRole + 7, QString());
+  refItem->setData(Qt::UserRole + 8, QString());
+  refItem->setData(Qt::UserRole + 9, 0);
+  refItem->setData(Qt::UserRole + 10, 0);
+  refItem->setData(Qt::UserRole + 11, QString());
+  refItem->setData(Qt::UserRole + 12, QString());
+  refItem->setData(Qt::UserRole + 13, QString());
+  refItem->setData(Qt::UserRole + 14, QString());
+  refItem->setData(Qt::UserRole + 15, QString());
+  refItem->setData(Qt::UserRole + 16, 0);
+  refItem->setData(Qt::UserRole + 17, 0);
+  refItem->setData(Qt::UserRole + 18, 0);
+  refItem->setData(Qt::UserRole + 19, 0);
+  refItem->setData(Qt::UserRole + 20, 0);
+  refItem->setData(Qt::UserRole + 21, QString());
+  refItem->setData(Qt::UserRole + 22, 0);
+  refItem->setData(Qt::UserRole + 23, QString());
   m_viewTable->setItem(row, UColRef, refItem);
   m_viewTable->setItem(row, UColTitle, new QTableWidgetItem(ref));
   auto *listItem = new QTableWidgetItem;
@@ -1026,6 +1223,8 @@ void JsonTableDialog::appendViewJoinRow(const QString &ref) {
   modeCombo->addItem(QStringLiteral("范围"), QStringLiteral("gap"));
   modeCombo->addItem(QStringLiteral("仅接口"), QStringLiteral("api"));
   modeCombo->setCurrentIndex(1);  // 缺省精确
+  connect(modeCombo, &QComboBox::currentIndexChanged, this,
+                     [this](int) { if (!m_loading) emit configChanged(); });
   m_viewTable->setCellWidget(row, UColQuery, modeCombo);
   auto *editItem = new QTableWidgetItem;
   editItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);  // 联表行只读
@@ -1040,7 +1239,7 @@ void JsonTableDialog::appendViewJoinRow(const QString &ref) {
   m_viewTable->setCurrentCell(row, UColRef);
 }
 
-void JsonTableDialog::collectViewTable(JsonTableTable *out) const {
+void JsonTableDesigner::collectViewTable(JsonTableTable *out) const {
   out->selCols.clear();
   out->selColsEq.clear();
   out->selColsLike.clear();
@@ -1053,10 +1252,50 @@ void JsonTableDialog::collectViewTable(JsonTableTable *out) const {
     QString widthStr;
     QString widget;
     QString editLabel;
+    QString displayType;
+    int listThumbW = 0;
+    int listThumbH = 0;
+    QString uploadFile;
+    QString uploadId;
+    int editThumbW = 0;
+    int editThumbH = 0;
+    QString domainType;
+    QString domainFile;
+    QString domainId;
+    QString domainUrl;
+    QString placeholder;
+    int maxlength = 0;
+    int textareaRows = 0;
+    double minValue = 0;
+    double maxValue = 0;
+    int precision = 0;
+    QString dateFormat;
+    int formSpan = 0;
+    QString formDefaultValue;
     if (const QTableWidgetItem *refIt = m_viewTable->item(r, UColRef)) {
       widthStr = refIt->data(Qt::UserRole + 1).toString();
       widget = refIt->data(Qt::UserRole + 2).toString();
       editLabel = refIt->data(Qt::UserRole + 3).toString();
+      displayType = refIt->data(Qt::UserRole + 4).toString();
+      listThumbW = refIt->data(Qt::UserRole + 5).toInt();
+      listThumbH = refIt->data(Qt::UserRole + 6).toInt();
+      uploadFile = refIt->data(Qt::UserRole + 7).toString();
+      uploadId = refIt->data(Qt::UserRole + 8).toString();
+      editThumbW = refIt->data(Qt::UserRole + 9).toInt();
+      editThumbH = refIt->data(Qt::UserRole + 10).toInt();
+      domainType = refIt->data(Qt::UserRole + 11).toString();
+      domainFile = refIt->data(Qt::UserRole + 12).toString();
+      domainId = refIt->data(Qt::UserRole + 13).toString();
+      domainUrl = refIt->data(Qt::UserRole + 14).toString();
+      placeholder = refIt->data(Qt::UserRole + 15).toString();
+      maxlength = refIt->data(Qt::UserRole + 16).toInt();
+      textareaRows = refIt->data(Qt::UserRole + 17).toInt();
+      minValue = refIt->data(Qt::UserRole + 18).toDouble();
+      maxValue = refIt->data(Qt::UserRole + 19).toDouble();
+      precision = refIt->data(Qt::UserRole + 20).toInt();
+      dateFormat = refIt->data(Qt::UserRole + 21).toString();
+      formSpan = refIt->data(Qt::UserRole + 22).toInt();
+      formDefaultValue = refIt->data(Qt::UserRole + 23).toString();
     }
     // 列表视图
     const QTableWidgetItem *listIt = m_viewTable->item(r, UColList);
@@ -1065,6 +1304,9 @@ void JsonTableDialog::collectViewTable(JsonTableTable *out) const {
       c.ref = ref;
       if (!title.isEmpty() && title != ref) c.label = title;
       c.width = widthStr.toInt();
+      c.displayType = displayType;
+      c.listThumbWidth = listThumbW;
+      c.listThumbHeight = listThumbH;
       out->selCols.append(c);
     }
     // 查询视图（模式下拉）
@@ -1091,65 +1333,115 @@ void JsonTableDialog::collectViewTable(JsonTableTable *out) const {
         ec.label = title;
       }
       ec.widget = widget;
+      ec.uploadSourceFile = uploadFile;
+      ec.uploadSourceId = uploadId;
+      ec.editThumbWidth = editThumbW;
+      ec.editThumbHeight = editThumbH;
+      ec.placeholder = placeholder;
+      ec.maxlength = maxlength;
+      ec.textareaRows = textareaRows;
+      ec.minValue = minValue;
+      ec.maxValue = maxValue;
+      ec.precision = precision;
+      ec.dateFormat = dateFormat;
+      ec.formSpan = formSpan;
+      ec.formDefaultValue = formDefaultValue;
       const QTableWidgetItem *reqIt = m_viewTable->item(r, UColRequired);
       ec.required = reqIt && reqIt->checkState() == Qt::Checked;
       out->editCols.append(ec);
     }
+    // 列级取值域暂存 → 回写物理列定义（联表行无域；域随列存储）
+    if (!ref.contains(QLatin1Char('.')) && !domainType.isEmpty()) {
+      for (auto &c : out->columns) {
+        if (c.name == ref) {
+          c.domainType = domainType;
+          c.domainSourceFile = domainFile;
+          c.domainSourceId = domainId;
+          c.domainUrl = domainUrl;
+          break;
+        }
+      }
+    }
   }
 }
 
-void JsonTableDialog::openViewFieldConfig(int row) {
+void JsonTableDesigner::openViewFieldConfig(int row) {
   if (row < 0 || row >= m_viewTable->rowCount()) return;
   const QString ref = cellOf(m_viewTable, row, UColRef);
   if (ref.isEmpty()) return;
   const bool isJoinRow = ref.contains(QLatin1Char('.'));
   QTableWidgetItem *refIt = m_viewTable->item(row, UColRef);
+  if (!refIt) return;
 
-  QDialog dlg(this);
-  ConfigDialogFrame frame = beginConfigDialog(&dlg, QStringLiteral("字段设置：%1").arg(ref),
-                                              QMargins(12, 10, 12, 10), 6);
-  auto *form = new QFormLayout;
-  form->setSpacing(6);
-  auto *widthEdit = new QLineEdit(&dlg);
-  widthEdit->setPlaceholderText(QStringLiteral("空 = 自适应"));
-  widthEdit->setText(refIt->data(Qt::UserRole + 1).toString());
-  form->addRow(QStringLiteral("列表列宽(px):"), widthEdit);
-  auto *widgetCombo = AuiComboBox::create(&dlg);
-  widgetCombo->addItem(QStringLiteral("自动（按 mysqlType 推导）"), QStringLiteral(""));
-  widgetCombo->addItem(QStringLiteral("input"), QStringLiteral("input"));
-  widgetCombo->addItem(QStringLiteral("textarea"), QStringLiteral("textarea"));
-  widgetCombo->addItem(QStringLiteral("select"), QStringLiteral("select"));
-  widgetCombo->addItem(QStringLiteral("date"), QStringLiteral("date"));
-  widgetCombo->addItem(QStringLiteral("number"), QStringLiteral("number"));
-  widgetCombo->addItem(QStringLiteral("image"), QStringLiteral("image"));
-  widgetCombo->addItem(QStringLiteral("upload"), QStringLiteral("upload"));
-  widgetCombo->addItem(QStringLiteral("boolean"), QStringLiteral("boolean"));
-  comboSelectData(widgetCombo, refIt->data(Qt::UserRole + 2).toString());
-  widgetCombo->setEnabled(!isJoinRow);
-  form->addRow(QStringLiteral("编辑控件:"), widgetCombo);
-  auto *editLabelEdit = new QLineEdit(&dlg);
-  editLabelEdit->setPlaceholderText(QStringLiteral("空 = 用主表格标题"));
-  editLabelEdit->setText(refIt->data(Qt::UserRole + 3).toString());
-  editLabelEdit->setEnabled(!isJoinRow);
-  form->addRow(QStringLiteral("编辑标题覆盖:"), editLabelEdit);
-  frame.contentLayout->addLayout(form);
-  if (isJoinRow) {
-    auto *tip = new QLabel(QStringLiteral("联表列只读：无编辑控件/标题/列宽配置"), &dlg);
-    frame.contentLayout->addWidget(tip);
+  // 行槽位 → 双视图结构（列表侧 sc / 编辑侧 ec）
+  JsonTableSelCol sc;
+  sc.ref = ref;
+  sc.width = refIt->data(Qt::UserRole + 1).toInt();
+  sc.displayType = refIt->data(Qt::UserRole + 4).toString();
+  sc.listThumbWidth = refIt->data(Qt::UserRole + 5).toInt();
+  sc.listThumbHeight = refIt->data(Qt::UserRole + 6).toInt();
+  JsonTableEditCol ec;
+  ec.widget = refIt->data(Qt::UserRole + 2).toString();
+  ec.label = refIt->data(Qt::UserRole + 3).toString();
+  ec.uploadSourceFile = refIt->data(Qt::UserRole + 7).toString();
+  ec.uploadSourceId = refIt->data(Qt::UserRole + 8).toString();
+  ec.editThumbWidth = refIt->data(Qt::UserRole + 9).toInt();
+  ec.editThumbHeight = refIt->data(Qt::UserRole + 10).toInt();
+  ec.placeholder = refIt->data(Qt::UserRole + 15).toString();
+  ec.maxlength = refIt->data(Qt::UserRole + 16).toInt();
+  ec.textareaRows = refIt->data(Qt::UserRole + 17).toInt();
+  ec.minValue = refIt->data(Qt::UserRole + 18).toDouble();
+  ec.maxValue = refIt->data(Qt::UserRole + 19).toDouble();
+  ec.precision = refIt->data(Qt::UserRole + 20).toInt();
+  ec.dateFormat = refIt->data(Qt::UserRole + 21).toString();
+  ec.formSpan = refIt->data(Qt::UserRole + 22).toInt();
+  ec.formDefaultValue = refIt->data(Qt::UserRole + 23).toString();
+
+  ViewFieldConfigDialog dlg(ref, isJoinRow, this);
+  dlg.setSearchRoot(m_filePath.isEmpty() ? QString() : QFileInfo(m_filePath).absolutePath());
+  dlg.setCurrent(sc, ec);
+  if (!isJoinRow) {
+    // 列级取值域初值（+11..+14 暂存槽位）
+    JsonTableColumn dc;
+    dc.domainType = refIt->data(Qt::UserRole + 11).toString();
+    dc.domainSourceFile = refIt->data(Qt::UserRole + 12).toString();
+    dc.domainSourceId = refIt->data(Qt::UserRole + 13).toString();
+    dc.domainUrl = refIt->data(Qt::UserRole + 14).toString();
+    dlg.setDomain(dc);
   }
-  finishConfigDialog(&dlg, frame);
-
   if (dlg.exec() != QDialog::Accepted) return;
-  // 确定后写回行 UserRole（collectViewTable 读取落三视图）
-  refIt->setData(Qt::UserRole + 1, widthEdit->text().trimmed());
-  refIt->setData(Qt::UserRole + 2, widgetCombo->currentData().toString());
-  refIt->setData(Qt::UserRole + 3, editLabelEdit->text().trimmed());
+  // 确定后写回行槽位（collectViewTable 读取落三视图/列定义）
+  dlg.fillListResult(&sc);
+  dlg.fillEditResult(&ec);
+  refIt->setData(Qt::UserRole + 1, sc.width);
+  refIt->setData(Qt::UserRole + 2, ec.widget);
+  refIt->setData(Qt::UserRole + 3, ec.label);
+  refIt->setData(Qt::UserRole + 4, sc.displayType);
+  refIt->setData(Qt::UserRole + 5, sc.listThumbWidth);
+  refIt->setData(Qt::UserRole + 6, sc.listThumbHeight);
+  refIt->setData(Qt::UserRole + 7, ec.uploadSourceFile);
+  refIt->setData(Qt::UserRole + 8, ec.uploadSourceId);
+  refIt->setData(Qt::UserRole + 9, ec.editThumbWidth);
+  refIt->setData(Qt::UserRole + 10, ec.editThumbHeight);
+  refIt->setData(Qt::UserRole + 15, ec.placeholder);
+  refIt->setData(Qt::UserRole + 16, ec.maxlength);
+  refIt->setData(Qt::UserRole + 17, ec.textareaRows);
+  refIt->setData(Qt::UserRole + 18, ec.minValue);
+  refIt->setData(Qt::UserRole + 19, ec.maxValue);
+  refIt->setData(Qt::UserRole + 20, ec.precision);
+  refIt->setData(Qt::UserRole + 21, ec.dateFormat);
+  refIt->setData(Qt::UserRole + 22, ec.formSpan);
+  refIt->setData(Qt::UserRole + 23, ec.formDefaultValue);
+  refIt->setData(Qt::UserRole + 11, dlg.domainType());
+  refIt->setData(Qt::UserRole + 12, dlg.domainSourceFile());
+  refIt->setData(Qt::UserRole + 13, dlg.domainSourceId());
+  refIt->setData(Qt::UserRole + 14, dlg.domainUrl());
 }
 // ════════════════════════════════════════════════════════════
 //  表级进阶键：查询配置 / 排序 / 表内枚举 / i18n
 // ════════════════════════════════════════════════════════════
 
-QStringList JsonTableDialog::splitCsv(const QString &text) {
+QStringList JsonTableDesigner::splitCsv(const QString &text) {
   QStringList out;
   for (const QString &part : text.split(QLatin1Char(','))) {
     const QString item = part.trimmed();
@@ -1158,16 +1450,16 @@ QStringList JsonTableDialog::splitCsv(const QString &text) {
   return out;
 }
 
-QString JsonTableDialog::joinCsv(const QStringList &list) {
+QString JsonTableDesigner::joinCsv(const QStringList &list) {
   return list.join(QStringLiteral(","));
 }
 
-void JsonTableDialog::fillSortTable(const QVector<QPair<QString, QString>> &sort) {
+void JsonTableDesigner::fillSortTable(const QVector<QPair<QString, QString>> &sort) {
   m_sortTable->setRowCount(0);
   for (const auto &p : sort) appendSortRow(p.first, p.second);
 }
 
-void JsonTableDialog::appendSortRow(const QString &col, const QString &dir) {
+void JsonTableDesigner::appendSortRow(const QString &col, const QString &dir) {
   const int row = m_sortTable->rowCount();
   m_sortTable->insertRow(row);
   m_sortTable->setItem(row, 0, new QTableWidgetItem(col));
@@ -1175,10 +1467,12 @@ void JsonTableDialog::appendSortRow(const QString &col, const QString &dir) {
   dirCombo->addItem(QStringLiteral("ASC"), QStringLiteral("ASC"));
   dirCombo->addItem(QStringLiteral("DESC"), QStringLiteral("DESC"));
   comboSelectData(dirCombo, dir.isEmpty() ? QStringLiteral("DESC") : dir);
+  connect(dirCombo, &QComboBox::currentIndexChanged, this,
+                     [this](int) { if (!m_loading) emit configChanged(); });
   m_sortTable->setCellWidget(row, 1, dirCombo);
 }
 
-QVector<QPair<QString, QString>> JsonTableDialog::collectSort() const {
+QVector<QPair<QString, QString>> JsonTableDesigner::collectSort() const {
   QVector<QPair<QString, QString>> out;
   for (int r = 0; r < m_sortTable->rowCount(); ++r) {
     const QTableWidgetItem *colIt = m_sortTable->item(r, 0);
@@ -1192,7 +1486,79 @@ QVector<QPair<QString, QString>> JsonTableDialog::collectSort() const {
   return out;
 }
 
-void JsonTableDialog::syncEnumDrafts() {
+// ════════════════════════════════════════════════════════════
+//  操作按钮（buttons：键名与 .jsonvue ButtonConfig 一致）
+// ════════════════════════════════════════════════════════════
+
+void JsonTableDesigner::fillButtons() {
+  m_buttonTable->setRowCount(0);
+  for (int i = 0; i < m_buttons.size(); ++i) {
+    appendButtonRow(i);
+  }
+}
+
+void JsonTableDesigner::appendButtonRow(int idx) {
+  if (idx < 0 || idx >= m_buttons.size()) return;
+  const ButtonConfig &b = m_buttons[idx];
+  const int row = m_buttonTable->rowCount();
+  m_buttonTable->insertRow(row);
+  m_buttonTable->setItem(row, 0, new QTableWidgetItem(b.label));
+  m_buttonTable->setItem(
+      row, 1, new QTableWidgetItem(b.position == ButtonPosition::Toolbar
+                                       ? QStringLiteral("工具栏")
+                                       : QStringLiteral("行操作")));
+  QString action;
+  switch (b.actionType) {
+    case ButtonActionType::Ajax: action = QStringLiteral("调 API"); break;
+    case ButtonActionType::Confirm: action = QStringLiteral("二次确认"); break;
+    case ButtonActionType::Dialog: action = QStringLiteral("对话框"); break;
+    case ButtonActionType::Link: action = QStringLiteral("跳转"); break;
+  }
+  m_buttonTable->setItem(row, 2, new QTableWidgetItem(action));
+  m_buttonTable->setItem(row, 3, new QTableWidgetItem(b.actionKey));
+}
+
+void JsonTableDesigner::onAddButton() {
+  ButtonConfigDialog dlg(this);
+  dlg.setSearchRoot(
+      m_filePath.isEmpty() ? QString() : QFileInfo(m_filePath).absolutePath());
+  if (dlg.exec() != QDialog::Accepted) return;
+  m_buttons.append(dlg.getData());
+  appendButtonRow(m_buttons.size() - 1);
+}
+
+void JsonTableDesigner::onEditButton(int row) {
+  if (row < 0 || row >= m_buttons.size()) return;
+  ButtonConfigDialog dlg(m_buttons[row], this);
+  dlg.setSearchRoot(
+      m_filePath.isEmpty() ? QString() : QFileInfo(m_filePath).absolutePath());
+  if (dlg.exec() != QDialog::Accepted) return;
+  m_buttons[row] = dlg.getData();
+  // 摘要刷新：重建该行文本（行数不变）
+  const ButtonConfig &b = m_buttons[row];
+  m_buttonTable->item(row, 0)->setText(b.label);
+  m_buttonTable->item(row, 1)->setText(b.position == ButtonPosition::Toolbar
+                                           ? QStringLiteral("工具栏")
+                                           : QStringLiteral("行操作"));
+  QString action;
+  switch (b.actionType) {
+    case ButtonActionType::Ajax: action = QStringLiteral("调 API"); break;
+    case ButtonActionType::Confirm: action = QStringLiteral("二次确认"); break;
+    case ButtonActionType::Dialog: action = QStringLiteral("对话框"); break;
+    case ButtonActionType::Link: action = QStringLiteral("跳转"); break;
+  }
+  m_buttonTable->item(row, 2)->setText(action);
+  m_buttonTable->item(row, 3)->setText(b.actionKey);
+}
+
+void JsonTableDesigner::onRemoveButton() {
+  int row = m_buttonTable->currentRow();
+  if (row < 0 || row >= m_buttons.size()) return;
+  m_buttonTable->removeRow(row);
+  m_buttons.removeAt(row);
+}
+
+void JsonTableDesigner::syncEnumDrafts() {
   // 主表编辑内容 → m_enums（列名/说明直接读表格条目）
   for (int r = 0; r < m_enumTable->rowCount() && r < m_enums.size(); ++r) {
     const QTableWidgetItem *colIt = m_enumTable->item(r, 0);
@@ -1206,7 +1572,7 @@ void JsonTableDialog::syncEnumDrafts() {
   }
 }
 
-void JsonTableDialog::rebuildEnumMaster() {
+void JsonTableDesigner::rebuildEnumMaster() {
   m_enumSyncing = true;
   m_enumTable->setRowCount(0);
   for (const auto &e : m_enums) {
@@ -1218,7 +1584,7 @@ void JsonTableDialog::rebuildEnumMaster() {
   m_enumSyncing = false;
 }
 
-void JsonTableDialog::fillEnumOptions(int row) {
+void JsonTableDesigner::fillEnumOptions(int row) {
   m_enumSyncing = true;
   m_enumCurRow = (row >= 0 && row < m_enums.size()) ? row : -1;
   m_enumOptTable->setRowCount(0);
@@ -1240,7 +1606,7 @@ void JsonTableDialog::fillEnumOptions(int row) {
   m_enumSyncing = false;
 }
 
-void JsonTableDialog::appendEnumOptRow() {
+void JsonTableDesigner::appendEnumOptRow() {
   const int row = m_enumOptTable->rowCount();
   m_enumOptTable->insertRow(row);
   m_enumOptTable->setItem(row, 0, new QTableWidgetItem(QString()));
@@ -1253,7 +1619,7 @@ void JsonTableDialog::appendEnumOptRow() {
   m_enumOptTable->setCurrentCell(row, 0);
 }
 
-QVector<JsonTableEnumOption> JsonTableDialog::collectEnumOptions() const {
+QVector<JsonTableEnumOption> JsonTableDesigner::collectEnumOptions() const {
   QVector<JsonTableEnumOption> out;
   for (int r = 0; r < m_enumOptTable->rowCount(); ++r) {
     JsonTableEnumOption o;
@@ -1271,7 +1637,7 @@ QVector<JsonTableEnumOption> JsonTableDialog::collectEnumOptions() const {
   return out;
 }
 
-QVector<JsonTableEnum> JsonTableDialog::collectEnums() const {
+QVector<JsonTableEnum> JsonTableDesigner::collectEnums() const {
   QVector<JsonTableEnum> out = m_enums;
   // 主表编辑内容 → out；当前行选项表格内容 → out（const 下按值修正副本）
   for (int r = 0; r < m_enumTable->rowCount() && r < out.size(); ++r) {
@@ -1290,7 +1656,7 @@ QVector<JsonTableEnum> JsonTableDialog::collectEnums() const {
 //  DDL 生成 / 预览 / 执行
 // ════════════════════════════════════════════════════════════
 
-bool JsonTableDialog::validateForDdl(QString *err) const {
+bool JsonTableDesigner::validateForDdl(QString *err) const {
   if (m_nameEdit->text().trimmed().isEmpty()) {
     if (err) *err = QStringLiteral("表名不能为空");
     return false;
@@ -1312,16 +1678,7 @@ bool JsonTableDialog::validateForDdl(QString *err) const {
 //  交叉校验 / 列名候选刷新
 // ════════════════════════════════════════════════════════════
 
-void JsonTableDialog::accept() {
-  QString err;
-  if (!validateCrossRefs(&err)) {
-    AuiMessageBox::show(this, QStringLiteral("无法保存"), err);
-    return;
-  }
-  QDialog::accept();
-}
-
-bool JsonTableDialog::validateCrossRefs(QString *err) const {
+bool JsonTableDesigner::validateCrossRefs(QString *err) const {
   auto fail = [err](const QString &msg) {
     if (err) *err = msg;
     return false;
@@ -1503,7 +1860,7 @@ bool JsonTableDialog::validateCrossRefs(QString *err) const {
   return true;
 }
 
-void JsonTableDialog::refreshColumnCandidates() {
+void JsonTableDesigner::refreshColumnCandidates() {
   // 本表列名（枚举列/全局枚举列/联表外键列/编辑列候选）
   QStringList names;
   for (int r = 0; r < m_colsTable->rowCount(); ++r) {
@@ -1536,7 +1893,7 @@ void JsonTableDialog::refreshColumnCandidates() {
     static_cast<CsvCompleter *>(m_globalEnumCompleter)->setCandidates(names);
 }
 
-void JsonTableDialog::refreshI18nFieldCandidates() {
+void JsonTableDesigner::refreshI18nFieldCandidates() {
   QStringList names;
   const QString trans = m_i18nTableEdit->text().trimmed();
   if (!trans.isEmpty()) {
@@ -1550,7 +1907,7 @@ void JsonTableDialog::refreshI18nFieldCandidates() {
     static_cast<CsvCompleter *>(m_i18nFieldsCompleter)->setCandidates(names);
 }
 
-QString JsonTableDialog::toCreateDdl() const {
+QString JsonTableDesigner::toCreateDdl() const {
   const QString tableName = m_nameEdit->text().trimmed();
   const QVector<JsonTableColumn> cols = collectColumns();
   const QVector<JsonTableIndex> indexes = collectIndexes();
@@ -1587,7 +1944,7 @@ QString JsonTableDialog::toCreateDdl() const {
   return sql;
 }
 
-void JsonTableDialog::previewDdl() {
+void JsonTableDesigner::previewDdl() {
   QString err;
   if (!validateForDdl(&err)) {
     AuiMessageBox::show(this, QStringLiteral("无法生成 DDL"), err);
@@ -1596,7 +1953,7 @@ void JsonTableDialog::previewDdl() {
   m_ddlView->setPlainText(toCreateDdl());
 }
 
-void JsonTableDialog::importFromDatabase() {
+void JsonTableDesigner::importFromDatabase() {
   const QString table = m_nameEdit->text().trimmed();
   if (table.isEmpty()) {
     AuiMessageBox::show(this, QStringLiteral("无法导入"), QStringLiteral("请先填写表名"));
@@ -1666,7 +2023,7 @@ void JsonTableDialog::importFromDatabase() {
       QStringLiteral("已从数据库导入 %1 列（前端角色按列名合并保留）").arg(cols.size()));
 }
 
-void JsonTableDialog::executeCreateTable() {
+void JsonTableDesigner::executeCreateTable() {
   QString err;
   if (!validateForDdl(&err)) {
     AuiMessageBox::show(this, QStringLiteral("无法执行建表"), err);
@@ -1703,12 +2060,14 @@ void JsonTableDialog::executeCreateTable() {
 //  结果收集
 // ════════════════════════════════════════════════════════════
 
-JsonTableTable JsonTableDialog::resultTable() const {
+JsonTableTable JsonTableDesigner::collectTable() const {
   JsonTableTable t = m_table;  // extra 未知键保真（joinTable 等未结构化节点原样写回）
   t.tableName = m_nameEdit->text().trimmed();
   t.modelName = m_modelEdit->text().trimmed();
   t.tableComment = m_commentEdit->text().trimmed();
   t.manualUpdateTime = m_manualUpdateCheck->isChecked();
+  t.frontend = m_frontendCheck->isChecked();
+  t.buttons = m_buttons;
   t.columns = collectColumns();
   t.indexes = collectIndexes();
   // ── 表级进阶键 ──

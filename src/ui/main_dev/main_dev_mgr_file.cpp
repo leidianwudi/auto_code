@@ -140,6 +140,7 @@ QWidget *MainDevMgr::createEditorTab(const QString &filePath, const QString &con
     auto *jtw = new JsonTableWidget;
     editor = jtw->codeEditor();
     editor->setPlainText(content);
+    editor->setObjectName(filePath);  // 供表设计器定位项目 meta 与数据源作用域
     jtw->setPreservedSource(content);
     tabWidget = jtw;
     // 注：表结构配置无"测试请求"按钮，不需要 HTTP 配置

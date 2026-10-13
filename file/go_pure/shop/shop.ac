@@ -19,17 +19,27 @@ import { generateAdminMain } from "../../admin_pure/template/main_admin.ac";
 main {
 
   // ── 1. 统一配置文件（表结构 + 前端角色，双端共用的事实源）────────
-  let jsonTablePath: String = scriptDir() + "/shop.jsontable";
+  //      一文件一表：shop.jsontable / shop0.jsontable / user.jsontable
+  //      （由 file/tools/split_jsontable.ac 从旧多表 shop.jsontable 拆出）；
+  //      共享 meta 在同目录 project.jsontableproj（goBasePath/webBasePath 回退源）
+  let jsonTablePaths: String[] = [
+    scriptDir() + "/shop.jsontable",
+    scriptDir() + "/shop0.jsontable",
+    scriptDir() + "/user.jsontable"
+  ];
+  let projPath: String = scriptDir() + "/project.jsontableproj";
 
   // ── 2. 目标项目根目录（父目录分组：D:/work/github/shop/{shop_api, shop_admin}）
-  //      与 shop.jsontable meta 中的 goBasePath/webBasePath 一致（显式传入优先）──
+  //      显式传入优先；缺省回退 project.jsontableproj 的 meta.*BasePath ──
   let goBasePath: String = "D:/work/github/shop/shop_api";
   let webBasePath: String = "D:/work/github/shop/shop_admin";
 
   // ── 3. Go 后端生成 ────────────────────────────────────────────────
-  //     genGlobalEnum: false 可跳过全局枚举生成（缺省生成）
+  //     genGlobalEnum: false 可跳过全局枚举生成（缺省生成）；
+  //     frontend=false 的表（纯 API 模块）后端链照常生成
   let apiParams: Object = {
-    jsonTablePath: jsonTablePath,
+    jsonTablePaths: jsonTablePaths,
+    projPath: projPath,
     goBasePath: goBasePath,
     genGlobalEnum: true
   };
@@ -37,11 +47,13 @@ main {
 
   // ── 4. pure-admin 前端生成 ────────────────────────────────────────
   //     双轨制：目标页面目录存在同名 .jsonvue 则按高级页生成，
-  //     否则从 shop.jsontable 的列角色合成标准页
+  //     否则从 .jsontable 的列角色合成标准页；
+  //     frontend=false 的表（纯 API 模块）跳过页面生成
   //     模板路径相对本脚本目录（入口在 go_pure/<项目>/，故用 ../../）──
   let tplDir: String = "../../admin_pure/template";
   let adminParams: Object = {
-    jsonTablePath: jsonTablePath,
+    jsonTablePaths: jsonTablePaths,
+    projPath: projPath,
     webBasePath: webBasePath,
     templates: [
       { tpl: tplDir + "/index.tpl", out: "{basePath}/src/views/{pagePath}/{pageName}.vue" },

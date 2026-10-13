@@ -1,0 +1,139 @@
+// ============================================================================
+// split_jsontable.ac — 旧「多表 .jsontable」一次性拆分工具（一文件一表改造）
+// ----------------------------------------------------------------------------
+// 旧格式：{ $schema?, meta{...}, tables[] }   —— 一个文件多张表
+// 新格式：<modelName>.jsontable → { table: {...} }（一文件一表 + 内嵌翻译表）
+//         project.jsontableproj → { meta: {...} }（项目级共享 meta）
+//
+// 安全策略：
+//   1. 先把原文件整份备份为 <原名>.jsontable.bak（该后缀不会被生成链收集），
+//      再写输出——与原文件同名的表（如 shop.jsontable 里的 shop 表）原路径覆写
+//   2. 每个输出写盘后立即 readJson 回读校验（table 键/表名/列数/排序对数），
+//      任一不符立即报错中止，避免半拆状态
+//   3. 没有任何表与原文件名同名时，旧文件仍是多表格式、会被生成链重复收集，
+//      脚本结束前明确报错提醒手工删除
+//
+// 用法：修改 main 里配置区的 inputPath 后，在脚本树中运行本脚本。
+// ============================================================================
+
+/// 拆分一个旧多表 .jsontable；返回拆出的表数，失败返回 -1
+export function splitJsontableFile(inputPath: String): Number {
+  if (fileExists(inputPath) == false) {
+    printError("拆分中止：输入文件不存在：" + inputPath);
+    return -1;
+  }
+  let root: Object = readJson(inputPath);
+  if (root == null) {
+    printError("拆分中止：读取或解析失败（要求旧格式 { meta, tables[] }）：" + inputPath);
+    return -1;
+  }
+  let meta: Object = root["meta"];
+  let tables: Object[] = root["tables"];
+  if (tables == null || tables.length == 0) {
+    printError("拆分中止：缺少非空 tables 数组（可能已是单表新格式）：" + inputPath);
+    return -1;
+  }
+  if (meta == null) {
+    printError("拆分中止：缺少 meta 节点：" + inputPath);
+    return -1;
+  }
+
+  // 输出目录 = 输入文件所在目录（兼容 \ 分隔）
+  let sepIdx: Number = inputPath.lastIndexOf("/");
+  let bakIdx: Number = inputPath.lastIndexOf("\\");
+  if (bakIdx > sepIdx) { sepIdx = bakIdx; }
+  let dir: String = inputPath.substring(0, sepIdx);
+
+  // ── 0. 输出文件名预检：modelName/tableName 缺失与重名 ──────────────
+  let names: String[] = [];
+  let tLen: Number = tables.length;
+  for (let ti = 0; ti < tLen; ti = ti + 1) {
+    let t: Object = tables[ti];
+    let name: String = t["modelName"];
+    if (name == null || name == "") { name = t["tableName"]; }
+    if (name == null || name == "") {
+      printError("拆分中止：第 " + (ti + 1) + " 张表缺少 modelName 与 tableName");
+      return -1;
+    }
+    if (names.includes(name)) {
+      printError("拆分中止：存在同名表 '" + name + "'（输出文件会互相覆盖），请先处理");
+      return -1;
+    }
+    names.push(name);
+  }
+
+  // ── 1. 备份原文件（整份原文；.bak 后缀不会被 getCheckedFiles 收集）──
+  let bakOk: Bool = writeFile(inputPath + ".bak", readFile(inputPath));
+  if (bakOk == false) {
+    printError("拆分中止：备份文件写入失败：" + inputPath + ".bak");
+    return -1;
+  }
+  printLog("已备份：" + inputPath + ".bak");
+
+  // ── 2. 写项目级 meta 文件（meta 整体搬运，未知键随对象保真）─────────
+  let projObj: Object = { meta: meta };
+  let projPath: String = dir + "/project.jsontableproj";
+  if (writeFile(projPath, toJsonString(projObj)) == false) {
+    printError("拆分中止：proj 文件写入失败：" + projPath);
+    return -1;
+  }
+  printLog("已写出：" + projPath);
+
+  // ── 3. 逐表写单表文件 + 回读校验 ──────────────────────────────────
+  let sameAsInput: Bool = false;
+  for (let ti = 0; ti < tLen; ti = ti + 1) {
+    let t: Object = tables[ti];
+    let name: String = t["modelName"];
+    if (name == null || name == "") { name = t["tableName"]; }
+    let outPath: String = dir + "/" + name + ".jsontable";
+    let outObj: Object = { table: t };
+    if (writeFile(outPath, toJsonString(outObj)) == false) {
+      printError("拆分中止：单表文件写入失败：" + outPath);
+      return -1;
+    }
+
+    // 回读校验：形状 + 表名 + 列数 + 排序对数
+    let back: Object = readJson(outPath);
+    if (back == null || back["table"] == null) {
+      printError("拆分校验失败（回读缺失 table 键）：" + outPath);
+      return -1;
+    }
+    let bt: Object = back["table"];
+    if (bt["tableName"] != t["tableName"]) {
+      printError("拆分校验失败（tableName 不一致）：" + outPath);
+      return -1;
+    }
+    let srcCols: Number = 0;
+    if (t["columns"] != null) { srcCols = t["columns"].length; }
+    let outCols: Number = 0;
+    if (bt["columns"] != null) { outCols = bt["columns"].length; }
+    if (srcCols != outCols) {
+      printError("拆分校验失败（columns 数 " + srcCols + " -> " + outCols + "）：" + outPath);
+      return -1;
+    }
+    let srcSort: Number = 0;
+    if (t["selColsSort"] != null) { srcSort = t["selColsSort"].length; }
+    let outSort: Number = 0;
+    if (bt["selColsSort"] != null) { outSort = bt["selColsSort"].length; }
+    if (srcSort != outSort) {
+      printError("拆分校验失败（selColsSort 对数 " + srcSort + " -> " + outSort + "）：" + outPath);
+      return -1;
+    }
+    printLog("已写出：" + outPath + "（" + outCols + " 列）");
+    if (outPath == inputPath) { sameAsInput = true; }
+  }
+
+  // ── 4. 原文件处置检查 ─────────────────────────────────────────────
+  if (sameAsInput == false) {
+    printError("注意：没有表与原文件同名，旧多表文件仍在原位，会被生成链重复收集，请手工删除：" + inputPath);
+  }
+  printLog("--- 拆分完成：" + tLen + " 张表 + project.jsontableproj ---");
+  return tLen;
+}
+
+main {
+  // ── 配置区：要拆分的旧多表 .jsontable（按需修改）─────────────────
+  let inputPath: String = scriptDir() + "/../go_pure/shop/shop.jsontable";
+
+  splitJsontableFile(inputPath);
+}

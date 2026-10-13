@@ -617,6 +617,229 @@ static void testJsonTableConfigRoundTrip() {
   CHECK(minimal.tables[0].columns[1].defaultValue == QStringLiteral("0"));  // 数字默认值显式转串
 }
 
+/// 单表新格式（一文件一表）：文件往返 + 新键（frontend/buttons/取值域/上传/缩略图）
+/// + extra 剔除回归 + 旧多表格式报错 + 项目 meta 与表清单查找
+static void testJsonTableSingleFileRoundTrip() {
+  // ── 1. 构造单表（新键全覆盖）──
+  JsonTableTable t;
+  t.tableName = QStringLiteral("shop");
+  t.modelName = QStringLiteral("shop");
+  t.tableComment = QStringLiteral("商品表");
+  t.manualUpdateTime = true;
+
+  JsonTableColumn id;
+  id.name = QStringLiteral("id");
+  id.mysqlType = QStringLiteral("bigint");
+  id.isPrimary = true;
+  id.isAutoInc = true;
+  id.comment = QStringLiteral("主键");
+  id.domainType = QStringLiteral("enum");
+  id.domainSourceFile = QStringLiteral("global_enum.jsonsource");
+  id.domainSourceId = QStringLiteral("shop_status");
+  t.columns.append(id);
+
+  JsonTableColumn img;
+  img.name = QStringLiteral("logo_img");
+  img.mysqlType = QStringLiteral("varchar(255)");
+  img.comment = QStringLiteral("店铺logo");
+  t.columns.append(img);
+
+  JsonTableSelCol sc;
+  sc.ref = QStringLiteral("logo_img");
+  sc.displayType = QStringLiteral("image");
+  sc.listThumbWidth = 96;
+  sc.listThumbHeight = 48;
+  t.selCols.append(sc);
+
+  JsonTableEditCol ec;
+  ec.ref = QStringLiteral("logo_img");
+  ec.widget = QStringLiteral("upload");
+  ec.uploadSourceFile = QStringLiteral("upload/image.jsonupload");
+  ec.uploadSourceId = QStringLiteral("main");
+  ec.editThumbWidth = 160;
+  ec.editThumbHeight = 80;
+  ec.placeholder = QStringLiteral("请输入图片地址");
+  ec.maxlength = 255;
+  ec.textareaRows = 5;
+  ec.minValue = 0.5;
+  ec.maxValue = 99.5;
+  ec.precision = 2;
+  ec.dateFormat = QStringLiteral("datetime");
+  ec.formSpan = 8;
+  ec.formDefaultValue = QStringLiteral("0");
+  t.editCols.append(ec);
+
+  ButtonConfig btn;
+  btn.label = QStringLiteral("重置密码");
+  btn.position = ButtonPosition::Row;
+  btn.actionType = ButtonActionType::Confirm;
+  btn.actionKey = QStringLiteral("resetPwd");
+  btn.apiName = QStringLiteral("resetPwdApi");
+  btn.confirmText = QStringLiteral("确定重置？");
+  DialogFieldConfig df;
+  df.fieldName = QStringLiteral("newPwd");
+  df.label = QStringLiteral("新密码");
+  df.editStyle = EditStyle::Text;
+  df.required = true;
+  btn.dialogFields.append(df);
+  t.buttons.append(btn);
+  t.frontend = false;  // 纯 API 模块（仅 false 落键）
+
+  // ── 2. 文件往返（operator== 全字段含 extra）──
+  const QString dir =
+      QDir::cleanPath(QStringLiteral(PROJECT_SOURCE_DIR) + QStringLiteral("/file/__test_single__"));
+  QDir().mkpath(dir);
+  const QString path = dir + QStringLiteral("/shop.jsontable");
+  CHECK(jsonTableToFile(t, path));
+  QString err;
+  const JsonTableTable back = jsonTableFromFile(path, &err);
+  CHECK(err.isEmpty());
+  // 逐字段隔离（定位 operator== 差异用）
+  CHECK(back.tableName == t.tableName);
+  CHECK(back.modelName == t.modelName);
+  CHECK(back.tableComment == t.tableComment);
+  CHECK(back.manualUpdateTime == t.manualUpdateTime);
+  CHECK(back.frontend == t.frontend);
+  CHECK(back.columns == t.columns);
+  CHECK(back.indexes == t.indexes);
+  CHECK(back.joinTable == t.joinTable);
+  CHECK(back.selCols == t.selCols);
+  CHECK(back.selColsEq == t.selColsEq);
+  CHECK(back.selColsGap == t.selColsGap);
+  CHECK(back.selColsLike == t.selColsLike);
+  CHECK(back.editCols == t.editCols);
+  CHECK(back.selColsSort == t.selColsSort);
+  CHECK(back.enums == t.enums);
+  CHECK(back.globalEnumCols == t.globalEnumCols);
+  CHECK(back.i18n == t.i18n);
+  CHECK(back.buttons == t.buttons);
+  CHECK(back.extra == t.extra);
+  CHECK(back == t);
+
+  // 文本解析入口（可视化同步用）：紧凑单行 JSON 不依赖文件路径
+  {
+    QFile rf0(path);
+    CHECK(rf0.open(QIODevice::ReadOnly | QIODevice::Text));
+    const QString compact = QString::fromUtf8(rf0.readAll());
+    rf0.close();
+    QString errS;
+    const JsonTableTable fromText = jsonTableFromString(compact, &errS);
+    CHECK(errS.isEmpty());
+    CHECK(fromText == t);
+  }
+
+  // 新键逐项断言（序列化键名与 .jsonvue 一致）
+  QFile rf(path);
+  CHECK(rf.open(QIODevice::ReadOnly | QIODevice::Text));
+  const QJsonObject root = UtilJson::fromJson(QString::fromUtf8(rf.readAll())).object();
+  rf.close();
+  const QJsonObject tObj = root.value(QStringLiteral("table")).toObject();
+  CHECK(tObj.contains(QStringLiteral("frontend")));
+  CHECK(tObj.value(QStringLiteral("frontend")).toBool() == false);
+  CHECK(!tObj.value(QStringLiteral("buttons")).toArray().isEmpty());
+  CHECK(tObj.value(QStringLiteral("buttons"))
+            .toArray()
+            .at(0)
+            .toObject()
+            .value(QStringLiteral("actionKey"))
+            .toString() == QStringLiteral("resetPwd"));
+  CHECK(tObj.value(QStringLiteral("buttons"))
+            .toArray()
+            .at(0)
+            .toObject()
+            .value(QStringLiteral("dialogFields"))
+            .toArray()
+            .at(0)
+            .toObject()
+            .value(QStringLiteral("editStyle"))
+            .toString() == QStringLiteral("text"));
+  const QJsonObject selObj = tObj.value(QStringLiteral("selCols")).toArray().at(0).toObject();
+  CHECK(selObj.value(QStringLiteral("displayType")).toString() == QStringLiteral("image"));
+  CHECK(selObj.value(QStringLiteral("listThumbWidth")).toInt() == 96);
+  CHECK(selObj.value(QStringLiteral("listThumbHeight")).toInt() == 48);
+  const QJsonObject editObj = tObj.value(QStringLiteral("editCols")).toArray().at(0).toObject();
+  CHECK(editObj.value(QStringLiteral("uploadSourceFile")).toString() ==
+        QStringLiteral("upload/image.jsonupload"));
+  CHECK(editObj.value(QStringLiteral("editThumbWidth")).toInt() == 160);
+  // 编辑表单精细参数（键名与 .jsonvue 一致）
+  CHECK(editObj.value(QStringLiteral("placeholder")).toString() == QStringLiteral("请输入图片地址"));
+  CHECK(editObj.value(QStringLiteral("maxlength")).toInt() == 255);
+  CHECK(editObj.value(QStringLiteral("textareaRows")).toInt() == 5);
+  CHECK(editObj.value(QStringLiteral("minValue")).toDouble() == 0.5);
+  CHECK(editObj.value(QStringLiteral("maxValue")).toDouble() == 99.5);
+  CHECK(editObj.value(QStringLiteral("precision")).toInt() == 2);
+  CHECK(editObj.value(QStringLiteral("dateFormat")).toString() == QStringLiteral("datetime"));
+  CHECK(editObj.value(QStringLiteral("formSpan")).toInt() == 8);
+  CHECK(editObj.value(QStringLiteral("defaultValue")).toString() == QStringLiteral("0"));
+  const QJsonObject colObj = tObj.value(QStringLiteral("columns")).toArray().at(0).toObject();
+  CHECK(colObj.value(QStringLiteral("domainType")).toString() == QStringLiteral("enum"));
+  CHECK(colObj.value(QStringLiteral("domainSourceId")).toString() ==
+        QStringLiteral("shop_status"));
+
+  // extra 剔除回归：新键不得进 extra（避免往返双写）
+  CHECK(!back.extra.contains(QStringLiteral("frontend")));
+  CHECK(!back.extra.contains(QStringLiteral("buttons")));
+
+  // frontend 缺省语义：键缺失 = true，且 true 不落键
+  {
+    JsonTableTable noFlag;
+    noFlag.tableName = QStringLiteral("t2");
+    noFlag.modelName = QStringLiteral("t2");
+    CHECK(noFlag.frontend);
+    const QString p2 = dir + QStringLiteral("/t2.jsontable");
+    CHECK(jsonTableToFile(noFlag, p2));
+    QFile rf2(p2);
+    CHECK(rf2.open(QIODevice::ReadOnly | QIODevice::Text));
+    const QJsonObject r2 = UtilJson::fromJson(QString::fromUtf8(rf2.readAll())).object();
+    rf2.close();
+    CHECK(!r2.value(QStringLiteral("table")).toObject().contains(QStringLiteral("frontend")));
+    const JsonTableTable back2 = jsonTableFromFile(p2, &err);
+    CHECK(err.isEmpty());
+    CHECK(back2.frontend);
+  }
+
+  // ── 3. 旧多表格式明确报错（指路拆分脚本）──
+  const QString oldPath = dir + QStringLiteral("/old.jsontable");
+  {
+    QFile f(oldPath);
+    CHECK(f.open(QIODevice::WriteOnly | QIODevice::Text));
+    f.write(QStringLiteral("{\"meta\":{},\"tables\":[{\"tableName\":\"a\"}]}").toUtf8());
+    f.close();
+  }
+  QString errOld;
+  jsonTableFromFile(oldPath, &errOld);
+  CHECK(!errOld.isEmpty());
+  CHECK(errOld.contains(QStringLiteral("split_jsontable")));
+
+  // ── 4. 项目 meta 与表清单查找 ──
+  const QString projPath = dir + QStringLiteral("/project.jsontableproj");
+  {
+    QFile f(projPath);
+    CHECK(f.open(QIODevice::WriteOnly | QIODevice::Text));
+    f.write(QStringLiteral("{\"meta\":{\"project\":\"p\",\"webBasePath\":\"D:/web\","
+                           "\"goBasePath\":\"D:/go\",\"db\":{\"host\":\"h\"}}}")
+                .toUtf8());
+    f.close();
+  }
+  QDir().mkpath(dir + QStringLiteral("/sub"));
+  CHECK(findJsontableProjPath(dir) == projPath);                        // 同目录
+  CHECK(findJsontableProjPath(dir + QStringLiteral("/sub")) == projPath);  // 向上一级
+  QString errProj;
+  const JsonTableConfig projCfg = jsontableProjFromFile(projPath, &errProj);
+  CHECK(errProj.isEmpty());
+  CHECK(projCfg.webBasePath == QStringLiteral("D:/web"));
+  CHECK(projCfg.goBasePath == QStringLiteral("D:/go"));
+  CHECK(projCfg.tables.isEmpty());
+  // 表清单：shop + t2（按 modelName 排序；旧多表 old 解析失败被跳过）
+  const QVector<JsonTableTable> tables = listProjectTables(dir);
+  CHECK(tables.size() == 2);
+  CHECK(tables[0].modelName == QStringLiteral("shop"));
+  CHECK(tables[1].modelName == QStringLiteral("t2"));
+
+  // 清理临时目录
+  QDir(dir).removeRecursively();
+}
+
 /// 性能探针（诊断 .jsontable 编辑卡顿）：对真实 shop.jsontable + 其 schema，
 /// 分别计时 load / validateDocument / completions 的批量耗时，
 /// 输出每次操作的平均毫秒数——定位"每键全量重验"卡顿的真实热点。
@@ -681,6 +904,7 @@ int main() {
   testJsonUploadConfigRoundTrip();
   testProjectScopedJsontableFinder();
   testJsonTableConfigRoundTrip();
+  testJsonTableSingleFileRoundTrip();
   testSchemaValidatePerfProbe();
   const int extraFailed = runAcParamDefaultTests();
   const int jsonValueFailed = runAcJsonValueTests();
