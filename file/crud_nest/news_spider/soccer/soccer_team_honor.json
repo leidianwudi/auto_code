@@ -1,0 +1,34 @@
+{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 足球球队荣誉查询配置。
+  tables: [
+    {
+      "modelName": "soccer\\soccer_team_honor",
+      "tableName": "soccer_team_honor",
+      "selCols": [
+        "team_tid",
+      ],
+      "selColsLike": [
+        "name",
+        "season"
+      ],
+      "selColsSort": {
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSoccerTeam",
+          "joinEnClass_Url": "src/soccer/soccer_team/entities/en_soccer_team",
+          "joinEnClassPro": "team",
+          "joinType": "ManyToOne",
+          "isJoinRelations": true,
+          "joinColumn": {
+            "name": "team_tid",
+            "referencedColumnName": "tid"
+          }
+        }
+      ]
+    }
+  ],
+}
