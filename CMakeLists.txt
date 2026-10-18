@@ -280,6 +280,8 @@ qt_add_executable(auto_code
     src/ui/create/create_mgr.cpp
     src/ui/create/create_model.h
     src/ui/create/create_model.cpp
+    src/ui/common/button_types.h
+    src/ui/common/button_types.cpp
     src/ui/json_vue/json_vue_model.h
     src/ui/json_vue/json_vue_model.cpp
     src/ui/json_vue/json_vue_editor.h
@@ -325,12 +327,14 @@ qt_add_executable(auto_code
     src/ui/json_source/json_upload_widget.cpp
     src/ui/json_source/json_table_model.h
     src/ui/json_source/json_table_model.cpp
-    src/ui/json_source/json_table_dialog.h
-    src/ui/json_source/json_table_dialog.cpp
+    src/ui/json_source/json_table_designer.h
+    src/ui/json_source/json_table_designer.cpp
     src/ui/json_source/json_table_editor.h
     src/ui/json_source/json_table_editor.cpp
     src/ui/json_source/json_table_widget.h
     src/ui/json_source/json_table_widget.cpp
+    src/ui/json_source/view_field_config_dialog.h
+    src/ui/json_source/view_field_config_dialog.cpp
     src/ui/json_global_enum/json_global_enum_model.h
     src/ui/json_global_enum/json_global_enum_model.cpp
     src/ui/json_global_enum/json_global_enum_dialog.h
@@ -456,6 +460,8 @@ add_executable(auto_code_tests EXCLUDE_FROM_ALL
     src/ui/json_source/json_upload_model.cpp
     # JSON 表结构模型测试所需（UI 层纯模型文件，测试直接编译）
     src/ui/json_source/json_table_model.cpp
+    # 按钮共享类型序列化（json_table_model 的 buttons 字段依赖）
+    src/ui/common/button_types.cpp
     # JSON/JSON5 格式化测试所需（UI 层纯 QtCore 工具，测试直接编译）
     src/util/ui/code/format_code.cpp
 )

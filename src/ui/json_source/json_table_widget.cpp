@@ -37,11 +37,17 @@ void JsonTableWidget::syncCodeToVisualImpl() {
   // 以当前代码内容刷新保真底：用户可能在代码视图删除过自定义键，
   // 若沿用打开文件时的旧快照，写回时会把这些已删除的键"复活"
   m_visual->setPreservedSource(jsonStr);
-  JsonTableConfig config = JsonTableConfig::fromJsonString(jsonStr);
+  // 文件路径供表设计器定位项目 meta（project.jsontableproj）与数据源作用域
+  //（可能为空——路径由主窗口在打开/拆分重建时经 objectName 注入）
+  m_visual->setFilePath(m_editor->objectName());
+  // 从编辑器文本解析单表（与旧链 fromJsonString 同源，不依赖文件已保存/路径已知）；
+  // 解析失败（旧多表格式/空文件）时给可视化页空表，由面板显示"未解析出表配置"
+  QString err;
+  JsonTableTable table = jsonTableFromString(jsonStr, &err);
   // 内容与可视化页一致时跳过整表重建：反复切换/来回点击时不卡顿（同 jsonvue）
-  const QByteArray hash = UtilJson::fingerprint(config.toJsonObject());
+  const QByteArray hash = UtilJson::fingerprint(table.toJsonObject());
   if (hash != m_lastVisualHash) {
-    m_visual->loadConfig(config);
+    m_visual->loadConfig(table);
     m_lastVisualHash = hash;
   }
 }
@@ -50,10 +56,11 @@ void JsonTableWidget::syncVisualToCodeImpl() {
   // 序列化后格式化（JSON5 风格，与右键"格式化代码"一致）再写回：
   // 紧凑单行 JSON 会让代码视图退化成一条 7KB 长行——缩进竖线错位、
   // 高亮/校验/括号匹配对超长块全量重算导致切换卡顿
-  const QString jsonStr = FormatCode::format(
-      JsonTableConfig::toJsonString(m_visual->collectMergedObject()), FormatCode::FormatJson5);
+  QJsonObject root = m_visual->collectMergedObject();
+  const QString jsonStr =
+      FormatCode::format(JsonTableConfig::toJsonString(root), FormatCode::FormatJson5);
   setPlainTextIfChanged(jsonStr);
-  m_lastVisualHash = UtilJson::fingerprint(m_visual->collectMergedObject());
+  m_lastVisualHash = UtilJson::fingerprint(root);
 }
 
 // ════════════════════════════════════════════════════════════

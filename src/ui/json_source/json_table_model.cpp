@@ -5,7 +5,13 @@
 
 #include "json_table_model.h"
 
+#include <QDir>
+#include <QDirIterator>
+#include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
+
+#include <algorithm>
 
 #include "src/util/common/util_json.h"
 
@@ -26,6 +32,13 @@ QJsonObject JsonTableColumn::toJsonObject() const {
     obj[QString::fromLatin1(JsonTableKey::kDefault)] = defaultValue;
   }
   obj[QString::fromLatin1(JsonTableKey::kComment)] = comment;
+  // 取值域（空串=未声明不落键）
+  if (!domainType.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kDomainType)] = domainType;
+  if (!domainSourceFile.isEmpty())
+    obj[QString::fromLatin1(JsonTableKey::kDomainSourceFile)] = domainSourceFile;
+  if (!domainSourceId.isEmpty())
+    obj[QString::fromLatin1(JsonTableKey::kDomainSourceId)] = domainSourceId;
+  if (!domainUrl.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kDomainUrl)] = domainUrl;
   return obj;
 }
 
@@ -46,6 +59,10 @@ JsonTableColumn JsonTableColumn::fromJsonObject(const QJsonObject &obj) {
     c.defaultValue = QString::number(dv.toDouble());
   }
   c.comment = obj.value(QString::fromLatin1(JsonTableKey::kComment)).toString();
+  c.domainType = obj.value(QString::fromLatin1(JsonTableKey::kDomainType)).toString();
+  c.domainSourceFile = obj.value(QString::fromLatin1(JsonTableKey::kDomainSourceFile)).toString();
+  c.domainSourceId = obj.value(QString::fromLatin1(JsonTableKey::kDomainSourceId)).toString();
+  c.domainUrl = obj.value(QString::fromLatin1(JsonTableKey::kDomainUrl)).toString();
   return c;
 }
 
@@ -53,7 +70,9 @@ bool JsonTableColumn::operator==(const JsonTableColumn &other) const {
   return name == other.name && mysqlType == other.mysqlType && isUnsigned == other.isUnsigned &&
          nullable == other.nullable && isPrimary == other.isPrimary &&
          isAutoInc == other.isAutoInc && defaultValue == other.defaultValue &&
-         comment == other.comment;
+         comment == other.comment && domainType == other.domainType &&
+         domainSourceFile == other.domainSourceFile && domainSourceId == other.domainSourceId &&
+         domainUrl == other.domainUrl;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -126,6 +145,11 @@ QJsonObject JsonTableSelCol::toJsonObject() const {
   obj[QString::fromLatin1(JsonTableKey::kRef)] = ref;
   if (!label.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kLabel)] = label;
   if (width > 0) obj[QString::fromLatin1(JsonTableKey::kWidth)] = width;
+  // 列表展示（空/0=未配置不落键）
+  if (!displayType.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kDisplayType)] = displayType;
+  if (listThumbWidth > 0) obj[QString::fromLatin1(JsonTableKey::kListThumbWidth)] = listThumbWidth;
+  if (listThumbHeight > 0)
+    obj[QString::fromLatin1(JsonTableKey::kListThumbHeight)] = listThumbHeight;
   return obj;
 }
 
@@ -134,11 +158,16 @@ JsonTableSelCol JsonTableSelCol::fromJsonObject(const QJsonObject &obj) {
   c.ref = obj.value(QString::fromLatin1(JsonTableKey::kRef)).toString();
   c.label = obj.value(QString::fromLatin1(JsonTableKey::kLabel)).toString();
   c.width = obj.value(QString::fromLatin1(JsonTableKey::kWidth)).toInt(0);
+  c.displayType = obj.value(QString::fromLatin1(JsonTableKey::kDisplayType)).toString();
+  c.listThumbWidth = obj.value(QString::fromLatin1(JsonTableKey::kListThumbWidth)).toInt(0);
+  c.listThumbHeight = obj.value(QString::fromLatin1(JsonTableKey::kListThumbHeight)).toInt(0);
   return c;
 }
 
 bool JsonTableSelCol::operator==(const JsonTableSelCol &other) const {
-  return ref == other.ref && label == other.label && width == other.width;
+  return ref == other.ref && label == other.label && width == other.width &&
+         displayType == other.displayType && listThumbWidth == other.listThumbWidth &&
+         listThumbHeight == other.listThumbHeight;
 }
 
 QJsonObject JsonTableQueryCol::toJsonObject() const {
@@ -167,6 +196,25 @@ QJsonObject JsonTableEditCol::toJsonObject() const {
   if (!visible) obj[QString::fromLatin1(JsonTableKey::kVisible)] = false;
   if (!widget.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kWidget)] = widget;
   if (required) obj[QString::fromLatin1(JsonTableKey::kRequired)] = true;
+  // 上传绑定与编辑缩略图（空/0=未配置不落键）
+  if (!uploadSourceFile.isEmpty())
+    obj[QString::fromLatin1(JsonTableKey::kUploadSourceFile)] = uploadSourceFile;
+  if (!uploadSourceId.isEmpty())
+    obj[QString::fromLatin1(JsonTableKey::kUploadSourceId)] = uploadSourceId;
+  if (editThumbWidth > 0) obj[QString::fromLatin1(JsonTableKey::kEditThumbWidth)] = editThumbWidth;
+  if (editThumbHeight > 0)
+    obj[QString::fromLatin1(JsonTableKey::kEditThumbHeight)] = editThumbHeight;
+  // 编辑表单精细参数（空/0=未配置不落键，模板按类型缺省）
+  if (!placeholder.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kPlaceholder)] = placeholder;
+  if (maxlength > 0) obj[QString::fromLatin1(JsonTableKey::kMaxlength)] = maxlength;
+  if (textareaRows > 0) obj[QString::fromLatin1(JsonTableKey::kTextareaRows)] = textareaRows;
+  if (minValue != 0) obj[QString::fromLatin1(JsonTableKey::kMinValue)] = minValue;
+  if (maxValue != 0) obj[QString::fromLatin1(JsonTableKey::kMaxValue)] = maxValue;
+  if (precision > 0) obj[QString::fromLatin1(JsonTableKey::kPrecision)] = precision;
+  if (!dateFormat.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kDateFormat)] = dateFormat;
+  if (formSpan > 0) obj[QString::fromLatin1(JsonTableKey::kFormSpan)] = formSpan;
+  if (!formDefaultValue.isEmpty())
+    obj[QString::fromLatin1(JsonTableKey::kFormFieldDefault)] = formDefaultValue;
   return obj;
 }
 
@@ -177,12 +225,32 @@ JsonTableEditCol JsonTableEditCol::fromJsonObject(const QJsonObject &obj) {
   c.visible = obj.value(QString::fromLatin1(JsonTableKey::kVisible)).toBool(true);
   c.widget = obj.value(QString::fromLatin1(JsonTableKey::kWidget)).toString();
   c.required = obj.value(QString::fromLatin1(JsonTableKey::kRequired)).toBool(false);
+  c.uploadSourceFile = obj.value(QString::fromLatin1(JsonTableKey::kUploadSourceFile)).toString();
+  c.uploadSourceId = obj.value(QString::fromLatin1(JsonTableKey::kUploadSourceId)).toString();
+  c.editThumbWidth = obj.value(QString::fromLatin1(JsonTableKey::kEditThumbWidth)).toInt(0);
+  c.editThumbHeight = obj.value(QString::fromLatin1(JsonTableKey::kEditThumbHeight)).toInt(0);
+  c.placeholder = obj.value(QString::fromLatin1(JsonTableKey::kPlaceholder)).toString();
+  c.maxlength = obj.value(QString::fromLatin1(JsonTableKey::kMaxlength)).toInt(0);
+  c.textareaRows = obj.value(QString::fromLatin1(JsonTableKey::kTextareaRows)).toInt(0);
+  c.minValue = obj.value(QString::fromLatin1(JsonTableKey::kMinValue)).toDouble(0);
+  c.maxValue = obj.value(QString::fromLatin1(JsonTableKey::kMaxValue)).toDouble(0);
+  c.precision = obj.value(QString::fromLatin1(JsonTableKey::kPrecision)).toInt(0);
+  c.dateFormat = obj.value(QString::fromLatin1(JsonTableKey::kDateFormat)).toString();
+  c.formSpan = obj.value(QString::fromLatin1(JsonTableKey::kFormSpan)).toInt(0);
+  c.formDefaultValue = obj.value(QString::fromLatin1(JsonTableKey::kFormFieldDefault)).toString();
   return c;
 }
 
 bool JsonTableEditCol::operator==(const JsonTableEditCol &other) const {
   return ref == other.ref && label == other.label && visible == other.visible &&
-         widget == other.widget && required == other.required;
+         widget == other.widget && required == other.required &&
+         uploadSourceFile == other.uploadSourceFile && uploadSourceId == other.uploadSourceId &&
+         editThumbWidth == other.editThumbWidth && editThumbHeight == other.editThumbHeight &&
+         placeholder == other.placeholder && maxlength == other.maxlength &&
+         textareaRows == other.textareaRows && minValue == other.minValue &&
+         maxValue == other.maxValue && precision == other.precision &&
+         dateFormat == other.dateFormat && formSpan == other.formSpan &&
+         formDefaultValue == other.formDefaultValue;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -290,6 +358,8 @@ QJsonObject JsonTableTable::toJsonObject() const {
   obj[QString::fromLatin1(JsonTableKey::kModelName)] = modelName;
   obj[QString::fromLatin1(JsonTableKey::kTableComment)] = tableComment;
   obj[QString::fromLatin1(JsonTableKey::kManualUpdateTime)] = manualUpdateTime;
+  // frontend 缺省 true 不落键（仅 false 落键 = 纯 API 模块，前端链跳过）
+  if (!frontend) obj[QString::fromLatin1(JsonTableKey::kFrontend)] = false;
 
   QJsonArray colArr;
   for (const auto &c : columns) colArr.append(c.toJsonObject());
@@ -359,6 +429,13 @@ QJsonObject JsonTableTable::toJsonObject() const {
   if (i18n.isEnabled()) {
     obj.insert(QString::fromLatin1(JsonTableKey::kI18n), i18n.toJsonObject());
   }
+
+  // 操作按钮（键名与 .jsonvue ButtonConfig 完全一致；空数组不落键）
+  if (!buttons.isEmpty()) {
+    QJsonArray btnArr;
+    for (const auto &b : buttons) btnArr.append(b.toJson());
+    obj.insert(QString::fromLatin1(JsonTableKey::kButtons), btnArr);
+  }
   return obj;
 }
 
@@ -370,6 +447,8 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
   t.extra.remove(QString::fromLatin1(JsonTableKey::kModelName));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kTableComment));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kManualUpdateTime));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kFrontend));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kButtons));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kColumns));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kIndexes));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kJoinTable));
@@ -388,6 +467,8 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
   t.tableComment = obj.value(QString::fromLatin1(JsonTableKey::kTableComment)).toString();
   t.manualUpdateTime =
       obj.value(QString::fromLatin1(JsonTableKey::kManualUpdateTime)).toBool(false);
+  // frontend 缺省/空/null = true（生成前端页面）；仅显式 false 生效
+  t.frontend = obj.value(QString::fromLatin1(JsonTableKey::kFrontend)).toBool(true);
 
   const QJsonArray colArr = obj.value(QString::fromLatin1(JsonTableKey::kColumns)).toArray();
   for (const auto &v : colArr) {
@@ -472,18 +553,25 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
 
   t.i18n = JsonTableI18n::fromJsonObject(
       obj.value(QString::fromLatin1(JsonTableKey::kI18n)).toObject());
+
+  // 操作按钮（键名与 .jsonvue ButtonConfig 完全一致）
+  const QJsonArray btnArr = obj.value(QString::fromLatin1(JsonTableKey::kButtons)).toArray();
+  for (const auto &v : btnArr) {
+    if (v.isObject()) t.buttons.append(ButtonConfig::fromJson(v.toObject()));
+  }
   return t;
 }
 
 bool JsonTableTable::operator==(const JsonTableTable &other) const {
   return tableName == other.tableName && modelName == other.modelName &&
          tableComment == other.tableComment && manualUpdateTime == other.manualUpdateTime &&
-         columns == other.columns && indexes == other.indexes && joinTable == other.joinTable &&
-         selCols == other.selCols && selColsEq == other.selColsEq &&
-         selColsGap == other.selColsGap && selColsLike == other.selColsLike &&
-         editCols == other.editCols && selColsSort == other.selColsSort &&
-         enums == other.enums && globalEnumCols == other.globalEnumCols && i18n == other.i18n &&
-         extra == other.extra;
+         frontend == other.frontend && columns == other.columns && indexes == other.indexes &&
+         joinTable == other.joinTable && selCols == other.selCols &&
+         selColsEq == other.selColsEq && selColsGap == other.selColsGap &&
+         selColsLike == other.selColsLike && editCols == other.editCols &&
+         selColsSort == other.selColsSort && enums == other.enums &&
+         globalEnumCols == other.globalEnumCols && i18n == other.i18n &&
+         buttons == other.buttons && extra == other.extra;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -560,4 +648,104 @@ JsonTableConfig JsonTableConfig::fromJsonString(const QString &jsonStr, QString 
     return JsonTableConfig();
   }
   return fromJson(doc.object());
+}
+
+// ════════════════════════════════════════════════════════════
+//  一文件一表（单表新格式）文件读写与项目上下文辅助
+// ════════════════════════════════════════════════════════════
+
+JsonTableTable jsonTableFromString(const QString &text, QString *error) {
+  if (error) error->clear();
+  QJsonParseError perr;
+  // JSON5 兼容解析（与 JsonTableConfig::fromJsonString 同理由，见彼处注释）
+  QJsonDocument doc = UtilJson::fromJson(text, &perr);
+  if (perr.error != QJsonParseError::NoError || !doc.isObject()) {
+    if (error) *error = QStringLiteral("JSON 解析失败");
+    return JsonTableTable();
+  }
+  const QJsonObject root = doc.object();
+  if (root.contains(QString::fromLatin1(JsonTableKey::kTables))) {
+    if (error)
+      *error = QStringLiteral("旧多表格式（含 tables 键），请先运行 "
+                              "file/tools/split_jsontable.ac 拆分");
+    return JsonTableTable();
+  }
+  if (!root.contains(QString::fromLatin1(JsonTableKey::kTable))) {
+    if (error) *error = QStringLiteral("缺少顶层 table 键");
+    return JsonTableTable();
+  }
+  return JsonTableTable::fromJsonObject(
+      root.value(QString::fromLatin1(JsonTableKey::kTable)).toObject());
+}
+
+JsonTableTable jsonTableFromFile(const QString &path, QString *error) {
+  if (error) error->clear();
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    if (error) *error = QStringLiteral("无法打开文件: %1").arg(path);
+    return JsonTableTable();
+  }
+  const QString content = QString::fromUtf8(file.readAll());
+  file.close();
+  return jsonTableFromString(content, error);
+}
+
+bool jsonTableToFile(const JsonTableTable &table, const QString &path) {
+  QJsonObject root;
+  root[QString::fromLatin1(JsonTableKey::kTable)] = table.toJsonObject();
+  QFile file(path);
+  if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) return false;
+  file.write(JsonTableConfig::toJsonString(root).toUtf8());
+  file.close();
+  return true;
+}
+
+QString findJsontableProjPath(const QString &fromDir, int maxUpLevels) {
+  QDir dir(fromDir);
+  for (int i = 0; i <= maxUpLevels; ++i) {
+    const QString candidate = dir.filePath(QString::fromLatin1(JsonTableKey::kProjFile));
+    if (QFileInfo::exists(candidate)) return QDir::cleanPath(candidate);
+    if (!dir.cdUp()) break;
+  }
+  return QString();
+}
+
+JsonTableConfig jsontableProjFromFile(const QString &path, QString *error) {
+  if (error) error->clear();
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    if (error) *error = QStringLiteral("无法打开项目 meta 文件: %1").arg(path);
+    return JsonTableConfig();
+  }
+  const QString content = QString::fromUtf8(file.readAll());
+  file.close();
+
+  QJsonParseError perr;
+  QJsonDocument doc = UtilJson::fromJson(content, &perr);
+  if (perr.error != QJsonParseError::NoError || !doc.isObject() ||
+      !doc.object().contains(QString::fromLatin1(JsonTableKey::kMeta))) {
+    if (error) *error = QStringLiteral("项目 meta 文件解析失败（缺少 meta 节点）: %1").arg(path);
+    return JsonTableConfig();
+  }
+  return JsonTableConfig::fromJson(doc.object());
+}
+
+QVector<JsonTableTable> listProjectTables(const QString &baseDir) {
+  QVector<JsonTableTable> tables;
+  QDirIterator it(baseDir, {QStringLiteral("*.jsontable")}, QDir::Files,
+                  QDirIterator::Subdirectories);
+  while (it.hasNext()) {
+    const QString path = it.next();
+    QString err;
+    const JsonTableTable t = jsonTableFromFile(path, &err);
+    if (!err.isEmpty() || t.tableName.isEmpty()) continue;  // 跳过解析失败/空文件
+    tables.append(t);
+  }
+  std::sort(tables.begin(), tables.end(),
+            [](const JsonTableTable &a, const JsonTableTable &b) {
+              const QString am = a.modelName.isEmpty() ? a.tableName : a.modelName;
+              const QString bm = b.modelName.isEmpty() ? b.tableName : b.modelName;
+              return am < bm;
+            });
+  return tables;
 }

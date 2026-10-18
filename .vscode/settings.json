@@ -9,6 +9,18 @@
         "editor.formatOnSave": true
     },
     "cmake.useCMakePresets": "never",
+    "cmake.generator": "Visual Studio 17 2022",
+    "cmake.environment": {
+        "PATH": "C:\\WINDOWS\\system32;C:\\WINDOWS;D:\\tool\\Qt\\6.12.0\\msvc2022_64\\bin;D:\\tool\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.43.34808\\bin\\Hostx64\\x64;${workspaceFolder}\\build\\RelWithDebInfo"
+    },
+    "cmake.debugConfig": {
+        "environment": [
+            {
+                "name": "PATH",
+                "value": "C:\\WINDOWS\\system32;C:\\WINDOWS;D:\\tool\\Qt\\6.12.0\\msvc2022_64\\bin;D:\\tool\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.43.34808\\bin\\Hostx64\\x64;${workspaceFolder}\\build\\RelWithDebInfo"
+            }
+        ]
+    },
     "cmake.defaultVariants": {
         "buildType": {
             "default": "reldeb",

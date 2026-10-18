@@ -1,0 +1,64 @@
+{
+  table: {
+    columns: [
+      {
+        comment: '主键',
+        isAutoInc: true,
+        isPrimary: true,
+        mysqlType: 'int',
+        name: 'id',
+        nullable: false,
+        unsigned: true,
+      },
+      {
+        comment: '用户名（登录账号）',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'user_name',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '密码（bcrypt）',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(128)',
+        name: 'password',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '昵称',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'nick_name',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '创建时间',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'datetime',
+        name: 'create_time',
+        nullable: false,
+        unsigned: false,
+      },
+    ],
+    indexes: [
+      {
+        cols: [
+          'user_name',
+        ],
+        name: 'uk_user_name',
+        unique: true,
+      },
+    ],
+    manualUpdateTime: false,
+    modelName: 'user',
+    tableComment: '用户表（shop.user_id 联表演示）',
+    tableName: 'user',
+  },
+}

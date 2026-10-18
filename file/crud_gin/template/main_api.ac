@@ -37,6 +37,7 @@ import { QueryData, SelFieldDef } from "./core/query_data.ac";
 import { updateRouterFile } from "./go_module.ac";
 import { snakeToPascal, isNumericStr } from "../../tool/tool_str.ac";
 import { findGlobalEnumFiles, mergeGlobalEnumFiles } from "../../tool/tool_global_enum.ac";
+import { dirnameOf, findProjPath } from "../../tool/tool_jsontable.ac";
 
 /// @brief 模板配置（一个模板对应一个生成的代码文件）
 class TemplateConfig {
@@ -52,13 +53,24 @@ export function generateApiMain(params: Object): Number {
   let generatedFileCount: Number = 0;
 
   // ── 1. .jsontable 配置文件收集 ─────────────────────────────────────
-  //      params.jsonTablePath 优先（单文件）；
-  //      省略时收集 tree.config 勾选文件中的 .jsontable（限定本项目目录）
+  //      优先级：params.jsonTablePaths（文件数组，与前端链对称）
+  //            > params.jsonTablePath（单文件）
+  //            > 收集 tree.config 勾选文件中的 .jsontable（限定本项目目录）
   let jsonFiles: String[] = [];
-  let jsonTablePath: String = params["jsonTablePath"];
-  if (jsonTablePath != null && jsonTablePath.length > 0) {
-    jsonFiles.append(jsonTablePath);
-  } else {
+  let jtpArr: String[] = params["jsonTablePaths"];
+  if (jtpArr != null) {
+    let jaLen = jtpArr.length;
+    for (let ja = 0; ja < jaLen; ja = ja + 1) {
+      jsonFiles.append(jtpArr[ja].replace("\\", "/"));
+    }
+  }
+  if (jsonFiles.length == 0) {
+    let jsonTablePath: String = params["jsonTablePath"];
+    if (jsonTablePath != null && jsonTablePath.length > 0) {
+      jsonFiles.append(jsonTablePath);
+    }
+  }
+  if (jsonFiles.length == 0) {
     let checked: String[] = getCheckedFiles(scriptDir());
     for (f in checked) {
       if (f.endsWith(".jsontable")) {
@@ -67,7 +79,7 @@ export function generateApiMain(params: Object): Number {
     }
   }
   if (jsonFiles.length == 0) {
-    printError("错误：未找到 .jsontable 配置（请配置 params.jsonTablePath，或在项目目录勾选 .jsontable 文件）");
+    printError("错误：未找到 .jsontable 配置（请配置 params.jsonTablePaths / jsonTablePath，或在项目目录勾选 .jsontable 文件）");
     return 0;
   }
   printLog("jsontable files: " + jsonFiles.length + " 份");
@@ -96,28 +108,48 @@ export function generateApiMain(params: Object): Number {
     return 0;
   }
 
-  // ── 2. 读取 .jsontable：归一 tables[] 并收集 meta ──────────────────
-  //      多份配置时 tables 顺序合并（表名重复在 4 节预扫描中报错去重）
+  // ── 2. 读取 .jsontable：单表新格式逐文件收集 + 项目 meta ────────────
+  //      一文件一表：每份 { table: {...} } 一张表（翻译表内嵌在表的 i18n 配置）；
+  //      共享 meta 在同目录 project.jsontableproj（params.projPath 显式指定
+  //      优先，否则从第一份 .jsontable 所在目录向上查找）；
+  //      表名重复在 4 节预扫描中报错去重
   let tables: Object[] = [];
   let metaGoBasePath: String = "";
+  let projPath: String = params["projPath"];
+  if (projPath == null || projPath.length == 0) {
+    projPath = findProjPath(dirnameOf(jsonFiles[0]), 3);
+  }
+  if (projPath != null && projPath.length > 0) {
+    let projJson: Object = readJson(projPath);
+    if (projJson == null) {
+      printError("错误：项目 meta 文件读取失败: " + projPath);
+      return 0;
+    }
+    let projMeta: Object = projJson["meta"];
+    if (projMeta != null && projMeta["goBasePath"] != null) {
+      metaGoBasePath = projMeta["goBasePath"];
+    }
+    printLog("项目 meta: " + projPath);
+  } else {
+    printLog("未找到 project.jsontableproj（meta.goBasePath 回退 params.goBasePath）");
+  }
   for (file in jsonFiles) {
     let fileJson: Object = readJson(file);
     if (fileJson == null) {
       printError("错误：.jsontable 读取失败: " + file);
       return 0;
     }
-    let meta: Object = fileJson["meta"];
-    if (meta != null && metaGoBasePath == "" && meta["goBasePath"] != null) {
-      metaGoBasePath = meta["goBasePath"];
-    }
-    let fileTables: Object[] = fileJson["tables"];
-    if (fileTables == null) {
-      printError("错误：.jsontable 缺少 tables 数组: " + file);
+    if (fileJson["tables"] != null) {
+      printError("错误：旧多表格式（含 tables 键）: " + file);
+      printError("      请先运行 file/tools/split_jsontable.ac 拆分为一文件一表新格式");
       return 0;
     }
-    for (t in fileTables) {
-      tables.append(t);
+    let t: Object = fileJson["table"];
+    if (t == null) {
+      printError("错误：.jsontable 缺少顶层 table 键: " + file);
+      return 0;
     }
+    tables.append(t);
   }
   printLog("tables count: " + tables.length);
 
@@ -382,7 +414,7 @@ export function generateApiMain(params: Object): Number {
     //      whereConditions - repo getWhereByIn 的 Go 条件块
     let queryData: QueryData = new QueryData();
     let selFields: SelFieldDef[] = queryData.buildSelFields(json, param, joinDefs, hasJoin);
-    let sortInfo = queryData.buildSortInfo(json, param.primaryField.name, joinDefs, hasJoin);
+    let sortInfo = queryData.buildSortInfo(json, param, param.primaryField.name, joinDefs, hasJoin);
     let whereConditions: String[] = queryData.buildWhereConditions(selFields);
 
     // ── 6.4c 联表平铺字段与 JOIN/SELECT 片段（按 ref 使用集按需生成）─────
