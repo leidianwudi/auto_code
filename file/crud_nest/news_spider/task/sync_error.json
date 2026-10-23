@@ -1,0 +1,32 @@
+{
+  // 指定 AutoCode schema，便于拆分后的单表配置校验。
+  $schema: '/crud_nest/template/tool/param.schema.json',
+  // 同步/爬取失败留痕表：按 source_table + source_id 去重刷新失败原因。
+  tables: [
+    {
+      modelName: 'task\\sync_error',
+      tableName: 'sync_error',
+
+      // 精确查询字段
+      selCols: [
+        'source_table',
+        'source_id',
+        'status',
+      ],
+
+      // 模糊查询字段
+      selColsLike: [
+        'source_table',
+        'error_message',
+      ],
+
+      // 最新的失败记录优先展示
+      selColsSort: {
+        id: 'DESC',
+      },
+
+      // 该表没有物理外键
+      joinTable: [],
+    },
+  ],
+}

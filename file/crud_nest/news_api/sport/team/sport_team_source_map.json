@@ -1,0 +1,17 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\sport_team_source_map",
+      "tableName": "sport_team_source_map",
+      "selCols": [
+        "sport_id",
+        "source",
+        "source_id"
+      ],
+      "selColsSort": {
+        "id": "DESC"
+      }
+    }
+  ]
+}

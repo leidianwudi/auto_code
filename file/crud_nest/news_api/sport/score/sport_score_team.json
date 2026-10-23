@@ -10,9 +10,7 @@
         "team_id",
         "score_type_id"
       ],
-      "selColsLike": [
-        "year"
-      ],
+      "selColsLike": [],
       "selColsGap": [
         "score"
       ],
