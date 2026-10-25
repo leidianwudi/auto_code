@@ -286,6 +286,19 @@ void JsonTableDesigner::setupUI() {
   m_frontendCheck->setToolTip(
       QStringLiteral("取消勾选 = 纯 API 模块：后端链照常生成 API，前端链跳过此表"));
   topRow->addWidget(m_frontendCheck);
+  // C 端只读查询（modules/app）：默认不生成，鉴权默认需登录
+  m_appQueryCheck = new QCheckBox(QStringLiteral("生成C端查询"), this);
+  m_appQueryCheck->setToolTip(
+      QStringLiteral("勾选后生成 modules/app 的 selectByIn/selectById 只读接口，永不生成写接口"));
+  topRow->addWidget(m_appQueryCheck);
+  m_appAuthCombo = AuiComboBox::create(this);
+  m_appAuthCombo->addItem(QStringLiteral("公开浏览"), QStringLiteral("public"));
+  m_appAuthCombo->addItem(QStringLiteral("需登录"), QStringLiteral("user"));
+  m_appAuthCombo->setToolTip(
+      QStringLiteral("public=不挂 UserAuth（如商品列表）；user=需登录（默认，宁可漏开放不可误开放）"));
+  topRow->addWidget(m_appAuthCombo);
+  connect(m_appQueryCheck, &QCheckBox::toggled, this,
+          [this](bool on) { m_appAuthCombo->setEnabled(on); });
   fieldTab->addLayout(topRow);
 
   // ── 字段表格工具行 ──
@@ -751,6 +764,12 @@ void JsonTableDesigner::refill() {
   m_commentEdit->setText(m_table.tableComment);
   m_manualUpdateCheck->setChecked(m_table.manualUpdateTime);
   m_frontendCheck->setChecked(m_table.frontend);
+  m_appQueryCheck->setChecked(m_table.appQuery);
+  {
+    const int authIdx = m_appAuthCombo->findData(m_table.appAuth);
+    m_appAuthCombo->setCurrentIndex(authIdx >= 0 ? authIdx : 1);
+    m_appAuthCombo->setEnabled(m_table.appQuery);
+  }
   fillColumns(m_table.columns);
   fillIndexes(m_table.indexes);
   fillJoins(m_table.joinTable);
@@ -2189,6 +2208,9 @@ JsonTableTable JsonTableDesigner::collectTable() const {
   t.tableComment = m_commentEdit->text().trimmed();
   t.manualUpdateTime = m_manualUpdateCheck->isChecked();
   t.frontend = m_frontendCheck->isChecked();
+  t.appQuery = m_appQueryCheck->isChecked();
+  t.appAuth = m_appAuthCombo->currentData().toString();
+  if (t.appAuth.isEmpty()) t.appAuth = QStringLiteral("user");
   t.buttons = m_buttons;
   t.columns = collectColumns();
   t.indexes = collectIndexes();

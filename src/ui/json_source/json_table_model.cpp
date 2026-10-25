@@ -360,6 +360,12 @@ QJsonObject JsonTableTable::toJsonObject() const {
   obj[QString::fromLatin1(JsonTableKey::kManualUpdateTime)] = manualUpdateTime;
   // frontend 缺省 true 不落键（仅 false 落键 = 纯 API 模块，前端链跳过）
   if (!frontend) obj[QString::fromLatin1(JsonTableKey::kFrontend)] = false;
+  // appQuery 缺省 false 不落键；启用时同时写鉴权方式（缺省 user）
+  if (appQuery) {
+    obj[QString::fromLatin1(JsonTableKey::kAppQuery)] = true;
+    obj[QString::fromLatin1(JsonTableKey::kAppAuth)] =
+        appAuth.isEmpty() ? QStringLiteral("user") : appAuth;
+  }
 
   QJsonArray colArr;
   for (const auto &c : columns) colArr.append(c.toJsonObject());
@@ -448,6 +454,8 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
   t.extra.remove(QString::fromLatin1(JsonTableKey::kTableComment));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kManualUpdateTime));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kFrontend));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kAppQuery));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kAppAuth));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kButtons));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kColumns));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kIndexes));
@@ -469,6 +477,10 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
       obj.value(QString::fromLatin1(JsonTableKey::kManualUpdateTime)).toBool(false);
   // frontend 缺省/空/null = true（生成前端页面）；仅显式 false 生效
   t.frontend = obj.value(QString::fromLatin1(JsonTableKey::kFrontend)).toBool(true);
+  // appQuery 缺省 false；appAuth 缺省 user
+  t.appQuery = obj.value(QString::fromLatin1(JsonTableKey::kAppQuery)).toBool(false);
+  t.appAuth = obj.value(QString::fromLatin1(JsonTableKey::kAppAuth)).toString();
+  if (t.appAuth.isEmpty()) t.appAuth = QStringLiteral("user");
 
   const QJsonArray colArr = obj.value(QString::fromLatin1(JsonTableKey::kColumns)).toArray();
   for (const auto &v : colArr) {
@@ -565,7 +577,8 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
 bool JsonTableTable::operator==(const JsonTableTable &other) const {
   return tableName == other.tableName && modelName == other.modelName &&
          tableComment == other.tableComment && manualUpdateTime == other.manualUpdateTime &&
-         frontend == other.frontend && columns == other.columns && indexes == other.indexes &&
+         frontend == other.frontend && appQuery == other.appQuery && appAuth == other.appAuth &&
+         columns == other.columns && indexes == other.indexes &&
          joinTable == other.joinTable && selCols == other.selCols &&
          selColsEq == other.selColsEq && selColsGap == other.selColsGap &&
          selColsLike == other.selColsLike && editCols == other.editCols &&

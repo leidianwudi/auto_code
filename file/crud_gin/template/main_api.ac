@@ -1471,6 +1471,34 @@ export function generateSplitTable(json: Object, goBasePath: String, moduleName:
   let routerImports: String = "import (\n" + tb + "\"github.com/gin-gonic/gin\"\n\n" + tb + "\""
     + commonPath + "\"\n" + tb + "\"" + middlewarePath + "\"\n)";
 
+  // ── C 端只读模块（modules/app）配置 ──────────────────────────
+  //      appQuery 缺省 false；appAuth 缺省 user（宁可漏开放、不可误开放）
+  let appQuery: Bool = (json["appQuery"] == true);
+  let appAuth: String = json["appAuth"];
+  if (appAuth == null || appAuth == "") {
+    appAuth = "user";
+  }
+  let appIsPublic: Bool = (appAuth == "public");
+  let appPkgComment: String = json["appPkgComment"];
+  if (appPkgComment == null || appPkgComment == "") {
+    appPkgComment = param.tableDesc
+      + (appIsPublic ? " C 端模块（公开只读查询）" : " C 端模块（需登录只读查询）");
+  }
+  let appRouterMountNote: String = appIsPublic
+    ? "本模块生成配置为公开浏览，故不挂 UserAuth。"
+    : "本模块生成配置为需登录，已挂 UserAuth。";
+  let appRouterAuthNote: String = appIsPublic
+    ? "生成配置：公开浏览，未挂 UserAuth"
+    : "生成配置：需登录，已挂 UserAuth";
+  let appRouterImports: String = "";
+  if (appIsPublic) {
+    appRouterImports = "import (\n" + tb + "\"github.com/gin-gonic/gin\"\n\n" + tb
+      + "\"" + commonPath + "\"\n)";
+  } else {
+    appRouterImports = "import (\n" + tb + "\"github.com/gin-gonic/gin\"\n\n" + tb
+      + "\"" + commonPath + "\"\n" + tb + "\"" + middlewarePath + "\"\n)";
+  }
+
   // ── 包注释文案（表级配置，缺省按表注释兜底）───────────────────
   let dataPkgComment: String = json["dataPkgComment"];
   if (dataPkgComment == null || dataPkgComment == "") {
@@ -1526,6 +1554,12 @@ export function generateSplitTable(json: Object, goBasePath: String, moduleName:
   tplData["hdlImports"] = hdlImports;
   tplData["svcImports"] = svcImports;
   tplData["routerImports"] = routerImports;
+  tplData["appQuery"] = appQuery;
+  tplData["appIsPublic"] = appIsPublic;
+  tplData["appPkgComment"] = appPkgComment;
+  tplData["appRouterMountNote"] = appRouterMountNote;
+  tplData["appRouterAuthNote"] = appRouterAuthNote;
+  tplData["appRouterImports"] = appRouterImports;
   tplData["hasEnums"] = hasEnums;
   tplData["enums"] = enums;
 
@@ -1540,6 +1574,17 @@ export function generateSplitTable(json: Object, goBasePath: String, moduleName:
     { tpl: tplDir + "/router.tpl",        out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_router_.go" },
     { tpl: tplDir + "/service/svc_write.tpl", out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_service.go" }
   ];
+
+  // C 端只读模块：只生成 selectByIn/selectById 三件（service/handler/router），
+  // 永不生成写接口；路由是否挂 UserAuth 由 appAuth 决定
+  if (appQuery) {
+    templates.append({ tpl: tplDir + "/app/svc.tpl",
+      out: "{goBasePath}/modules/app/{dataDir}/{tableName}_service_.go" });
+    templates.append({ tpl: tplDir + "/app/hdl.tpl",
+      out: "{goBasePath}/modules/app/{dataDir}/{tableName}_handler_.go" });
+    templates.append({ tpl: tplDir + "/app/router.tpl",
+      out: "{goBasePath}/modules/app/{dataDir}/{tableName}_router_.go" });
+  }
 
   let count: Number = 0;
   for (cfg in templates) {

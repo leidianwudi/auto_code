@@ -170,6 +170,8 @@ private:
   QLineEdit *m_commentEdit = nullptr;         ///< 表注释
   QCheckBox *m_manualUpdateCheck = nullptr;   ///< 手动维护更新时间
   QCheckBox *m_frontendCheck = nullptr;       ///< 生成前端页面（false = 纯 API 模块）
+  QCheckBox *m_appQueryCheck = nullptr;       ///< 生成 C 端只读查询（modules/app）
+  QComboBox *m_appAuthCombo = nullptr;        ///< C 端鉴权：public / user
   QTableWidget *m_colsTable = nullptr;        ///< 字段表格（核心编辑区）
   QTableWidget *m_indexTable = nullptr;       ///< 索引表格
   QPlainTextEdit *m_ddlView = nullptr;        ///< DDL 预览（只读）

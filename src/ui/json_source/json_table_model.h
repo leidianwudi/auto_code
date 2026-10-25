@@ -57,6 +57,9 @@ inline constexpr const char *kProjFile =
     "project.jsontableproj";  ///< 项目级 meta 文件名（与 .jsontable 同目录）
 inline constexpr const char *kFrontend =
     "frontend";  ///< 生成前端页面开关（缺省 true；仅 false 落键 = 纯 API 模块）
+inline constexpr const char *kAppQuery = "appQuery";  ///< 生成 C 端只读查询模块（缺省 false）
+inline constexpr const char *kAppAuth =
+    "appAuth";  ///< C 端鉴权：public=公开 / user=需登录（缺省 user）
 inline constexpr const char *kButtons = "buttons";  ///< 操作按钮（ButtonConfig[]，键名与 .jsonvue 一致）
 // tables 键
 inline constexpr const char *kTables = "tables";
@@ -363,6 +366,8 @@ struct JsonTableTable {
   QString tableComment;            ///< 表注释
   bool manualUpdateTime = false;   ///< 手动维护更新时间（不走 DB ON UPDATE）
   bool frontend = true;            ///< 生成前端页面（缺省 true；仅 false 落键 = 纯 API 模块）
+  bool appQuery = false;           ///< 生成 C 端只读查询模块（缺省 false；只出 selectByIn/selectById）
+  QString appAuth = QStringLiteral("user");  ///< C 端鉴权：public=公开 / user=需登录
   QVector<JsonTableColumn> columns;  ///< 列定义（顺序即建表顺序；含列级取值域）
   QVector<JsonTableIndex> indexes;   ///< 索引定义
   // ── 表级进阶键（v2 结构化，此前走 extra）──

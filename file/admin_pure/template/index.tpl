@@ -364,8 +364,8 @@ ${/if}
     <!-- 工具栏 + 表格 + 分页（卡片内边距走全局变量 --app-card-gap，与其它页面统一） -->
     <div class="bg-white rounded" style="padding: var(--app-card-gap, 12px)">
       <div class="mb-3">
-        <el-button type="primary" @click="addAction">新增</el-button>
-${if !noDelete}        <el-button type="danger" :disabled="selectedRows.length === 0" @click="delData()">删除</el-button>
+        <el-button type="primary" v-perms="['${permPrefix}:edit']" @click="addAction">新增</el-button>
+${if !noDelete}        <el-button type="danger" v-perms="['${permPrefix}:delete']" :disabled="selectedRows.length === 0" @click="delData()">删除</el-button>
 ${/if}${each btn in toolbarButtons}        <el-button${if btn.hasType} type="${btn.type}"${/if} @click="onCustomAction(null, '${btn.key}')">${btn.label}</el-button>
 ${/each}      </div>
 
@@ -463,12 +463,12 @@ ${if !noDetail}            <el-tooltip content="详情" placement="top">
               </el-button>
             </el-tooltip>
 ${/if}${if !noEdit}            <el-tooltip content="编辑" placement="top">
-              <el-button link type="primary" size="small" @click="rowAction(row, 'edit')">
+              <el-button link type="primary" size="small" v-perms="['${permPrefix}:edit']" @click="rowAction(row, 'edit')">
                 <IconifyIconOffline :icon="EditPen" />
               </el-button>
             </el-tooltip>
 ${/if}${if !noDelete}            <el-tooltip content="删除" placement="top">
-              <el-button link type="danger" size="small" @click="delData(row)">
+              <el-button link type="danger" size="small" v-perms="['${permPrefix}:delete']" @click="delData(row)">
                 <IconifyIconOffline :icon="Delete" />
               </el-button>
             </el-tooltip>

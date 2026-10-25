@@ -257,6 +257,8 @@
       ],
     ],
     layout: 'split',
+    appQuery: true,
+    appAuth: 'public',
     dataPkgComment: '商店表共享数据层（admin 端与 app 端复用）',
     adminPkgComment: '商店管理端模块（CRUD）',
     tableComment: '商店',
