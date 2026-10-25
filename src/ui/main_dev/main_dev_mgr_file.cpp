@@ -22,6 +22,7 @@
 #include "src/ui/json_source/json_source_widget.h"
 #include "src/ui/json_source/json_table_widget.h"
 #include "src/ui/json_source/json_upload_widget.h"
+#include "src/ui/json_source/project_config_dialog.h"
 #include "src/ui/json_vue/json_vue_editor.h"
 #include "src/ui/json_vue/json_vue_widget.h"
 #include "src/ui/schema_json/schema_json_widget.h"
@@ -186,6 +187,24 @@ QWidget *MainDevMgr::createEditorTab(const QString &filePath, const QString &con
 }
 
 CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *target) {
+  // project.acproj：专用项目设置对话框（不进入代码标签页）
+  if (filePath.endsWith(AcFileSuffix::kAcProj, Qt::CaseInsensitive)) {
+    ProjectConfigDialog dialog(filePath, m_ui);
+    if (dialog.exec() == QDialog::Accepted) {
+      // 项目配置变更后刷新已打开的 .jsontable 设计器上下文（DB/路径）
+      for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
+        QTabWidget *tabs = m_ui->editorPanelAt(i);
+        if (!tabs) continue;
+        for (int j = 0; j < tabs->count(); ++j) {
+          if (auto *tableWidget = qobject_cast<JsonTableWidget *>(tabs->widget(j))) {
+            tableWidget->reloadProjectContext();
+          }
+        }
+      }
+    }
+    return nullptr;
+  }
+
   // ── 查重：已打开则选中并聚焦该标签 ──
   QTabWidget *tabs = nullptr;
   int index = -1;

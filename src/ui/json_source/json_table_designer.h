@@ -8,8 +8,8 @@
  * 其余页承载表级进阶键（索引、范围/模糊列与默认排序、表内枚举主从表、
  * 全局枚举列、多语言翻译表配置）与 DDL。确定时做交叉引用校验（枚举列/
  * 全局枚举列/查询排序索引列存在性、表名重复、i18n 引用完整性）。
- * 支持从数据库反向导入表结构（合并保留
- * .jsontable 已有列的前端角色），DDL 预览与执行建表。
+ * 支持从数据库刷新表结构（差异预览 + 逐列勾选 + 排除列 + 索引同步 +
+ * 删除列后的前端引用清理），DDL 预览与执行建表。
  * 通过构造传入待编辑表，resultTable() 取回编辑结果（getter 模式，无信号回写）。
  */
 
@@ -60,6 +60,8 @@ private:
   void connectChangeSignals();
   /// 被动交叉校验：随编辑刷新底部状态行（无按钮，结果内联展示）
   void updateValidateStatus();
+  /// 数据库刷新按钮启用态（meta.db 就绪性；构造时 config 可能为空，load 后需重算）
+  void updateDbButtonStates();
   /// 多语言启用态联动（翻译表配置区整体显隐）
   void applyI18nEnabled(bool on);
   /// 面板样式（内嵌后不再经 ConfigDialogFrame，自行应用主题）
@@ -175,7 +177,9 @@ private:
   QTableWidget *m_colsTable = nullptr;        ///< 字段表格（核心编辑区）
   QTableWidget *m_indexTable = nullptr;       ///< 索引表格
   QPlainTextEdit *m_ddlView = nullptr;        ///< DDL 预览（只读）
-  QPushButton *m_importBtn = nullptr;         ///< 从数据库导入按钮
+  QPushButton *m_importBtn = nullptr;         ///< 从数据库刷新结构按钮（DDL 页）
+  QPushButton *m_refreshFieldsBtn = nullptr;  ///< 从数据库刷新字段按钮（字段页）
+  QLineEdit *m_excludeEdit = nullptr;         ///< 刷新时忽略的列（逗号分隔，存 table.extra）
   // ── 操作按钮（字段呈现页签底部区块）──
   QTableWidget *m_buttonTable = nullptr;      ///< 按钮摘要表格（label/位置/行为）
   QVector<ButtonConfig> m_buttons;            ///< 按钮编辑态

@@ -623,10 +623,11 @@ void TreeDir::onItemChanged(QTreeWidgetItem *item, int column) {
 void TreeDir::addDirectoryToTree(QTreeWidgetItem *parentItem, const QString &dirPath) {
   QDir dir(dirPath);
 
-  // 文件（.ac、.tpl 和 JSON 族；json 族清单统一取 kJsonFamily 派生，与 isJsonLike 同源）
+  // 文件（.ac、.tpl、.acproj 和 JSON 族；json 族清单统一取 kJsonFamily 派生，与 isJsonLike 同源）
   QStringList nameFilters;
   nameFilters << (QStringLiteral("*") + AcFileSuffix::kAc)
-              << (QStringLiteral("*") + AcFileSuffix::kTpl);
+              << (QStringLiteral("*") + AcFileSuffix::kTpl)
+              << (QStringLiteral("*") + AcFileSuffix::kAcProj);
   for (const char *suf : AcFileSuffix::kJsonFamily) {
     nameFilters << (QStringLiteral("*") + suf);
   }
@@ -1097,6 +1098,7 @@ QIcon TreeDir::iconForSuffix(const QString &suffix) const {
   if (suf == QStringLiteral("jsonsource")) return m_jsonSourceIcon;
   if (suf == QStringLiteral("jsonupload")) return m_jsonUploadIcon;
   if (suf == QStringLiteral("jsontable")) return m_jsonTableIcon;
+  if (suf == QStringLiteral("acproj")) return m_acProjIcon;
   return m_tplIcon;  // tpl 及未知后缀
 }
 
@@ -1108,6 +1110,7 @@ void TreeDir::refreshIcons() {
   m_jsonSourceIcon = AuiIcon::createFileTypeIcon(QStringLiteral("jsonsource"));
   m_jsonUploadIcon = AuiIcon::createFileTypeIcon(QStringLiteral("jsonupload"));
   m_jsonTableIcon = AuiIcon::createFileTypeIcon(QStringLiteral("jsontable"));
+  m_acProjIcon = AuiIcon::createFileTypeIcon(QStringLiteral("acproj"));
   m_tplIcon = AuiIcon::createFileTypeIcon(QStringLiteral("tpl"));
   m_folderIcon = AuiIcon::createFolderIcon(false);
   m_folderOpenIcon = AuiIcon::createFolderIcon(true);

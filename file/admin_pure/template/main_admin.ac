@@ -884,9 +884,11 @@ export function generateAdminMain(params: Object): Void {
   let generatedFileCount = 0;
 
   // ── 1. 输出根目录（pure-admin 项目根）：params.webBasePath，
-  //      缺省回退 project.jsontableproj 的 meta.webBasePath（见 1.2 节）──
+  //      缺省回退 project.acproj 的 meta.webBasePath（见 1.2 节）──
   let basePath: String = params["webBasePath"];
-  basePath = basePath.replace("\\", "/");
+  if (basePath != null) {
+    basePath = basePath.replace("\\", "/");
+  }
 
   // ── 1.1 .jsontable 配置文件收集（多文件支持）──────────────────────
   //    优先级：params.jsonTablePaths（文件数组）> params.jsonTablePath（单文件）
@@ -919,7 +921,7 @@ export function generateAdminMain(params: Object): Void {
   }
   printLog("jsontable files: " + jsontableFiles.length + " 份");
 
-  // ── 1.2 项目 meta（project.jsontableproj）：webBasePath 回退来源 ────
+  //  ── 1.2 项目配置（project.acproj）：webBasePath 回退来源 ────
   //    params.projPath 显式指定优先，否则从第一份 .jsontable 所在目录向上查找
   let metaWebBasePath: String = "";
   let projPath: String = params["projPath"];
@@ -944,9 +946,10 @@ export function generateAdminMain(params: Object): Void {
     basePath = metaWebBasePath;
   }
   if (basePath == null || basePath == "") {
-    printError("错误：未配置 webBasePath（params.webBasePath 与 project.jsontableproj meta.webBasePath 均为空）");
+    printError("错误：未配置 webBasePath（params.webBasePath 与 project.acproj meta.webBasePath 均为空）");
     return;
   }
+  basePath = basePath.replace("\\", "/");
 
   // ── 2. 模板配置：一个模板对应一个生成的代码文件 ───────────────────
   //    字段说明：

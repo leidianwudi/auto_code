@@ -214,6 +214,10 @@ QIcon AuiIcon::createFileTypeIcon(const QString &suffix, int size) {
     accent = dark ? QColor(0x64, 0xd8, 0xcb) : QColor(0x00, 0x89, 0x7b);
     glyph = QStringLiteral("A");
     pixelSize = qMax(8, qRound(size * 0.78));
+  } else if (suf == QStringLiteral("acproj")) {
+    accent = dark ? QColor(0x9b, 0x8c, 0xf0) : QColor(0x5b, 0x4f, 0xc4);
+    glyph = QStringLiteral("P");
+    pixelSize = qMax(8, qRound(size * 0.78));
   } else {  // tpl 及未知后缀
     accent = dark ? QColor(0x4c, 0xb0, 0x5e) : QColor(0x2f, 0x8a, 0x44);
     glyph = QStringLiteral("T");

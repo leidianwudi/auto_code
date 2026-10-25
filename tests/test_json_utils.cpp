@@ -810,12 +810,12 @@ static void testJsonTableSingleFileRoundTrip() {
   CHECK(!errOld.isEmpty());
   CHECK(errOld.contains(QStringLiteral("split_jsontable")));
 
-  // ── 4. 项目 meta 与表清单查找 ──
-  const QString projPath = dir + QStringLiteral("/project.jsontableproj");
+  // ── 4. 项目配置与表清单查找 ──
+  const QString projPath = dir + QStringLiteral("/project.acproj");
   {
     QFile f(projPath);
     CHECK(f.open(QIODevice::WriteOnly | QIODevice::Text));
-    f.write(QStringLiteral("{\"meta\":{\"project\":\"p\",\"webBasePath\":\"D:/web\","
+    f.write(QStringLiteral("{\"name\":\"p\",\"meta\":{\"project\":\"p\",\"webBasePath\":\"D:/web\","
                            "\"goBasePath\":\"D:/go\",\"db\":{\"host\":\"h\"}}}")
                 .toUtf8());
     f.close();

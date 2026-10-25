@@ -18,32 +18,21 @@ import { generateAdminMain } from "../../admin_pure/template/main_admin.ac";
 
 main {
 
-  // ── 1. 统一配置文件（表结构 + 前端角色，双端共用的事实源）────────
-  //      一文件一表，按业务域分目录：<项目>/<域>/<表>.jsontable
-  //      （域目录与 Go 模块目录 moduleDir 首段一致：shop/user/admin/sys）；
-  //      共享 meta 在同目录 project.jsontableproj（findProjPath 向上查找命中）──
-  let jsonTablePaths: String[] = [
-    scriptDir() + "/shop/shop.jsontable",
-    scriptDir() + "/user/user.jsontable",
-    scriptDir() + "/admin/admin.jsontable",
-    scriptDir() + "/sys/sys_menu.jsontable",
-    scriptDir() + "/sys/sys_role.jsontable",
-    scriptDir() + "/sys/sys_role_menu.jsontable"
-  ];
-  let projPath: String = scriptDir() + "/project.jsontableproj";
+  // ── 1. 表清单：由项目树勾选的 .jsontable 决定 ────────────────────
+  //      不传 jsonTablePaths：go 链与前端链都回退到 getCheckedFiles(scriptDir())，
+  //      勾选哪些 .jsontable 就重新生成哪些表；新增表只需勾选，无需改本脚本。
+  //      如需 CI/固定清单，可临时传 jsonTablePaths 覆盖（优先级高于勾选）。
+  let projPath: String = scriptDir() + "/project.acproj";
 
-  // ── 2. 目标项目根目录（父目录分组：D:/work/github/shop/{shop_api, shop_admin}）
-  //      显式传入优先；缺省回退 project.jsontableproj 的 meta.*BasePath ──
-  let goBasePath: String = "D:/work/github/shop/shop_api";
-  let webBasePath: String = "D:/work/github/shop/shop_admin";
+  // ── 2. 目标项目根目录来自 project.acproj 的 meta.goBasePath /
+  //      meta.webBasePath（换机器只改 proj，不改脚本）──
+  //      params 里显式传 goBasePath/webBasePath 时优先，缺省回退 meta。
 
   // ── 3. Go 后端生成 ────────────────────────────────────────────────
   //     genGlobalEnum: false 可跳过全局枚举生成（缺省生成）；
   //     frontend=false 的表（纯 API 模块）后端链照常生成
   let apiParams: Object = {
-    jsonTablePaths: jsonTablePaths,
     projPath: projPath,
-    goBasePath: goBasePath,
     genGlobalEnum: true
   };
   generateApiMain(apiParams);
@@ -55,9 +44,7 @@ main {
   //     模板路径相对本脚本目录（入口在 go_pure/<项目>/，故用 ../../）──
   let tplDir: String = "../../admin_pure/template";
   let adminParams: Object = {
-    jsonTablePaths: jsonTablePaths,
     projPath: projPath,
-    webBasePath: webBasePath,
     apiPrefix: "/api",
     templates: [
       { tpl: tplDir + "/index.tpl", out: "{basePath}/src/views/{pagePath}/{pageName}.vue" },

@@ -44,6 +44,9 @@ public:
   /// 设置当前文件路径（供设计器定位项目 meta 与数据源作用域）
   void setFilePath(const QString &path) { m_filePath = path; }
 
+  /// 项目配置（project.acproj）变更后重载项目上下文（DB/路径/跨文件表清单）
+  void reloadProjectContext();
+
   /// 主题/颜色变化后重新应用样式表（设计器自带样式，此处无需额外处理）
   void reloadStyle() {}
 

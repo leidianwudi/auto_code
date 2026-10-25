@@ -276,6 +276,7 @@ private:
   QIcon m_jsonSourceIcon;  ///< .jsonsource 文件图标（琥珀「S」）
   QIcon m_jsonUploadIcon;  ///< .jsonupload 文件图标（紫色「U」）
   QIcon m_jsonTableIcon;   ///< .jsontable 文件图标（青色「A」）
+  QIcon m_acProjIcon;      ///< .acproj 项目配置文件图标（靛蓝「P」）
   QIcon m_tplIcon;         ///< .tpl 文件图标（绿色「T」）
   QIcon m_folderIcon;      ///< 文件夹收起图标
   QIcon m_folderOpenIcon;  ///< 文件夹展开图标

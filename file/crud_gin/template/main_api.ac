@@ -112,7 +112,7 @@ export function generateApiMain(params: Object): Number {
 
   // ── 2. 读取 .jsontable：单表新格式逐文件收集 + 项目 meta ────────────
   //      一文件一表：每份 { table: {...} } 一张表（翻译表内嵌在表的 i18n 配置）；
-  //      共享 meta 在同目录 project.jsontableproj（params.projPath 显式指定
+  //      共享 meta 在同目录 project.acproj（params.projPath 显式指定
   //      优先，否则从第一份 .jsontable 所在目录向上查找）；
   //      表名重复在 4 节预扫描中报错去重
   let tables: Object[] = [];
@@ -133,7 +133,7 @@ export function generateApiMain(params: Object): Number {
     }
     printLog("项目 meta: " + projPath);
   } else {
-    printLog("未找到 project.jsontableproj（meta.goBasePath 回退 params.goBasePath）");
+    printLog("未找到 project.acproj（meta.goBasePath 回退 params.goBasePath）");
   }
   for (file in jsonFiles) {
     let fileJson: Object = readJson(file);

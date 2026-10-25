@@ -11,6 +11,7 @@
 #include <QColor>
 #include <QComboBox>
 #include <QCompleter>
+#include <QDialog>
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QHBoxLayout>
@@ -215,6 +216,697 @@ bool connectDb(const JsonTableConfig &config, accore::AcJsonValue *instance, QWi
   return true;
 }
 
+// ════════════════════════════════════════════════════════════
+//  从数据库刷新结构：差异计算 + 差异预览对话框
+// ════════════════════════════════════════════════════════════
+
+/// 单列差异类别
+enum class ImportDiffKind { Added, Modified, Removed, Unchanged };
+
+/// 差异预览的一行
+struct ImportDiffEntry {
+  QString name;                       ///< 列名（保持数据库/配置中的原始大小写）
+  ImportDiffKind kind = ImportDiffKind::Unchanged;
+  JsonTableColumn current;            ///< 当前配置列（hasCurrent=false 时无效）
+  JsonTableColumn db;                 ///< 数据库列（hasDb=false 时无效）
+  bool hasCurrent = false;
+  bool hasDb = false;
+  bool excluded = false;              ///< 是否在排除列列表中（刷新时忽略）
+};
+
+/// 差异预览结果（applyByKey 的 key 为列名小写）
+struct ImportDiffResult {
+  bool accepted = false;
+  QHash<QString, bool> applyByKey;       ///< 列名小写 → 是否应用（已排除的列恒为 false）
+  QHash<QString, bool> indexApplyByKey;  ///< 索引名小写 → 是否应用
+  QStringList excludedColumns;           ///< 应用后的排除列列表
+  bool applyTableComment = false;        ///< 是否同步表注释
+};
+
+QString importColumnType(const JsonTableColumn &c) {
+  return c.isUnsigned ? c.mysqlType + QStringLiteral(" unsigned") : c.mysqlType;
+}
+
+QString importValueText(const QString &v) {
+  return v.isEmpty() ? QStringLiteral("（空）") : v;
+}
+
+QString importColumnSummary(const JsonTableColumn &c) {
+  QStringList parts;
+  parts << importColumnType(c);
+  parts << (c.nullable ? QStringLiteral("可空") : QStringLiteral("非空"));
+  if (c.isPrimary) parts << QStringLiteral("主键");
+  if (c.isAutoInc) parts << QStringLiteral("自增");
+  if (!c.defaultValue.isEmpty()) parts << QStringLiteral("默认 %1").arg(c.defaultValue);
+  if (!c.comment.isEmpty()) parts << c.comment;
+  return parts.join(QStringLiteral(" · "));
+}
+
+QStringList importColumnChanges(const JsonTableColumn &a, const JsonTableColumn &b) {
+  QStringList out;
+  if (importColumnType(a).compare(importColumnType(b), Qt::CaseInsensitive) != 0) {
+    out << QStringLiteral("类型 %1 → %2").arg(importColumnType(a), importColumnType(b));
+  }
+  if (a.nullable != b.nullable) {
+    out << QStringLiteral("可空 %1 → %2")
+               .arg(a.nullable ? QStringLiteral("是") : QStringLiteral("否"),
+                    b.nullable ? QStringLiteral("是") : QStringLiteral("否"));
+  }
+  if (a.isPrimary != b.isPrimary) {
+    out << QStringLiteral("主键 %1 → %2")
+               .arg(a.isPrimary ? QStringLiteral("是") : QStringLiteral("否"),
+                    b.isPrimary ? QStringLiteral("是") : QStringLiteral("否"));
+  }
+  if (a.isAutoInc != b.isAutoInc) {
+    out << QStringLiteral("自增 %1 → %2")
+               .arg(a.isAutoInc ? QStringLiteral("是") : QStringLiteral("否"),
+                    b.isAutoInc ? QStringLiteral("是") : QStringLiteral("否"));
+  }
+  if (a.defaultValue != b.defaultValue) {
+    out << QStringLiteral("默认值 %1 → %2")
+               .arg(importValueText(a.defaultValue), importValueText(b.defaultValue));
+  }
+  if (a.comment != b.comment) {
+    out << QStringLiteral("注释 %1 → %2")
+               .arg(importValueText(a.comment), importValueText(b.comment));
+  }
+  return out;
+}
+
+QString importKindText(ImportDiffKind kind) {
+  switch (kind) {
+    case ImportDiffKind::Added:
+      return QStringLiteral("新增");
+    case ImportDiffKind::Modified:
+      return QStringLiteral("修改");
+    case ImportDiffKind::Removed:
+      return QStringLiteral("删除");
+    default:
+      return QStringLiteral("未变");
+  }
+}
+
+QColor importKindColor(ImportDiffKind kind) {
+  switch (kind) {
+    case ImportDiffKind::Added:
+      return AuiStyle::successTextColor();
+    case ImportDiffKind::Modified:
+      return AuiStyle::modifiedTextColor();
+    case ImportDiffKind::Removed:
+      return AuiStyle::errorTextColor();
+    default:
+      return AuiStyle::mutedTextColor();
+  }
+}
+
+QString importEntryTooltip(const ImportDiffEntry &e) {
+  if (e.excluded) return QStringLiteral("在「排除列」中，刷新时忽略该列");
+  switch (e.kind) {
+    case ImportDiffKind::Added:
+      return QStringLiteral("数据库中新增的列，勾选后加入配置");
+    case ImportDiffKind::Modified:
+      return importColumnChanges(e.current, e.db).join(QStringLiteral("\n"));
+    case ImportDiffKind::Removed:
+      return QStringLiteral("数据库已无该列，勾选后从配置删除");
+    default:
+      return QString();
+  }
+}
+
+/// 计算当前配置列与数据库列的差异（跳过无变化的列；排除列即使无变化也保留展示）
+QVector<ImportDiffEntry> buildImportDiffEntries(const QVector<JsonTableColumn> &current,
+                                                const QVector<JsonTableColumn> &db,
+                                                const QStringList &excluded) {
+  QHash<QString, int> currentIndexByKey;
+  for (int i = 0; i < current.size(); ++i) {
+    currentIndexByKey.insert(current[i].name.toLower(), i);
+  }
+  QSet<QString> excludedKeys;
+  for (const auto &name : excluded) {
+    const QString key = name.trimmed().toLower();
+    if (!key.isEmpty()) excludedKeys.insert(key);
+  }
+
+  QVector<ImportDiffEntry> entries;
+  QSet<QString> dbKeys;
+  for (const auto &d : db) {
+    const QString key = d.name.toLower();
+    dbKeys.insert(key);
+    ImportDiffEntry e;
+    e.name = d.name;
+    e.db = d;
+    e.hasDb = true;
+    const auto it = currentIndexByKey.constFind(key);
+    if (it != currentIndexByKey.constEnd()) {
+      e.current = current[*it];
+      e.hasCurrent = true;
+      e.kind = importColumnChanges(e.current, d).isEmpty() ? ImportDiffKind::Unchanged
+                                                           : ImportDiffKind::Modified;
+    } else {
+      e.kind = ImportDiffKind::Added;
+    }
+    e.excluded = excludedKeys.contains(key);
+    if (e.kind == ImportDiffKind::Unchanged && !e.excluded) continue;
+    entries.append(e);
+  }
+  // 配置中存在、数据库已删除的列（按配置顺序追加）
+  for (const auto &c : current) {
+    if (dbKeys.contains(c.name.toLower())) continue;
+    ImportDiffEntry e;
+    e.name = c.name;
+    e.current = c;
+    e.hasCurrent = true;
+    e.kind = ImportDiffKind::Removed;
+    entries.append(e);
+  }
+  return entries;
+}
+
+/// 排除列写入 table.extra（空列表时移除键；生成期不消费该键）
+void setExcludedColumns(JsonTableTable *table, const QStringList &columns) {
+  if (!table) return;
+  const QString key = QString::fromLatin1(JsonTableKey::kExcludeColumns);
+  QStringList unique;
+  for (const auto &name : columns) {
+    const QString trimmed = name.trimmed();
+    if (!trimmed.isEmpty() && !unique.contains(trimmed, Qt::CaseInsensitive)) {
+      unique << trimmed;
+    }
+  }
+  if (unique.isEmpty()) {
+    table->extra.remove(key);
+    return;
+  }
+  QJsonArray array;
+  for (const auto &name : unique) array.append(name);
+  table->extra.insert(key, array);
+}
+
+/// 删除列后前端引用清理统计
+struct RefCleanupStats {
+  int selCols = 0;
+  int queryCols = 0;
+  int sortCols = 0;
+  int editCols = 0;
+  int joins = 0;
+  int enums = 0;
+  int globalEnumCols = 0;
+  int i18nFields = 0;
+  int buttonFields = 0;
+  QStringList details;
+
+  int total() const {
+    return selCols + queryCols + sortCols + editCols + joins + enums + globalEnumCols +
+           i18nFields + buttonFields;
+  }
+
+  QString summary() const {
+    QStringList parts;
+    if (selCols > 0) parts << QStringLiteral("列表 %1").arg(selCols);
+    if (queryCols > 0) parts << QStringLiteral("查询 %1").arg(queryCols);
+    if (sortCols > 0) parts << QStringLiteral("排序 %1").arg(sortCols);
+    if (editCols > 0) parts << QStringLiteral("编辑 %1").arg(editCols);
+    if (joins > 0) parts << QStringLiteral("联表 %1").arg(joins);
+    if (enums > 0) parts << QStringLiteral("枚举 %1").arg(enums);
+    if (globalEnumCols > 0) parts << QStringLiteral("全局枚举 %1").arg(globalEnumCols);
+    if (i18nFields > 0) parts << QStringLiteral("多语言字段 %1").arg(i18nFields);
+    if (buttonFields > 0) parts << QStringLiteral("按钮字段 %1").arg(buttonFields);
+    return parts.join(QStringLiteral("、"));
+  }
+};
+
+/// 清理被删除列（及其联表别名）在视图/查询/排序/编辑/枚举/多语言/按钮中的引用。
+/// 只修改传入的表模型，不触碰界面；调用方决定确认后再 load 回填。
+RefCleanupStats cleanRemovedColumnRefs(JsonTableTable *table,
+                                       const QStringList &removedColumns) {
+  RefCleanupStats stats;
+  if (!table || removedColumns.isEmpty()) return stats;
+
+  QSet<QString> removedKeys;
+  for (const auto &name : removedColumns) {
+    const QString key = name.trimmed().toLower();
+    if (!key.isEmpty()) removedKeys.insert(key);
+  }
+  if (removedKeys.isEmpty()) return stats;
+
+  // 联表外键列被删除 → 移除整条联表声明，其视图引用一并清理
+  QVector<JsonTableJoin> joins;
+  QSet<QString> droppedAliases;
+  for (const auto &join : table->joinTable) {
+    if (removedKeys.contains(join.joinFk.toLower())) {
+      ++stats.joins;
+      stats.details << QStringLiteral("联表「%1」（外键 %2）").arg(join.joinEnClassPro, join.joinFk);
+      if (!join.joinEnClassPro.isEmpty()) droppedAliases.insert(join.joinEnClassPro.toLower());
+      continue;
+    }
+    joins << join;
+  }
+  table->joinTable = joins;
+
+  auto isDroppedRef = [&](const QString &ref) {
+    const QString r = ref.trimmed();
+    if (removedKeys.contains(r.toLower())) return true;
+    const int dot = r.indexOf(QLatin1Char('.'));
+    return dot > 0 && droppedAliases.contains(r.left(dot).toLower());
+  };
+
+  auto cleanRefVector = [&](auto &vector, int &counter, const QString &label) {
+    const auto copy = vector;
+    vector.clear();
+    for (const auto &col : copy) {
+      if (isDroppedRef(col.ref)) {
+        ++counter;
+        stats.details << QStringLiteral("%1 %2").arg(label, col.ref);
+      } else {
+        vector << col;
+      }
+    }
+  };
+  cleanRefVector(table->selCols, stats.selCols, QStringLiteral("列表列"));
+  cleanRefVector(table->selColsEq, stats.queryCols, QStringLiteral("查询列"));
+  cleanRefVector(table->selColsGap, stats.queryCols, QStringLiteral("范围查询列"));
+  cleanRefVector(table->selColsLike, stats.queryCols, QStringLiteral("模糊查询列"));
+  cleanRefVector(table->editCols, stats.editCols, QStringLiteral("编辑列"));
+
+  QVector<QPair<QString, QString>> sorts;
+  for (const auto &sort : table->selColsSort) {
+    if (isDroppedRef(sort.first)) {
+      ++stats.sortCols;
+      stats.details << QStringLiteral("排序 %1").arg(sort.first);
+    } else {
+      sorts << sort;
+    }
+  }
+  table->selColsSort = sorts;
+
+  QVector<JsonTableEnum> enums;
+  for (const auto &item : table->enums) {
+    if (removedKeys.contains(item.column.toLower())) {
+      ++stats.enums;
+      stats.details << QStringLiteral("枚举列 %1").arg(item.column);
+    } else {
+      enums << item;
+    }
+  }
+  table->enums = enums;
+
+  QStringList globalEnums;
+  for (const auto &name : table->globalEnumCols) {
+    if (removedKeys.contains(name.toLower())) {
+      ++stats.globalEnumCols;
+      stats.details << QStringLiteral("全局枚举列 %1").arg(name);
+    } else {
+      globalEnums << name;
+    }
+  }
+  table->globalEnumCols = globalEnums;
+
+  QStringList i18nFields;
+  for (const auto &name : table->i18n.fields) {
+    if (removedKeys.contains(name.toLower())) {
+      ++stats.i18nFields;
+      stats.details << QStringLiteral("多语言字段 %1").arg(name);
+    } else {
+      i18nFields << name;
+    }
+  }
+  table->i18n.fields = i18nFields;
+
+  // 按钮对话框字段（fieldName 通常与表单项/字段同名）
+  for (auto &button : table->buttons) {
+    QVector<DialogFieldConfig> fields;
+    for (const auto &field : button.dialogFields) {
+      if (removedKeys.contains(field.fieldName.toLower())) {
+        ++stats.buttonFields;
+        stats.details << QStringLiteral("按钮「%1」字段 %2").arg(button.label, field.fieldName);
+      } else {
+        fields << field;
+      }
+    }
+    button.dialogFields = fields;
+  }
+
+  return stats;
+}
+
+// ════════════════════════════════════════════════════════════
+//  索引差异
+// ════════════════════════════════════════════════════════════
+
+struct IndexDiffEntry {
+  QString name;
+  ImportDiffKind kind = ImportDiffKind::Unchanged;
+  JsonTableIndex current;
+  JsonTableIndex db;
+  bool hasCurrent = false;
+  bool hasDb = false;
+};
+
+bool sameIndexShape(const JsonTableIndex &a, const JsonTableIndex &b) {
+  return a.unique == b.unique && a.cols == b.cols;
+}
+
+QString indexSummary(const JsonTableIndex &index) {
+  return QStringLiteral("%1 · %2")
+      .arg(index.unique ? QStringLiteral("unique") : QStringLiteral("普通"),
+           index.cols.join(QStringLiteral(", ")));
+}
+
+QStringList indexChanges(const JsonTableIndex &a, const JsonTableIndex &b) {
+  QStringList out;
+  if (a.cols != b.cols) {
+    out << QStringLiteral("列 %1 → %2")
+               .arg(a.cols.join(QStringLiteral(", ")), b.cols.join(QStringLiteral(", ")));
+  }
+  if (a.unique != b.unique) {
+    out << QStringLiteral("unique %1 → %2")
+               .arg(a.unique ? QStringLiteral("是") : QStringLiteral("否"),
+                    b.unique ? QStringLiteral("是") : QStringLiteral("否"));
+  }
+  return out;
+}
+
+QVector<IndexDiffEntry> buildIndexDiffEntries(const QVector<JsonTableIndex> &current,
+                                              const QVector<JsonTableIndex> &db) {
+  QHash<QString, int> currentIndexByKey;
+  for (int i = 0; i < current.size(); ++i) {
+    currentIndexByKey.insert(current[i].name.toLower(), i);
+  }
+  QVector<IndexDiffEntry> entries;
+  QSet<QString> dbKeys;
+  for (const auto &d : db) {
+    const QString key = d.name.toLower();
+    dbKeys.insert(key);
+    IndexDiffEntry e;
+    e.name = d.name;
+    e.db = d;
+    e.hasDb = true;
+    const auto it = currentIndexByKey.constFind(key);
+    if (it != currentIndexByKey.constEnd()) {
+      e.current = current[*it];
+      e.hasCurrent = true;
+      e.kind = sameIndexShape(e.current, d) ? ImportDiffKind::Unchanged
+                                           : ImportDiffKind::Modified;
+    } else {
+      e.kind = ImportDiffKind::Added;
+    }
+    if (e.kind == ImportDiffKind::Unchanged) continue;
+    entries.append(e);
+  }
+  for (const auto &c : current) {
+    if (dbKeys.contains(c.name.toLower())) continue;
+    IndexDiffEntry e;
+    e.name = c.name;
+    e.current = c;
+    e.hasCurrent = true;
+    e.kind = ImportDiffKind::Removed;
+    entries.append(e);
+  }
+  return entries;
+}
+
+/// 差异预览对话框：逐列勾选应用/排除，返回用户选择（取消时 accepted=false）
+ImportDiffResult runImportDiffDialog(QWidget *parent, const QString &tableName,
+                                     const QVector<ImportDiffEntry> &entries,
+                                     const QVector<IndexDiffEntry> &indexEntries,
+                                     const QString &currentComment, const QString &dbComment,
+                                     const QStringList &initialExcluded) {
+  ImportDiffResult result;
+  QDialog dlg(parent);
+  dlg.setMinimumWidth(760);
+  ConfigDialogFrame frame =
+      beginConfigDialog(&dlg, QStringLiteral("从数据库刷新结构：%1").arg(tableName),
+                        QMargins(12, 10, 12, 10), 6);
+
+  int added = 0;
+  int modified = 0;
+  int removed = 0;
+  int excluded = 0;
+  for (const auto &e : entries) {
+    if (e.excluded) ++excluded;
+    switch (e.kind) {
+      case ImportDiffKind::Added:
+        ++added;
+        break;
+      case ImportDiffKind::Modified:
+        ++modified;
+        break;
+      case ImportDiffKind::Removed:
+        ++removed;
+        break;
+      default:
+        break;
+    }
+  }
+  int indexAdded = 0;
+  int indexModified = 0;
+  int indexRemoved = 0;
+  for (const auto &e : indexEntries) {
+    switch (e.kind) {
+      case ImportDiffKind::Added:
+        ++indexAdded;
+        break;
+      case ImportDiffKind::Modified:
+        ++indexModified;
+        break;
+      case ImportDiffKind::Removed:
+        ++indexRemoved;
+        break;
+      default:
+        break;
+    }
+  }
+  QString summaryText =
+      QStringLiteral("共 %1 项列差异：新增 %2 / 修改 %3 / 删除 %4 / 已排除 %5。\n"
+                     "勾选要应用的变更；删除列默认不勾选，排除列不会被新增或修改。\n"
+                     "勾选删除列时，会同时清理列表/查询/排序/编辑/联表/枚举/按钮中的相关引用。")
+          .arg(entries.size())
+          .arg(added)
+          .arg(modified)
+          .arg(removed)
+          .arg(excluded);
+  if (!indexEntries.isEmpty()) {
+    summaryText += QStringLiteral("\n索引差异：新增 %1 / 修改 %2 / 删除 %3（默认全部应用，不涉及数据行）。")
+                       .arg(indexAdded)
+                       .arg(indexModified)
+                       .arg(indexRemoved);
+  }
+  auto *summary = new QLabel(summaryText, &dlg);
+  summary->setWordWrap(true);
+  summary->setStyleSheet(
+      QStringLiteral("color: %1;").arg(AuiStyle::mutedTextColor().name()));
+  frame.contentLayout->addWidget(summary);
+
+  QCheckBox *commentCheck = nullptr;
+  if (!dbComment.isEmpty() && dbComment != currentComment) {
+    commentCheck = new QCheckBox(
+        QStringLiteral("同步表注释：%1 → %2")
+            .arg(currentComment.isEmpty() ? QStringLiteral("（空）") : currentComment, dbComment),
+        &dlg);
+    commentCheck->setChecked(true);
+    frame.contentLayout->addWidget(commentCheck);
+  }
+
+  auto *btnRow = new QHBoxLayout;
+  auto *selectAllBtn = makeCompactButton(QStringLiteral("全选变更"), &dlg);
+  auto *selectNoneBtn = makeCompactButton(QStringLiteral("全不选"), &dlg);
+  btnRow->addWidget(selectAllBtn);
+  btnRow->addWidget(selectNoneBtn);
+  btnRow->addStretch();
+  frame.contentLayout->addLayout(btnRow);
+
+  enum DiffCol { DiffApply = 0, DiffName, DiffStatus, DiffCurrent, DiffDb, DiffExclude };
+  auto *table = makeConfigTable({{QStringLiteral("应用"), QHeaderView::Fixed, 60},
+                                 {QStringLiteral("列名"), QHeaderView::Interactive, 140},
+                                 {QStringLiteral("变更"), QHeaderView::Fixed, 80},
+                                 {QStringLiteral("当前配置"), QHeaderView::Stretch, 0},
+                                 {QStringLiteral("数据库"), QHeaderView::Stretch, 0},
+                                 {QStringLiteral("排除"), QHeaderView::Fixed, 60}},
+                                &dlg, 260, 0, QAbstractItemView::SelectRows);
+  table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+  table->verticalHeader()->setDefaultSectionSize(28);
+  frame.contentLayout->addWidget(table, 1);
+
+  for (const auto &e : entries) {
+    const int row = table->rowCount();
+    table->insertRow(row);
+
+    const bool defaultApply =
+        !e.excluded &&
+        (e.kind == ImportDiffKind::Added || e.kind == ImportDiffKind::Modified);
+    QTableWidgetItem *apply = makeCheckItem(defaultApply);
+    if (e.excluded) apply->setFlags(apply->flags() & ~Qt::ItemIsUserCheckable);
+    table->setItem(row, DiffApply, apply);
+
+    auto *name = new QTableWidgetItem(e.name);
+    name->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+    table->setItem(row, DiffName, name);
+
+    auto *status = new QTableWidgetItem(e.excluded ? QStringLiteral("已排除")
+                                                   : importKindText(e.kind));
+    status->setForeground(QBrush(e.excluded ? AuiStyle::mutedTextColor()
+                                            : importKindColor(e.kind)));
+    status->setToolTip(importEntryTooltip(e));
+    table->setItem(row, DiffStatus, status);
+
+    auto *cur = new QTableWidgetItem(e.hasCurrent ? importColumnSummary(e.current)
+                                                  : QStringLiteral("-"));
+    cur->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+    cur->setToolTip(cur->text());
+    table->setItem(row, DiffCurrent, cur);
+
+    auto *db = new QTableWidgetItem(e.hasDb ? importColumnSummary(e.db) : QStringLiteral("-"));
+    db->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+    db->setToolTip(db->text());
+    table->setItem(row, DiffDb, db);
+
+    QTableWidgetItem *exclude = nullptr;
+    if (e.hasDb) {
+      exclude = makeCheckItem(e.excluded);
+      exclude->setToolTip(QStringLiteral("勾选后，后续从数据库刷新将忽略该列"));
+    } else {
+      exclude = new QTableWidgetItem;
+      exclude->setFlags(Qt::ItemIsEnabled);
+      exclude->setTextAlignment(Qt::AlignCenter);
+    }
+    table->setItem(row, DiffExclude, exclude);
+  }
+
+  // ── 索引差异（若存在）──
+  enum IndexDiffCol { IdxApply = 0, IdxName, IdxStatus, IdxCurrent, IdxDb };
+  QTableWidget *indexTable = nullptr;
+  if (!indexEntries.isEmpty()) {
+    auto *idxLabel = new QLabel(QStringLiteral("索引差异:"), &dlg);
+    idxLabel->setStyleSheet(
+        QStringLiteral("color: %1;").arg(AuiStyle::mutedTextColor().name()));
+    frame.contentLayout->addWidget(idxLabel);
+    indexTable = makeConfigTable({{QStringLiteral("应用"), QHeaderView::Fixed, 60},
+                                  {QStringLiteral("索引名"), QHeaderView::Interactive, 140},
+                                  {QStringLiteral("变更"), QHeaderView::Fixed, 80},
+                                  {QStringLiteral("当前配置"), QHeaderView::Stretch, 0},
+                                  {QStringLiteral("数据库"), QHeaderView::Stretch, 0}},
+                                 &dlg, 140, 0, QAbstractItemView::SelectRows);
+    indexTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    indexTable->verticalHeader()->setDefaultSectionSize(28);
+    indexTable->setMaximumHeight(200);
+    frame.contentLayout->addWidget(indexTable);
+    for (const auto &e : indexEntries) {
+      const int row = indexTable->rowCount();
+      indexTable->insertRow(row);
+      indexTable->setItem(row, IdxApply, makeCheckItem(true));
+      auto *name = new QTableWidgetItem(e.name);
+      name->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+      indexTable->setItem(row, IdxName, name);
+      auto *status = new QTableWidgetItem(importKindText(e.kind));
+      status->setForeground(QBrush(importKindColor(e.kind)));
+      if (e.kind == ImportDiffKind::Modified) {
+        status->setToolTip(indexChanges(e.current, e.db).join(QStringLiteral("\n")));
+      }
+      indexTable->setItem(row, IdxStatus, status);
+      auto *cur = new QTableWidgetItem(e.hasCurrent ? indexSummary(e.current)
+                                                    : QStringLiteral("-"));
+      cur->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+      cur->setToolTip(cur->text());
+      indexTable->setItem(row, IdxCurrent, cur);
+      auto *db = new QTableWidgetItem(e.hasDb ? indexSummary(e.db) : QStringLiteral("-"));
+      db->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+      db->setToolTip(db->text());
+      indexTable->setItem(row, IdxDb, db);
+    }
+  }
+
+  // 排除勾选联动：勾上 → 取消应用且禁用；取消 → 恢复默认应用勾选
+  bool syncing = false;
+  QObject::connect(table, &QTableWidget::itemChanged, &dlg,
+                   [&](QTableWidgetItem *item) {
+                     if (syncing || item->column() != DiffExclude) return;
+                     if (!(item->flags() & Qt::ItemIsUserCheckable)) return;
+                     syncing = true;
+                     const int row = item->row();
+                     const auto &e = entries[row];
+                     const bool isExcluded = item->checkState() == Qt::Checked;
+                     QTableWidgetItem *apply = table->item(row, DiffApply);
+                     if (isExcluded) {
+                       apply->setCheckState(Qt::Unchecked);
+                       apply->setFlags(apply->flags() & ~Qt::ItemIsUserCheckable);
+                     } else {
+                       apply->setFlags(apply->flags() | Qt::ItemIsUserCheckable);
+                       apply->setCheckState((e.kind == ImportDiffKind::Added ||
+                                             e.kind == ImportDiffKind::Modified)
+                                                ? Qt::Checked
+                                                : Qt::Unchecked);
+                     }
+                     QTableWidgetItem *status = table->item(row, DiffStatus);
+                     status->setText(isExcluded ? QStringLiteral("已排除")
+                                                : importKindText(e.kind));
+                     status->setForeground(
+                         QBrush(isExcluded ? AuiStyle::mutedTextColor() : importKindColor(e.kind)));
+                     syncing = false;
+                   });
+
+  QObject::connect(selectAllBtn, &QPushButton::clicked, &dlg, [&]() {
+    for (int r = 0; r < table->rowCount(); ++r) {
+      QTableWidgetItem *apply = table->item(r, DiffApply);
+      if (apply && (apply->flags() & Qt::ItemIsUserCheckable)) {
+        apply->setCheckState(Qt::Checked);
+      }
+    }
+    if (indexTable) {
+      for (int r = 0; r < indexTable->rowCount(); ++r) {
+        indexTable->item(r, IdxApply)->setCheckState(Qt::Checked);
+      }
+    }
+  });
+  QObject::connect(selectNoneBtn, &QPushButton::clicked, &dlg, [&]() {
+    for (int r = 0; r < table->rowCount(); ++r) {
+      QTableWidgetItem *apply = table->item(r, DiffApply);
+      if (apply && (apply->flags() & Qt::ItemIsUserCheckable)) {
+        apply->setCheckState(Qt::Unchecked);
+      }
+    }
+    if (indexTable) {
+      for (int r = 0; r < indexTable->rowCount(); ++r) {
+        indexTable->item(r, IdxApply)->setCheckState(Qt::Unchecked);
+      }
+    }
+  });
+
+  finishConfigDialog(&dlg, frame);
+  if (dlg.exec() != QDialog::Accepted) return result;
+
+  result.accepted = true;
+  QSet<QString> dbKeysInDiff;
+  for (int r = 0; r < entries.size(); ++r) {
+    const auto &e = entries[r];
+    const bool excludeChecked =
+        e.hasDb && table->item(r, DiffExclude)->checkState() == Qt::Checked;
+    const bool applyChecked =
+        table->item(r, DiffApply)->checkState() == Qt::Checked && !excludeChecked;
+    result.applyByKey.insert(e.name.toLower(), applyChecked);
+    // 只要该列出现在差异表（数据库中存在），就由本次勾选决定其排除状态；
+    // 未勾选排除时不再回填到排除列表（否则取消排除会被旧值覆盖）。
+    if (e.hasDb) dbKeysInDiff.insert(e.name.toLower());
+    if (excludeChecked) {
+      result.excludedColumns << e.name;
+    }
+  }
+  // 保留初始排除列表中不在本次差异里的条目（拼写/未来列），避免被误删
+  for (const auto &name : initialExcluded) {
+    if (dbKeysInDiff.contains(name.toLower())) continue;
+    if (result.excludedColumns.contains(name, Qt::CaseInsensitive)) continue;
+    result.excludedColumns << name;
+  }
+  if (indexTable) {
+    for (int r = 0; r < indexEntries.size(); ++r) {
+      result.indexApplyByKey.insert(
+          indexEntries[r].name.toLower(),
+          indexTable->item(r, IdxApply)->checkState() == Qt::Checked);
+    }
+  }
+  result.applyTableComment = commentCheck && commentCheck->isChecked();
+  return result;
+}
+
 }  // namespace
 
 // ════════════════════════════════════════════════════════════
@@ -309,10 +1001,13 @@ void JsonTableDesigner::setupUI() {
   auto *delColBtn = makeCompactButton(QStringLiteral("- 删列"), this);
   auto *upColBtn = makeCompactButton(QStringLiteral("↑ 上移"), this);
   auto *downColBtn = makeCompactButton(QStringLiteral("↓ 下移"), this);
+  m_refreshFieldsBtn = makeCompactButton(QStringLiteral("从数据库刷新字段"), this);
   colHeader->addWidget(addColBtn);
   colHeader->addWidget(delColBtn);
   colHeader->addWidget(upColBtn);
   colHeader->addWidget(downColBtn);
+  colHeader->addSpacing(8);
+  colHeader->addWidget(m_refreshFieldsBtn);
   fieldTab->addLayout(colHeader);
 
   // ── 字段表格（纯物理属性，独占字段页；页面呈现由三视图接管）──
@@ -611,11 +1306,26 @@ void JsonTableDesigner::setupUI() {
   i18nTab->addStretch(1);
   applyI18nEnabled(false);
 
+  // ── 刷新时忽略的列（排除列）──
+  // 从数据库刷新结构时，这些列不会新增也不会被修改；用于 token/locked 等
+  // 不希望进入生成配置的认证列。持久化在 table.extra.excludeColumns。
+  auto *excludeRow = new QHBoxLayout;
+  excludeRow->setSpacing(6);
+  excludeRow->addWidget(new QLabel(QStringLiteral("排除列:"), this));
+  m_excludeEdit = new QLineEdit(this);
+  m_excludeEdit->setPlaceholderText(
+      QStringLiteral("逗号分隔，如 token,locked（从数据库刷新时忽略这些列）"));
+  m_excludeEdit->setToolTip(
+      QStringLiteral("从数据库刷新结构时忽略的列：既不新增、也不修改；\n"
+                     "适合 token/locked 等不想进入生成配置的认证列"));
+  excludeRow->addWidget(m_excludeEdit, 1);
+  ddlTab->addLayout(excludeRow);
+
   // ── DDL 预览 + 执行区（DDL 页）──
   auto *ddlHeader = new QHBoxLayout;
   ddlHeader->addWidget(new QLabel(QStringLiteral("DDL:"), this));
   ddlHeader->addStretch();
-  m_importBtn = makeCompactButton(QStringLiteral("从数据库导入"), this);
+  m_importBtn = makeCompactButton(QStringLiteral("从数据库刷新结构"), this);
   auto *previewBtn = makeCompactButton(QStringLiteral("DDL 预览"), this);
   auto *execBtn = makeCompactButton(QStringLiteral("执行建表"), this);
   ddlHeader->addWidget(m_importBtn);
@@ -629,15 +1339,13 @@ void JsonTableDesigner::setupUI() {
   m_ddlView->setMinimumHeight(160);
   ddlTab->addWidget(m_ddlView, 1);
 
-  // meta.db 四件套齐全才允许从数据库导入
-  const bool dbReady = !m_config.dbHost.isEmpty() && !m_config.dbUser.isEmpty() &&
-                       !m_config.dbPassword.isEmpty() && !m_config.dbDatabase.isEmpty();
-  m_importBtn->setEnabled(dbReady);
-  if (!dbReady)
-    m_importBtn->setToolTip(
-        QStringLiteral("meta.db 未配置完整（host/user/password/database），无法从数据库导入"));
+  // meta.db 就绪性由 updateDbButtonStates 统一处理（构造时 config 可能为空，
+  // 真正的连接信息在 load() 后才到位，refill 末尾会重新评估）
+  updateDbButtonStates();
 
   // ── 连接 ──
+  connect(m_refreshFieldsBtn, &QPushButton::clicked, this,
+          &JsonTableDesigner::importFromDatabase);
   connect(addColBtn, &QPushButton::clicked, this, [this]() { addColumn(); });
   connect(delColBtn, &QPushButton::clicked, this, [this]() { deleteColumn(); });
   connect(upColBtn, &QPushButton::clicked, this, [this]() { moveColumn(-1); });
@@ -789,10 +1497,35 @@ void JsonTableDesigner::refill() {
   comboSelectData(m_i18nLangFromCombo, m_table.i18n.langFrom);
   m_i18nFieldsEdit->setText(joinCsv(m_table.i18n.fields));
   applyI18nEnabled(m_i18nCheck->isChecked());
+  // 排除列（设计器专属键，存 table.extra，生成期不消费）
+  QStringList excludedColumns;
+  const QJsonArray excludedArray =
+      m_table.extra.value(QString::fromLatin1(JsonTableKey::kExcludeColumns)).toArray();
+  for (const auto &value : excludedArray) {
+    const QString name = value.toString().trimmed();
+    if (!name.isEmpty()) excludedColumns << name;
+  }
+  m_excludeEdit->setText(joinCsv(excludedColumns));
   refreshColumnCandidates();
   refreshI18nFieldCandidates();
   m_loading = false;
+  updateDbButtonStates();
   updateValidateStatus();
+}
+
+void JsonTableDesigner::updateDbButtonStates() {
+  // 密码允许为空（本机 MySQL 免密场景），只要求连接定位三要素齐全
+  const bool ready = !m_config.dbHost.isEmpty() && !m_config.dbUser.isEmpty() &&
+                     !m_config.dbDatabase.isEmpty();
+  const QString readyTip =
+      QStringLiteral("按当前表名拉取数据库结构，先展示差异再按勾选应用");
+  const QString missingTip =
+      QStringLiteral("meta.db 未配置完整（host/user/database），无法从数据库刷新结构");
+  for (QPushButton *button : {m_importBtn, m_refreshFieldsBtn}) {
+    if (!button) continue;
+    button->setEnabled(ready);
+    button->setToolTip(ready ? readyTip : missingTip);
+  }
 }
 
 void JsonTableDesigner::load(const JsonTableTable &table, const JsonTableConfig &config,
@@ -954,8 +1687,33 @@ void JsonTableDesigner::addColumn() {
 
 void JsonTableDesigner::deleteColumn() {
   const int row = m_colsTable->currentRow();
-  if (row >= 0) m_colsTable->removeRow(row);
-  refreshColumnCandidates();  // 行删除不触发 itemChanged，显式刷新候选
+  if (row < 0) return;
+  const QString name = cellText(row, ColColName);
+  if (name.isEmpty()) {
+    m_colsTable->removeRow(row);
+    refreshColumnCandidates();
+    return;
+  }
+
+  // 在模型副本上删除并清理引用；用户取消时界面不受影响
+  JsonTableTable table = collectTable();
+  for (int i = 0; i < table.columns.size(); ++i) {
+    if (table.columns[i].name.compare(name, Qt::CaseInsensitive) == 0) {
+      table.columns.removeAt(i);
+      break;
+    }
+  }
+  const RefCleanupStats cleanup = cleanRemovedColumnRefs(&table, QStringList() << name);
+  if (!cleanup.details.isEmpty()) {
+    const QString message =
+        QStringLiteral("删除列「%1」将同时清理以下前端引用：\n\n%2\n\n是否继续？")
+            .arg(name, cleanup.details.join(QStringLiteral("\n")));
+    if (!AuiMessageBox::confirm(this, QStringLiteral("删除列并清理引用"), message)) return;
+  }
+
+  load(table, m_config, m_filePath);
+  emit configChanged();
+  updateValidateStatus();
 }
 
 void JsonTableDesigner::moveColumn(int delta) {
@@ -2082,7 +2840,8 @@ void JsonTableDesigner::previewDdl() {
 void JsonTableDesigner::importFromDatabase() {
   const QString table = m_nameEdit->text().trimmed();
   if (table.isEmpty()) {
-    AuiMessageBox::show(this, QStringLiteral("无法导入"), QStringLiteral("请先填写表名"));
+    AuiMessageBox::show(this, QStringLiteral("无法刷新"),
+                        QStringLiteral("请先填写表名"));
     return;
   }
 
@@ -2098,14 +2857,13 @@ void JsonTableDesigner::importFromDatabase() {
   const accore::AcJsonValue schema = FunDb::tableSchema(inst, args);
   if (!schema.isArray()) {
     FunDb::destructor(inst, accore::AcJsonValue::makeArray());
-    showFunDbError(this, QStringLiteral("导入失败"),
+    showFunDbError(this, QStringLiteral("刷新失败"),
                    QStringLiteral("读取表结构失败（表可能不存在）"));
     return;
   }
 
-  // 导入为纯物理结构：DB 列为基础重建（列级呈现角色已退役，列表/查询/编辑
-  // 三个视图的配置不随导入变化，仅物理列定义被替换）
-  QVector<JsonTableColumn> cols;
+  // 数据库列 → JsonTableColumn（纯物理属性）
+  QVector<JsonTableColumn> dbColumns;
   for (const auto &v : schema.items()) {
     JsonTableColumn col;
     col.name = v.value(QString::fromLatin1(AcDB::kColName)).toString();
@@ -2118,7 +2876,8 @@ void JsonTableDesigner::importFromDatabase() {
     }
     col.mysqlType = type;
     col.nullable = v.value(QString::fromLatin1(AcDB::kColNullable)).toBool(false);
-    col.isPrimary = v.value(QString::fromLatin1(AcDB::kColKey)).toString() == QStringLiteral("PRI");
+    col.isPrimary =
+        v.value(QString::fromLatin1(AcDB::kColKey)).toString() == QStringLiteral("PRI");
     col.isAutoInc = v.value(QString::fromLatin1(AcDB::kColExtra))
                         .toString()
                         .contains(QStringLiteral("auto_increment"));
@@ -2130,23 +2889,219 @@ void JsonTableDesigner::importFromDatabase() {
       col.defaultValue = QString::number(dv.toDouble());
     }
     col.comment = v.value(QString::fromLatin1(AcDB::kColComment)).toString();
-
-    // 导入为纯物理结构（列级呈现角色已退役，编辑/查询/列表视图不受影响）
-    cols.append(col);
+    dbColumns.append(col);
   }
 
-  // 表注释回填
+  // 表注释
+  QString dbComment;
   const accore::AcJsonValue info = FunDb::tableInfo(inst, args);
   if (info.isObject()) {
-    const QString cmt = info.value(QString::fromLatin1(AcDB::kTblComment)).toString();
-    if (!cmt.isEmpty()) m_commentEdit->setText(cmt);
+    dbComment = info.value(QString::fromLatin1(AcDB::kTblComment)).toString();
   }
 
+  // 索引（INFORMATION_SCHEMA.STATISTICS；PRIMARY 由主键列维护，跳过）
+  QVector<JsonTableIndex> dbIndexes;
+  bool indexQueryOk = false;
+  {
+    accore::AcJsonValue idxArgs = accore::AcJsonValue::makeArray();
+    accore::AcJsonValue idxParams = accore::AcJsonValue::makeObject();
+    idxParams.set(
+        QString::fromLatin1(AcDB::kSql),
+        accore::AcJsonValue(
+            QStringLiteral("SELECT INDEX_NAME, NON_UNIQUE, SEQ_IN_INDEX, COLUMN_NAME "
+                           "FROM INFORMATION_SCHEMA.STATISTICS "
+                           "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %1 "
+                           "ORDER BY INDEX_NAME, SEQ_IN_INDEX")
+                .arg(quote(table))));
+    idxArgs.append(idxParams);
+    const accore::AcJsonValue idxRows = FunDb::query(inst, idxArgs);
+    indexQueryOk = idxRows.isArray();
+    if (indexQueryOk) {
+      QHash<QString, int> indexPositions;
+      for (const auto &row : idxRows.items()) {
+        const QString name = row.value(QStringLiteral("INDEX_NAME")).toString();
+        if (name.isEmpty() ||
+            name.compare(QStringLiteral("PRIMARY"), Qt::CaseInsensitive) == 0) {
+          continue;
+        }
+        const QString column = row.value(QStringLiteral("COLUMN_NAME")).toString();
+        if (column.isEmpty()) continue;  // 函数索引等无列名条目
+        const QString key = name.toLower();
+        int position = indexPositions.value(key, -1);
+        if (position < 0) {
+          position = dbIndexes.size();
+          indexPositions.insert(key, position);
+          JsonTableIndex index;
+          index.name = name;
+          index.unique =
+              row.value(QStringLiteral("NON_UNIQUE")).toString() == QStringLiteral("0");
+          dbIndexes.append(index);
+        }
+        dbIndexes[position].cols << column;
+      }
+    }
+  }
   FunDb::destructor(inst, accore::AcJsonValue::makeArray());
-  fillColumns(cols);
-  AuiMessageBox::show(
-      this, QStringLiteral("导入完成"),
-      QStringLiteral("已从数据库导入 %1 列（前端角色按列名合并保留）").arg(cols.size()));
+
+  // 差异计算：当前配置 vs 数据库（排除列跳过，但会在预览中标记）
+  const QVector<JsonTableColumn> currentColumns = collectColumns();
+  const QVector<JsonTableIndex> currentIndexes = collectIndexes();
+  const QString currentComment = m_commentEdit->text().trimmed();
+  const QStringList initialExcluded = splitCsv(m_excludeEdit->text());
+  const QVector<ImportDiffEntry> entries =
+      buildImportDiffEntries(currentColumns, dbColumns, initialExcluded);
+  const QVector<IndexDiffEntry> indexEntries =
+      indexQueryOk ? buildIndexDiffEntries(currentIndexes, dbIndexes)
+                   : QVector<IndexDiffEntry>();
+  const bool commentDiffers = !dbComment.isEmpty() && dbComment != currentComment;
+  if (entries.isEmpty() && indexEntries.isEmpty() && !commentDiffers) {
+    AuiMessageBox::show(this, QStringLiteral("刷新结构"),
+                        QStringLiteral("结构与数据库一致，无需刷新。"));
+    return;
+  }
+
+  const ImportDiffResult result =
+      runImportDiffDialog(this, table, entries, indexEntries, currentComment, dbComment,
+                          initialExcluded);
+  if (!result.accepted) return;
+
+  // 应用选择：现有列保序；新增列按数据库顺序追加；删除列仅在勾选时移除
+  QHash<QString, JsonTableColumn> dbByKey;
+  for (const auto &col : dbColumns) {
+    dbByKey.insert(col.name.toLower(), col);
+  }
+  QVector<JsonTableColumn> nextColumns;
+  for (const auto &cur : currentColumns) {
+    const QString key = cur.name.toLower();
+    if (dbByKey.contains(key)) {
+      if (result.applyByKey.value(key, false)) {
+        // 物理属性取数据库值，列级取值域等设计器配置按原列保留
+        JsonTableColumn updated = dbByKey.value(key);
+        updated.domainType = cur.domainType;
+        updated.domainSourceFile = cur.domainSourceFile;
+        updated.domainSourceId = cur.domainSourceId;
+        updated.domainUrl = cur.domainUrl;
+        nextColumns.append(updated);
+      } else {
+        nextColumns.append(cur);
+      }
+    } else if (!result.applyByKey.value(key, false)) {
+      nextColumns.append(cur);  // 删除列默认保留
+    }
+  }
+  QSet<QString> keptKeys;
+  for (const auto &col : nextColumns) {
+    keptKeys.insert(col.name.toLower());
+  }
+  for (const auto &db : dbColumns) {
+    const QString key = db.name.toLower();
+    if (keptKeys.contains(key)) continue;
+    if (result.applyByKey.value(key, false)) nextColumns.append(db);
+  }
+
+  // 索引应用（索引查询失败时保持原索引，不做任何删除）
+  QVector<JsonTableIndex> nextIndexes = currentIndexes;
+  if (indexQueryOk) {
+    QHash<QString, JsonTableIndex> dbIndexByKey;
+    for (const auto &index : dbIndexes) {
+      dbIndexByKey.insert(index.name.toLower(), index);
+    }
+    nextIndexes.clear();
+    for (const auto &cur : currentIndexes) {
+      const QString key = cur.name.toLower();
+      if (dbIndexByKey.contains(key)) {
+        nextIndexes.append(result.indexApplyByKey.value(key, false) ? dbIndexByKey.value(key)
+                                                                    : cur);
+      } else if (!result.indexApplyByKey.value(key, false)) {
+        nextIndexes.append(cur);  // 删除索引默认保留
+      }
+    }
+    QSet<QString> keptIndexKeys;
+    for (const auto &index : nextIndexes) {
+      keptIndexKeys.insert(index.name.toLower());
+    }
+    for (const auto &index : dbIndexes) {
+      const QString key = index.name.toLower();
+      if (keptIndexKeys.contains(key)) continue;
+      if (result.indexApplyByKey.value(key, false)) nextIndexes.append(index);
+    }
+  }
+
+  int appliedAdded = 0;
+  int appliedModified = 0;
+  int appliedRemoved = 0;
+  QStringList removedColumns;
+  for (const auto &e : entries) {
+    if (!result.applyByKey.value(e.name.toLower(), false)) continue;
+    switch (e.kind) {
+      case ImportDiffKind::Added:
+        ++appliedAdded;
+        break;
+      case ImportDiffKind::Modified:
+        ++appliedModified;
+        break;
+      case ImportDiffKind::Removed:
+        ++appliedRemoved;
+        removedColumns << e.name;
+        break;
+      default:
+        break;
+    }
+  }
+  int appliedIndexAdded = 0;
+  int appliedIndexModified = 0;
+  int appliedIndexRemoved = 0;
+  for (const auto &e : indexEntries) {
+    if (!result.indexApplyByKey.value(e.name.toLower(), false)) continue;
+    switch (e.kind) {
+      case ImportDiffKind::Added:
+        ++appliedIndexAdded;
+        break;
+      case ImportDiffKind::Modified:
+        ++appliedIndexModified;
+        break;
+      case ImportDiffKind::Removed:
+        ++appliedIndexRemoved;
+        break;
+      default:
+        break;
+    }
+  }
+
+  // 模型回填：列/索引/注释/排除列 + 删除列的前端引用清理，最后 load 统一刷新界面
+  JsonTableTable updated = collectTable();
+  updated.columns = nextColumns;
+  if (indexQueryOk) updated.indexes = nextIndexes;
+  if (result.applyTableComment && !dbComment.isEmpty()) updated.tableComment = dbComment;
+  setExcludedColumns(&updated, result.excludedColumns);
+  const RefCleanupStats cleanup = cleanRemovedColumnRefs(&updated, removedColumns);
+
+  load(updated, m_config, m_filePath);
+  emit configChanged();
+  updateValidateStatus();
+
+  QString msg = QStringLiteral("已应用 %1 项列变更（新增 %2 / 修改 %3 / 删除 %4）。")
+                    .arg(appliedAdded + appliedModified + appliedRemoved)
+                    .arg(appliedAdded)
+                    .arg(appliedModified)
+                    .arg(appliedRemoved);
+  if (indexQueryOk) {
+    msg += QStringLiteral("\n索引：新增 %1 / 修改 %2 / 删除 %3。")
+               .arg(appliedIndexAdded)
+               .arg(appliedIndexModified)
+               .arg(appliedIndexRemoved);
+  } else {
+    msg += QStringLiteral("\n索引结构读取失败，本次未同步索引。");
+  }
+  if (cleanup.total() > 0) {
+    msg += QStringLiteral("\n已清理前端引用 %1 处（%2）。")
+               .arg(cleanup.total())
+               .arg(cleanup.summary());
+  }
+  if (!result.excludedColumns.isEmpty()) {
+    msg += QStringLiteral("\n排除列：%1").arg(result.excludedColumns.join(QStringLiteral(", ")));
+  }
+  AuiMessageBox::show(this, QStringLiteral("刷新完成"), msg);
 }
 
 void JsonTableDesigner::executeCreateTable() {
@@ -2232,5 +3187,7 @@ JsonTableTable JsonTableDesigner::collectTable() const {
   } else {
     t.i18n = JsonTableI18n();  // 未启用：清空（table 空 → toJson 不落键）
   }
+  // 排除列：设计器专属键，写入 extra 保真（生成期不消费）
+  setExcludedColumns(&t, splitCsv(m_excludeEdit->text()));
   return t;
 }

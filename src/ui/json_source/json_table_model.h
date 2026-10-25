@@ -10,8 +10,8 @@
  * 供表设计器编辑、DDL 同步建表与双端模板渲染共用，字段只配一遍。
  *
  * 单表新格式（一文件一表）：每个 .jsontable 文件 = { table: {...} } 一张表
- * （含内嵌翻译表配置 i18n）；共享 meta（project + db 连接四件套/port/
- * goBasePath/webBasePath）抽到同目录 project.jsontableproj 项目级文件。
+ * （含内嵌翻译表配置 i18n）；共享项目配置（项目名 + db 连接四件套/port/
+ * goBasePath/webBasePath）抽到同目录 project.acproj 项目级文件。
  * 表级含 frontend 前端开关（false=纯 API 模块）与 buttons 操作按钮；
  * 列级含取值域（domainType/...，方案 B 中心化），视图列含展示类型/
  * 上传绑定/缩略图尺寸（键名与 .jsonvue 一致）。
@@ -54,13 +54,15 @@ inline constexpr const char *kWebBasePath = "webBasePath";  ///< pure-admin 项�
 // 单表新格式（一文件一表）顶层键与表级新键
 inline constexpr const char *kTable = "table";  ///< 单表文件顶层键（{ table: {...} }）
 inline constexpr const char *kProjFile =
-    "project.jsontableproj";  ///< 项目级 meta 文件名（与 .jsontable 同目录）
+    "project.acproj";  ///< 项目配置文件（项目根标记 + meta 生成配置；与 .jsontable 同目录）
 inline constexpr const char *kFrontend =
     "frontend";  ///< 生成前端页面开关（缺省 true；仅 false 落键 = 纯 API 模块）
 inline constexpr const char *kAppQuery = "appQuery";  ///< 生成 C 端只读查询模块（缺省 false）
 inline constexpr const char *kAppAuth =
     "appAuth";  ///< C 端鉴权：public=公开 / user=需登录（缺省 user）
 inline constexpr const char *kButtons = "buttons";  ///< 操作按钮（ButtonConfig[]，键名与 .jsonvue 一致）
+inline constexpr const char *kExcludeColumns =
+    "excludeColumns";  ///< 从数据库刷新时忽略的列（设计器使用，生成期不消费；存 table.extra）
 // tables 键
 inline constexpr const char *kTables = "tables";
 inline constexpr const char *kTableName = "tableName";
@@ -439,11 +441,11 @@ JsonTableTable jsonTableFromFile(const QString &path, QString *error = nullptr);
 /// 写单表 .jsontable（紧凑 JSON，UTF-8；成功返回 true）
 bool jsonTableToFile(const JsonTableTable &table, const QString &path);
 
-/// 从 fromDir 起向上查找 project.jsontableproj（含 fromDir 本身，最多 maxUpLevels 级）；
+/// 从 fromDir 起向上查找 project.acproj（含 fromDir 本身，最多 maxUpLevels 级）；
 /// 未找到返回空串
 QString findJsontableProjPath(const QString &fromDir, int maxUpLevels = 3);
 
-/// 读取项目级 meta 文件（project.jsontableproj）为 JsonTableConfig（仅 meta 有效，tables 为空）
+/// 读取项目配置文件（project.acproj）为 JsonTableConfig（仅 meta 有效，tables 为空）
 /// 失败时返回空配置并写 *error
 JsonTableConfig jsontableProjFromFile(const QString &path, QString *error = nullptr);
 

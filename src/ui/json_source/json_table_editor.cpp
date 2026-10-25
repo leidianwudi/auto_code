@@ -60,6 +60,15 @@ void JsonTableEditor::loadConfig(const JsonTableTable &table) {
   m_loading = false;
 }
 
+void JsonTableEditor::reloadProjectContext() {
+  if (m_filePath.isEmpty()) return;
+  // 保留设计器当前编辑内容，仅重建项目上下文后回填
+  const JsonTableTable current = m_designer->collectTable();
+  m_ctxBuilt = false;
+  ensureProjectContext();
+  m_designer->load(current, m_ctx, m_filePath);
+}
+
 JsonTableTable JsonTableEditor::collectTable() const { return m_designer->collectTable(); }
 
 void JsonTableEditor::setPreservedSource(const QString &src) {

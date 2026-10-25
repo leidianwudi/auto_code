@@ -70,8 +70,9 @@
     ],
     frontend: false,
     indexes: [],
+    layout: 'split',
     manualUpdateTime: false,
-    moduleDir: 'sys/role',
+    moduleDir: 'sys/sys_role',
     modelName: 'sys_role',
     selColsSort: [
       [

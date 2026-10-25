@@ -400,6 +400,8 @@ inline constexpr const char *kJsonsource = ".jsonsource";
 inline constexpr const char *kJsonupload = ".jsonupload";
 /// 统一 API 配置（表结构 + 字段前端角色，双端代码生成与表设计器的事实源）
 inline constexpr const char *kJsontable = ".jsontable";
+/// 项目配置文件（项目根标记 + meta.db/goBasePath/webBasePath；可视化编辑）
+inline constexpr const char *kAcProj = ".acproj";
 /// 全局枚举配置（跨表/跨项目共用的枚举定义，生成公共枚举文件与前端静态数据源）
 inline constexpr const char *kJsonglobalenum = ".jsonglobalenum";
 /// JSON 族后缀清单（.json 及其派生配置类型）；新增 json 族类型只需在此追加，

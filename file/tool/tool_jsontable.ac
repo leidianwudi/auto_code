@@ -1,8 +1,8 @@
 // ============================================================================
 // tool_jsontable.ac — jsontable 单表新格式共享辅助（双端生成链共用）
 // ----------------------------------------------------------------------------
-// 一文件一表改造后，共享 meta 抽到同目录 project.jsontableproj；
-// main_api.ac / main_admin.ac 经本模块定位项目 meta 文件。
+// 一文件一表改造后，共享 meta 抽到同目录 project.acproj（项目根标记 + meta）；
+// main_api.ac / main_admin.ac 经本模块定位项目配置文件。
 // ============================================================================
 
 /// 取路径的目录部分（兼容 \ 与 / 分隔；无分隔符返回空串）
@@ -14,12 +14,12 @@ export function dirnameOf(path: String): String {
   return path.substring(0, idx);
 }
 
-/// 从 dir 起向上查找 project.jsontableproj（含 dir 本身，最多 maxUpLevels 级）；
+/// 从 dir 起向上查找 project.acproj（含 dir 本身，最多 maxUpLevels 级）；
 /// 未找到返回 ""
 export function findProjPath(dir: String, maxUpLevels: Number): String {
   let cur: String = dir;
   for (let i = 0; i <= maxUpLevels; i = i + 1) {
-    let candidate: String = cur + "/project.jsontableproj";
+    let candidate: String = cur + "/project.acproj";
     if (fileExists(candidate)) {
       return candidate;
     }

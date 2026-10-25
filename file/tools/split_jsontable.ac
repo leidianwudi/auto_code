@@ -3,7 +3,7 @@
 // ----------------------------------------------------------------------------
 // 旧格式：{ $schema?, meta{...}, tables[] }   —— 一个文件多张表
 // 新格式：<modelName>.jsontable → { table: {...} }（一文件一表 + 内嵌翻译表）
-//         project.jsontableproj → { meta: {...} }（项目级共享 meta）
+//         project.acproj → { name, meta: {...} }（项目根标记 + 项目级共享 meta）
 //
 // 安全策略：
 //   1. 先把原文件整份备份为 <原名>.jsontable.bak（该后缀不会被生成链收集），
@@ -70,9 +70,9 @@ export function splitJsontableFile(inputPath: String): Number {
   }
   printLog("已备份：" + inputPath + ".bak");
 
-  // ── 2. 写项目级 meta 文件（meta 整体搬运，未知键随对象保真）─────────
-  let projObj: Object = { meta: meta };
-  let projPath: String = dir + "/project.jsontableproj";
+  // ── 2. 写项目配置文件（name + meta 整体搬运，未知键随对象保真）─────
+  let projObj: Object = { name: basename(dir), meta: meta };
+  let projPath: String = dir + "/project.acproj";
   if (writeFile(projPath, toJsonString(projObj)) == false) {
     printError("拆分中止：proj 文件写入失败：" + projPath);
     return -1;
@@ -127,7 +127,7 @@ export function splitJsontableFile(inputPath: String): Number {
   if (sameAsInput == false) {
     printError("注意：没有表与原文件同名，旧多表文件仍在原位，会被生成链重复收集，请手工删除：" + inputPath);
   }
-  printLog("--- 拆分完成：" + tLen + " 张表 + project.jsontableproj ---");
+  printLog("--- 拆分完成：" + tLen + " 张表 + project.acproj ---");
   return tLen;
 }
 

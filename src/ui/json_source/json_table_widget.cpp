@@ -37,7 +37,7 @@ void JsonTableWidget::syncCodeToVisualImpl() {
   // 以当前代码内容刷新保真底：用户可能在代码视图删除过自定义键，
   // 若沿用打开文件时的旧快照，写回时会把这些已删除的键"复活"
   m_visual->setPreservedSource(jsonStr);
-  // 文件路径供表设计器定位项目 meta（project.jsontableproj）与数据源作用域
+  // 文件路径供表设计器定位项目配置（project.acproj）与数据源作用域
   //（可能为空——路径由主窗口在打开/拆分重建时经 objectName 注入）
   m_visual->setFilePath(m_editor->objectName());
   // 从编辑器文本解析单表（与旧链 fromJsonString 同源，不依赖文件已保存/路径已知）；
@@ -68,3 +68,5 @@ void JsonTableWidget::syncVisualToCodeImpl() {
 // ════════════════════════════════════════════════════════════
 
 void JsonTableWidget::setPreservedSource(const QString &src) { m_visual->setPreservedSource(src); }
+
+void JsonTableWidget::reloadProjectContext() { m_visual->reloadProjectContext(); }

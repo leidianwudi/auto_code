@@ -32,6 +32,9 @@ public:
   /// 缓存磁盘原始 .jsontable 内容，供可视化写回时保真合并
   void setPreservedSource(const QString &src);
 
+  /// 项目配置（project.acproj）变更后重载设计器的项目上下文
+  void reloadProjectContext();
+
 protected:
   QWidget *visualView() const override;
   void syncCodeToVisualImpl() override;
