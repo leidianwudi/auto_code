@@ -1,0 +1,16 @@
+/// 临时修复：恢复被编码 bug 损坏的菜单标题（id=1），sort 保持 5 供用户验证图标
+main {
+  let db = new DB({
+    host: "127.0.0.1",
+    port: 3306,
+    user: "root",
+    password: "123456",
+    database: "shop"
+  });
+  db.exec({sql: "UPDATE sys_menu SET title = '系统管理' WHERE id = 1"});
+  let rows = db.query({sql: "SELECT id, title, icon, sort FROM sys_menu WHERE pid = 0 ORDER BY sort"});
+  for (r in rows) {
+    printLog("id=" + r.id + " sort=" + r.sort + " icon=[" + r.icon + "] " + r.title);
+  }
+  db.disconnect();
+}

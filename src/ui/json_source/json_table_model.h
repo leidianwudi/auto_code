@@ -445,3 +445,14 @@ JsonTableConfig jsontableProjFromFile(const QString &path, QString *error = null
 /// 递归收集 baseDir 下全部单表 .jsontable 的完整表定义（跳过解析失败文件，
 /// 按 modelName 排序；供表设计器联表下拉/交叉校验跨文件解析目标表）
 QVector<JsonTableTable> listProjectTables(const QString &baseDir);
+
+/// 从启用 i18n 的主表按惯例派生翻译表定义（0 表），规则与 main_api.ac 的
+/// deriveI18nTable 保持一致（两处实现互为镜像，修改需同步）：
+///   表名/模型名 = i18n.table；表注释 = 主表注释 + "多语言表"；frontend=false；
+///   列 = id（自增主键，类型随主表主键）+ extKey（类型随主表主键）+
+///        langKey（varchar(8)）+ fields（继承主表同名列的类型/符号/可空/注释，
+///        主表无此列时回退 varchar(255) 文本）+ created_at/updated_at（datetime 可空）；
+///   索引 = uk_{extKey}_{langKey}（extKey+langKey 唯一）。
+/// 前提：main.i18n.isEnabled()（调用方保证）；不检查显式翻译表文件是否存在
+/// （同目录显式 .jsontable 优先，派生仅作缺省）。
+JsonTableTable deriveI18nTable(const JsonTableTable &main);

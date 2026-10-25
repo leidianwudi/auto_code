@@ -68,9 +68,10 @@ accore::AcJsonValue FunFile::write(const accore::AcJsonValue &args) {
 
   QDir().mkpath(QFileInfo(path).absolutePath());
 
-  // 打开文件，只写模式
+  // 打开文件，只写模式（不开 Text 模式：避免 Windows 把 \n 自动转成 \r\n，
+  // 下方已显式移除 \r，保证生成文件统一 LF 换行）
   QFile file(path);
-  if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+  if (!file.open(QIODevice::WriteOnly)) {
     FunMgr::setError(QStringLiteral("File::write() cannot open file for writing: '%1'").arg(path));
     return accore::AcJsonValue();
   }

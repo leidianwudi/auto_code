@@ -1,25 +1,34 @@
 ${# ============================================================================}
-${# Svc 模板：生成 Go 业务层手改层（internal/service/{tableName}.go）          }
+${# Service 模板（split 布局）：modules/admin/{dataDir}/{tableName}_service_.go  }
 ${# ----------------------------------------------------------------------------}
-${# 作用：手改层骨架，只新增业务方法，不被覆盖。对齐 NestJS service.ts 的角色。   }
-${# 安全保护：只有当输出文件不存在时才生成，防止开发者已修改的代码被覆盖          }
+${#   - 生成件只出查询编排；写路径（Save/Delete）与自定义方法放手写 service 件  }
+${#   - DB/Repo 两列由 main_api.ac 预渲染对齐                                  }
+${# 数据来源：pkgName/serviceClass/repoClass/enClass/selClass/dataAlias         }
+${#           svcImports/svcFieldLines/tableView                                }
 ${# ============================================================================}
-${if !fileExists(outputPath)}
-// 此代码为AutoCode编译器生成，需要扩展时，可以手动修改
-// ─────────────────────────────────────────────────────────────────────
-// 手改层说明（Go 无继承，与 Nest 手改层机制不同）：
-//   1. 本文件与 ${tableName}_.go 共同构成 ${serviceClass}
-//      （Go 允许同包多文件为同一 struct 定义方法）
-//   2. 只能新增方法，禁止定义与覆盖层同名方法（同名方法重复定义 = 编译错误）
-//   3. ${tableName}_.go 是覆盖层，重新生成会被覆盖，请勿手改
-//   4. 覆盖层方法第一参数 db *gorm.DB：传 s.DB 走独立查询，传事务 tx 进事务
-//   5. 想改变覆盖层方法的行为：在路由/构造处换用手改层编排，勿直接改覆盖层
-// ─────────────────────────────────────────────────────────────────────
-package service
+// 此代码为AutoCode编译器生成，请勿手动修改
+package ${pkgName}
 
-// （示例）新增自定义业务方法（按需取消注释并修改）：
-// func (s *${serviceClass}) DoSomething(id ${idGoType}) error {
-//   _, err := s.Repo.SelectById(s.DB, id)
-//   return err
-// }
-${/if}
+${svcImports}
+
+// ${serviceClass} ${tableComment}(${tableName}) 业务层
+// 生成件只提供查询；写路径（Save/Delete）与自定义方法写在手写件 ${tableName}_service.go。
+type ${serviceClass} struct {
+${each line in svcFieldLines}
+${line}
+${/each}}
+
+// New${serviceClass} 创建业务层对象
+func New${serviceClass}(db *gorm.DB) *${serviceClass} {
+	return &${serviceClass}{DB: db, Repo: ${dataAlias}.New${repoClass}(db)}
+}
+
+// SelectByIn 分页查询列表数据，返回数据列表和总记录数
+func (s *${serviceClass}) SelectByIn(sel *${dataAlias}.${selClass}) ([]${dataAlias}.${enClass}, int64, error) {
+	return s.Repo.SelectByIn(s.DB, sel)
+}
+
+// SelectById 根据id查询单条记录
+func (s *${serviceClass}) SelectById(id ${idGoType}) (*${dataAlias}.${enClass}, error) {
+	return s.Repo.SelectById(s.DB, id)
+}

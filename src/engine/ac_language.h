@@ -284,6 +284,7 @@ struct DbConfig {
 inline const QStringList kMethods = {
     QString::fromLatin1(kTableSchema),
     QString::fromLatin1(kQuery),
+    QString::fromLatin1(kExec),
     QString::fromLatin1(kDisconnect),
     QString::fromLatin1(AcKeyword::kDispose),
 };

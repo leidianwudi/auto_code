@@ -1,25 +1,80 @@
 ${# ============================================================================}
-${# Hdl 模板：生成 Go HTTP 层手改层（internal/handler/{tableName}.go）         }
+${# Handler 模板（split 布局）：modules/admin/{dataDir}/{tableName}_handler_.go  }
 ${# ----------------------------------------------------------------------------}
-${# 作用：手改层骨架，只新增自定义接口/换编排，不被覆盖。                         }
-${# 对齐 NestJS controller.ts 的角色（Go 无继承，本文件不"继承"覆盖层）。        }
-${# 安全保护：只有当输出文件不存在时才生成，防止开发者已修改的代码被覆盖          }
+${#   - 4 接口：selectByIn / selectById / update / delete（无 insert，save 单接口）}
+${#   - common.Bind 绑定 + common.OK/Fail/NewOutPage 统一响应                   }
+${# 数据来源：pkgName/handlerClass/serviceClass/updClass/selClass/dataAlias      }
+${#           hdlImports/tableComment/tableName                                 }
 ${# ============================================================================}
-${if !fileExists(outputPath)}
-// 此代码为AutoCode编译器生成，需要扩展时，可以手动修改
-// ─────────────────────────────────────────────────────────────────────
-// 手改层说明（Go 无继承，与 Nest 手改层机制不同）：
-//   1. 本文件与 ${tableName}_.go 共同构成 ${handlerClass}
-//      （Go 允许同包多文件为同一 struct 定义方法）
-//   2. 只能新增方法，禁止定义与覆盖层同名方法（同名方法重复定义 = 编译错误）
-//   3. ${tableName}_.go 是覆盖层，重新生成会被覆盖，请勿手改
-//   4. 自定义接口在本文件新增方法后，路由注册可追加到 router_.go 手改文件
-//      （或项目 main.go 的路由注入点）
-// ─────────────────────────────────────────────────────────────────────
-package handler
+// 此代码为AutoCode编译器生成，请勿手动修改
+package ${pkgName}
 
-// （示例）新增自定义接口（按需取消注释并修改）：
-// func (h *${handlerClass}) CustomAction(c *gin.Context) {
-//   c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "ok"})
-// }
-${/if}
+${hdlImports}
+
+// ${handlerClass} ${tableComment}(${tableName}) HTTP 层
+// 薄层：参数绑定 → service → 统一响应（common.OK/common.Fail）
+// 自定义 HTTP 方法写在手写件 ${tableName}_handler.go
+type ${handlerClass} struct {
+	Svc *${serviceClass}
+}
+
+// New${handlerClass} 创建 HTTP 层对象
+func New${handlerClass}(svc *${serviceClass}) *${handlerClass} {
+	return &${handlerClass}{Svc: svc}
+}
+
+// SelectByIn 分页查询
+func (h *${handlerClass}) SelectByIn(c *gin.Context) {
+	sel, ok := common.Bind[${dataAlias}.${selClass}](c)
+	if !ok {
+		return
+	}
+	list, total, err := h.Svc.SelectByIn(&sel)
+	if err != nil {
+		common.Fail(c, err.Error())
+		return
+	}
+	common.OK(c, common.NewOutPage(list, total))
+}
+
+// SelectById 根据id查询
+func (h *${handlerClass}) SelectById(c *gin.Context) {
+	body, ok := common.Bind[common.InSelId](c)
+	if !ok {
+		return
+	}
+	entity, err := h.Svc.SelectById(body.Id)
+	if err != nil {
+		common.Fail(c, err.Error())
+		return
+	}
+	common.OK(c, entity)
+}
+
+// Update save 单接口：Id=0 新增，Id>0 更新
+func (h *${handlerClass}) Update(c *gin.Context) {
+	data, ok := common.Bind[${updClass}](c)
+	if !ok {
+		return
+	}
+	id, err := h.Svc.Save(&data)
+	if err != nil {
+		common.Fail(c, err.Error())
+		return
+	}
+	common.OK(c, gin.H{"id": id})
+}
+
+// Delete 删除记录（支持多条）
+func (h *${handlerClass}) Delete(c *gin.Context) {
+	body, ok := common.Bind[common.InDelIds](c)
+	if !ok {
+		return
+	}
+	affected, err := h.Svc.Delete(body.Ids)
+	if err != nil {
+		common.Fail(c, err.Error())
+		return
+	}
+	common.OK(c, gin.H{"affected": affected})
+}

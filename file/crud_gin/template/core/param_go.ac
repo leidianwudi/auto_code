@@ -10,9 +10,9 @@
 //     - gormTag / jsonTag / bindingTag 全量预拼，模板直接输出
 //     - isInsParam / isUpdParam 决定 InsertParams / UpdateParams 的字段集合
 //
-// 类型映射表（plan 5.2）：
-//   bigint → int64（unsigned → uint64）    int → int
-//   tinyint(1) → bool（其余 tinyint → int8）
+// 类型映射表：
+//   整数族（int/tinyint/bigint/smallint/mediumint，含 unsigned）→ int64
+//   tinyint(1) → bool
 //   varchar/text → string                  decimal → float64
 //   datetime/timestamp → time.Time         json → datatypes.JSON（gorm.io/datatypes）
 // ============================================================================
@@ -29,21 +29,11 @@ export function mapTypeToGo(colType: String, unsigned: Bool): String {
   if (t.includes("tinyint(1)") || t.includes("boolean") || t.includes("bool")) {
     return "bool";
   }
-  // 整数族：长类型先判（bigint / tinyint 都包含 "int" 子串）
-  if (t.includes("bigint")) {
-    return unsigned ? "uint64" : "int64";
-  }
-  if (t.includes("tinyint")) {
-    return unsigned ? "uint8" : "int8";
-  }
-  if (t.includes("smallint")) {
-    return unsigned ? "uint16" : "int16";
-  }
-  if (t.includes("mediumint")) {
-    return unsigned ? "uint32" : "int32";
-  }
-  if (t.includes("int")) {
-    return unsigned ? "uint" : "int";
+  // 整数族统一 int64（覆盖数据库 int/tinyint/bigint 及其 unsigned 变体；
+  // 类型少、避免 uint/int 混用；gorm tag 仍保留原始 MySQL 类型）
+  if (t.includes("bigint") || t.includes("tinyint") || t.includes("smallint")
+      || t.includes("mediumint") || t.includes("int")) {
+    return "int64";
   }
   // 浮点/小数类型
   if (t.includes("decimal") || t.includes("float") || t.includes("double")) {
@@ -124,6 +114,11 @@ export function zeroKindOfGoType(goType: String): String {
   return "string";
 }
 
+/// @brief 制表符（AC 字符串不支持 \t 转义，直接返回一个 tab 字符）
+export function tabChar(): String {
+  return "	";
+}
+
 /// @brief 构建带分组的 Go import 块（stdlib 组 + 第三方/本项目组，空行分隔）
 /// @param stdLines stdlib 导入行数组（裸路径，如 "time"，函数内部加引号）
 /// @param extLines 第三方/本项目导入行数组（裸路径，如 "gorm.io/gorm"）
@@ -186,13 +181,21 @@ export class FieldDef {
 //   param.fields / param.insFields / param.updFields → 模板循环
 // ============================================================================
 export class Param {
-  let entityClass: String = "";      // Go 结构体名，如 Shop（snakeToPascal(tableName)）
+  let entityClass: String = "";      // 表名前缀类名，如 Shop（snakeToPascal(tableName)）
+  let tableClass: String = "";       // 同上，语义别名（Shop）
+  let enClass: String = "";          // 实体名，如 EnShop
+  let selClass: String = "";         // 查询入参，如 InSelShop
+  let updClass: String = "";         // 保存入参，如 InUpdShop
+  let repoClass: String = "";        // 数据层，如 ShopRepo
+  let serviceClass: String = "";     // 业务层，如 ShopService
+  let handlerClass: String = "";     // HTTP 层，如 ShopHandler
   let tableName: String = "";        // 物理表名，如 shop
   let tableDesc: String = "";        // 表注释（tableComment，已单行化）
   let modelName: String = "";        // 模型名（.jsontable 原样透传）
   let fields: FieldDef[] = [];       // 全部列（含自动维护时间列）
   let insFields: FieldDef[] = [];    // InsertParams 字段集（排除自动时间列与自增主键）
   let updFields: FieldDef[] = [];    // UpdateParams 字段集（排除自动时间列与主键）
+  let allWritableFields: FieldDef[] = []; // 除主键外全部列（InUpd 用，含 create_time 等时间列）
   let primaryField: FieldDef = null; // 主键列（SelectById/Update/Delete 依赖；无主键时报错跳表）
   let hasTimeField: Bool = false;    // 是否有 time.Time 列（实体 import "time"）
   let hasJsonField: Bool = false;    // 是否有 datatypes.JSON 列（实体 import gorm.io/datatypes）
@@ -229,8 +232,17 @@ export class Param {
     this.tableDesc = sanitizeGoComment(data.tableComment);
     let manualUpdateTime: Bool = (data.manualUpdateTime == true);
 
-    // ── 结构体名：snakeToPascal(tableName)，如 shop → Shop、shop_order → ShopOrder ──
-    this.entityClass = snakeToPascal(this.tableName);
+    // ── 类型名族：snakeToPascal(tableName)，如 shop → Shop、shop_order → ShopOrder ──
+    //   数据层 En<表> / 读入参 InSel<表> / 写入参 InUpd<表>；
+    //   repo/service/handler 均以表名类名作前缀（ShopRepo/ShopService/ShopHandler）
+    this.tableClass = snakeToPascal(this.tableName);
+    this.entityClass = this.tableClass;
+    this.enClass = "En" + this.tableClass;
+    this.selClass = "InSel" + this.tableClass;
+    this.updClass = "InUpd" + this.tableClass;
+    this.repoClass = this.tableClass + "Repo";
+    this.serviceClass = this.tableClass + "Service";
+    this.handlerClass = this.tableClass + "Handler";
 
     // ── 编辑视图 editCols：显式列出 = 进增改参数与编辑表单 ────────────
     //    空/缺省 = 全部可写列进参数（排除自动维护时间/自增主键，零配置等价旧行为）；
@@ -251,6 +263,7 @@ export class Param {
     this.fields = [];
     this.insFields = [];
     this.updFields = [];
+    this.allWritableFields = [];
     let columns: Object[] = data.columns;
     let colLen = columns.length;
     for (let i = 0; i < colLen; i = i + 1) {
@@ -269,11 +282,9 @@ export class Param {
       field.goName = snakeToPascal(field.name);
       field.isCoin = field.goType == "float64";
 
-      // 声明类型：可空 → 指针；json 类型（datatypes.JSON）天然可空不加指针；
-      // 主键语义上不为 NULL，保持值类型（Insert 返回值/Update 定位依赖此约定）
-      field.declType = (field.nullable && !field.isPrimary && field.goType != "datatypes.JSON")
-                           ? "*" + field.goType
-                           : field.goType;
+      // 实体声明类型统一值类型（整数统一 int64，可空列也用值类型：
+      // 数据库默认值/零值兜底，避免实体字段到处解引用）
+      field.declType = field.goType;
       field.ptrType = (field.goType != "datatypes.JSON") ? "*" + field.goType : field.goType;
       // UpdateParams 用 ptrType（全指针）；isPtr 标记模板解引用行为
       // （JSON 类型非指针，赋值不解引用）
@@ -289,12 +300,13 @@ export class Param {
       }
       field.zeroKind = zeroKindOfGoType(field.goType);
 
-      // 自动维护时间列：create_time 恒自动（DB 默认值）；update_time 未配
-      // manualUpdateTime 时由 DB ON UPDATE 维护——两者均不入增改参数
+      // 自动维护时间列：create_time/created_at 恒自动（DB 默认值或 gorm
+      // CreatedAt 约定）；update_time/updated_at 未配 manualUpdateTime 时
+      // 由 DB ON UPDATE 或 gorm UpdatedAt 约定维护——两者均不入增改参数
       let isDateTime = field.colType.toLowerCase().includes("datetime")
         || field.colType.toLowerCase().includes("timestamp");
-      field.isCreateDate = (field.name == "create_time") && isDateTime;
-      field.isUpdateDate = (field.name == "update_time") && isDateTime && !manualUpdateTime;
+      field.isCreateDate = (field.name == "create_time" || field.name == "created_at") && isDateTime;
+      field.isUpdateDate = (field.name == "update_time" || field.name == "updated_at") && isDateTime && !manualUpdateTime;
       field.isAutoTime = field.isCreateDate || field.isUpdateDate;
 
       // 参数字段集合：editCols 显式列出 = 可写字段进增改参数（visible=false
@@ -318,6 +330,10 @@ export class Param {
       }
 
       this.fields.append(field);
+      if (!field.isPrimary) {
+        // InUpd：除主键外全部列（含 create_time 等自动时间列，nil=不改）
+        this.allWritableFields.append(field);
+      }
       if (field.isInsParam) {
         this.insFields.append(field);
       }

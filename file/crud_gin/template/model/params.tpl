@@ -1,18 +1,18 @@
 ${# ============================================================================}
-${# 请求结构模板：生成 Go 请求参数（internal/model/{tableName}_in.go）        }
+${# 请求结构模板：生成 Go 请求参数（modules/{moduleDir}/dto.go，同包免 import）  }
 ${# ----------------------------------------------------------------------------}
-${# 作用：覆盖层，每次重新生成，请勿手改。对齐 NestJS in_*.ts 的角色。            }
+${# 作用：覆盖层，每次重新生成，请勿手改。                                        }
 ${#   - SelectParams：分页 + 查询字段 + 语言码（gin ShouldBindJSON 绑定）         }
 ${#   - InsertParams：新增参数（required → binding:"required"，自增主键不入参）  }
 ${#   - UpdateParams：更新参数（除主键外全指针，nil 字段不更新）                  }
 ${#   - hasI18n 时定义 {Entity}I18nMap 全语言翻译 map 类型（值为翻译实体）        }
 ${# 数据来源（tplData）：                                                        }
-${#   selClass/insClass/updClass/selFields/insFields/updFields/inImports         }
+${#   pkgName/selClass/insClass/updClass/selFields/insFields/updFields/inImports }
 ${#   hasI18n/i18nMapType/i18nEntityClass/i18nExtKey/i18nLangKey/i18nDefaultLang }
 ${#   idGoName/idGoType/idColName（主键）                                        }
 ${# ============================================================================}
 // 此代码为AutoCode编译器生成，请勿手动修改
-package model
+package ${pkgName}
 
 ${inImports}
 ${if hasI18n}

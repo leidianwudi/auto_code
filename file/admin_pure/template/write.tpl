@@ -16,7 +16,7 @@ ${# ============================================================================
 <script setup lang="ts">
 //此文件为AutoCode编译器生成，请勿手动修改
 // ==================== ${commentTitle}（${pageName}）编辑界面 ====================
-import { reactive, ref, computed${if hasWatch}, watch${/if}${if hasDefaultValues}, nextTick${/if} } from "vue";
+import { reactive, ref, computed, watch${if hasDefaultValues}, nextTick${/if} } from "vue";
 import type { PropType } from "vue";
 import type { FormInstance, FormRules } from "element-plus";
 ${if hasUploadFields}import { ElMessage } from "element-plus";
@@ -39,15 +39,39 @@ const props = defineProps({
 // 详情模式：表单整体只读（el-form disabled 会联动禁用全部控件）
 const isDetail = computed(() => props.actionType === 'detail');
 
-// 表单数据模型（数值/日期初始化 null，其余空串；新增默认值见下方 defaultValues）
+// 表单数据模型（id 隐藏携带：save 接口靠它区分新增/更新；数值/日期初始化 null，其余空串）
 const formRef = ref<FormInstance>();
 const form = reactive<Record<string, any>>({
+  id: null,
 ${each col in columns}${if col.editVisible}${if col.isInt}  ${col.dataName}: null,
 ${else if col.isFloat}  ${col.dataName}: null,
 ${else if col.isMoney}  ${col.dataName}: null,
 ${else if col.isDate}  ${col.dataName}: null,
-${else}  ${col.dataName}: '',
+${else}  ${col.dataName}: "",
 ${/if}${/if}${/each}});
+
+// 回填：编辑/详情把当前行写入表单（含 id）；新增（currentRow=null）清空
+watch(
+  () => props.currentRow,
+  row => {
+    if (row) {
+      form.id = row.id ?? null;
+${each col in columns}${if col.editVisible}${if col.isInt}      form.${col.dataName} = row.${col.dataName} ?? null;
+${else if col.isFloat}      form.${col.dataName} = row.${col.dataName} ?? null;
+${else if col.isMoney}      form.${col.dataName} = row.${col.dataName} ?? null;
+${else if col.isDate}      form.${col.dataName} = row.${col.dataName} ?? null;
+${else}      form.${col.dataName} = row.${col.dataName} ?? "";
+${/if}${/if}${/each}    } else {
+      form.id = null;
+${each col in columns}${if col.editVisible}${if col.isInt}      form.${col.dataName} = null;
+${else if col.isFloat}      form.${col.dataName} = null;
+${else if col.isMoney}      form.${col.dataName} = null;
+${else if col.isDate}      form.${col.dataName} = null;
+${else}      form.${col.dataName} = "";
+${/if}${/if}${/each}    }
+  },
+  { immediate: true }
+);
 
 ${if hasUploadFields}
 // ==================== 图片上传（引用 .jsonupload 上传预设）====================

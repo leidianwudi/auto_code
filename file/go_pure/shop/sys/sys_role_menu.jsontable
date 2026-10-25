@@ -1,0 +1,49 @@
+{
+  table: {
+    columns: [
+      {
+        comment: '主键',
+        isAutoInc: true,
+        isPrimary: true,
+        mysqlType: 'int',
+        name: 'id',
+        nullable: false,
+        unsigned: true,
+      },
+      {
+        comment: '角色ID，关联sys_role.id',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'role_id',
+        nullable: false,
+        unsigned: true,
+      },
+      {
+        comment: '菜单ID，关联sys_menu.id',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'menu_id',
+        nullable: false,
+        unsigned: false,
+      },
+    ],
+    frontend: false,
+    indexes: [
+      {
+        cols: [
+          'role_id',
+          'menu_id',
+        ],
+        name: 'uk_role_menu',
+        unique: true,
+      },
+    ],
+    manualUpdateTime: false,
+    moduleDir: 'sys/role_menu',
+    modelName: 'sys_role_menu',
+    tableComment: '角色菜单关联',
+    tableName: 'sys_role_menu',
+  },
+}

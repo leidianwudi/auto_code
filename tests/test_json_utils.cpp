@@ -28,7 +28,6 @@
 #include "src/util/common/util_json.h"
 #include "src/util/ui/code/format_code.h"
 
-
 static int g_total = 0;
 static int g_failed = 0;
 
@@ -613,7 +612,7 @@ static void testJsonTableConfigRoundTrip() {
   CHECK(minimal.dbPort == 3306);
   CHECK(minimal.tables.size() == 1);
   CHECK(minimal.tables[0].columns[0].defaultValue.isEmpty());  // null → 无默认值
-  CHECK(minimal.tables[0].editCols.isEmpty());  // 无 editCols → 缺省全列推导
+  CHECK(minimal.tables[0].editCols.isEmpty());                 // 无 editCols → 缺省全列推导
   CHECK(minimal.tables[0].columns[1].defaultValue == QStringLiteral("0"));  // 数字默认值显式转串
 }
 
@@ -762,7 +761,8 @@ static void testJsonTableSingleFileRoundTrip() {
         QStringLiteral("upload/image.jsonupload"));
   CHECK(editObj.value(QStringLiteral("editThumbWidth")).toInt() == 160);
   // 编辑表单精细参数（键名与 .jsonvue 一致）
-  CHECK(editObj.value(QStringLiteral("placeholder")).toString() == QStringLiteral("请输入图片地址"));
+  CHECK(editObj.value(QStringLiteral("placeholder")).toString() ==
+        QStringLiteral("请输入图片地址"));
   CHECK(editObj.value(QStringLiteral("maxlength")).toInt() == 255);
   CHECK(editObj.value(QStringLiteral("textareaRows")).toInt() == 5);
   CHECK(editObj.value(QStringLiteral("minValue")).toDouble() == 0.5);
@@ -773,8 +773,7 @@ static void testJsonTableSingleFileRoundTrip() {
   CHECK(editObj.value(QStringLiteral("defaultValue")).toString() == QStringLiteral("0"));
   const QJsonObject colObj = tObj.value(QStringLiteral("columns")).toArray().at(0).toObject();
   CHECK(colObj.value(QStringLiteral("domainType")).toString() == QStringLiteral("enum"));
-  CHECK(colObj.value(QStringLiteral("domainSourceId")).toString() ==
-        QStringLiteral("shop_status"));
+  CHECK(colObj.value(QStringLiteral("domainSourceId")).toString() == QStringLiteral("shop_status"));
 
   // extra 剔除回归：新键不得进 extra（避免往返双写）
   CHECK(!back.extra.contains(QStringLiteral("frontend")));
@@ -822,7 +821,7 @@ static void testJsonTableSingleFileRoundTrip() {
     f.close();
   }
   QDir().mkpath(dir + QStringLiteral("/sub"));
-  CHECK(findJsontableProjPath(dir) == projPath);                        // 同目录
+  CHECK(findJsontableProjPath(dir) == projPath);                           // 同目录
   CHECK(findJsontableProjPath(dir + QStringLiteral("/sub")) == projPath);  // 向上一级
   QString errProj;
   const JsonTableConfig projCfg = jsontableProjFromFile(projPath, &errProj);
@@ -891,6 +890,69 @@ static void testSchemaValidatePerfProbe() {
               timer.elapsed() / 200.0);
 }
 
+/// i18n 翻译表派生：主表列类型继承 / 主键类型基准 / 缺省回退 / 唯一索引 / frontend=false
+static void testDeriveI18nTable() {
+  JsonTableTable main;
+  main.tableName = QStringLiteral("shop");
+  main.modelName = QStringLiteral("shop");
+  main.tableComment = QStringLiteral("商店");
+  JsonTableColumn id;
+  id.name = QStringLiteral("id");
+  id.mysqlType = QStringLiteral("int");
+  id.isUnsigned = true;
+  id.isPrimary = true;
+  id.isAutoInc = true;
+  main.columns.append(id);
+  JsonTableColumn name;
+  name.name = QStringLiteral("name");
+  name.mysqlType = QStringLiteral("varchar(255)");
+  name.comment = QStringLiteral("商店名称");
+  main.columns.append(name);
+
+  main.i18n.table = QStringLiteral("shop0");
+  main.i18n.extKey = QStringLiteral("ext_id");
+  main.i18n.langKey = QStringLiteral("lang");
+  main.i18n.fields = QStringList{QStringLiteral("name"), QStringLiteral("intro")};
+
+  const JsonTableTable d = deriveI18nTable(main);
+  CHECK(d.tableName == QStringLiteral("shop0"));
+  CHECK(d.modelName == QStringLiteral("shop0"));
+  CHECK(d.tableComment == QStringLiteral("商店多语言表"));
+  CHECK(!d.frontend);  // 纯 API 模块：翻译表不生成前端页面
+  // 列：id/extKey/langKey/name(继承)/intro(主表无此列回退 varchar(255))/created_at/updated_at
+  CHECK(d.columns.size() == 7);
+  CHECK(d.columns[0].name == QStringLiteral("id"));
+  CHECK(d.columns[0].mysqlType == QStringLiteral("int"));  // id 类型随主表主键
+  CHECK(d.columns[0].isPrimary);
+  CHECK(d.columns[0].isAutoInc);
+  CHECK(d.columns[1].name == QStringLiteral("ext_id"));
+  CHECK(d.columns[1].mysqlType == QStringLiteral("int"));  // extKey 类型随主表主键
+  CHECK(d.columns[1].comment.contains(QStringLiteral("shop")));
+  CHECK(d.columns[2].name == QStringLiteral("lang"));
+  CHECK(d.columns[2].mysqlType == QStringLiteral("varchar(8)"));
+  CHECK(d.columns[3].name == QStringLiteral("name"));
+  CHECK(d.columns[3].mysqlType == QStringLiteral("varchar(255)"));  // 继承主表同名列
+  CHECK(d.columns[3].comment == QStringLiteral("商店名称"));
+  CHECK(d.columns[4].name == QStringLiteral("intro"));
+  CHECK(d.columns[4].mysqlType == QStringLiteral("varchar(255)"));  // 主表无此列 → 回退
+  CHECK(d.columns[5].name == QStringLiteral("created_at"));
+  CHECK(d.columns[5].nullable);
+  CHECK(d.columns[6].name == QStringLiteral("updated_at"));
+  // 唯一索引：extKey + langKey（宏参数里不能放带逗号的花括号初始化列表，用局部变量）
+  const QStringList ukCols{QStringLiteral("ext_id"), QStringLiteral("lang")};
+  CHECK(d.indexes.size() == 1);
+  CHECK(d.indexes[0].unique);
+  CHECK(d.indexes[0].cols == ukCols);
+  CHECK(d.indexes[0].name == QStringLiteral("uk_ext_id_lang"));
+  // 缺省键名：extKey/langKey 为空时回退 ext_id/lang
+  JsonTableTable main2 = main;
+  main2.i18n.extKey.clear();
+  main2.i18n.langKey.clear();
+  const JsonTableTable d2 = deriveI18nTable(main2);
+  CHECK(d2.columns[1].name == QStringLiteral("ext_id"));
+  CHECK(d2.columns[2].name == QStringLiteral("lang"));
+}
+
 int main() {
   // 无缓冲输出：崩溃前也能看到进度（stdout 重定向到文件是块缓冲，崩溃会丢缓冲）
   std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -905,6 +967,7 @@ int main() {
   testProjectScopedJsontableFinder();
   testJsonTableConfigRoundTrip();
   testJsonTableSingleFileRoundTrip();
+  testDeriveI18nTable();
   testSchemaValidatePerfProbe();
   const int extraFailed = runAcParamDefaultTests();
   const int jsonValueFailed = runAcJsonValueTests();

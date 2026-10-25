@@ -220,6 +220,8 @@ qt_add_executable(auto_code
     src/util/ui/component/aui_tree.cpp
     src/util/ui/component/aui_combo_box.h
     src/util/ui/component/aui_combo_box.cpp
+    src/util/ui/component/aui_splitter.h
+    src/util/ui/component/aui_splitter.cpp
     src/util/ui/component/aui_combo_delete.h
     src/util/ui/component/aui_combo_delete.cpp
     src/util/ui/component/aui_tree_combo.h

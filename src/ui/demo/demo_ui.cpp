@@ -18,6 +18,7 @@
 #include "src/util/ui/aui_window.h"
 #include "src/util/ui/code/code_editor.h"
 #include "src/util/ui/component/aui_button.h"
+#include "src/util/ui/component/aui_splitter.h"
 #include "src/util/ui/component/aui_style.h"
 
 // ──────────────────────────────────────────────────────────────
@@ -78,7 +79,7 @@ void DemoUi::setupUI() {
   contentLayout->setSpacing(0);
 
   // ── 上方分割器：左侧模板 / 右侧数据 ──
-  auto *topSplitter = new QSplitter(Qt::Horizontal);
+  auto *topSplitter = new AuiSplitter(Qt::Horizontal);
 
   // 左：模板编辑区
   auto *templatePanel = new QWidget;

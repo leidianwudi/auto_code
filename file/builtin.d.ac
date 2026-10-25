@@ -222,6 +222,9 @@ export class DB {
   /// 执行 SQL 查询，返回结果集
   function query(opts: Object): Object[];
 
+  /// 执行 SQL（DDL/写操作），返回受影响行数
+  function exec(opts: Object): Number;
+
   /// 断开数据库连接
   function disconnect(): Void;
 

@@ -20,7 +20,7 @@
         unsigned: false,
       },
       {
-        comment: '商店所有人,user.id',
+        comment: '商店所有人,user.id（一人可开多家店）',
         isAutoInc: false,
         isPrimary: false,
         mysqlType: 'int',
@@ -138,10 +138,6 @@
     ],
     editCols: [
       {
-        ref: 'name',
-        required: true,
-      },
-      {
         label: '店主',
         ref: 'user_id',
       },
@@ -184,46 +180,13 @@
         ],
       },
     ],
-    i18n: {
-      defaultLang: 'zh',
-      extKey: 'ext_id',
-      fields: [
-        'name',
-        'intro',
-      ],
-      langFrom: 'body',
-      langKey: 'lang',
-      table: 'shop0',
-    },
-    indexes: [
-      {
-        cols: [
-          'user_id',
-        ],
-        name: 'uk_user_id',
-        unique: true,
-      },
-    ],
-    joinTable: [
-      {
-        isJoinRelations: true,
-        joinEnClass: 'user',
-        joinEnClassPro: 'user',
-        joinFk: 'user_id',
-        joinType: 'ManyToOne',
-      },
-    ],
     manualUpdateTime: false,
     modelName: 'shop',
     selCols: [
       {
-        label: '商店名称',
-        ref: 'name',
+        label: '店铺logo',
+        ref: 'logo_img',
         width: 180,
-      },
-      {
-        label: '店主',
-        ref: 'user.user_name',
       },
       {
         label: '星级',
@@ -241,9 +204,6 @@
     selColsEq: [
       {
         ref: 'user_id',
-      },
-      {
-        ref: 'user.user_name',
       },
       {
         ref: 'is_open',
@@ -271,7 +231,34 @@
         'id',
         'DESC',
       ],
+      [
+        'create_time',
+        'DESC',
+      ],
+      [
+        'level',
+        'DESC',
+      ],
+      [
+        'sell_count',
+        'DESC',
+      ],
+      [
+        'sell_money',
+        'DESC',
+      ],
+      [
+        'follow',
+        'DESC',
+      ],
+      [
+        'like',
+        'DESC',
+      ],
     ],
+    layout: 'split',
+    dataPkgComment: '商店表共享数据层（admin 端与 app 端复用）',
+    adminPkgComment: '商店管理端模块（CRUD）',
     tableComment: '商店',
     tableName: 'shop',
   },

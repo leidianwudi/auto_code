@@ -16,26 +16,28 @@
 ///     │ tables[]   │  列定义     │ (加工器) │   渲染数据   │ /svc/hdl  │
 ///     └────────────┘            └──────────┘             └─────┬─────┘
 ///                                             renderTpl()      ▼
-///                                              internal/{model,repository,...}/*.go
+///                                              modules/<moduleDir>/{model,dto,...}/*.go
 ///
 /// 接收的项目参数（params 对象）：
-///   - goBasePath     Go 项目根目录（internal/... 写到这里）；
+///   - goBasePath     Go 项目根目录（modules/... 写到这里）；
 ///                    省略时用 .jsontable 的 meta.goBasePath
 ///   - jsonTablePath  可选，.jsontable 配置文件绝对路径；
 ///                    省略时收集勾选文件中的 .jsontable
-///   - routerFilePath 可选，路由注册文件路径；
-///                    缺省 {goBasePath}/internal/router/router_.go
 ///   - genGlobalEnum  可选，false 跳过全局枚举收集（缺省/true 收集）
 ///   - templates      可选，模板配置数组（省略时使用本文件默认模板）
 ///
-/// 默认模板路径假设入口脚本位于 file/go_pure/<项目>/（与 crud_nest 链
-/// "入口在 file/crud_nest/<项目>/" 的约定平行）。
+/// 输出布局（对齐 gin-vue-admin 式模块化架子）：
+///   modules/<moduleDir>/{model,dto,repo,service,handler,router}.go
+///   + {tableName}_custom.go 自定义层（仅首次生成，fileExists 守卫）
+///   moduleDir 缺省 <tableName>/<tableName>，系统表可在 .jsontable 配
+///   moduleDir（如 sys/menu）与手写架子目录对齐；包名 = 目录末段。
+///   路由集中注册在 {goBasePath}/router/router.go（手写文件，生成器不注入，
+///   生成结束打印提醒清单）。
 /// ----------------------------------------------------------------------------
 
-import { Param, FieldDef, buildGoImports, escapeGoStr, sanitizeGoComment } from "./core/param_go.ac";
+import { Param, FieldDef, buildGoImports, escapeGoStr, sanitizeGoComment, tabChar } from "./core/param_go.ac";
 import { QueryData, SelFieldDef } from "./core/query_data.ac";
-import { updateRouterFile } from "./go_module.ac";
-import { snakeToPascal, isNumericStr } from "../../tool/tool_str.ac";
+import { snakeToPascal, snakeToCamel, isNumericStr } from "../../tool/tool_str.ac";
 import { findGlobalEnumFiles, mergeGlobalEnumFiles } from "../../tool/tool_global_enum.ac";
 import { dirnameOf, findProjPath } from "../../tool/tool_jsontable.ac";
 
@@ -153,6 +155,34 @@ export function generateApiMain(params: Object): Number {
   }
   printLog("tables count: " + tables.length);
 
+  // ── 2.5 i18n 翻译表派生：启用 i18n 且无显式翻译表配置时按惯例派生 ────
+  //      派生规则见 deriveI18nTable（与 C++ json_table_model.cpp 镜像）；
+  //      显式 {table}0.jsontable 存在时优先（用户完全控制权），仅缺省时派生。
+  //      派生表与显式表同路进入 4 节预扫描（i18nRefs 标记 → 只生成实体）
+  let explicitNames: Object = {};
+  for (t in tables) {
+    explicitNames[t["tableName"]] = true;
+  }
+  let derivedTables: Object[] = [];
+  for (t in tables) {
+    let cfg: Object = t["i18n"];
+    if (cfg == null || cfg["table"] == null || cfg["table"].length == 0) {
+      continue;
+    }
+    if (explicitNames[cfg["table"]] == true) {
+      continue;
+    }
+    let d: Object = deriveI18nTable(t);
+    printLog("i18n 翻译表 '" + d["tableName"] + "' 无显式配置，已从主表 '" + t["tableName"] + "' 派生");
+    derivedTables.append(d);
+  }
+  for (d in derivedTables) {
+    tables.append(d);
+  }
+  if (derivedTables.length > 0) {
+    printLog("tables count（含派生）: " + tables.length);
+  }
+
   // ── 3. goBasePath 与模块名 ─────────────────────────────────────────
   //      goBasePath：params 优先（兼容 basePath 键名），缺省回退 meta.goBasePath
   let goBasePath: String = params["goBasePath"];
@@ -168,17 +198,16 @@ export function generateApiMain(params: Object): Number {
   }
   goBasePath = goBasePath.replace("\\", "/");
 
-  // 模块名：读 go.mod 的 module 行（生成 import 前缀 {moduleName}/internal/...）；
+  // 模块名：读 go.mod 的 module 行（生成架子包 import 前缀，如 {moduleName}/common）；
   // 无 go.mod 时无法确定 import 路径 → 报错并跳过全部表生成
   let moduleName: String = readGoModuleName(goBasePath);
   if (moduleName == "") {
     printError("错误：go.mod 不存在或缺 module 行，跳过全部表生成: " + goBasePath + "/go.mod");
     return 0;
   }
-  let modulePath: String = moduleName + "/internal/model";
-  let repoPath: String = moduleName + "/internal/repository";
-  let svcPath: String = moduleName + "/internal/service";
-  let hdlPath: String = moduleName + "/internal/handler";
+  // 架子公共包 import 路径（响应统一走 common.OK/Fail，路由挂 middleware.JWTAuth）
+  let commonPath: String = moduleName + "/common";
+  let middlewarePath: String = moduleName + "/middleware";
   printLog("Go 项目: " + goBasePath + "（module: " + moduleName + "）");
 
   // ── 3.5 全局枚举收集（tool_global_enum.ac 直接复用）────────────────
@@ -204,10 +233,11 @@ export function generateApiMain(params: Object): Number {
     printLog("genGlobalEnum=false，跳过全局枚举收集");
   }
 
-  // ── 4. 预扫描：i18n 引用标记 + 表名/模型名去重 ──────────────────────
+  // ── 4. 预扫描：i18n 引用标记 + 表名/模型名去重 + 模块目录预计算 ──────
   //      被某表 i18n.table 引用的表（如 shop0）只生成实体文件，
   //      跳过 repo/service/handler/router 生成（翻译表是主表从属）
   let i18nRefs: Object = {};
+  let i18nOwner: Object = {};      // 翻译表名 → 主表表名（翻译实体落主表模块目录用）
   let tablesByName: Object = {};   // tableName → 表配置（i18n 翻译表列定义查找用）
   let tablesByModel: Object = {};  // modelName → 表配置（joinTable 联表目标定位用）
   let genTables: Object[] = [];    // 去重后的待生成表配置
@@ -232,27 +262,49 @@ export function generateApiMain(params: Object): Number {
       continue;
     }
     tablesByModel[mn] = t;
+    // ── 模块目录预计算（modules/<moduleDir>/，包名 = 目录末段）────────
+    //    moduleDir 缺省 <tableName>/<tableName>；系统表配 sys/menu 等
+    //    与手写架子目录对齐。仅允许相对子路径（禁 ..，去首尾斜杠）
+    let md: String = t["moduleDir"];
+    if (md == null || md.length == 0) {
+      md = tn + "/" + tn;
+    }
+    md = md.replace("\\", "/");
+    while (md.startsWith("/")) {
+      md = md.substring(1);
+    }
+    while (md.endsWith("/") && md.length > 1) {
+      md = md.substring(0, md.length - 1);
+    }
+    if (md == "" || md.indexOf("..") >= 0) {
+      printError("错误：表 '" + tn + "' 的 moduleDir 非法（空或包含 ..），该表已跳过: " + md);
+      continue;
+    }
+    let segs: String[] = md.split("/");
+    t["moduleDir"] = md;
+    t["pkgName"] = segs[segs.length - 1];
     genTables.append(t);
     let i18nCfg: Object = t["i18n"];
     if (i18nCfg != null && i18nCfg["table"] != null) {
       i18nRefs[i18nCfg["table"]] = true;
+      i18nOwner[i18nCfg["table"]] = tn;
     }
   }
 
   // ── 5. 模板配置：一个模板对应一个生成的代码文件 ───────────────────
-  //      覆盖层（en/in/repo_/svc_/hdl_）每次重新生成；
-  //      手改层（repo/svc/hdl）由模板内 fileExists(outputPath) 守卫，只在首次生成
+  //      覆盖层（model/dto/repo/service/handler/router）每次重新生成；
+  //      自定义层 {tableName}_custom.go 由模板内 fileExists(outputPath) 守卫，
+  //      仅首次生成（自定义逻辑全写这里，重新生成不会覆盖）
   let templates: TemplateConfig[] = params["templates"];
   if (templates == null) {
     templates = [
-      { tpl: "../../crud_gin/template/model/en.tpl",      out: "{goBasePath}/internal/model/en_{tableName}.go" },
-      { tpl: "../../crud_gin/template/model/in.tpl",      out: "{goBasePath}/internal/model/{tableName}_in.go" },
-      { tpl: "../../crud_gin/template/repo/repo_.tpl",    out: "{goBasePath}/internal/repository/{tableName}_.go" },
-      { tpl: "../../crud_gin/template/repo/repo.tpl",     out: "{goBasePath}/internal/repository/{tableName}.go" },
-      { tpl: "../../crud_gin/template/service/svc_.tpl",  out: "{goBasePath}/internal/service/{tableName}_.go" },
-      { tpl: "../../crud_gin/template/service/svc.tpl",   out: "{goBasePath}/internal/service/{tableName}.go" },
-      { tpl: "../../crud_gin/template/handler/hdl_.tpl",  out: "{goBasePath}/internal/handler/{tableName}_.go" },
-      { tpl: "../../crud_gin/template/handler/hdl.tpl",   out: "{goBasePath}/internal/handler/{tableName}.go" }
+      { tpl: "../../crud_gin/template/model/entity.tpl",  out: "{goBasePath}/modules/{moduleDir}/model.go" },
+      { tpl: "../../crud_gin/template/model/params.tpl",  out: "{goBasePath}/modules/{moduleDir}/dto.go" },
+      { tpl: "../../crud_gin/template/repo/repo.tpl",     out: "{goBasePath}/modules/{moduleDir}/repo.go" },
+      { tpl: "../../crud_gin/template/service/svc.tpl",   out: "{goBasePath}/modules/{moduleDir}/service.go" },
+      { tpl: "../../crud_gin/template/handler/hdl.tpl",   out: "{goBasePath}/modules/{moduleDir}/handler.go" },
+      { tpl: "../../crud_gin/template/router.tpl",        out: "{goBasePath}/modules/{moduleDir}/router.go" },
+      { tpl: "../../crud_gin/template/custom.tpl",        out: "{goBasePath}/modules/{moduleDir}/{tableName}_custom.go" }
     ];
   }
   // 枚举/路由模板路径（支持 params 覆盖，相对入口脚本目录）
@@ -260,13 +312,9 @@ export function generateApiMain(params: Object): Number {
   if (enumTplPath == null || enumTplPath.length == 0) {
     enumTplPath = "../../crud_gin/template/model/enum.tpl";
   }
-  let routerTplPath: String = params["routerTpl"];
-  if (routerTplPath == null || routerTplPath.length == 0) {
-    routerTplPath = "../../crud_gin/template/router.tpl";
-  }
 
-  // 收集路由注册函数（渲染文本），全部表生成完后幂等注入 router_.go
-  let routes: Object[] = [];
+  // 集中注册提醒清单（modules/<moduleDir>，生成结束统一打印）
+  let regModules: String[] = [];
   // 配置缺陷被跳过的表数量（结束时报错汇总）
   let missingTableCount: Number = 0;
 
@@ -288,17 +336,44 @@ export function generateApiMain(params: Object): Number {
     }
     printLog("[" + tableName + "] columns count: " + columns.length);
 
+    // ── 6.1b split 布局分支：data/ + modules/admin/ 新规范 ─────────
+    //      表配置 layout="split" 才走新布局；未配置的表跳过（避免误覆盖
+    //      尚未迁移的模块）。生成逻辑见 generateSplitTable。
+    let layoutCfg: String = json["layout"];
+    if (layoutCfg != "split") {
+      printLog("表 '" + tableName + "' 未配置 layout=split，跳过生成（待迁移）");
+      continue;
+    }
+    let splitModuleDir: String = json["moduleDir"];
+    let splitPkgName: String = json["pkgName"];
+    let splitCount: Number = generateSplitTable(json, goBasePath, moduleName,
+        commonPath, middlewarePath, splitModuleDir, splitPkgName,
+        globalEnumDefs, emittedGlobalEnums);
+    generatedFileCount = generatedFileCount + splitCount;
+    regModules.append(splitModuleDir);
+    continue;
+
     // ── 6.2 翻译表分支：被 i18n 引用的表只生成实体文件 ─────────────
     //      跳过 repo/service/handler/router 生成（其 CRUD 由主表 repo 的
-    //      i18n 辅助方法承接，翻译表不需要独立接口）
+    //      i18n 辅助方法承接，翻译表不需要独立接口）；
+    //      翻译实体落主表模块目录（与主表同包，repo 直接引用类型）
     if (i18nRefs[tableName] == true) {
-      printLog("表 '" + tableName + "' 为 i18n 翻译表（被引用），只生成实体文件，跳过 repo/service/handler/router 生成");
+      let ownerName: String = i18nOwner[tableName];
+      if (ownerName == null) {
+        ownerName = tableName;
+      }
+      let ownerTable: Object = tablesByName[ownerName];
+      let ownerDir: String = ownerTable["moduleDir"];
+      let ownerPkg: String = ownerTable["pkgName"];
+      printLog("表 '" + tableName + "' 为 i18n 翻译表（被引用），只生成实体文件（入主表模块 modules/" + ownerDir + "），跳过其余文件生成");
       let iParam: Param = new Param();
       iParam.setTableData(json);
       let iTplData: Object = buildEntityData(iParam);
-      let iOutPath: String = formatPath("{goBasePath}/internal/model/en_{tableName}.go", {
+      iTplData["pkgName"] = ownerPkg;
+      let iOutPath: String = formatPath("{goBasePath}/modules/{moduleDir}/en_{tableName}.go", {
         goBasePath: goBasePath,
-        tableName: tableName
+        tableName: tableName,
+        moduleDir: ownerDir
       });
       let iEntityTpl: String = entityTplPath(templates);
       if (iEntityTpl != "") {
@@ -313,6 +388,11 @@ export function generateApiMain(params: Object): Number {
       }
       continue;
     }
+
+    // ── 6.2b 模块目录与包名（预扫描已写入表配置）──────────────────
+    let moduleDir: String = json["moduleDir"];
+    let pkgName: String = json["pkgName"];
+    printLog("[" + tableName + "] module: modules/" + moduleDir + "（package " + pkgName + "）");
 
     // ── 6.3 Param 加工：.jsontable 列 → goType/标签/参数字段集 ────
     let param: Param = new Param();
@@ -561,11 +641,11 @@ export function generateApiMain(params: Object): Number {
           argsStr = argsStr + "data." + snakeToPascal(c);
         }
         let dupMsg: String = "duplicate: " + ix["name"] + "(" + ucols.join(",") + ")";
-        // Insert 前置查重（返回签名 0, err）
+        // Insert 前置查重（返回签名 0, err；modules 模式同包，实体类型免 model. 前缀）
         uniqInsChecks.append(
           "  {\n"
           + "    var cnt int64\n"
-          + "    if err := db.Model(&model." + param.entityClass + "{}).Where(\"" + whereStr + "\", " + argsStr + ").Count(&cnt).Error; err != nil {\n"
+          + "    if err := db.Model(&" + param.entityClass + "{}).Where(\"" + whereStr + "\", " + argsStr + ").Count(&cnt).Error; err != nil {\n"
           + "      return 0, err\n"
           + "    }\n"
           + "    if cnt > 0 {\n"
@@ -576,7 +656,7 @@ export function generateApiMain(params: Object): Number {
         uniqUpdChecks.append(
           "  {\n"
           + "    var cnt int64\n"
-          + "    if err := db.Model(&model." + param.entityClass + "{}).Where(\"" + whereStr + "\", " + argsStr + ").Where(\"`" + param.primaryField.name + "` <> ?\", data." + param.primaryField.goName + ").Count(&cnt).Error; err != nil {\n"
+          + "    if err := db.Model(&" + param.entityClass + "{}).Where(\"" + whereStr + "\", " + argsStr + ").Where(\"`" + param.primaryField.name + "` <> ?\", data." + param.primaryField.goName + ").Count(&cnt).Error; err != nil {\n"
           + "      return 0, err\n"
           + "    }\n"
           + "    if cnt > 0 {\n"
@@ -589,7 +669,7 @@ export function generateApiMain(params: Object): Number {
     let hasUniqCheck: Bool = (uniqInsChecks.length > 0);
 
     // ── 6.5 枚举数据（表级 enums 节点 + globalEnumCols 全局枚举列）──
-    let enums: Object[] = buildTableEnums(json, param, globalEnumDefs, emittedGlobalEnums);
+    let enums: Object[] = buildTableEnums(json, param, globalEnumDefs, emittedGlobalEnums, pkgName);
     let hasEnums: Bool = (enums.length > 0);
 
     // ── 6.6 i18n 多语言配置处理 ────────────────────────────────────
@@ -713,10 +793,10 @@ export function generateApiMain(params: Object): Number {
     tplData["modelName"] = modelName;
     tplData["tableName"] = param.tableName;
     tplData["tableComment"] = param.tableDesc;
-    tplData["modulePath"] = modulePath;   // import 前缀：{moduleName}/internal/model 形态
-    tplData["repoPath"] = repoPath;
-    tplData["svcPath"] = svcPath;
-    tplData["hdlPath"] = hdlPath;
+    tplData["moduleDir"] = moduleDir;     // modules/<moduleDir>（预扫描计算）
+    tplData["pkgName"] = pkgName;         // 包名 = moduleDir 末段
+    tplData["commonPath"] = commonPath;   // 架子 common 包（OK/Fail 响应）
+    tplData["middlewarePath"] = middlewarePath;  // 架子 middleware 包（JWTAuth）
     // 类名/文件名族（Go 结构体名与文件名均由表名派生）
     tplData["entityClass"] = param.entityClass;                      // 如 Shop
     tplData["repoClass"] = param.entityClass + "Repo";               // 如 ShopRepo
@@ -767,7 +847,7 @@ export function generateApiMain(params: Object): Number {
     tplData["i18nMapType"] = i18nMapType;
     tplData["i18nColsStr"] = i18nColsStr;
 
-    // import 块（文本预拼，模板直接 ${xxxImports} 输出）
+    // import 块（文本预拼，模板直接 ${xxxImports} 输出；modules 模式同包免层间 import）
     tplData["entityImports"] = buildEntityImports(param, i18nFlatFields, joinFlatFields);
     tplData["inImports"] = buildInImports(param, selFields);
     let repoExt: String[] = [];
@@ -775,7 +855,6 @@ export function generateApiMain(params: Object): Number {
     if (hasI18n) {
       repoExt.append("gorm.io/gorm/clause");
     }
-    repoExt.append(modulePath);
     let repoStd: String[] = [];
     if (hasUniqCheck) {
       repoStd.append("errors");
@@ -783,32 +862,34 @@ export function generateApiMain(params: Object): Number {
     tplData["repoImports"] = buildGoImports(repoStd, repoExt);
     let svcExt: String[] = [];
     svcExt.append("gorm.io/gorm");
-    svcExt.append(modulePath);
-    svcExt.append(repoPath);
     tplData["svcImports"] = buildGoImports([], svcExt);
-    let hdlStd: String[] = [];
-    hdlStd.append("net/http");
     let hdlExt: String[] = [];
     hdlExt.append("github.com/gin-gonic/gin");
-    hdlExt.append(modulePath);
-    hdlExt.append(svcPath);
-    tplData["hdlImports"] = buildGoImports(hdlStd, hdlExt);
+    hdlExt.append(commonPath);
+    tplData["hdlImports"] = buildGoImports([], hdlExt);
+    // router.go（每模块自包含：gin + JWT 中间件 + common）
+    let routerExt: String[] = [];
+    routerExt.append("github.com/gin-gonic/gin");
+    routerExt.append(middlewarePath);
+    routerExt.append(commonPath);
+    tplData["routerImports"] = buildGoImports([], routerExt);
 
     // ── 6.8 遍历模板配置，逐个渲染并写入文件 ──────────────────
     //      每个模板 cfg 的输出路径由 cfg.out 模板 + formatPath 替换得到；
-    //      手改层模板内部用 ${if !fileExists(outputPath)} 守卫，存在即跳过
+    //      自定义层模板内部用 ${if !fileExists(outputPath)} 守卫，存在即跳过
     for (cfg in templates) {
       let outPath: String = formatPath(cfg.out, {
         goBasePath: goBasePath,
         tableName: param.tableName,
-        modelName: modelName
+        modelName: modelName,
+        moduleDir: moduleDir
       });
       tplData["outputPath"] = outPath;  // 供模板内的 fileExists(outputPath) 守卫使用
 
       // 核心：调用模板引擎，把 tpl 中的 ${变量名} 替换为实际值
       let result = renderTpl(cfg.tpl, tplData);
 
-      // 渲染成功 → 写入磁盘（手改层已存在时模板返回空串，不写）
+      // 渲染成功 → 写入磁盘（自定义层已存在时模板返回空串，不写）
       if (result) {
         let writeOk: Bool = writeFile(outPath, result);
         if (writeOk) {
@@ -820,9 +901,10 @@ export function generateApiMain(params: Object): Number {
 
     // ── 6.9 枚举文件（无枚举不生成）───────────────────────────
     if (hasEnums) {
-      let enumOutPath: String = formatPath("{goBasePath}/internal/model/{tableName}_enum.go", {
+      let enumOutPath: String = formatPath("{goBasePath}/modules/{moduleDir}/{tableName}_enum.go", {
         goBasePath: goBasePath,
-        tableName: param.tableName
+        tableName: param.tableName,
+        moduleDir: moduleDir
       });
       let enumResult = renderTpl(enumTplPath, tplData);
       if (enumResult) {
@@ -834,25 +916,20 @@ export function generateApiMain(params: Object): Number {
       }
     }
 
-    // ── 6.10 路由注册函数（渲染文本收集，循环结束后统一注入）──
-    let routerResult = renderTpl(routerTplPath, tplData);
-    if (routerResult) {
-      routes.push({
-        funcName: "Register" + param.entityClass + "Routes",
-        rendered: routerResult,
-        hdlPath: hdlPath
-      });
-    }
+    // ── 6.10 集中注册提醒（modules 模式不自动注入手写 router/router.go）──
+    regModules.append(moduleDir);
   }  // end for (json in genTables)
 
-  // ── 7. router_.go 幂等注入（照 app_module.ac 模式，整行匹配去重）──
-  //      把本次生成的注册函数追加进 internal/router/router_.go 的
-  //      {autocode:routes} 标记区；已存在的函数自动跳过
-  let routerFilePath: String = params["routerFilePath"];
-  if (routerFilePath == null || routerFilePath.length == 0) {
-    routerFilePath = goBasePath + "/internal/router/router_.go";
+  // ── 7. 集中注册清单 ────────────────────────────────────────────────
+  //      每个模块自带 router.go（RegisterRoutes，内含 Handler→Service→Repo
+  //      装配与 JWT 路由组）；集中注册在 {goBasePath}/router/router.go
+  //      （手写文件）加一行 <pkg>.RegisterRoutes(api)，生成器不自动注入
+  if (regModules.length > 0) {
+    printLog("── 请在 router/router.go 集中注册以下模块（<pkg>.RegisterRoutes(api)）──");
+    for (m in regModules) {
+      printLog("  modules/" + m);
+    }
   }
-  updateRouterFile(routerFilePath, routes);
 
   // ── 8. 汇总 ────────────────────────────────────────────────────────
   if (missingTableCount > 0) {
@@ -860,6 +937,100 @@ export function generateApiMain(params: Object): Number {
   }
   printLog("--- 代码生成结束，共生成 " + generatedFileCount + " 个文件 ---");
   return generatedFileCount;
+}
+
+/// @brief 从启用 i18n 的主表按惯例派生翻译表定义（0 表）
+/// @param mainTable 主表配置（含 i18n 节点：table/extKey/langKey/fields）
+/// @return 翻译表配置（tableName/modelName/columns/indexes，frontend=false）
+/// @note   派生规则与 C++ deriveI18nTable（json_table_model.cpp）互为镜像，修改需同步：
+///         id（自增主键，类型随主表主键）+ extKey（类型随主表主键）+
+///         langKey（varchar(8)）+ fields（继承主表同名列的类型/注释，
+///         主表无此列时回退 varchar(255)）+ created_at/updated_at（datetime 可空）；
+///         唯一索引 uk_{extKey}_{langKey}
+export function deriveI18nTable(mainTable: Object): Object {
+  let cfg: Object = mainTable["i18n"];
+  let transName: String = cfg["table"];
+  let extKey: String = cfg["extKey"];
+  if (extKey == null || extKey.length == 0) {
+    extKey = "ext_id";
+  }
+  let langKey: String = cfg["langKey"];
+  if (langKey == null || langKey.length == 0) {
+    langKey = "lang";
+  }
+  // 主表主键列（extKey 与 0 表 id 的类型基准；找不到回退 int unsigned）
+  let pkName: String = "id";
+  let pkType: String = "int";
+  let pkUnsigned: Bool = true;
+  let cols: Object[] = mainTable["columns"];
+  if (cols != null) {
+    for (c in cols) {
+      if (c["isPrimary"] == true) {
+        pkName = c["name"];
+        pkType = c["mysqlType"];
+        pkUnsigned = c["unsigned"] == true;
+        break;
+      }
+    }
+  }
+  // 列定义（id/extKey/langKey/翻译字段/时间戳）
+  let newCols: Object[] = [];
+  newCols.append({ name: "id", mysqlType: pkType, unsigned: pkUnsigned, nullable: false,
+                   isPrimary: true, isAutoInc: true, comment: "自增主键" });
+  newCols.append({ name: extKey, mysqlType: pkType, unsigned: pkUnsigned, nullable: false,
+                   isPrimary: false, isAutoInc: false,
+                   comment: "扩展ID，关联" + mainTable["tableName"] + "." + pkName });
+  newCols.append({ name: langKey, mysqlType: "varchar(8)", unsigned: false, nullable: false,
+                   isPrimary: false, isAutoInc: false, comment: "语言编码：zh、en、ja" });
+  let fields: String[] = cfg["fields"];
+  if (fields != null) {
+    for (f in fields) {
+      let src: Object = null;
+      if (cols != null) {
+        for (c in cols) {
+          if (c["name"] == f) {
+            src = c;
+            break;
+          }
+        }
+      }
+      if (src != null) {
+        let fc: String = src["comment"];
+        if (fc == null) {
+          fc = f;
+        }
+        newCols.append({ name: f, mysqlType: src["mysqlType"], unsigned: src["unsigned"] == true,
+                         nullable: src["nullable"] == true, isPrimary: false, isAutoInc: false,
+                         comment: fc });
+      } else {
+        newCols.append({ name: f, mysqlType: "varchar(255)", unsigned: false, nullable: false,
+                         isPrimary: false, isAutoInc: false, comment: f });
+      }
+    }
+  }
+  newCols.append({ name: "created_at", mysqlType: "datetime", unsigned: false, nullable: true,
+                   isPrimary: false, isAutoInc: false, comment: "创建时间" });
+  newCols.append({ name: "updated_at", mysqlType: "datetime", unsigned: false, nullable: true,
+                   isPrimary: false, isAutoInc: false, comment: "更新时间" });
+  // 唯一索引：一行一种语言
+  let idxs: Object[] = [];
+  idxs.append({ name: "uk_" + extKey + "_" + langKey, cols: [extKey, langKey], unique: true });
+  // 组装翻译表配置
+  let transComment: String = "多语言表";
+  let mainComment: String = mainTable["tableComment"];
+  if (mainComment != null && mainComment.length > 0) {
+    transComment = mainComment + "多语言表";
+  }
+  let t: Object = {
+    tableName: transName,
+    modelName: transName,
+    tableComment: transComment,
+    manualUpdateTime: false,
+    frontend: false,
+    columns: newCols,
+    indexes: idxs,
+  };
+  return t;
 }
 
 /// @brief 从 Go 项目根的 go.mod 读取 module 名
@@ -885,12 +1056,12 @@ export function readGoModuleName(goBasePath: String): String {
   return "";
 }
 
-/// @brief 从模板配置数组中取出实体模板路径（翻译表分支复用 en.tpl）
+/// @brief 从模板配置数组中取出实体模板路径（翻译表分支复用 entity.tpl）
 /// @param templates 模板配置数组
 /// @return 实体模板路径；找不到返回空串（调用方按空跳过渲染）
 export function entityTplPath(templates: TemplateConfig[]): String {
   for (cfg in templates) {
-    if (cfg.tpl.indexOf("en.tpl") >= 0) {
+    if (cfg.tpl.indexOf("entity.tpl") >= 0) {
       return cfg.tpl;
     }
   }
@@ -967,14 +1138,16 @@ export function buildEntityData(param: Param): Object {
 /// @param table .jsontable 表配置
 /// @param param 已加工的表参数（列注释回退用）
 /// @param globalEnumDefs 全局枚举查找表（name → 定义）
-/// @param emitted 本次运行已生成 const 的全局枚举名（跨表去重，Go 同包禁重复）
+/// @param emitted 本次运行已生成 const 的全局枚举名（同包去重；键 = pkgName/枚举名，
+///        跨包各自生成互不影响）
+/// @param pkgName 模块包名（modules 模式每模块独立包，Go const 同包禁重复）
 /// @return enums 数组，每项 {enumName, columnName, comment, mapKeyType, items}
-export function buildTableEnums(table: Object, param: Param, globalEnumDefs: Object, emitted: Object): Object[] {
+export function buildTableEnums(table: Object, param: Param, globalEnumDefs: Object, emitted: Object, pkgName: String): Object[] {
   let enums: Object[] = [];
 
   // ── 1. 全局枚举列：globalEnumCols 命中 .jsonglobalenum ──────────
   //      命中列在 {model}_enum.go 生成 Go const 块 + Map；
-  //      同一全局枚举本次运行只生成一份（Go 同包不允许重复 const 定义）
+  //      同一全局枚举在同一包内只生成一份（Go 同包不允许重复 const 定义）
   let geCols: String[] = table["globalEnumCols"];
   if (geCols != null) {
     for (gcol in geCols) {
@@ -985,11 +1158,12 @@ export function buildTableEnums(table: Object, param: Param, globalEnumDefs: Obj
         continue;
       }
       let geName: String = gDef["enumName"];
-      if (emitted[geName] == true) {
-        printLog("全局枚举 " + geName + " 已在本次运行生成过 const，跳过重复生成（表 " + table.tableName + "）");
+      let dedupKey: String = pkgName + "/" + geName;
+      if (emitted[dedupKey] == true) {
+        printLog("全局枚举 " + geName + " 已在包 " + pkgName + " 生成过 const，跳过重复生成（表 " + table.tableName + "）");
         continue;
       }
-      emitted[geName] = true;
+      emitted[dedupKey] = true;
       enums.append(buildEnumEntry(geName, gcol, gDef["remark"], gDef["options"]));
     }
   }
@@ -1070,4 +1244,337 @@ export function buildEnumEntry(enumName: String, columnName: String, comment: St
     mapKeyType: mapKeyType,
     items: items
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// split 布局（data/ + modules/admin/，生成件以 `_` 结尾）
+// ----------------------------------------------------------------------------
+// 由 .jsontable 的 layout="split" 触发；与旧 modules/<mod>/ 单文件布局并存，
+// 未配置 layout 的表仍走旧流程（避免误覆盖未迁移模块）。
+// 为保证生成结果与手写黄金文件逐字节一致，结构体/常量/map 的列对齐在这里
+// 用 padTo 预渲染成行数组，模板只做逐行输出（不依赖外部 gofmt）。
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// @brief 右侧补空格到指定宽度（go fmt 的 tabwriter 对齐用）
+export function padTo(s: String, w: Number): String {
+  let n: Number = w - s.length;
+  if (n <= 0) {
+    return s;
+  }
+  return s + " ".repeat(n);
+}
+
+/// @brief 实体结构体字段行（gorm tag + json tag + 注释，三列对齐）
+export function buildEnFieldLines(fields: FieldDef[]): String[] {
+  let maxName: Number = 0;
+  let maxType: Number = 0;
+  let maxTag: Number = 0;
+  for (f in fields) {
+    if (f.goName.length > maxName) { maxName = f.goName.length; }
+    if (f.goType.length > maxType) { maxType = f.goType.length; }
+    let tl: Number = ("`" + f.gormTag + " " + f.jsonTag + "`").length;
+    if (tl > maxTag) { maxTag = tl; }
+  }
+  let lines: String[] = [];
+  for (f in fields) {
+    let tag: String = "`" + f.gormTag + " " + f.jsonTag + "`";
+    lines.append(tabChar() + padTo(f.goName, maxName) + " " + padTo(f.goType, maxType)
+      + " " + padTo(tag, maxTag) + " // " + f.comment);
+  }
+  return lines;
+}
+
+/// @brief InSel 结构体字段行（嵌入 BasePage + 全指针筛选 + Sort，三列对齐）
+export function buildSelFieldLines(selFields: SelFieldDef[]): String[] {
+  let baseName: String = "common.BasePage";
+  let maxName: Number = baseName.length;
+  let maxType: Number = 0;
+  let maxTag: Number = 0;
+  for (sf in selFields) {
+    if (sf.goName.length > maxName) { maxName = sf.goName.length; }
+    if (sf.declType.length > maxType) { maxType = sf.declType.length; }
+    let tl: Number = ("`json:\"" + sf.name + "\"`").length;
+    if (tl > maxTag) { maxTag = tl; }
+  }
+  // Sort 行参与宽度计算
+  let sortTag: String = "`json:\"sort\"`";
+  if ("Sort".length > maxName) { maxName = "Sort".length; }
+  if ("[]string".length > maxType) { maxType = "[]string".length; }
+  if (sortTag.length > maxTag) { maxTag = sortTag.length; }
+
+  let lines: String[] = [];
+  // 嵌入字段：gofmt 仍保留 type 列宽度，注释落在 type 列之后
+  lines.append(tabChar() + padTo(baseName, maxName) + " " + padTo("", maxType) + " // 分页参数");
+  for (sf in selFields) {
+    let tag: String = "`json:\"" + sf.name + "\"`";
+    lines.append(tabChar() + padTo(sf.goName, maxName) + " " + padTo(sf.declType, maxType)
+      + " " + padTo(tag, maxTag) + " // " + sf.comment);
+  }
+  lines.append(tabChar() + padTo("Sort", maxName) + " " + padTo("[]string", maxType)
+    + " " + padTo(sortTag, maxTag) + " // 排序字段名（方向由后端白名单写死）");
+  return lines;
+}
+
+/// @brief InUpd 结构体字段行（Id 值类型 + 其余全指针，三列对齐）
+export function buildUpdFieldLines(fields: FieldDef[], idName: String, idType: String): String[] {
+  let idTag: String = "`json:\"id\"`";
+  let maxName: Number = idName.length;
+  let maxType: Number = idType.length;
+  let maxTag: Number = idTag.length;
+  for (f in fields) {
+    if (f.goName.length > maxName) { maxName = f.goName.length; }
+    if (f.ptrType.length > maxType) { maxType = f.ptrType.length; }
+    let tl: Number = ("`" + f.jsonTag + "`").length;
+    if (tl > maxTag) { maxTag = tl; }
+  }
+  let lines: String[] = [];
+  lines.append(tabChar() + padTo(idName, maxName) + " " + padTo(idType, maxType)
+    + " " + padTo(idTag, maxTag) + " // 主键：0=新增，>0=更新");
+  for (f in fields) {
+    let tag: String = "`" + f.jsonTag + "`";
+    lines.append(tabChar() + padTo(f.goName, maxName) + " " + padTo(f.ptrType, maxType)
+      + " " + padTo(tag, maxTag) + " // " + f.comment);
+  }
+  return lines;
+}
+
+/// @brief Col 常量块行（名称列对齐）
+export function buildColLines(fields: FieldDef[]): String[] {
+  let maxName: Number = 0;
+  for (f in fields) {
+    let n: String = "Col" + f.goName;
+    if (n.length > maxName) { maxName = n.length; }
+  }
+  let lines: String[] = [];
+  for (f in fields) {
+    let n: String = "Col" + f.goName;
+    lines.append(tabChar() + padTo(n, maxName) + " = \"" + f.name + "\"");
+  }
+  return lines;
+}
+
+/// @brief 排序白名单 map 行（键列对齐）
+export function buildSortEntryLines(cols: String[], dirs: String[]): String[] {
+  let maxKey: Number = 0;
+  for (let i = 0; i < cols.length; i = i + 1) {
+    let k: String = "Col" + snakeToPascal(cols[i]) + ":";
+    if (k.length > maxKey) { maxKey = k.length; }
+  }
+  let lines: String[] = [];
+  for (let i = 0; i < cols.length; i = i + 1) {
+    let k: String = "Col" + snakeToPascal(cols[i]) + ":";
+    lines.append(tabChar() + padTo(k, maxKey) + " \"" + dirs[i] + "\",");
+  }
+  return lines;
+}
+
+/// @brief 生成一张 split 布局的表（data/ + modules/admin/）
+/// @return 实际写入文件数
+export function generateSplitTable(json: Object, goBasePath: String, moduleName: String,
+    commonPath: String, middlewarePath: String, moduleDir: String, pkgName: String,
+    globalEnumDefs: Object, emitted: Object): Number {
+  let tplDir: String = "../../crud_gin/template";
+  let tableName: String = json["tableName"];
+  let param: Param = new Param();
+  param.setTableData(json);
+  if (param.primaryField == null) {
+    printError("错误：表 '" + tableName + "' 未声明主键列（isPrimary），已跳过生成");
+    return 0;
+  }
+
+  let dataDir: String = moduleDir;
+  let dataPath: String = moduleName + "/data/" + dataDir;
+  let dataAlias: String = "d" + pkgName;
+  let idType: String = param.primaryField.goType;
+  let idName: String = param.primaryField.goName;
+  let idCol: String = param.primaryField.name;
+
+  // ── 查询场景：过滤字段全指针 + common.Where* 条件 ───────────────
+  let qd: QueryData = new QueryData();
+  qd.pointerMode = true;
+  let selFields: SelFieldDef[] = qd.buildSelFields(json, param, [], false);
+  let whereConds: String[] = qd.buildWhereConditionsPointer(selFields);
+
+  // ── 排序白名单：selColsSort 顺序（跳过联表 ref）──────────────────
+  let sortCols: String[] = [];
+  let sortDirs: String[] = [];
+  let sortPairs: Object[] = json["selColsSort"];
+  if (sortPairs != null) {
+    for (pair in sortPairs) {
+      let ref: String = pair[0];
+      if (ref == null || ref == "" || ref.indexOf(".") > 0) { continue; }
+      let dir: String = pair[1];
+      if (dir == null || dir == "") { dir = "DESC"; }
+      sortCols.append(ref);
+      sortDirs.append(dir);
+    }
+  }
+  let sortWhitelistName: String = snakeToCamel(tableName) + "SortWhitelist";
+  let sortEntryLines: String[] = buildSortEntryLines(sortCols, sortDirs);
+
+  // ── 预渲染行（逐字节对齐）─────────────────────────────────────
+  let enFieldLines: String[] = buildEnFieldLines(param.fields);
+  let colLines: String[] = buildColLines(param.fields);
+  let selFieldLines: String[] = buildSelFieldLines(selFields);
+  let updFieldLines: String[] = buildUpdFieldLines(param.allWritableFields, idName, idType);
+  let toEntityLines: String[] = [];
+  let toUpdatesLines: String[] = [];
+  for (f in param.allWritableFields) {
+    toEntityLines.append(tabChar() + "common.CopyNonNil(&e." + f.goName + ", in." + f.goName + ")");
+    toUpdatesLines.append(tabChar() + tabChar() + dataAlias + ".Col" + f.goName + ", in." + f.goName + ",");
+  }
+  // service 结构体两列对齐（DB/Repo）
+  let svcName1: String = "DB";
+  let svcType1: String = "*gorm.DB";
+  let svcName2: String = "Repo";
+  let svcType2: String = "*" + dataAlias + "." + param.repoClass;
+  let svcMaxName: Number = svcName1.length;
+  if (svcName2.length > svcMaxName) { svcMaxName = svcName2.length; }
+  let svcMaxType: Number = svcType1.length;
+  if (svcType2.length > svcMaxType) { svcMaxType = svcType2.length; }
+  let svcFieldLines: String[] = [];
+  // 类型列是行尾（无 tag/注释），gofmt 不补尾随空格
+  svcFieldLines.append(tabChar() + padTo(svcName1, svcMaxName) + " " + svcType1);
+  svcFieldLines.append(tabChar() + padTo(svcName2, svcMaxName) + " " + svcType2);
+
+  // ── import 块 ────────────────────────────────────────────────
+  let needTime: Bool = false;
+  for (f in param.fields) {
+    if (f.goType == "time.Time") { needTime = true; }
+  }
+  let selNeedTime: Bool = false;
+  for (sf in selFields) {
+    if (sf.goType == "time.Time") { selNeedTime = true; }
+  }
+  let tb: String = tabChar();
+  let enImports: String = needTime ? "import \"time\"" : "";
+  let selImports: String = "";
+  if (selNeedTime) {
+    selImports = "import (\n" + tb + "\"" + commonPath + "\"\n" + tb + "\"time\"\n)";
+  } else {
+    selImports = "import \"" + commonPath + "\"";
+  }
+  let repoImports: String = "import (\n" + tb + "\"" + commonPath + "\"\n\n" + tb
+    + "\"gorm.io/gorm\"\n)";
+  let updImports: String = "";
+  if (needTime) {
+    updImports = "import (\n" + tb + "\"time\"\n\n" + tb + "\"" + commonPath + "\"\n"
+      + tb + dataAlias + " \"" + dataPath + "\"\n)";
+  } else {
+    updImports = "import (\n" + tb + "\"" + commonPath + "\"\n" + tb + dataAlias
+      + " \"" + dataPath + "\"\n)";
+  }
+  let hdlImports: String = "import (\n" + tb + "\"github.com/gin-gonic/gin\"\n\n" + tb + "\""
+    + commonPath + "\"\n" + tb + dataAlias + " \"" + dataPath + "\"\n)";
+  let svcImports: String = "import (\n" + tb + "\"gorm.io/gorm\"\n\n" + tb + dataAlias
+    + " \"" + dataPath + "\"\n)";
+  let routerImports: String = "import (\n" + tb + "\"github.com/gin-gonic/gin\"\n\n" + tb + "\""
+    + commonPath + "\"\n" + tb + "\"" + middlewarePath + "\"\n)";
+
+  // ── 包注释文案（表级配置，缺省按表注释兜底）───────────────────
+  let dataPkgComment: String = json["dataPkgComment"];
+  if (dataPkgComment == null || dataPkgComment == "") {
+    dataPkgComment = param.tableDesc + "表共享数据层（admin 端与 app 端复用）";
+  }
+  let adminPkgComment: String = json["adminPkgComment"];
+  if (adminPkgComment == null || adminPkgComment == "") {
+    adminPkgComment = param.tableDesc + "管理端模块（CRUD）";
+  }
+
+  // ── 枚举（表级 enums + globalEnumCols；与旧链同一加工器）────────
+  let enums: Object[] = buildTableEnums(json, param, globalEnumDefs, emitted, pkgName);
+  let hasEnums: Bool = (enums.length > 0);
+
+  // ── tplData ──────────────────────────────────────────────────
+  let tplData: Object = {};
+  tplData["moduleName"] = moduleName;
+  tplData["tableName"] = param.tableName;
+  tplData["tableComment"] = param.tableDesc;
+  tplData["dataDir"] = dataDir;
+  tplData["pkgName"] = pkgName;
+  tplData["dataPath"] = dataPath;
+  tplData["dataAlias"] = dataAlias;
+  tplData["commonPath"] = commonPath;
+  tplData["middlewarePath"] = middlewarePath;
+  tplData["dataPkgComment"] = dataPkgComment;
+  tplData["adminPkgComment"] = adminPkgComment;
+  tplData["tableClass"] = param.tableClass;
+  tplData["enClass"] = param.enClass;
+  tplData["selClass"] = param.selClass;
+  tplData["updClass"] = param.updClass;
+  tplData["repoClass"] = param.repoClass;
+  tplData["serviceClass"] = param.serviceClass;
+  tplData["handlerClass"] = param.handlerClass;
+  tplData["idGoType"] = idType;
+  tplData["idGoName"] = idName;
+  tplData["idColName"] = idCol;
+  tplData["permPrefix"] = tableName;
+  tplData["enFieldLines"] = enFieldLines;
+  tplData["colLines"] = colLines;
+  tplData["selFieldLines"] = selFieldLines;
+  tplData["updFieldLines"] = updFieldLines;
+  tplData["toEntityLines"] = toEntityLines;
+  tplData["toUpdatesLines"] = toUpdatesLines;
+  tplData["svcFieldLines"] = svcFieldLines;
+  tplData["whereConditions"] = whereConds;
+  tplData["sortWhitelistName"] = sortWhitelistName;
+  tplData["sortEntryLines"] = sortEntryLines;
+  tplData["enImports"] = enImports;
+  tplData["selImports"] = selImports;
+  tplData["repoImports"] = repoImports;
+  tplData["updImports"] = updImports;
+  tplData["hdlImports"] = hdlImports;
+  tplData["svcImports"] = svcImports;
+  tplData["routerImports"] = routerImports;
+  tplData["hasEnums"] = hasEnums;
+  tplData["enums"] = enums;
+
+  // ── 模板清单（data 读面 → admin 写面 → 首次骨架）──────────────
+  let templates: TemplateConfig[] = [
+    { tpl: tplDir + "/model/entity.tpl",  out: "{goBasePath}/data/{dataDir}/en_{tableName}_.go" },
+    { tpl: tplDir + "/model/in_sel.tpl",  out: "{goBasePath}/data/{dataDir}/in_sel_{tableName}_.go" },
+    { tpl: tplDir + "/repo/repo.tpl",     out: "{goBasePath}/data/{dataDir}/{tableName}_repo_.go" },
+    { tpl: tplDir + "/model/in_upd.tpl",  out: "{goBasePath}/modules/admin/{dataDir}/in_upd_{tableName}_.go" },
+    { tpl: tplDir + "/handler/hdl.tpl",   out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_handler_.go" },
+    { tpl: tplDir + "/service/svc.tpl",   out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_service_.go" },
+    { tpl: tplDir + "/router.tpl",        out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_router_.go" },
+    { tpl: tplDir + "/service/svc_write.tpl", out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_service.go" }
+  ];
+
+  let count: Number = 0;
+  for (cfg in templates) {
+    let outPath: String = formatPath(cfg.out, {
+      goBasePath: goBasePath,
+      dataDir: dataDir,
+      tableName: param.tableName,
+      moduleDir: moduleDir
+    });
+    tplData["outputPath"] = outPath;
+    let result = renderTpl(cfg.tpl, tplData);
+    if (result) {
+      if (writeFile(outPath, result)) {
+        count = count + 1;
+      }
+      printLog("生成文件: " + outPath);
+    }
+  }
+
+  // ── 枚举文件（data 层，无枚举不生成）──────────────────────────
+  if (hasEnums) {
+    let enumOutPath: String = formatPath("{goBasePath}/data/{dataDir}/enum_{tableName}_.go", {
+      goBasePath: goBasePath,
+      dataDir: dataDir,
+      tableName: param.tableName
+    });
+    let enumResult = renderTpl(tplDir + "/model/enum.tpl", tplData);
+    if (enumResult) {
+      if (writeFile(enumOutPath, enumResult)) {
+        count = count + 1;
+      }
+      printLog("生成文件: " + enumOutPath);
+    }
+  }
+
+  printLog("[" + tableName + "] split 布局：data/" + dataDir + " + modules/admin/" + dataDir);
+  return count;
 }

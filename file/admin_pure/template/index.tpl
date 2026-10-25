@@ -23,9 +23,22 @@ ${# ============================================================================
 // ==================== ${commentTitle}（${pageName}）查询列表 ====================
 import { reactive, ref, unref } from "vue";
 import { message } from "@/utils/message";
-${if needMessageBox}import { ElMessageBox } from "element-plus";
-${/if}${if hasRemoteDialogSelect}import { http } from "@/utils/http";
-${/if}import Write from "./components/write.vue";
+${if !noDetail}
+import View from "~icons/ep/view";
+${/if}
+${if !noEdit}
+import EditPen from "~icons/ep/edit-pen";
+${/if}
+${if !noDelete}
+import Delete from "~icons/ep/delete";
+${/if}
+${if needMessageBox}
+import { ElMessageBox } from "element-plus";
+${/if}
+${if hasRemoteDialogSelect}
+import { http } from "@/utils/http";
+${/if}
+import Write from "./components/write.vue";
 import { ${apiImports} } from "@/api/${apiModule}/${pageName}";
 ${if hasSelectApi}import { ${selectApiImports} } from "@/api/${apiModule}/${pageName}";
 ${/if}${if hasBoolSourceImports}${boolSourceImportLines}
@@ -44,10 +57,10 @@ const pageSize = ref(10);
 const selectedRows = ref<any[]>([]);
 const searchParams = ref<Record<string, any>>({});
 
-// 搜索栏表单（范围查询生成 Start/End 两个参数）
+// 搜索栏表单（范围查询生成 _min/_max 两个参数，与后端 InSel 字段名一致）
 ${if hasQueryFields}const searchForm = reactive<Record<string, any>>({
-${each q in queryFields}${if q.isRange}  ${q.dataName}Start: "",
-  ${q.dataName}End: "",
+${each q in queryFields}${if q.isRange}  ${q.dataName}_min: "",
+  ${q.dataName}_max: "",
 ${else}  ${q.dataName}: "",
 ${/if}${/each}});
 ${/if}
@@ -306,13 +319,13 @@ ${if hasQueryFields}    <!-- 搜索栏 -->
     <el-form :inline="true" :model="searchForm" class="bg-white rounded p-3 mb-3">
 ${each q in queryFields}${if q.isRange}
       <el-form-item label="${q.displayName}开始">
-${if q.isDate}        <el-date-picker v-model="searchForm.${q.dataName}Start" type="${q.dateFormat}"${if q.isDatetimeFormat} value-format="YYYY-MM-DD HH:mm:ss"${else} value-format="YYYY-MM-DD"${/if} placeholder="请选择" style="width: 180px" />
-${else}        <el-input v-model="searchForm.${q.dataName}Start"${if q.hasPlaceholder} placeholder="${q.placeholder}"${else} placeholder="请输入"${/if} clearable style="width: 160px" />
+${if q.isDate}        <el-date-picker v-model="searchForm.${q.dataName}_min" type="${q.dateFormat}"${if q.isDatetimeFormat} value-format="YYYY-MM-DD HH:mm:ss"${else} value-format="YYYY-MM-DD"${/if} placeholder="请选择" style="width: 180px" />
+${else}        <el-input v-model="searchForm.${q.dataName}_min"${if q.hasPlaceholder} placeholder="${q.placeholder}"${else} placeholder="请输入"${/if} clearable style="width: 160px" />
 ${/if}
       </el-form-item>
       <el-form-item label="${q.displayName}结束">
-${if q.isDate}        <el-date-picker v-model="searchForm.${q.dataName}End" type="${q.dateFormat}"${if q.isDatetimeFormat} value-format="YYYY-MM-DD HH:mm:ss"${else} value-format="YYYY-MM-DD"${/if} placeholder="请选择" style="width: 180px" />
-${else}        <el-input v-model="searchForm.${q.dataName}End"${if q.hasPlaceholder} placeholder="${q.placeholder}"${else} placeholder="请输入"${/if} clearable style="width: 160px" />
+${if q.isDate}        <el-date-picker v-model="searchForm.${q.dataName}_max" type="${q.dateFormat}"${if q.isDatetimeFormat} value-format="YYYY-MM-DD HH:mm:ss"${else} value-format="YYYY-MM-DD"${/if} placeholder="请选择" style="width: 180px" />
+${else}        <el-input v-model="searchForm.${q.dataName}_max"${if q.hasPlaceholder} placeholder="${q.placeholder}"${else} placeholder="请输入"${/if} clearable style="width: 160px" />
 ${/if}
       </el-form-item>
 ${else if q.isSelect}${if q.hasStaticRef}
@@ -348,8 +361,8 @@ ${/if}${/each}
       </el-form-item>
     </el-form>
 ${/if}
-    <!-- 工具栏 + 表格 + 分页 -->
-    <div class="bg-white rounded p-3">
+    <!-- 工具栏 + 表格 + 分页（卡片内边距走全局变量 --app-card-gap，与其它页面统一） -->
+    <div class="bg-white rounded" style="padding: var(--app-card-gap, 12px)">
       <div class="mb-3">
         <el-button type="primary" @click="addAction">新增</el-button>
 ${if !noDelete}        <el-button type="danger" :disabled="selectedRows.length === 0" @click="delData()">删除</el-button>
@@ -385,13 +398,13 @@ ${else if col.isTagSwitch}
           </template>
         </el-table-column>
 ${else if col.isMoneyDisplay}
-        <el-table-column label="${col.label}" prop="${col.dataName}"${if col.hasColumnWidth} width="${col.columnWidth}"${/if}${if col.hasColumnFixed} fixed="${col.columnFixed}"${/if}>
+        <el-table-column label="${col.label}" prop="${col.dataName}" show-overflow-tooltip${if col.hasColumnWidth} width="${col.columnWidth}"${/if}${if col.hasColumnFixed} fixed="${col.columnFixed}"${/if}>
           <template #default="{ row }">
             <span>{{ formatMoney(row.${col.dataName}, ${col.precision}) }}</span>
           </template>
         </el-table-column>
 ${else if col.isTagDisplay}
-        <el-table-column label="${col.label}" prop="${col.dataName}"${if col.hasColumnWidth} width="${col.columnWidth}"${/if}${if col.hasColumnFixed} fixed="${col.columnFixed}"${/if}>
+        <el-table-column label="${col.label}" prop="${col.dataName}" show-overflow-tooltip${if col.hasColumnWidth} width="${col.columnWidth}"${/if}${if col.hasColumnFixed} fixed="${col.columnFixed}"${/if}>
           <template #default="{ row }">
             <el-tag v-if="tagMaps['${col.dataName}']?.[String(row.${col.dataName})]" :type="(tagMaps['${col.dataName}']?.[String(row.${col.dataName})]?.color as any)">
               {{ tagMaps['${col.dataName}']?.[String(row.${col.dataName})]?.text }}
@@ -400,13 +413,13 @@ ${else if col.isTagDisplay}
           </template>
         </el-table-column>
 ${else if col.isBooleanDisplay}
-        <el-table-column label="${col.label}" prop="${col.dataName}"${if col.hasColumnWidth} width="${col.columnWidth}"${/if}${if col.hasColumnFixed} fixed="${col.columnFixed}"${/if}>
+        <el-table-column label="${col.label}" prop="${col.dataName}" show-overflow-tooltip${if col.hasColumnWidth} width="${col.columnWidth}"${/if}${if col.hasColumnFixed} fixed="${col.columnFixed}"${/if}>
           <template #default="{ row }">
             <span>{{ row.${col.dataName} ? ${col.switchActiveTextExpr} : ${col.switchInactiveTextExpr} }}</span>
           </template>
         </el-table-column>
 ${else if col.isSelectDisplay}
-        <el-table-column label="${col.label}" prop="${col.dataName}"${if col.hasColumnWidth} width="${col.columnWidth}"${/if}${if col.hasColumnFixed} fixed="${col.columnFixed}"${/if}>
+        <el-table-column label="${col.label}" prop="${col.dataName}" show-overflow-tooltip${if col.hasColumnWidth} width="${col.columnWidth}"${/if}${if col.hasColumnFixed} fixed="${col.columnFixed}"${/if}>
           <template #default="{ row }">
             <el-tag v-if="tagDisplayMaps['${col.dataName}']?.[String(row.${col.dataName})]" :type="(tagDisplayMaps['${col.dataName}']?.[String(row.${col.dataName})] as any)">
               {{ selectDisplayMaps['${col.dataName}']?.[String(row.${col.dataName})] ?? row.${col.dataName} }}
@@ -415,7 +428,7 @@ ${else if col.isSelectDisplay}
           </template>
         </el-table-column>
 ${else if col.isImageDisplay}
-        <el-table-column label="${col.label}" prop="${col.dataName}"${if col.hasColumnWidth} width="${col.columnWidth}"${/if}${if col.hasColumnFixed} fixed="${col.columnFixed}"${/if}>
+        <el-table-column label="${col.label}" prop="${col.dataName}" show-overflow-tooltip${if col.hasColumnWidth} width="${col.columnWidth}"${/if}${if col.hasColumnFixed} fixed="${col.columnFixed}"${/if}>
           <template #default="{ row }">
             <el-image
               v-if="row.${col.dataName}"
@@ -428,7 +441,7 @@ ${else if col.isImageDisplay}
           </template>
         </el-table-column>
 ${else}
-        <el-table-column label="${col.label}" prop="${col.dataName}"${if col.hasDefaultSort} sortable${/if}${if col.hasColumnWidth} width="${col.columnWidth}"${/if}${if col.hasColumnFixed} fixed="${col.columnFixed}"${/if}>
+        <el-table-column label="${col.label}" prop="${col.dataName}" show-overflow-tooltip${if col.hasDefaultSort} sortable${/if}${if col.hasColumnWidth} width="${col.columnWidth}"${/if}${if col.hasColumnFixed} fixed="${col.columnFixed}"${/if}>
 ${if col.isFormatterDate}          <template #default="{ row }">
             <span>{{ row.${col.dataName} ? String(row.${col.dataName}).substring(0, 10) : '' }}</span>
           </template>
@@ -442,11 +455,23 @@ ${/if}
         </el-table-column>
 ${/if}
 ${/if}${/each}
-        <el-table-column label="操作" width="${actionColumnWidth}" fixed="right">
+        <el-table-column label="操作" width="${actionColumnWidth}" align="center" fixed="right" class-name="action-column">
           <template #default="{ row }">
-${if !noDetail}            <el-button link type="primary" size="small" @click="rowAction(row, 'detail')">详情</el-button>
-${/if}${if !noEdit}            <el-button link type="primary" size="small" @click="rowAction(row, 'edit')">编辑</el-button>
-${/if}${if !noDelete}            <el-button link type="danger" size="small" @click="delData(row)">删除</el-button>
+${if !noDetail}            <el-tooltip content="详情" placement="top">
+              <el-button link type="primary" size="small" @click="rowAction(row, 'detail')">
+                <IconifyIconOffline :icon="View" />
+              </el-button>
+            </el-tooltip>
+${/if}${if !noEdit}            <el-tooltip content="编辑" placement="top">
+              <el-button link type="primary" size="small" @click="rowAction(row, 'edit')">
+                <IconifyIconOffline :icon="EditPen" />
+              </el-button>
+            </el-tooltip>
+${/if}${if !noDelete}            <el-tooltip content="删除" placement="top">
+              <el-button link type="danger" size="small" @click="delData(row)">
+                <IconifyIconOffline :icon="Delete" />
+              </el-button>
+            </el-tooltip>
 ${/if}${each btn in rowButtons}            <el-button link size="small"${if btn.hasType} type="${btn.type}"${/if} @click="onCustomAction(row, '${btn.key}')">${btn.label}</el-button>
 ${/each}
           </template>

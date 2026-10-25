@@ -155,6 +155,9 @@ private:
   void refreshI18nFieldCandidates();
   /// 生成 CREATE TABLE DDL（列 + 主键 + 索引，InnoDB/utf8mb4）
   QString toCreateDdl() const;
+  /// 主表启用 i18n 且同目录无显式翻译表 .jsontable 时，返回派生翻译表的
+  /// CREATE TABLE DDL（deriveI18nTable 惯例）；否则返回空串
+  QString i18nCreateDdl() const;
   /// 从数据库反向导入表结构（合并模式：保留 .jsontable 已有列的前端角色）
   void importFromDatabase();
   /// 生成 DDL 显示在预览区（校验失败弹警告）

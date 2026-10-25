@@ -749,3 +749,93 @@ QVector<JsonTableTable> listProjectTables(const QString &baseDir) {
             });
   return tables;
 }
+
+JsonTableTable deriveI18nTable(const JsonTableTable &main) {
+  const JsonTableI18n &cfg = main.i18n;
+  JsonTableTable t;
+  t.tableName = cfg.table;
+  t.modelName = cfg.table;
+  t.tableComment = main.tableComment.isEmpty() ? QStringLiteral("多语言表")
+                                               : main.tableComment + QStringLiteral("多语言表");
+  t.frontend = false;  // 纯 API 模块：翻译表不生成前端页面
+
+  // 主表主键列（extKey 类型与 0 表 id 类型都随它；找不到主键回退 int unsigned）
+  QString pkName = QStringLiteral("id");
+  QString pkType = QStringLiteral("int");
+  bool pkUnsigned = true;
+  for (const auto &c : main.columns) {
+    if (c.isPrimary) {
+      pkName = c.name;
+      pkType = c.mysqlType;
+      pkUnsigned = c.isUnsigned;
+      break;
+    }
+  }
+
+  // id：自增主键
+  JsonTableColumn id;
+  id.name = QStringLiteral("id");
+  id.mysqlType = pkType;
+  id.isUnsigned = pkUnsigned;
+  id.isPrimary = true;
+  id.isAutoInc = true;
+  id.comment = QStringLiteral("自增主键");
+  t.columns.append(id);
+
+  // extKey：关联主表主键
+  JsonTableColumn ext;
+  ext.name = cfg.extKey.isEmpty() ? QStringLiteral("ext_id") : cfg.extKey;
+  ext.mysqlType = pkType;
+  ext.isUnsigned = pkUnsigned;
+  ext.comment = QStringLiteral("扩展ID，关联%1.%2").arg(main.tableName, pkName);
+  t.columns.append(ext);
+
+  // langKey：语言码
+  JsonTableColumn lang;
+  lang.name = cfg.langKey.isEmpty() ? QStringLiteral("lang") : cfg.langKey;
+  lang.mysqlType = QStringLiteral("varchar(8)");
+  lang.comment = QStringLiteral("语言编码：zh、en、ja");
+  t.columns.append(lang);
+
+  // 翻译字段：继承主表同名列；主表无此列时回退 varchar(255) 文本
+  for (const QString &f : cfg.fields) {
+    if (f.isEmpty()) continue;
+    JsonTableColumn col;
+    col.name = f;
+    bool found = false;
+    for (const auto &mc : main.columns) {
+      if (mc.name == f) {
+        col.mysqlType = mc.mysqlType;
+        col.isUnsigned = mc.isUnsigned;
+        col.nullable = mc.nullable;
+        col.comment = mc.comment;
+        found = true;
+        break;
+      }
+    }
+    if (!found) col.mysqlType = QStringLiteral("varchar(255)");
+    t.columns.append(col);
+  }
+
+  // 时间戳惯例（与既有 0 表文件一致：datetime 可空）
+  JsonTableColumn ca;
+  ca.name = QStringLiteral("created_at");
+  ca.mysqlType = QStringLiteral("datetime");
+  ca.nullable = true;
+  ca.comment = QStringLiteral("创建时间");
+  t.columns.append(ca);
+  JsonTableColumn ua;
+  ua.name = QStringLiteral("updated_at");
+  ua.mysqlType = QStringLiteral("datetime");
+  ua.nullable = true;
+  ua.comment = QStringLiteral("更新时间");
+  t.columns.append(ua);
+
+  // 唯一索引：一行一种语言
+  JsonTableIndex uk;
+  uk.name = QStringLiteral("uk_%1_%2").arg(ext.name, lang.name);
+  uk.cols << ext.name << lang.name;
+  uk.unique = true;
+  t.indexes.append(uk);
+  return t;
+}

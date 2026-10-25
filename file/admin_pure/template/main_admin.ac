@@ -750,8 +750,9 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
 ///   - 查询字段级：isDatetimeFormat、dataNameCamel（选项加载函数名合法标识）
 ///   - 弹窗按钮级：keyPascal、字段 fieldNameCamel、select url 归一与方法小写
 ///   - 顶层：hasQueryFields/hasMoneyDisplay/hasRemoteDialogSelect/needMessageBox
-export function enrichPureTplData(tplData: Object): Void {
-  // ── 列级派生 ──
+export function enrichPureTplData(tplData: Object): Object {
+  // 注意：ac 的 Object 传参是 COW 值拷贝（AcJsonValue 写时分离），函数内
+  // 对 tplData 的 set 不会写回外部——必须 return tplData 并在调用点接收
   let cols: Object[] = tplData["columns"];
   let hasMoneyDisplay: Bool = false;
   let colsLen = cols.length;
@@ -825,6 +826,8 @@ export function enrichPureTplData(tplData: Object): Void {
   // 在脚本侧预计算合并标记）
   tplData["needMessageBox"] =
     ((tplData["noDelete"] != true) || (tplData["hasConfirmButtons"] == true));
+  // COW：必须返回补全后的对象，调用点接收
+  return tplData;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1302,6 +1305,12 @@ export function generateAdminMain(params: Object): Void {
       printLog("表 '" + table["tableName"] + "' frontend=false（纯 API 模块），跳过页面生成");
       continue;
     }
+    // split 布局门禁（与 crud_gin 一致）：只有显式 layout="split" 的表才生成页面，
+    // 避免后端尚未迁移时单独重出前端造成契约错位
+    if (table["layout"] != "split") {
+      printLog("表 '" + table["tableName"] + "' 未配置 layout=split，跳过页面生成（待迁移）");
+      continue;
+    }
     let vuePath: String = resolveJsonvuePath(modelName, basePath, checkedVueFiles);
     let pageJson: Object = null;
     let filePath: String = "";
@@ -1350,13 +1359,19 @@ export function generateAdminMain(params: Object): Void {
   suffixes["select"] = "selectByIn";
   suffixes["update"] = "update";
   suffixes["delete"] = "delete";
+  // apiPrefix：请求 URL 前缀（params 传入，如 go_pure 后端 "/api" 路由组）；
+  // 缺省不加前缀（与 admin_vue 旧链行为一致）
+  if (params["apiPrefix"] != null) {
+    suffixes["prefix"] = params["apiPrefix"];
+  }
   let pgLen = pages.length;
   for (let pg = 0; pg < pgLen; pg = pg + 1) {
     let tplData: Object = buildAdminTplData(pages[pg]["json"], pages[pg]["filePath"],
                                             suffixes, sourceFiles, uploadFiles,
                                             globalEnumSources);
     // pure-admin 专用派生键补全（isDatetimeFormat/needMessageBox 等）
-    enrichPureTplData(tplData);
+    // 注意：ac 的 Object 是 COW 语义，必须接收返回值，否则补全全部丢失
+    tplData = enrichPureTplData(tplData);
     let pagePath: String = tplData["pagePath"];
     printLog("processing page: " + pagePath);
 

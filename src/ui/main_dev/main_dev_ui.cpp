@@ -45,6 +45,7 @@
 #include "src/ui/help/about_dialog.h"
 #include "src/ui/help/help_doc_mgr.h"
 #include "src/util/common/code_constants.h"
+#include "src/util/ui/component/aui_splitter.h"
 #include "src/util/ui/aui_window.h"
 #include "src/util/ui/code/code_editor.h"
 #include "src/util/ui/code/code_log.h"
@@ -290,7 +291,7 @@ void MainDevUi::setupLeftPanel() {
 
 void MainDevUi::setupEditorSplitter() {
   // ── 右侧编辑器分割器 ──
-  m_editorSplitter = new QSplitter(Qt::Horizontal);
+  m_editorSplitter = new AuiSplitter(Qt::Horizontal);
   m_editorSplitter->setChildrenCollapsible(false);
 
   QTabWidget *initialTabs = createEditorPanel();
@@ -317,14 +318,14 @@ void MainDevUi::setupBottomPanel() {
 
 void MainDevUi::assembleMainSplitter() {
   // ── 垂直分割器：编辑器 + 底部 tab 面板 ──
-  m_contentSplitter = new QSplitter(Qt::Vertical);
+  m_contentSplitter = new AuiSplitter(Qt::Vertical);
   m_contentSplitter->addWidget(m_editorSplitter);
   m_contentSplitter->addWidget(m_outputTabs);
   m_contentSplitter->setStretchFactor(0, 1);
   m_contentSplitter->setStretchFactor(1, 0);
 
   // ── 主分割器：文件树(tab) + 右侧区域 ──
-  m_mainSplitter = new QSplitter(Qt::Horizontal);
+  m_mainSplitter = new AuiSplitter(Qt::Horizontal);
   m_mainSplitter->addWidget(m_leftTabs);
   m_mainSplitter->addWidget(m_contentSplitter);
   m_mainSplitter->setStretchFactor(0, 0);

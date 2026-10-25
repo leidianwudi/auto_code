@@ -19,13 +19,16 @@ import { generateAdminMain } from "../../admin_pure/template/main_admin.ac";
 main {
 
   // ── 1. 统一配置文件（表结构 + 前端角色，双端共用的事实源）────────
-  //      一文件一表：shop.jsontable / shop0.jsontable / user.jsontable
-  //      （由 file/tools/split_jsontable.ac 从旧多表 shop.jsontable 拆出）；
-  //      共享 meta 在同目录 project.jsontableproj（goBasePath/webBasePath 回退源）
+  //      一文件一表，按业务域分目录：<项目>/<域>/<表>.jsontable
+  //      （域目录与 Go 模块目录 moduleDir 首段一致：shop/user/admin/sys）；
+  //      共享 meta 在同目录 project.jsontableproj（findProjPath 向上查找命中）──
   let jsonTablePaths: String[] = [
-    scriptDir() + "/shop.jsontable",
-    scriptDir() + "/shop0.jsontable",
-    scriptDir() + "/user.jsontable"
+    scriptDir() + "/shop/shop.jsontable",
+    scriptDir() + "/user/user.jsontable",
+    scriptDir() + "/admin/admin.jsontable",
+    scriptDir() + "/sys/sys_menu.jsontable",
+    scriptDir() + "/sys/sys_role.jsontable",
+    scriptDir() + "/sys/sys_role_menu.jsontable"
   ];
   let projPath: String = scriptDir() + "/project.jsontableproj";
 
@@ -55,6 +58,7 @@ main {
     jsonTablePaths: jsonTablePaths,
     projPath: projPath,
     webBasePath: webBasePath,
+    apiPrefix: "/api",
     templates: [
       { tpl: tplDir + "/index.tpl", out: "{basePath}/src/views/{pagePath}/{pageName}.vue" },
       { tpl: tplDir + "/write.tpl", out: "{basePath}/src/views/{pagePath}/components/write.vue" },

@@ -1297,14 +1297,17 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
   let selSuffix: String = "selectByIn";
   let updSuffix: String = "update";
   let delSuffix: String = "delete";
+  let urlPrefix: String = "";
   if (suffixes != null) {
     if (suffixes["select"] != "" && suffixes["select"] != null) { selSuffix = suffixes["select"]; }
     if (suffixes["update"] != "" && suffixes["update"] != null) { updSuffix = suffixes["update"]; }
     if (suffixes["delete"] != "" && suffixes["delete"] != null) { delSuffix = suffixes["delete"]; }
+    // 请求 URL 前缀（如 go_pure 后端 /api 路由组 → "/api"）；缺省空 = 不加前缀
+    if (suffixes["prefix"] != null) { urlPrefix = suffixes["prefix"]; }
   }
-  let selectUrl = "/" + apiBase + "/" + selSuffix;
-  let updateUrl = "/" + apiBase + "/" + updSuffix;
-  let deleteUrl = "/" + apiBase + "/" + delSuffix;
+  let selectUrl = urlPrefix + "/" + apiBase + "/" + selSuffix;
+  let updateUrl = urlPrefix + "/" + apiBase + "/" + updSuffix;
+  let deleteUrl = urlPrefix + "/" + apiBase + "/" + delSuffix;
 
   // ── 数据源引用查找表 ────────────────────────────────────────────
   // 收集引用 .jsonsource 数据源的列，读取对应文件建立 "文件路径#数据源id" 映射。
@@ -1649,14 +1652,19 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
   let dialogButtons: Object[] = btnResult["dialogButtons"];
   let linkButtons: Object[] = btnResult["linkButtons"];
 
-  // ── 操作列宽度（每个按钮约 60px，含间距）────────────────────────
+  // ── 操作列宽度（详情/编辑/删除为 16px 图标按钮 + 相邻 margin 12px，
+  //    约每按钮 28px；左右 cell padding 各 10px，另加 20px 余量。
+  //    自定义行按钮仍为文本样式，每个约 60px）────────────────────────
   let baseActionCount = 0;
   if (!noDetail) { baseActionCount = baseActionCount + 1; }
   if (!noEdit) { baseActionCount = baseActionCount + 1; }
   if (!noDelete) { baseActionCount = baseActionCount + 1; }
-  let actionColumnWidth: Int = (baseActionCount + rowButtons.length) * 60;
-  if (actionColumnWidth < 120) {
-    actionColumnWidth = 120;  // 最小宽度兜底
+  let actionColumnWidth: Int = rowButtons.length * 60;
+  if (baseActionCount > 0) {
+    actionColumnWidth = actionColumnWidth + baseActionCount * 28 + 20;
+  }
+  if (actionColumnWidth < 48) {
+    actionColumnWidth = 48;  // 最小宽度兜底（单个图标按钮）
   }
   let hasCustomButtons = (buttons.length > 0);
 
