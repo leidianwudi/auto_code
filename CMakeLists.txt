@@ -335,8 +335,10 @@ qt_add_executable(auto_code
     src/ui/json_source/json_table_editor.cpp
     src/ui/json_source/json_table_widget.h
     src/ui/json_source/json_table_widget.cpp
-    src/ui/json_source/project_config_dialog.h
-    src/ui/json_source/project_config_dialog.cpp
+    src/ui/json_source/project_config_editor.h
+    src/ui/json_source/project_config_editor.cpp
+    src/ui/json_source/project_acproj_widget.h
+    src/ui/json_source/project_acproj_widget.cpp
     src/ui/json_source/view_field_config_dialog.h
     src/ui/json_source/view_field_config_dialog.cpp
     src/ui/json_global_enum/json_global_enum_model.h

@@ -22,7 +22,7 @@
 #include "src/ui/json_source/json_source_widget.h"
 #include "src/ui/json_source/json_table_widget.h"
 #include "src/ui/json_source/json_upload_widget.h"
-#include "src/ui/json_source/project_config_dialog.h"
+#include "src/ui/json_source/project_acproj_widget.h"
 #include "src/ui/json_vue/json_vue_editor.h"
 #include "src/ui/json_vue/json_vue_widget.h"
 #include "src/ui/schema_json/schema_json_widget.h"
@@ -91,14 +91,15 @@ QWidget *MainDevMgr::createEditorTab(const QString &filePath, const QString &con
   CodeEditor *editor = nullptr;
   QWidget *tabWidget = nullptr;
 
-  // .jsonvue / .jsonsource / .jsonupload / .jsontable / .jsonglobalenum 文件使用可视化包装器
-  // （CodeEditor + 可视化编辑器）
+  // .jsonvue / .jsonsource / .jsonupload / .jsontable / .jsonglobalenum / .acproj 文件
+  // 使用可视化包装器（CodeEditor + 可视化编辑器）
   const bool isJsonVue = filePath.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive);
   const bool isJsonSource = filePath.endsWith(AcFileSuffix::kJsonsource, Qt::CaseInsensitive);
   const bool isJsonUpload = filePath.endsWith(AcFileSuffix::kJsonupload, Qt::CaseInsensitive);
   const bool isJsonTable = filePath.endsWith(AcFileSuffix::kJsontable, Qt::CaseInsensitive);
   const bool isJsonGlobalEnum =
       filePath.endsWith(AcFileSuffix::kJsonglobalenum, Qt::CaseInsensitive);
+  const bool isAcProj = filePath.endsWith(AcFileSuffix::kAcProj, Qt::CaseInsensitive);
   const QString acPath = resolveHttpConfigAcPath(filePath);
 
   if (isJsonVue) {
@@ -156,6 +157,15 @@ QWidget *MainDevMgr::createEditorTab(const QString &filePath, const QString &con
     // 注：全局枚举为纯静态选项，无"测试请求"按钮，不需要 HTTP 配置
     // 可视化按钮生效时，自动以可视化方式打开
     if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) gew->switchToVisual();
+  } else if (isAcProj) {
+    // .acproj 项目配置：代码 + 项目设置表单双视图
+    auto *pcw = new ProjectAcprojWidget;
+    editor = pcw->codeEditor();
+    editor->setPlainText(content);
+    tabWidget = pcw;
+    // 注：项目设置无"测试请求"按钮，不需要 HTTP 配置
+    // 可视化按钮生效时，自动以可视化方式打开
+    if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) pcw->switchToVisual();
   } else {
     CodeEditor *plain = createEditorForFile(filePath);
     plain->setPlainText(content);
@@ -187,24 +197,6 @@ QWidget *MainDevMgr::createEditorTab(const QString &filePath, const QString &con
 }
 
 CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *target) {
-  // project.acproj：专用项目设置对话框（不进入代码标签页）
-  if (filePath.endsWith(AcFileSuffix::kAcProj, Qt::CaseInsensitive)) {
-    ProjectConfigDialog dialog(filePath, m_ui);
-    if (dialog.exec() == QDialog::Accepted) {
-      // 项目配置变更后刷新已打开的 .jsontable 设计器上下文（DB/路径）
-      for (int i = 0; i < m_ui->editorPanelCount(); ++i) {
-        QTabWidget *tabs = m_ui->editorPanelAt(i);
-        if (!tabs) continue;
-        for (int j = 0; j < tabs->count(); ++j) {
-          if (auto *tableWidget = qobject_cast<JsonTableWidget *>(tabs->widget(j))) {
-            tableWidget->reloadProjectContext();
-          }
-        }
-      }
-    }
-    return nullptr;
-  }
-
   // ── 查重：已打开则选中并聚焦该标签 ──
   QTabWidget *tabs = nullptr;
   int index = -1;
@@ -359,6 +351,19 @@ bool MainDevMgr::saveAndSync(CodeEditor *editor) {
   syncEditorsForFile(editor->objectName(), editor->toPlainText(), editor);
   // 该文件的缓冲修改已落盘，清除缓冲
   clearPendingChange(editor->objectName());
+  // 保存的是 project.acproj：项目配置（DB/路径）可能已变化，
+  // 刷新所有已打开 .jsontable 设计器的项目上下文
+  if (editor->objectName().endsWith(AcFileSuffix::kAcProj, Qt::CaseInsensitive)) {
+    for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
+      auto *tabs = m_ui->editorPanelAt(pi);
+      if (!tabs) continue;
+      for (int ti = 0; ti < tabs->count(); ++ti) {
+        if (auto *tableWidget = qobject_cast<JsonTableWidget *>(tabs->widget(ti))) {
+          tableWidget->reloadProjectContext();
+        }
+      }
+    }
+  }
   // 保存后触发工作区防抖重扫：刷新其它文件（含未打开文件）对该文件的引用错误
   scheduleWorkspaceRescan();
   return true;

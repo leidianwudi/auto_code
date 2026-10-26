@@ -1,14 +1,12 @@
 /**
- * @file project_config_dialog.cpp
- * @brief project.acproj 项目配置可视化编辑对话框实现
+ * @file project_config_editor.cpp
+ * @brief project.acproj 项目配置可视化编辑页实现
  */
 
-#include "project_config_dialog.h"
+#include "project_config_editor.h"
 
 #include <QDir>
-#include <QFile>
 #include <QFileDialog>
-#include <QFileInfo>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -22,7 +20,6 @@
 #include "src/engine/function/fun_db.h"
 #include "src/engine/function/fun_mgr.h"
 #include "src/ui/json_vue/config_dialog_common.h"
-#include "src/util/common/util_json.h"
 #include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/component/aui_style.h"
 
@@ -51,18 +48,15 @@ QWidget *makePathRow(QLineEdit *edit, QWidget *parent, const QString &title) {
 
 }  // namespace
 
-ProjectConfigDialog::ProjectConfigDialog(const QString &filePath, QWidget *parent)
-    : QDialog(parent), m_filePath(filePath) {
+ProjectConfigEditor::ProjectConfigEditor(QWidget *parent) : QWidget(parent) {
   setupUI();
-  QString error;
-  if (!loadFile(&error)) {
-    AuiMessageBox::show(this, QStringLiteral("读取失败"), error);
-  }
 }
 
-void ProjectConfigDialog::setupUI() {
-  ConfigDialogFrame frame = beginConfigDialog(
-      this, QStringLiteral("项目设置"), QMargins(12, 10, 12, 10), 6);
+void ProjectConfigEditor::setupUI() {
+  auto *rootLayout = new QVBoxLayout(this);
+  rootLayout->setContentsMargins(12, 10, 12, 10);
+  rootLayout->setSpacing(6);
+
   auto *form = new QFormLayout;
   form->setSpacing(6);
 
@@ -93,7 +87,8 @@ void ProjectConfigDialog::setupUI() {
   form->addRow(QStringLiteral("数据库:"), m_databaseEdit);
 
   m_goBasePathEdit = new QLineEdit(this);
-  m_goBasePathEdit->setPlaceholderText(QStringLiteral("Go 项目根目录，如 D:/work/github/shop/shop_api"));
+  m_goBasePathEdit->setPlaceholderText(
+      QStringLiteral("Go 项目根目录，如 D:/work/github/shop/shop_api"));
   form->addRow(QStringLiteral("goBasePath:"),
                makePathRow(m_goBasePathEdit, this, QStringLiteral("Go 项目根")));
 
@@ -103,7 +98,8 @@ void ProjectConfigDialog::setupUI() {
   form->addRow(QStringLiteral("webBasePath:"),
                makePathRow(m_webBasePathEdit, this, QStringLiteral("前端项目根")));
 
-  frame.contentLayout->addLayout(form);
+  rootLayout->addLayout(form);
+  rootLayout->addStretch();
 
   auto *hint = new QLabel(
       QStringLiteral("project.acproj 同时作为项目根标记；根 / meta / db 三层的未知键会原样保留。"),
@@ -111,13 +107,13 @@ void ProjectConfigDialog::setupUI() {
   hint->setWordWrap(true);
   hint->setStyleSheet(
       QStringLiteral("color: %1; font-size: 12px;").arg(AuiStyle::mutedTextColor().name()));
-  frame.contentLayout->addWidget(hint);
+  rootLayout->addWidget(hint);
 
   auto *btnRow = new QHBoxLayout;
   auto *testBtn = makeCompactButton(QStringLiteral("测试连接"), this);
   btnRow->addWidget(testBtn);
   btnRow->addStretch();
-  frame.contentLayout->addLayout(btnRow);
+  rootLayout->addLayout(btnRow);
   connect(testBtn, &QPushButton::clicked, this, [this]() {
     if (!testConnection()) {
       const QString error = FunMgr::takeError();
@@ -132,26 +128,21 @@ void ProjectConfigDialog::setupUI() {
     }
   });
 
-  finishConfigDialog(this, frame);
-  setMinimumWidth(640);
+  // 任一字段变化 → 通知包装器写回代码页（loadFromObject 期间由 m_loading 抑制）
+  for (QLineEdit *edit : {m_nameEdit, m_hostEdit, m_userEdit, m_passwordEdit, m_databaseEdit,
+                          m_goBasePathEdit, m_webBasePathEdit}) {
+    connect(edit, &QLineEdit::textChanged, this, [this]() {
+      if (!m_loading) emit contentChanged();
+    });
+  }
+  connect(m_portSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int) {
+    if (!m_loading) emit contentChanged();
+  });
 }
 
-bool ProjectConfigDialog::loadFile(QString *error) {
-  QFile file(m_filePath);
-  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-    if (error) *error = QStringLiteral("无法打开项目配置: %1").arg(m_filePath);
-    return false;
-  }
-  const QString text = QString::fromUtf8(file.readAll());
-  file.close();
+void ProjectConfigEditor::loadFromObject(const QJsonObject &root) {
+  m_loading = true;
 
-  QJsonParseError perr;
-  const QJsonDocument doc = UtilJson::fromJson(text, &perr);
-  if (perr.error != QJsonParseError::NoError || !doc.isObject()) {
-    if (error) *error = QStringLiteral("项目配置解析失败: %1").arg(perr.errorString());
-    return false;
-  }
-  const QJsonObject root = doc.object();
   const QJsonObject meta = root.value(jsonKey(JsonTableKey::kMeta)).toObject();
   const QJsonObject db = meta.value(jsonKey(JsonTableKey::kDb)).toObject();
 
@@ -173,9 +164,7 @@ bool ProjectConfigDialog::loadFile(QString *error) {
   m_dbExtra.remove(jsonKey(JsonTableKey::kPassword));
   m_dbExtra.remove(jsonKey(JsonTableKey::kDatabase));
 
-  QString name = root.value(jsonKey(JsonTableKey::kName)).toString().trimmed();
-  if (name.isEmpty()) name = QFileInfo(m_filePath).dir().dirName();
-  m_nameEdit->setText(name);
+  m_nameEdit->setText(root.value(jsonKey(JsonTableKey::kName)).toString().trimmed());
   m_hostEdit->setText(db.value(jsonKey(JsonTableKey::kHost)).toString());
   m_portSpin->setValue(db.value(jsonKey(JsonTableKey::kPort)).toInt(3306));
   m_userEdit->setText(db.value(jsonKey(JsonTableKey::kUser)).toString());
@@ -185,37 +174,11 @@ bool ProjectConfigDialog::loadFile(QString *error) {
       QDir::toNativeSeparators(meta.value(jsonKey(JsonTableKey::kGoBasePath)).toString()));
   m_webBasePathEdit->setText(
       QDir::toNativeSeparators(meta.value(jsonKey(JsonTableKey::kWebBasePath)).toString()));
-  return true;
+
+  m_loading = false;
 }
 
-bool ProjectConfigDialog::validate(QString *error) const {
-  if (m_nameEdit->text().trimmed().isEmpty()) {
-    if (error) *error = QStringLiteral("项目名不能为空");
-    return false;
-  }
-  // 允许只改项目名（非 jsontable 项目可能没有 db 配置）；
-  // 一旦填写了数据库信息，则 host/user/database 必须齐全。
-  const bool hasDb = !m_hostEdit->text().trimmed().isEmpty() ||
-                     !m_userEdit->text().trimmed().isEmpty() ||
-                     !m_databaseEdit->text().trimmed().isEmpty();
-  if (hasDb) {
-    if (m_hostEdit->text().trimmed().isEmpty()) {
-      if (error) *error = QStringLiteral("数据库主机不能为空");
-      return false;
-    }
-    if (m_userEdit->text().trimmed().isEmpty()) {
-      if (error) *error = QStringLiteral("数据库用户不能为空");
-      return false;
-    }
-    if (m_databaseEdit->text().trimmed().isEmpty()) {
-      if (error) *error = QStringLiteral("数据库名不能为空");
-      return false;
-    }
-  }
-  return true;
-}
-
-bool ProjectConfigDialog::saveFile(QString *error) {
+QJsonObject ProjectConfigEditor::collectObject() const {
   const bool hasDb = !m_hostEdit->text().trimmed().isEmpty() ||
                      !m_userEdit->text().trimmed().isEmpty() ||
                      !m_databaseEdit->text().trimmed().isEmpty();
@@ -252,21 +215,10 @@ bool ProjectConfigDialog::saveFile(QString *error) {
   } else {
     root.insert(jsonKey(JsonTableKey::kMeta), meta);
   }
-
-  QFile file(m_filePath);
-  if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
-    if (error) *error = QStringLiteral("无法写入项目配置: %1").arg(m_filePath);
-    return false;
-  }
-  const QByteArray bytes =
-      (JsonTableConfig::toJsonString(root) + QStringLiteral("\n")).toUtf8();
-  const bool ok = file.write(bytes) == bytes.size();
-  file.close();
-  if (!ok && error) *error = QStringLiteral("写入项目配置失败: %1").arg(m_filePath);
-  return ok;
+  return root;
 }
 
-bool ProjectConfigDialog::testConnection() {
+bool ProjectConfigEditor::testConnection() {
   accore::AcJsonValue cfg = accore::AcJsonValue::makeObject();
   cfg.set(jsonKey(AcDB::kHost), accore::AcJsonValue(m_hostEdit->text().trimmed()));
   cfg.set(jsonKey(AcDB::kPort), accore::AcJsonValue(m_portSpin->value()));
@@ -283,17 +235,4 @@ bool ProjectConfigDialog::testConnection() {
     FunDb::destructor(instance, accore::AcJsonValue::makeArray());
   }
   return connected;
-}
-
-void ProjectConfigDialog::accept() {
-  QString error;
-  if (!validate(&error)) {
-    AuiMessageBox::show(this, QStringLiteral("无法保存"), error);
-    return;
-  }
-  if (!saveFile(&error)) {
-    AuiMessageBox::show(this, QStringLiteral("无法保存"), error);
-    return;
-  }
-  QDialog::accept();
 }

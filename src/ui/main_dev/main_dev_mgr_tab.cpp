@@ -16,6 +16,7 @@
 #include "src/ui/json_source/json_source_widget.h"
 #include "src/ui/json_source/json_table_widget.h"
 #include "src/ui/json_source/json_upload_widget.h"
+#include "src/ui/json_source/project_acproj_widget.h"
 #include "src/ui/json_vue/json_vue_editor.h"
 #include "src/ui/json_vue/json_vue_widget.h"
 #include "src/ui/schema_json/schema_json_widget.h"
@@ -260,6 +261,7 @@ void MainDevMgr::onSplitRight() {
     bool isJsonUpload = filePath.endsWith(AcFileSuffix::kJsonupload, Qt::CaseInsensitive);
     bool isJsonTable = filePath.endsWith(AcFileSuffix::kJsontable, Qt::CaseInsensitive);
     bool isJsonGlobalEnum = filePath.endsWith(AcFileSuffix::kJsonglobalenum, Qt::CaseInsensitive);
+    bool isAcProj = filePath.endsWith(AcFileSuffix::kAcProj, Qt::CaseInsensitive);
     QFileInfo fi(filePath);
     QString tabLabel = filePath.isEmpty() ? QStringLiteral("拆分副本") : fi.fileName();
     int tabIdx = -1;
@@ -368,6 +370,23 @@ void MainDevMgr::onSplitRight() {
       if (!filePath.isEmpty()) editor->setObjectName(filePath);
 
       connect(gew, &JsonGlobalEnumWidget::contentChanged, this, [this, editor]() {
+        editor->document()->setModified(true);
+        updateSaveButtonState();
+      });
+    } else if (isAcProj) {
+      // .acproj 项目配置拆分时创建 ProjectAcprojWidget，保持可视化能力
+      auto *pcw = new ProjectAcprojWidget;
+      auto *editor = pcw->codeEditor();
+      editor->setPlainText(current->toPlainText());
+      // 注：项目设置无"测试请求"按钮，不需要 HTTP 配置
+      if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) pcw->switchToVisual();
+
+      tabIdx = newPanel->addTab(pcw, tabLabel);
+      newPanel->setTabToolTip(tabIdx, filePath);
+      newPanel->setCurrentIndex(tabIdx);
+      if (!filePath.isEmpty()) editor->setObjectName(filePath);
+
+      connect(pcw, &ProjectAcprojWidget::contentChanged, this, [this, editor]() {
         editor->document()->setModified(true);
         updateSaveButtonState();
       });
