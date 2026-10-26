@@ -7,13 +7,15 @@
       "modelName": "basketball\\basketball_info_articles",
       "tableName": "basketball_info_articles",
       "selCols": [
-        "aid"
+        "aid",
+        "published_time"
       ],
       "selColsLike": [
         "title",
         "url"
       ],
       "selColsSort": {
+        "published_time": "DESC",
         "id": "DESC"
       },
       "joinTable": []
