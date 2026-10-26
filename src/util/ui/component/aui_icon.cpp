@@ -183,9 +183,10 @@ QIcon AuiIcon::createFileTypeIcon(const QString &suffix, int size) {
   const bool dark = (SettingStore::ins().theme() == SettingStore::ThemeDark);
   const qreal w = size;
 
-  // 无底框，纯文字标识：ac 蓝色「A」/ json 琥珀「J」/ jsonvue 琥珀「V」/
-  // jsonsource 琥珀「S」/ jsonupload 紫色「U」/ jsontable 青色「A」/ tpl 绿色「T」，
-  // 颜色随主题明暗调整
+  // 无底框：除 jsontable 外均为纯文字标识——ac 蓝色「A」/ json 琥珀「J」/
+  // jsonvue 琥珀「V」/ jsonsource 琥珀「S」/ jsonupload 紫色「U」/
+  // jsontable 手绘迷你表格图形（青色，与 .ac 的字母「A」形色双重区分）/
+  // acproj 紫色「P」/ tpl 绿色「T」，颜色随主题明暗调整
   QColor accent;
   QString glyph;
   int pixelSize;
@@ -212,8 +213,8 @@ QIcon AuiIcon::createFileTypeIcon(const QString &suffix, int size) {
     pixelSize = qMax(8, qRound(size * 0.78));
   } else if (suf == QStringLiteral("jsontable")) {
     accent = dark ? QColor(0x64, 0xd8, 0xcb) : QColor(0x00, 0x89, 0x7b);
-    glyph = QStringLiteral("A");
-    pixelSize = qMax(8, qRound(size * 0.78));
+    glyph.clear();  // 置空标记走下方手绘表格图形分支
+    pixelSize = 0;
   } else if (suf == QStringLiteral("acproj")) {
     accent = dark ? QColor(0x9b, 0x8c, 0xf0) : QColor(0x5b, 0x4f, 0xc4);
     glyph = QStringLiteral("P");
@@ -224,13 +225,26 @@ QIcon AuiIcon::createFileTypeIcon(const QString &suffix, int size) {
     pixelSize = qMax(8, qRound(size * 0.78));
   }
 
-  QFont f;
-  f.setFamily(QStringLiteral("Segoe UI"));
-  f.setBold(true);
-  f.setPixelSize(pixelSize);
-  p.setFont(f);
-  p.setPen(accent);
-  p.drawText(QRectF(0.0, 0.0, w, w), Qt::AlignCenter, glyph);
+  if (glyph.isEmpty()) {
+    // jsontable：手绘迷你表格图形（圆角外框 + 表头横线 + 表体竖线），
+    // 与七个字母图标形色双重区分；线宽与帮助图标一致（1.3 逻辑像素）
+    p.setPen(QPen(accent, 1.3));
+    p.setBrush(Qt::NoBrush);
+    const qreal side = w - 7.0;
+    const QRectF r((w - side) / 2.0, (w - side) / 2.0, side, side);
+    p.drawRoundedRect(r, 1.5, 1.5);
+    const qreal headY = r.top() + r.height() * 0.32;
+    p.drawLine(QPointF(r.left(), headY), QPointF(r.right(), headY));
+    p.drawLine(QPointF(r.center().x(), headY), QPointF(r.center().x(), r.bottom()));
+  } else {
+    QFont f;
+    f.setFamily(QStringLiteral("Segoe UI"));
+    f.setBold(true);
+    f.setPixelSize(pixelSize);
+    p.setFont(f);
+    p.setPen(accent);
+    p.drawText(QRectF(0.0, 0.0, w, w), Qt::AlignCenter, glyph);
+  }
 
   p.end();
   return QIcon(pm);

@@ -121,6 +121,7 @@ struct ConfigTableColumn {
  * 消除各配置对话框重复的表格样板（新建 + 列头 + 列宽 + 行号隐藏 + 行选择）：
  *   - 默认隐藏行号、按列规格设置列头 / resize 模式 / 固定宽度
  *   - 统一最小/最大高度与行选择行为（默认 SelectItems，保持 Qt 原生语义）
+ *   - 纯复选框单元格（无文本有勾选态）的勾选框自动居中（绘制与点击命中）
  * 特殊行为（事件过滤器、NoEditTriggers 等）由调用方在返回后自行设置。
  */
 QTableWidget *makeConfigTable(const std::initializer_list<ConfigTableColumn> &columns,

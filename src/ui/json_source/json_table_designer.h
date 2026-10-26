@@ -16,12 +16,15 @@
 #pragma once
 
 #include <QDialog>
+#include <QHash>
 
 #include "json_table_model.h"
 
 class QCheckBox;
 class QComboBox;
 class QCompleter;
+class QEvent;
+class QHeaderView;
 class QLineEdit;
 class QPlainTextEdit;
 class QPushButton;
@@ -46,6 +49,10 @@ public:
 
   /// 换表重建：重新绑定表/项目上下文并全量回填界面（代码侧变更后由宿主调用）
   void load(const JsonTableTable &table, const JsonTableConfig &config, const QString &filePath);
+
+protected:
+  /// 事件过滤：仅当悬停「编辑」列表头的问号小图标时弹出三态说明
+  bool eventFilter(QObject *watched, QEvent *event) override;
 
 signals:
   /// 编辑发生变化（逐编辑广播；写回防抖由 CodeVisualSyncWidget 基类处理）
@@ -187,6 +194,11 @@ private:
   QTableWidget *m_sortTable = nullptr;        ///< 默认排序表格（列名 + 方向）
   QTableWidget *m_joinTable = nullptr;        ///< 联表声明表格（joinTable）
   QTableWidget *m_viewTable = nullptr;        ///< 字段呈现统一表格（一行=一字段，三视图合一）
+  QHeaderView *m_viewHeader = nullptr;        ///< 字段呈现表水平表头（问号图标悬停判定）
+  QHash<int, QString> m_headerTips;           ///< 功能列表头问号提示（列索引 → 文案）
+
+  /// 指定功能列表头问号图标的可视矩形（表头坐标），供 eventFilter 精准判定悬停
+  QRect headerHelpIconRect(int section) const;
   QTableWidget *m_enumTable = nullptr;        ///< 表内枚举主表（枚举列 + 说明）
   QTableWidget *m_enumOptTable = nullptr;     ///< 选中枚举的选项表格（key/label/value/valueType）
   QLineEdit *m_globalEnumEdit = nullptr;      ///< 全局枚举列（逗号分隔）

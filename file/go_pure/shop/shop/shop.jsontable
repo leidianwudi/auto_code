@@ -205,8 +205,28 @@
         ref: 'create_time',
       },
       {
+        label: '全店总售件数',
+        ref: 'sell_count',
+      },
+      {
+        label: '总营业额',
+        ref: 'sell_money',
+      },
+      {
+        label: '好评',
+        ref: 'like',
+      },
+      {
+        label: '是否开店，掌柜操作',
+        ref: 'is_open',
+      },
+      {
         label: '状态',
         ref: 'status',
+      },
+      {
+        label: '是否启用，管理员操作',
+        ref: 'enable',
       },
     ],
     selColsEq: [

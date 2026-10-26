@@ -9,8 +9,10 @@
 #include <QDialog>
 #include <QFile>
 #include <QFileInfo>
+#include <QPainter>
 #include <QPushButton>
 #include <QStandardItem>
+#include <QStyledItemDelegate>
 #include <QTableWidget>
 #include <QVBoxLayout>
 
@@ -120,6 +122,53 @@ QPushButton *makeTableDeleteButton(QTableWidget *table, int column, QWidget *par
   return btn;
 }
 
+// ════════════════════════════════════════════════════════════
+//  配置表格统一委托：纯复选框单元格的勾选框居中
+// ════════════════════════════════════════════════════════════
+
+namespace {
+
+/// QTableWidget 的勾选框默认贴单元格左缘（setTextAlignment 只作用于文本，
+/// 管不到勾选框）。配置表的复选框列均为"无文本纯勾选"，本委托把这类单元格
+/// 的勾选框绘制与点击命中区一起水平居中；普通文本 / 控件单元格不受影响。
+class CenterCheckDelegate : public QStyledItemDelegate {
+ public:
+  using QStyledItemDelegate::QStyledItemDelegate;
+
+  /// 无文本 + 有勾选态 = 纯复选框单元格
+  static bool isBareCheckCell(const QModelIndex &index) {
+    return index.data(Qt::CheckStateRole).isValid() &&
+           index.data(Qt::DisplayRole).toString().isEmpty();
+  }
+
+  /// 以单元格水平中心为中点的窄条矩形（样式会在此矩形内垂直居中勾选框；
+  /// 悬停/选中高亮也随矩形居中，视觉上即"勾选框居中"）
+  static QStyleOptionViewItem shrunkOption(const QStyleOptionViewItem &option) {
+    QStyleOptionViewItem opt = option;
+    const int side = qMin(opt.rect.height(), 24);
+    opt.rect = QRect(opt.rect.center().x() - side / 2, opt.rect.top(), side,
+                     opt.rect.height());
+    return opt;
+  }
+
+  void paint(QPainter *painter, const QStyleOptionViewItem &option,
+             const QModelIndex &index) const override {
+    QStyledItemDelegate::paint(
+        painter, isBareCheckCell(index) ? shrunkOption(option) : option, index);
+  }
+
+  bool editorEvent(QEvent *event, QAbstractItemModel *model,
+                   const QStyleOptionViewItem &option,
+                   const QModelIndex &index) override {
+    // 命中区与绘制区用同一矩形，保证点在居中勾选框上能切换、点空白处不误触
+    return QStyledItemDelegate::editorEvent(
+        event, model, isBareCheckCell(index) ? shrunkOption(option) : option,
+        index);
+  }
+};
+
+}  // namespace
+
 QTableWidget *makeConfigTable(const std::initializer_list<ConfigTableColumn> &columns,
                               QWidget *parent, int minHeight, int maxHeight,
                               QAbstractItemView::SelectionBehavior selection) {
@@ -128,6 +177,11 @@ QTableWidget *makeConfigTable(const std::initializer_list<ConfigTableColumn> &co
   for (const auto &c : columns) headers << c.header;
   table->setHorizontalHeaderLabels(headers);
   table->verticalHeader()->setVisible(false);
+  // 表头不响应点击：避免点击列标题整列选中（配置表无此操作需求），
+  // 拖拽调宽不受影响（resize 走独立的光标/手柄逻辑）
+  table->horizontalHeader()->setSectionsClickable(false);
+  // 纯复选框单元格统一居中（绘制 + 点击命中），全项目配置表生效
+  table->setItemDelegate(new CenterCheckDelegate(table));
   table->setSelectionBehavior(selection);
   table->setMinimumHeight(minHeight);
   if (maxHeight > 0) table->setMaximumHeight(maxHeight);

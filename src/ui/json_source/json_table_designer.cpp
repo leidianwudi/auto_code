@@ -17,6 +17,7 @@
 #include <QHBoxLayout>
 #include <QHash>
 #include <QHeaderView>
+#include <QHelpEvent>
 #include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
@@ -26,7 +27,9 @@
 #include <QSet>
 #include <QStringListModel>
 #include <QStyledItemDelegate>
+#include <QStyleOptionHeader>
 #include <QTabWidget>
+#include <QToolTip>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
@@ -39,6 +42,7 @@
 #include "src/ui/json_vue/config_dialog_common.h"
 #include "src/ui/json_vue/json_vue_model.h"
 #include "src/util/ui/component/aui_combo_box.h"
+#include "src/util/ui/component/aui_icon.h"
 #include "src/util/ui/component/aui_splitter.h"
 #include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/component/aui_style.h"
@@ -1011,7 +1015,7 @@ void JsonTableDesigner::setupUI() {
   fieldTab->addLayout(colHeader);
 
   // ── 字段表格（纯物理属性，独占字段页；页面呈现由三视图接管）──
-  m_colsTable = makeConfigTable({{QStringLiteral("列名"), QHeaderView::Stretch, 0},
+  m_colsTable = makeConfigTable({{QStringLiteral("列名"), QHeaderView::Interactive, 110},
                                  {QStringLiteral("MySQL类型"), QHeaderView::Interactive, 120},
                                  {QStringLiteral("unsigned"), QHeaderView::Interactive, 62},
                                  {QStringLiteral("可空"), QHeaderView::Interactive, 50},
@@ -1050,21 +1054,47 @@ void JsonTableDesigner::setupUI() {
   viewLay->addLayout(viewHeader);
   presentSplit->addWidget(viewLay->parentWidget());
 
-  m_viewTable = makeConfigTable({{QStringLiteral("字段引用"), QHeaderView::Stretch, 0},
-                                 {QStringLiteral("标题"), QHeaderView::Stretch, 0},
-                                 {QStringLiteral("列表"), QHeaderView::Interactive, 46},
+  // 列模式：文本列与勾选列全部 Interactive（可拖拽调宽），末列 ⚙ Stretch 吸收
+  // 剩余宽度——前两列原为 Stretch 会被 Qt 禁用拖拽柄，导致列宽拖不动
+  m_viewTable = makeConfigTable({{QStringLiteral("字段引用"), QHeaderView::Interactive, 150},
+                                 {QStringLiteral("标题"), QHeaderView::Interactive, 150},
+                                 {QStringLiteral("列表"), QHeaderView::Interactive, 64},
                                  {QStringLiteral("查询"), QHeaderView::Interactive, 96},
-                                 {QStringLiteral("编辑"), QHeaderView::Interactive, 46},
-                                 {QStringLiteral("必填"), QHeaderView::Interactive, 46},
-                                 {QStringLiteral("⚙"), QHeaderView::Interactive, 36}},
+                                 {QStringLiteral("编辑"), QHeaderView::Interactive, 64},
+                                 {QStringLiteral("必填"), QHeaderView::Interactive, 64},
+                                 {QStringLiteral("⚙"), QHeaderView::Stretch, 0}},
                                 this, 240, 0, QAbstractItemView::SelectItems);
-  m_viewTable->setToolTip(
-      QStringLiteral("一行 = 一个字段在所有页面的呈现（对齐 jsonvue 列配置心智）：\n"
-                     "· 列表：勾选后出现在列表页表格（标题/列宽在 ⚙ 配置）\n"
-                     "· 查询：不查询 / 精确 / 模糊 / 范围 / 仅接口（后端生成条件、前端不渲染）\n"
-                     "· 编辑：☑渲染 / ■进表单但不渲染（参数保留）/ ☐不进表单\n"
-                     "· ⚙：列宽 / 控件类型 / 编辑标题覆盖\n"
-                     "联表行（引用名.目标列）只读，编辑列自动禁用；枚举列/外键列查询自动下拉"));
+  // 功能列表头：问号小图标 + 悬停图标显示对应说明（eventFilter 精准限定图标区，
+  // 列头其余区域不弹）；⚙ 列图标本身即入口，仅普通 tooltip
+  m_headerTips = {
+      {UColList,
+       QStringLiteral("勾选后该字段出现在列表页表格中\n（列标题 / 列宽在 ⚙ 列配置）")},
+      {UColQuery,
+       QStringLiteral("查询方式：\n"
+                      "· 不查询：列表页无该字段的查询控件\n"
+                      "· 精确 / 模糊 / 范围：前端渲染输入控件，后端生成对应查询条件\n"
+                      "· 仅接口：后端生成查询条件，前端不渲染输入控件\n"
+                      "枚举列 / 外键列的查询控件自动为下拉框")},
+      {UColEdit,
+       QStringLiteral("编辑列三态勾：\n"
+                      "☑ 进编辑表单且渲染输入控件\n"
+                      "■ 进编辑表单但不渲染（提交时保留该字段值）\n"
+                      "☐ 不进编辑表单\n"
+                      "单击单元格在三态间循环切换；联表行只读")},
+      {UColRequired,
+       QStringLiteral("勾选后编辑表单提交时对该字段做必填校验")}};
+  m_viewHeader = m_viewTable->horizontalHeader();
+  m_viewHeader->installEventFilter(this);
+  for (auto tipIt = m_headerTips.constBegin(); tipIt != m_headerTips.constEnd();
+       ++tipIt) {
+    if (auto *h = m_viewTable->horizontalHeaderItem(tipIt.key())) {
+      h->setIcon(AuiIcon::createHelpIcon());
+      h->setToolTip(tipIt.value());
+    }
+  }
+  if (auto *gearHeader = m_viewTable->horizontalHeaderItem(UColGear)) {
+    gearHeader->setToolTip(QStringLiteral("字段设置：列宽 / 控件类型 / 编辑标题覆盖"));
+  }
   viewLay->addWidget(m_viewTable, 1);
   m_viewRefDelegate = new EditableComboDelegate(QStringList(), m_viewTable);
   m_viewTable->setItemDelegateForColumn(UColRef, m_viewRefDelegate);
@@ -1081,8 +1111,8 @@ void JsonTableDesigner::setupUI() {
   sortHeader->addWidget(delSortBtn);
   sortLay->addLayout(sortHeader);
 
-  m_sortTable = makeConfigTable({{QStringLiteral("排序列"), QHeaderView::Stretch, 0},
-                                 {QStringLiteral("方向"), QHeaderView::Interactive, 100}},
+  m_sortTable = makeConfigTable({{QStringLiteral("排序列"), QHeaderView::Interactive, 140},
+                                 {QStringLiteral("方向"), QHeaderView::Stretch, 0}},
                                 this, 150, 0, QAbstractItemView::SelectItems);
   sortLay->addWidget(m_sortTable, 1);
   m_sortRefDelegate = new EditableComboDelegate(QStringList(), m_sortTable);
@@ -1100,10 +1130,10 @@ void JsonTableDesigner::setupUI() {
   btnHeader->addWidget(delBtnBtn);
   btnLay->addLayout(btnHeader);
 
-  m_buttonTable = makeConfigTable({{QStringLiteral("按钮文字"), QHeaderView::Stretch, 0},
+  m_buttonTable = makeConfigTable({{QStringLiteral("按钮文字"), QHeaderView::Interactive, 140},
                                    {QStringLiteral("位置"), QHeaderView::Interactive, 90},
                                    {QStringLiteral("行为"), QHeaderView::Interactive, 90},
-                                   {QStringLiteral("动作"), QHeaderView::Interactive, 120}},
+                                   {QStringLiteral("动作"), QHeaderView::Stretch, 0}},
                                   this, 60, 0, QAbstractItemView::SelectRows);
   m_buttonTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
   m_buttonTable->setToolTip(
@@ -1145,7 +1175,7 @@ void JsonTableDesigner::setupUI() {
                                  {QStringLiteral("外键列"), QHeaderView::Interactive, 100},
                                  {QStringLiteral("主键列"), QHeaderView::Interactive, 84},
                                  {QStringLiteral("joinType"), QHeaderView::Interactive, 96},
-                                 {QStringLiteral("启用"), QHeaderView::Interactive, 48}},
+                                 {QStringLiteral("启用"), QHeaderView::Stretch, 0}},
                                 this, 120, 0, QAbstractItemView::SelectItems);
   m_joinTable->setToolTip(QStringLiteral(
       "引用名=joinEnClassPro（别名前缀+前端 ref 前缀）；目标表=joinEnClass"
@@ -1463,6 +1493,42 @@ void JsonTableDesigner::setupUI() {
   m_validateLabel->setContentsMargins(4, 0, 4, 0);
   layout->addWidget(m_validateLabel);
   applyStyle();
+}
+
+// ════════════════════════════════════════════════════════════
+//  「编辑」列表头问号图标：仅悬停图标弹出三态说明，列头其余区域不弹
+// ════════════════════════════════════════════════════════════
+
+bool JsonTableDesigner::eventFilter(QObject *watched, QEvent *event) {
+  if (watched == m_viewHeader && event->type() == QEvent::ToolTip) {
+    auto *he = static_cast<QHelpEvent *>(event);
+    const int section = m_viewHeader->logicalIndexAt(he->pos());
+    if (m_headerTips.contains(section)) {
+      // 仅悬停问号小图标才弹说明；列头其余区域不弹，避免阅读打扰
+      if (headerHelpIconRect(section).contains(he->pos())) {
+        QToolTip::showText(he->globalPos(), m_headerTips.value(section),
+                           m_viewHeader);
+      }
+      return true;  // 带问号的列提示全部接管
+    }
+  }
+  return QWidget::eventFilter(watched, event);
+}
+
+QRect JsonTableDesigner::headerHelpIconRect(int section) const {
+  QStyleOptionHeader opt;
+  opt.initFrom(m_viewHeader);
+  opt.section = section;
+  opt.orientation = Qt::Horizontal;
+  opt.position = QStyleOptionHeader::Middle;
+  opt.selectedPosition = QStyleOptionHeader::NotAdjacent;
+  opt.rect = QRect(m_viewHeader->sectionViewportPosition(section), 0,
+                   m_viewHeader->sectionSize(section), m_viewHeader->height());
+  // 问号图标由表头项 DecorationRole 绘制在 label 子矩形左端
+  const QRect label =
+      m_viewHeader->style()->subElementRect(QStyle::SE_HeaderLabel, &opt, m_viewHeader);
+  const int side = qMin(16, qMin(label.height(), label.width()));
+  return QRect(label.left(), label.center().y() - side / 2, side, side);
 }
 
 void JsonTableDesigner::refill() {
