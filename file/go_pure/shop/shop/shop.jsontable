@@ -1,5 +1,8 @@
 {
   table: {
+    adminPkgComment: '商店管理端模块（CRUD）',
+    appAuth: 'public',
+    appQuery: true,
     columns: [
       {
         comment: '主键',
@@ -136,20 +139,24 @@
         unsigned: false,
       },
     ],
+    dataPkgComment: '商店表共享数据层（admin 端与 app 端复用）',
     editCols: [
       {
         label: '店主',
         ref: 'user_id',
       },
       {
+        label: '星级',
         ref: 'level',
         widget: 'number',
       },
       {
+        label: '全店总售件数',
         ref: 'sell_count',
         visible: false,
       },
       {
+        label: '管理员备注',
         ref: 'desc',
         widget: 'textarea',
       },
@@ -180,6 +187,7 @@
         ],
       },
     ],
+    layout: 'split',
     manualUpdateTime: false,
     modelName: 'shop',
     selCols: [
@@ -193,12 +201,12 @@
         ref: 'level',
       },
       {
-        label: '状态',
-        ref: 'status',
-      },
-      {
         label: '创建时间',
         ref: 'create_time',
+      },
+      {
+        label: '状态',
+        ref: 'status',
       },
     ],
     selColsEq: [
@@ -207,10 +215,6 @@
       },
       {
         ref: 'is_open',
-      },
-      {
-        ref: 'status',
-        visible: false,
       },
       {
         ref: 'enable',
@@ -256,11 +260,6 @@
         'DESC',
       ],
     ],
-    layout: 'split',
-    appQuery: true,
-    appAuth: 'public',
-    dataPkgComment: '商店表共享数据层（admin 端与 app 端复用）',
-    adminPkgComment: '商店管理端模块（CRUD）',
     tableComment: '商店',
     tableName: 'shop',
   },

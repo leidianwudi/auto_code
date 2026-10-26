@@ -21,7 +21,6 @@
       },
       {
         comment: '备注',
-        default: '',
         isAutoInc: false,
         isPrimary: false,
         mysqlType: 'varchar(255)',
@@ -69,11 +68,10 @@
       },
     ],
     frontend: false,
-    indexes: [],
     layout: 'split',
     manualUpdateTime: false,
-    moduleDir: 'sys/sys_role',
     modelName: 'sys_role',
+    moduleDir: 'sys/sys_role',
     selColsSort: [
       [
         'sort',
