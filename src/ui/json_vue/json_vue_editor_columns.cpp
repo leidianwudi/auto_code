@@ -13,6 +13,8 @@
 #include <QTableWidgetItem>
 
 #include "json_vue_editor.h"
+
+#include "src/util/ui/component/aui_check_box.h"
 #include "json_vue_editor_helpers.h"
 #include "src/util/ui/component/aui_message_box.h"
 
@@ -52,14 +54,14 @@ void JsonVueEditor::onAddColumn() {
 
   m_columnTable->setItem(row, ColDataName, new QTableWidgetItem());
 
-  auto *qVis = new QCheckBox;
+  auto *qVis = new AuiCenterCheckBox;
   qVis->setChecked(true);
   m_columnTable->setCellWidget(row, ColQueryVisible, qVis);
   connectCellWidgetSignals(qVis);
 
   m_columnTable->setItem(row, ColTitle, new QTableWidgetItem());
 
-  auto *eVis = new QCheckBox;
+  auto *eVis = new AuiCenterCheckBox;
   eVis->setChecked(true);
   m_columnTable->setCellWidget(row, ColEditVisible, eVis);
   connectCellWidgetSignals(eVis);

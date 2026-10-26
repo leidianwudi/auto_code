@@ -21,6 +21,7 @@
 class AuiTreeCombo;
 class QComboBox;
 class QDoubleSpinBox;
+class QFormLayout;
 class QLabel;
 class QLineEdit;
 class QPushButton;
@@ -71,7 +72,15 @@ private:
   /// 上传预设引用（"文件#id"，未选时为空）
   QString currentUploadRef() const;
   /// 编辑表单控件启用联动（占位/长度/行数/数值范围/精度/日期格式随控件类型）
-  void updateEditFormEnabled();
+  /// 行级显隐联动（QFormLayout::setRowVisible 整行折叠，对齐 jsonvue 字段设置）：
+  /// 列表缩略图行随 displayType=image；编辑参数行随编辑控件类型按需出现
+  void updateListRows();
+  void updateEditFormRows();
+  /// 编辑表单区（── 编辑表单 ── 分隔行起至末尾）整体显隐；联表行整体折叠
+  void setEditRowsVisible(bool on);
+  /// 按 field widget 反查表单行号；-1 = 不在表单中
+  int formRowOf(QWidget *field) const;
+  void setFormRowVisible(QWidget *field, bool on);
   /// 取值域 → 编辑控件自动推导（仅控件为"自动"时生效：恰2项→boolean、其它→select）
   void deriveWidgetFromDomain();
 
@@ -124,4 +133,7 @@ private:
   QComboBox *m_uploadSourceCombo = nullptr;
   QSpinBox *m_editThumbW = nullptr;
   QSpinBox *m_editThumbH = nullptr;
+
+  QFormLayout *m_form = nullptr;  ///< 面板表单（行级显隐用）
+  QLabel *m_editSep = nullptr;    ///< ── 编辑表单 ── 分隔行（联表行整区折叠）
 };

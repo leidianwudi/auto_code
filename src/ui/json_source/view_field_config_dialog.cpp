@@ -37,11 +37,15 @@ ViewFieldConfigDialog::ViewFieldConfigDialog(const QString &ref, bool isJoinRow,
 void ViewFieldConfigDialog::setupUI() {
   ConfigDialogFrame frame = beginConfigDialog(this, QStringLiteral("字段设置：%1").arg(m_ref),
                                               QMargins(12, 10, 12, 10), 6);
-  auto *form = new QFormLayout;
+  m_form = new QFormLayout;
+  auto *form = m_form;
   form->setSpacing(6);
 
   if (!m_isJoinRow) {
-    // ── 取值域（方案 B 中心化；类型简化为 未声明/数据源/远程接口）──
+    // ── 字段取值域（方案 B 中心化；类型简化为 未声明/数据源/远程接口）──
+    auto *domainSep = new QLabel(QStringLiteral("── 字段取值域 ──"), this);
+    domainSep->setAlignment(Qt::AlignCenter);
+    form->addRow(QString(), domainSep);
     m_domainTypeCombo = AuiComboBox::create(this);
     m_domainTypeCombo->addItem(QStringLiteral("未声明（无数据源）"), QString());
     m_domainTypeCombo->addItem(QStringLiteral("数据源（.jsonsource / 全局枚举）"),
@@ -115,14 +119,15 @@ void ViewFieldConfigDialog::setupUI() {
   }
 
   // ── 列表页展示 ──
+  auto *listSep = new QLabel(QStringLiteral("── 列表页展示 ──"), this);
+  listSep->setAlignment(Qt::AlignCenter);
+  form->addRow(QString(), listSep);
   m_displayTypeCombo = AuiComboBox::create(this);
   m_displayTypeCombo->addItem(QStringLiteral("自动（按编辑控件/类型推导）"), QString());
   m_displayTypeCombo->addItem(QStringLiteral("image（图片缩略图）"), QStringLiteral("image"));
   form->addRow(QStringLiteral("列表展示:"), m_displayTypeCombo);
   connect(m_displayTypeCombo, &QComboBox::activated, this,
-          [this](int) { m_listThumbW->setEnabled(m_displayTypeCombo->currentData().toString() ==
-                                                 QStringLiteral("image"));
-                        m_listThumbH->setEnabled(m_listThumbW->isEnabled()); });
+          [this](int) { updateListRows(); });
 
   m_widthCombo = createNumericCombo(this, {60, 80, 100, 120, 150, 180, 220}, 0);
   m_widthCombo->setEditable(true);
@@ -144,7 +149,10 @@ void ViewFieldConfigDialog::setupUI() {
   listThumbLay->addStretch();
   form->addRow(QStringLiteral("列表缩略图宽高(px):"), listThumbRow);
 
-  // ── 编辑表单（联表行只读，无编辑控件配置）──
+  // ── 编辑表单（参数行按控件类型动态出现；联表行整区折叠仅列表展示生效）──
+  m_editSep = new QLabel(QStringLiteral("── 编辑表单 ──"), this);
+  m_editSep->setAlignment(Qt::AlignCenter);
+  form->addRow(QString(), m_editSep);
   m_widgetCombo = AuiComboBox::create(this);
   m_widgetCombo->addItem(QStringLiteral("自动（按 mysqlType 推导）"), QStringLiteral(""));
   m_widgetCombo->addItem(QStringLiteral("input"), QStringLiteral("input"));
@@ -157,7 +165,7 @@ void ViewFieldConfigDialog::setupUI() {
   m_widgetCombo->addItem(QStringLiteral("boolean"), QStringLiteral("boolean"));
   form->addRow(QStringLiteral("编辑控件:"), m_widgetCombo);
   connect(m_widgetCombo, &QComboBox::activated, this,
-          [this](int) { updateEditFormEnabled(); });
+          [this](int) { updateEditFormRows(); });
 
   m_editLabelEdit = new QLineEdit(this);
   m_editLabelEdit->setPlaceholderText(QStringLiteral("空 = 用主表格标题"));
@@ -240,6 +248,15 @@ void ViewFieldConfigDialog::setupUI() {
 
   frame.contentLayout->addLayout(form);
 
+  // 初始行显隐：列表缩略图随 displayType；编辑参数行随控件类型；联表行整区折叠
+  updateListRows();
+  if (!m_isJoinRow) {
+    rebuildDomainControls();
+    updateEditFormRows();
+  } else {
+    setEditRowsVisible(false);
+  }
+
   if (m_isJoinRow) {
     auto *tip = new QLabel(QStringLiteral("联表列只读：无取值域/编辑控件配置，仅列表展示生效"), this);
     frame.contentLayout->addWidget(tip);
@@ -316,28 +333,13 @@ void ViewFieldConfigDialog::setCurrent(const JsonTableSelCol &sc, const JsonTabl
   comboSelectData(m_dateFormatCombo, ec.dateFormat);
   m_formSpanSpin->setValue(ec.formSpan);
   m_formDefaultEdit->setText(ec.formDefaultValue);
-  // 联动启用态（displayType=image → 列表缩略图；控件类型 → 各参数行）
-  const bool listOn = m_displayTypeCombo->currentData().toString() == QStringLiteral("image");
-  m_listThumbW->setEnabled(listOn);
-  m_listThumbH->setEnabled(listOn);
-  if (!m_isJoinRow) {
-    m_editLabelEdit->setEnabled(true);
-    updateEditFormEnabled();
+  // 联动行显隐（displayType=image → 列表缩略图行；控件类型 → 编辑参数行；
+  // 联表行编辑区整体折叠，仅列表展示生效）
+  updateListRows();
+  if (m_isJoinRow) {
+    setEditRowsVisible(false);
   } else {
-    m_widgetCombo->setEnabled(false);
-    m_editLabelEdit->setEnabled(false);
-    m_placeholderEdit->setEnabled(false);
-    m_maxlengthSpin->setEnabled(false);
-    m_textareaRowsSpin->setEnabled(false);
-    m_minSpin->setEnabled(false);
-    m_maxSpin->setEnabled(false);
-    m_precisionSpin->setEnabled(false);
-    m_dateFormatCombo->setEnabled(false);
-    m_formSpanSpin->setEnabled(false);
-    m_formDefaultEdit->setEnabled(false);
-    m_uploadSourceCombo->setEnabled(false);
-    m_editThumbW->setEnabled(false);
-    m_editThumbH->setEnabled(false);
+    updateEditFormRows();
   }
 }
 
@@ -377,9 +379,9 @@ void ViewFieldConfigDialog::rebuildDomainControls() {
   const QString uiType = m_domainTypeCombo->currentData().toString();
   const bool hasSource = (uiType == QStringLiteral("source"));
   const bool hasUrl = (uiType == QString::fromLatin1(JsonVueDomain::kRemote));
-  if (m_domainSourceRow) m_domainSourceRow->setVisible(hasSource);
-  if (m_domainUrlBtn) m_domainUrlBtn->setVisible(hasUrl);
-  if (m_domainPreviewLabel) m_domainPreviewLabel->setVisible(hasSource);
+  setFormRowVisible(m_domainSourceRow, hasSource);
+  setFormRowVisible(m_domainUrlBtn, hasUrl);
+  setFormRowVisible(m_domainPreviewLabel, hasSource);
   if (hasSource) updateDomainPreview();
 }
 
@@ -408,29 +410,55 @@ QString ViewFieldConfigDialog::currentUploadRef() const {
   return m_uploadSourceCombo->currentData().toString();
 }
 
-void ViewFieldConfigDialog::updateEditFormEnabled() {
-  if (!m_uploadSourceCombo) return;
+void ViewFieldConfigDialog::updateListRows() {
+  if (!m_displayTypeCombo) return;
+  const bool isImg =
+      m_displayTypeCombo->currentData().toString() == QStringLiteral("image");
+  setFormRowVisible(m_listThumbW, isImg);
+}
+
+void ViewFieldConfigDialog::updateEditFormRows() {
+  if (!m_widgetCombo) return;
   const QString w = m_widgetCombo->currentData().toString();
-  const bool on = (w == QStringLiteral("image") || w == QStringLiteral("upload"));
-  m_uploadSourceCombo->setEnabled(on);
-  m_editThumbW->setEnabled(on);
-  m_editThumbH->setEnabled(on);
-  // 精细参数随控件类型启用（formDefault 全控件通用）
-  const bool isInput = (w == QStringLiteral("input"));
-  const bool isTextArea = (w == QStringLiteral("textarea"));
+  const bool isImageLike =
+      (w == QStringLiteral("image") || w == QStringLiteral("upload"));
   const bool isNumber = (w == QStringLiteral("number") || w == QStringLiteral("int") ||
                          w == QStringLiteral("float"));
-  const bool isFloat = (w == QStringLiteral("float"));
-  const bool isDate = (w == QStringLiteral("date"));
-  m_placeholderEdit->setEnabled(isInput || isTextArea || on);  // input/textarea/image/upload
-  m_maxlengthSpin->setEnabled(isInput);
-  m_textareaRowsSpin->setEnabled(isTextArea);
-  m_minSpin->setEnabled(isNumber);
-  m_maxSpin->setEnabled(isNumber);
-  m_precisionSpin->setEnabled(isFloat);
-  m_dateFormatCombo->setEnabled(isDate);
-  m_formSpanSpin->setEnabled(true);
-  m_formDefaultEdit->setEnabled(true);
+  // 参数行按控件类型整行折叠（对齐 jsonvue 字段设置面板的按需出现模式）
+  setFormRowVisible(m_placeholderEdit,
+                    isImageLike || w == QStringLiteral("input") ||
+                        w == QStringLiteral("textarea"));
+  setFormRowVisible(m_maxlengthSpin, w == QStringLiteral("input"));
+  setFormRowVisible(m_textareaRowsSpin, w == QStringLiteral("textarea"));
+  setFormRowVisible(m_minSpin, isNumber);
+  setFormRowVisible(m_precisionSpin, w == QStringLiteral("float"));
+  setFormRowVisible(m_dateFormatCombo, w == QStringLiteral("date"));
+  setFormRowVisible(m_uploadSourceCombo, isImageLike);
+  setFormRowVisible(m_editThumbW, isImageLike);
+}
+
+void ViewFieldConfigDialog::setEditRowsVisible(bool on) {
+  if (m_editSep) m_editSep->setVisible(on);
+  QWidget *fields[] = {m_widgetCombo,  m_editLabelEdit,     m_placeholderEdit,
+                       m_maxlengthSpin, m_textareaRowsSpin, m_minSpin,
+                       m_precisionSpin, m_dateFormatCombo,  m_formSpanSpin,
+                       m_formDefaultEdit, m_uploadSourceCombo, m_editThumbW};
+  for (QWidget *f : fields) {
+    if (f) setFormRowVisible(f, on);
+  }
+}
+
+int ViewFieldConfigDialog::formRowOf(QWidget *field) const {
+  for (int r = 0; r < m_form->rowCount(); ++r) {
+    const QLayoutItem *it = m_form->itemAt(r, QFormLayout::FieldRole);
+    if (it && it->widget() == field) return r;
+  }
+  return -1;
+}
+
+void ViewFieldConfigDialog::setFormRowVisible(QWidget *field, bool on) {
+  const int r = formRowOf(field);
+  if (r >= 0) m_form->setRowVisible(r, on);
 }
 
 void ViewFieldConfigDialog::deriveWidgetFromDomain() {
@@ -451,7 +479,7 @@ void ViewFieldConfigDialog::deriveWidgetFromDomain() {
   }
   if (!w.isEmpty()) {
     comboSelectData(m_widgetCombo, w);
-    updateEditFormEnabled();
+    updateEditFormRows();
   }
 }
 

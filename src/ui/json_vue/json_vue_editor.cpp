@@ -11,6 +11,8 @@
 
 #include "json_vue_editor.h"
 
+#include "src/util/ui/component/aui_check_box.h"
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
@@ -405,12 +407,12 @@ void JsonVueEditor::loadConfig(const JsonVueConfig &config) {
     QString title = col.queryName.isEmpty() ? col.editName : col.queryName;
     m_columnTable->setItem(row, ColTitle, new QTableWidgetItem(title));
 
-    auto *qVis = new QCheckBox;
+    auto *qVis = new AuiCenterCheckBox;
     qVis->setChecked(col.queryVisible);
     m_columnTable->setCellWidget(row, ColQueryVisible, qVis);
     connectCellWidgetSignals(qVis);
 
-    auto *eVis = new QCheckBox;
+    auto *eVis = new AuiCenterCheckBox;
     eVis->setChecked(col.editVisible);
     m_columnTable->setCellWidget(row, ColEditVisible, eVis);
     connectCellWidgetSignals(eVis);
