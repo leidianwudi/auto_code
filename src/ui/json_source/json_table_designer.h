@@ -51,7 +51,7 @@ public:
   void load(const JsonTableTable &table, const JsonTableConfig &config, const QString &filePath);
 
 protected:
-  /// 事件过滤：仅当悬停「编辑」列表头的问号小图标时弹出三态说明
+  /// 事件过滤：仅当悬停「编辑」列表头的问号小图标时弹出两态说明
   bool eventFilter(QObject *watched, QEvent *event) override;
 
 signals:
@@ -181,6 +181,10 @@ private:
   QCheckBox *m_frontendCheck = nullptr;       ///< 生成前端页面（false = 纯 API 模块）
   QCheckBox *m_appQueryCheck = nullptr;       ///< 生成 C 端只读查询（modules/app）
   QComboBox *m_appAuthCombo = nullptr;        ///< C 端鉴权：public / user
+  QCheckBox *m_genAddCheck = nullptr;          ///< 生成新增按钮（工具栏）
+  QCheckBox *m_genEditCheck = nullptr;         ///< 生成行内编辑按钮
+  QCheckBox *m_genDeleteCheck = nullptr;       ///< 生成删除按钮（行内删除 + 工具栏批量删除）
+  QCheckBox *m_genDetailCheck = nullptr;       ///< 生成行内详情按钮
   QTableWidget *m_colsTable = nullptr;        ///< 字段表格（核心编辑区）
   QTableWidget *m_indexTable = nullptr;       ///< 索引表格
   QPlainTextEdit *m_ddlView = nullptr;        ///< DDL 预览（只读）

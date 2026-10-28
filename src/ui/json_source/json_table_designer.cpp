@@ -14,6 +14,7 @@
 #include <QDialog>
 #include <QFileInfo>
 #include <QFormLayout>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QHash>
 #include <QHeaderView>
@@ -85,7 +86,7 @@ enum UCols {
   UColTitle,     ///< 标题（生效值 = selCols.label > 列注释 > ref；写回 selCols.label）
   UColList,      ///< 列表勾选（在 selCols 中）
   UColQuery,     ///< 查询模式（cell widget：不查询/精确/模糊/范围/仅接口）
-  UColEdit,      ///< 编辑三态勾（☑渲染/■进表单不渲染/☐不进表单）
+  UColEdit,      ///< 编辑勾（☑进编辑表单/☐不进表单；编辑/新增/详情复用同一 write.vue）
   UColRequired,  ///< 必填勾选（editCols.required）
   UColGear,      ///< ⚙ 按钮列（列宽/控件类型/编辑标题 → 字段设置面板）
   UColCount
@@ -934,7 +935,7 @@ void JsonTableDesigner::setupUI() {
   auto *layout = rootLayout;
 
   // ── 页签容器（对齐 jsonvue「一行=一字段」心智）：
-  //    字段(物理) / 字段呈现(三视图合一+排序) / 联表与索引 / 枚举 / 多语言 / DDL ──
+  //    字段(物理) / 字段呈现(生成设置+三视图合一+排序) / 联表与索引 / 枚举 / 多语言 / DDL ──
   auto *tabs = new QTabWidget(this);
   auto makeTab = [tabs](const QString &title) {
     auto *w = new QWidget(tabs);
@@ -977,24 +978,6 @@ void JsonTableDesigner::setupUI() {
   m_manualUpdateCheck->setToolTip(
       QStringLiteral("勾选后生成端不由数据库 ON UPDATE 维护更新时间字段"));
   topRow->addWidget(m_manualUpdateCheck);
-  m_frontendCheck = new QCheckBox(QStringLiteral("生成前端页面"), this);
-  m_frontendCheck->setChecked(m_table.frontend);
-  m_frontendCheck->setToolTip(
-      QStringLiteral("取消勾选 = 纯 API 模块：后端链照常生成 API，前端链跳过此表"));
-  topRow->addWidget(m_frontendCheck);
-  // C 端只读查询（modules/app）：默认不生成，鉴权默认需登录
-  m_appQueryCheck = new QCheckBox(QStringLiteral("生成C端查询"), this);
-  m_appQueryCheck->setToolTip(
-      QStringLiteral("勾选后生成 modules/app 的 selectByIn/selectById 只读接口，永不生成写接口"));
-  topRow->addWidget(m_appQueryCheck);
-  m_appAuthCombo = AuiComboBox::create(this);
-  m_appAuthCombo->addItem(QStringLiteral("公开浏览"), QStringLiteral("public"));
-  m_appAuthCombo->addItem(QStringLiteral("需登录"), QStringLiteral("user"));
-  m_appAuthCombo->setToolTip(
-      QStringLiteral("public=不挂 UserAuth（如商品列表）；user=需登录（默认，宁可漏开放不可误开放）"));
-  topRow->addWidget(m_appAuthCombo);
-  connect(m_appQueryCheck, &QCheckBox::toggled, this,
-          [this](bool on) { m_appAuthCombo->setEnabled(on); });
   fieldTab->addLayout(topRow);
 
   // ── 字段表格工具行 ──
@@ -1076,11 +1059,11 @@ void JsonTableDesigner::setupUI() {
                       "· 仅接口：后端生成查询条件，前端不渲染输入控件\n"
                       "枚举列 / 外键列的查询控件自动为下拉框")},
       {UColEdit,
-       QStringLiteral("编辑列三态勾：\n"
-                      "☑ 进编辑表单且渲染输入控件\n"
-                      "■ 进编辑表单但不渲染（提交时保留该字段值）\n"
+       QStringLiteral("编辑列勾选：\n"
+                      "☑ 进编辑表单（渲染控件、参与校验与提交）\n"
                       "☐ 不进编辑表单\n"
-                      "单击单元格在三态间循环切换；联表行只读")},
+                      "编辑/新增/详情复用同一 write.vue，详情为整表单只读，\n"
+                      "无需列级只读态；联表行只读")},
       {UColRequired,
        QStringLiteral("勾选后编辑表单提交时对该字段做必填校验")}};
   m_viewHeader = m_viewTable->horizontalHeader();
@@ -1093,7 +1076,7 @@ void JsonTableDesigner::setupUI() {
     }
   }
   if (auto *gearHeader = m_viewTable->horizontalHeaderItem(UColGear)) {
-    gearHeader->setToolTip(QStringLiteral("字段设置：列宽 / 控件类型 / 编辑标题覆盖"));
+    gearHeader->setToolTip(QStringLiteral("字段设置：列宽 / 控件类型 / 编辑表单参数"));
   }
   viewLay->addWidget(m_viewTable, 1);
   m_viewRefDelegate = new EditableComboDelegate(QStringList(), m_viewTable);
@@ -1151,6 +1134,61 @@ void JsonTableDesigner::setupUI() {
   presentSplit->setStretchFactor(1, 1);
   presentSplit->setStretchFactor(2, 1);
   presentSplit->setSizes({320, 160, 90});
+  // ── 顶部：生成设置（表级生成开关，从字段页迁入；门禁下方三视图/按钮产物）──
+  //    一行三段，段间竖线分隔：
+  //      生成前端页面 │ 按钮: 新增 编辑 删除 详情 │ 生成C端查询 [鉴权]
+  //    生成前端页面 = 三视图总开关（false = 纯 API 模块，下方配置不生效）；
+  //    按钮组同属页面呈现范畴；删除勾选同时控制工具栏批量删除与行内删除图标
+  //    （两者同生同灭，避免"能批量删但不能单删"的怪状态）
+  auto *genSep = new QLabel(QStringLiteral("── 生成设置 ──"), this);
+  genSep->setAlignment(Qt::AlignCenter);
+  presentTab->addWidget(genSep);
+  auto *genRow = new QHBoxLayout;
+  genRow->setSpacing(6);
+  // 段间竖线（VLine + Sunken 阴影，跟随主题边框色）
+  auto addVSep = [this, genRow]() {
+    auto *v = new QFrame(this);
+    v->setFrameShape(QFrame::VLine);
+    v->setFrameShadow(QFrame::Sunken);
+    genRow->addWidget(v);
+  };
+  m_frontendCheck = new QCheckBox(QStringLiteral("生成前端页面"), this);
+  m_frontendCheck->setChecked(m_table.frontend);
+  m_frontendCheck->setToolTip(
+      QStringLiteral("取消勾选 = 纯 API 模块：后端链照常生成 API，前端链跳过此表（下方三视图/排序/按钮配置不生效）"));
+  genRow->addWidget(m_frontendCheck);
+  addVSep();
+  genRow->addWidget(new QLabel(QStringLiteral("按钮:"), this));
+  m_genAddCheck = new QCheckBox(QStringLiteral("新增"), this);
+  m_genAddCheck->setToolTip(QStringLiteral("工具栏「新增」按钮（打开编辑弹窗新增）"));
+  genRow->addWidget(m_genAddCheck);
+  m_genEditCheck = new QCheckBox(QStringLiteral("编辑"), this);
+  m_genEditCheck->setToolTip(QStringLiteral("行操作列「编辑」图标（打开编辑弹窗修改）"));
+  genRow->addWidget(m_genEditCheck);
+  m_genDeleteCheck = new QCheckBox(QStringLiteral("删除"), this);
+  m_genDeleteCheck->setToolTip(
+      QStringLiteral("行操作列「删除」图标 + 工具栏「删除」批量按钮（两者同一开关）"));
+  genRow->addWidget(m_genDeleteCheck);
+  m_genDetailCheck = new QCheckBox(QStringLiteral("详情"), this);
+  m_genDetailCheck->setToolTip(QStringLiteral("行操作列「详情」图标（只读弹窗查看）"));
+  genRow->addWidget(m_genDetailCheck);
+  addVSep();
+  // C 端只读查询（modules/app）：默认不生成，鉴权默认需登录
+  m_appQueryCheck = new QCheckBox(QStringLiteral("生成C端查询"), this);
+  m_appQueryCheck->setToolTip(
+      QStringLiteral("勾选后生成 modules/app 的 selectByIn/selectById 只读接口，永不生成写接口"));
+  genRow->addWidget(m_appQueryCheck);
+  m_appAuthCombo = AuiComboBox::create(this);
+  m_appAuthCombo->addItem(QStringLiteral("公开浏览"), QStringLiteral("public"));
+  m_appAuthCombo->addItem(QStringLiteral("需登录"), QStringLiteral("user"));
+  m_appAuthCombo->setToolTip(
+      QStringLiteral("public=不挂 UserAuth（如商品列表）；user=需登录（默认，宁可漏开放不可误开放）"));
+  genRow->addWidget(m_appAuthCombo);
+  genRow->addStretch();
+  connect(m_appQueryCheck, &QCheckBox::toggled, this,
+          [this](bool on) { m_appAuthCombo->setEnabled(on); });
+  presentTab->addLayout(genRow);
+
   presentTab->addWidget(presentSplit, 1);
 
   // ── 联表声明表格（joinTable：多对一列表联查/一对多详情聚合声明）──
@@ -1496,7 +1534,7 @@ void JsonTableDesigner::setupUI() {
 }
 
 // ════════════════════════════════════════════════════════════
-//  「编辑」列表头问号图标：仅悬停图标弹出三态说明，列头其余区域不弹
+//  「编辑」列表头问号图标：仅悬停图标弹出两态说明，列头其余区域不弹
 // ════════════════════════════════════════════════════════════
 
 bool JsonTableDesigner::eventFilter(QObject *watched, QEvent *event) {
@@ -1538,6 +1576,10 @@ void JsonTableDesigner::refill() {
   m_commentEdit->setText(m_table.tableComment);
   m_manualUpdateCheck->setChecked(m_table.manualUpdateTime);
   m_frontendCheck->setChecked(m_table.frontend);
+  m_genAddCheck->setChecked(m_table.genAdd);
+  m_genEditCheck->setChecked(m_table.genEdit);
+  m_genDeleteCheck->setChecked(m_table.genDelete);
+  m_genDetailCheck->setChecked(m_table.genDetail);
   m_appQueryCheck->setChecked(m_table.appQuery);
   {
     const int authIdx = m_appAuthCombo->findData(m_table.appAuth);
@@ -1945,6 +1987,8 @@ void JsonTableDesigner::fillViewTable() {
   // 物理列注释（标题回退用）
   QHash<QString, QString> colComments;
   for (const auto &c : m_table.columns) colComments.insert(c.name, c.comment);
+  QHash<QString, QString> colTitles;
+  for (const auto &c : m_table.columns) colTitles.insert(c.name, c.title);
 
   // 模式判定需区分键归属，循环三键填 mode2（ref → {mode, visible}）
   QHash<QString, QPair<QString, bool>> mode2;
@@ -1956,11 +2000,13 @@ void JsonTableDesigner::fillViewTable() {
   auto appendRow = [&](const QString &ref, bool isJoinRow) {
     const int row = m_viewTable->rowCount();
     m_viewTable->insertRow(row);
-    // 标题（生效值）：selCols.label > 列注释(本表/联表目标列) > ref
+    // 标题（生效值）：selCols.label > 列定义 title > 列注释(本表/联表目标列) > ref
     QString title;
     const auto selIt = selOf.constFind(ref);
     if (selIt != selOf.constEnd() && !selIt.value().label.isEmpty()) {
       title = selIt.value().label;
+    } else if (colTitles.contains(ref) && !colTitles.value(ref).isEmpty()) {
+      title = colTitles.value(ref);
     } else if (isJoinRow) {
       const int dot = ref.indexOf(QLatin1Char('.'));
       const QString pro = ref.left(dot);
@@ -1980,7 +2026,6 @@ void JsonTableDesigner::fillViewTable() {
     refItem->setData(Qt::UserRole + 1, selMeta.width > 0 ? selMeta.width : 0);  // 列宽
     const auto editMeta = editOf.value(ref);
     refItem->setData(Qt::UserRole + 2, editMeta.widget);  // 控件类型
-    refItem->setData(Qt::UserRole + 3, editMeta.label);   // 编辑标题
     // 列表展示/上传绑定/缩略图（⚙ 面板读写；collectViewTable 落三视图）
     refItem->setData(Qt::UserRole + 4, selMeta.displayType);  // 展示类型
     refItem->setData(Qt::UserRole + 5,
@@ -2045,14 +2090,14 @@ void JsonTableDesigner::fillViewTable() {
       if (!m_loading) emit configChanged();
     });
     m_viewTable->setCellWidget(row, UColQuery, modeCombo);
-    // 编辑三态勾（联表行只读禁用；三态用 ItemIsUserTristate flag）
+    // 编辑勾选（两态；联表行只读禁用）
+    // 旧配置 visible:false 视作未勾选（生成端本就过滤该字段，语义等价，重存后此项移除）
     auto *editItem = new QTableWidgetItem;
     editItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable |
-                       (isJoinRow
-                            ? Qt::NoItemFlags
-                            : Qt::ItemFlags(Qt::ItemIsUserCheckable | Qt::ItemIsUserTristate)));
-    if (const auto eIt = editOf.constFind(ref); eIt != editOf.constEnd()) {
-      editItem->setCheckState(eIt.value().visible ? Qt::Checked : Qt::PartiallyChecked);
+                       (isJoinRow ? Qt::NoItemFlags : Qt::ItemFlags(Qt::ItemIsUserCheckable)));
+    if (const auto eIt = editOf.constFind(ref);
+        eIt != editOf.constEnd() && eIt.value().visible) {
+      editItem->setCheckState(Qt::Checked);
     } else {
       editItem->setCheckState(Qt::Unchecked);
     }
@@ -2092,7 +2137,6 @@ void JsonTableDesigner::appendViewJoinRow(const QString &ref) {
   auto *refItem = new QTableWidgetItem(ref);
   refItem->setData(Qt::UserRole + 1, 0);
   refItem->setData(Qt::UserRole + 2, QString());
-  refItem->setData(Qt::UserRole + 3, QString());
   refItem->setData(Qt::UserRole + 4, QString());
   refItem->setData(Qt::UserRole + 5, 0);
   refItem->setData(Qt::UserRole + 6, 0);
@@ -2156,7 +2200,6 @@ void JsonTableDesigner::collectViewTable(JsonTableTable *out) const {
     const QString title = cellOf(m_viewTable, r, UColTitle);
     QString widthStr;
     QString widget;
-    QString editLabel;
     QString displayType;
     int listThumbW = 0;
     int listThumbH = 0;
@@ -2180,7 +2223,6 @@ void JsonTableDesigner::collectViewTable(JsonTableTable *out) const {
     if (const QTableWidgetItem *refIt = m_viewTable->item(r, UColRef)) {
       widthStr = refIt->data(Qt::UserRole + 1).toString();
       widget = refIt->data(Qt::UserRole + 2).toString();
-      editLabel = refIt->data(Qt::UserRole + 3).toString();
       displayType = refIt->data(Qt::UserRole + 4).toString();
       listThumbW = refIt->data(Qt::UserRole + 5).toInt();
       listThumbH = refIt->data(Qt::UserRole + 6).toInt();
@@ -2228,16 +2270,15 @@ void JsonTableDesigner::collectViewTable(JsonTableTable *out) const {
       else if (mode == QStringLiteral("gap"))
         out->selColsGap.append(qc);
     }
-    // 编辑视图（三态；联表行禁用天然 Unchecked）
+    // 编辑视图（两态；联表行禁用天然 Unchecked）
     const QTableWidgetItem *editIt = m_viewTable->item(r, UColEdit);
     if (editIt && editIt->checkState() != Qt::Unchecked && !ref.contains(QLatin1Char('.'))) {
       JsonTableEditCol ec;
       ec.ref = ref;
       ec.visible = (editIt->checkState() == Qt::Checked);
-      // 编辑标题：⚙ 覆盖 > 主表格标题（空 = 生成端回退列注释）
-      if (!editLabel.isEmpty()) {
-        ec.label = editLabel;
-      } else if (!title.isEmpty() && title != ref) {
+      // 编辑标题：唯一来源 = 「字段呈现」的标题列（空 = 生成端回退列注释）
+      // 旧 editCols.label（⚙ 覆盖）已废弃，此处不再读取
+      if (!title.isEmpty() && title != ref) {
         ec.label = title;
       }
       ec.widget = widget;
@@ -2270,6 +2311,17 @@ void JsonTableDesigner::collectViewTable(JsonTableTable *out) const {
         }
       }
     }
+    // 列级标题 → 回写物理列定义（三视图共用一个标题；与注释/引用相同的值
+    // 视为未覆写不落键，避免批量固化注释导致后续注释修改无法传导）
+    if (!ref.contains(QLatin1Char('.'))) {
+      for (auto &c : out->columns) {
+        if (c.name == ref) {
+          c.title =
+              (title.isEmpty() || title == ref || title == c.comment) ? QString() : title;
+          break;
+        }
+      }
+    }
   }
 }
 
@@ -2290,7 +2342,6 @@ void JsonTableDesigner::openViewFieldConfig(int row) {
   sc.listThumbHeight = refIt->data(Qt::UserRole + 6).toInt();
   JsonTableEditCol ec;
   ec.widget = refIt->data(Qt::UserRole + 2).toString();
-  ec.label = refIt->data(Qt::UserRole + 3).toString();
   ec.uploadSourceFile = refIt->data(Qt::UserRole + 7).toString();
   ec.uploadSourceId = refIt->data(Qt::UserRole + 8).toString();
   ec.editThumbWidth = refIt->data(Qt::UserRole + 9).toInt();
@@ -2323,7 +2374,6 @@ void JsonTableDesigner::openViewFieldConfig(int row) {
   dlg.fillEditResult(&ec);
   refIt->setData(Qt::UserRole + 1, sc.width);
   refIt->setData(Qt::UserRole + 2, ec.widget);
-  refIt->setData(Qt::UserRole + 3, ec.label);
   refIt->setData(Qt::UserRole + 4, sc.displayType);
   refIt->setData(Qt::UserRole + 5, sc.listThumbWidth);
   refIt->setData(Qt::UserRole + 6, sc.listThumbHeight);
@@ -3229,6 +3279,10 @@ JsonTableTable JsonTableDesigner::collectTable() const {
   t.tableComment = m_commentEdit->text().trimmed();
   t.manualUpdateTime = m_manualUpdateCheck->isChecked();
   t.frontend = m_frontendCheck->isChecked();
+  t.genAdd = m_genAddCheck->isChecked();
+  t.genEdit = m_genEditCheck->isChecked();
+  t.genDelete = m_genDeleteCheck->isChecked();
+  t.genDetail = m_genDetailCheck->isChecked();
   t.appQuery = m_appQueryCheck->isChecked();
   t.appAuth = m_appAuthCombo->currentData().toString();
   if (t.appAuth.isEmpty()) t.appAuth = QStringLiteral("user");

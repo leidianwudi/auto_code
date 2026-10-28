@@ -47,7 +47,7 @@ main {
     projPath: projPath,
     apiPrefix: "/api",
     templates: [
-      { tpl: tplDir + "/index.tpl", out: "{basePath}/src/views/{pagePath}/{pageName}.vue" },
+      { tpl: tplDir + "/index.tpl", out: "{basePath}/src/views/{pagePath}/index.vue" },
       { tpl: tplDir + "/write.tpl", out: "{basePath}/src/views/{pagePath}/components/write.vue" },
       { tpl: tplDir + "/api.tpl", out: "{basePath}/src/api/{apiModule}/{pageName}.ts" }
     ],

@@ -46,6 +46,7 @@
         mysqlType: 'int',
         name: 'is_real_name',
         nullable: false,
+        title: '是否实名',
         unsigned: false,
       },
       {
@@ -200,10 +201,12 @@
       {
         label: '用户vip等级',
         ref: 'level',
+        required: true,
       },
       {
         label: '昵称',
         ref: 'nick',
+        required: true,
       },
       {
         label: '头像url',
@@ -212,6 +215,7 @@
       {
         label: '是否实名;0:未实名;1:已实名',
         ref: 'is_real_name',
+        required: true,
       },
       {
         label: '粉丝数量',
@@ -225,6 +229,18 @@
         label: '获踩数量',
         ref: 'dislike_count',
       },
+      {
+        label: '自己关注数量',
+        ref: 'following_count',
+      },
+      {
+        label: '上级',
+        ref: 'up1',
+      },
+      {
+        label: '上级的上级',
+        ref: 'up2',
+      },
     ],
     indexes: [
       {
@@ -237,6 +253,40 @@
     ],
     manualUpdateTime: false,
     modelName: 'user',
+    selCols: [
+      {
+        label: '用户vip等级',
+        ref: 'level',
+      },
+      {
+        label: '昵称',
+        ref: 'nick',
+      },
+      {
+        label: '是否实名',
+        ref: 'is_real_name',
+      },
+      {
+        label: '金币余额',
+        ref: 'coin',
+      },
+      {
+        label: '充值金币',
+        ref: 'recharge_coin',
+      },
+      {
+        label: '充值金额',
+        ref: 'recharge_money',
+      },
+      {
+        label: '活动获得金币',
+        ref: 'activity_coin',
+      },
+      {
+        label: '备注',
+        ref: 'desc',
+      },
+    ],
     selColsEq: [
       {
         ref: 'id',

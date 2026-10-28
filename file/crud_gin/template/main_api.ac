@@ -47,6 +47,29 @@ class TemplateConfig {
   let out: String = "";  // 输出文件路径模板，用 {key} 占位符从 tplData 取值
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 〇、生成覆盖守卫（防手写文件被误覆盖）
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// @brief 生成覆盖守卫：目标文件已存在但缺少 AutoCode 生成标记时跳过覆盖
+/// @param path 输出文件路径
+/// @return true=可写入（文件不存在，或内容含生成标记属于本生成器产物）；
+///         false=跳过写入（已输出红字提示，疑似用户手写文件）
+/// 检测标记取两条生成链模板头注释的公共子串：
+///   vue 链"//此文件为AutoCode编译器生成，请勿手动修改"、
+///   Go 链"// 此代码为AutoCode编译器生成，请勿手动修改"
+export function canOverwriteGenerated(path: String): Bool {
+  if (!fileExists(path)) {
+    return true;
+  }
+  let old: String = readFile(path);
+  if (old.indexOf("AutoCode编译器生成") >= 0) {
+    return true;
+  }
+  printError("跳过覆盖: " + path + "（已存在但缺少 AutoCode 生成标记，疑似手写文件；确认要覆盖请先删除该文件再重新生成）");
+  return false;
+}
+
 /// @brief 生成 Go 后端 API 代码
 /// @param params 项目参数对象（见文件头说明）
 /// @return 实际写入磁盘的文件数量
@@ -336,14 +359,9 @@ export function generateApiMain(params: Object): Number {
     }
     printLog("[" + tableName + "] columns count: " + columns.length);
 
-    // ── 6.1b split 布局分支：data/ + modules/admin/ 新规范 ─────────
-    //      表配置 layout="split" 才走新布局；未配置的表跳过（避免误覆盖
-    //      尚未迁移的模块）。生成逻辑见 generateSplitTable。
-    let layoutCfg: String = json["layout"];
-    if (layoutCfg != "split") {
-      printLog("表 '" + tableName + "' 未配置 layout=split，跳过生成（待迁移）");
-      continue;
-    }
+    // ── 6.1b split 布局：data/ + modules/admin/ 新规范 ─────────────
+    //      开发期无旧格式包袱，layout 门禁已移除：所有表统一走新布局，
+    //      生成逻辑见 generateSplitTable。
     let splitModuleDir: String = json["moduleDir"];
     let splitPkgName: String = json["pkgName"];
     let splitCount: Number = generateSplitTable(json, goBasePath, moduleName,
@@ -379,11 +397,13 @@ export function generateApiMain(params: Object): Number {
       if (iEntityTpl != "") {
         let iResult = renderTpl(iEntityTpl, iTplData);
         if (iResult) {
-          let iOk: Bool = writeFile(iOutPath, iResult);
-          if (iOk) {
-            generatedFileCount = generatedFileCount + 1;
+          if (canOverwriteGenerated(iOutPath)) {
+            let iOk: Bool = writeFile(iOutPath, iResult);
+            if (iOk) {
+              generatedFileCount = generatedFileCount + 1;
+            }
+            printLog("生成文件: " + iOutPath);
           }
-          printLog("生成文件: " + iOutPath);
         }
       }
       continue;
@@ -891,11 +911,13 @@ export function generateApiMain(params: Object): Number {
 
       // 渲染成功 → 写入磁盘（自定义层已存在时模板返回空串，不写）
       if (result) {
-        let writeOk: Bool = writeFile(outPath, result);
-        if (writeOk) {
-          generatedFileCount = generatedFileCount + 1;
+        if (canOverwriteGenerated(outPath)) {
+          let writeOk: Bool = writeFile(outPath, result);
+          if (writeOk) {
+            generatedFileCount = generatedFileCount + 1;
+          }
+          printLog("生成文件: " + outPath);
         }
-        printLog("生成文件: " + outPath);
       }
     }
 
@@ -908,11 +930,13 @@ export function generateApiMain(params: Object): Number {
       });
       let enumResult = renderTpl(enumTplPath, tplData);
       if (enumResult) {
-        let enumOk: Bool = writeFile(enumOutPath, enumResult);
-        if (enumOk) {
-          generatedFileCount = generatedFileCount + 1;
+        if (canOverwriteGenerated(enumOutPath)) {
+          let enumOk: Bool = writeFile(enumOutPath, enumResult);
+          if (enumOk) {
+            generatedFileCount = generatedFileCount + 1;
+          }
+          printLog("生成文件: " + enumOutPath);
         }
-        printLog("生成文件: " + enumOutPath);
       }
     }
 
@@ -1249,8 +1273,8 @@ export function buildEnumEntry(enumName: String, columnName: String, comment: St
 // ═══════════════════════════════════════════════════════════════════════════
 // split 布局（data/ + modules/admin/，生成件以 `_` 结尾）
 // ----------------------------------------------------------------------------
-// 由 .jsontable 的 layout="split" 触发；与旧 modules/<mod>/ 单文件布局并存，
-// 未配置 layout 的表仍走旧流程（避免误覆盖未迁移模块）。
+// 由 .jsontable 触发的模块级新布局（data/ + modules/admin/），
+// 所有 .jsontable 统一走此流程（开发期无旧格式，layout 门禁已移除）。
 // 为保证生成结果与手写黄金文件逐字节一致，结构体/常量/map 的列对齐在这里
 // 用 padTo 预渲染成行数组，模板只做逐行输出（不依赖外部 gofmt）。
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1597,10 +1621,12 @@ export function generateSplitTable(json: Object, goBasePath: String, moduleName:
     tplData["outputPath"] = outPath;
     let result = renderTpl(cfg.tpl, tplData);
     if (result) {
-      if (writeFile(outPath, result)) {
-        count = count + 1;
+      if (canOverwriteGenerated(outPath)) {
+        if (writeFile(outPath, result)) {
+          count = count + 1;
+        }
+        printLog("生成文件: " + outPath);
       }
-      printLog("生成文件: " + outPath);
     }
   }
 
@@ -1613,10 +1639,12 @@ export function generateSplitTable(json: Object, goBasePath: String, moduleName:
     });
     let enumResult = renderTpl(tplDir + "/model/enum.tpl", tplData);
     if (enumResult) {
-      if (writeFile(enumOutPath, enumResult)) {
-        count = count + 1;
+      if (canOverwriteGenerated(enumOutPath)) {
+        if (writeFile(enumOutPath, enumResult)) {
+          count = count + 1;
+        }
+        printLog("生成文件: " + enumOutPath);
       }
-      printLog("生成文件: " + enumOutPath);
     }
   }
 

@@ -104,7 +104,27 @@ protected:
         qBound<qreal>(halfW + 2.0, qreal(arrowRect.center().x()), qreal(width()) - halfW - 2.0);
     const qreal cy = height() / 2.0 + 0.5;
     QPainter painter(this);
-    AuiStyle::drawDownArrow(painter, QPointF(cx, cy), AuiStyle::textColor());
+    // 禁用态箭头用弱色，避免"下拉框已置灰但箭头仍是正常色"的视觉误导
+    AuiStyle::drawDownArrow(painter, QPointF(cx, cy),
+                            isEnabled() ? AuiStyle::textColor()
+                                        : AuiStyle::mutedTextColor());
+
+    // ── 3. 统一重绘文字（启用=正常色，禁用=弱色）──
+    // QSS 的 :disabled 颜色规则在 QComboBox 标签文字的绘制路径上不生效，
+    // 且 QSS 定位与手工重绘的几何有细微差异——若只在禁用时重绘，状态切换
+    // 时文字会跳位。这里两条状态都用同一几何覆盖重绘，位置恒定不抖动。
+    if (!isEditable() && !currentText().isEmpty()) {
+      QStyleOptionComboBox textOpt;
+      initStyleOption(&textOpt);
+      const QRect editRect = style()->subControlRect(
+          QStyle::CC_ComboBox, &textOpt, QStyle::SC_ComboBoxEditField, this);
+      painter.fillRect(editRect, AuiStyle::panelBackground());
+      painter.setPen(isEnabled() ? AuiStyle::textColor()
+                                 : AuiStyle::mutedTextColor());
+      const Qt::Alignment align =
+          QStyle::visualAlignment(layoutDirection(), Qt::AlignLeft | Qt::AlignVCenter);
+      painter.drawText(editRect.adjusted(1, 0, -1, 0), align, currentText());
+    }
   }
 };
 

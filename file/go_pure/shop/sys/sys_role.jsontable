@@ -68,7 +68,6 @@
       },
     ],
     frontend: false,
-    layout: 'split',
     manualUpdateTime: false,
     modelName: 'sys_role',
     moduleDir: 'sys/sys_role',

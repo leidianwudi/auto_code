@@ -54,7 +54,8 @@ const dataList = ref<any[]>([]);
 const total = ref(0);
 const currentPage = ref(1);
 const pageSize = ref(10);
-const selectedRows = ref<any[]>([]);
+${if !noDelete}const selectedRows = ref<any[]>([]);  // 批量删除的勾选行
+${/if}
 const searchParams = ref<Record<string, any>>({});
 
 // 搜索栏表单（范围查询生成 _min/_max 两个参数，与后端 InSel 字段名一致）
@@ -93,10 +94,11 @@ const onReset = () => {
   onSearch();
 };
 ${/if}
-// 表格勾选（批量删除用）
+${if !noDelete}// 表格勾选（批量删除用；关闭删除按钮时不需要勾选）
 const onSelectionChange = (rows: any[]) => {
   selectedRows.value = rows;
 };
+${/if}
 
 ${if hasBoolApiColumns}
 // 布尔开关引用的静态数据源文字：静态源函数同步返回，setup 直接读取，
@@ -315,8 +317,11 @@ ${/if}
 
 <template>
   <div class="main">
-${if hasQueryFields}    <!-- 搜索栏 -->
-    <el-form :inline="true" :model="searchForm" class="bg-white rounded p-3 mb-3">
+    <!-- 查询条件 + 工具栏 + 表格 + 分页合并为同一张卡片：
+         查询区与列表区之间不留卡片间隙（原先两个 bg-white 之间露出页面灰底） -->
+    <div class="bg-white rounded" style="padding: var(--app-card-gap, 12px)">
+${if hasQueryFields}      <!-- 搜索栏（同卡片内：无背景/圆角/内边距，靠 el-form-item 自身间距分隔） -->
+      <el-form :inline="true" :model="searchForm">
 ${each q in queryFields}${if q.isRange}
       <el-form-item label="${q.displayName}开始">
 ${if q.isDate}        <el-date-picker v-model="searchForm.${q.dataName}_min" type="${q.dateFormat}"${if q.isDatetimeFormat} value-format="YYYY-MM-DD HH:mm:ss"${else} value-format="YYYY-MM-DD"${/if} placeholder="请选择" style="width: 180px" />
@@ -361,16 +366,16 @@ ${/if}${/each}
       </el-form-item>
     </el-form>
 ${/if}
-    <!-- 工具栏 + 表格 + 分页（卡片内边距走全局变量 --app-card-gap，与其它页面统一） -->
-    <div class="bg-white rounded" style="padding: var(--app-card-gap, 12px)">
+    <!-- 工具栏 + 表格 + 分页（同属上方卡片，内边距由卡片统一提供） -->
       <div class="mb-3">
-        <el-button type="primary" v-perms="['${permPrefix}:edit']" @click="addAction">新增</el-button>
-${if !noDelete}        <el-button type="danger" v-perms="['${permPrefix}:delete']" :disabled="selectedRows.length === 0" @click="delData()">删除</el-button>
+${if !noAdd}        <el-button type="primary" v-perms="['${permPrefix}:add']" @click="addAction">新增</el-button>
+${/if}${if !noDelete}        <el-button type="danger" v-perms="['${permPrefix}:delete']" :disabled="selectedRows.length === 0" @click="delData()">删除</el-button>
 ${/if}${each btn in toolbarButtons}        <el-button${if btn.hasType} type="${btn.type}"${/if} @click="onCustomAction(null, '${btn.key}')">${btn.label}</el-button>
 ${/each}      </div>
 
-      <el-table v-loading="loading" :data="dataList" @selection-change="onSelectionChange"${if hasTableDefaultSort} :default-sort="{ prop: '${defaultSortField}', order: '${defaultSortOrder}' }"${/if}>
-        <el-table-column type="selection" width="55" />
+      <el-table v-loading="loading" :data="dataList"${if !noDelete} @selection-change="onSelectionChange"${/if}${if hasTableDefaultSort} :default-sort="{ prop: '${defaultSortField}', order: '${defaultSortOrder}' }"${/if}>
+${if !noDelete}        <el-table-column type="selection" width="55" />
+${/if}
 ${each col in columns}${if col.queryVisible}${if col.isBooleanSwitch}
         <el-table-column label="${col.label}"${if col.hasColumnWidth} width="${col.columnWidth}"${/if}${if col.hasColumnFixed} fixed="${col.columnFixed}"${/if}>
           <template #default="{ row }">
@@ -455,7 +460,7 @@ ${/if}
         </el-table-column>
 ${/if}
 ${/if}${/each}
-        <el-table-column label="操作" width="${actionColumnWidth}" align="center" fixed="right" class-name="action-column">
+${if hasActionColumn}        <el-table-column label="操作" width="${actionColumnWidth}" align="center" fixed="right" class-name="action-column">
           <template #default="{ row }">
 ${if !noDetail}            <el-tooltip content="详情" placement="top">
               <el-button link type="primary" size="small" @click="rowAction(row, 'detail')">
@@ -476,6 +481,7 @@ ${/if}${each btn in rowButtons}            <el-button link size="small"${if btn.
 ${/each}
           </template>
         </el-table-column>
+${/if}
       </el-table>
 
       <div class="mt-3 flex justify-end">

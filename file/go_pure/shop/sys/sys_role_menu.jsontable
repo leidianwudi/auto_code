@@ -49,7 +49,6 @@
         unique: true,
       },
     ],
-    layout: 'split',
     manualUpdateTime: false,
     modelName: 'sys_role_menu',
     moduleDir: 'sys/sys_role_menu',

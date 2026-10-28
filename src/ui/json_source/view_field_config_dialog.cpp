@@ -167,9 +167,7 @@ void ViewFieldConfigDialog::setupUI() {
   connect(m_widgetCombo, &QComboBox::activated, this,
           [this](int) { updateEditFormRows(); });
 
-  m_editLabelEdit = new QLineEdit(this);
-  m_editLabelEdit->setPlaceholderText(QStringLiteral("空 = 用主表格标题"));
-  form->addRow(QStringLiteral("编辑标题覆盖:"), m_editLabelEdit);
+  // 注：编辑表单标题不在此配置——界面显示标题统一取「字段呈现」的标题列
 
   // ── 编辑表单精细参数（键名与 .jsonvue 一致；空/0=未配置，合成页由模板按类型缺省）──
   m_placeholderEdit = new QLineEdit(this);
@@ -306,7 +304,6 @@ void ViewFieldConfigDialog::setSearchRoot(const QString &dir) {
 void ViewFieldConfigDialog::setCurrent(const JsonTableSelCol &sc, const JsonTableEditCol &ec) {
   comboSelectData(m_widthCombo, sc.width > 0 ? QVariant(sc.width) : QVariant(QString()));
   comboSelectData(m_widgetCombo, ec.widget);
-  m_editLabelEdit->setText(ec.label);
   comboSelectData(m_displayTypeCombo, sc.displayType);
   m_listThumbW->setValue(sc.listThumbWidth);
   m_listThumbH->setValue(sc.listThumbHeight);
@@ -439,9 +436,9 @@ void ViewFieldConfigDialog::updateEditFormRows() {
 
 void ViewFieldConfigDialog::setEditRowsVisible(bool on) {
   if (m_editSep) m_editSep->setVisible(on);
-  QWidget *fields[] = {m_widgetCombo,  m_editLabelEdit,     m_placeholderEdit,
-                       m_maxlengthSpin, m_textareaRowsSpin, m_minSpin,
-                       m_precisionSpin, m_dateFormatCombo,  m_formSpanSpin,
+  QWidget *fields[] = {m_widgetCombo,     m_placeholderEdit,
+                       m_maxlengthSpin,   m_textareaRowsSpin,  m_minSpin,
+                       m_precisionSpin,   m_dateFormatCombo,   m_formSpanSpin,
                        m_formDefaultEdit, m_uploadSourceCombo, m_editThumbW};
   for (QWidget *f : fields) {
     if (f) setFormRowVisible(f, on);
@@ -502,7 +499,6 @@ void ViewFieldConfigDialog::fillListResult(JsonTableSelCol *sc) const {
 void ViewFieldConfigDialog::fillEditResult(JsonTableEditCol *ec) const {
   if (!ec) return;
   if (m_widgetCombo) ec->widget = m_widgetCombo->currentData().toString();
-  if (m_editLabelEdit) ec->label = m_editLabelEdit->text().trimmed();
   if (m_placeholderEdit) ec->placeholder = m_placeholderEdit->text().trimmed();
   ec->maxlength = m_maxlengthSpin ? m_maxlengthSpin->value() : 0;
   ec->textareaRows = m_textareaRowsSpin ? m_textareaRowsSpin->value() : 0;

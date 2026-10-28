@@ -120,7 +120,6 @@ private:
 
   // ── 编辑表单 ──
   QComboBox *m_widgetCombo = nullptr;
-  QLineEdit *m_editLabelEdit = nullptr;
   QLineEdit *m_placeholderEdit = nullptr;   ///< 占位提示（input/textarea/image）
   QSpinBox *m_maxlengthSpin = nullptr;      ///< 最大长度（input，0=不限）
   QSpinBox *m_textareaRowsSpin = nullptr;   ///< 行数（textarea，0=缺省 4）

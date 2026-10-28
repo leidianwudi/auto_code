@@ -58,7 +58,29 @@ class TemplateConfig {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 一、.jsontable → jsonvue 形状合成（plan 3.3 双轨制·标准页）
+// 一、生成覆盖守卫（防手写文件被误覆盖）
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// @brief 生成覆盖守卫：目标文件已存在但缺少 AutoCode 生成标记时跳过覆盖
+/// @param path 输出文件路径
+/// @return true=可写入（文件不存在，或内容含生成标记属于本生成器产物）；
+///         false=跳过写入（已输出红字提示，疑似用户手写文件）
+/// 检测标记取两条生成链模板头注释的公共子串：
+///   vue 链"//此文件为AutoCode编译器生成，请勿手动修改"、
+///   Go 链"// 此代码为AutoCode编译器生成，请勿手动修改"
+export function canOverwriteGenerated(path: String): Bool {
+  if (!fileExists(path)) {
+    return true;
+  }
+  let old: String = readFile(path);
+  if (old.indexOf("AutoCode编译器生成") >= 0) {
+    return true;
+  }
+  printError("跳过覆盖: " + path + "（已存在但缺少 AutoCode 生成标记，疑似手写文件；确认要覆盖请先删除该文件再重新生成）");
+  return false;
+}
+
+// 二、.jsontable → jsonvue 形状合成（plan 3.3 双轨制·标准页）
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// @brief MySQL 类型 → 前端日期控件格式推导
@@ -462,6 +484,16 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
   if (table["columns"] != null) {
     rawCols = table["columns"];
   }
+  // 列级标题（columns[].title）：字段呈现标题列的持久化落点，列表/查询/编辑
+  // 三视图共用。回退链：selCols.label > title > 列注释 > ref（此处只补缺不覆盖）
+  let rcLenT: Number = rawCols.length;
+  for (let ti = 0; ti < rcLenT; ti = ti + 1) {
+    let rcT: Object = rawCols[ti];
+    let colTitle: String = rcT["title"];
+    if (colTitle != null && colTitle != "" && selLabelOf[rcT["name"]] == null) {
+      selLabelOf[rcT["name"]] = colTitle;
+    }
+  }
   let rcLen = rawCols.length;
   for (let i = 0; i < rcLen; i = i + 1) {
     let rc: Object = rawCols[i];
@@ -508,9 +540,14 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
       }
     }
     let col: Object = buildJsonvueColumn(rc, enumDef, editCol);
-    // 编辑标题覆盖（editCols.label > 列注释）+ 联表外键远程取值域注入
-    if (ec != null && ec["label"] != null && ec["label"] != "") {
-      col["editName"] = ec["label"];
+    // 列级标题：唯一来源 = 「字段呈现」的标题列（空=回退列注释）。
+    // queryName 与 editName 必须同时赋值：加工器 processColumns 里
+    // editName 由 queryName 派生，只改 editName 会被覆盖回列注释。
+    // 列表选中时下方 selCols 收敛会再用 selCols.label（同样来自标题列）覆盖，
+    // 未选中时（仅编辑/查询用）则以此处 title 为准。
+    if (rc["title"] != null && rc["title"] != "") {
+      col["queryName"] = rc["title"];
+      col["editName"] = rc["title"];
     }
     // 列级取值域（方案 B 中心化：物理列声明一次，列渲染/编辑/查询三处共享；
     // 联表虚拟列无列定义不涉及。声明优先于外键自动推导，见下方 guard）
@@ -724,9 +761,12 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
       queryApi: "get" + pascal + "List",
       updateApi: "upd" + pascal + "List",
       deleteApi: "del" + pascal + "List",
-      noDelete: false,
-      noEdit: false,
-      noDetail: false,
+      // 基础按钮开关：jsontable 正向 gen*（缺省 true；缺失键=null 时按生成处理）
+      // 取反为加工器约定的 no* 否定键
+      noAdd: (table["genAdd"] == false),
+      noDelete: (table["genDelete"] == false),
+      noEdit: (table["genEdit"] == false),
+      noDetail: (table["genDetail"] == false),
       description: tableComment
     },
     columns: cols,
@@ -959,7 +999,7 @@ export function generateAdminMain(params: Object): Void {
   let templates: TemplateConfig[] = params["templates"];
   if (templates == null) {
     templates = [
-      { tpl: "../template/index.tpl", out: "{basePath}/src/views/{pagePath}/{pageName}.vue" },
+      { tpl: "../template/index.tpl", out: "{basePath}/src/views/{pagePath}/index.vue" },
       { tpl: "../template/write.tpl", out: "{basePath}/src/views/{pagePath}/components/write.vue" },
       { tpl: "../template/api.tpl", out: "{basePath}/src/api/{apiModule}/{pageName}.ts" }
     ];
@@ -1194,11 +1234,13 @@ export function generateAdminMain(params: Object): Void {
           });
           let geResult: String = renderTpl(sourceTemplates[gi].tpl, srcData);
           if (geResult) {
-            let geWriteOk: Bool = writeFile(geOutPath, geResult);
-            if (geWriteOk == true) {
-              generatedFileCount = generatedFileCount + 1;
+            if (canOverwriteGenerated(geOutPath)) {
+              let geWriteOk: Bool = writeFile(geOutPath, geResult);
+              if (geWriteOk == true) {
+                generatedFileCount = generatedFileCount + 1;
+              }
+              printLog("生成文件: " + geOutPath);
             }
-            printLog("生成文件: " + geOutPath);
           }
         }
       } else {
@@ -1238,11 +1280,13 @@ export function generateAdminMain(params: Object): Void {
         });
         let srcResult: String = renderTpl(sourceTemplates[sj].tpl, srcData);
         if (srcResult) {
-          let srcWriteOk: Bool = writeFile(srcOutPath, srcResult);
-          if (srcWriteOk == true) {
-            generatedFileCount = generatedFileCount + 1;
+          if (canOverwriteGenerated(srcOutPath)) {
+            let srcWriteOk: Bool = writeFile(srcOutPath, srcResult);
+            if (srcWriteOk == true) {
+              generatedFileCount = generatedFileCount + 1;
+            }
+            printLog("生成文件: " + srcOutPath);
           }
-          printLog("生成文件: " + srcOutPath);
         }
       }
       continue;
@@ -1258,11 +1302,13 @@ export function generateAdminMain(params: Object): Void {
         });
         let upResult: String = renderTpl(uploadTemplates[uj].tpl, upData);
         if (upResult) {
-          let upWriteOk: Bool = writeFile(upOutPath, upResult);
-          if (upWriteOk == true) {
-            generatedFileCount = generatedFileCount + 1;
+          if (canOverwriteGenerated(upOutPath)) {
+            let upWriteOk: Bool = writeFile(upOutPath, upResult);
+            if (upWriteOk == true) {
+              generatedFileCount = generatedFileCount + 1;
+            }
+            printLog("生成文件: " + upOutPath);
           }
-          printLog("生成文件: " + upOutPath);
         }
       }
       continue;
@@ -1306,12 +1352,6 @@ export function generateAdminMain(params: Object): Void {
     // 后端链照常生成 API，这里只裁剪前端产物
     if (table["frontend"] == false) {
       printLog("表 '" + table["tableName"] + "' frontend=false（纯 API 模块），跳过页面生成");
-      continue;
-    }
-    // split 布局门禁（与 crud_gin 一致）：只有显式 layout="split" 的表才生成页面，
-    // 避免后端尚未迁移时单独重出前端造成契约错位
-    if (table["layout"] != "split") {
-      printLog("表 '" + table["tableName"] + "' 未配置 layout=split，跳过页面生成（待迁移）");
       continue;
     }
     let vuePath: String = resolveJsonvuePath(modelName, basePath, checkedVueFiles);
@@ -1402,11 +1442,13 @@ export function generateAdminMain(params: Object): Void {
       // 核心：调用模板引擎，把 tpl 中的 ${变量名} 替换为实际值
       let result: String = renderTpl(templates[ct].tpl, tplData);
       if (result) {
-        let writeOk: Bool = writeFile(outPath, result);
-        if (writeOk == true) {
-          generatedFileCount = generatedFileCount + 1;
+        if (canOverwriteGenerated(outPath)) {
+          let writeOk: Bool = writeFile(outPath, result);
+          if (writeOk == true) {
+            generatedFileCount = generatedFileCount + 1;
+          }
+          printLog("生成文件: " + outPath);
         }
-        printLog("生成文件: " + outPath);
       }
     }
   }

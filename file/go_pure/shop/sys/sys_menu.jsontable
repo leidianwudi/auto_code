@@ -115,7 +115,6 @@
       },
     ],
     frontend: false,
-    layout: 'split',
     manualUpdateTime: false,
     modelName: 'sys_menu',
     moduleDir: 'sys/sys_menu',

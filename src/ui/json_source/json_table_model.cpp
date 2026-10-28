@@ -32,6 +32,10 @@ QJsonObject JsonTableColumn::toJsonObject() const {
     obj[QString::fromLatin1(JsonTableKey::kDefault)] = defaultValue;
   }
   obj[QString::fromLatin1(JsonTableKey::kComment)] = comment;
+  // title 空串表示回退列注释，不落键
+  if (!title.isEmpty()) {
+    obj[QString::fromLatin1(JsonTableKey::kTitle)] = title;
+  }
   // 取值域（空串=未声明不落键）
   if (!domainType.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kDomainType)] = domainType;
   if (!domainSourceFile.isEmpty())
@@ -59,6 +63,7 @@ JsonTableColumn JsonTableColumn::fromJsonObject(const QJsonObject &obj) {
     c.defaultValue = QString::number(dv.toDouble());
   }
   c.comment = obj.value(QString::fromLatin1(JsonTableKey::kComment)).toString();
+  c.title = obj.value(QString::fromLatin1(JsonTableKey::kTitle)).toString();
   c.domainType = obj.value(QString::fromLatin1(JsonTableKey::kDomainType)).toString();
   c.domainSourceFile = obj.value(QString::fromLatin1(JsonTableKey::kDomainSourceFile)).toString();
   c.domainSourceId = obj.value(QString::fromLatin1(JsonTableKey::kDomainSourceId)).toString();
@@ -70,7 +75,8 @@ bool JsonTableColumn::operator==(const JsonTableColumn &other) const {
   return name == other.name && mysqlType == other.mysqlType && isUnsigned == other.isUnsigned &&
          nullable == other.nullable && isPrimary == other.isPrimary &&
          isAutoInc == other.isAutoInc && defaultValue == other.defaultValue &&
-         comment == other.comment && domainType == other.domainType &&
+         comment == other.comment && title == other.title &&
+         domainType == other.domainType &&
          domainSourceFile == other.domainSourceFile && domainSourceId == other.domainSourceId &&
          domainUrl == other.domainUrl;
 }
@@ -366,6 +372,11 @@ QJsonObject JsonTableTable::toJsonObject() const {
     obj[QString::fromLatin1(JsonTableKey::kAppAuth)] =
         appAuth.isEmpty() ? QStringLiteral("user") : appAuth;
   }
+  // 页面基础按钮开关：缺省 true 不落键（仅 false 落键 = 不生成该按钮）
+  if (!genAdd) obj[QString::fromLatin1(JsonTableKey::kGenAdd)] = false;
+  if (!genEdit) obj[QString::fromLatin1(JsonTableKey::kGenEdit)] = false;
+  if (!genDelete) obj[QString::fromLatin1(JsonTableKey::kGenDelete)] = false;
+  if (!genDetail) obj[QString::fromLatin1(JsonTableKey::kGenDetail)] = false;
 
   QJsonArray colArr;
   for (const auto &c : columns) colArr.append(c.toJsonObject());
@@ -456,6 +467,10 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
   t.extra.remove(QString::fromLatin1(JsonTableKey::kFrontend));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kAppQuery));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kAppAuth));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kGenAdd));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kGenEdit));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kGenDelete));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kGenDetail));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kButtons));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kColumns));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kIndexes));
@@ -481,6 +496,11 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
   t.appQuery = obj.value(QString::fromLatin1(JsonTableKey::kAppQuery)).toBool(false);
   t.appAuth = obj.value(QString::fromLatin1(JsonTableKey::kAppAuth)).toString();
   if (t.appAuth.isEmpty()) t.appAuth = QStringLiteral("user");
+  // 页面基础按钮开关缺省 true（仅显式 false 不生成）
+  t.genAdd = obj.value(QString::fromLatin1(JsonTableKey::kGenAdd)).toBool(true);
+  t.genEdit = obj.value(QString::fromLatin1(JsonTableKey::kGenEdit)).toBool(true);
+  t.genDelete = obj.value(QString::fromLatin1(JsonTableKey::kGenDelete)).toBool(true);
+  t.genDetail = obj.value(QString::fromLatin1(JsonTableKey::kGenDetail)).toBool(true);
 
   const QJsonArray colArr = obj.value(QString::fromLatin1(JsonTableKey::kColumns)).toArray();
   for (const auto &v : colArr) {
@@ -578,6 +598,8 @@ bool JsonTableTable::operator==(const JsonTableTable &other) const {
   return tableName == other.tableName && modelName == other.modelName &&
          tableComment == other.tableComment && manualUpdateTime == other.manualUpdateTime &&
          frontend == other.frontend && appQuery == other.appQuery && appAuth == other.appAuth &&
+         genAdd == other.genAdd && genEdit == other.genEdit && genDelete == other.genDelete &&
+         genDetail == other.genDetail &&
          columns == other.columns && indexes == other.indexes &&
          joinTable == other.joinTable && selCols == other.selCols &&
          selColsEq == other.selColsEq && selColsGap == other.selColsGap &&

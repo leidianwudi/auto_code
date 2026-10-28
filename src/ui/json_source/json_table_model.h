@@ -61,6 +61,11 @@ inline constexpr const char *kAppQuery = "appQuery";  ///< 生成 C 端只读查
 inline constexpr const char *kAppAuth =
     "appAuth";  ///< C 端鉴权：public=公开 / user=需登录（缺省 user）
 inline constexpr const char *kButtons = "buttons";  ///< 操作按钮（ButtonConfig[]，键名与 .jsonvue 一致）
+// 页面基础按钮生成开关（缺省 true；仅 false 落键，合成 meta 时取反为 noAdd/noEdit/...）
+inline constexpr const char *kGenAdd = "genAdd";      ///< 生成新增按钮（工具栏）
+inline constexpr const char *kGenEdit = "genEdit";    ///< 生成行内编辑按钮
+inline constexpr const char *kGenDelete = "genDelete";  ///< 生成删除按钮（行内删除 + 工具栏批量删除）
+inline constexpr const char *kGenDetail = "genDetail";  ///< 生成行内详情按钮
 inline constexpr const char *kExcludeColumns =
     "excludeColumns";  ///< 从数据库刷新时忽略的列（设计器使用，生成期不消费；存 table.extra）
 // tables 键
@@ -139,6 +144,7 @@ inline constexpr const char *kDomainSourceFile =
     "domainSourceFile";  ///< enum/static 引用的数据源文件（全局枚举固定基名 global_enum.jsonsource）
 inline constexpr const char *kDomainSourceId = "domainSourceId";  ///< enum/static 引用的数据源 id
 inline constexpr const char *kDomainUrl = "domainUrl";  ///< remote 手动数据源 URL
+inline constexpr const char *kTitle = "title";  ///< 列级显示标题（字段呈现标题列；空=回退列注释）
 inline constexpr const char *kEnums = "enums";                  ///< 表内枚举
 inline constexpr const char *kGlobalEnumCols = "globalEnumCols";  ///< 引用全局枚举的列名
 inline constexpr const char *kI18n = "i18n";                    ///< 多语言翻译表配置
@@ -162,9 +168,12 @@ inline constexpr const char *kLangFrom = "langFrom";      ///< 语言码来源 b
  * @struct JsonTableColumn
  * @brief .jsontable 中的一列：纯 MySQL 元数据（建表与生成同源）
  *
- * 页面呈现（标题/显隐/控件）全部由表级三视图接管：selCols（列表）/
+ * 页面呈现（显隐/控件）由表级三视图接管：selCols（列表）/
  * selColsEq/Like/Gap（查询）/ editCols（编辑）；历史 list/search/form/
  * required 列角色均已退役。
+ * 显示标题为列级属性（title，字段呈现标题列编辑落此），列表/查询/编辑
+ * 三视图共用；视图内 label 键仍可单独覆盖（回退链：视图 label > title >
+ * 列注释 > ref）。
  */
 struct JsonTableColumn {
   QString name;                                  ///< 列名
@@ -175,6 +184,7 @@ struct JsonTableColumn {
   bool isAutoInc = false;   ///< 自增
   QString defaultValue;     ///< 默认值（JSON 键 "default"；空串=无默认值）
   QString comment;          ///< 列注释
+  QString title;            ///< 显示标题（字段呈现标题列；空=回退列注释，三视图共用）
 
   // ── 字段取值域（jsonvue 方案 B 列级中心化；空=未声明）──
   // 单处存储三视图共用；生成侧列级域优先，enums/globalEnumCols 旧机制回退
@@ -370,6 +380,11 @@ struct JsonTableTable {
   bool frontend = true;            ///< 生成前端页面（缺省 true；仅 false 落键 = 纯 API 模块）
   bool appQuery = false;           ///< 生成 C 端只读查询模块（缺省 false；只出 selectByIn/selectById）
   QString appAuth = QStringLiteral("user");  ///< C 端鉴权：public=公开 / user=需登录
+  // 页面基础按钮生成开关（缺省 true；生成端合成 meta 时取反为 noAdd/noEdit/noDelete/noDetail）
+  bool genAdd = true;      ///< 生成新增按钮（工具栏）
+  bool genEdit = true;     ///< 生成行内编辑按钮
+  bool genDelete = true;   ///< 生成删除按钮（行内删除 + 工具栏批量删除同一开关）
+  bool genDetail = true;   ///< 生成行内详情按钮
   QVector<JsonTableColumn> columns;  ///< 列定义（顺序即建表顺序；含列级取值域）
   QVector<JsonTableIndex> indexes;   ///< 索引定义
   // ── 表级进阶键（v2 结构化，此前走 extra）──
