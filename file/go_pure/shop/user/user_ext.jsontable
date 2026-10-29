@@ -66,6 +66,7 @@
         mysqlType: 'int',
         name: 'pwd_error_count',
         nullable: false,
+        title: '密码错误次数',
         unsigned: false,
       },
       {
@@ -76,6 +77,7 @@
         mysqlType: 'int',
         name: 'is_freeze',
         nullable: false,
+        title: '冻结',
         unsigned: false,
       },
       {
@@ -105,6 +107,7 @@
         mysqlType: 'int',
         name: 'is_disable',
         nullable: false,
+        title: '是否禁用',
         unsigned: false,
       },
       {
@@ -204,6 +207,7 @@
         mysqlType: 'varchar(256)',
         name: 'register_city',
         nullable: false,
+        title: 'IP所在地',
         unsigned: false,
       },
       {
@@ -231,6 +235,7 @@
         mysqlType: 'varchar(64)',
         name: 'last_city',
         nullable: false,
+        title: '最后IP所在地',
         unsigned: false,
       },
       {
@@ -249,6 +254,7 @@
         mysqlType: 'varchar(64)',
         name: 'last_device_type',
         nullable: false,
+        title: '登陆设备类型',
         unsigned: false,
       },
       {
@@ -271,23 +277,15 @@
         ref: 'account',
       },
       {
-        label: '微信登陆id',
-        ref: 'wechat_id',
-      },
-      {
         label: '密码',
         ref: 'pwd',
       },
       {
-        label: '微信登陆token',
-        ref: 'wechat_token',
-      },
-      {
-        label: '密码错误次数,超过5次自动冻结',
+        label: '密码错误次数',
         ref: 'pwd_error_count',
       },
       {
-        label: '是否冻结;0:正常;1:已冻结',
+        label: '冻结',
         ref: 'is_freeze',
       },
       {
@@ -299,7 +297,7 @@
         ref: 'freeze_count',
       },
       {
-        label: '是否禁用;0:正常;1:禁用',
+        label: '是否禁用',
         ref: 'is_disable',
       },
       {
@@ -343,7 +341,7 @@
         ref: 'register_ip',
       },
       {
-        label: '注册IP所在地',
+        label: 'IP所在地',
         ref: 'register_city',
       },
       {
@@ -355,7 +353,7 @@
         ref: 'last_ip',
       },
       {
-        label: '最后登陆IP所在地',
+        label: '最后IP所在地',
         ref: 'last_city',
       },
       {
@@ -363,7 +361,7 @@
         ref: 'last_time',
       },
       {
-        label: '最后登陆设备类型;pc,android;Ios',
+        label: '登陆设备类型',
         ref: 'last_device_type',
       },
       {
@@ -399,23 +397,11 @@
         ref: 'account',
       },
       {
-        label: '微信登陆id',
-        ref: 'wechat_id',
-      },
-      {
         label: '密码',
         ref: 'pwd',
       },
       {
-        label: '微信登陆token',
-        ref: 'wechat_token',
-      },
-      {
-        label: '密码错误次数,超过5次自动冻结',
-        ref: 'pwd_error_count',
-      },
-      {
-        label: '是否冻结;0:正常;1:已冻结',
+        label: '冻结',
         ref: 'is_freeze',
       },
       {
@@ -427,7 +413,7 @@
         ref: 'freeze_count',
       },
       {
-        label: '是否禁用;0:正常;1:禁用',
+        label: '是否禁用',
         ref: 'is_disable',
       },
       {
@@ -473,7 +459,7 @@
         ref: 'account',
       },
     ],
-    tableComment: '用户扩展表',
+    tableComment: '用户扩展',
     tableName: 'user_ext',
   },
 }

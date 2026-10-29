@@ -319,8 +319,10 @@ ${/if}
 <template>
   <div class="main">
     <!-- 查询条件 + 工具栏 + 表格 + 分页合并为同一张卡片：
-         查询区与列表区之间不留卡片间隙（原先两个 bg-white 之间露出页面灰底） -->
-    <div class="bg-white rounded" style="padding: var(--app-card-gap, 12px)">
+         查询区与列表区之间不留卡片间隙（原先两个卡片之间露出页面灰底）。
+         背景走 element-plus 主题变量（同 el-card），深色模式自动跟随；
+         禁用 tailwind 的 bg-white（硬编码白色，暗色下不变） -->
+    <div style="background: var(--el-bg-color); border-radius: var(--el-border-radius-base, 4px); padding: var(--app-card-gap, 12px)">
 ${if hasQueryFields}      <!-- 搜索栏（同卡片内：无背景/圆角/内边距，靠 el-form-item 自身间距分隔） -->
       <el-form :inline="true" :model="searchForm">
 ${each q in queryFields}${if q.isRange}
