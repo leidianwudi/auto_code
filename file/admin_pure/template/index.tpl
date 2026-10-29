@@ -66,6 +66,14 @@ ${each q in queryFields}${if q.isRange}  ${q.dataName}_min: "",
 ${else}  ${q.dataName}: "",
 ${/if}${/each}});
 ${/if}
+// 查询参数清洗：空串/空值不传给服务端（后端按字段精确匹配，传空串会查出 0 条；
+// 保留有意义的 0/false 等值）
+const cleanParams = (params: Record<string, any>) =>
+  Object.fromEntries(
+    Object.entries(params).filter(
+      ([, v]) => v !== "" && v !== null && v !== undefined
+    )
+  );
 // 加载列表数据（POST ${selectUrl}，page/pageSize + 查询参数走 data）
 const loadData = async () => {
   loading.value = true;
@@ -73,7 +81,7 @@ const loadData = async () => {
     const res: any = await ${queryApi}({
       page: currentPage.value,
       pageSize: pageSize.value,
-      ...unref(searchParams)
+      ...cleanParams(unref(searchParams))
     });
     dataList.value = res?.data?.list || [];
     total.value = res?.data?.total || 0;
