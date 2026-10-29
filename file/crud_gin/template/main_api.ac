@@ -31,7 +31,7 @@
 ///   + {tableName}_custom.go 自定义层（仅首次生成，fileExists 守卫）
 ///   moduleDir 缺省 <tableName>/<tableName>，系统表可在 .jsontable 配
 ///   moduleDir（如 sys/menu）与手写架子目录对齐；包名 = 目录末段。
-///   路由集中注册：生成器独占 {goBasePath}/router/routes_gen.go，每次生成
+///   路由集中注册：生成器独占 {goBasePath}/router/routes_.go，每次生成
 ///   按 modules/{admin,app} 树扫描 *_router_.go 生成覆盖件并整体重写（幂等，
 ///   见 regenRouteRegistration）；手写模块与 RegisterCustomRoutes 钩子仍在
 ///   router/router.go 手动注册。旧版 modules/<moduleDir> 自包含 router.go
@@ -959,7 +959,7 @@ export function generateApiMain(params: Object): Number {
   }  // end for (json in genTables)
 
   // ── 7. 生成模块路由集中注册 ────────────────────────────────────────
-  //      生成器独占 {goBasePath}/router/routes_gen.go：按 modules/{admin,app}
+  //      生成器独占 {goBasePath}/router/routes_.go：按 modules/{admin,app}
   //      树扫描 *_router_.go 生成覆盖件并整体重写（幂等），生成模块无需再
   //      手动到 router.go 注册（详见 regenRouteRegistration）
   let regenCount: Number = regenRouteRegistration(goBasePath);
@@ -981,10 +981,11 @@ export function generateApiMain(params: Object): Number {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 生成模块路由集中注册（routes_gen.go 独占重写）
+// 生成模块路由集中注册（routes_.go 独占重写；命名遵循 *_ 尾下划线约定，
+// 与模块内 *_handler_.go / *_service_.go / *_router_.go 等生成覆盖件一致）
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// @brief 重写 {goBasePath}/router/routes_gen.go（生成器独占文件，整体重写，幂等）
+/// @brief 重写 {goBasePath}/router/routes_.go（生成器独占文件，整体重写，幂等）
 /// @param goBasePath Go 项目根目录
 /// @return 注册的生成模块数量；写入失败/找不到 go.mod 返回 -1
 /// 扫描 modules/admin 与 modules/app 下全部 *_router_.go 生成覆盖件：
@@ -1004,7 +1005,7 @@ export function regenRouteRegistration(goBasePath: String): Number {
   // Go module 名（go.mod 的 module 行）作为 import 前缀，如 shop_api
   let modName: String = readGoModuleName(root);
   if (modName == "") {
-    printError("routes_gen.go 跳过：go.mod 不存在或缺 module 行: " + root + "/go.mod");
+    printError("routes_.go 跳过：go.mod 不存在或缺 module 行: " + root + "/go.mod");
     return -1;
   }
 
@@ -1074,7 +1075,7 @@ export function regenRouteRegistration(goBasePath: String): Number {
   }
   content = content + "}" + nl;
 
-  let outPath: String = root + "/router/routes_gen.go";
+  let outPath: String = root + "/router/routes_.go";
   if (!writeFile(outPath, content)) {
     return -1;
   }
