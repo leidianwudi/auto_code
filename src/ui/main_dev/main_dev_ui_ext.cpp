@@ -193,6 +193,13 @@ void DraggableTabBar::dropEvent(QDropEvent *event) {
   int toIndex = tabAt(event->position().toPoint());
   if (toIndex < 0) toIndex = count();  // 追加到末尾
 
+  // 松手在 tab 头上：dragMoveEvent 曾显示整面板 Full 高亮（合并/移动提示），
+  // 此分支必须同步隐藏，否则目标面板的蓝色覆盖层永久残留
+  m_splitSide = SplitSide::None;
+  if (auto *panel = qobject_cast<DimmableTabWidget *>(parentWidget())) {
+    panel->hideSplitOverlay();
+  }
+
   emit tabDropped(s_sourceIndex, s_sourceBar, toIndex);
   s_sourceBar = nullptr;
   s_sourceIndex = -1;
