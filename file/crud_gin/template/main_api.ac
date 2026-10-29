@@ -373,16 +373,16 @@ export function generateApiMain(params: Object): Number {
     }
     printLog("[" + tableName + "] columns count: " + columns.length);
 
-    // ── 6.1b split 布局：data/ + modules/admin/ 新规范 ─────────────
+    // ── 6.1b 分层布局：data/ + modules/admin/ 新规范 ─────────────
     //      开发期无旧格式包袱，layout 门禁已移除：所有表统一走新布局，
-    //      生成逻辑见 generateSplitTable。
-    let splitModuleDir: String = json["moduleDir"];
-    let splitPkgName: String = json["pkgName"];
-    let splitCount: Number = generateSplitTable(json, goBasePath, moduleName,
-        commonPath, middlewarePath, splitModuleDir, splitPkgName,
+    //      生成逻辑见 generateLayeredTable。
+    let layeredModuleDir: String = json["moduleDir"];
+    let layeredPkgName: String = json["pkgName"];
+    let layeredCount: Number = generateLayeredTable(json, goBasePath, moduleName,
+        commonPath, middlewarePath, layeredModuleDir, layeredPkgName,
         globalEnumDefs, emittedGlobalEnums);
-    generatedFileCount = generatedFileCount + splitCount;
-    regModules.append(splitModuleDir);
+    generatedFileCount = generatedFileCount + layeredCount;
+    regModules.append(layeredModuleDir);
     continue;
 
     // ── 6.2 翻译表分支：被 i18n 引用的表只生成实体文件 ─────────────
@@ -1391,7 +1391,7 @@ export function buildEnumEntry(enumName: String, columnName: String, comment: St
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// split 布局（data/ + modules/admin/，生成件以 `_` 结尾）
+// 分层布局（data/ + modules/admin/，生成件以 `_` 结尾）
 // ----------------------------------------------------------------------------
 // 由 .jsontable 触发的模块级新布局（data/ + modules/admin/），
 // 所有 .jsontable 统一走此流程（开发期无旧格式，layout 门禁已移除）。
@@ -1512,9 +1512,9 @@ export function buildSortEntryLines(cols: String[], dirs: String[]): String[] {
   return lines;
 }
 
-/// @brief 生成一张 split 布局的表（data/ + modules/admin/）
+/// @brief 生成一张分层布局的表（data/ + modules/admin/）
 /// @return 实际写入文件数
-export function generateSplitTable(json: Object, goBasePath: String, moduleName: String,
+export function generateLayeredTable(json: Object, goBasePath: String, moduleName: String,
     commonPath: String, middlewarePath: String, moduleDir: String, pkgName: String,
     globalEnumDefs: Object, emitted: Object): Number {
   let tplDir: String = "../../crud_gin/template";
@@ -1770,6 +1770,6 @@ export function generateSplitTable(json: Object, goBasePath: String, moduleName:
     }
   }
 
-  printLog("[" + tableName + "] split 布局：data/" + dataDir + " + modules/admin/" + dataDir);
+  printLog("[" + tableName + "] 分层布局：data/" + dataDir + " + modules/admin/" + dataDir);
   return count;
 }

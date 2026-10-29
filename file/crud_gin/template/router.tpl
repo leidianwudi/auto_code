@@ -1,5 +1,5 @@
 ${# ============================================================================}
-${# Router 模板（split 布局）：modules/admin/{dataDir}/{tableName}_router_.go   }
+${# Router 模板：modules/admin/{dataDir}/{tableName}_router_.go   }
 ${# ----------------------------------------------------------------------------}
 ${#   - mount<表>(rg) 装配 group/handler/中间件（路径与 DB 的唯一来源）         }
 ${#   - RegisterRoutes 只注册固定 CRUD，admin 端每接口串 RequirePerm           }

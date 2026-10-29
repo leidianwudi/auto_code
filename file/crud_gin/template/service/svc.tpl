@@ -1,5 +1,5 @@
 ${# ============================================================================}
-${# Service 模板（split 布局）：modules/admin/{dataDir}/{tableName}_service_.go  }
+${# Service 模板：modules/admin/{dataDir}/{tableName}_service_.go  }
 ${# ----------------------------------------------------------------------------}
 ${#   - 生成件只出查询编排；写路径（Save/Delete）与自定义方法放手写 service 件  }
 ${#   - DB/Repo 两列由 main_api.ac 预渲染对齐                                  }

@@ -1,5 +1,5 @@
 ${# ============================================================================}
-${# Repo 模板（split 布局）：data/{dataDir}/{tableName}_repo_.go               }
+${# Repo 模板：data/{dataDir}/{tableName}_repo_.go               }
 ${# ----------------------------------------------------------------------------}
 ${#   - 共享数据层：admin/app 两端复用；方法首参 db 支持独立查询/事务           }
 ${#   - 白名单排序（selColsSort 派生）+ common.Paginate/Where*/ApplyOrder      }

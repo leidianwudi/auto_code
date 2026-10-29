@@ -1,5 +1,5 @@
 ${# ============================================================================}
-${# Handler 模板（split 布局）：modules/admin/{dataDir}/{tableName}_handler_.go  }
+${# Handler 模板：modules/admin/{dataDir}/{tableName}_handler_.go  }
 ${# ----------------------------------------------------------------------------}
 ${#   - 4 接口：selectByIn / selectById / update / delete（无 insert，save 单接口）}
 ${#   - common.Bind 绑定 + common.OK/Fail/NewOutPage 统一响应                   }

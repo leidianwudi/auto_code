@@ -46,7 +46,7 @@ export class SortInfoResult {
 
 /// @brief 查询场景数据构建器（无 DB，全部来自 .jsontable 配置）
 export class QueryData {
-  /// true = split 布局：过滤字段全指针 + 条件走 common.Where*（nil 不加条件）
+  /// true = 分层布局：过滤字段全指针 + 条件走 common.Where*（nil 不加条件）
   let pointerMode: Bool = false;
 
   // ------------------------------------------------------------------------
@@ -117,7 +117,7 @@ export class QueryData {
         let sf: SelFieldDef = this.makeSelField(resolved["name"], field, resolved["sqlCol"], ref);
         sf.isLike = field.goType == "string";
         if (sf.isLike) {
-          sf.comment = sf.comment + "（模糊）";  // split 布局黄金注释约定
+          sf.comment = sf.comment + "（模糊）";  // 分层布局黄金注释约定
         }
         selFields.append(sf);
         selFieldNames.append(sf.name);
@@ -310,7 +310,7 @@ export class QueryData {
   }
 
   // ------------------------------------------------------------------------
-  // split 布局条件块：过滤字段全指针，nil = 不加条件；条件走 common.Where*
+  // 分层布局条件块：过滤字段全指针，nil = 不加条件；条件走 common.Where*
   //   - 精确：common.WhereEq(db, ColXxx, *sel.Xxx)（time 直接传指针）
   //   - 模糊：common.WhereLike(db, ColXxx, *sel.Xxx)
   //   - 范围：_min → WhereGte，_max → WhereLte（time 传指针，数值解引用）
@@ -322,7 +322,7 @@ export class QueryData {
     for (sf in selFields) {
       let colName: String = sf.baseName;
       if (colName == null || colName.indexOf(".") > 0) {
-        printLog("提示：split 布局暂不支持联表条件 '" + colName + "'，已跳过");
+        printLog("提示：分层布局暂不支持联表条件 '" + colName + "'，已跳过");
         continue;
       }
       let colConst: String = "Col" + snakeToPascal(colName);
@@ -380,7 +380,7 @@ export class QueryData {
     sf.goName = snakeToPascal(name);
     sf.kind = zeroKindOfGoType(field.goType);
     // 查询参数声明类型：time/bool 用指针（零值无法区分"未传"），其余保持；
-    // split 布局下全部过滤字段用指针（nil=不加条件，非 nil 含 0/空串也筛）
+    // 分层布局下全部过滤字段用指针（nil=不加条件，非 nil 含 0/空串也筛）
     if (this.pointerMode) {
       sf.declType = (field.goType == "datatypes.JSON") ? field.goType : "*" + field.goType;
     } else {

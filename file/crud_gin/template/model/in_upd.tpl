@@ -1,5 +1,5 @@
 ${# ============================================================================}
-${# InUpd 模板（split 布局）：modules/admin/{dataDir}/in_upd_{tableName}_.go     }
+${# InUpd 模板：modules/admin/{dataDir}/in_upd_{tableName}_.go     }
 ${# ----------------------------------------------------------------------------}
 ${#   - Id 值类型（0=新增/>0=更新）+ 其余列全指针（nil=不改，非 nil 含 0 也写）  }
 ${#   - ToEntity 用 common.CopyNonNil；ToUpdates 用 common.BuildUpdates 成对    }
