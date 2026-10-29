@@ -33,3 +33,20 @@ export function findProjPath(dir: String, maxUpLevels: Number): String {
   }
   return "";
 }
+
+/// .jsontable 文件相对扫描根（入口脚本目录）的目录段——「目录结构 = 模块结构」。
+/// file 在 baseDir 之下时返回中间目录段（如 "user"、"app/user"，多层全保留）；
+/// 不在 baseDir 之下（显式传外部路径）或非法时返回 ""（调用方回退旧缺省）
+export function relDirUnder(file: String, baseDir: String): String {
+  let f: String = file.replace("\\", "/");
+  let idx: Number = f.lastIndexOf("/");
+  f = idx < 0 ? "" : f.substring(0, idx);  // 去文件名 → 所在目录
+  let b: String = baseDir.replace("\\", "/");
+  while (b.endsWith("/") && b.length > 1) { b = b.substring(0, b.length - 1); }
+  if (b == "" || f.startsWith(b + "/") == false) { return ""; }
+  let rel: String = f.substring(b.length + 1);
+  while (rel.startsWith("/")) { rel = rel.substring(1); }
+  while (rel.endsWith("/") && rel.length > 1) { rel = rel.substring(0, rel.length - 1); }
+  if (rel == "" || rel.indexOf("..") >= 0) { return ""; }
+  return rel;
+}

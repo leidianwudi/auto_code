@@ -31,15 +31,18 @@
 ///   + {tableName}_custom.go 自定义层（仅首次生成，fileExists 守卫）
 ///   moduleDir 缺省 <tableName>/<tableName>，系统表可在 .jsontable 配
 ///   moduleDir（如 sys/menu）与手写架子目录对齐；包名 = 目录末段。
-///   路由集中注册在 {goBasePath}/router/router.go（手写文件，生成器不注入，
-///   生成结束打印提醒清单）。
+///   路由集中注册：生成器独占 {goBasePath}/router/routes_gen.go，每次生成
+///   按 modules/{admin,app} 树扫描 *_router_.go 生成覆盖件并整体重写（幂等，
+///   见 regenRouteRegistration）；手写模块与 RegisterCustomRoutes 钩子仍在
+///   router/router.go 手动注册。旧版 modules/<moduleDir> 自包含 router.go
+///   链（params.templates 缺省时）不在扫描范围，仍走集中注册提醒清单。
 /// ----------------------------------------------------------------------------
 
 import { Param, FieldDef, buildGoImports, escapeGoStr, sanitizeGoComment, tabChar } from "./core/param_go.ac";
 import { QueryData, SelFieldDef } from "./core/query_data.ac";
 import { snakeToPascal, snakeToCamel, isNumericStr } from "../../tool/tool_str.ac";
 import { findGlobalEnumFiles, mergeGlobalEnumFiles } from "../../tool/tool_global_enum.ac";
-import { dirnameOf, findProjPath } from "../../tool/tool_jsontable.ac";
+import { dirnameOf, findProjPath, relDirUnder } from "../../tool/tool_jsontable.ac";
 
 /// @brief 模板配置（一个模板对应一个生成的代码文件）
 class TemplateConfig {
@@ -174,6 +177,9 @@ export function generateApiMain(params: Object): Number {
       printError("错误：.jsontable 缺少顶层 table 键: " + file);
       return 0;
     }
+    // 目录结构 = 模块结构：记录相对扫描根（入口脚本目录）的目录段，
+    // 供 moduleDir 缺省推导（4 节预扫描）；不在扫描根下时为 ""（回退旧缺省）
+    t["_relDir"] = relDirUnder(file, scriptDir());
     tables.append(t);
   }
   printLog("tables count: " + tables.length);
@@ -286,11 +292,19 @@ export function generateApiMain(params: Object): Number {
     }
     tablesByModel[mn] = t;
     // ── 模块目录预计算（modules/<moduleDir>/，包名 = 目录末段）────────
-    //    moduleDir 缺省 <tableName>/<tableName>；系统表配 sys/menu 等
-    //    与手写架子目录对齐。仅允许相对子路径（禁 ..，去首尾斜杠）
+    //    moduleDir 缺省 = .jsontable 相对扫描根的目录段 + 表名
+    //    （目录结构 = 模块结构：user/user_ext.jsontable → user/user_ext）；
+    //    与扫描根同目录时回退 <tableName>/<tableName>；
+    //    系统表可显式配 moduleDir（如 sys/menu）与手写架子目录对齐。
+    //    仅允许相对子路径（禁 ..，去首尾斜杠）
     let md: String = t["moduleDir"];
     if (md == null || md.length == 0) {
-      md = tn + "/" + tn;
+      let rel: String = t["_relDir"];
+      if (rel != null && rel.length > 0) {
+        md = rel + "/" + tn;
+      } else {
+        md = tn + "/" + tn;
+      }
     }
     md = md.replace("\\", "/");
     while (md.startsWith("/")) {
@@ -940,16 +954,19 @@ export function generateApiMain(params: Object): Number {
       }
     }
 
-    // ── 6.10 集中注册提醒（modules 模式不自动注入手写 router/router.go）──
+    // ── 6.10 旧版自包含链提醒清单收集（modules/<moduleDir> 模式）──
     regModules.append(moduleDir);
   }  // end for (json in genTables)
 
-  // ── 7. 集中注册清单 ────────────────────────────────────────────────
-  //      每个模块自带 router.go（RegisterRoutes，内含 Handler→Service→Repo
-  //      装配与 JWT 路由组）；集中注册在 {goBasePath}/router/router.go
-  //      （手写文件）加一行 <pkg>.RegisterRoutes(api)，生成器不自动注入
-  if (regModules.length > 0) {
-    printLog("── 请在 router/router.go 集中注册以下模块（<pkg>.RegisterRoutes(api)）──");
+  // ── 7. 生成模块路由集中注册 ────────────────────────────────────────
+  //      生成器独占 {goBasePath}/router/routes_gen.go：按 modules/{admin,app}
+  //      树扫描 *_router_.go 生成覆盖件并整体重写（幂等），生成模块无需再
+  //      手动到 router.go 注册（详见 regenRouteRegistration）
+  let regenCount: Number = regenRouteRegistration(goBasePath);
+  // 旧版 modules/<moduleDir> 自包含 router.go 链（params.templates 缺省时）
+  // 不在扫描范围，仍按清单手动注册
+  if (regenCount >= 0 && regModules.length > 0) {
+    printLog("── modules/<moduleDir> 旧版自包含路由模块（不在自动注册范围，请手动注册）──");
     for (m in regModules) {
       printLog("  modules/" + m);
     }
@@ -961,6 +978,108 @@ export function generateApiMain(params: Object): Number {
   }
   printLog("--- 代码生成结束，共生成 " + generatedFileCount + " 个文件 ---");
   return generatedFileCount;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 生成模块路由集中注册（routes_gen.go 独占重写）
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// @brief 重写 {goBasePath}/router/routes_gen.go（生成器独占文件，整体重写，幂等）
+/// @param goBasePath Go 项目根目录
+/// @return 注册的生成模块数量；写入失败/找不到 go.mod 返回 -1
+/// 扫描 modules/admin 与 modules/app 下全部 *_router_.go 生成覆盖件：
+///   - admin 侧注册到 api 组（<pkg>.RegisterRoutes(api)），包名 = 目录末段；
+///   - app 侧注册到 appGroup 组，别名 = "app" + 包名帕斯卡（与 admin 侧包名
+///     天然不撞，admin/app 同名包在同一 import 块靠别名区分，如 appShop）；
+///   - 手写模块（auth/usermgr/upload/app 等）与 RegisterCustomRoutes 钩子
+///     不在本文件，仍由 router/router.go 手动注册。
+/// 每次生成按目录树整体重算：新增模块自动进入、删除模块重生成后自动移除，
+/// 无需人工维护；import 行按扫描顺序（listFilesDeep 已按路径排序）天然有序。
+export function regenRouteRegistration(goBasePath: String): Number {
+  let root: String = goBasePath.replace("\\", "/");
+  while (root.endsWith("/") && root.length > 1) {
+    root = root.substring(0, root.length - 1);
+  }
+
+  // Go module 名（go.mod 的 module 行）作为 import 前缀，如 shop_api
+  let modName: String = readGoModuleName(root);
+  if (modName == "") {
+    printError("routes_gen.go 跳过：go.mod 不存在或缺 module 行: " + root + "/go.mod");
+    return -1;
+  }
+
+  // 两侧扫描：dir → 相对 goBasePath 的模块根；group → 注册目标路由组参数
+  let sides: Object[] = [
+    { dir: "modules/admin", group: "api" },
+    { dir: "modules/app", group: "appGroup", appSide: true }
+  ];
+  let imports: String[] = [];
+  let calls: String[] = [];
+  let usedAlias: Object = {};
+  let regCount: Number = 0;
+  for (s in sides) {
+    let scanDir: String = root + "/" + s["dir"];
+    if (!fileExists(scanDir)) {
+      continue;
+    }
+    // listFilesDeep 结果已按路径排序，拼接后 import 块有序，gofmt 稳定
+    let files: String[] = listFilesDeep(scanDir, "_router_.go");
+    for (f in files) {
+      // f 形如 user/user_ext/user_ext_router_.go → rel 取所在目录
+      let rel: String = relDirUnder(scanDir + "/" + f, scanDir);
+      if (rel == "") {
+        continue;
+      }
+      // 包名 = 目录末段（AutoCode模板规范约定）
+      let sep: Number = rel.lastIndexOf("/");
+      let pkg: String = sep < 0 ? rel : rel.substring(sep + 1);
+      let alias: String = pkg;
+      if (s["appSide"] == true) {
+        alias = "app" + snakeToPascal(pkg);
+      }
+      // 同名兜底去重（规范下不会发生，防目录异常导致重复别名编译错误）
+      if (usedAlias[alias] == true) {
+        let n: Number = 2;
+        while (usedAlias[alias + n] == true) {
+          n = n + 1;
+        }
+        alias = alias + n;
+      }
+      usedAlias[alias] = true;
+      imports.append(alias + " \"" + modName + "/" + s["dir"] + "/" + rel + "\"");
+      // .ac 字符串不支持 \t 转义，缩进用 tabChar()（param_go.ac 提供）
+      calls.append(tabChar() + alias + ".RegisterRoutes(" + s["group"] + ")");
+      regCount = regCount + 1;
+    }
+  }
+
+  // 组装文件：生成头第一行 + 空行 + 包注释紧贴 package（对齐生成件风格）
+  let nl: String = "\n";
+  let content: String = "// 此代码为AutoCode编译器生成，请勿手动修改" + nl + nl;
+  content = content + "// Package router 生成模块集中注册件（AutoCode 独占：每次生成按 modules 树整体重写）" + nl;
+  content = content + "// - modules/{admin,app}/**/*_router_.go（生成覆盖件）在此自动注册 RegisterRoutes；" + nl;
+  content = content + "// - 手写模块与 RegisterCustomRoutes 钩子仍在 router.go 手动注册。" + nl;
+  content = content + "package router" + nl + nl;
+  content = content + "import (" + nl;
+  // gin 单独一组（对齐 router.go 既有风格：三方库与项目模块之间空行分组）
+  content = content + tabChar() + "\"github.com/gin-gonic/gin\"" + nl + nl;
+  for (imp in imports) {
+    content = content + tabChar() + imp + nl;
+  }
+  content = content + ")" + nl + nl;
+  content = content + "// registerGeneratedRoutes 注册全部 AutoCode 生成模块的路由（router.Setup 调用一次）" + nl;
+  content = content + "func registerGeneratedRoutes(api *gin.RouterGroup, appGroup *gin.RouterGroup) {" + nl;
+  for (c in calls) {
+    content = content + c + nl;
+  }
+  content = content + "}" + nl;
+
+  let outPath: String = root + "/router/routes_gen.go";
+  if (!writeFile(outPath, content)) {
+    return -1;
+  }
+  printLog("生成模块路由集中注册已重写: " + outPath + "（" + regCount + " 个生成模块）");
+  return regCount;
 }
 
 /// @brief 从启用 i18n 的主表按惯例派生翻译表定义（0 表）
@@ -1592,6 +1711,8 @@ export function generateSplitTable(json: Object, goBasePath: String, moduleName:
     { tpl: tplDir + "/model/entity.tpl",  out: "{goBasePath}/data/{dataDir}/en_{tableName}_.go" },
     { tpl: tplDir + "/model/in_sel.tpl",  out: "{goBasePath}/data/{dataDir}/in_sel_{tableName}_.go" },
     { tpl: tplDir + "/repo/repo.tpl",     out: "{goBasePath}/data/{dataDir}/{tableName}_repo_.go" },
+    // repo 手写扩展件（首次骨架，fileExists 守卫）：自定义查询/统计方法写这里
+    { tpl: tplDir + "/repo/repo_ext.tpl", out: "{goBasePath}/data/{dataDir}/{tableName}_repo.go" },
     { tpl: tplDir + "/model/in_upd.tpl",  out: "{goBasePath}/modules/admin/{dataDir}/in_upd_{tableName}_.go" },
     { tpl: tplDir + "/handler/hdl.tpl",   out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_handler_.go" },
     { tpl: tplDir + "/service/svc.tpl",   out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_service_.go" },

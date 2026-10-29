@@ -23,6 +23,7 @@ ${# ============================================================================
 // ==================== ${commentTitle}（${pageName}）查询列表 ====================
 import { reactive, ref, unref } from "vue";
 import { message } from "@/utils/message";
+import { hasPerms } from "@/utils/auth";
 ${if !noDetail}
 import View from "~icons/ep/view";
 ${/if}
@@ -368,8 +369,8 @@ ${/if}${/each}
 ${/if}
     <!-- 工具栏 + 表格 + 分页（同属上方卡片，内边距由卡片统一提供） -->
       <div class="mb-3">
-${if !noAdd}        <el-button type="primary" v-perms="['${permPrefix}:add']" @click="addAction">新增</el-button>
-${/if}${if !noDelete}        <el-button type="danger" v-perms="['${permPrefix}:delete']" :disabled="selectedRows.length === 0" @click="delData()">删除</el-button>
+${if !noAdd}        <el-button type="primary" :disabled="!hasPerms(['${permPrefix}:add'])" @click="addAction">新增</el-button>
+${/if}${if !noDelete}        <el-button type="danger" :disabled="selectedRows.length === 0 || !hasPerms(['${permPrefix}:delete'])" @click="delData()">删除</el-button>
 ${/if}${each btn in toolbarButtons}        <el-button${if btn.hasType} type="${btn.type}"${/if} @click="onCustomAction(null, '${btn.key}')">${btn.label}</el-button>
 ${/each}      </div>
 
@@ -468,12 +469,12 @@ ${if !noDetail}            <el-tooltip content="详情" placement="top">
               </el-button>
             </el-tooltip>
 ${/if}${if !noEdit}            <el-tooltip content="编辑" placement="top">
-              <el-button link type="primary" size="small" v-perms="['${permPrefix}:edit']" @click="rowAction(row, 'edit')">
+              <el-button link type="primary" size="small" :disabled="!hasPerms(['${permPrefix}:edit'])" @click="rowAction(row, 'edit')">
                 <IconifyIconOffline :icon="EditPen" />
               </el-button>
             </el-tooltip>
 ${/if}${if !noDelete}            <el-tooltip content="删除" placement="top">
-              <el-button link type="danger" size="small" v-perms="['${permPrefix}:delete']" @click="delData(row)">
+              <el-button link type="danger" size="small" :disabled="!hasPerms(['${permPrefix}:delete'])" @click="delData(row)">
                 <IconifyIconOffline :icon="Delete" />
               </el-button>
             </el-tooltip>

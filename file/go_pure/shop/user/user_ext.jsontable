@@ -1,5 +1,7 @@
 {
   table: {
+    appAuth: 'user',
+    appQuery: true,
     columns: [
       {
         comment: '主键',
@@ -17,6 +19,7 @@
         mysqlType: 'int',
         name: 'user_id',
         nullable: false,
+        title: '用户id',
         unsigned: false,
       },
       {
@@ -258,6 +261,116 @@
         unsigned: false,
       },
     ],
+    editCols: [
+      {
+        label: '用户id',
+        ref: 'user_id',
+      },
+      {
+        label: '账户',
+        ref: 'account',
+      },
+      {
+        label: '微信登陆id',
+        ref: 'wechat_id',
+      },
+      {
+        label: '密码',
+        ref: 'pwd',
+      },
+      {
+        label: '微信登陆token',
+        ref: 'wechat_token',
+      },
+      {
+        label: '密码错误次数,超过5次自动冻结',
+        ref: 'pwd_error_count',
+      },
+      {
+        label: '是否冻结;0:正常;1:已冻结',
+        ref: 'is_freeze',
+      },
+      {
+        label: '冻结截止时间',
+        ref: 'freeze_end_time',
+      },
+      {
+        label: '冻结次数',
+        ref: 'freeze_count',
+      },
+      {
+        label: '是否禁用;0:正常;1:禁用',
+        ref: 'is_disable',
+      },
+      {
+        label: '身份证',
+        ref: 'card_id',
+      },
+      {
+        label: '真实姓名',
+        ref: 'real_name',
+      },
+      {
+        label: '电话',
+        ref: 'tel',
+      },
+      {
+        label: '微信号',
+        ref: 'wechat',
+      },
+      {
+        label: 'qq号',
+        ref: 'qq',
+      },
+      {
+        label: '国家',
+        ref: 'country',
+      },
+      {
+        label: '省份',
+        ref: 'province',
+      },
+      {
+        label: '城市',
+        ref: 'city',
+      },
+      {
+        label: '详细住址',
+        ref: 'address',
+      },
+      {
+        label: '注册IP',
+        ref: 'register_ip',
+      },
+      {
+        label: '注册IP所在地',
+        ref: 'register_city',
+      },
+      {
+        label: '注册时间',
+        ref: 'register_time',
+      },
+      {
+        label: '最后登陆IP',
+        ref: 'last_ip',
+      },
+      {
+        label: '最后登陆IP所在地',
+        ref: 'last_city',
+      },
+      {
+        label: '最后登陆时间',
+        ref: 'last_time',
+      },
+      {
+        label: '最后登陆设备类型;pc,android;Ios',
+        ref: 'last_device_type',
+      },
+      {
+        label: '最后登陆设备',
+        ref: 'last_device',
+      },
+    ],
     indexes: [
       {
         cols: [
@@ -276,6 +389,90 @@
     ],
     manualUpdateTime: false,
     modelName: 'user_ext',
+    selCols: [
+      {
+        label: '用户id',
+        ref: 'user_id',
+      },
+      {
+        label: '账户',
+        ref: 'account',
+      },
+      {
+        label: '微信登陆id',
+        ref: 'wechat_id',
+      },
+      {
+        label: '密码',
+        ref: 'pwd',
+      },
+      {
+        label: '微信登陆token',
+        ref: 'wechat_token',
+      },
+      {
+        label: '密码错误次数,超过5次自动冻结',
+        ref: 'pwd_error_count',
+      },
+      {
+        label: '是否冻结;0:正常;1:已冻结',
+        ref: 'is_freeze',
+      },
+      {
+        label: '冻结截止时间',
+        ref: 'freeze_end_time',
+      },
+      {
+        label: '冻结次数',
+        ref: 'freeze_count',
+      },
+      {
+        label: '是否禁用;0:正常;1:禁用',
+        ref: 'is_disable',
+      },
+      {
+        label: '身份证',
+        ref: 'card_id',
+      },
+      {
+        label: '真实姓名',
+        ref: 'real_name',
+      },
+    ],
+    selColsEq: [
+      {
+        ref: 'user_id',
+      },
+      {
+        ref: 'wechat_id',
+      },
+      {
+        ref: 'wechat_token',
+      },
+      {
+        ref: 'is_disable',
+      },
+      {
+        ref: 'card_id',
+      },
+      {
+        ref: 'real_name',
+      },
+      {
+        ref: 'tel',
+      },
+      {
+        ref: 'wechat',
+      },
+      {
+        ref: 'qq',
+      },
+    ],
+    selColsLike: [
+      {
+        ref: 'account',
+      },
+    ],
     tableComment: '用户扩展表',
     tableName: 'user_ext',
   },

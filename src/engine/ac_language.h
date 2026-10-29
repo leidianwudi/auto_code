@@ -181,6 +181,10 @@ inline constexpr const char *kFileExists = "fileExists";
 /// @brief 列出目录下匹配后缀的文件名数组：listFiles("dir", ".json") → 返回字符串数组
 /// 不递归；后缀省略/为空时返回全部文件
 inline constexpr const char *kListFiles = "listFiles";
+/// @brief 递归列出目录下匹配后缀的文件相对路径数组（含子目录）：
+///        listFilesDeep("dir", "_router_.go") → ["a/b_x.go", ...]
+/// 返回相对 dir 的路径（POSIX 斜杠，按路径排序）；后缀省略/为空时返回全部文件
+inline constexpr const char *kListFilesDeep = "listFilesDeep";
 /// @brief 格式化路径：formatPath("{basePath}/{name}.ts", {basePath:"D:/out", name:"user"})
 /// → "D:/out/user.ts"。占位符 {key} 从第二个参数的对象中查找替换。
 inline constexpr const char *kFormatPath = "formatPath";
@@ -195,7 +199,7 @@ inline const QStringList kAll = {
     QString(kPrintLog),   QString(kPrintError), QString(kGetCheckedFiles),
     QString(kScriptDir),  QString(kMerge),      QString(kBasename),
     QString(kFileName),   QString(kFileExists), QString(kListFiles),
-    QString(kFormatPath), QString(kAssert),
+    QString(kListFilesDeep), QString(kFormatPath), QString(kAssert),
 };
 }  // namespace AcBuiltin
 

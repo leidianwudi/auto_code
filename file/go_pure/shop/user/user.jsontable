@@ -1,5 +1,7 @@
 {
   table: {
+    appAuth: 'user',
+    appQuery: true,
     columns: [
       {
         comment: '主键',
@@ -213,7 +215,7 @@
         ref: 'head_img_url',
       },
       {
-        label: '是否实名;0:未实名;1:已实名',
+        label: '是否实名',
         ref: 'is_real_name',
         required: true,
       },
