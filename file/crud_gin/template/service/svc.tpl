@@ -23,8 +23,8 @@ func New${serviceClass}(db *gorm.DB) *${serviceClass} {
 	return &${serviceClass}{DB: db, Repo: ${dataAlias}.New${repoClass}(db)}
 }
 
-// SelectByIn 分页查询列表数据，返回数据列表和总记录数
-func (s *${serviceClass}) SelectByIn(sel *${dataAlias}.${selClass}) ([]${dataAlias}.${enClass}, int64, error) {
+// SelectByIn ${selComment}
+func (s *${serviceClass}) SelectByIn(sel *${dataAlias}.${selClass}) ([]${dataAlias}.${listType}, int64, error) {
 	return s.Repo.SelectByIn(s.DB, sel)
 }
 

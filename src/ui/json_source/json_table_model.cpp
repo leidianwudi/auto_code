@@ -146,6 +146,64 @@ bool JsonTableJoin::operator==(const JsonTableJoin &other) const {
          isJoinRelations == other.isJoinRelations;
 }
 
+QJsonObject JsonTableJoinCol::toJsonObject() const {
+  QJsonObject obj;
+  obj[QString::fromLatin1(JsonTableKey::kJoinSpecCol)] = col;
+  // filter 空（只输出）不落键
+  if (!filter.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kJoinSpecFilter)] = filter;
+  return obj;
+}
+
+JsonTableJoinCol JsonTableJoinCol::fromJsonObject(const QJsonObject &obj) {
+  JsonTableJoinCol c;
+  c.col = obj.value(QString::fromLatin1(JsonTableKey::kJoinSpecCol)).toString();
+  c.filter = obj.value(QString::fromLatin1(JsonTableKey::kJoinSpecFilter)).toString();
+  return c;
+}
+
+bool JsonTableJoinCol::operator==(const JsonTableJoinCol &other) const {
+  return col == other.col && filter == other.filter;
+}
+
+QJsonObject JsonTableJoinSpec::toJsonObject() const {
+  QJsonObject obj;
+  obj[QString::fromLatin1(JsonTableKey::kTable)] = table;
+  // type 非空即落键（含缺省 LEFT：手写配置显式写出时保存不丢失）
+  if (!type.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kJoinSpecType)] = type;
+  if (on.size() == 2) {
+    QJsonArray onArr;
+    onArr.append(on.at(0));
+    onArr.append(on.at(1));
+    obj[QString::fromLatin1(JsonTableKey::kJoinSpecOn)] = onArr;
+  }
+  if (!cols.isEmpty()) {
+    QJsonArray colArr;
+    for (const auto &c : cols) colArr.append(c.toJsonObject());
+    obj[QString::fromLatin1(JsonTableKey::kCols)] = colArr;
+  }
+  return obj;
+}
+
+JsonTableJoinSpec JsonTableJoinSpec::fromJsonObject(const QJsonObject &obj) {
+  JsonTableJoinSpec j;
+  j.table = obj.value(QString::fromLatin1(JsonTableKey::kTable)).toString();
+  j.type = obj.value(QString::fromLatin1(JsonTableKey::kJoinSpecType))
+               .toString(QStringLiteral("LEFT"));
+  const QJsonArray onArr = obj.value(QString::fromLatin1(JsonTableKey::kJoinSpecOn)).toArray();
+  for (const auto &v : onArr) {
+    if (v.isString()) j.on.append(v.toString());
+  }
+  const QJsonArray colArr = obj.value(QString::fromLatin1(JsonTableKey::kCols)).toArray();
+  for (const auto &v : colArr) {
+    if (v.isObject()) j.cols.append(JsonTableJoinCol::fromJsonObject(v.toObject()));
+  }
+  return j;
+}
+
+bool JsonTableJoinSpec::operator==(const JsonTableJoinSpec &other) const {
+  return table == other.table && type == other.type && on == other.on && cols == other.cols;
+}
+
 QJsonObject JsonTableSelCol::toJsonObject() const {
   QJsonObject obj;
   obj[QString::fromLatin1(JsonTableKey::kRef)] = ref;
@@ -200,6 +258,8 @@ QJsonObject JsonTableEditCol::toJsonObject() const {
   obj[QString::fromLatin1(JsonTableKey::kRef)] = ref;
   if (!label.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kLabel)] = label;
   if (!visible) obj[QString::fromLatin1(JsonTableKey::kVisible)] = false;
+  // editEditable 缺省 true 不落键（false=表单内只读展示）
+  if (!editEditable) obj[QString::fromLatin1(JsonTableKey::kEditEditable)] = false;
   if (!widget.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kWidget)] = widget;
   if (required) obj[QString::fromLatin1(JsonTableKey::kRequired)] = true;
   // 上传绑定与编辑缩略图（空/0=未配置不落键）
@@ -229,6 +289,7 @@ JsonTableEditCol JsonTableEditCol::fromJsonObject(const QJsonObject &obj) {
   c.ref = obj.value(QString::fromLatin1(JsonTableKey::kRef)).toString();
   c.label = obj.value(QString::fromLatin1(JsonTableKey::kLabel)).toString();
   c.visible = obj.value(QString::fromLatin1(JsonTableKey::kVisible)).toBool(true);
+  c.editEditable = obj.value(QString::fromLatin1(JsonTableKey::kEditEditable)).toBool(true);
   c.widget = obj.value(QString::fromLatin1(JsonTableKey::kWidget)).toString();
   c.required = obj.value(QString::fromLatin1(JsonTableKey::kRequired)).toBool(false);
   c.uploadSourceFile = obj.value(QString::fromLatin1(JsonTableKey::kUploadSourceFile)).toString();
@@ -249,7 +310,7 @@ JsonTableEditCol JsonTableEditCol::fromJsonObject(const QJsonObject &obj) {
 
 bool JsonTableEditCol::operator==(const JsonTableEditCol &other) const {
   return ref == other.ref && label == other.label && visible == other.visible &&
-         widget == other.widget && required == other.required &&
+         editEditable == other.editEditable && widget == other.widget && required == other.required &&
          uploadSourceFile == other.uploadSourceFile && uploadSourceId == other.uploadSourceId &&
          editThumbWidth == other.editThumbWidth && editThumbHeight == other.editThumbHeight &&
          placeholder == other.placeholder && maxlength == other.maxlength &&
@@ -413,6 +474,13 @@ QJsonObject JsonTableTable::toJsonObject() const {
     obj.insert(QString::fromLatin1(JsonTableKey::kJoinTable), joinArr);
   }
 
+  // 联表查询声明 joinTables[]（新格式：{table,type,on[2],cols[{col,filter}]}）
+  if (!joinTables.isEmpty()) {
+    QJsonArray jtArr;
+    for (const auto &j : joinTables) jtArr.append(j.toJsonObject());
+    obj.insert(QString::fromLatin1(JsonTableKey::kJoinTables), jtArr);
+  }
+
   if (!selCols.isEmpty()) {
     QJsonArray selArr;
     for (const auto &c : selCols) selArr.append(c.toJsonObject());
@@ -475,6 +543,7 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
   t.extra.remove(QString::fromLatin1(JsonTableKey::kColumns));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kIndexes));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kJoinTable));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kJoinTables));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kSelCols));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kSelColsEq));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kSelColsGap));
@@ -553,6 +622,12 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
     if (v.isObject()) t.joinTable.append(JsonTableJoin::fromJsonObject(v.toObject()));
   }
 
+  // 联表查询声明 joinTables[]（新格式：{table,type,on[2],cols[{col,filter}]}）
+  const QJsonArray jtArr = obj.value(QString::fromLatin1(JsonTableKey::kJoinTables)).toArray();
+  for (const auto &v : jtArr) {
+    if (v.isObject()) t.joinTables.append(JsonTableJoinSpec::fromJsonObject(v.toObject()));
+  }
+
   // 列表读模型 selCols[]（{ref,label}；ref 支持联表路径）
   const QJsonArray selArr = obj.value(QString::fromLatin1(JsonTableKey::kSelCols)).toArray();
   for (const auto &v : selArr) {
@@ -601,7 +676,7 @@ bool JsonTableTable::operator==(const JsonTableTable &other) const {
          genAdd == other.genAdd && genEdit == other.genEdit && genDelete == other.genDelete &&
          genDetail == other.genDetail &&
          columns == other.columns && indexes == other.indexes &&
-         joinTable == other.joinTable && selCols == other.selCols &&
+         joinTable == other.joinTable && joinTables == other.joinTables && selCols == other.selCols &&
          selColsEq == other.selColsEq && selColsGap == other.selColsGap &&
          selColsLike == other.selColsLike && editCols == other.editCols &&
          selColsSort == other.selColsSort && enums == other.enums &&

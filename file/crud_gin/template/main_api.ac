@@ -38,7 +38,8 @@
 ///   链（params.templates 缺省时）不在扫描范围，仍走集中注册提醒清单。
 /// ----------------------------------------------------------------------------
 
-import { Param, FieldDef, buildGoImports, escapeGoStr, sanitizeGoComment, tabChar } from "./core/param_go.ac";
+import { Param, FieldDef, buildGoImports, escapeGoStr, sanitizeGoComment, tabChar,
+         mapTypeToGo, zeroKindOfGoType } from "./core/param_go.ac";
 import { QueryData, SelFieldDef } from "./core/query_data.ac";
 import { snakeToPascal, snakeToCamel, isNumericStr } from "../../tool/tool_str.ac";
 import { findGlobalEnumFiles, mergeGlobalEnumFiles } from "../../tool/tool_global_enum.ac";
@@ -380,7 +381,7 @@ export function generateApiMain(params: Object): Number {
     let layeredPkgName: String = json["pkgName"];
     let layeredCount: Number = generateLayeredTable(json, goBasePath, moduleName,
         commonPath, middlewarePath, layeredModuleDir, layeredPkgName,
-        globalEnumDefs, emittedGlobalEnums);
+        globalEnumDefs, emittedGlobalEnums, tablesByName);
     generatedFileCount = generatedFileCount + layeredCount;
     regModules.append(layeredModuleDir);
     continue;
@@ -1512,11 +1513,413 @@ export function buildSortEntryLines(cols: String[], dirs: String[]): String[] {
   return lines;
 }
 
+/// @brief 取联表条目的输出列数组（Any → Object[]，供 for-in 类型检查）
+export function joinColsOf(je: Object): Object[] {
+  return je["cols"];
+}
+
+/// @brief 分层布局联表数据构建（.jsontable 表节点新键 joinTables）
+/// ----------------------------------------------------------------------------
+/// 配置形态（数组；未配置 = 无联表，生成物与单表版完全一致）：
+///   "joinTables": [
+///     { "table": "user_ext",           // 被联表名（∈ 本项目已扫描 .jsontable）
+///       "type": "LEFT",                // LEFT / INNER，缺省 LEFT
+///       "on": ["id", "user_id"],       // [主表列, 联表列]，表名由规格自带不重复写
+///       "cols": [ { "col": "account" } ] } ]  // 联表输出列（∈ 联表列；只管列表输出）
+/// 查询能力与主表列同源：查询视图 selColsEq/selColsLike 里引用输出别名
+/// （如 "user_ext_account"）即生成对应筛选字段；cols[].filter 为旧写法仍兼容
+/// 派生规则（与 shop_api 手写黄金样板逐字对齐）：
+///   - 常量：col<表><列> = 真实列名；view<表><列> = 输出别名（统一 = 表名_列名）
+///   - EnXxxView：匿名嵌入主表实体 + 联表列平铺（值类型，gorm/json tag = 输出别名）
+///   - querySpec：Table + Joins + Order（排序白名单 = selColsSort）
+///   - 入参字段：查询视图（selColsEq/Like）命中的输出别名 → InSelXxx 指针字段
+///   - 条件行：querySpec.Where*（裸列名/输出别名由 QuerySpec.qualify 解析表限定）
+/// @return { hasJoin, joinEntries, viewFields, joinConstLines, enViewFieldLines,
+///           joinSpecBlock, joinSelFields, joinWhereLines }
+export function buildLayeredJoinData(json: Object, param: Param, tablesByName: Object,
+    sortCols: String[], sortDirs: String[]): Object {
+  let result: Object = {
+    hasJoin: false, joinEntries: [], viewFields: [], joinConstLines: [],
+    enViewFieldLines: [], joinSpecBlock: "", joinSelFields: [], joinWhereLines: [],
+    aliasMap: {}
+  };
+  let joinCfgs: Object[] = json["joinTables"];
+  if (joinCfgs == null || joinCfgs.length == 0) {
+    return result;
+  }
+  let joinEntries: Object[] = [];
+  let usedAliasGo: Object = {};  // 输出字段 Go 名去重（同结构体字段/SQL 别名禁重复）
+  for (jc in joinCfgs) {
+    let tbl: String = jc["table"];
+    if (tbl == null || tbl == "") {
+      printError("错误：表 '" + param.tableName + "' 联表缺少 table，该条目已跳过");
+      continue;
+    }
+    if (tbl == param.tableName) {
+      printError("错误：表 '" + param.tableName + "' 联表目标不能是本表，该条目已跳过");
+      continue;
+    }
+    let target: Object = tablesByName[tbl];
+    if (target == null) {
+      printError("错误：表 '" + param.tableName + "' 联表目标 '" + tbl +
+                 "' 不在本项目已扫描的 .jsontable 中，该条目已跳过");
+      continue;
+    }
+    let joinType: String = jc["type"];
+    if (joinType == null || joinType == "") { joinType = "LEFT"; }
+    if (joinType != "LEFT" && joinType != "INNER") {
+      printError("错误：表 '" + param.tableName + "' 联表 '" + tbl + "' 的 type '" + joinType +
+                 "' 仅支持 LEFT/INNER，该条目已跳过");
+      continue;
+    }
+    let onArr: Object = jc["on"];
+    if (onArr == null || onArr.length != 2) {
+      printError("错误：表 '" + param.tableName + "' 联表 '" + tbl +
+                 "' 的 on 须为 [主表列, 联表列]，该条目已跳过");
+      continue;
+    }
+    let on0: String = onArr[0];
+    let on1: String = onArr[1];
+    let on0Field: FieldDef = null;
+    for (f in param.fields) {
+      if (f.name == on0) { on0Field = f; }
+    }
+    if (on0Field == null) {
+      printError("错误：表 '" + param.tableName + "' 联表 '" + tbl + "' 的 on[0]('" +
+                 (on0 == null ? "" : on0) + "') 不在主表列中，该条目已跳过");
+      continue;
+    }
+    let tcols: Object[] = target["columns"];
+    let on1Col: Object = null;
+    if (tcols != null) {
+      for (c in tcols) {
+        if (c["name"] == on1) { on1Col = c; }
+      }
+    }
+    if (on1Col == null) {
+      printError("错误：表 '" + param.tableName + "' 联表 '" + tbl + "' 的 on[1]('" +
+                 (on1 == null ? "" : on1) + "') 不在联表列中，该条目已跳过");
+      continue;
+    }
+    // 输出列加工（filter 生效值：""=只输出 / like / eq；like 仅字符串列）
+    let colEntries: Object[] = [];
+    let colSeen: Object = {};
+    let cfgCols: Object[] = jc["cols"];
+    if (cfgCols != null) {
+      for (cc in cfgCols) {
+        let colName: String = cc["col"];
+        if (colName == null || colName == "") {
+          printError("错误：表 '" + param.tableName + "' 联表 '" + tbl +
+                     "' 存在缺少 col 的输出列，已跳过该列");
+          continue;
+        }
+        if (colSeen[colName] != null) { continue; }
+        colSeen[colName] = true;
+        let tcol: Object = null;
+        for (c in tcols) {
+          if (c["name"] == colName) { tcol = c; }
+        }
+        if (tcol == null) {
+          printError("错误：表 '" + param.tableName + "' 联表 '" + tbl + "' 的输出列 '" +
+                     colName + "' 不在联表列中，已跳过该列");
+          continue;
+        }
+        let goType: String = mapTypeToGo(tcol["mysqlType"], tcol["unsigned"] == true);
+        if (goType == "datatypes.JSON") {
+          printLog("提示：联表 '" + tbl + "' 输出列 '" + colName +
+                   "' 为 JSON 类型，不支持联表输出，已跳过该列");
+          continue;
+        }
+        let filter: String = cc["filter"];
+        if (filter == null) { filter = ""; }
+        if (filter != "" && filter != "like" && filter != "eq") {
+          printLog("提示：联表 '" + tbl + "' 输出列 '" + colName + "' 的 filter '" + filter +
+                   "' 仅支持 like/eq，已按只输出处理");
+          filter = "";
+        }
+        if (filter == "like" && goType != "string") {
+          printLog("提示：联表输出列 '" + tbl + "." + colName + "' 非字符串，filter=like 已按 eq 生成");
+          filter = "eq";
+        }
+        let alias: String = tbl + "_" + colName;
+        let aliasGo: String = snakeToPascal(alias);
+        let clash: Bool = false;
+        for (f in param.fields) {
+          if (f.goName == aliasGo) { clash = true; }
+        }
+        if (usedAliasGo[aliasGo] != null) { clash = true; }
+        if (clash) {
+          printError("错误：表 '" + param.tableName + "' 联表输出字段 '" + aliasGo +
+                     "' 与主表列名/已有联表字段冲突，已跳过该列");
+          continue;
+        }
+        usedAliasGo[aliasGo] = true;
+        colEntries.append({
+          col: colName,
+          comment: sanitizeGoComment(tcol["comment"]),
+          goType: goType,
+          filter: filter,
+          alias: alias,
+          aliasGo: aliasGo,
+          colConst: "col" + snakeToPascal(tbl) + snakeToPascal(colName),
+          viewConst: "view" + aliasGo
+        });
+      }
+    }
+    joinEntries.append({
+      table: tbl,
+      joinType: joinType,
+      on0: on0,
+      on1: on1,
+      on0Const: "Col" + on0Field.goName,
+      on1Const: "col" + snakeToPascal(tbl) + snakeToPascal(on1),
+      cols: colEntries
+    });
+  }
+  if (joinEntries.length == 0) {
+    return result;
+  }
+
+  // ── 联表列名常量（colXxx 真实列名 + viewXxx 输出别名；去重，ON/输出同列只一条）
+  let constDefs: Object[] = [];
+  for (je in joinEntries) {
+    let onExists: Bool = false;
+    for (cd in constDefs) {
+      if (cd["name"] == je["on1Const"]) { onExists = true; }
+    }
+    if (!onExists) {
+      constDefs.append({ name: je["on1Const"], value: je["on1"],
+        comment: je["table"] + "." + je["on1"] + "（ON 条件用）" });
+    }
+    for (ce in joinColsOf(je)) {
+      let isOn: Bool = (ce["col"] == je["on1"]);
+      let cmt: String = je["table"] + "." + ce["col"] + (isOn ? "（ON 条件用）" : "（真实列名）");
+      let colExists: Bool = false;
+      for (cd in constDefs) {
+        if (cd["name"] == ce["colConst"]) { colExists = true; }
+      }
+      if (!colExists) {
+        constDefs.append({ name: ce["colConst"], value: ce["col"], comment: cmt });
+      }
+    }
+  }
+  for (je in joinEntries) {
+    for (ce in joinColsOf(je)) {
+      let viewExists: Bool = false;
+      for (cd in constDefs) {
+        if (cd["name"] == ce["viewConst"]) { viewExists = true; }
+      }
+      if (!viewExists) {
+        constDefs.append({ name: ce["viewConst"], value: ce["alias"],
+          comment: "输出别名 = 前端统一字段名（输出/入参/排序同名）" });
+      }
+    }
+  }
+  let tb: String = tabChar();
+  let maxName: Number = 0;
+  let maxValue: Number = 0;
+  for (cd in constDefs) {
+    if (cd["name"].length > maxName) { maxName = cd["name"].length; }
+    let vl: Number = ("\"" + cd["value"] + "\"").length;
+    if (vl > maxValue) { maxValue = vl; }
+  }
+  let joinConstLines: String[] = [];
+  for (cd in constDefs) {
+    let v: String = "\"" + cd["value"] + "\"";
+    joinConstLines.append(tb + padTo(cd["name"], maxName) + " = " + padTo(v, maxValue)
+      + " // " + cd["comment"]);
+  }
+
+  // ── EnXxxView 字段行（嵌入行 + 联表列平铺，gorm/json tag = 输出别名）──
+  let viewFields: Object[] = [];
+  for (je in joinEntries) {
+    for (ce in joinColsOf(je)) {
+      viewFields.append({ goName: ce["aliasGo"], goType: ce["goType"], alias: ce["alias"],
+        comment: ce["comment"] + "（" + je["table"] + "." + ce["col"] + "）" });
+    }
+  }
+  let maxVn: Number = 0;
+  let maxVt: Number = 0;
+  let maxVtag: Number = 0;
+  for (vf in viewFields) {
+    if (vf["goName"].length > maxVn) { maxVn = vf["goName"].length; }
+    if (vf["goType"].length > maxVt) { maxVt = vf["goType"].length; }
+    let tl: Number = ("`gorm:\"column:" + vf["alias"] + "\" json:\"" + vf["alias"] + "\"`").length;
+    if (tl > maxVtag) { maxVtag = tl; }
+  }
+  let enViewFieldLines: String[] = [];
+  enViewFieldLines.append(tb + param.enClass);
+  for (vf in viewFields) {
+    let tag: String = "`gorm:\"column:" + vf["alias"] + "\" json:\"" + vf["alias"] + "\"`";
+    enViewFieldLines.append(tb + padTo(vf["goName"], maxVn) + " " + padTo(vf["goType"], maxVt)
+      + " " + padTo(tag, maxVtag) + " // " + vf["comment"]);
+  }
+
+  // ── 查询字段来源（优先级：查询视图 selColsEq/Like 的输出别名 > cols[].filter 旧写法）──
+  // aliasMap：输出别名 → true（generateLayeredTable 据此把别名 ref 从主查询字段剥离）
+  let aliasMap: Object = {};
+  for (je in joinEntries) {
+    for (ce in joinColsOf(je)) {
+      aliasMap[ce["alias"]] = true;
+    }
+  }
+  // filterOf：输出别名 → like/eq（cols[].filter 先落底，查询视图按 eq 优先合并）
+  let filterOf: Object = {};
+  for (je in joinEntries) {
+    for (ce in joinColsOf(je)) {
+      if (ce["filter"] != "") { filterOf[ce["alias"]] = ce["filter"]; }
+    }
+  }
+  let eqCfgs: Object[] = json["selColsEq"];
+  if (eqCfgs != null) {
+    for (qc in eqCfgs) {
+      let ref: String = qc["ref"];
+      if (ref != null && ref != "" && aliasMap[ref] != null) { filterOf[ref] = "eq"; }
+    }
+  }
+  let likeCfgs: Object[] = json["selColsLike"];
+  if (likeCfgs != null) {
+    for (qc in likeCfgs) {
+      let ref: String = qc["ref"];
+      if (ref != null && ref != "" && aliasMap[ref] != null && filterOf[ref] == null) {
+        filterOf[ref] = "like";
+      }
+    }
+  }
+  let gapCfgs: Object[] = json["selColsGap"];
+  if (gapCfgs != null) {
+    for (qc in gapCfgs) {
+      let ref: String = qc["ref"];
+      if (ref != null && ref != "" && aliasMap[ref] != null) {
+        printLog("提示：联表输出列 '" + ref + "' 暂不支持范围查询，已跳过");
+      }
+    }
+  }
+
+  // ── 入参字段（查询视图/cols[].filter 命中的输出列 → InSel 指针字段，json = 输出别名）──
+  let joinSelFields: SelFieldDef[] = [];
+  let joinWhereLines: String[] = [];
+  for (je in joinEntries) {
+    for (ce in joinColsOf(je)) {
+      let flt: String = filterOf[ce["alias"]];
+      if (flt == null || flt == "") { continue; }
+      let sf: SelFieldDef = new SelFieldDef();
+      sf.name = ce["alias"];
+      sf.baseName = ce["alias"];
+      sf.comment = ce["comment"] + (flt == "like" ? "（模糊，联表 " : "（联表 ")
+        + je["table"] + "）";
+      sf.goType = ce["goType"];
+      sf.goName = ce["aliasGo"];
+      sf.kind = zeroKindOfGoType(ce["goType"]);
+      sf.declType = "*" + ce["goType"];
+      sf.isLike = (flt == "like");
+      joinSelFields.append(sf);
+      let val: String = "sel." + ce["aliasGo"];
+      if (ce["goType"] != "time.Time") { val = "*" + val; }
+      let fn: String = flt == "like" ? "querySpec.WhereLike" : "querySpec.WhereEq";
+      joinWhereLines.append(tb + "if sel." + ce["aliasGo"] + " != nil {\n"
+        + tb + tb + "db = " + fn + "(db, " + ce["viewConst"] + ", " + val + ")\n"
+        + tb + "}");
+    }
+  }
+
+  // ── querySpec 块（Table + Joins + Order；键对齐与 gofmt 一致）────────
+  let orderEntryLines: String[] = [];
+  let maxKey: Number = 0;
+  for (let i = 0; i < sortCols.length; i = i + 1) {
+    let k: String = "\"" + sortCols[i] + "\":";
+    if (k.length > maxKey) { maxKey = k.length; }
+  }
+  for (let i = 0; i < sortCols.length; i = i + 1) {
+    let k: String = "\"" + sortCols[i] + "\":";
+    orderEntryLines.append(tb + tb + padTo(k, maxKey) + " \"" + sortDirs[i] + "\",");
+  }
+  let spec: String = "// querySpec 列表查询规格（" + param.tableName
+    + ".jsontable 生成）：主表 + 联表 + 排序白名单\n";
+  for (je in joinEntries) {
+    let colList: String = "";
+    for (ce in joinColsOf(je)) {
+      colList = colList + (colList == "" ? "" : "、") + ce["col"];
+    }
+    if (colList == "") { colList = "无输出列"; }
+    spec = spec + "// 联表 " + je["table"] + "：输出 " + colList + "；"
+      + je["joinType"] + " JOIN 保证 " + je["table"] + " 无行时主表仍返回\n";
+  }
+  spec = spec + "var querySpec = common.QuerySpec{\n";
+  spec = spec + tb + "Table: \"" + param.tableName + "\",\n";
+  spec = spec + tb + "Joins: []common.Join{\n";
+  for (je in joinEntries) {
+    // Join 类型常量名：JoinLeft / JoinInner（配置大写 → Go 常量驼峰）
+    let joinConst: String = je["joinType"] == "LEFT" ? "common.JoinLeft" : "common.JoinInner";
+    let colsInline: String = "";
+    for (ce in joinColsOf(je)) {
+      colsInline = colsInline + (colsInline == "" ? "" : ", ")
+        + "{Col: " + ce["colConst"] + ", Alias: " + ce["viewConst"] + "}";
+    }
+    spec = spec + tb + tb + "{\n";
+    spec = spec + tb + tb + tb + "Table: \"" + je["table"] + "\",\n";
+    spec = spec + tb + tb + tb + "Type:  " + joinConst + ",\n";
+    spec = spec + tb + tb + tb + "On:    [2]string{" + je["on0Const"] + ", " + je["on1Const"] + "},\n";
+    spec = spec + tb + tb + tb + "Cols:  []common.OutCol{" + colsInline + "},\n";
+    spec = spec + tb + tb + "},\n";
+  }
+  spec = spec + tb + "},\n";
+  if (orderEntryLines.length == 0) {
+    spec = spec + tb + "Order: map[string]string{},\n";
+  } else {
+    spec = spec + tb + "Order: map[string]string{\n";
+    for (ol in orderEntryLines) {
+      spec = spec + ol + "\n";
+    }
+    spec = spec + tb + "},\n";
+  }
+  spec = spec + "}";
+
+  result["hasJoin"] = true;
+  result["joinEntries"] = joinEntries;
+  result["viewFields"] = viewFields;
+  result["joinConstLines"] = joinConstLines;
+  result["enViewFieldLines"] = enViewFieldLines;
+  result["joinSpecBlock"] = spec;
+  result["joinSelFields"] = joinSelFields;
+  result["joinWhereLines"] = joinWhereLines;
+  result["aliasMap"] = aliasMap;
+  return result;
+}
+
+/// @brief 复制表配置并剥离查询视图里的联表输出别名 ref
+/// （别名由 buildLayeredJoinData 的 joinSelFields 承接，避免主查询字段
+///   生成端把它当本表列解析而报"不存在"警告）
+export function stripJoinQueryRefs(json: Object, aliasMap: Object): Object {
+  if (aliasMap == null) { aliasMap = {}; }
+  let copy: Object = {};
+  for (k in json) {
+    copy[k] = json[k];
+  }
+  copy["selColsEq"] = filterJoinRefs(json["selColsEq"], aliasMap);
+  copy["selColsLike"] = filterJoinRefs(json["selColsLike"], aliasMap);
+  copy["selColsGap"] = filterJoinRefs(json["selColsGap"], aliasMap);
+  return copy;
+}
+
+/// @brief 过滤查询列数组：剔除 ref 为联表输出别名的条目
+export function filterJoinRefs(arr: Object, aliasMap: Object): Object[] {
+  let out: Object[] = [];
+  if (arr != null) {
+    for (qc in arr) {
+      let ref: String = qc["ref"];
+      if (ref != null && aliasMap[ref] != null) { continue; }
+      out.append(qc);
+    }
+  }
+  return out;
+}
+
 /// @brief 生成一张分层布局的表（data/ + modules/admin/）
 /// @return 实际写入文件数
 export function generateLayeredTable(json: Object, goBasePath: String, moduleName: String,
     commonPath: String, middlewarePath: String, moduleDir: String, pkgName: String,
-    globalEnumDefs: Object, emitted: Object): Number {
+    globalEnumDefs: Object, emitted: Object, tablesByName: Object): Number {
   let tplDir: String = "../../crud_gin/template";
   let tableName: String = json["tableName"];
   let param: Param = new Param();
@@ -1533,13 +1936,7 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   let idName: String = param.primaryField.goName;
   let idCol: String = param.primaryField.name;
 
-  // ── 查询场景：过滤字段全指针 + common.Where* 条件 ───────────────
-  let qd: QueryData = new QueryData();
-  qd.pointerMode = true;
-  let selFields: SelFieldDef[] = qd.buildSelFields(json, param, [], false);
-  let whereConds: String[] = qd.buildWhereConditionsPointer(selFields);
-
-  // ── 排序白名单：selColsSort 顺序（跳过联表 ref）──────────────────
+  // ── 排序白名单：selColsSort 顺序（联表模式 = querySpec.Order 键）──
   let sortCols: String[] = [];
   let sortDirs: String[] = [];
   let sortPairs: Object[] = json["selColsSort"];
@@ -1555,6 +1952,37 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   }
   let sortWhitelistName: String = snakeToCamel(tableName) + "SortWhitelist";
   let sortEntryLines: String[] = buildSortEntryLines(sortCols, sortDirs);
+
+  // ── 联表（joinTables 新格式）：视图/常量/querySpec/入参字段/条件行 ──
+  //      有联表时 SelectByIn 走 querySpec 流水线（返回 EnXxxView），排序白名单
+  //      移入 querySpec.Order；无联表的表生成物与单表版完全一致
+  let jd: Object = buildLayeredJoinData(json, param, tablesByName, sortCols, sortDirs);
+  let hasJoin: Bool = jd["hasJoin"];
+
+  // ── 查询场景：过滤字段全指针 + 条件行（联表模式条件走 querySpec.Where*，
+  //      主表裸列名由 QuerySpec 自动限定）────────────────────────────
+  let qd: QueryData = new QueryData();
+  qd.pointerMode = true;
+  let aliasMap: Object = jd["aliasMap"];
+  let mainSelFields: SelFieldDef[] = qd.buildSelFields(stripJoinQueryRefs(json, aliasMap), param, [], false);
+  let selFields: SelFieldDef[] = mainSelFields;
+  let joinSelFields: SelFieldDef[] = jd["joinSelFields"];
+  for (jsf in joinSelFields) {
+    selFields.append(jsf);
+  }
+  let whereConds: String[] = [];
+  if (hasJoin) {
+    let rawConds: String[] = qd.buildWhereConditionsPointer(mainSelFields);
+    for (c in rawConds) {
+      whereConds.append(c.replace("common.Where", "querySpec.Where"));
+    }
+    let joinWhere: String[] = jd["joinWhereLines"];
+    for (c in joinWhere) {
+      whereConds.append(c);
+    }
+  } else {
+    whereConds = qd.buildWhereConditionsPointer(mainSelFields);
+  }
 
   // ── 预渲染行（逐字节对齐）─────────────────────────────────────
   let enFieldLines: String[] = buildEnFieldLines(param.fields);
@@ -1592,6 +2020,19 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   }
   let tb: String = tabChar();
   let enImports: String = needTime ? "import \"time\"" : "";
+  if (hasJoin) {
+    // 联表模式：querySpec 引用 common；联表输出列为 time.Time 时需要 time 包
+    let viewFieldList: Object[] = jd["viewFields"];
+    let joinNeedTime: Bool = false;
+    for (vf in viewFieldList) {
+      if (vf["goType"] == "time.Time") { joinNeedTime = true; }
+    }
+    if (needTime || joinNeedTime) {
+      enImports = "import (\n" + tb + "\"time\"\n\n" + tb + "\"" + commonPath + "\"\n)";
+    } else {
+      enImports = "import \"" + commonPath + "\"";
+    }
+  }
   let selImports: String = "";
   if (selNeedTime) {
     selImports = "import (\n" + tb + "\"" + commonPath + "\"\n" + tb + "\"time\"\n)";
@@ -1706,6 +2147,23 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   tplData["appRouterImports"] = appRouterImports;
   tplData["hasEnums"] = hasEnums;
   tplData["enums"] = enums;
+
+  // ── 联表（joinTables）模板数据 ─────────────────────────────────
+  tplData["hasJoin"] = hasJoin;
+  tplData["joinConstLines"] = jd["joinConstLines"];
+  tplData["enViewFieldLines"] = jd["enViewFieldLines"];
+  tplData["joinSpecBlock"] = jd["joinSpecBlock"];
+  tplData["listType"] = hasJoin ? param.enClass + "View" : param.enClass;
+  let selComment: String = "分页查询列表数据，返回数据列表和总记录数";
+  if (hasJoin) {
+    let joinEntryList: Object[] = jd["joinEntries"];
+    let jl: String = "";
+    for (je in joinEntryList) {
+      jl = jl + (jl == "" ? "" : " + ") + je["table"];
+    }
+    selComment = "分页联表查询列表数据（" + param.tableName + " + " + jl + "），返回视图列表和总记录数";
+  }
+  tplData["selComment"] = selComment;
 
   // ── 模板清单（data 读面 → admin 写面 → 首次骨架）──────────────
   let templates: TemplateConfig[] = [

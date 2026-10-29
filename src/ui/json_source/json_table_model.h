@@ -100,6 +100,14 @@ inline constexpr const char *kJoinFk = "joinFk";      ///< 本表外键列（∈
 inline constexpr const char *kJoinPk = "joinPk";      ///< 目标表主键列（缺省 id）
 inline constexpr const char *kIsJoinRelations =
     "isJoinRelations";  ///< true=有效声明；false=该条目不生效（旧 .json 同名）
+// 联表查询声明（新格式 joinTables：声明式 JOIN，生成 QuerySpec 联表流水线）
+inline constexpr const char *kJoinTables = "joinTables";  ///< 联表查询声明数组（新格式）
+inline constexpr const char *kJoinSpecType = "type";    ///< JOIN 类型：LEFT/INNER（缺省 LEFT）
+inline constexpr const char *kJoinSpecOn = "on";        ///< [主表列, 被联表列]（表名由规格自带）
+inline constexpr const char *kJoinSpecCol = "col";      ///< 输出列名（∈ 被联表列）
+inline constexpr const char *kJoinSpecFilter = "filter";  ///< 筛选：like/eq/""（空=只输出）
+// 编辑表单（jsonvue 一致键名；editCols[] 元素级）
+inline constexpr const char *kEditEditable = "editEditable";  ///< 表单内可编辑（false=只读展示）
 inline constexpr const char *kSelCols = "selCols";      ///< 列表读模型（[{ref,label,width}]，ref 支持联表路径）
 inline constexpr const char *kSelColsEq = "selColsEq";  ///< 精确查询列（[{ref,visible}]，支持联表路径）
 inline constexpr const char *kSelColsGap = "selColsGap";        ///< 范围查询列（展开 _min/_max）
@@ -223,6 +231,38 @@ struct JsonTableJoin {
 };
 
 /**
+ * @struct JsonTableJoinCol
+ * @brief 联表查询输出列（joinTables[].cols[] 元素，新格式）
+ */
+struct JsonTableJoinCol {
+  QString col;     ///< 联表输出列名（∈ 被联表列）
+  QString filter;  ///< 筛选：like=模糊 / eq=精确 / ""=只输出不筛
+
+  QJsonObject toJsonObject() const;
+  static JsonTableJoinCol fromJsonObject(const QJsonObject &obj);
+  bool operator==(const JsonTableJoinCol &other) const;
+};
+
+/**
+ * @struct JsonTableJoinSpec
+ * @brief 联表查询声明（joinTables[] 元素，新格式；生成端产出 QuerySpec 联表流水线）
+ *
+ * 声明式 JOIN：被联表名 + ON 两列（on[0]=主表列, on[1]=被联表列，表名由
+ * QuerySpec/Join 自带不重复写）+ 输出列（别名固定 = 表名_列名，前端统一字段名）。
+ * 关系基数（1:1 / 多:1）由 on 两列语义自然表达，不单独建模。
+ */
+struct JsonTableJoinSpec {
+  QString table;  ///< 被联表名（∈ 项目已扫描 .jsontable）
+  QString type = QStringLiteral("LEFT");  ///< LEFT / INNER
+  QStringList on;                         ///< [主表列, 被联表列]（恰好 2 元素）
+  QVector<JsonTableJoinCol> cols;         ///< 输出列（filter 空 = 只输出）
+
+  QJsonObject toJsonObject() const;
+  static JsonTableJoinSpec fromJsonObject(const QJsonObject &obj);
+  bool operator==(const JsonTableJoinSpec &other) const;
+};
+
+/**
  * @struct JsonTableSelCol
  * @brief 列表视图的一列（selCols 数组元素）
  */
@@ -259,7 +299,7 @@ struct JsonTableQueryCol {
 
 /**
  * @struct JsonTableEditCol
- * @brief 编辑视图的一列（editCols 数组元素；仅物理列，联表列只读进不来）
+ * @brief 编辑视图的一列（editCols 数组元素；物理列可编辑，联表输出别名只读展示）
  *
  * 显式列出的列 = 进编辑表单（未列出 = 不进，原 form:"none" 语义被取代）；
  * widget 空 = 按 mysqlType 推导（varchar→input、int/decimal→number、
@@ -267,9 +307,10 @@ struct JsonTableQueryCol {
  * 进表单、控件按类型推导（零配置等价旧行为）。
  */
 struct JsonTableEditCol {
-  QString ref;          ///< 列引用（仅本表物理列名）
+  QString ref;          ///< 列引用（本表物理列名 或 联表输出别名 表名_列名）
   QString label;        ///< 编辑标题（空 = 回退列注释/列名）
   bool visible = true;  ///< 前端是否渲染表单项（false=参数仍生成，仅 UI 不渲染）
+  bool editEditable = true;  ///< 表单内可编辑（false=只读展示；联表输出别名固定 false）
   QString widget;       ///< 控件类型：input/textarea/select/date/number/image/upload/boolean
   bool required = false;  ///< 必填（→ InsertParams binding:"required"）
 
@@ -388,7 +429,8 @@ struct JsonTableTable {
   QVector<JsonTableColumn> columns;  ///< 列定义（顺序即建表顺序；含列级取值域）
   QVector<JsonTableIndex> indexes;   ///< 索引定义
   // ── 表级进阶键（v2 结构化，此前走 extra）──
-  QVector<JsonTableJoin> joinTable;  ///< 联表声明（多对一列表联查/一对多详情聚合）
+  QVector<JsonTableJoin> joinTable;  ///< 联表声明（多对一列表联查/一对多详情聚合，旧格式遗留）
+  QVector<JsonTableJoinSpec> joinTables;  ///< 联表查询声明（新格式，生成 QuerySpec 流水线）
   QVector<JsonTableSelCol> selCols;  ///< 列表视图（ref 支持联表路径 joinEnClassPro.column）
   QVector<JsonTableQueryCol> selColsEq;   ///< 查询视图：精确（visible=false 仅后端）
   QVector<JsonTableQueryCol> selColsGap;  ///< 查询视图：范围（每列展开 _min/_max）

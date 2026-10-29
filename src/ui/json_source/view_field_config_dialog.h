@@ -19,6 +19,7 @@
 #include "json_table_model.h"
 
 class AuiTreeCombo;
+class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QFormLayout;
@@ -119,6 +120,7 @@ private:
   QSpinBox *m_listThumbH = nullptr;
 
   // ── 编辑表单 ──
+  QCheckBox *m_editEditableCheck = nullptr;  ///< 编辑时可编辑（false=表单内只读展示）
   QComboBox *m_widgetCombo = nullptr;
   QLineEdit *m_placeholderEdit = nullptr;   ///< 占位提示（input/textarea/image）
   QSpinBox *m_maxlengthSpin = nullptr;      ///< 最大长度（input，0=不限）

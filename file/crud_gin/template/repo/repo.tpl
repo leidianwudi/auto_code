@@ -2,10 +2,12 @@ ${# ============================================================================
 ${# Repo 模板：data/{dataDir}/{tableName}_repo_.go               }
 ${# ----------------------------------------------------------------------------}
 ${#   - 共享数据层：admin/app 两端复用；方法首参 db 支持独立查询/事务           }
-${#   - 白名单排序（selColsSort 派生）+ common.Paginate/Where*/ApplyOrder      }
+${#   - 联表模式（hasJoin）：querySpec 流水线（Apply→Where→ApplyOrder→分页），   }
+${#     排序白名单在 querySpec.Order；单表模式：白名单变量 + common.Where*/ApplyOrder }
 ${#   - 写路径只留 UpdateById(map) 原子方法，Save/Delete 编排在手写 service 件 }
 ${# 数据来源：pkgName/repoClass/enClass/selClass/idGoType/idGoName/tableComment  }
-${#           repoImports/sortWhitelistName/sortEntryLines/whereConditions      }
+${#           repoImports/sortWhitelistName/sortEntryLines/whereConditions/      }
+${#           hasJoin                                                            }
 ${# ============================================================================}
 // 此代码为AutoCode编译器生成，请勿手动修改
 package ${pkgName}
@@ -23,12 +25,35 @@ func New${repoClass}(db *gorm.DB) *${repoClass} {
 	return &${repoClass}{DB: db}
 }
 
+${if hasJoin}// SelectByIn 分页联表查询，返回视图列表和总记录数
+// 列表返回 ${enClass}View（主表实体 + 联表输出列）
+// 查询流水线：SELECT+JOIN（querySpec.Apply）→ WHERE（getWhereByIn）→ ORDER（querySpec.ApplyOrder）→ 分页
+func (r *${repoClass}) SelectByIn(db *gorm.DB, sel *${selClass}) ([]${enClass}View, int64, error) {
+	query := querySpec.Apply(db.Model(&${enClass}{}))
+	query = r.getWhereByIn(query, sel)
+	query = querySpec.ApplyOrder(query, sel.Sort)
+	var list []${enClass}View
+	total, err := common.Paginate(query, sel.Page, sel.PageSize, &list)
+	if err != nil {
+		return nil, 0, err
+	}
+	return list, total, nil
+}
+
+// getWhereByIn 根据查询参数构建查询条件（指针 nil=不加条件，非 nil=按它筛选，含 0）
+// 全部裸列名：主表列与联表输出列由 QuerySpec 自动限定表名
+func (r *${repoClass}) getWhereByIn(db *gorm.DB, sel *${selClass}) *gorm.DB {
+${each cond in whereConditions}
+${cond}
+${/each}
+	return db
+}
+${else}
 // ${sortWhitelistName} 排序白名单：列名 → 固定方向（前端只传字段名，防注入）
 var ${sortWhitelistName} = map[string]string{
 ${each line in sortEntryLines}
 ${line}
-${/each}
-}
+${/each}}
 
 // SelectByIn 分页查询，返回数据列表和总记录数
 func (r *${repoClass}) SelectByIn(db *gorm.DB, sel *${selClass}) ([]${enClass}, int64, error) {
@@ -49,6 +74,7 @@ ${cond}
 ${/each}
 	return db
 }
+${/if}
 
 // SelectById 根据id查询单条记录
 func (r *${repoClass}) SelectById(db *gorm.DB, id ${idGoType}) (*${enClass}, error) {

@@ -201,9 +201,9 @@
     ],
     editCols: [
       {
-        label: '用户vip等级',
-        ref: 'level',
-        required: true,
+        editEditable: false,
+        label: '账户',
+        ref: 'user_ext_account',
       },
       {
         label: '昵称',
@@ -211,13 +211,38 @@
         required: true,
       },
       {
-        label: '头像url',
-        ref: 'head_img_url',
+        label: '用户vip等级',
+        ref: 'level',
+        required: true,
       },
       {
         label: '是否实名',
         ref: 'is_real_name',
         required: true,
+      },
+      {
+        label: '金币余额',
+        ref: 'coin',
+      },
+      {
+        label: '充值金币',
+        ref: 'recharge_coin',
+      },
+      {
+        label: '充值金额',
+        ref: 'recharge_money',
+      },
+      {
+        label: '活动获得金币',
+        ref: 'activity_coin',
+      },
+      {
+        label: '备注',
+        ref: 'desc',
+      },
+      {
+        label: '头像url',
+        ref: 'head_img_url',
       },
       {
         label: '粉丝数量',
@@ -243,6 +268,22 @@
         label: '上级的上级',
         ref: 'up2',
       },
+      {
+        label: '收益金币',
+        ref: 'earn_coin',
+      },
+      {
+        label: '消费金币',
+        ref: 'spend_coin',
+      },
+      {
+        label: '转出金币',
+        ref: 'out_coin',
+      },
+      {
+        label: '道具数量',
+        ref: 'item_count',
+      },
     ],
     indexes: [
       {
@@ -253,16 +294,35 @@
         unique: false,
       },
     ],
+    joinTables: [
+      {
+        cols: [
+          {
+            col: 'account',
+          },
+        ],
+        on: [
+          'id',
+          'user_id',
+        ],
+        table: 'user_ext',
+        type: 'LEFT',
+      },
+    ],
     manualUpdateTime: false,
     modelName: 'user',
     selCols: [
       {
-        label: '用户vip等级',
-        ref: 'level',
+        label: '账户',
+        ref: 'user_ext_account',
       },
       {
         label: '昵称',
         ref: 'nick',
+      },
+      {
+        label: '用户vip等级',
+        ref: 'level',
       },
       {
         label: '是否实名',
@@ -292,6 +352,9 @@
     selColsEq: [
       {
         ref: 'id',
+      },
+      {
+        ref: 'user_ext_account',
       },
     ],
     selColsLike: [

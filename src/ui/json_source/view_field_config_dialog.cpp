@@ -5,6 +5,7 @@
 
 #include "view_field_config_dialog.h"
 
+#include <QCheckBox>
 #include <QFile>
 #include <QFileInfo>
 #include <QFormLayout>
@@ -167,6 +168,10 @@ void ViewFieldConfigDialog::setupUI() {
   connect(m_widgetCombo, &QComboBox::activated, this,
           [this](int) { updateEditFormRows(); });
 
+  m_editEditableCheck = new QCheckBox(QStringLiteral("取消勾选 = 编辑表单内只读展示"), this);
+  m_editEditableCheck->setChecked(true);
+  form->addRow(QStringLiteral("编辑时可编辑:"), m_editEditableCheck);
+
   // 注：编辑表单标题不在此配置——界面显示标题统一取「字段呈现」的标题列
 
   // ── 编辑表单精细参数（键名与 .jsonvue 一致；空/0=未配置，合成页由模板按类型缺省）──
@@ -304,6 +309,7 @@ void ViewFieldConfigDialog::setSearchRoot(const QString &dir) {
 void ViewFieldConfigDialog::setCurrent(const JsonTableSelCol &sc, const JsonTableEditCol &ec) {
   comboSelectData(m_widthCombo, sc.width > 0 ? QVariant(sc.width) : QVariant(QString()));
   comboSelectData(m_widgetCombo, ec.widget);
+  m_editEditableCheck->setChecked(ec.editEditable);
   comboSelectData(m_displayTypeCombo, sc.displayType);
   m_listThumbW->setValue(sc.listThumbWidth);
   m_listThumbH->setValue(sc.listThumbHeight);
@@ -499,6 +505,7 @@ void ViewFieldConfigDialog::fillListResult(JsonTableSelCol *sc) const {
 void ViewFieldConfigDialog::fillEditResult(JsonTableEditCol *ec) const {
   if (!ec) return;
   if (m_widgetCombo) ec->widget = m_widgetCombo->currentData().toString();
+  ec->editEditable = m_editEditableCheck ? m_editEditableCheck->isChecked() : true;
   if (m_placeholderEdit) ec->placeholder = m_placeholderEdit->text().trimmed();
   ec->maxlength = m_maxlengthSpin ? m_maxlengthSpin->value() : 0;
   ec->textareaRows = m_textareaRowsSpin ? m_textareaRowsSpin->value() : 0;
