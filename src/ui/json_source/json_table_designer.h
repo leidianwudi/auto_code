@@ -1,4 +1,4 @@
-﻿﻿/**
+/**
  * @file json_table_designer.h
  * @brief .jsontable 单张表设计器对话框
  *
