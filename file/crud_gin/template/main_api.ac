@@ -2165,18 +2165,24 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   }
   tplData["selComment"] = selComment;
 
-  // ── 模板清单（data 读面 → admin 写面 → 首次骨架）──────────────
+  // ── 模板清单（data 读面 → admin 写面；repo_ext 为手写扩展首次骨架）──
   let templates: TemplateConfig[] = [
     { tpl: tplDir + "/model/entity.tpl",  out: "{goBasePath}/data/{dataDir}/en_{tableName}_.go" },
     { tpl: tplDir + "/model/in_sel.tpl",  out: "{goBasePath}/data/{dataDir}/in_sel_{tableName}_.go" },
     { tpl: tplDir + "/repo/repo.tpl",     out: "{goBasePath}/data/{dataDir}/{tableName}_repo_.go" },
     // repo 手写扩展件（首次骨架，fileExists 守卫）：自定义查询/统计方法写这里
+    // （生成件不调用其中的方法，无编译契约；service 写路径已并入 *_service_.go 覆盖件）
     { tpl: tplDir + "/repo/repo_ext.tpl", out: "{goBasePath}/data/{dataDir}/{tableName}_repo.go" },
     { tpl: tplDir + "/model/in_upd.tpl",  out: "{goBasePath}/modules/admin/{dataDir}/in_upd_{tableName}_.go" },
     { tpl: tplDir + "/handler/hdl.tpl",   out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_handler_.go" },
     { tpl: tplDir + "/service/svc.tpl",   out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_service_.go" },
-    { tpl: tplDir + "/router.tpl",        out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_router_.go" },
-    { tpl: tplDir + "/service/svc_write.tpl", out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_service.go" }
+    // 手写扩展三件套（首次骨架，fileExists 守卫）：自定义业务/接口写这里；
+    // 命名约定 = 生成覆盖件去尾下划线（与 *_repo.go 一致）；
+    // {tableName}_router.go 的 RegisterExtRoutes 由下方 router_.go 生成件调用（须先生成）
+    { tpl: tplDir + "/service/svc_ext.tpl",   out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_service.go" },
+    { tpl: tplDir + "/handler/hdl_ext.tpl",   out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_handler.go" },
+    { tpl: tplDir + "/router_ext.tpl",        out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_router.go" },
+    { tpl: tplDir + "/router.tpl",        out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_router_.go" }
   ];
 
   // C 端只读模块：只生成 selectByIn/selectById 三件（service/handler/router），
@@ -2188,6 +2194,14 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
       out: "{goBasePath}/modules/app/{dataDir}/{tableName}_handler_.go" });
     templates.append({ tpl: tplDir + "/app/router.tpl",
       out: "{goBasePath}/modules/app/{dataDir}/{tableName}_router_.go" });
+    // C 端手写扩展三件套（首次骨架；{tableName}_router.go 的 RegisterExtRoutes
+    // 由 app router_.go 调用；命名约定同 admin 侧）
+    templates.append({ tpl: tplDir + "/app/svc_ext.tpl",
+      out: "{goBasePath}/modules/app/{dataDir}/{tableName}_service.go" });
+    templates.append({ tpl: tplDir + "/app/hdl_ext.tpl",
+      out: "{goBasePath}/modules/app/{dataDir}/{tableName}_handler.go" });
+    templates.append({ tpl: tplDir + "/app/router_ext.tpl",
+      out: "{goBasePath}/modules/app/{dataDir}/{tableName}_router.go" });
   }
 
   let count: Number = 0;

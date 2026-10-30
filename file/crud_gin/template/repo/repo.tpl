@@ -4,7 +4,8 @@ ${# ----------------------------------------------------------------------------
 ${#   - 共享数据层：admin/app 两端复用；方法首参 db 支持独立查询/事务           }
 ${#   - 联表模式（hasJoin）：querySpec 流水线（Apply→Where→ApplyOrder→分页），   }
 ${#     排序白名单在 querySpec.Order；单表模式：白名单变量 + common.Where*/ApplyOrder }
-${#   - 写路径只留 UpdateById(map) 原子方法，Save/Delete 编排在手写 service 件 }
+${#   - 写路径只留 Insert/UpdateById(map)/Delete 原子方法，Save/Delete 编排在     }
+${#     service 生成件（*_service_.go）                                          }
 ${# 数据来源：pkgName/repoClass/enClass/selClass/idGoType/idGoName/tableComment  }
 ${#           repoImports/sortWhitelistName/sortEntryLines/whereConditions/      }
 ${#           hasJoin                                                            }
