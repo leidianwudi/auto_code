@@ -116,11 +116,13 @@ private:
   // ── 列表页展示 ──
   QComboBox *m_displayTypeCombo = nullptr;
   QComboBox *m_widthCombo = nullptr;
+  QWidget *m_listThumbRow = nullptr;  ///< 列表缩略图行容器（整行显隐随 displayType=image）
   QSpinBox *m_listThumbW = nullptr;
   QSpinBox *m_listThumbH = nullptr;
 
   // ── 编辑表单 ──
   QCheckBox *m_editEditableCheck = nullptr;  ///< 编辑时可编辑（false=表单内只读展示）
+  QCheckBox *m_requiredCheck = nullptr;      ///< 必填（提交时校验；对齐 jsonvue 字段设置）
   QComboBox *m_widgetCombo = nullptr;
   QLineEdit *m_placeholderEdit = nullptr;   ///< 占位提示（input/textarea/image）
   QSpinBox *m_maxlengthSpin = nullptr;      ///< 最大长度（input，0=不限）
@@ -129,11 +131,14 @@ private:
   QDoubleSpinBox *m_maxSpin = nullptr;      ///< 最大值（int/float，0=不限）
   QSpinBox *m_precisionSpin = nullptr;      ///< 小数位（float，0=缺省 2）
   QComboBox *m_dateFormatCombo = nullptr;   ///< 日期格式覆盖（空=按类型推导）
-  QSpinBox *m_formSpanSpin = nullptr;       ///< 编辑表单栅格 span（0=缺省 12）
+  QComboBox *m_formSpanCombo = nullptr;     ///< 编辑表单栅格（自动/半行12/整行24，对齐 jsonvue）
   QLineEdit *m_formDefaultEdit = nullptr;   ///< 表单新建预填值
   QComboBox *m_uploadSourceCombo = nullptr;
+  QWidget *m_editThumbRow = nullptr;  ///< 编辑缩略图行容器（整行显隐随 image/upload 控件）
   QSpinBox *m_editThumbW = nullptr;
   QSpinBox *m_editThumbH = nullptr;
+
+  QLabel *m_fieldNameLabel = nullptr;  ///< 字段名首行（面板围绕单字段属性展开）
 
   QFormLayout *m_form = nullptr;  ///< 面板表单（行级显隐用）
   QLabel *m_editSep = nullptr;    ///< ── 编辑表单 ── 分隔行（联表行整区折叠）

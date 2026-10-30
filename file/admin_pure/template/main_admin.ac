@@ -260,15 +260,20 @@ export function qfNameOf(ref: String): String {
   return ref;
 }
 
-/// @brief 查询字段显示名（selCols label > 联表输出别名注释 > 联表目标列注释 > 本表列注释 > ref 原样）
+/// @brief 查询字段显示名（selCols label > 联表输出别名标题(title)>别名注释 >
+///        联表目标列注释 > 本表列注释 > ref 原样）
 export function qfLabelOf(ref: String, selLabelOf: Object, joinContext: Object, rawCols: Object[],
                    aliasMeta: Object): String {
   if (selLabelOf[ref] != null && selLabelOf[ref] != "") {
     return selLabelOf[ref];
   }
-  if (aliasMeta != null && aliasMeta[ref] != null && aliasMeta[ref]["comment"] != null &&
-      aliasMeta[ref]["comment"] != "") {
-    return aliasMeta[ref]["comment"];
+  if (aliasMeta != null && aliasMeta[ref] != null) {
+    if (aliasMeta[ref]["title"] != null && aliasMeta[ref]["title"] != "") {
+      return aliasMeta[ref]["title"];
+    }
+    if (aliasMeta[ref]["comment"] != null && aliasMeta[ref]["comment"] != "") {
+      return aliasMeta[ref]["comment"];
+    }
   }
   if (ref.indexOf(".") > 0) {
     let d: Number = ref.indexOf(".");
@@ -451,7 +456,8 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
     selMeta[sc2["ref"]] = { label: sc2["label"], width: sc2["width"],
                             displayType: sc2["displayType"],
                             listThumbWidth: sc2["listThumbWidth"],
-                            listThumbHeight: sc2["listThumbHeight"] };
+                            listThumbHeight: sc2["listThumbHeight"],
+                            tagItems: (sc2["tagItems"] != null ? sc2["tagItems"] : []) };
   }
   // ── 编辑视图（editCols：显式列出=进表单）──
   let editColCfgs: Object[] = [];
@@ -642,6 +648,12 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
         if (meta["displayType"] != null && meta["displayType"] != "") {
           cn["displayType"] = meta["displayType"];
         }
+        // 方案 1：selCols 手工标签映射（优先级最高，覆盖表内枚举/取值域/
+        // displayType 推导；映射隐含 tag 展示）
+        if (meta["tagItems"] != null && meta["tagItems"].length > 0) {
+          cn["displayType"] = "tag";
+          cn["tagItems"] = meta["tagItems"];
+        }
         if (meta["listThumbWidth"] != null && meta["listThumbWidth"] > 0) {
           cn["listThumbWidth"] = meta["listThumbWidth"];
         }
@@ -692,12 +704,15 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
 
   // 联表输出别名（joinTables 新格式）→ 虚拟列（dataName=表名_列名，与后端
   // EnXxxView 返回键对齐；编辑列勾选时进编辑表单但固定只读展示（editEditable=false）；
-  // label>目标列注释>别名）
+  // label>目标列标题(title)>目标列注释>别名；tag 样式 = selCols 手工映射（方案 1）
+  // 优先，否则自动继承目标表内枚举（方案 3，零配置））
   for (ar in selAliasRefs) {
     let am: Object = aliasMeta != null ? aliasMeta[ar] : null;
     let label2: String = selLabelOf[ar];
     if (label2 == null || label2 == "") {
-      if (am != null && am["comment"] != null && am["comment"] != "") {
+      if (am != null && am["title"] != null && am["title"] != "") {
+        label2 = am["title"];
+      } else if (am != null && am["comment"] != null && am["comment"] != "") {
         label2 = am["comment"];
       } else {
         label2 = ar;
@@ -706,6 +721,19 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
     // 编辑列勾选（editCols 命中别名）→ 编辑表单内只读展示
     let aec: Object = editColMap[ar];
     let aEditVisible: Bool = (aec != null && aec["visible"] != false);
+    // ── tag 样式推导（方案 1 手工映射优先，方案 3 自动继承兜底）──
+    let vTagItems: Object[] = [];
+    let vMeta: Object = selMeta[ar];
+    if (vMeta != null && vMeta["tagItems"] != null && vMeta["tagItems"].length > 0) {
+      vTagItems = vMeta["tagItems"];
+    } else if (am != null && am["enumItems"] != null && am["enumItems"].length > 0) {
+      let eis: Object[] = am["enumItems"];
+      let eisLen = eis.length;
+      for (let eix = 0; eix < eisLen; eix = eix + 1) {
+        vTagItems.append({ value: eis[eix]["value"], text: eis[eix]["label"],
+                           color: tagColorOf(eix) });
+      }
+    }
     cols.push({
       dataName: ar,
       queryName: label2,
@@ -722,7 +750,8 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
       textareaRows: 4,
       boolTrueText: "启用",
       boolFalseText: "禁用",
-      tagItems: [],
+      tagItems: vTagItems,
+      displayType: (vTagItems.length > 0 ? "tag" : ""),
       dateFormat: "",
       editStyle: "text"
     });
@@ -1198,8 +1227,10 @@ export function generateAdminMain(params: Object): Void {
     }
   }
 
-  // ── 联表输出别名上下文（joinTables 新格式）：别名 → {comment, mysqlType}──
-  //    目标表按 tableName 定位；与旧 joinContext 并存，别名 ref 走本上下文
+  // ── 联表输出别名上下文（joinTables 新格式）：别名 → {comment, mysqlType, ──
+  //    title, enumItems}。目标表按 tableName 定位；与旧 joinContext 并存。
+  //    title/enumItems 供方案 3 自动继承：目标列标题补显示名、目标表内枚举
+  //    推导列表 tag 样式（零配置），均取自目标表配置，无额外解析
   let aliasMeta: Object = {};
   for (let jz = 0; jz < tblLen; jz = jz + 1) {
     let jtSpecs: Object[] = tables[jz]["joinTables"];
@@ -1215,6 +1246,16 @@ export function generateAdminMain(params: Object): Void {
         printLog("提示：联表 '" + jtName + "' 的目标不在 tables[] 中，别名上下文跳过");
         continue;
       }
+      // 目标表内枚举索引（column → items）：方案 3 自动继承的数据源
+      let jtEnums: Object = {};
+      let tgtEnums: Object[] = target2["enums"];
+      if (tgtEnums != null) {
+        for (te in tgtEnums) {
+          if (te["column"] != null && te["column"] != "" && te["items"] != null) {
+            jtEnums[te["column"]] = te["items"];
+          }
+        }
+      }
       let colsSpec: Object[] = js["cols"];
       if (colsSpec == null) { continue; }
       for (cs in colsSpec) {
@@ -1222,15 +1263,18 @@ export function generateAdminMain(params: Object): Void {
         if (cn == null || cn == "") { continue; }
         let cm: String = "";
         let mt: String = "";
+        let tt: String = "";
         let tCols2: Object[] = target2["columns"];
         for (tcol2 in tCols2) {
           if (tcol2["name"] == cn) {
             cm = tcol2["comment"];
             mt = tcol2["mysqlType"];
+            tt = tcol2["title"];
             break;
           }
         }
-        aliasMeta[jtName + "_" + cn] = { comment: cm, mysqlType: mt };
+        aliasMeta[jtName + "_" + cn] = { comment: cm, mysqlType: mt, title: tt,
+                                         enumItems: jtEnums[cn] };
       }
     }
   }

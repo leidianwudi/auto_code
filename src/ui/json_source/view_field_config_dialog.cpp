@@ -36,11 +36,21 @@ ViewFieldConfigDialog::ViewFieldConfigDialog(const QString &ref, bool isJoinRow,
 }
 
 void ViewFieldConfigDialog::setupUI() {
-  ConfigDialogFrame frame = beginConfigDialog(this, QStringLiteral("字段设置：%1").arg(m_ref),
+  // 对齐 jsonvue 字段设置面板：宽度 520（长标签行不被挤压）
+  setMinimumWidth(520);
+  ConfigDialogFrame frame = beginConfigDialog(this, QStringLiteral("字段设置"),
                                               QMargins(12, 10, 12, 10), 6);
   m_form = new QFormLayout;
   auto *form = m_form;
+  form->setContentsMargins(0, 0, 0, 0);
   form->setSpacing(6);
+  // 标签右对齐（对齐 jsonvue）：控件列起始位置一致，标签长短不一不再参差
+  form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+
+  // 字段名首行（对齐 jsonvue：面板围绕单字段属性展开，字段名常显）
+  m_fieldNameLabel = new QLabel(m_ref, this);
+  m_fieldNameLabel->setStyleSheet(QStringLiteral("font-weight: 600; font-size: 13px;"));
+  form->addRow(QStringLiteral("字段:"), m_fieldNameLabel);
 
   if (!m_isJoinRow) {
     // ── 字段取值域（方案 B 中心化；类型简化为 未声明/数据源/远程接口）──
@@ -135,46 +145,43 @@ void ViewFieldConfigDialog::setupUI() {
   m_widthCombo->lineEdit()->setPlaceholderText(QStringLiteral("空 = 自适应"));
   form->addRow(QStringLiteral("列表列宽(px):"), m_widthCombo);
 
-  auto *listThumbRow = new QWidget(this);
-  auto *listThumbLay = new QHBoxLayout(listThumbRow);
+  m_listThumbRow = new QWidget(this);
+  auto *listThumbLay = new QHBoxLayout(m_listThumbRow);
   listThumbLay->setContentsMargins(0, 0, 0, 0);
   listThumbLay->setSpacing(4);
-  m_listThumbW = new QSpinBox(listThumbRow);
-  m_listThumbH = new QSpinBox(listThumbRow);
+  m_listThumbW = new QSpinBox(m_listThumbRow);
+  m_listThumbH = new QSpinBox(m_listThumbRow);
   for (QSpinBox *spin : {m_listThumbW, m_listThumbH}) {
     spin->setRange(0, 999);
     spin->setSpecialValueText(QStringLiteral("跟随预设"));
     listThumbLay->addWidget(spin);
   }
-  listThumbLay->addWidget(new QLabel(QStringLiteral("×（宽 × 高，0=跟随上传预设）"), listThumbRow));
+  listThumbLay->addWidget(new QLabel(QStringLiteral("宽×高（0=跟随预设）"), m_listThumbRow));
   listThumbLay->addStretch();
-  form->addRow(QStringLiteral("列表缩略图宽高(px):"), listThumbRow);
+  form->addRow(QStringLiteral("列表缩略图:"), m_listThumbRow);
 
   // ── 编辑表单（参数行按控件类型动态出现；联表行整区折叠仅列表展示生效）──
   m_editSep = new QLabel(QStringLiteral("── 编辑表单 ──"), this);
   m_editSep->setAlignment(Qt::AlignCenter);
   form->addRow(QString(), m_editSep);
   m_widgetCombo = AuiComboBox::create(this);
+  // 候选文案对齐 jsonvue / 主流低代码惯例：业务词为主，括号内技术名
   m_widgetCombo->addItem(QStringLiteral("自动（按 mysqlType 推导）"), QStringLiteral(""));
-  m_widgetCombo->addItem(QStringLiteral("input"), QStringLiteral("input"));
-  m_widgetCombo->addItem(QStringLiteral("textarea"), QStringLiteral("textarea"));
-  m_widgetCombo->addItem(QStringLiteral("select"), QStringLiteral("select"));
-  m_widgetCombo->addItem(QStringLiteral("date"), QStringLiteral("date"));
-  m_widgetCombo->addItem(QStringLiteral("number"), QStringLiteral("number"));
-  m_widgetCombo->addItem(QStringLiteral("image"), QStringLiteral("image"));
-  m_widgetCombo->addItem(QStringLiteral("upload"), QStringLiteral("upload"));
-  m_widgetCombo->addItem(QStringLiteral("boolean"), QStringLiteral("boolean"));
+  m_widgetCombo->addItem(QStringLiteral("单行文本(input)"), QStringLiteral("input"));
+  m_widgetCombo->addItem(QStringLiteral("多行文本(textarea)"), QStringLiteral("textarea"));
+  m_widgetCombo->addItem(QStringLiteral("下拉选择(select)"), QStringLiteral("select"));
+  m_widgetCombo->addItem(QStringLiteral("日期(date)"), QStringLiteral("date"));
+  m_widgetCombo->addItem(QStringLiteral("数字(number)"), QStringLiteral("number"));
+  m_widgetCombo->addItem(QStringLiteral("图片(image)"), QStringLiteral("image"));
+  m_widgetCombo->addItem(QStringLiteral("上传(upload)"), QStringLiteral("upload"));
+  m_widgetCombo->addItem(QStringLiteral("开关(boolean)"), QStringLiteral("boolean"));
   form->addRow(QStringLiteral("编辑控件:"), m_widgetCombo);
   connect(m_widgetCombo, &QComboBox::activated, this,
           [this](int) { updateEditFormRows(); });
 
-  m_editEditableCheck = new QCheckBox(QStringLiteral("取消勾选 = 编辑表单内只读展示"), this);
-  m_editEditableCheck->setChecked(true);
-  form->addRow(QStringLiteral("编辑时可编辑:"), m_editEditableCheck);
-
-  // 注：编辑表单标题不在此配置——界面显示标题统一取「字段呈现」的标题列
-
-  // ── 编辑表单精细参数（键名与 .jsonvue 一致；空/0=未配置，合成页由模板按类型缺省）──
+  // ── 控件子参数（紧随编辑控件；updateEditFormRows 按类型整行折叠，
+  //    可见行总是连续跟在选择器下方——对齐 jsonvue 子容器重建的视觉效果，
+  //    且控件值常驻无需缓存回写）──
   m_placeholderEdit = new QLineEdit(this);
   m_placeholderEdit->setPlaceholderText(QStringLiteral("空 = 模板缺省占位"));
   form->addRow(QStringLiteral("占位提示:"), m_placeholderEdit);
@@ -220,34 +227,47 @@ void ViewFieldConfigDialog::setupUI() {
   m_dateFormatCombo->addItem(QStringLiteral("daterange（日期范围）"), QStringLiteral("daterange"));
   form->addRow(QStringLiteral("日期格式覆盖:"), m_dateFormatCombo);
 
-  m_formSpanSpin = new QSpinBox(this);
-  m_formSpanSpin->setRange(0, 24);
-  m_formSpanSpin->setSpecialValueText(QStringLiteral("跟随模板（12）"));
-  form->addRow(QStringLiteral("表单栅格 span:"), m_formSpanSpin);
-
-  m_formDefaultEdit = new QLineEdit(this);
-  m_formDefaultEdit->setPlaceholderText(QStringLiteral("新建时表单预填（空 = 不预填）"));
-  form->addRow(QStringLiteral("表单默认值:"), m_formDefaultEdit);
-
   // 上传预设下拉：列出作用域内所有 .jsonupload 预设（同 jsonvue 字段设置面板）
   m_uploadSourceCombo = AuiComboBox::create(this);
   m_uploadSourceCombo->addItem(QStringLiteral("（不上传，手动输入图片 URL）"), QString());
   form->addRow(QStringLiteral("上传预设:"), m_uploadSourceCombo);
 
-  auto *editThumbRow = new QWidget(this);
-  auto *editThumbLay = new QHBoxLayout(editThumbRow);
+  m_editThumbRow = new QWidget(this);
+  auto *editThumbLay = new QHBoxLayout(m_editThumbRow);
   editThumbLay->setContentsMargins(0, 0, 0, 0);
   editThumbLay->setSpacing(4);
-  m_editThumbW = new QSpinBox(editThumbRow);
-  m_editThumbH = new QSpinBox(editThumbRow);
+  m_editThumbW = new QSpinBox(m_editThumbRow);
+  m_editThumbH = new QSpinBox(m_editThumbRow);
   for (QSpinBox *spin : {m_editThumbW, m_editThumbH}) {
     spin->setRange(0, 999);
     spin->setSpecialValueText(QStringLiteral("跟随预设"));
     editThumbLay->addWidget(spin);
   }
-  editThumbLay->addWidget(new QLabel(QStringLiteral("×（宽 × 高，0=跟随上传预设）"), editThumbRow));
+  editThumbLay->addWidget(new QLabel(QStringLiteral("宽×高（0=跟随预设）"), m_editThumbRow));
   editThumbLay->addStretch();
-  form->addRow(QStringLiteral("编辑缩略图宽高(px):"), editThumbRow);
+  form->addRow(QStringLiteral("编辑缩略图:"), m_editThumbRow);
+  // 编辑可编辑/必填（说明走 tooltip，行内保持干净复选框；位置对齐 jsonvue）
+  m_editEditableCheck = new QCheckBox(this);
+  m_editEditableCheck->setChecked(true);
+  m_editEditableCheck->setToolTip(QStringLiteral("取消勾选 = 编辑表单内只读展示\n（详情模式整表单只读，无需逐字段设置）"));
+  form->addRow(QStringLiteral("编辑可编辑:"), m_editEditableCheck);
+
+  // 必填（编辑提交时校验；位置与 jsonvue 字段设置一致：编辑可编辑 → 必填 → 栅格）
+  m_requiredCheck = new QCheckBox(this);
+  form->addRow(QStringLiteral("必填:"), m_requiredCheck);
+
+  // 表单栅格：combo 三态（对齐 jsonvue 半行/整行；自动 = 模板缺省 12）
+  m_formSpanCombo = AuiComboBox::create(this);
+  m_formSpanCombo->addItem(QStringLiteral("自动（模板缺省）"), 0);
+  m_formSpanCombo->addItem(QStringLiteral("半行（24 栅格占 12）"), 12);
+  m_formSpanCombo->addItem(QStringLiteral("整行（24 栅格占 24）"), 24);
+  form->addRow(QStringLiteral("表单栅格:"), m_formSpanCombo);
+
+  m_formDefaultEdit = new QLineEdit(this);
+  m_formDefaultEdit->setPlaceholderText(QStringLiteral("新建时表单预填（空 = 不预填）"));
+  form->addRow(QStringLiteral("表单默认值:"), m_formDefaultEdit);
+
+  // 注：编辑表单标题不在此配置——界面显示标题统一取「字段呈现」的标题列
 
   frame.contentLayout->addLayout(form);
 
@@ -310,6 +330,7 @@ void ViewFieldConfigDialog::setCurrent(const JsonTableSelCol &sc, const JsonTabl
   comboSelectData(m_widthCombo, sc.width > 0 ? QVariant(sc.width) : QVariant(QString()));
   comboSelectData(m_widgetCombo, ec.widget);
   m_editEditableCheck->setChecked(ec.editEditable);
+  m_requiredCheck->setChecked(ec.required);
   comboSelectData(m_displayTypeCombo, sc.displayType);
   m_listThumbW->setValue(sc.listThumbWidth);
   m_listThumbH->setValue(sc.listThumbHeight);
@@ -334,7 +355,7 @@ void ViewFieldConfigDialog::setCurrent(const JsonTableSelCol &sc, const JsonTabl
   m_maxSpin->setValue(ec.maxValue);
   m_precisionSpin->setValue(ec.precision);
   comboSelectData(m_dateFormatCombo, ec.dateFormat);
-  m_formSpanSpin->setValue(ec.formSpan);
+  comboSelectData(m_formSpanCombo, ec.formSpan > 0 ? QVariant(ec.formSpan) : QVariant(0));
   m_formDefaultEdit->setText(ec.formDefaultValue);
   // 联动行显隐（displayType=image → 列表缩略图行；控件类型 → 编辑参数行；
   // 联表行编辑区整体折叠，仅列表展示生效）
@@ -415,9 +436,10 @@ QString ViewFieldConfigDialog::currentUploadRef() const {
 
 void ViewFieldConfigDialog::updateListRows() {
   if (!m_displayTypeCombo) return;
+  // 列表缩略图仅 image 展示类型有意义（整行折叠）
   const bool isImg =
       m_displayTypeCombo->currentData().toString() == QStringLiteral("image");
-  setFormRowVisible(m_listThumbW, isImg);
+  setFormRowVisible(m_listThumbRow, isImg);
 }
 
 void ViewFieldConfigDialog::updateEditFormRows() {
@@ -437,15 +459,16 @@ void ViewFieldConfigDialog::updateEditFormRows() {
   setFormRowVisible(m_precisionSpin, w == QStringLiteral("float"));
   setFormRowVisible(m_dateFormatCombo, w == QStringLiteral("date"));
   setFormRowVisible(m_uploadSourceCombo, isImageLike);
-  setFormRowVisible(m_editThumbW, isImageLike);
+  setFormRowVisible(m_editThumbRow, isImageLike);
 }
 
 void ViewFieldConfigDialog::setEditRowsVisible(bool on) {
   if (m_editSep) m_editSep->setVisible(on);
-  QWidget *fields[] = {m_widgetCombo,     m_placeholderEdit,
-                       m_maxlengthSpin,   m_textareaRowsSpin,  m_minSpin,
-                       m_precisionSpin,   m_dateFormatCombo,   m_formSpanSpin,
-                       m_formDefaultEdit, m_uploadSourceCombo, m_editThumbW};
+  QWidget *fields[] = {m_widgetCombo,      m_placeholderEdit, m_maxlengthSpin,
+                       m_textareaRowsSpin, m_minSpin,         m_precisionSpin,
+                       m_dateFormatCombo,  m_editEditableCheck, m_requiredCheck,
+                       m_formSpanCombo,    m_formDefaultEdit, m_uploadSourceCombo,
+                       m_editThumbRow};
   for (QWidget *f : fields) {
     if (f) setFormRowVisible(f, on);
   }
@@ -506,6 +529,7 @@ void ViewFieldConfigDialog::fillEditResult(JsonTableEditCol *ec) const {
   if (!ec) return;
   if (m_widgetCombo) ec->widget = m_widgetCombo->currentData().toString();
   ec->editEditable = m_editEditableCheck ? m_editEditableCheck->isChecked() : true;
+  ec->required = m_requiredCheck ? m_requiredCheck->isChecked() : false;
   if (m_placeholderEdit) ec->placeholder = m_placeholderEdit->text().trimmed();
   ec->maxlength = m_maxlengthSpin ? m_maxlengthSpin->value() : 0;
   ec->textareaRows = m_textareaRowsSpin ? m_textareaRowsSpin->value() : 0;
@@ -513,7 +537,7 @@ void ViewFieldConfigDialog::fillEditResult(JsonTableEditCol *ec) const {
   ec->maxValue = m_maxSpin ? m_maxSpin->value() : 0;
   ec->precision = m_precisionSpin ? m_precisionSpin->value() : 0;
   if (m_dateFormatCombo) ec->dateFormat = m_dateFormatCombo->currentData().toString();
-  ec->formSpan = m_formSpanSpin ? m_formSpanSpin->value() : 0;
+  ec->formSpan = m_formSpanCombo ? m_formSpanCombo->currentData().toInt() : 0;
   if (m_formDefaultEdit) ec->formDefaultValue = m_formDefaultEdit->text().trimmed();
   const QString ref = currentUploadRef();
   if (ref.isEmpty()) {

@@ -87,8 +87,7 @@ enum UCols {
   UColList,      ///< 列表勾选（在 selCols 中）
   UColQuery,     ///< 查询模式（cell widget：不查询/精确/模糊/范围/仅接口）
   UColEdit,      ///< 编辑勾（☑进编辑表单/☐不进表单；编辑/新增/详情复用同一 write.vue）
-  UColRequired,  ///< 必填勾选（editCols.required）
-  UColCfg,       ///< 配置（⚙ + 一行式摘要合成一列：点击打开字段设置面板）
+  UColCfg,       ///< 配置（⚙ + 一行式摘要合成一列：双击打开字段设置面板；必填在面板内）
   UColCount
 };
 
@@ -1038,7 +1037,6 @@ void JsonTableDesigner::setupUI() {
                                  {QStringLiteral("列表"), QHeaderView::Interactive, 56},
                                  {QStringLiteral("查询"), QHeaderView::Interactive, 88},
                                  {QStringLiteral("编辑"), QHeaderView::Interactive, 56},
-                                 {QStringLiteral("必填"), QHeaderView::Interactive, 56},
                                  {QStringLiteral("配置"), QHeaderView::Stretch, 0}},
                                 this, 240, 0, QAbstractItemView::SelectItems);
   // 功能列表头：问号并入标题（「列表 ?」），悬停整格显示对应说明
@@ -1053,10 +1051,11 @@ void JsonTableDesigner::setupUI() {
                                 "☑ 进编辑表单（渲染控件、参与校验与提交）\n"
                                 "☐ 不进编辑表单\n"
                                 "编辑/新增/详情复用同一 write.vue，详情为整表单只读，\n"
-                                "无需列级只读态；联表行勾选 = 只读展示")},
-      {UColRequired, QStringLiteral("勾选后编辑表单提交时对该字段做必填校验")},
+                                "无需列级只读态；联表行勾选 = 只读展示\n"
+                                "必填：双击 ⚙ 在字段设置面板里配置")},
       {UColCfg, QStringLiteral("配置：⚙ 显示=列表展示类型、编辑=编辑控件、"
-                               "取值域=字段取值域、列宽=列表列宽；点击单元格打开设置")}};
+                               "取值域=字段取值域、列宽=列表列宽、必填=编辑提交校验；"
+                               "双击单元格打开设置")}};
   m_viewHeader = m_viewTable->horizontalHeader();
   for (auto tipIt = m_headerTips.constBegin(); tipIt != m_headerTips.constEnd(); ++tipIt) {
     if (auto *h = m_viewTable->horizontalHeaderItem(tipIt.key())) {
@@ -1509,8 +1508,9 @@ void JsonTableDesigner::setupUI() {
     if (!it) return;
     refreshColumnCandidates();
   });
-  // 字段呈现表「配置」列点击（⚙ 与摘要同一单元格）→ 字段设置面板
-  connect(m_viewTable, &QTableWidget::cellClicked, this, [this](int row, int col) {
+  // 字段呈现表「配置」列双击（⚙ 与摘要同一单元格）→ 字段设置面板
+  // （单击不弹：避免只想点选单元格/复制摘要时误开对话框）
+  connect(m_viewTable, &QTableWidget::cellDoubleClicked, this, [this](int row, int col) {
     if (col == UColCfg) openViewFieldConfig(row);
   });
   // 翻译表名输入 → 多语言字段候选切换
@@ -2167,22 +2167,18 @@ void JsonTableDesigner::fillViewTable() {
     }
     editItem->setTextAlignment(Qt::AlignCenter);
     m_viewTable->setItem(row, UColEdit, editItem);
-    // 必填勾选
-    auto *reqItem = new QTableWidgetItem;
-    reqItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable |
-                      (isJoinRow ? Qt::NoItemFlags : Qt::ItemIsUserCheckable));
-    reqItem->setCheckState(editMeta.required ? Qt::Checked : Qt::Unchecked);
-    reqItem->setTextAlignment(Qt::AlignCenter);
-    m_viewTable->setItem(row, UColRequired, reqItem);
-    // 配置列（⚙ 与摘要合成一列，对齐 jsonvue；点击单元格打开设置面板）
+    // 配置列（⚙ 与摘要合成一列，对齐 jsonvue；双击单元格打开设置面板）
     auto *cfgItem =
         new QTableWidgetItem(QStringLiteral("⚙ ") + viewCfgSummary(selMeta, editMeta, dType));
     cfgItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
     m_viewTable->setItem(row, UColCfg, cfgItem);
-    // 编辑可编辑槽位（+24；联表行固定只读，物理列取 editCols 配置，缺省 true）
+    // 编辑可编辑/必填槽位（+24/+25；必填在 ⚙ 字段设置面板编辑，联表行固定只读不校验）
     refItem->setData(
         Qt::UserRole + 24,
         isJoinRow ? 0 : (editOf.contains(ref) ? (editOf.value(ref).editEditable ? 1 : 0) : 1));
+    refItem->setData(
+        Qt::UserRole + 25,
+        isJoinRow ? 0 : (editOf.contains(ref) ? (editOf.value(ref).required ? 1 : 0) : 0));
   };
 
   // 行序 = selCols 顺序优先（字段呈现里的排序即列表列顺序，保存重开不丢）；
@@ -2252,10 +2248,6 @@ void JsonTableDesigner::appendViewJoinRow(const QString &ref) {
   editItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
   editItem->setTextAlignment(Qt::AlignCenter);
   m_viewTable->setItem(row, UColEdit, editItem);
-  auto *reqItem = new QTableWidgetItem;
-  reqItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
-  reqItem->setTextAlignment(Qt::AlignCenter);
-  m_viewTable->setItem(row, UColRequired, reqItem);
   // 配置列（⚙ 与摘要合成一列；联表行未配置 → 显示缺省 text 语义）
   auto *cfgItem = new QTableWidgetItem(QStringLiteral("⚙ 显示:text, 编辑:text"));
   cfgItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
@@ -2371,8 +2363,8 @@ void JsonTableDesigner::collectViewTable(JsonTableTable *out) const {
       ec.dateFormat = dateFormat;
       ec.formSpan = formSpan;
       ec.formDefaultValue = formDefaultValue;
-      const QTableWidgetItem *reqIt = m_viewTable->item(r, UColRequired);
-      ec.required = reqIt && reqIt->checkState() == Qt::Checked;
+      // 必填槽位（+25）：原「必填」列已并入 ⚙ 字段设置面板
+      ec.required = m_viewTable->item(r, UColRef)->data(Qt::UserRole + 25).toInt() != 0;
       // 编辑可编辑槽位（+24）：联表行固定 false（只读展示），物理列取 ⚙ 配置
       if (const QTableWidgetItem *eeIt = m_viewTable->item(r, UColRef)) {
         ec.editEditable = eeIt->data(Qt::UserRole + 24).toInt() != 0;
@@ -2434,6 +2426,7 @@ void JsonTableDesigner::openViewFieldConfig(int row) {
   JsonTableEditCol ec;
   ec.widget = refIt->data(Qt::UserRole + 2).toString();
   ec.editEditable = refIt->data(Qt::UserRole + 24).toInt() != 0;
+  ec.required = refIt->data(Qt::UserRole + 25).toInt() != 0;
   ec.uploadSourceFile = refIt->data(Qt::UserRole + 7).toString();
   ec.uploadSourceId = refIt->data(Qt::UserRole + 8).toString();
   ec.editThumbWidth = refIt->data(Qt::UserRole + 9).toInt();
@@ -2483,6 +2476,7 @@ void JsonTableDesigner::openViewFieldConfig(int row) {
   refIt->setData(Qt::UserRole + 22, ec.formSpan);
   refIt->setData(Qt::UserRole + 23, ec.formDefaultValue);
   refIt->setData(Qt::UserRole + 24, ec.editEditable ? 1 : 0);
+  refIt->setData(Qt::UserRole + 25, ec.required ? 1 : 0);
   refIt->setData(Qt::UserRole + 11, dlg.domainType());
   refIt->setData(Qt::UserRole + 12, dlg.domainSourceFile());
   refIt->setData(Qt::UserRole + 13, dlg.domainSourceId());
