@@ -7,7 +7,7 @@ ${# ============================================================================
 // 此代码为AutoCode编译器生成，请勿手动修改
 package ${pkgName}
 
-${hdlImports}
+${appHdlImports}
 
 // ${handlerClass} ${tableComment}(${tableName}) C 端 HTTP 层（只读）
 // 薄层：参数绑定 → service → 统一响应（common.OK/common.Fail）

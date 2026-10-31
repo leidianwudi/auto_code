@@ -2160,10 +2160,9 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   tplData["appQuery"] = appQuery;
   tplData["appEmpty"] = appEmpty;
   // app 空接口：handler 生成件只剩 struct + New（同包类型），无 gin/common/实体
-  // 引用 → import 必须为空（与 admin 共用 hdlImports 键，此处按形态覆盖）
-  if (appEmpty) {
-    tplData["hdlImports"] = "";
-  }
+  // 引用 → import 必须为空。用独立键 appHdlImports：若直接清空 hdlImports，
+  // admin handler 生成件（共用该键）会一起丢掉 import 而编译失败
+  tplData["appHdlImports"] = appEmpty ? "" : hdlImports;
   tplData["appIsPublic"] = appIsPublic;
   tplData["appPkgComment"] = appPkgComment;
   tplData["appRouterMountNote"] = appRouterMountNote;
