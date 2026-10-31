@@ -57,7 +57,9 @@ inline constexpr const char *kProjFile =
     "project.acproj";  ///< 项目配置文件（项目根标记 + meta 生成配置；与 .jsontable 同目录）
 inline constexpr const char *kFrontend =
     "frontend";  ///< 生成前端页面开关（缺省 true；仅 false 落键 = 纯 API 模块）
-inline constexpr const char *kAppQuery = "appQuery";  ///< 生成 C 端只读查询模块（缺省 false）
+inline constexpr const char *kAppQuery = "appQuery";  ///< 生成 C 端模块（缺省 false）
+inline constexpr const char *kAppQueryMode =
+    "appQueryMode";  ///< C 端接口形态：缺省=只读查询 / "empty"=空接口（仅骨架）
 inline constexpr const char *kAppAuth =
     "appAuth";  ///< C 端鉴权：public=公开 / user=需登录（缺省 user）
 inline constexpr const char *kButtons = "buttons";  ///< 操作按钮（ButtonConfig[]，键名与 .jsonvue 一致）
@@ -419,7 +421,8 @@ struct JsonTableTable {
   QString tableComment;            ///< 表注释
   bool manualUpdateTime = false;   ///< 手动维护更新时间（不走 DB ON UPDATE）
   bool frontend = true;            ///< 生成前端页面（缺省 true；仅 false 落键 = 纯 API 模块）
-  bool appQuery = false;           ///< 生成 C 端只读查询模块（缺省 false；只出 selectByIn/selectById）
+  bool appQuery = false;           ///< 生成 C 端模块（缺省 false）
+  QString appQueryMode;            ///< C 端接口形态：空=只读查询 / "empty"=空接口（仅骨架不生成只读接口）
   QString appAuth = QStringLiteral("user");  ///< C 端鉴权：public=公开 / user=需登录
   // 页面基础按钮生成开关（缺省 true；生成端合成 meta 时取反为 noAdd/noEdit/noDelete/noDetail）
   bool genAdd = true;      ///< 生成新增按钮（工具栏）

@@ -50,11 +50,14 @@ ${/each}
 	return db
 }
 ${else}
-// ${sortWhitelistName} 排序白名单：列名 → 固定方向（前端只传字段名，防注入）
+${if hasSortCols}// ${sortWhitelistName} 排序白名单：列名 → 固定方向（前端只传字段名，防注入）
 var ${sortWhitelistName} = map[string]string{
 ${each line in sortEntryLines}
 ${line}
 ${/each}}
+${else}// ${sortWhitelistName} 排序白名单：列名 → 固定方向（前端只传字段名，防注入）
+var ${sortWhitelistName} = map[string]string{}
+${/if}
 
 // SelectByIn 分页查询，返回数据列表和总记录数
 func (r *${repoClass}) SelectByIn(db *gorm.DB, sel *${selClass}) ([]${enClass}, int64, error) {

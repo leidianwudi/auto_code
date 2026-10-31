@@ -2,8 +2,8 @@ ${# ============================================================================
 ${# C 端 Router 模板：modules/app/{dataDir}/{tableName}_router_.go             }
 ${# ----------------------------------------------------------------------------}
 ${#   - 只挂 selectByIn / selectById；appAuth=user 时挂 middleware.UserAuth    }
-${#   - 不挂 RequirePerm（管理端专用）；末尾调用 RegisterExtRoutes 挂载         }
-${#     手写扩展路由（ext_router 首次骨架提供）                                 }
+${#   - appEmpty=空接口时不挂只读路由，RegisterRoutes 仅调 RegisterExtRoutes    }
+${#   - 不挂 RequirePerm（管理端专用）                                          }
 ${# ============================================================================}
 // 此代码为AutoCode编译器生成，请勿手动修改
 
@@ -23,14 +23,14 @@ ${/if}
 	return g, h
 }
 
-// RegisterRoutes 注册${tableComment}(${tableName}) C 端查询路由（${appRouterAuthNote}）
-// 挂在 /api/app 组下：/api/app/${tableName}/selectByIn、/api/app/${tableName}/selectById
-// 自定义接口写在 ${tableName}_router.go / ${tableName}_handler.go，自动挂载。
+// RegisterRoutes 注册${tableComment}(${tableName}) C 端路由（${appRouterAuthNote}）
+// 挂在 /api/app 组下；自定义接口写在 ${tableName}_router.go / ${tableName}_handler.go，自动挂载。
 func RegisterRoutes(rg *gin.RouterGroup) {
-	g, h := mount${tableClass}(rg)
-	{
+${if appEmpty}	g, _ := mount${tableClass}(rg)
+${else}	g, h := mount${tableClass}(rg)
+${/if}${if !appEmpty}	{
 		g.POST("/selectByIn", h.SelectByIn)
 		g.POST("/selectById", h.SelectById)
 	}
-	RegisterExtRoutes(g)
+${/if}	RegisterExtRoutes(g)
 }

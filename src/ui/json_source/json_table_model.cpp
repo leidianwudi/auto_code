@@ -427,9 +427,12 @@ QJsonObject JsonTableTable::toJsonObject() const {
   obj[QString::fromLatin1(JsonTableKey::kManualUpdateTime)] = manualUpdateTime;
   // frontend 缺省 true 不落键（仅 false 落键 = 纯 API 模块，前端链跳过）
   if (!frontend) obj[QString::fromLatin1(JsonTableKey::kFrontend)] = false;
-  // appQuery 缺省 false 不落键；启用时同时写鉴权方式（缺省 user）
+  // appQuery 缺省 false 不落键；启用时同时写接口形态与鉴权方式（缺省=只读查询/user）
   if (appQuery) {
     obj[QString::fromLatin1(JsonTableKey::kAppQuery)] = true;
+    if (appQueryMode == QStringLiteral("empty")) {
+      obj[QString::fromLatin1(JsonTableKey::kAppQueryMode)] = appQueryMode;
+    }
     obj[QString::fromLatin1(JsonTableKey::kAppAuth)] =
         appAuth.isEmpty() ? QStringLiteral("user") : appAuth;
   }
@@ -561,8 +564,9 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
       obj.value(QString::fromLatin1(JsonTableKey::kManualUpdateTime)).toBool(false);
   // frontend 缺省/空/null = true（生成前端页面）；仅显式 false 生效
   t.frontend = obj.value(QString::fromLatin1(JsonTableKey::kFrontend)).toBool(true);
-  // appQuery 缺省 false；appAuth 缺省 user
+  // appQuery 缺省 false；appQueryMode 缺省空=只读查询；appAuth 缺省 user
   t.appQuery = obj.value(QString::fromLatin1(JsonTableKey::kAppQuery)).toBool(false);
+  t.appQueryMode = obj.value(QString::fromLatin1(JsonTableKey::kAppQueryMode)).toString();
   t.appAuth = obj.value(QString::fromLatin1(JsonTableKey::kAppAuth)).toString();
   if (t.appAuth.isEmpty()) t.appAuth = QStringLiteral("user");
   // 页面基础按钮开关缺省 true（仅显式 false 不生成）
@@ -672,7 +676,8 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
 bool JsonTableTable::operator==(const JsonTableTable &other) const {
   return tableName == other.tableName && modelName == other.modelName &&
          tableComment == other.tableComment && manualUpdateTime == other.manualUpdateTime &&
-         frontend == other.frontend && appQuery == other.appQuery && appAuth == other.appAuth &&
+         frontend == other.frontend && appQuery == other.appQuery &&
+         appQueryMode == other.appQueryMode && appAuth == other.appAuth &&
          genAdd == other.genAdd && genEdit == other.genEdit && genDelete == other.genDelete &&
          genDetail == other.genDetail &&
          columns == other.columns && indexes == other.indexes &&

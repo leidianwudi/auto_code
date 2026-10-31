@@ -7,9 +7,12 @@
 
 #include <QAbstractItemView>
 #include <QComboBox>
+#include <QDateTime>
+#include <QElapsedTimer>
 #include <QEvent>
 #include <QGuiApplication>
 #include <QLineEdit>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QScreen>
 #include <QStyle>
@@ -48,13 +51,22 @@ static void updateTextPadding(QComboBox *combo) {
   const int inset = probe.style()->subElementRect(QStyle::SE_LineEditContents, &opt, &probe).left();
   const int textLeft = inset + 2;  // QLineEdit 固定的 2px 文字边距
   const int pad = qMax(0, combo->isEditable() ? textLeft - 3 : textLeft - 1);
+  // 单元格内的下拉「扁平化」（无边框/透明底），看起来与同列文本一致
+  const bool flat = combo->property("auiFlat").toBool();
   // 结果没变化时不重设样式表，避免 showEvent 里反复重设触发无谓的重绘
-  if (combo->property("auiTextPad").isValid() && combo->property("auiTextPad").toInt() == pad)
+  if (combo->property("auiTextPad").isValid() && combo->property("auiTextPad").toInt() == pad &&
+      combo->property("auiFlatApplied").toBool() == flat)
     return;
   combo->setProperty("auiTextPad", pad);
+  combo->setProperty("auiFlatApplied", flat);
   // 仅覆盖 padding-left（无颜色），不影响切换主题时的文字颜色；
-  // 右侧/上下 padding 仍走全局样式表
-  combo->setStyleSheet(QStringLiteral("QComboBox { padding-left: %1px; }").arg(pad));
+  // 右侧/上下 padding 仍走全局样式表；单元格内的扁平化额外去掉边框与底色，
+  // 可编辑下拉的内部 QLineEdit（自带一层输入框边框）也要一并去掉
+  combo->setStyleSheet(
+      flat ? QStringLiteral("QComboBox { padding-left: %1px; border: none; background: transparent; }"
+                            "QComboBox QLineEdit { border: none; background: transparent; }")
+                 .arg(pad)
+           : QStringLiteral("QComboBox { padding-left: %1px; }").arg(pad));
 }
 
 // ════════════════════════════════════════════════════════════
@@ -75,8 +87,107 @@ public:
 protected:
   void showEvent(QShowEvent *e) override {
     QComboBox::showEvent(e);
+    // 仅表格/列表里「常驻」的下拉（indexWidget）扁平化（去边框与底色），
+    // 与同列普通文本视觉一致；委托编辑器（进编辑时才出现）保持完整外观，
+    // 否则透明底会透出单元格条目文字，形成重影
+    setProperty("auiFlat", isCellWidget());
     // setEditable 可能发生在 applyStyle 之后，显示时按最终可编辑态校准文字左边距
     updateTextPadding(this);
+  }
+
+  void showPopup() override {
+    QComboBox::showPopup();
+    // ── 表格内下拉防「一出现就收起」──────────────────────────────────
+    // 双击打开下拉时，第二击落在刚弹出的弹层窗口之外，弹层容器把它判为
+    // 「点击外部」立即收起。这里记录弹出时刻并监听弹层容器：打开后短窗口
+    // 内到达容器的外部点击（press / 双击合成）一律吞掉，保持弹层展开。
+    if (view()) {
+      if (auto *container = qobject_cast<QWidget *>(view()->window()))
+        container->installEventFilter(this);
+    }
+    m_popupClock.start();
+  }
+
+  bool eventFilter(QObject *watched, QEvent *e) override {
+    if (!view() || watched != view()->window()) return QComboBox::eventFilter(watched, e);
+    // 弹层窗口被隐藏（不论谁关闭的：选中条目 / 点击外部 / 主动收起）→ 记录关闭时刻，
+    // 供「收起那次点击」的后续事件识别（见 mousePressEvent 与输入框过滤器）
+    if (e->type() == QEvent::Hide) {
+      m_popupHideClock.restart();
+      setProperty("auiPopupHideMs", QDateTime::currentMSecsSinceEpoch());
+      return QComboBox::eventFilter(watched, e);
+    }
+    // 仅处理本下拉弹层容器的鼠标事件
+    if (m_popupClock.isValid() &&
+        (e->type() == QEvent::MouseButtonPress || e->type() == QEvent::MouseButtonDblClick ||
+         e->type() == QEvent::MouseButtonRelease)) {
+      const qint64 elapsed = m_popupClock.elapsed();
+      // 判定点击是否落在本下拉自身（弹层目标外但被 popup 鼠标抓取捕获）
+      bool onSelf = false;
+      if (auto *me = dynamic_cast<QMouseEvent *>(e))
+        onSelf = rect().contains(mapFromGlobal(me->globalPosition().toPoint()));
+      // 打开瞬间的合成事件（双击第二击的 press + 配对 release）一律吞掉，
+      // 否则容器的 release 处理会立刻 hidePopup，表现为「一展开就收起」
+      if (elapsed < 300) return true;
+      // 弹层稳定后点下拉自身 → 收起（原生可编辑下拉不会自动收）
+      if (onSelf && (e->type() == QEvent::MouseButtonPress ||
+                     e->type() == QEvent::MouseButtonDblClick)) {
+        hidePopup();
+        return true;
+      }
+    }
+    return QComboBox::eventFilter(watched, e);
+  }
+
+  void mousePressEvent(QMouseEvent *e) override {
+    // 弹层刚被关闭（本次点击就是「收起」那一下，系统会把事件再送回下拉）：
+    // 直接吞掉，避免可编辑下拉把光标点击 / 箭头点击当成重新展开
+    if (m_popupHideClock.isValid() && m_popupHideClock.elapsed() < 300 && view() &&
+        !view()->isVisible()) {
+      e->accept();
+      return;
+    }
+    // 箭头热区：全局样式表把原生 down-arrow 压为 0 尺寸后 SC_ComboBoxArrow
+    // 可能退化成极窄矩形，命中率很低。这里按自绘三角的实际位置判定
+    // （右缘 20~32px，控件越窄按 1/3 宽）。
+    // 注意：不能在 press 里直接 showPopup —— 弹层容器随后会收到同一个鼠标
+    // 手势的 release，其默认处理会立刻 hidePopup（「一展开就收起」的根因），
+    // 因此这里只记标记，统一在 release 时展开。
+    if (e->button() == Qt::LeftButton && isEnabled() && !property("auiNoArrow").toBool()) {
+      const int hot = qMin(32, qMax(20, width() / 3));
+      if (e->position().x() >= width() - hot) {
+        m_arrowPressed = true;
+        e->accept();
+        return;
+      }
+      // 表格单元格内的不可编辑下拉：只有点箭头才展开。整块点击直接展开会与
+      // 「选中行 / 定位单元格」冲突；可编辑下拉的文字区点击由内部 QLineEdit
+      // 处理（只定位光标，不弹），因此这里只针对不可编辑下拉。
+      if (!isEditable() && inItemView()) {
+        m_pressSwallowed = true;
+        e->accept();
+        return;
+      }
+    }
+    QComboBox::mousePressEvent(e);
+  }
+
+  void mouseReleaseEvent(QMouseEvent *e) override {
+    // 箭头按下（含拖动回控件内）→ 松开时展开，避免 release 关闭刚弹出的列表
+    if (m_arrowPressed) {
+      m_arrowPressed = false;
+      const bool inside = rect().contains(e->position().toPoint());
+      if (e->button() == Qt::LeftButton && isEnabled() && inside) showPopup();
+      e->accept();
+      return;
+    }
+    // 表格内不可编辑下拉被吞掉的按下：配对 release 一并吞掉
+    if (m_pressSwallowed) {
+      m_pressSwallowed = false;
+      e->accept();
+      return;
+    }
+    QComboBox::mouseReleaseEvent(e);
   }
 
   void paintEvent(QPaintEvent *e) override {
@@ -113,7 +224,7 @@ protected:
     // QSS 的 :disabled 颜色规则在 QComboBox 标签文字的绘制路径上不生效，
     // 且 QSS 定位与手工重绘的几何有细微差异——若只在禁用时重绘，状态切换
     // 时文字会跳位。这里两条状态都用同一几何覆盖重绘，位置恒定不抖动。
-    if (!isEditable() && !currentText().isEmpty()) {
+    if (!isEditable() && !currentText().isEmpty() && !property("auiFlat").toBool()) {
       QStyleOptionComboBox textOpt;
       initStyleOption(&textOpt);
       const QRect editRect = style()->subControlRect(
@@ -126,6 +237,32 @@ protected:
       painter.drawText(editRect.adjusted(1, 0, -1, 0), align, currentText());
     }
   }
+
+private:
+  /// 是否位于表格/列表的单元格内（cellWidget 或委托编辑器）：父链存在 QAbstractItemView
+  bool inItemView() const {
+    for (QWidget *w = parentWidget(); w; w = w->parentWidget())
+      if (qobject_cast<QAbstractItemView *>(w)) return true;
+    return false;
+  }
+
+  /// 是否作为表格/列表的常驻单元格控件（indexWidget），而非委托编辑器
+  bool isCellWidget() {
+    for (QWidget *w = parentWidget(); w; w = w->parentWidget()) {
+      if (auto *view = qobject_cast<QAbstractItemView *>(w)) {
+        const QModelIndex idx = view->indexAt(mapTo(view->viewport(), QPoint(0, 0)));
+        return idx.isValid() && view->indexWidget(idx) == this;
+      }
+    }
+    return false;
+  }
+
+  // 弹层打开时刻（isValid=false = 从未弹出）；「防一出现就收起」的时间窗用
+  QElapsedTimer m_popupClock;
+  // 弹层关闭时刻（isValid=false = 从未关闭）；「收起那次点击」的识别窗口用
+  QElapsedTimer m_popupHideClock;
+  bool m_arrowPressed = false;     // 箭头热区已按下：等 release 再展开
+  bool m_pressSwallowed = false;   // 表格内不可编辑下拉的按下被吞：配对 release 也吞
 };
 
 // ════════════════════════════════════════════════════════════

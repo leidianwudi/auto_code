@@ -52,6 +52,20 @@
     manualUpdateTime: false,
     modelName: 'sys_role_menu',
     moduleDir: 'sys/sys_role_menu',
+    selColsEq: [
+      {
+        ref: 'role_id',
+      },
+      {
+        ref: 'menu_id',
+      },
+    ],
+    selColsSort: [
+      [
+        'id',
+        'DESC',
+      ],
+    ],
     tableComment: '角色菜单关联',
     tableName: 'sys_role_menu',
   },

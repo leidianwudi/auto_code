@@ -2,6 +2,7 @@
   table: {
     appAuth: 'user',
     appQuery: true,
+    appQueryMode: 'empty',
     columns: [
       {
         comment: '主键',
@@ -281,10 +282,6 @@
         ref: 'pwd',
       },
       {
-        label: '密码错误次数',
-        ref: 'pwd_error_count',
-      },
-      {
         label: '冻结',
         ref: 'is_freeze',
       },
@@ -307,6 +304,10 @@
       {
         label: '真实姓名',
         ref: 'real_name',
+      },
+      {
+        label: '密码错误次数',
+        ref: 'pwd_error_count',
       },
       {
         label: '电话',
@@ -430,12 +431,6 @@
         ref: 'user_id',
       },
       {
-        ref: 'wechat_id',
-      },
-      {
-        ref: 'wechat_token',
-      },
-      {
         ref: 'is_disable',
       },
       {
@@ -443,6 +438,12 @@
       },
       {
         ref: 'real_name',
+      },
+      {
+        ref: 'wechat_id',
+      },
+      {
+        ref: 'wechat_token',
       },
       {
         ref: 'tel',

@@ -95,8 +95,42 @@
       },
     ],
     manualUpdateTime: false,
-    moduleDir: 'admin/admin',
     modelName: 'admin',
+    moduleDir: 'admin/admin',
+    selColsEq: [
+      {
+        ref: 'role_id',
+      },
+      {
+        ref: 'enable',
+      },
+    ],
+    selColsLike: [
+      {
+        ref: 'account',
+      },
+      {
+        ref: 'nick',
+      },
+    ],
+    selColsSort: [
+      [
+        'id',
+        'DESC',
+      ],
+      [
+        'created_at',
+        'DESC',
+      ],
+      [
+        'account',
+        'ASC',
+      ],
+      [
+        'nick',
+        'ASC',
+      ],
+    ],
     tableComment: '管理员',
     tableName: 'admin',
   },

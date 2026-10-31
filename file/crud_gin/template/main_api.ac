@@ -2010,6 +2010,8 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   svcFieldLines.append(tabChar() + padTo(svcName2, svcMaxName) + " " + svcType2);
 
   // ── import 块 ────────────────────────────────────────────────
+  //      金额列（common.Coin）只依赖架子 common 包：repo/in_sel/in_upd
+  //      与联表实体恒有 common，无需处理；仅单表实体原本无 common，需补
   let needTime: Bool = false;
   for (f in param.fields) {
     if (f.goType == "time.Time") { needTime = true; }
@@ -2019,18 +2021,30 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
     if (sf.goType == "time.Time") { selNeedTime = true; }
   }
   let tb: String = tabChar();
-  let enImports: String = needTime ? "import \"time\"" : "";
+  let joinNeedTime: Bool = false;
   if (hasJoin) {
     // 联表模式：querySpec 引用 common；联表输出列为 time.Time 时需要 time 包
     let viewFieldList: Object[] = jd["viewFields"];
-    let joinNeedTime: Bool = false;
     for (vf in viewFieldList) {
       if (vf["goType"] == "time.Time") { joinNeedTime = true; }
     }
-    if (needTime || joinNeedTime) {
+  }
+  let enTime: Bool = (needTime || joinNeedTime);
+  let enImports: String = "";
+  if (hasJoin) {
+    if (enTime) {
       enImports = "import (\n" + tb + "\"time\"\n\n" + tb + "\"" + commonPath + "\"\n)";
     } else {
       enImports = "import \"" + commonPath + "\"";
+    }
+  } else {
+    // 单表实体无既有 common 引用：金额列（common.Coin）需补 import common
+    if (enTime && param.hasDecimalField) {
+      enImports = "import (\n" + tb + "\"time\"\n\n" + tb + "\"" + commonPath + "\"\n)";
+    } else if (param.hasDecimalField) {
+      enImports = "import \"" + commonPath + "\"";
+    } else if (enTime) {
+      enImports = "import \"time\"";
     }
   }
   let selImports: String = "";
@@ -2056,9 +2070,11 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   let routerImports: String = "import (\n" + tb + "\"github.com/gin-gonic/gin\"\n\n" + tb + "\""
     + commonPath + "\"\n" + tb + "\"" + middlewarePath + "\"\n)";
 
-  // ── C 端只读模块（modules/app）配置 ──────────────────────────
-  //      appQuery 缺省 false；appAuth 缺省 user（宁可漏开放、不可误开放）
+  // ── C 端模块（modules/app）配置 ──────────────────────────────
+  //      appQuery 缺省 false；appAuth 缺省 user（宁可漏开放、不可误开放）；
+  //      appQueryMode 缺省=只读查询，"empty"=空接口（仅骨架，不生成只读接口）
   let appQuery: Bool = (json["appQuery"] == true);
+  let appEmpty: Bool = (appQuery && json["appQueryMode"] == "empty");
   let appAuth: String = json["appAuth"];
   if (appAuth == null || appAuth == "") {
     appAuth = "user";
@@ -2067,7 +2083,8 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   let appPkgComment: String = json["appPkgComment"];
   if (appPkgComment == null || appPkgComment == "") {
     appPkgComment = param.tableDesc
-      + (appIsPublic ? " C 端模块（公开只读查询）" : " C 端模块（需登录只读查询）");
+      + (appEmpty ? " C 端模块（空接口，自定义接口写扩展件）"
+                  : (appIsPublic ? " C 端模块（公开只读查询）" : " C 端模块（需登录只读查询）"));
   }
   let appRouterMountNote: String = appIsPublic
     ? "本模块生成配置为公开浏览，故不挂 UserAuth。"
@@ -2130,6 +2147,7 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   tplData["toUpdatesLines"] = toUpdatesLines;
   tplData["svcFieldLines"] = svcFieldLines;
   tplData["whereConditions"] = whereConds;
+  tplData["hasSortCols"] = (sortEntryLines.length > 0);
   tplData["sortWhitelistName"] = sortWhitelistName;
   tplData["sortEntryLines"] = sortEntryLines;
   tplData["enImports"] = enImports;
@@ -2140,6 +2158,12 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   tplData["svcImports"] = svcImports;
   tplData["routerImports"] = routerImports;
   tplData["appQuery"] = appQuery;
+  tplData["appEmpty"] = appEmpty;
+  // app 空接口：handler 生成件只剩 struct + New（同包类型），无 gin/common/实体
+  // 引用 → import 必须为空（与 admin 共用 hdlImports 键，此处按形态覆盖）
+  if (appEmpty) {
+    tplData["hdlImports"] = "";
+  }
   tplData["appIsPublic"] = appIsPublic;
   tplData["appPkgComment"] = appPkgComment;
   tplData["appRouterMountNote"] = appRouterMountNote;

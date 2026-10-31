@@ -71,10 +71,28 @@
     manualUpdateTime: false,
     modelName: 'sys_role',
     moduleDir: 'sys/sys_role',
+    selColsEq: [
+      {
+        ref: 'status',
+      },
+    ],
+    selColsLike: [
+      {
+        ref: 'name',
+      },
+    ],
     selColsSort: [
+      [
+        'id',
+        'DESC',
+      ],
       [
         'sort',
         'ASC',
+      ],
+      [
+        'created_at',
+        'DESC',
       ],
     ],
     tableComment: '系统角色',

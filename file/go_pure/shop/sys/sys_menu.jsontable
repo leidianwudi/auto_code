@@ -118,6 +118,36 @@
     manualUpdateTime: false,
     modelName: 'sys_menu',
     moduleDir: 'sys/sys_menu',
+    selColsEq: [
+      {
+        ref: 'pid',
+      },
+      {
+        ref: 'type',
+      },
+      {
+        ref: 'visible',
+      },
+    ],
+    selColsLike: [
+      {
+        ref: 'title',
+      },
+    ],
+    selColsSort: [
+      [
+        'id',
+        'DESC',
+      ],
+      [
+        'sort',
+        'ASC',
+      ],
+      [
+        'created_at',
+        'DESC',
+      ],
+    ],
     tableComment: '系统菜单',
     tableName: 'sys_menu',
   },

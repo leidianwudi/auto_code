@@ -2,6 +2,7 @@
   table: {
     appAuth: 'user',
     appQuery: true,
+    appQueryMode: 'empty',
     columns: [
       {
         comment: '主键',
@@ -351,10 +352,10 @@
     ],
     selColsEq: [
       {
-        ref: 'id',
+        ref: 'user_ext_account',
       },
       {
-        ref: 'user_ext_account',
+        ref: 'id',
       },
     ],
     selColsLike: [

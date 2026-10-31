@@ -77,6 +77,8 @@ private:
   void fillColumns(const QVector<JsonTableColumn> &cols);
   /// 追加一行列定义
   void appendColumnRow(const JsonTableColumn &c);
+  /// 为字段表格某行绑定 MySQL 类型列的常驻可编辑下拉
+  void bindColTypeCombo(int row, const QString &type);
   /// 从表格收集全部列定义（跳过列名为空的行）
   QVector<JsonTableColumn> collectColumns() const;
   /// 读取指定行为列定义
@@ -103,6 +105,14 @@ private:
   void appendSortRow(const QString &col, const QString &dir);
   /// 从表格收集全部排序定义（跳过排序列为空的行）
   QVector<QPair<QString, QString>> collectSort() const;
+  /// 刷新全部排序行的候选列表（字段表格列名变化时调用，保留已填值）
+  void setSortOptions(const QStringList &opts);
+  /// 刷新全部字段呈现行的「字段引用」候选（同上，保留已填值）
+  void setViewRefOptions(const QStringList &opts);
+  /// 为字段呈现表某行绑定常驻可编辑下拉（字段引用列，单击即展开候选）
+  void bindViewRefCombo(int row, const QString &ref);
+  /// 读取字段呈现表某行的字段引用（优先下拉当前文本）
+  QString viewRefText(int row) const;
   // ── 表级进阶键：联表查询声明（joinTables 新格式）──
   /// 用联表查询定义全量重建关联表格
   void fillJoins(const QVector<JsonTableJoinSpec> &joins);
@@ -180,7 +190,7 @@ private:
   QLineEdit *m_commentEdit = nullptr;         ///< 表注释
   QCheckBox *m_manualUpdateCheck = nullptr;   ///< 手动维护更新时间
   QCheckBox *m_frontendCheck = nullptr;       ///< 生成前端页面（false = 纯 API 模块）
-  QCheckBox *m_appQueryCheck = nullptr;       ///< 生成 C 端只读查询（modules/app）
+  QComboBox *m_appQueryCombo = nullptr;       ///< C 端模块形态：不生成 / 只读查询 / 空接口
   QComboBox *m_appAuthCombo = nullptr;        ///< C 端鉴权：public / user
   QCheckBox *m_genAddCheck = nullptr;          ///< 生成新增按钮（工具栏）
   QCheckBox *m_genEditCheck = nullptr;         ///< 生成行内编辑按钮
@@ -217,8 +227,8 @@ private:
   QStyledItemDelegate *m_enumColDelegate = nullptr;   ///< 枚举列下拉委托（预设=字段列名）
   QStyledItemDelegate *m_joinMainColDelegate = nullptr;  ///< 联表 on[0] 主表列下拉（候选=字段列名）
   QStyledItemDelegate *m_joinTableDelegate = nullptr;  ///< 联表被联表下拉（候选=项目表名）
-  QStyledItemDelegate *m_viewRefDelegate = nullptr;   ///< 字段呈现 ref 下拉委托（字段列+联表 ref）
-  QStyledItemDelegate *m_sortRefDelegate = nullptr;    ///< 排序列 ref 下拉委托（字段列+联表 ref）
+  QStringList m_viewRefOptions;                        ///< 字段引用候选（字段列+联表 ref）
+  QStringList m_sortColOptions;                        ///< 排序列候选（字段列+联表 ref）
   QLabel *m_validateLabel = nullptr;          ///< 交叉校验状态行（随编辑被动刷新）
   QVector<JsonTableEnum> m_enums;             ///< 表内枚举编辑态（主从表联动的数据侧）
   int m_enumCurRow = -1;                      ///< 当前编辑的枚举行（-1=无）
