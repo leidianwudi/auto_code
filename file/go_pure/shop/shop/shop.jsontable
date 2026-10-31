@@ -11,26 +11,26 @@
         mysqlType: 'int',
         name: 'id',
         nullable: false,
-        unsigned: true,
+        unsigned: false,
       },
       {
         comment: '店铺logo',
         isAutoInc: false,
         isPrimary: false,
-        mysqlType: 'varchar(255)',
+        mysqlType: 'varchar(512)',
         name: 'logo_img',
         nullable: false,
         unsigned: false,
       },
       {
-        comment: '商店所有人,user.id（一人可开多家店）',
+        comment: '商店所有人,user.id',
         isAutoInc: false,
         isPrimary: false,
         mysqlType: 'int',
         name: 'user_id',
         nullable: false,
-        title: '用户id',
-        unsigned: true,
+        title: '掌柜id',
+        unsigned: false,
       },
       {
         comment: '星级。一共10星',
@@ -44,6 +44,7 @@
       },
       {
         comment: '创建时间',
+        default: 'now()',
         isAutoInc: false,
         isPrimary: false,
         mysqlType: 'datetime',
@@ -114,13 +115,14 @@
         unsigned: false,
       },
       {
-        comment: '状态',
+        comment: '状态; 0:编辑中;1:审核中;2:正常;3:审核不通过;4:关闭',
         default: '0',
         isAutoInc: false,
         isPrimary: false,
         mysqlType: 'int',
         name: 'status',
         nullable: false,
+        title: '状态',
         unsigned: false,
       },
       {
@@ -138,10 +140,9 @@
         comment: '管理员备注',
         isAutoInc: false,
         isPrimary: false,
-        mysqlType: 'varchar(255)',
+        mysqlType: 'varchar(512)',
         name: 'desc',
         nullable: false,
-        title: '备注',
         unsigned: false,
       },
     ],
@@ -152,7 +153,7 @@
         ref: 'logo_img',
       },
       {
-        label: '用户id',
+        label: '掌柜id',
         ref: 'user_id',
       },
       {
@@ -173,16 +174,8 @@
         ref: 'sell_money',
       },
       {
-        label: '差评',
-        ref: 'dis_like',
-      },
-      {
         label: '好评',
         ref: 'like',
-      },
-      {
-        label: '关注数量',
-        ref: 'follow',
       },
       {
         label: '是否开店',
@@ -197,7 +190,15 @@
         ref: 'enable',
       },
       {
-        label: '备注',
+        label: '差评',
+        ref: 'dis_like',
+      },
+      {
+        label: '关注数量',
+        ref: 'follow',
+      },
+      {
+        label: '管理员备注',
         ref: 'desc',
         widget: 'textarea',
       },
@@ -235,6 +236,10 @@
         label: '店铺logo',
         ref: 'logo_img',
         width: 180,
+      },
+      {
+        label: '掌柜id',
+        ref: 'user_id',
       },
       {
         label: '星级',
@@ -322,5 +327,21 @@
     ],
     tableComment: '商店',
     tableName: 'shop',
+    viewOrder: [
+      'logo_img',
+      'user_id',
+      'level',
+      'create_time',
+      'sell_count',
+      'sell_money',
+      'like',
+      'is_open',
+      'status',
+      'enable',
+      'id',
+      'dis_like',
+      'follow',
+      'desc',
+    ],
   },
 }

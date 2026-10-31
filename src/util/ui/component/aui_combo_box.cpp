@@ -11,6 +11,7 @@
 #include <QElapsedTimer>
 #include <QEvent>
 #include <QGuiApplication>
+#include <QItemSelectionModel>
 #include <QLineEdit>
 #include <QMouseEvent>
 #include <QPainter>
@@ -19,6 +20,7 @@
 #include <QStyleOption>
 #include <QStylePainter>
 #include <QStyledItemDelegate>
+#include <QTableWidget>
 #include <QTimer>
 #include <QWheelEvent>
 #include <QWidget>
@@ -87,10 +89,10 @@ public:
 protected:
   void showEvent(QShowEvent *e) override {
     QComboBox::showEvent(e);
-    // 仅表格/列表里「常驻」的下拉（indexWidget）扁平化（去边框与底色），
-    // 与同列普通文本视觉一致；委托编辑器（进编辑时才出现）保持完整外观，
-    // 否则透明底会透出单元格条目文字，形成重影
-    setProperty("auiFlat", isCellWidget());
+    // 表格/列表单元格内的下拉扁平化（去边框与底色），与同列普通文本视觉一致；
+    // 委托编辑器（进编辑时才出现）保持完整外观，否则透明底会透出单元格条目文字。
+    // createForTable 显式创建的可直接标记（不依赖 showEvent 时的 indexWidget 判定）
+    setProperty("auiFlat", isCellWidget() || property("auiTableCombo").toBool());
     // setEditable 可能发生在 applyStyle 之后，显示时按最终可编辑态校准文字左边距
     updateTextPadding(this);
   }
@@ -190,7 +192,25 @@ protected:
     QComboBox::mouseReleaseEvent(e);
   }
 
+  void mouseDoubleClickEvent(QMouseEvent *e) override {
+    // 表格单元格内的常驻下拉：双击不展开（Qt 默认双击会 showPopup，可能同步
+    // 当前项并触发 currentIndexChanged，导致「没改内容也变成已修改」）。
+    // 展开入口仍只有点箭头；可编辑下拉文字区的双击由内部 QLineEdit 处理（选词）
+    if (e->button() == Qt::LeftButton && inItemView()) {
+      e->accept();
+      return;
+    }
+    QComboBox::mouseDoubleClickEvent(e);
+  }
+
   void paintEvent(QPaintEvent *e) override {
+    // 表格单元格专用（createForTable）：完全自绘无边框样式，
+    // 背景/文字跟随所在行的选中态（避免单元格控件盖住行高亮）
+    if (property("auiTableCombo").toBool() && !isEditable()) {
+      paintTableCombo();
+      return;
+    }
+
     // ── 1. 让 QComboBox 自身（含样式表）完成框架渲染 ──
     QComboBox::paintEvent(e);
 
@@ -239,6 +259,43 @@ protected:
   }
 
 private:
+  /// 表格单元格专用的无边框绘制（文字占满 + 行选中态联动）
+  void paintTableCombo() {
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    QColor bg;
+    QColor fg;
+    auto *table = hostTable();
+    bool rowSelected = false;
+    if (table && table->selectionModel()) {
+      const int row = table->rowAt(mapTo(table->viewport(), QPoint(0, 0)).y());
+      rowSelected = row >= 0 && table->selectionModel()->isRowSelected(row);
+    }
+    if (rowSelected && table) {
+      bg = table->palette().color(QPalette::Highlight);
+      fg = table->palette().color(QPalette::HighlightedText);
+    } else if (hasFocus()) {
+      bg = AuiStyle::listSelectionBackground();
+      fg = AuiStyle::textColor();
+    } else {
+      bg = AuiStyle::panelBackground();
+      fg = isEnabled() ? AuiStyle::textColor() : AuiStyle::mutedTextColor();
+    }
+    painter.fillRect(rect(), bg);
+    painter.setPen(fg);
+    painter.drawText(rect().adjusted(2, 0, -18, 0), Qt::AlignLeft | Qt::AlignVCenter,
+                     currentText());
+    // 箭头（hideArrow 场景不画）
+    if (!property("auiNoArrow").toBool())
+      AuiStyle::drawDownArrow(painter, QPointF(rect().right() - 9, rect().center().y() + 0.5), fg);
+  }
+
+  /// 所在 QTableWidget（若作为单元格控件）
+  QTableWidget *hostTable() const {
+    QWidget *vp = parentWidget();
+    return vp ? qobject_cast<QTableWidget *>(vp->parentWidget()) : nullptr;
+  }
+
   /// 是否位于表格/列表的单元格内（cellWidget 或委托编辑器）：父链存在 QAbstractItemView
   bool inItemView() const {
     for (QWidget *w = parentWidget(); w; w = w->parentWidget())
@@ -424,6 +481,39 @@ QComboBox *AuiComboBox::create(QWidget *parent) {
   auto *combo = new AuiComboBoxWidget(parent);
   applyStyle(combo);
   return combo;
+}
+
+QComboBox *AuiComboBox::createForTable(QWidget *parent) {
+  auto *combo = create(parent);
+  // 标记「表格单元格」：无边框自绘 + 跟随行选中态，交互由 AuiComboBoxWidget 内建
+  combo->setProperty("auiTableCombo", true);
+  return combo;
+}
+
+void AuiComboBox::connectValueCommitted(QComboBox *combo, QObject *context,
+                                        const std::function<void()> &slot) {
+  if (!combo || !context || !slot) return;
+  // 以当前文本为基线：用户重新选择同一项、程序性刷新都不算「值变化」
+  auto last = std::make_shared<QString>(combo->currentText());
+  auto commit = [combo, last, slot]() {
+    const QString now = combo->currentText();
+    if (now == *last) return;
+    *last = now;
+    slot();
+  };
+  QObject::connect(combo, QOverload<int>::of(&QComboBox::activated), context, commit);
+  // 可编辑下拉：仅当用户确实输入过（textEdited）后结束编辑才提交，
+  // 避免单击/失焦/焦点切换也上报「值变化」
+  if (auto *edit = combo->lineEdit()) {
+    auto edited = std::make_shared<bool>(false);
+    QObject::connect(edit, &QLineEdit::textEdited, context,
+                     [edited](const QString &) { *edited = true; });
+    QObject::connect(edit, &QLineEdit::editingFinished, context, [edited, commit]() {
+      if (!*edited) return;
+      *edited = false;
+      commit();
+    });
+  }
 }
 
 void AuiComboBox::applyStyle(QComboBox *combo) {

@@ -1599,6 +1599,13 @@ void JsonTableDesigner::refill() {
   fillIndexes(m_table.indexes);
   fillJoins(m_table.joinTables);
   fillViewTable();
+  // 记录回填后的行序基线：保存时只有用户真正移动过行才落 viewOrder，
+  // 避免打开文件后没动就凭空新增键（那会让「单击/失焦」被误判成内容变化）
+  m_viewBaselineOrder.clear();
+  for (int r = 0; r < m_viewTable->rowCount(); ++r) {
+    const QString ref = viewRefText(r);
+    if (!ref.isEmpty()) m_viewBaselineOrder << ref;
+  }
   fillSortTable(m_table.selColsSort);
   m_buttons = m_table.buttons;
   fillButtons();
@@ -1688,8 +1695,10 @@ void JsonTableDesigner::connectChangeSignals() {
     connect(tw->model(), &QAbstractItemModel::rowsInserted, this, onChange);
     connect(tw->model(), &QAbstractItemModel::rowsRemoved, this, onChange);
   }
-  // 静态输入控件（setupUI 构建的顶层控件；setupUI 结束时已全部存在）
+  // 静态输入控件（setupUI 构建的顶层控件；行内下拉的内部输入框跳过：
+  // 后者随 combo 一起单独接线，避免「点一下单元格」就误报变化）
   for (QLineEdit *le : findChildren<QLineEdit *>()) {
+    if (qobject_cast<QComboBox *>(le->parentWidget())) continue;
     connect(le, &QLineEdit::textChanged, this, onChange);
   }
   for (QCheckBox *cb : findChildren<QCheckBox *>()) {
@@ -1909,6 +1918,20 @@ void JsonTableDesigner::moveViewRow(int delta) {
         b->setCurrentIndex(ia);
         a->blockSignals(false);
         b->blockSignals(false);
+      }
+      continue;
+    }
+    if (c == UColRef) {
+      // 字段引用列有常驻下拉：整条 item 的 takeItem/setItem 会与 indexWidget
+      // 冲突（上移/下移崩溃）；只交换 item 内保存的元数据槽位，控件本身不动
+      QTableWidgetItem *a = m_viewTable->item(row, c);
+      QTableWidgetItem *b = m_viewTable->item(target, c);
+      if (a && b) {
+        for (int role = Qt::UserRole + 1; role <= Qt::UserRole + 25; ++role) {
+          const QVariant va = a->data(role);
+          a->setData(role, b->data(role));
+          b->setData(role, va);
+        }
       }
       continue;
     }
@@ -2273,13 +2296,16 @@ void JsonTableDesigner::fillViewTable() {
         isJoinRow ? 0 : (editOf.contains(ref) ? (editOf.value(ref).required ? 1 : 0) : 0));
   };
 
-  // 行序 = selCols 顺序优先（字段呈现里的排序即列表列顺序，保存重开不丢）；
-  // 未列出的 ref（未勾选列表的物理列/仅查询 ref/旧格式联表路径/输出别名）追加在后
+  // 行序 = 上次保存的字段呈现行序 > selCols 顺序 > columns 顺序；未列出的 ref
+  // （未勾选列表的物理列/仅查询 ref/旧格式联表路径/输出别名）追加在后
   QStringList orderedRefs;
   auto pushRef = [&](const QString &r) {
     if (r.isEmpty() || orderedRefs.contains(r)) return;
     orderedRefs.append(r);
   };
+  const QJsonArray viewOrderArr =
+      m_table.extra.value(QString::fromLatin1(JsonTableKey::kViewOrder)).toArray();
+  for (const auto &v : viewOrderArr) pushRef(v.toString().trimmed());
   for (const auto &sc : m_table.selCols) pushRef(sc.ref);
   for (const auto &c : m_table.columns) pushRef(c.name);
   for (auto it = selOf.constBegin(); it != selOf.constEnd(); ++it) pushRef(it.key());
@@ -2458,7 +2484,8 @@ void JsonTableDesigner::collectViewTable(JsonTableTable *out) const {
       ec.formSpan = formSpan;
       ec.formDefaultValue = formDefaultValue;
       // 必填槽位（+25）：原「必填」列已并入 ⚙ 字段设置面板
-      ec.required = m_viewTable->item(r, UColRef)->data(Qt::UserRole + 25).toInt() != 0;
+      if (const QTableWidgetItem *refIt = m_viewTable->item(r, UColRef))
+        ec.required = refIt->data(Qt::UserRole + 25).toInt() != 0;
       // 编辑可编辑槽位（+24）：联表行固定 false（只读展示），物理列取 ⚙ 配置
       if (const QTableWidgetItem *eeIt = m_viewTable->item(r, UColRef)) {
         ec.editEditable = eeIt->data(Qt::UserRole + 24).toInt() != 0;
@@ -3360,28 +3387,49 @@ void JsonTableDesigner::importFromDatabase() {
                                                       currentComment, dbComment, initialExcluded);
   if (!result.accepted) return;
 
-  // 应用选择：现有列保序；新增列按数据库顺序追加；删除列仅在勾选时移除
+  // 应用选择：现有列保序；新增列按数据库顺序追加；删除列仅在勾选时移除。
+  // 非数据库属性（显示标题 / 列级取值域）按原列保真，不随刷新改写
   QHash<QString, JsonTableColumn> dbByKey;
   for (const auto &col : dbColumns) {
     dbByKey.insert(col.name.toLower(), col);
   }
+  QHash<QString, JsonTableColumn> origByKey;
+  for (const auto &col : m_table.columns) {
+    origByKey.insert(col.name.toLower(), col);
+  }
   QVector<JsonTableColumn> nextColumns;
   for (const auto &cur : currentColumns) {
     const QString key = cur.name.toLower();
-    if (dbByKey.contains(key)) {
-      if (result.applyByKey.value(key, false)) {
-        // 物理属性取数据库值，列级取值域等设计器配置按原列保留
-        JsonTableColumn updated = dbByKey.value(key);
-        updated.domainType = cur.domainType;
-        updated.domainSourceFile = cur.domainSourceFile;
-        updated.domainSourceId = cur.domainSourceId;
-        updated.domainUrl = cur.domainUrl;
-        nextColumns.append(updated);
-      } else {
-        nextColumns.append(cur);
+    const auto origIt = origByKey.constFind(key);
+    if (dbByKey.contains(key) && result.applyByKey.value(key, false)) {
+      // 物理属性取数据库值，设计器侧属性按原列保留
+      JsonTableColumn merged = dbByKey.value(key);
+      if (origIt != origByKey.constEnd()) {
+        merged.title = origIt->title;
+        merged.domainType = origIt->domainType;
+        merged.domainSourceFile = origIt->domainSourceFile;
+        merged.domainSourceId = origIt->domainSourceId;
+        merged.domainUrl = origIt->domainUrl;
+        // 标题由列注释派生时，数据库更新注释会让字段呈现标题跳变：把原显示
+        // 标题固化为显式 title，保证刷新后标题不变
+        if (merged.title.isEmpty() && !origIt->comment.isEmpty() &&
+            merged.comment != origIt->comment) {
+          merged.title = origIt->comment;
+        }
       }
-    } else if (!result.applyByKey.value(key, false)) {
-      nextColumns.append(cur);  // 删除列默认保留
+      nextColumns.append(merged);
+    } else if (!dbByKey.contains(key) && result.applyByKey.value(key, false)) {
+      // 删除列已勾选：不保留（前端引用由 cleanRemovedColumnRefs 清理）
+    } else {
+      JsonTableColumn keep = cur;
+      if (origIt != origByKey.constEnd()) {
+        keep.title = origIt->title;
+        keep.domainType = origIt->domainType;
+        keep.domainSourceFile = origIt->domainSourceFile;
+        keep.domainSourceId = origIt->domainSourceId;
+        keep.domainUrl = origIt->domainUrl;
+      }
+      nextColumns.append(keep);
     }
   }
   QSet<QString> keptKeys;
@@ -3463,8 +3511,10 @@ void JsonTableDesigner::importFromDatabase() {
     }
   }
 
-  // 模型回填：列/索引/注释/排除列 + 删除列的前端引用清理，最后 load 统一刷新界面
-  JsonTableTable updated = collectTable();
+  // 模型回填：以打开时的表配置为基底，只替换数据库来源的信息（列物理属性 /
+  // 索引 / 表注释 / 排除列）；字段呈现、联表、按钮、多语言等设计器配置不重建，
+  // 避免从数据库刷新时改写非数据库信息
+  JsonTableTable updated = m_table;
   updated.columns = nextColumns;
   if (indexQueryOk) updated.indexes = nextIndexes;
   if (result.applyTableComment && !dbComment.isEmpty()) updated.tableComment = dbComment;
@@ -3575,6 +3625,22 @@ JsonTableTable JsonTableDesigner::collectTable() const {
   t.joinTable = m_table.joinTable;  // 旧格式联表不再编辑，原样保真（避免旧文件保存丢失）
   t.joinTables = collectJoins();
   collectViewTable(&t);  // 统一字段表格 → 三视图（selCols/eq/like/gap/editCols）
+  // 字段呈现行序持久化（设计器专属键，存 extra；生成端不消费）：
+  // 只有用户真正移动过行（与回填基线不同）才写；未动时保持文件原状，
+  // 避免打开后凭空新增键，进而让「单击/失焦」被误判成内容变化
+  QStringList currentOrder;
+  for (int r = 0; r < m_viewTable->rowCount(); ++r) {
+    const QString ref = viewRefText(r);
+    if (!ref.isEmpty()) currentOrder << ref;
+  }
+  if (currentOrder != m_viewBaselineOrder) {
+    QJsonArray viewOrderArr;
+    for (const QString &ref : currentOrder) viewOrderArr.append(ref);
+    if (viewOrderArr.isEmpty())
+      t.extra.remove(QString::fromLatin1(JsonTableKey::kViewOrder));
+    else
+      t.extra.insert(QString::fromLatin1(JsonTableKey::kViewOrder), viewOrderArr);
+  }
   t.selColsSort = collectSort();
   t.enums = collectEnums();
   t.globalEnumCols = splitCsv(m_globalEnumEdit->text());

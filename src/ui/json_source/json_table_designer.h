@@ -228,6 +228,7 @@ private:
   QStyledItemDelegate *m_joinMainColDelegate = nullptr;  ///< 联表 on[0] 主表列下拉（候选=字段列名）
   QStyledItemDelegate *m_joinTableDelegate = nullptr;  ///< 联表被联表下拉（候选=项目表名）
   QStringList m_viewRefOptions;                        ///< 字段引用候选（字段列+联表 ref）
+  QStringList m_viewBaselineOrder;                     ///< 回填时的字段呈现行序（判断用户是否移动过行）
   QStringList m_sortColOptions;                        ///< 排序列候选（字段列+联表 ref）
   QLabel *m_validateLabel = nullptr;          ///< 交叉校验状态行（随编辑被动刷新）
   QVector<JsonTableEnum> m_enums;             ///< 表内枚举编辑态（主从表联动的数据侧）

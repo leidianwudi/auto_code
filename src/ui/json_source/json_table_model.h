@@ -157,6 +157,8 @@ inline constexpr const char *kDomainUrl = "domainUrl";  ///< remote 手动数据
 inline constexpr const char *kTitle = "title";  ///< 列级显示标题（字段呈现标题列；空=回退列注释）
 inline constexpr const char *kEnums = "enums";                  ///< 表内枚举
 inline constexpr const char *kGlobalEnumCols = "globalEnumCols";  ///< 引用全局枚举的列名
+inline constexpr const char *kViewOrder =
+    "viewOrder";  ///< 字段呈现行序（ref 数组；设计器专属，生成端不消费）
 inline constexpr const char *kI18n = "i18n";                    ///< 多语言翻译表配置
 // 枚举键（kName 复用列名常量；kComment 复用列注释常量）
 inline constexpr const char *kColumn = "column";  ///< 枚举对应列名

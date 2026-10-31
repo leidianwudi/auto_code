@@ -97,5 +97,14 @@
     ],
     tableComment: '系统角色',
     tableName: 'sys_role',
+    viewOrder: [
+      'id',
+      'name',
+      'remark',
+      'sort',
+      'status',
+      'created_at',
+      'updated_at',
+    ],
   },
 }
