@@ -21,6 +21,29 @@ func New${serviceClass}(db *gorm.DB) *${serviceClass} {
 	return &${serviceClass}{DB: db, Repo: ${dataAlias}.New${repoClass}(db)}
 }
 
+${if appHasOut}
+// SelectByIn ${selComment}
+func (s *${serviceClass}) SelectByIn(sel *${dataAlias}.${selClass}) ([]${appOutClass}, int64, error) {
+	list, total, err := s.Repo.SelectByIn(s.DB, sel)
+	if err != nil {
+		return nil, 0, err
+	}
+	out := make([]${appOutClass}, len(list))
+	for i := range list {
+		out[i] = *To${appOutClass}(${if hasJoin}&list[i].${enClass}${else}&list[i]${/if})
+	}
+	return out, total, nil
+}
+
+// SelectById 根据id查询单条记录
+func (s *${serviceClass}) SelectById(id ${idGoType}) (*${appOutClass}, error) {
+	e, err := s.Repo.SelectById(s.DB, id)
+	if err != nil {
+		return nil, err
+	}
+	return To${appOutClass}(e), nil
+}
+${else}
 // SelectByIn ${selComment}
 func (s *${serviceClass}) SelectByIn(sel *${dataAlias}.${selClass}) ([]${dataAlias}.${listType}, int64, error) {
 	return s.Repo.SelectByIn(s.DB, sel)
@@ -30,3 +53,4 @@ func (s *${serviceClass}) SelectByIn(sel *${dataAlias}.${selClass}) ([]${dataAli
 func (s *${serviceClass}) SelectById(id ${idGoType}) (*${dataAlias}.${enClass}, error) {
 	return s.Repo.SelectById(s.DB, id)
 }
+${/if}

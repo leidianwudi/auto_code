@@ -26,11 +26,10 @@ ${/if}
 // RegisterRoutes 注册${tableComment}(${tableName}) C 端路由（${appRouterAuthNote}）
 // 挂在 /api/app 组下；自定义接口写在 ${tableName}_router.go / ${tableName}_handler.go，自动挂载。
 func RegisterRoutes(rg *gin.RouterGroup) {
-${if appEmpty}	g, _ := mount${tableClass}(rg)
-${else}	g, h := mount${tableClass}(rg)
-${/if}${if !appEmpty}	{
+	g, h := mount${tableClass}(rg)
+${if !appEmpty}	{
 		g.POST("/selectByIn", h.SelectByIn)
 		g.POST("/selectById", h.SelectById)
 	}
-${/if}	RegisterExtRoutes(g)
+${/if}	RegisterExtRoutes(g, h)
 }

@@ -21,8 +21,9 @@ package ${pkgName}
 import "github.com/gin-gonic/gin"
 
 // RegisterExtRoutes 挂载${tableComment}扩展路由（生成件 ${tableName}_router_.go 调用）
-func RegisterExtRoutes(rg *gin.RouterGroup) {
-	// 示例：rg.POST("/approve", middleware.RequirePerm("${permPrefix}:edit"), h.Approve)
-	_ = rg
+// g 已配好路径与中间件，h 是该模块的 handler（复用生成件同一实例，勿再 New）
+func RegisterExtRoutes(g *gin.RouterGroup, h *${handlerClass}) {
+	// 示例：g.POST("/approve", middleware.RequirePerm("${permPrefix}:edit"), h.Approve)
+	_ = g
 }
 ${/if}

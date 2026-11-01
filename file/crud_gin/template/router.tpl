@@ -34,5 +34,5 @@ func RegisterRoutes(rg *gin.RouterGroup) {
 		g.POST("/update", middleware.RequirePerm("${permPrefix}:edit"), h.Update)
 		g.POST("/delete", middleware.RequirePerm("${permPrefix}:delete"), h.Delete)
 	}
-	RegisterExtRoutes(g)
+	RegisterExtRoutes(g, h)
 }

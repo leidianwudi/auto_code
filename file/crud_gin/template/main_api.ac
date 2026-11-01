@@ -2085,6 +2085,39 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
     appAuth = "user";
   }
   let appIsPublic: Bool = (appAuth == "public");
+  // C 端出参白名单（appOutCols）：空=直接回实体；非空生成 out_<表>_.go
+  let appOutCols: Object[] = json["appOutCols"];
+  let appHasOut: Bool = appQuery && appOutCols != null && appOutCols.length > 0;
+  let appOutFields: Object[] = [];
+  if (appHasOut) {
+    // 按 appOutCols 的配置顺序输出，出参 JSON 字段顺序与配置一致
+    for (oc in appOutCols) {
+      for (f in param.fields) {
+        if (oc == f.name) {
+          appOutFields.append(f);
+        }
+      }
+    }
+  }
+  let appOutClass: String = appHasOut ? ("Out" + param.tableClass) : (dataAlias + "." + param.enClass);
+  // 出参字段行预对齐（gofmt 格式）
+  let appOutFieldLines: String[] = [];
+  let appOutAssignLines: String[] = [];
+  if (appHasOut) {
+    let outMaxName: Number = 0;
+    let outMaxType: Number = 0;
+    for (f in appOutFields) {
+      if (f.goName.length > outMaxName) { outMaxName = f.goName.length; }
+      if (f.declType.length > outMaxType) { outMaxType = f.declType.length; }
+    }
+    for (f in appOutFields) {
+      let tag: String = "`json:\"" + f.name + "\"`";
+      appOutFieldLines.append(tabChar() + padTo(f.goName, outMaxName) + " "
+        + padTo(f.declType, outMaxType) + " " + tag);
+      appOutAssignLines.append(tabChar() + tabChar() + padTo(f.goName + ":", outMaxName + 1)
+        + " e." + f.goName + ",");
+    }
+  }
   let appPkgComment: String = json["appPkgComment"];
   if (appPkgComment == null || appPkgComment == "") {
     appPkgComment = param.tableDesc
@@ -2114,7 +2147,7 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   // ── 包注释文案（表级配置，缺省按表注释兜底）───────────────────
   let dataPkgComment: String = json["dataPkgComment"];
   if (dataPkgComment == null || dataPkgComment == "") {
-    dataPkgComment = param.tableDesc + "表共享数据层（admin 端与 app 端复用）";
+    dataPkgComment = param.tableDesc + "共享数据层（admin 端与 app 端复用）";
   }
   let adminPkgComment: String = json["adminPkgComment"];
   if (adminPkgComment == null || adminPkgComment == "") {
@@ -2168,6 +2201,11 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   tplData["svcImports"] = svcImports;
   tplData["routerImports"] = routerImports;
   tplData["appQuery"] = appQuery;
+  tplData["appHasOut"] = appHasOut;
+  tplData["appOutClass"] = appOutClass;
+  tplData["appOutFields"] = appOutFields;
+  tplData["appOutFieldLines"] = appOutFieldLines;
+  tplData["appOutAssignLines"] = appOutAssignLines;
   tplData["appEmpty"] = appEmpty;
   // app 空接口：handler 生成件只剩 struct + New（同包类型），无 gin/common/实体
   // 引用 → import 必须为空。用独立键 appHdlImports：若直接清空 hdlImports，
@@ -2233,6 +2271,11 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
       out: "{goBasePath}/modules/app/{dataDir}/{tableName}_handler_.go" });
     templates.append({ tpl: tplDir + "/app/router.tpl",
       out: "{goBasePath}/modules/app/{dataDir}/{tableName}_router_.go" });
+    // C 端出参白名单（appOutCols 非空时生成 out_<表>_.go）
+    if (appHasOut) {
+      templates.append({ tpl: tplDir + "/app/out.tpl",
+        out: "{goBasePath}/modules/app/{dataDir}/out_{tableName}_.go" });
+    }
     // C 端手写扩展三件套（首次骨架；{tableName}_router.go 的 RegisterExtRoutes
     // 由 app router_.go 调用；命名约定同 admin 侧）
     templates.append({ tpl: tplDir + "/app/svc_ext.tpl",

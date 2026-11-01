@@ -3,6 +3,7 @@
     adminPkgComment: '商店管理端模块（CRUD）',
     appAuth: 'public',
     appQuery: true,
+    appOutCols: ['id', 'logo_img', 'level', 'sell_count', 'like', 'follow', 'is_open', 'status'],
     columns: [
       {
         comment: '主键',
@@ -155,6 +156,8 @@
       {
         label: '掌柜id',
         ref: 'user_id',
+        editEditable: false,
+        writable: false,
       },
       {
         label: '星级',
@@ -165,18 +168,25 @@
         editEditable: false,
         label: '创建时间',
         ref: 'create_time',
+        writable: false,
       },
       {
         label: '总售件数',
         ref: 'sell_count',
+        editEditable: false,
+        writable: false,
       },
       {
         label: '总营业额',
         ref: 'sell_money',
+        editEditable: false,
+        writable: false,
       },
       {
         label: '好评',
         ref: 'like',
+        editEditable: false,
+        writable: false,
       },
       {
         label: '是否开店',
@@ -197,10 +207,14 @@
       {
         label: '差评',
         ref: 'dis_like',
+        editEditable: false,
+        writable: false,
       },
       {
         label: '关注数量',
         ref: 'follow',
+        editEditable: false,
+        writable: false,
       },
       {
         label: '管理员备注',

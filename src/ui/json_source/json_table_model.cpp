@@ -440,6 +440,12 @@ QJsonObject JsonTableTable::toJsonObject() const {
     obj[QString::fromLatin1(JsonTableKey::kAppAuth)] =
         appAuth.isEmpty() ? QStringLiteral("user") : appAuth;
   }
+  // C 端出参白名单：空不落键（直接回实体）
+  if (!appOutCols.isEmpty()) {
+    QJsonArray outArr;
+    for (const auto &col : appOutCols) outArr.append(col);
+    obj[QString::fromLatin1(JsonTableKey::kAppOutCols)] = outArr;
+  }
   // 表缓存骨架缺省 false 不落键；仅勾选时写 true（生成 data/<表>/<表>_cache.go）
   if (genCache) obj[QString::fromLatin1(JsonTableKey::kGenCache)] = true;
   // 页面基础按钮开关：缺省 true 不落键（仅 false 落键 = 不生成该按钮）
@@ -545,6 +551,7 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
   t.extra.remove(QString::fromLatin1(JsonTableKey::kAppQuery));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kAppQueryMode));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kAppAuth));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kAppOutCols));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kGenCache));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kGenAdd));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kGenEdit));
@@ -577,6 +584,10 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
   t.appQueryMode = obj.value(QString::fromLatin1(JsonTableKey::kAppQueryMode)).toString();
   t.appAuth = obj.value(QString::fromLatin1(JsonTableKey::kAppAuth)).toString();
   if (t.appAuth.isEmpty()) t.appAuth = QStringLiteral("user");
+  const QJsonArray outArr = obj.value(QString::fromLatin1(JsonTableKey::kAppOutCols)).toArray();
+  for (const auto &v : outArr) {
+    if (v.isString()) t.appOutCols.append(v.toString());
+  }
   // genCache 缺省 false：仅显式 true 时生成 data 层表缓存骨架
   t.genCache = obj.value(QString::fromLatin1(JsonTableKey::kGenCache)).toBool(false);
   // 页面基础按钮开关缺省 true（仅显式 false 不生成）
@@ -688,7 +699,7 @@ bool JsonTableTable::operator==(const JsonTableTable &other) const {
          tableComment == other.tableComment && manualUpdateTime == other.manualUpdateTime &&
          frontend == other.frontend && appQuery == other.appQuery &&
          appQueryMode == other.appQueryMode && appAuth == other.appAuth &&
-         genCache == other.genCache &&
+         genCache == other.genCache && appOutCols == other.appOutCols &&
          genAdd == other.genAdd && genEdit == other.genEdit && genDelete == other.genDelete &&
          genDetail == other.genDetail &&
          columns == other.columns && indexes == other.indexes &&

@@ -62,6 +62,8 @@ inline constexpr const char *kAppQueryMode =
     "appQueryMode";  ///< C 端接口形态：缺省=只读查询 / "empty"=空接口（仅骨架）
 inline constexpr const char *kAppAuth =
     "appAuth";  ///< C 端鉴权：public=公开 / user=需登录（缺省 user）
+inline constexpr const char *kAppOutCols =
+    "appOutCols";  ///< C 端出参白名单（列名数组；空=直接回实体）
 inline constexpr const char *kGenCache = "genCache";  ///< 生成表缓存骨架（缺省 false）
 inline constexpr const char *kButtons = "buttons";  ///< 操作按钮（ButtonConfig[]，键名与 .jsonvue 一致）
 // 页面基础按钮生成开关（缺省 true；仅 false 落键，合成 meta 时取反为 noAdd/noEdit/...）
@@ -429,6 +431,7 @@ struct JsonTableTable {
   bool appQuery = false;           ///< 生成 C 端模块（缺省 false）
   QString appQueryMode;            ///< C 端接口形态：空=只读查询 / "empty"=空接口（仅骨架不生成只读接口）
   QString appAuth = QStringLiteral("user");  ///< C 端鉴权：public=公开 / user=需登录
+  QStringList appOutCols;  ///< C 端出参白名单（空=直接回实体）
   bool genCache = false;  ///< 生成 data 层表缓存骨架（缺省 false；仅首次骨架，不覆盖）
   // 页面基础按钮生成开关（缺省 true；生成端合成 meta 时取反为 noAdd/noEdit/noDelete/noDetail）
   bool genAdd = true;      ///< 生成新增按钮（工具栏）
