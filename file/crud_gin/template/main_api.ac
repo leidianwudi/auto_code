@@ -805,21 +805,6 @@ export function buildColLines(fields: FieldDef[]): String[] {
   return lines;
 }
 
-/// @brief 排序白名单 map 行（键列对齐）
-export function buildSortEntryLines(cols: String[], dirs: String[]): String[] {
-  let maxKey: Number = 0;
-  for (let i = 0; i < cols.length; i = i + 1) {
-    let k: String = "Col" + snakeToPascal(cols[i]) + ":";
-    if (k.length > maxKey) { maxKey = k.length; }
-  }
-  let lines: String[] = [];
-  for (let i = 0; i < cols.length; i = i + 1) {
-    let k: String = "Col" + snakeToPascal(cols[i]) + ":";
-    lines.append(tabChar() + padTo(k, maxKey) + " \"" + dirs[i] + "\",");
-  }
-  return lines;
-}
-
 /// @brief 取联表条目的输出列数组（Any → Object[]，供 for-in 类型检查）
 export function joinColsOf(je: Object): Object[] {
   return je["cols"];
@@ -851,8 +836,8 @@ export function buildLayeredJoinData(json: Object, param: Param, tablesByName: O
     aliasMap: {}
   };
   let joinCfgs: Object[] = json["joinTables"];
-  if (joinCfgs == null || joinCfgs.length == 0) {
-    return result;
+  if (joinCfgs == null) {
+    joinCfgs = [];
   }
   let joinEntries: Object[] = [];
   let usedAliasGo: Object = {};  // 输出字段 Go 名去重（同结构体字段/SQL 别名禁重复）
@@ -983,10 +968,6 @@ export function buildLayeredJoinData(json: Object, param: Param, tablesByName: O
       cols: colEntries
     });
   }
-  if (joinEntries.length == 0) {
-    return result;
-  }
-
   // ── 联表列名常量（colXxx 真实列名 + viewXxx 输出别名；去重，ON/输出同列只一条）
   let constDefs: Object[] = [];
   for (je in joinEntries) {
@@ -1131,18 +1112,49 @@ export function buildLayeredJoinData(json: Object, param: Param, tablesByName: O
   }
 
   // ── querySpec 块（Table + Joins + Order；键对齐与 gofmt 一致）────────
+  //      Order 的键用生成好的列常量（ColXxx / viewXxx），列名拼错编译期就报错；
+  //      解析顺序与 QuerySpec.qualify 一致：联表输出列优先，其次主表列。
+  let mainConstByRef: Object = {};
+  for (f in param.fields) {
+    mainConstByRef[f.name] = "Col" + f.goName;
+  }
+  let joinConstByRef: Object = {};
+  for (je in joinEntries) {
+    for (ce in joinColsOf(je)) {
+      // 联表排序只认输出别名（前端统一字段名）；裸列名不作为 Order 键
+      if (joinConstByRef[ce["alias"]] == null) {
+        joinConstByRef[ce["alias"]] = ce["viewConst"];
+      }
+    }
+  }
+  let orderKeyExprs: String[] = [];
+  let orderDirs: String[] = [];
+  for (let i = 0; i < sortCols.length; i = i + 1) {
+    let ref: String = sortCols[i];
+    let keyExpr: String = joinConstByRef[ref];
+    if (keyExpr == null) {
+      keyExpr = mainConstByRef[ref];
+    }
+    if (keyExpr == null) {
+      printError("错误：表 '" + param.tableName + "' 的 selColsSort 字段 '" + ref +
+                 "' 不是主表列或联表输出别名，已跳过该排序项");
+      continue;
+    }
+    orderKeyExprs.append(keyExpr);
+    orderDirs.append(sortDirs[i]);
+  }
   let orderEntryLines: String[] = [];
   let maxKey: Number = 0;
-  for (let i = 0; i < sortCols.length; i = i + 1) {
-    let k: String = "\"" + sortCols[i] + "\":";
+  for (let i = 0; i < orderKeyExprs.length; i = i + 1) {
+    let k: String = orderKeyExprs[i] + ":";
     if (k.length > maxKey) { maxKey = k.length; }
   }
-  for (let i = 0; i < sortCols.length; i = i + 1) {
-    let k: String = "\"" + sortCols[i] + "\":";
-    orderEntryLines.append(tb + tb + padTo(k, maxKey) + " \"" + sortDirs[i] + "\",");
+  for (let i = 0; i < orderKeyExprs.length; i = i + 1) {
+    let k: String = orderKeyExprs[i] + ":";
+    orderEntryLines.append(tb + tb + padTo(k, maxKey) + " \"" + orderDirs[i] + "\",");
   }
   let spec: String = "// querySpec 列表查询规格（" + param.tableName
-    + ".jsontable 生成）：主表 + 联表 + 排序白名单\n";
+    + ".jsontable 生成）：主表 + 排序白名单（有联表时附带 JOIN）\n";
   for (je in joinEntries) {
     let colList: String = "";
     for (ce in joinColsOf(je)) {
@@ -1154,23 +1166,25 @@ export function buildLayeredJoinData(json: Object, param: Param, tablesByName: O
   }
   spec = spec + "var querySpec = cdb.QuerySpec{\n";
   spec = spec + tb + "Table: \"" + param.tableName + "\",\n";
-  spec = spec + tb + "Joins: []cdb.Join{\n";
-  for (je in joinEntries) {
-    // Join 类型常量名：JoinLeft / JoinInner（配置大写 → Go 常量驼峰）
-    let joinConst: String = je["joinType"] == "LEFT" ? "cdb.JoinLeft" : "cdb.JoinInner";
-    let colsInline: String = "";
-    for (ce in joinColsOf(je)) {
-      colsInline = colsInline + (colsInline == "" ? "" : ", ")
-        + "{Col: " + ce["colConst"] + ", Alias: " + ce["viewConst"] + "}";
+  if (joinEntries.length > 0) {
+    spec = spec + tb + "Joins: []cdb.Join{\n";
+    for (je in joinEntries) {
+      // Join 类型常量名：JoinLeft / JoinInner（配置大写 → Go 常量驼峰）
+      let joinConst: String = je["joinType"] == "LEFT" ? "cdb.JoinLeft" : "cdb.JoinInner";
+      let colsInline: String = "";
+      for (ce in joinColsOf(je)) {
+        colsInline = colsInline + (colsInline == "" ? "" : ", ")
+          + "{Col: " + ce["colConst"] + ", Alias: " + ce["viewConst"] + "}";
+      }
+      spec = spec + tb + tb + "{\n";
+      spec = spec + tb + tb + tb + "Table: \"" + je["table"] + "\",\n";
+      spec = spec + tb + tb + tb + "Type:  " + joinConst + ",\n";
+      spec = spec + tb + tb + tb + "On:    [2]string{" + je["on0Const"] + ", " + je["on1Const"] + "},\n";
+      spec = spec + tb + tb + tb + "Cols:  []cdb.OutCol{" + colsInline + "},\n";
+      spec = spec + tb + tb + "},\n";
     }
-    spec = spec + tb + tb + "{\n";
-    spec = spec + tb + tb + tb + "Table: \"" + je["table"] + "\",\n";
-    spec = spec + tb + tb + tb + "Type:  " + joinConst + ",\n";
-    spec = spec + tb + tb + tb + "On:    [2]string{" + je["on0Const"] + ", " + je["on1Const"] + "},\n";
-    spec = spec + tb + tb + tb + "Cols:  []cdb.OutCol{" + colsInline + "},\n";
-    spec = spec + tb + tb + "},\n";
+    spec = spec + tb + "},\n";
   }
-  spec = spec + tb + "},\n";
   if (orderEntryLines.length == 0) {
     spec = spec + tb + "Order: map[string]string{},\n";
   } else {
@@ -1182,7 +1196,7 @@ export function buildLayeredJoinData(json: Object, param: Param, tablesByName: O
   }
   spec = spec + "}";
 
-  result["hasJoin"] = true;
+  result["hasJoin"] = (joinEntries.length > 0);
   result["joinEntries"] = joinEntries;
   result["viewFields"] = viewFields;
   result["joinConstLines"] = joinConstLines;
@@ -1247,7 +1261,7 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   let idName: String = param.primaryField.goName;
   let idCol: String = param.primaryField.name;
 
-  // ── 排序白名单：selColsSort 顺序（联表模式 = querySpec.Order 键）──
+  // ── 排序白名单：selColsSort 顺序（所有表统一进 querySpec.Order）────
   let sortCols: String[] = [];
   let sortDirs: String[] = [];
   let sortPairs: Object[] = json["selColsSort"];
@@ -1261,12 +1275,10 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
       sortDirs.append(dir);
     }
   }
-  let sortWhitelistName: String = snakeToCamel(tableName) + "SortWhitelist";
-  let sortEntryLines: String[] = buildSortEntryLines(sortCols, sortDirs);
 
   // ── 联表（joinTables 新格式）：视图/常量/querySpec/入参字段/条件行 ──
-  //      有联表时 SelectByIn 走 querySpec 流水线（返回 EnXxxView），排序白名单
-  //      移入 querySpec.Order；无联表的表生成物与单表版完全一致
+  //      所有表统一走 querySpec 流水线（无联表时 Joins 为空），排序白名单
+  //      一律进 querySpec.Order；SelectByIn 返回 EnXxxView（有联表）或 EnXxx。
   let jd: Object = buildLayeredJoinData(json, param, tablesByName, sortCols, sortDirs);
   let hasJoin: Bool = jd["hasJoin"];
 
@@ -1282,17 +1294,14 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
     selFields.append(jsf);
   }
   let whereConds: String[] = [];
-  if (hasJoin) {
-    let rawConds: String[] = qd.buildWhereConditionsPointer(mainSelFields);
-    for (c in rawConds) {
-      whereConds.append(c.replace("cdb.Where", "querySpec.Where"));
-    }
-    let joinWhere: String[] = jd["joinWhereLines"];
-    for (c in joinWhere) {
-      whereConds.append(c);
-    }
-  } else {
-    whereConds = qd.buildWhereConditionsPointer(mainSelFields);
+  // 条件统一走 querySpec.Where*：裸列名由 QuerySpec.qualify 自动限定表名
+  let rawConds: String[] = qd.buildWhereConditionsPointer(mainSelFields);
+  for (c in rawConds) {
+    whereConds.append(c.replace("cdb.Where", "querySpec.Where"));
+  }
+  let joinWhere: String[] = jd["joinWhereLines"];
+  for (c in joinWhere) {
+    whereConds.append(c);
   }
 
   // ── 预渲染行（逐字节对齐）─────────────────────────────────────
@@ -1353,7 +1362,8 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   let enExt: String[] = [];
   if (enTime) { enStd.append("time"); }
   if (param.hasDecimalField) { enExt.append(coinPath); }
-  if (hasJoin) { enExt.append(dbPath); }
+  // 所有表都生成 querySpec（无联表时 Joins 为空），实体文件必须引用 cdb
+  enExt.append(dbPath);
   enImports = buildGoImports(enStd, enExt);
 
   let selImports: String = "";
@@ -1502,9 +1512,11 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   tplData["toUpdatesLines"] = toUpdatesLines;
   tplData["svcFieldLines"] = svcFieldLines;
   tplData["whereConditions"] = whereConds;
-  tplData["hasSortCols"] = (sortEntryLines.length > 0);
-  tplData["sortWhitelistName"] = sortWhitelistName;
-  tplData["sortEntryLines"] = sortEntryLines;
+  let listType: String = param.enClass;
+  if (hasJoin) {
+    listType = param.enClass + "View";
+  }
+  tplData["listType"] = listType;
   tplData["enImports"] = enImports;
   tplData["selImports"] = selImports;
   tplData["repoImports"] = repoImports;

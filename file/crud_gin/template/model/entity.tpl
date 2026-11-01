@@ -40,9 +40,9 @@ ${each line in joinConstLines}
 ${line}
 ${/each})
 
-${joinSpecBlock}
+${/if}${joinSpecBlock}
 
-${/if}// 列名常量
+// 列名常量
 const (
 ${each line in colLines}
 ${line}
