@@ -138,14 +138,14 @@ export function buildGoImports(stdLines: String[], extLines: String[]): String {
   }
   let s: String = "import (";
   for (let i = 0; i < stdLines.length; i = i + 1) {
-    s = s + "\n  \"" + stdLines[i] + "\"";
+    s = s + "\n" + tabChar() + "\"" + stdLines[i] + "\"";
   }
   if (extLines.length > 0) {
     if (stdLines.length > 0) {
       s = s + "\n";
     }
     for (let j = 0; j < extLines.length; j = j + 1) {
-      s = s + "\n  \"" + extLines[j] + "\"";
+      s = s + "\n" + tabChar() + "\"" + extLines[j] + "\"";
     }
   }
   s = s + "\n)";
