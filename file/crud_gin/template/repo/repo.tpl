@@ -17,13 +17,11 @@ ${repoImports}
 
 // ${repoClass} ${tableComment}(${tableName}) 数据访问层（共享，admin 端与 app 端复用）
 // 方法首参 db *gorm.DB：传 common.DB 走独立查询，传 tx 进入事务。
-type ${repoClass} struct {
-	DB *gorm.DB
-}
+type ${repoClass} struct{}
 
 // New${repoClass} 创建数据访问层对象
-func New${repoClass}(db *gorm.DB) *${repoClass} {
-	return &${repoClass}{DB: db}
+func New${repoClass}() *${repoClass} {
+	return &${repoClass}{}
 }
 
 ${if hasJoin}// SelectByIn 分页联表查询，返回视图列表和总记录数

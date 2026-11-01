@@ -28,7 +28,7 @@ var ${tableClass}DeleteHook func(s *${serviceClass}, ids []${idGoType}) (int64, 
 
 // New${serviceClass} 创建业务层对象
 func New${serviceClass}(db *gorm.DB) *${serviceClass} {
-	return &${serviceClass}{DB: db, Repo: ${dataAlias}.New${repoClass}(db)}
+	return &${serviceClass}{DB: db, Repo: ${dataAlias}.New${repoClass}()}
 }
 
 // SelectByIn ${selComment}

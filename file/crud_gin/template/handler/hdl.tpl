@@ -31,7 +31,7 @@ func (h *${handlerClass}) SelectByIn(c *gin.Context) {
 	}
 	list, total, err := h.Svc.SelectByIn(&sel)
 	if err != nil {
-		common.Fail(c, err.Error())
+		common.FailErr(c, err)
 		return
 	}
 	common.OK(c, common.NewOutPage(list, total))
@@ -45,7 +45,7 @@ func (h *${handlerClass}) SelectById(c *gin.Context) {
 	}
 	entity, err := h.Svc.SelectById(body.Id)
 	if err != nil {
-		common.Fail(c, err.Error())
+		common.FailErr(c, err)
 		return
 	}
 	common.OK(c, entity)
@@ -59,7 +59,7 @@ func (h *${handlerClass}) Update(c *gin.Context) {
 	}
 	id, err := h.Svc.Save(&data)
 	if err != nil {
-		common.Fail(c, err.Error())
+		common.FailErr(c, err)
 		return
 	}
 	common.OK(c, gin.H{"id": id})
@@ -73,7 +73,7 @@ func (h *${handlerClass}) Delete(c *gin.Context) {
 	}
 	affected, err := h.Svc.Delete(body.Ids)
 	if err != nil {
-		common.Fail(c, err.Error())
+		common.FailErr(c, err)
 		return
 	}
 	common.OK(c, gin.H{"affected": affected})
