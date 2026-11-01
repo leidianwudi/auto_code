@@ -237,6 +237,10 @@ export function generateApiMain(params: Object): Number {
   }
   // 架子公共包 import 路径（响应统一走 common.OK/Fail，路由挂 middleware.AdminAuth）
   let commonPath: String = moduleName + "/common";
+  let dbPath: String = commonPath + "/db";
+  let coinPath: String = commonPath + "/coin";
+  let httpxPath: String = commonPath + "/httpx";
+  let redisxPath: String = commonPath + "/redisx";
   let middlewarePath: String = moduleName + "/middleware";
   printLog("Go 项目: " + goBasePath + "（module: " + moduleName + "）");
 
@@ -831,6 +835,10 @@ export function generateApiMain(params: Object): Number {
     tplData["moduleDir"] = moduleDir;     // modules/<moduleDir>（预扫描计算）
     tplData["pkgName"] = pkgName;         // 包名 = moduleDir 末段
     tplData["commonPath"] = commonPath;   // 架子 common 包（OK/Fail 响应）
+    tplData["dbPath"] = dbPath;           // 架子 common/db（查询/事务/更新集）
+    tplData["coinPath"] = coinPath;       // 架子 common/coin（金额类型）
+    tplData["httpxPath"] = httpxPath;     // 架子 common/httpx（分页/入参）
+    tplData["redisxPath"] = redisxPath;   // 架子 common/redisx（缓存）
     tplData["middlewarePath"] = middlewarePath;  // 架子 middleware 包（AdminAuth）
     // 类名/文件名族（Go 结构体名与文件名均由表名派生）
     tplData["entityClass"] = param.entityClass;                      // 如 Shop
@@ -1431,7 +1439,7 @@ export function buildEnFieldLines(fields: FieldDef[]): String[] {
 
 /// @brief InSel 结构体字段行（嵌入 BasePage + 全指针筛选 + Sort，三列对齐）
 export function buildSelFieldLines(selFields: SelFieldDef[]): String[] {
-  let baseName: String = "common.BasePage";
+  let baseName: String = "httpx.BasePage";
   let maxName: Number = baseName.length;
   let maxType: Number = 0;
   let maxTag: Number = 0;
@@ -1845,12 +1853,12 @@ export function buildLayeredJoinData(json: Object, param: Param, tablesByName: O
     spec = spec + "// 联表 " + je["table"] + "：输出 " + colList + "；"
       + je["joinType"] + " JOIN 保证 " + je["table"] + " 无行时主表仍返回\n";
   }
-  spec = spec + "var querySpec = common.QuerySpec{\n";
+  spec = spec + "var querySpec = cdb.QuerySpec{\n";
   spec = spec + tb + "Table: \"" + param.tableName + "\",\n";
-  spec = spec + tb + "Joins: []common.Join{\n";
+  spec = spec + tb + "Joins: []cdb.Join{\n";
   for (je in joinEntries) {
     // Join 类型常量名：JoinLeft / JoinInner（配置大写 → Go 常量驼峰）
-    let joinConst: String = je["joinType"] == "LEFT" ? "common.JoinLeft" : "common.JoinInner";
+    let joinConst: String = je["joinType"] == "LEFT" ? "cdb.JoinLeft" : "cdb.JoinInner";
     let colsInline: String = "";
     for (ce in joinColsOf(je)) {
       colsInline = colsInline + (colsInline == "" ? "" : ", ")
@@ -1860,7 +1868,7 @@ export function buildLayeredJoinData(json: Object, param: Param, tablesByName: O
     spec = spec + tb + tb + tb + "Table: \"" + je["table"] + "\",\n";
     spec = spec + tb + tb + tb + "Type:  " + joinConst + ",\n";
     spec = spec + tb + tb + tb + "On:    [2]string{" + je["on0Const"] + ", " + je["on1Const"] + "},\n";
-    spec = spec + tb + tb + tb + "Cols:  []common.OutCol{" + colsInline + "},\n";
+    spec = spec + tb + tb + tb + "Cols:  []cdb.OutCol{" + colsInline + "},\n";
     spec = spec + tb + tb + "},\n";
   }
   spec = spec + tb + "},\n";
@@ -1921,6 +1929,10 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
     commonPath: String, middlewarePath: String, moduleDir: String, pkgName: String,
     globalEnumDefs: Object, emitted: Object, tablesByName: Object): Number {
   let tplDir: String = "../../crud_gin/template";
+  let dbPath: String = commonPath + "/db";
+  let coinPath: String = commonPath + "/coin";
+  let httpxPath: String = commonPath + "/httpx";
+  let redisxPath: String = commonPath + "/redisx";
   let tableName: String = json["tableName"];
   let param: Param = new Param();
   param.setTableData(json);
@@ -1974,7 +1986,7 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   if (hasJoin) {
     let rawConds: String[] = qd.buildWhereConditionsPointer(mainSelFields);
     for (c in rawConds) {
-      whereConds.append(c.replace("common.Where", "querySpec.Where"));
+      whereConds.append(c.replace("cdb.Where", "querySpec.Where"));
     }
     let joinWhere: String[] = jd["joinWhereLines"];
     for (c in joinWhere) {
@@ -1992,7 +2004,7 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   let toEntityLines: String[] = [];
   let toUpdatesLines: String[] = [];
   for (f in param.updFields) {
-    toEntityLines.append(tabChar() + "common.CopyNonNil(&e." + f.goName + ", in." + f.goName + ")");
+    toEntityLines.append(tabChar() + "cdb.CopyNonNil(&e." + f.goName + ", in." + f.goName + ")");
     toUpdatesLines.append(tabChar() + tabChar() + dataAlias + ".Col" + f.goName + ", in." + f.goName + ",");
   }
   // service 结构体两列对齐（DB/Repo）
@@ -2010,7 +2022,7 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   svcFieldLines.append(tabChar() + padTo(svcName2, svcMaxName) + " " + svcType2);
 
   // ── import 块 ────────────────────────────────────────────────
-  //      金额列（common.Coin）只依赖架子 common 包：repo/in_sel/in_upd
+  //      金额列（coin.Coin）只依赖架子 coin 包：repo/in_sel/in_upd
   //      与联表实体恒有 common，无需处理；仅单表实体原本无 common，需补
   let needTime: Bool = false;
   for (f in param.fields) {
@@ -2018,8 +2030,10 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   }
   // InUpd 按 editCols 收敛后可能已无时间列；import 只看实际写入参数字段
   let updNeedTime: Bool = false;
+  let updNeedCoin: Bool = false;
   for (uf in param.updFields) {
     if (uf.ptrType.includes("time.Time")) { updNeedTime = true; }
+    if (uf.goType == "coin.Coin") { updNeedCoin = true; }
   }
   let selNeedTime: Bool = false;
   for (sf in selFields) {
@@ -2036,44 +2050,39 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   }
   let enTime: Bool = (needTime || joinNeedTime);
   let enImports: String = "";
-  if (hasJoin) {
-    if (enTime) {
-      enImports = "import (\n" + tb + "\"time\"\n\n" + tb + "\"" + commonPath + "\"\n)";
-    } else {
-      enImports = "import \"" + commonPath + "\"";
-    }
-  } else {
-    // 单表实体无既有 common 引用：金额列（common.Coin）需补 import common
-    if (enTime && param.hasDecimalField) {
-      enImports = "import (\n" + tb + "\"time\"\n\n" + tb + "\"" + commonPath + "\"\n)";
-    } else if (param.hasDecimalField) {
-      enImports = "import \"" + commonPath + "\"";
-    } else if (enTime) {
-      enImports = "import \"time\"";
-    }
-  }
+  let enStd: String[] = [];
+  let enExt: String[] = [];
+  if (enTime) { enStd.append("time"); }
+  if (hasJoin) { enExt.append(dbPath); }
+  if (param.hasDecimalField) { enExt.append(coinPath); }
+  enImports = buildGoImports(enStd, enExt);
+
   let selImports: String = "";
-  if (selNeedTime) {
-    selImports = "import (\n" + tb + "\"" + commonPath + "\"\n" + tb + "\"time\"\n)";
-  } else {
-    selImports = "import \"" + commonPath + "\"";
-  }
-  let repoImports: String = "import (\n" + tb + "\"" + commonPath + "\"\n\n" + tb
-    + "\"gorm.io/gorm\"\n)";
-  let updImports: String = "";
+  let selStd: String[] = [];
+  let selExt: String[] = [];
+  if (selNeedTime) { selStd.append("time"); }
+  selExt.append(httpxPath);
+  selImports = buildGoImports(selStd, selExt);
+
+  let repoImports: String = buildGoImports([dbPath], ["gorm.io/gorm"]);
+
+  let updImports: String = "import (\n";
   if (updNeedTime) {
-    updImports = "import (\n" + tb + "\"time\"\n\n" + tb + "\"" + commonPath + "\"\n"
-      + tb + dataAlias + " \"" + dataPath + "\"\n)";
-  } else {
-    updImports = "import (\n" + tb + "\"" + commonPath + "\"\n" + tb + dataAlias
-      + " \"" + dataPath + "\"\n)";
+    updImports = updImports + tb + "\"time\"\n\n";
   }
+  updImports = updImports + tb + "\"" + dbPath + "\"\n";
+  if (updNeedCoin) {
+    updImports = updImports + tb + "\"" + coinPath + "\"\n";
+  }
+  updImports = updImports + tb + dataAlias + " \"" + dataPath + "\"\n)";
+
   let hdlImports: String = "import (\n" + tb + "\"github.com/gin-gonic/gin\"\n\n" + tb + "\""
-    + commonPath + "\"\n" + tb + dataAlias + " \"" + dataPath + "\"\n)";
+    + commonPath + "\"\n" + tb + "\"" + httpxPath + "\"\n" + tb + dataAlias
+    + " \"" + dataPath + "\"\n)";
   let svcImports: String = "import (\n" + tb + "\"gorm.io/gorm\"\n\n" + tb + dataAlias
     + " \"" + dataPath + "\"\n)";
   let routerImports: String = "import (\n" + tb + "\"github.com/gin-gonic/gin\"\n\n" + tb + "\""
-    + commonPath + "\"\n" + tb + "\"" + middlewarePath + "\"\n)";
+    + dbPath + "\"\n" + tb + "\"" + middlewarePath + "\"\n)";
 
   // ── C 端模块（modules/app）配置 ──────────────────────────────
   //      appQuery 缺省 false；appAuth 缺省 user（宁可漏开放、不可误开放）；
@@ -2133,10 +2142,10 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   let appRouterImports: String = "";
   if (appIsPublic) {
     appRouterImports = "import (\n" + tb + "\"github.com/gin-gonic/gin\"\n\n" + tb
-      + "\"" + commonPath + "\"\n)";
+      + "\"" + dbPath + "\"\n)";
   } else {
     appRouterImports = "import (\n" + tb + "\"github.com/gin-gonic/gin\"\n\n" + tb
-      + "\"" + commonPath + "\"\n" + tb + "\"" + middlewarePath + "\"\n)";
+      + "\"" + dbPath + "\"\n" + tb + "\"" + middlewarePath + "\"\n)";
   }
 
   // ── 表缓存骨架（data 层手写件）────────────────────────────────
@@ -2168,6 +2177,10 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   tplData["dataPath"] = dataPath;
   tplData["dataAlias"] = dataAlias;
   tplData["commonPath"] = commonPath;
+  tplData["dbPath"] = dbPath;
+  tplData["coinPath"] = coinPath;
+  tplData["httpxPath"] = httpxPath;
+  tplData["redisxPath"] = redisxPath;
   tplData["middlewarePath"] = middlewarePath;
   tplData["dataPkgComment"] = dataPkgComment;
   tplData["adminPkgComment"] = adminPkgComment;

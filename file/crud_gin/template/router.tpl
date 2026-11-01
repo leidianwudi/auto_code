@@ -17,7 +17,7 @@ ${routerImports}
 // mount${tableClass} 装配${tableComment}路由组与 handler（路径 / 中间件 / DB 的唯一来源）
 // CRUD 路由与扩展路由都复用它，避免两处各建一套导致中间件漂移。
 func mount${tableClass}(rg *gin.RouterGroup) (*gin.RouterGroup, *${handlerClass}) {
-	h := New${handlerClass}(New${serviceClass}(common.DB))
+	h := New${handlerClass}(New${serviceClass}(cdb.DB))
 	g := rg.Group("/${tableName}")
 	g.Use(middleware.AdminAuth())
 	return g, h

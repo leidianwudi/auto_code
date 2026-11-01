@@ -13,7 +13,7 @@
 // 类型映射表：
 //   整数族（int/tinyint/bigint/smallint/mediumint，含 unsigned）→ int64
 //   tinyint(1) → bool
-//   varchar/text → string                  decimal/numeric → common.Coin（项目金额类型）
+//   varchar/text → string                  decimal/numeric → coin.Coin（项目金额类型）
 //   float/double → float64
 //   datetime/timestamp → time.Time         json → datatypes.JSON（gorm.io/datatypes）
 // ============================================================================
@@ -40,10 +40,10 @@ export function mapTypeToGo(colType: String, unsigned: Bool): String {
   if (t.includes("float") || t.includes("double")) {
     return "float64";
   }
-  // 定点小数（金额）→ common.Coin（架子 common 包封装的金额类型，
+  // 定点小数（金额）→ coin.Coin（架子 common 包封装的金额类型，
   // 内含 shopspring decimal + 全局精度；引用处需 import 项目 common 包）
   if (t.includes("decimal") || t.includes("numeric")) {
-    return "common.Coin";
+    return "coin.Coin";
   }
   // 日期时间类型
   if (t.includes("datetime") || t.includes("timestamp") || t.includes("date")) {
@@ -114,7 +114,7 @@ export function zeroKindOfGoType(goType: String): String {
   if (goType == "string") {
     return "string";
   }
-  if (goType == "common.Coin") {
+  if (goType == "coin.Coin") {
     return "number";  // 金额支持精确/范围查询（指针模式条件 = *sel.X 传参，类型无关）
   }
   if (goType.includes("int") || goType.includes("float")) {
@@ -207,7 +207,7 @@ export class Param {
   let primaryField: FieldDef = null; // 主键列（SelectById/Update/Delete 依赖；无主键时报错跳表）
   let hasTimeField: Bool = false;    // 是否有 time.Time 列（实体 import "time"）
   let hasJsonField: Bool = false;    // 是否有 datatypes.JSON 列（实体 import gorm.io/datatypes）
-  let hasDecimalField: Bool = false; // 是否有 common.Coin 金额列（单表实体需补 import common）
+  let hasDecimalField: Bool = false; // 是否有 coin.Coin 金额列（单表实体需补 import common）
 
   /// @brief 拼接单列的 gorm tag
   ///   形如 gorm:"column:name;type:varchar(64)"，主键追加 ;primaryKey，
@@ -331,7 +331,7 @@ export class Param {
       if (field.goType == "datatypes.JSON") {
         this.hasJsonField = true;
       }
-      if (field.goType == "common.Coin") {
+      if (field.goType == "coin.Coin") {
         this.hasDecimalField = true;
       }
 

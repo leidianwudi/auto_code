@@ -15,7 +15,7 @@ ${appRouterImports}
 // mount${tableClass} 装配 C 端${tableComment}路由组与 handler（路径 / 中间件 / DB 的唯一来源）
 // 只读查询与扩展路由都复用它；${appRouterMountNote}
 func mount${tableClass}(rg *gin.RouterGroup) (*gin.RouterGroup, *${handlerClass}) {
-	h := New${handlerClass}(New${serviceClass}(common.DB))
+	h := New${handlerClass}(New${serviceClass}(cdb.DB))
 	g := rg.Group("/${tableName}")
 ${if !appIsPublic}
 	g.Use(middleware.UserAuth())

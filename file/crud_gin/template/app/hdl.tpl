@@ -11,7 +11,7 @@ ${appHdlImports}
 ${/if}
 
 // ${handlerClass} ${tableComment}(${tableName}) C 端 HTTP 层（只读）
-// 薄层：参数绑定 → service → 统一响应（common.OK/common.Fail）
+// 薄层：参数绑定 → service → 统一响应（common.OK/common.FailErr）
 ${if appEmpty}// 空接口形态：不生成只读接口；自定义接口 Handler 写 ${tableName}_ext_handler.go
 ${/if}type ${handlerClass} struct {
 	Svc *${serviceClass}
@@ -34,12 +34,12 @@ func (h *${handlerClass}) SelectByIn(c *gin.Context) {
 		common.FailErr(c, err)
 		return
 	}
-	common.OK(c, common.NewOutPage(list, total))
+	common.OK(c, httpx.NewOutPage(list, total))
 }
 
 // SelectById 根据id查询
 func (h *${handlerClass}) SelectById(c *gin.Context) {
-	body, ok := common.Bind[common.InSelId](c)
+	body, ok := common.Bind[httpx.InSelId](c)
 	if !ok {
 		return
 	}

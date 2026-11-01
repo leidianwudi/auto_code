@@ -46,7 +46,7 @@ export class SortInfoResult {
 
 /// @brief 查询场景数据构建器（无 DB，全部来自 .jsontable 配置）
 export class QueryData {
-  /// true = 分层布局：过滤字段全指针 + 条件走 common.Where*（nil 不加条件）
+  /// true = 分层布局：过滤字段全指针 + 条件走 cdb.Where*（nil 不加条件）
   let pointerMode: Bool = false;
 
   // ------------------------------------------------------------------------
@@ -310,9 +310,9 @@ export class QueryData {
   }
 
   // ------------------------------------------------------------------------
-  // 分层布局条件块：过滤字段全指针，nil = 不加条件；条件走 common.Where*
-  //   - 精确：common.WhereEq(db, ColXxx, *sel.Xxx)（time 直接传指针）
-  //   - 模糊：common.WhereLike(db, ColXxx, *sel.Xxx)
+  // 分层布局条件块：过滤字段全指针，nil = 不加条件；条件走 cdb.Where*
+  //   - 精确：cdb.WhereEq(db, ColXxx, *sel.Xxx)（time 直接传指针）
+  //   - 模糊：cdb.WhereLike(db, ColXxx, *sel.Xxx)
   //   - 范围：_min → WhereGte，_max → WhereLte（time 传指针，数值解引用）
   // 列名常量由 baseName 派生（ColXxx），与 data 层 en_<表>_.go 的常量同名。
   // ------------------------------------------------------------------------
@@ -339,10 +339,10 @@ export class QueryData {
           valMax = "*" + valMax;
         }
         conditions.append(tb + "if sel." + sf.goName + " != nil {\n"
-          + tb + tb + "db = common.WhereGte(db, " + colConst + ", " + valMin + ")\n"
+          + tb + tb + "db = cdb.WhereGte(db, " + colConst + ", " + valMin + ")\n"
           + tb + "}");
         conditions.append(tb + "if sel." + maxGo + " != nil {\n"
-          + tb + tb + "db = common.WhereLte(db, " + colConst + ", " + valMax + ")\n"
+          + tb + tb + "db = cdb.WhereLte(db, " + colConst + ", " + valMax + ")\n"
           + tb + "}");
         continue;
       }
@@ -352,11 +352,11 @@ export class QueryData {
       }
       if (sf.isLike) {
         conditions.append(tb + "if sel." + sf.goName + " != nil {\n"
-          + tb + tb + "db = common.WhereLike(db, " + colConst + ", " + val + ")\n"
+          + tb + tb + "db = cdb.WhereLike(db, " + colConst + ", " + val + ")\n"
           + tb + "}");
       } else {
         conditions.append(tb + "if sel." + sf.goName + " != nil {\n"
-          + tb + tb + "db = common.WhereEq(db, " + colConst + ", " + val + ")\n"
+          + tb + tb + "db = cdb.WhereEq(db, " + colConst + ", " + val + ")\n"
           + tb + "}");
       }
     }

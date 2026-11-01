@@ -3,7 +3,7 @@ ${# Repo 模板：data/{dataDir}/{tableName}_repo_.go               }
 ${# ----------------------------------------------------------------------------}
 ${#   - 共享数据层：admin/app 两端复用；方法首参 db 支持独立查询/事务           }
 ${#   - 联表模式（hasJoin）：querySpec 流水线（Apply→Where→ApplyOrder→分页），   }
-${#     排序白名单在 querySpec.Order；单表模式：白名单变量 + common.Where*/ApplyOrder }
+${#     排序白名单在 querySpec.Order；单表模式：白名单变量 + cdb.Where*/ApplyOrder }
 ${#   - 写路径只留 Insert/UpdateById(map)/Delete 原子方法，Save/Delete 编排在     }
 ${#     service 生成件（*_service_.go）                                          }
 ${# 数据来源：pkgName/repoClass/enClass/selClass/idGoType/idGoName/tableComment  }
@@ -16,7 +16,7 @@ package ${pkgName}
 ${repoImports}
 
 // ${repoClass} ${tableComment}(${tableName}) 数据访问层（共享，admin 端与 app 端复用）
-// 方法首参 db *gorm.DB：传 common.DB 走独立查询，传 tx 进入事务。
+// 方法首参 db *gorm.DB：传 cdb.DB 走独立查询，传 tx 进入事务。
 type ${repoClass} struct{}
 
 // New${repoClass} 创建数据访问层对象
@@ -32,7 +32,7 @@ func (r *${repoClass}) SelectByIn(db *gorm.DB, sel *${selClass}) ([]${enClass}Vi
 	query = r.getWhereByIn(query, sel)
 	query = querySpec.ApplyOrder(query, sel.Sort)
 	var list []${enClass}View
-	total, err := common.Paginate(query, sel.Page, sel.PageSize, &list)
+	total, err := cdb.Paginate(query, sel.Page, sel.PageSize, &list)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -60,9 +60,9 @@ ${/if}
 // SelectByIn 分页查询，返回数据列表和总记录数
 func (r *${repoClass}) SelectByIn(db *gorm.DB, sel *${selClass}) ([]${enClass}, int64, error) {
 	query := r.getWhereByIn(db.Model(&${enClass}{}), sel)
-	query = common.ApplyOrder(query, sel.Sort, ${sortWhitelistName})
+	query = cdb.ApplyOrder(query, sel.Sort, ${sortWhitelistName})
 	var list []${enClass}
-	total, err := common.Paginate(query, sel.Page, sel.PageSize, &list)
+	total, err := cdb.Paginate(query, sel.Page, sel.PageSize, &list)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -81,7 +81,7 @@ ${/if}
 // SelectById 根据id查询单条记录
 func (r *${repoClass}) SelectById(db *gorm.DB, id ${idGoType}) (*${enClass}, error) {
 	var entity ${enClass}
-	if err := common.WhereEq(db, Col${idGoName}, id).First(&entity).Error; err != nil {
+	if err := cdb.WhereEq(db, Col${idGoName}, id).First(&entity).Error; err != nil {
 		return nil, err
 	}
 	return &entity, nil
@@ -100,7 +100,7 @@ func (r *${repoClass}) UpdateById(db *gorm.DB, id ${idGoType}, updates map[strin
 	if len(updates) == 0 {
 		return 0, nil
 	}
-	query := common.WhereEq(db.Model(&${enClass}{}).Omit(Col${idGoName}), Col${idGoName}, id).Updates(updates)
+	query := cdb.WhereEq(db.Model(&${enClass}{}).Omit(Col${idGoName}), Col${idGoName}, id).Updates(updates)
 	if query.Error != nil {
 		return 0, query.Error
 	}
@@ -109,7 +109,7 @@ func (r *${repoClass}) UpdateById(db *gorm.DB, id ${idGoType}, updates map[strin
 
 // Delete 删除记录（支持多条），返回受影响行数
 func (r *${repoClass}) Delete(db *gorm.DB, ids []${idGoType}) (int64, error) {
-	res := common.WhereIn(db, Col${idGoName}, ids).Delete(&${enClass}{})
+	res := cdb.WhereIn(db, Col${idGoName}, ids).Delete(&${enClass}{})
 	if res.Error != nil {
 		return 0, res.Error
 	}
