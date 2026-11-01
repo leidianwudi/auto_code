@@ -1223,6 +1223,12 @@ void JsonTableDesigner::setupUI() {
       "public=不挂 UserAuth（如商品列表）；user=需登录（默认，宁可漏开放不可误开放）\n"
       "作用于 mount 路由组（含扩展路由）"));
   genRow->addWidget(m_appAuthCombo);
+  m_appOutBtn = makeCompactButton(QStringLiteral("C端出参: 全部"), this);
+  m_appOutBtn->setToolTip(QStringLiteral(
+      "C 端出参白名单：勾选后生成 out_<表>_.go，只输出所选列\n"
+      "留空 = 直接返回完整实体（敏感列靠 json:\"-\" 挡住）\n"
+      "只对主表字段生效，联表输出列暂不支持"));
+  genRow->addWidget(m_appOutBtn);
   addVSep();
   // 表缓存骨架（data 层手写件）：仅首次生成，之后重新生成不覆盖
   m_genCacheCheck = new QCheckBox(QStringLiteral("表缓存"), this);
@@ -1234,8 +1240,13 @@ void JsonTableDesigner::setupUI() {
   genRow->addWidget(m_genCacheCheck);
   genRow->addStretch();
   connect(m_appQueryCombo, &QComboBox::activated, this, [this](int) {
-    m_appAuthCombo->setEnabled(m_appQueryCombo->currentData().toString() != QStringLiteral("none"));
+    const bool appOn =
+        m_appQueryCombo->currentData().toString() != QStringLiteral("none");
+    m_appAuthCombo->setEnabled(appOn);
+    updateAppOutBtn();
+    if (!m_loading) emit configChanged();
   });
+  connect(m_appOutBtn, &QPushButton::clicked, this, [this]() { editAppOutCols(); });
   presentTab->addLayout(genRow);
 
   presentTab->addWidget(presentSplit, 1);
@@ -1608,6 +1619,8 @@ void JsonTableDesigner::refill() {
     const int authIdx = m_appAuthCombo->findData(m_table.appAuth);
     m_appAuthCombo->setCurrentIndex(authIdx >= 0 ? authIdx : 1);
     m_appAuthCombo->setEnabled(appMode != QStringLiteral("none"));
+    m_appOutCols = m_table.appOutCols;
+    updateAppOutBtn();
   }
   fillColumns(m_table.columns);
   fillIndexes(m_table.indexes);
@@ -2690,6 +2703,130 @@ QString JsonTableDesigner::joinCsv(const QStringList &list) {
   return list.join(QStringLiteral(","));
 }
 
+void JsonTableDesigner::updateAppOutBtn() {
+  if (!m_appOutBtn) return;
+  const bool appOn = m_appQueryCombo &&
+                     m_appQueryCombo->currentData().toString() != QStringLiteral("none");
+  m_appOutBtn->setEnabled(appOn);
+  if (!appOn) {
+    m_appOutBtn->setText(QStringLiteral("C端出参: 不适用"));
+    return;
+  }
+  m_appOutBtn->setText(m_appOutCols.isEmpty()
+                           ? QStringLiteral("C端出参: 全部")
+                           : QStringLiteral("C端出参: %1列").arg(m_appOutCols.size()));
+  const QString current = m_appOutCols.isEmpty()
+                              ? QStringLiteral("未选择（返回完整实体）")
+                              : m_appOutCols.join(QStringLiteral(", "));
+  m_appOutBtn->setToolTip(QStringLiteral(
+      "C 端出参白名单：勾选后生成 out_<表>_.go，只输出所选列\n"
+      "留空 = 直接返回完整实体（敏感列靠 json:\"-\" 挡住）\n"
+      "只对主表字段生效，联表输出列暂不支持\n"
+      "当前：%1").arg(current));
+}
+
+void JsonTableDesigner::editAppOutCols() {
+  QDialog dlg(this);
+  dlg.resize(560, 460);
+  auto frame = beginConfigDialog(
+      &dlg, QStringLiteral("C端出参白名单 - %1").arg(m_nameEdit->text().trimmed()));
+
+  auto *tip = new QLabel(
+      QStringLiteral("勾选 C 端接口允许输出的列（只支持主表字段）；留空 = 返回完整实体。"),
+      &dlg);
+  tip->setWordWrap(true);
+  frame.contentLayout->addWidget(tip);
+
+  auto *toolRow = new QHBoxLayout;
+  auto *allBtn = makeCompactButton(QStringLiteral("全选"), &dlg);
+  auto *noneBtn = makeCompactButton(QStringLiteral("全不选"), &dlg);
+  auto *summary = new QLabel(&dlg);
+  toolRow->addWidget(allBtn);
+  toolRow->addWidget(noneBtn);
+  toolRow->addStretch();
+  toolRow->addWidget(summary);
+  frame.contentLayout->addLayout(toolRow);
+
+  // 统一字段配置表格：隐藏行号、纯勾选单元格居中、表头不可点选
+  auto *table = makeConfigTable(
+      {{QStringLiteral("选"), QHeaderView::ResizeToContents, 0},
+       {QStringLiteral("列名"), QHeaderView::ResizeToContents, 0},
+       {QStringLiteral("注释"), QHeaderView::Stretch, 0}},
+      &dlg, 200);
+  table->setSelectionMode(QAbstractItemView::NoSelection);
+  table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+  for (int r = 0; r < m_colsTable->rowCount(); ++r) {
+    const QString name = cellText(r, ColColName);
+    if (name.isEmpty()) continue;
+    const int row = table->rowCount();
+    table->insertRow(row);
+    auto *check = new QTableWidgetItem;
+    check->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
+    check->setCheckState(m_appOutCols.contains(name) ? Qt::Checked : Qt::Unchecked);
+    table->setItem(row, 0, check);
+    auto *nameItem = new QTableWidgetItem(name);
+    nameItem->setFlags(Qt::ItemIsEnabled);
+    table->setItem(row, 1, nameItem);
+    auto *commentItem = new QTableWidgetItem(cellText(r, ColColComment));
+    commentItem->setFlags(Qt::ItemIsEnabled);
+    commentItem->setForeground(QBrush(QColor(0x80, 0x80, 0x80)));
+    table->setItem(row, 2, commentItem);
+  }
+  frame.contentLayout->addWidget(table, 1);
+
+  auto *warn = new QLabel(&dlg);
+  warn->setWordWrap(true);
+  frame.contentLayout->addWidget(warn);
+
+  const auto refreshSummary = [table, summary, warn]() {
+    QStringList selected;
+    for (int r = 0; r < table->rowCount(); ++r) {
+      const QTableWidgetItem *check = table->item(r, 0);
+      const QTableWidgetItem *name = table->item(r, 1);
+      if (check && name && check->checkState() == Qt::Checked) selected << name->text();
+    }
+    if (selected.isEmpty()) {
+      summary->setText(QStringLiteral("已选 0 列"));
+      warn->setText(
+          QStringLiteral("⚠ 未选择：C 端接口将返回完整实体（coin/up1 等会全部输出）。"));
+      warn->setStyleSheet(QStringLiteral("color:#b26a00;"));
+    } else {
+      summary->setText(QStringLiteral("已选 %1 列").arg(selected.size()));
+      QString shown = selected.mid(0, 8).join(QStringLiteral(", "));
+      if (selected.size() > 8) shown += QStringLiteral(" …");
+      warn->setText(QStringLiteral("输出列：%1").arg(shown));
+      warn->setStyleSheet(QString());
+    }
+  };
+  connect(table, &QTableWidget::itemChanged, &dlg,
+          [refreshSummary](QTableWidgetItem *) { refreshSummary(); });
+  connect(allBtn, &QPushButton::clicked, &dlg, [table]() {
+    for (int r = 0; r < table->rowCount(); ++r) {
+      if (auto *it = table->item(r, 0)) it->setCheckState(Qt::Checked);
+    }
+  });
+  connect(noneBtn, &QPushButton::clicked, &dlg, [table]() {
+    for (int r = 0; r < table->rowCount(); ++r) {
+      if (auto *it = table->item(r, 0)) it->setCheckState(Qt::Unchecked);
+    }
+  });
+  refreshSummary();
+
+  // 框架封装：无边框 + 自定义标题栏 + 统一样式确定/取消
+  finishConfigDialog(&dlg, frame);
+
+  if (dlg.exec() != QDialog::Accepted) return;
+  QStringList selected;
+  for (int r = 0; r < table->rowCount(); ++r) {
+    const QTableWidgetItem *check = table->item(r, 0);
+    const QTableWidgetItem *name = table->item(r, 1);
+    if (check && name && check->checkState() == Qt::Checked) selected << name->text();
+  }
+  m_appOutCols = selected;
+  updateAppOutBtn();
+  emit configChanged();
+}
+
 void JsonTableDesigner::fillSortTable(const QVector<QPair<QString, QString>> &sort) {
   m_sortTable->setRowCount(0);
   for (const auto &p : sort) appendSortRow(p.first, p.second);
@@ -3685,6 +3822,14 @@ JsonTableTable JsonTableDesigner::collectTable() const {
   t.appQueryMode = (appMode == QStringLiteral("empty")) ? QStringLiteral("empty") : QString();
   t.appAuth = m_appAuthCombo->currentData().toString();
   if (t.appAuth.isEmpty()) t.appAuth = QStringLiteral("user");
+  // C 端出参白名单：仅 appQuery 生效；按字段表顺序，过滤已删除/改名的列
+  t.appOutCols.clear();
+  if (t.appQuery) {
+    for (int r = 0; r < m_colsTable->rowCount(); ++r) {
+      const QString name = cellText(r, ColColName);
+      if (!name.isEmpty() && m_appOutCols.contains(name)) t.appOutCols.append(name);
+    }
+  }
   t.buttons = m_buttons;
   t.columns = collectColumns();
   t.indexes = collectIndexes();

@@ -173,6 +173,10 @@ private:
   /// 列表列/查询条件/排序的 ref 候选（字段列名 + 联表 别名.列）、
   /// 联表外键列下拉（候选=字段列名）
   void refreshColumnCandidates();
+  /// 刷新「C端出参」按钮文案/提示/可用状态（空=完整实体，非空显示列数）
+  void updateAppOutBtn();
+  /// 打开 C 端出参白名单选择对话框（勾选主表字段，顺序=字段表顺序）
+  void editAppOutCols();
   /// 刷新多语言字段补全候选（候选=翻译表列名，按翻译表名实时切换）
   void refreshI18nFieldCandidates();
   /// 生成 CREATE TABLE DDL（列 + 主键 + 索引，InnoDB/utf8mb4）
@@ -194,6 +198,8 @@ private:
   QCheckBox *m_frontendCheck = nullptr;       ///< 生成前端页面（false = 纯 API 模块）
   QComboBox *m_appQueryCombo = nullptr;       ///< C 端模块形态：不生成 / 只读查询 / 空接口
   QComboBox *m_appAuthCombo = nullptr;        ///< C 端鉴权：public / user
+  QPushButton *m_appOutBtn = nullptr;         ///< C 端出参白名单（弹字段勾选）
+  QStringList m_appOutCols;                   ///< C 端出参白名单（列名，空=完整实体）
   QCheckBox *m_genAddCheck = nullptr;          ///< 生成新增按钮（工具栏）
   QCheckBox *m_genEditCheck = nullptr;         ///< 生成行内编辑按钮
   QCheckBox *m_genDeleteCheck = nullptr;       ///< 生成删除按钮（行内删除 + 工具栏批量删除）
