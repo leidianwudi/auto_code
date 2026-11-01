@@ -6,7 +6,7 @@ ${#   覆盖层（model/dto/repo/service/handler/router 七文件）每次重新
 ${#   自定义逻辑全部写在本文件：                                                  }
 ${#   - 业务钩子：BeforeInsert/AfterInsert/BeforeUpdate/AfterUpdate/             }
 ${#     BeforeDelete/AfterDelete（包级函数变量，init() 中赋值）                   }
-${#   - 自定义路由：CustomRoutes（追加进 /{tableName} 路由组，同挂 JWT）          }
+${#   - 自定义路由：CustomRoutes（追加进 /{tableName} 路由组，同挂 AdminAuth）          }
 ${#   - 新增方法：Go 同包多文件，可直接为 {repoClass}/{serviceClass}/{handlerClass}}
 ${#     定义新方法（禁止与覆盖层同名方法 = 重复定义编译错误）                      }
 ${# 数据来源（tplData）：                                                        }
@@ -22,7 +22,7 @@ ${if !fileExists(outputPath)}
 //   2. 自定义逻辑都写在本文件：
 //      - 业务钩子：BeforeInsert/AfterInsert/BeforeUpdate/AfterUpdate/
 //        BeforeDelete/AfterDelete（包级函数变量，在 init() 中赋值）
-//      - 自定义路由：CustomRoutes（追加到 /${tableName} 路由组，同挂 JWT）
+//      - 自定义路由：CustomRoutes（追加到 /${tableName} 路由组，同挂 AdminAuth）
 //      - 新增方法：直接为 ${repoClass}/${serviceClass}/${handlerClass} 定义方法
 //   3. 使用第三方包时自行在本文件补 import 块
 // ─────────────────────────────────────────────────────────────────────

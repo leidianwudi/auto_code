@@ -235,7 +235,7 @@ export function generateApiMain(params: Object): Number {
     printError("错误：go.mod 不存在或缺 module 行，跳过全部表生成: " + goBasePath + "/go.mod");
     return 0;
   }
-  // 架子公共包 import 路径（响应统一走 common.OK/Fail，路由挂 middleware.JWTAuth）
+  // 架子公共包 import 路径（响应统一走 common.OK/Fail，路由挂 middleware.AdminAuth）
   let commonPath: String = moduleName + "/common";
   let middlewarePath: String = moduleName + "/middleware";
   printLog("Go 项目: " + goBasePath + "（module: " + moduleName + "）");
@@ -831,7 +831,7 @@ export function generateApiMain(params: Object): Number {
     tplData["moduleDir"] = moduleDir;     // modules/<moduleDir>（预扫描计算）
     tplData["pkgName"] = pkgName;         // 包名 = moduleDir 末段
     tplData["commonPath"] = commonPath;   // 架子 common 包（OK/Fail 响应）
-    tplData["middlewarePath"] = middlewarePath;  // 架子 middleware 包（JWTAuth）
+    tplData["middlewarePath"] = middlewarePath;  // 架子 middleware 包（AdminAuth）
     // 类名/文件名族（Go 结构体名与文件名均由表名派生）
     tplData["entityClass"] = param.entityClass;                      // 如 Shop
     tplData["repoClass"] = param.entityClass + "Repo";               // 如 ShopRepo
@@ -902,7 +902,7 @@ export function generateApiMain(params: Object): Number {
     hdlExt.append("github.com/gin-gonic/gin");
     hdlExt.append(commonPath);
     tplData["hdlImports"] = buildGoImports([], hdlExt);
-    // router.go（每模块自包含：gin + JWT 中间件 + common）
+    // router.go（每模块自包含：gin + AdminAuth 中间件 + common）
     let routerExt: String[] = [];
     routerExt.append("github.com/gin-gonic/gin");
     routerExt.append(middlewarePath);

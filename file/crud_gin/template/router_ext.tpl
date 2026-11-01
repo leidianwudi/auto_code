@@ -11,7 +11,7 @@ ${if !fileExists(outputPath)}
 // ${tableComment}(${tableName}) 扩展路由（admin 端）：自定义接口挂载点
 //   1. 生成件 ${tableName}_router_.go 每次重新生成都会调用 RegisterExtRoutes，
 //      请勿删除该函数（函数体可自由修改）
-//   2. rg 复用 mount${tableClass} 的路由组（已挂 JWTAuth）；
+//   2. rg 复用 mount${tableClass} 的路由组（已挂 AdminAuth）；
 //      接口级权限自行调用 middleware.RequirePerm("${permPrefix}:xxx")
 //   3. 扩展 Handler 方法建议写在 ${tableName}_handler.go
 //   4. 使用第三方包时自行补 import 块

@@ -19,11 +19,11 @@ ${routerImports}
 func mount${tableClass}(rg *gin.RouterGroup) (*gin.RouterGroup, *${handlerClass}) {
 	h := New${handlerClass}(New${serviceClass}(common.DB))
 	g := rg.Group("/${tableName}")
-	g.Use(middleware.JWTAuth())
+	g.Use(middleware.AdminAuth())
 	return g, h
 }
 
-// RegisterRoutes 注册${tableComment}(${tableName})模块路由（JWT 认证 + 接口级 RBAC）
+// RegisterRoutes 注册${tableComment}(${tableName})模块路由（AdminAuth 认证 + 接口级 RBAC）
 // 自定义接口写在 ${tableName}_router.go / ${tableName}_handler.go
 // （首次骨架，重新生成不覆盖），由下方 RegisterExtRoutes 自动挂载。
 func RegisterRoutes(rg *gin.RouterGroup) {

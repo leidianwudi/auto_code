@@ -47,5 +47,7 @@
                 }
             }
         }
-    }
+    },
+    "go.useLanguageServer": false,
+    "go.toolsManagement.autoUpdate": false
 }
