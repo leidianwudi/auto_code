@@ -121,7 +121,7 @@ private:
   QSpinBox *m_listThumbH = nullptr;
 
   // ── 编辑表单 ──
-  QCheckBox *m_editEditableCheck = nullptr;  ///< 编辑时可编辑（false=表单内只读展示）
+  QCheckBox *m_editEditableCheck = nullptr;  ///< 表单内可编辑（false=只读展示）
   QCheckBox *m_requiredCheck = nullptr;      ///< 必填（提交时校验；对齐 jsonvue 字段设置）
   QComboBox *m_widgetCombo = nullptr;
   QLineEdit *m_placeholderEdit = nullptr;   ///< 占位提示（input/textarea/image）

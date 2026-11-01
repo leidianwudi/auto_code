@@ -67,6 +67,36 @@
         unsigned: false,
       },
     ],
+    editCols: [
+      {
+        label: '主键',
+        ref: 'id',
+      },
+      {
+        label: '角色名',
+        ref: 'name',
+      },
+      {
+        label: '备注',
+        ref: 'remark',
+      },
+      {
+        label: '排序（越小越靠前）',
+        ref: 'sort',
+      },
+      {
+        label: '状态 0:停用 1:启用',
+        ref: 'status',
+      },
+      {
+        label: '创建时间',
+        ref: 'created_at',
+      },
+      {
+        label: '更新时间',
+        ref: 'updated_at',
+      },
+    ],
     frontend: false,
     manualUpdateTime: false,
     modelName: 'sys_role',

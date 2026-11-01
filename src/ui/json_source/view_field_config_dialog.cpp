@@ -246,13 +246,15 @@ void ViewFieldConfigDialog::setupUI() {
   editThumbLay->addWidget(new QLabel(QStringLiteral("宽×高（0=跟随预设）"), m_editThumbRow));
   editThumbLay->addStretch();
   form->addRow(QStringLiteral("编辑缩略图:"), m_editThumbRow);
-  // 编辑可编辑/必填（说明走 tooltip，行内保持干净复选框；位置对齐 jsonvue）
+  // 表单可编辑 / 必填（展示与写入在「字段呈现」列表勾选，不在本面板重复）
   m_editEditableCheck = new QCheckBox(this);
   m_editEditableCheck->setChecked(true);
-  m_editEditableCheck->setToolTip(QStringLiteral("取消勾选 = 编辑表单内只读展示\n（详情模式整表单只读，无需逐字段设置）"));
-  form->addRow(QStringLiteral("编辑可编辑:"), m_editEditableCheck);
+  m_editEditableCheck->setToolTip(
+      QStringLiteral("取消勾选 = 编辑表单内只读展示（仍可展示，但不允许输入）\n"
+                     "（详情模式整表单只读，无需逐字段设置）"));
+  form->addRow(QStringLiteral("表单可编辑:"), m_editEditableCheck);
 
-  // 必填（编辑提交时校验；位置与 jsonvue 字段设置一致：编辑可编辑 → 必填 → 栅格）
+  // 必填（编辑提交时校验；位置与 jsonvue 字段设置一致：表单可编辑 → 必填 → 栅格）
   m_requiredCheck = new QCheckBox(this);
   form->addRow(QStringLiteral("必填:"), m_requiredCheck);
 

@@ -6,8 +6,9 @@ ${#     查询方法（仅 struct + New），自定义接口写 ext 扩展件   
 ${# ============================================================================}
 // 此代码为AutoCode编译器生成，请勿手动修改
 package ${pkgName}
-
+${if appEmpty}${else}
 ${appHdlImports}
+${/if}
 
 // ${handlerClass} ${tableComment}(${tableName}) C 端 HTTP 层（只读）
 // 薄层：参数绑定 → service → 统一响应（common.OK/common.Fail）
@@ -21,6 +22,7 @@ func New${handlerClass}(svc *${serviceClass}) *${handlerClass} {
 	return &${handlerClass}{Svc: svc}
 }
 ${if !appEmpty}
+
 // SelectByIn 分页查询
 func (h *${handlerClass}) SelectByIn(c *gin.Context) {
 	sel, ok := common.Bind[${dataAlias}.${selClass}](c)

@@ -127,6 +127,8 @@ private:
   void appendViewJoinRow(const QString &ref);
   /// 收集统一表格 → 三视图结构（写回 out 的 selCols/eq/like/gap/editCols）
   void collectViewTable(JsonTableTable *out) const;
+  /// 按行槽位与「表单展示」勾选重建配置摘要（⚙ 列）
+  void refreshViewCfgSummary(int row);
   /// 字段呈现表格行上移/下移（delta=-1 上移，1 下移）
   void moveViewRow(int delta);
   /// 打开 ⚙ 字段设置面板（ViewFieldConfigDialog：取值域/列表展示/编辑表单）
@@ -196,6 +198,7 @@ private:
   QCheckBox *m_genEditCheck = nullptr;         ///< 生成行内编辑按钮
   QCheckBox *m_genDeleteCheck = nullptr;       ///< 生成删除按钮（行内删除 + 工具栏批量删除）
   QCheckBox *m_genDetailCheck = nullptr;       ///< 生成行内详情按钮
+  QCheckBox *m_genCacheCheck = nullptr;        ///< 生成表缓存骨架（data 层手写件）
   QTableWidget *m_colsTable = nullptr;        ///< 字段表格（核心编辑区）
   QTableWidget *m_indexTable = nullptr;       ///< 索引表格
   QPlainTextEdit *m_ddlView = nullptr;        ///< DDL 预览（只读）

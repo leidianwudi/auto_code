@@ -260,6 +260,8 @@ QJsonObject JsonTableEditCol::toJsonObject() const {
   if (!visible) obj[QString::fromLatin1(JsonTableKey::kVisible)] = false;
   // editEditable 缺省 true 不落键（false=表单内只读展示）
   if (!editEditable) obj[QString::fromLatin1(JsonTableKey::kEditEditable)] = false;
+  // writable 缺省 true 不落键（false=只读展示且不进写参数）
+  if (!writable) obj[QString::fromLatin1(JsonTableKey::kWritable)] = false;
   if (!widget.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kWidget)] = widget;
   if (required) obj[QString::fromLatin1(JsonTableKey::kRequired)] = true;
   // 上传绑定与编辑缩略图（空/0=未配置不落键）
@@ -290,6 +292,7 @@ JsonTableEditCol JsonTableEditCol::fromJsonObject(const QJsonObject &obj) {
   c.label = obj.value(QString::fromLatin1(JsonTableKey::kLabel)).toString();
   c.visible = obj.value(QString::fromLatin1(JsonTableKey::kVisible)).toBool(true);
   c.editEditable = obj.value(QString::fromLatin1(JsonTableKey::kEditEditable)).toBool(true);
+  c.writable = obj.value(QString::fromLatin1(JsonTableKey::kWritable)).toBool(true);
   c.widget = obj.value(QString::fromLatin1(JsonTableKey::kWidget)).toString();
   c.required = obj.value(QString::fromLatin1(JsonTableKey::kRequired)).toBool(false);
   c.uploadSourceFile = obj.value(QString::fromLatin1(JsonTableKey::kUploadSourceFile)).toString();
@@ -310,7 +313,8 @@ JsonTableEditCol JsonTableEditCol::fromJsonObject(const QJsonObject &obj) {
 
 bool JsonTableEditCol::operator==(const JsonTableEditCol &other) const {
   return ref == other.ref && label == other.label && visible == other.visible &&
-         editEditable == other.editEditable && widget == other.widget && required == other.required &&
+         editEditable == other.editEditable && writable == other.writable &&
+         widget == other.widget && required == other.required &&
          uploadSourceFile == other.uploadSourceFile && uploadSourceId == other.uploadSourceId &&
          editThumbWidth == other.editThumbWidth && editThumbHeight == other.editThumbHeight &&
          placeholder == other.placeholder && maxlength == other.maxlength &&
@@ -436,6 +440,8 @@ QJsonObject JsonTableTable::toJsonObject() const {
     obj[QString::fromLatin1(JsonTableKey::kAppAuth)] =
         appAuth.isEmpty() ? QStringLiteral("user") : appAuth;
   }
+  // 表缓存骨架缺省 false 不落键；仅勾选时写 true（生成 data/<表>/<表>_cache.go）
+  if (genCache) obj[QString::fromLatin1(JsonTableKey::kGenCache)] = true;
   // 页面基础按钮开关：缺省 true 不落键（仅 false 落键 = 不生成该按钮）
   if (!genAdd) obj[QString::fromLatin1(JsonTableKey::kGenAdd)] = false;
   if (!genEdit) obj[QString::fromLatin1(JsonTableKey::kGenEdit)] = false;
@@ -537,7 +543,9 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
   t.extra.remove(QString::fromLatin1(JsonTableKey::kManualUpdateTime));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kFrontend));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kAppQuery));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kAppQueryMode));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kAppAuth));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kGenCache));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kGenAdd));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kGenEdit));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kGenDelete));
@@ -569,6 +577,8 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
   t.appQueryMode = obj.value(QString::fromLatin1(JsonTableKey::kAppQueryMode)).toString();
   t.appAuth = obj.value(QString::fromLatin1(JsonTableKey::kAppAuth)).toString();
   if (t.appAuth.isEmpty()) t.appAuth = QStringLiteral("user");
+  // genCache 缺省 false：仅显式 true 时生成 data 层表缓存骨架
+  t.genCache = obj.value(QString::fromLatin1(JsonTableKey::kGenCache)).toBool(false);
   // 页面基础按钮开关缺省 true（仅显式 false 不生成）
   t.genAdd = obj.value(QString::fromLatin1(JsonTableKey::kGenAdd)).toBool(true);
   t.genEdit = obj.value(QString::fromLatin1(JsonTableKey::kGenEdit)).toBool(true);
@@ -678,6 +688,7 @@ bool JsonTableTable::operator==(const JsonTableTable &other) const {
          tableComment == other.tableComment && manualUpdateTime == other.manualUpdateTime &&
          frontend == other.frontend && appQuery == other.appQuery &&
          appQueryMode == other.appQueryMode && appAuth == other.appAuth &&
+         genCache == other.genCache &&
          genAdd == other.genAdd && genEdit == other.genEdit && genDelete == other.genDelete &&
          genDetail == other.genDetail &&
          columns == other.columns && indexes == other.indexes &&

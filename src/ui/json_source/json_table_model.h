@@ -62,6 +62,7 @@ inline constexpr const char *kAppQueryMode =
     "appQueryMode";  ///< C 端接口形态：缺省=只读查询 / "empty"=空接口（仅骨架）
 inline constexpr const char *kAppAuth =
     "appAuth";  ///< C 端鉴权：public=公开 / user=需登录（缺省 user）
+inline constexpr const char *kGenCache = "genCache";  ///< 生成表缓存骨架（缺省 false）
 inline constexpr const char *kButtons = "buttons";  ///< 操作按钮（ButtonConfig[]，键名与 .jsonvue 一致）
 // 页面基础按钮生成开关（缺省 true；仅 false 落键，合成 meta 时取反为 noAdd/noEdit/...）
 inline constexpr const char *kGenAdd = "genAdd";      ///< 生成新增按钮（工具栏）
@@ -110,6 +111,7 @@ inline constexpr const char *kJoinSpecCol = "col";      ///< 输出列名（∈ 
 inline constexpr const char *kJoinSpecFilter = "filter";  ///< 筛选：like/eq/""（空=只输出）
 // 编辑表单（jsonvue 一致键名；editCols[] 元素级）
 inline constexpr const char *kEditEditable = "editEditable";  ///< 表单内可编辑（false=只读展示）
+inline constexpr const char *kWritable = "writable";  ///< 进写参数 InUpd（false=只读展示但不写入）
 inline constexpr const char *kSelCols = "selCols";      ///< 列表读模型（[{ref,label,width}]，ref 支持联表路径）
 inline constexpr const char *kSelColsEq = "selColsEq";  ///< 精确查询列（[{ref,visible}]，支持联表路径）
 inline constexpr const char *kSelColsGap = "selColsGap";        ///< 范围查询列（展开 _min/_max）
@@ -315,6 +317,7 @@ struct JsonTableEditCol {
   QString label;        ///< 编辑标题（空 = 回退列注释/列名）
   bool visible = true;  ///< 前端是否渲染表单项（false=参数仍生成，仅 UI 不渲染）
   bool editEditable = true;  ///< 表单内可编辑（false=只读展示；联表输出别名固定 false）
+  bool writable = true;      ///< 是否进写参数（InUpd/ToEntity/ToUpdates）；false=展示但不写入
   QString widget;       ///< 控件类型：input/textarea/select/date/number/image/upload/boolean
   bool required = false;  ///< 必填（→ InsertParams binding:"required"）
 
@@ -426,6 +429,7 @@ struct JsonTableTable {
   bool appQuery = false;           ///< 生成 C 端模块（缺省 false）
   QString appQueryMode;            ///< C 端接口形态：空=只读查询 / "empty"=空接口（仅骨架不生成只读接口）
   QString appAuth = QStringLiteral("user");  ///< C 端鉴权：public=公开 / user=需登录
+  bool genCache = false;  ///< 生成 data 层表缓存骨架（缺省 false；仅首次骨架，不覆盖）
   // 页面基础按钮生成开关（缺省 true；生成端合成 meta 时取反为 noAdd/noEdit/noDelete/noDetail）
   bool genAdd = true;      ///< 生成新增按钮（工具栏）
   bool genEdit = true;     ///< 生成行内编辑按钮

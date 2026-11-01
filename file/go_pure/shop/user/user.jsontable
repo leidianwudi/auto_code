@@ -203,8 +203,15 @@
     editCols: [
       {
         editEditable: false,
+        label: '主键',
+        ref: 'id',
+        visible: false,
+      },
+      {
+        editEditable: false,
         label: '账户',
         ref: 'user_ext_account',
+        writable: false,
       },
       {
         label: '昵称',
@@ -286,6 +293,7 @@
         ref: 'item_count',
       },
     ],
+    genCache: true,
     indexes: [
       {
         cols: [
@@ -352,10 +360,10 @@
     ],
     selColsEq: [
       {
-        ref: 'user_ext_account',
+        ref: 'id',
       },
       {
-        ref: 'id',
+        ref: 'user_ext_account',
       },
     ],
     selColsLike: [
@@ -366,6 +374,7 @@
     tableComment: '用户表',
     tableName: 'user',
     viewOrder: [
+      'id',
       'user_ext_account',
       'nick',
       'level',
@@ -375,7 +384,6 @@
       'recharge_money',
       'activity_coin',
       'desc',
-      'id',
       'head_img_url',
       'fans_count',
       'like_count',

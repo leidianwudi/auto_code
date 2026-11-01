@@ -317,12 +317,12 @@ export class Param {
       field.isUpdateDate = (field.name == "update_time" || field.name == "updated_at") && isDateTime && !manualUpdateTime;
       field.isAutoTime = field.isCreateDate || field.isUpdateDate;
 
-      // 参数字段集合：editCols 显式列出 = 可写字段进增改参数（visible=false
-      // 参数仍生成，仅前端表单不渲染）；未配 editCols 时缺省全部可写列
-      // （InsertParams 排除自动时间列与自增主键；UpdateParams 排除自动时间列与主键）
+      // 参数字段集合：editCols 显式列出 = 进表单；writable 决定是否进写参数
+      // （visible=false 仍可写，仅前端不渲染；editEditable 只影响 Vue，不影响 Go）
       let inEdit: Bool = (!hasEditCols) || (ec != null);
-      field.isInsParam = inEdit && !field.isAutoTime && !(field.isPrimary && field.isAutoInc);
-      field.isUpdParam = inEdit && !field.isAutoTime && !field.isPrimary;
+      let writable: Bool = (ec == null || ec["writable"] != false);
+      field.isInsParam = inEdit && writable && !field.isAutoTime && !(field.isPrimary && field.isAutoInc);
+      field.isUpdParam = inEdit && writable && !field.isAutoTime && !field.isPrimary;
 
       // import 探测：实体文件是否需要 time / datatypes / common（金额列）
       if (field.goType == "time.Time") {

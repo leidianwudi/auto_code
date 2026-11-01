@@ -1988,10 +1988,10 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   let enFieldLines: String[] = buildEnFieldLines(param.fields);
   let colLines: String[] = buildColLines(param.fields);
   let selFieldLines: String[] = buildSelFieldLines(selFields);
-  let updFieldLines: String[] = buildUpdFieldLines(param.allWritableFields, idName, idType);
+  let updFieldLines: String[] = buildUpdFieldLines(param.updFields, idName, idType);
   let toEntityLines: String[] = [];
   let toUpdatesLines: String[] = [];
-  for (f in param.allWritableFields) {
+  for (f in param.updFields) {
     toEntityLines.append(tabChar() + "common.CopyNonNil(&e." + f.goName + ", in." + f.goName + ")");
     toUpdatesLines.append(tabChar() + tabChar() + dataAlias + ".Col" + f.goName + ", in." + f.goName + ",");
   }
@@ -2015,6 +2015,11 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   let needTime: Bool = false;
   for (f in param.fields) {
     if (f.goType == "time.Time") { needTime = true; }
+  }
+  // InUpd 按 editCols 收敛后可能已无时间列；import 只看实际写入参数字段
+  let updNeedTime: Bool = false;
+  for (uf in param.updFields) {
+    if (uf.ptrType.includes("time.Time")) { updNeedTime = true; }
   }
   let selNeedTime: Bool = false;
   for (sf in selFields) {
@@ -2056,7 +2061,7 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   let repoImports: String = "import (\n" + tb + "\"" + commonPath + "\"\n\n" + tb
     + "\"gorm.io/gorm\"\n)";
   let updImports: String = "";
-  if (needTime) {
+  if (updNeedTime) {
     updImports = "import (\n" + tb + "\"time\"\n\n" + tb + "\"" + commonPath + "\"\n"
       + tb + dataAlias + " \"" + dataPath + "\"\n)";
   } else {
@@ -2100,6 +2105,11 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
     appRouterImports = "import (\n" + tb + "\"github.com/gin-gonic/gin\"\n\n" + tb
       + "\"" + commonPath + "\"\n" + tb + "\"" + middlewarePath + "\"\n)";
   }
+
+  // ── 表缓存骨架（data 层手写件）────────────────────────────────
+  //      genCache 缺省 false：仅对读多写少、且本表是缓存主数据源的表勾选；
+  //      生成 data/<前缀>/<表>/<表>_cache.go（fileExists 守卫，仅首次骨架不覆盖）
+  let genCache: Bool = (json["genCache"] == true);
 
   // ── 包注释文案（表级配置，缺省按表注释兜底）───────────────────
   let dataPkgComment: String = json["dataPkgComment"];
@@ -2207,6 +2217,12 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
     { tpl: tplDir + "/router_ext.tpl",        out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_router.go" },
     { tpl: tplDir + "/router.tpl",        out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_router_.go" }
   ];
+
+  // 表缓存骨架（opt-in，genCache=true）：data 层手写件，仅首次生成，存在即跳过
+  if (genCache) {
+    templates.append({ tpl: tplDir + "/cache.tpl",
+      out: "{goBasePath}/data/{dataDir}/{tableName}_cache.go" });
+  }
 
   // C 端只读模块：只生成 selectByIn/selectById 三件（service/handler/router），
   // 永不生成写接口；路由是否挂 UserAuth 由 appAuth 决定

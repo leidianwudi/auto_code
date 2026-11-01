@@ -20,6 +20,12 @@ ${each line in svcFieldLines}
 ${line}
 ${/each}}
 
+// ${tableClass}SaveHook 手写件可赋值以接管 Save（密码加密、唯一性校验等）；nil 走默认
+var ${tableClass}SaveHook func(s *${serviceClass}, data *${updClass}) (${idGoType}, error)
+
+// ${tableClass}DeleteHook 手写件可赋值以接管 Delete（会话/缓存失效等）；nil 走默认
+var ${tableClass}DeleteHook func(s *${serviceClass}, ids []${idGoType}) (int64, error)
+
 // New${serviceClass} 创建业务层对象
 func New${serviceClass}(db *gorm.DB) *${serviceClass} {
 	return &${serviceClass}{DB: db, Repo: ${dataAlias}.New${repoClass}(db)}
@@ -35,15 +41,21 @@ func (s *${serviceClass}) SelectById(id ${idGoType}) (*${dataAlias}.${enClass}, 
 	return s.Repo.SelectById(s.DB, id)
 }
 
-// Save 保存（save 单接口）：Id=0 走新增，Id>0 走更新
+// Save 保存（save 单接口）：Id=0 走新增，Id>0 走更新；手写件注册 hook 可接管
 func (s *${serviceClass}) Save(data *${updClass}) (${idGoType}, error) {
+	if ${tableClass}SaveHook != nil {
+		return ${tableClass}SaveHook(s, data)
+	}
 	if data.Id == 0 {
 		return s.Repo.Insert(s.DB, data.ToEntity())
 	}
 	return s.Repo.UpdateById(s.DB, data.Id, data.ToUpdates())
 }
 
-// Delete 删除一条或多条记录，返回受影响行数
+// Delete 删除一条或多条记录，返回受影响行数；手写件注册 hook 可接管
 func (s *${serviceClass}) Delete(ids []${idGoType}) (int64, error) {
+	if ${tableClass}DeleteHook != nil {
+		return ${tableClass}DeleteHook(s, ids)
+	}
 	return s.Repo.Delete(s.DB, ids)
 }

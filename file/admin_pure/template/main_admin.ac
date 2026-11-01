@@ -543,6 +543,8 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
       editCol = {
         widget: widget,
         visible: (ec["visible"] != false),
+        // 表单内可编辑（false=只读展示）：必须显式传入，否则合成列会按缺省 true
+        editEditable: (ec["editEditable"] != false),
         required: (ec["required"] == true)
       };
     } else if (!hasEditCols) {
@@ -553,7 +555,7 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
       let isAutoTimeCol: Bool =
           (isDateTime && (colName == "create_time" || (colName == "update_time" && !manualUpdate)));
       if (!rc["isPrimary"] && !rc["isAutoInc"] && !isAutoTimeCol) {
-        editCol = { widget: widget, visible: true, required: false };
+        editCol = { widget: widget, visible: true, editEditable: true, required: false };
       }
     }
     let col: Object = buildJsonvueColumn(rc, enumDef, editCol);
@@ -881,6 +883,8 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
       description: tableComment
     },
     columns: cols,
+    // 原始编辑列顺序（调用点据此为 write.tpl 生成 formColumns；不直接给模板）
+    editCols: editColCfgs,
     queryFields: queryFields,
     // 操作按钮（键名与 .jsonvue buttons 完全一致；无按钮时为 null，
     // 加工器 processButtons 对空/缺失键防御性处理）
@@ -1592,6 +1596,31 @@ export function generateAdminMain(params: Object): Void {
     // pure-admin 专用派生键补全（isDatetimeFormat/needMessageBox 等）
     // 注意：ac 的 Object 是 COW 语义，必须接收返回值，否则补全全部丢失
     tplData = enrichPureTplData(tplData);
+    // 表单列数组：按 .jsontable editCols（字段呈现行序）从最终 columns 重取，
+    // 与列表列顺序（selCols 勾选）解耦；高级页（.jsonvue）无 editCols 时按 columns 顺序
+    let editCfgsForm: Object[] = pages[pg]["json"]["editCols"];
+    let colsAllForm: Object[] = tplData["columns"];
+    let formColsArr: Object[] = [];
+    if (editCfgsForm != null && editCfgsForm.length > 0) {
+      for (ecForm2 in editCfgsForm) {
+        let rForm2: String = ecForm2["ref"];
+        if (rForm2 == null || rForm2 == "") { continue; }
+        let cLenFc = colsAllForm.length;
+        for (let fiC = 0; fiC < cLenFc; fiC = fiC + 1) {
+          if (colsAllForm[fiC]["dataName"] == rForm2 && colsAllForm[fiC]["editVisible"] == true) {
+            formColsArr.append(colsAllForm[fiC]);
+            break;
+          }
+        }
+      }
+    }
+    if (formColsArr.length == 0) {
+      let cLenFd = colsAllForm.length;
+      for (let fiD = 0; fiD < cLenFd; fiD = fiD + 1) {
+        if (colsAllForm[fiD]["editVisible"] == true) { formColsArr.append(colsAllForm[fiD]); }
+      }
+    }
+    tplData["formColumns"] = formColsArr;
     // 按钮权限前缀：与后端 RequirePerm 的 "<表>:edit/delete" 保持一致
     tplData["permPrefix"] = pages[pg]["permPrefix"];
     // 目录结构 = 模块结构：合成页用 .jsontable 相对扫描根的目录段覆盖
