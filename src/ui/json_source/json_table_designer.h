@@ -51,8 +51,7 @@ public:
   void load(const JsonTableTable &table, const JsonTableConfig &config, const QString &filePath);
 
 protected:
-  /// 事件过滤：仅当悬停「编辑」列表头的问号小图标时弹出三态说明
-  bool eventFilter(QObject *watched, QEvent *event) override;
+  /// 事件过滤：仅当悬停「编辑」列表头的问号小图标时弹出两态说明
 
 signals:
   /// 编辑发生变化（逐编辑广播；写回防抖由 CodeVisualSyncWidget 基类处理）
@@ -78,6 +77,8 @@ private:
   void fillColumns(const QVector<JsonTableColumn> &cols);
   /// 追加一行列定义
   void appendColumnRow(const JsonTableColumn &c);
+  /// 为字段表格某行绑定 MySQL 类型列的常驻可编辑下拉
+  void bindColTypeCombo(int row, const QString &type);
   /// 从表格收集全部列定义（跳过列名为空的行）
   QVector<JsonTableColumn> collectColumns() const;
   /// 读取指定行为列定义
@@ -104,13 +105,21 @@ private:
   void appendSortRow(const QString &col, const QString &dir);
   /// 从表格收集全部排序定义（跳过排序列为空的行）
   QVector<QPair<QString, QString>> collectSort() const;
-  // ── 表级进阶键：联表声明（joinTable）──
-  /// 用联表定义全量重建关联表格
-  void fillJoins(const QVector<JsonTableJoin> &joins);
+  /// 刷新全部排序行的候选列表（字段表格列名变化时调用，保留已填值）
+  void setSortOptions(const QStringList &opts);
+  /// 刷新全部字段呈现行的「字段引用」候选（同上，保留已填值）
+  void setViewRefOptions(const QStringList &opts);
+  /// 为字段呈现表某行绑定常驻可编辑下拉（字段引用列，单击即展开候选）
+  void bindViewRefCombo(int row, const QString &ref);
+  /// 读取字段呈现表某行的字段引用（优先下拉当前文本）
+  QString viewRefText(int row) const;
+  // ── 表级进阶键：联表查询声明（joinTables 新格式）──
+  /// 用联表查询定义全量重建关联表格
+  void fillJoins(const QVector<JsonTableJoinSpec> &joins);
   /// 追加一行空联表声明
   void appendJoinRow();
-  /// 从表格收集全部联表声明（跳过引用名与目标均未填的行）
-  QVector<JsonTableJoin> collectJoins() const;
+  /// 从表格收集全部联表声明（跳过全空行）
+  QVector<JsonTableJoinSpec> collectJoins() const;
   // ── 字段呈现（统一表格：一行 = 一个字段，列表/查询/编辑三视图合一）──
   /// 用三视图配置全量重建统一字段表格（物理列 + 联表 ref 行）
   void fillViewTable();
@@ -118,6 +127,10 @@ private:
   void appendViewJoinRow(const QString &ref);
   /// 收集统一表格 → 三视图结构（写回 out 的 selCols/eq/like/gap/editCols）
   void collectViewTable(JsonTableTable *out) const;
+  /// 按行槽位与「表单展示」勾选重建配置摘要（⚙ 列）
+  void refreshViewCfgSummary(int row);
+  /// 字段呈现表格行上移/下移（delta=-1 上移，1 下移）
+  void moveViewRow(int delta);
   /// 打开 ⚙ 字段设置面板（ViewFieldConfigDialog：取值域/列表展示/编辑表单）
   void openViewFieldConfig(int row);
   // ── 操作按钮（buttons：键名与 .jsonvue ButtonConfig 一致）──
@@ -160,6 +173,10 @@ private:
   /// 列表列/查询条件/排序的 ref 候选（字段列名 + 联表 别名.列）、
   /// 联表外键列下拉（候选=字段列名）
   void refreshColumnCandidates();
+  /// 刷新「C端出参」按钮文案/提示/可用状态（空=完整实体，非空显示列数）
+  void updateAppOutBtn();
+  /// 打开 C 端出参白名单选择对话框（勾选主表字段，顺序=字段表顺序）
+  void editAppOutCols();
   /// 刷新多语言字段补全候选（候选=翻译表列名，按翻译表名实时切换）
   void refreshI18nFieldCandidates();
   /// 生成 CREATE TABLE DDL（列 + 主键 + 索引，InnoDB/utf8mb4）
@@ -179,8 +196,15 @@ private:
   QLineEdit *m_commentEdit = nullptr;         ///< 表注释
   QCheckBox *m_manualUpdateCheck = nullptr;   ///< 手动维护更新时间
   QCheckBox *m_frontendCheck = nullptr;       ///< 生成前端页面（false = 纯 API 模块）
-  QCheckBox *m_appQueryCheck = nullptr;       ///< 生成 C 端只读查询（modules/app）
+  QComboBox *m_appQueryCombo = nullptr;       ///< C 端模块形态：不生成 / 只读查询 / 空接口
   QComboBox *m_appAuthCombo = nullptr;        ///< C 端鉴权：public / user
+  QPushButton *m_appOutBtn = nullptr;         ///< C 端出参白名单（弹字段勾选）
+  QStringList m_appOutCols;                   ///< C 端出参白名单（列名，空=完整实体）
+  QCheckBox *m_genAddCheck = nullptr;          ///< 生成新增按钮（工具栏）
+  QCheckBox *m_genEditCheck = nullptr;         ///< 生成行内编辑按钮
+  QCheckBox *m_genDeleteCheck = nullptr;       ///< 生成删除按钮（行内删除 + 工具栏批量删除）
+  QCheckBox *m_genDetailCheck = nullptr;       ///< 生成行内详情按钮
+  QCheckBox *m_genCacheCheck = nullptr;        ///< 生成表缓存骨架（data 层手写件）
   QTableWidget *m_colsTable = nullptr;        ///< 字段表格（核心编辑区）
   QTableWidget *m_indexTable = nullptr;       ///< 索引表格
   QPlainTextEdit *m_ddlView = nullptr;        ///< DDL 预览（只读）
@@ -194,11 +218,8 @@ private:
   QTableWidget *m_sortTable = nullptr;        ///< 默认排序表格（列名 + 方向）
   QTableWidget *m_joinTable = nullptr;        ///< 联表声明表格（joinTable）
   QTableWidget *m_viewTable = nullptr;        ///< 字段呈现统一表格（一行=一字段，三视图合一）
-  QHeaderView *m_viewHeader = nullptr;        ///< 字段呈现表水平表头（问号图标悬停判定）
-  QHash<int, QString> m_headerTips;           ///< 功能列表头问号提示（列索引 → 文案）
-
-  /// 指定功能列表头问号图标的可视矩形（表头坐标），供 eventFilter 精准判定悬停
-  QRect headerHelpIconRect(int section) const;
+  QHeaderView *m_viewHeader = nullptr;        ///< 字段呈现表水平表头
+  QHash<int, QString> m_headerTips;           ///< 功能列表头问号提示（列索引 → 文案，问号并入标题）
   QTableWidget *m_enumTable = nullptr;        ///< 表内枚举主表（枚举列 + 说明）
   QTableWidget *m_enumOptTable = nullptr;     ///< 选中枚举的选项表格（key/label/value/valueType）
   QLineEdit *m_globalEnumEdit = nullptr;      ///< 全局枚举列（逗号分隔）
@@ -213,10 +234,11 @@ private:
   QCompleter *m_globalEnumCompleter = nullptr;    ///< 全局枚举列补全（候选=字段列名）
   QCompleter *m_i18nFieldsCompleter = nullptr;    ///< 多语言字段补全（候选=翻译表列名）
   QStyledItemDelegate *m_enumColDelegate = nullptr;   ///< 枚举列下拉委托（预设=字段列名）
-  QStyledItemDelegate *m_joinFkDelegate = nullptr;    ///< 联表外键列下拉委托（预设=字段列名）
-  QStyledItemDelegate *m_joinClassDelegate = nullptr; ///< 联表目标下拉委托（预设=tables[].modelName）
-  QStyledItemDelegate *m_viewRefDelegate = nullptr;   ///< 字段呈现 ref 下拉委托（字段列+联表 ref）
-  QStyledItemDelegate *m_sortRefDelegate = nullptr;    ///< 排序列 ref 下拉委托（字段列+联表 ref）
+  QStyledItemDelegate *m_joinMainColDelegate = nullptr;  ///< 联表 on[0] 主表列下拉（候选=字段列名）
+  QStyledItemDelegate *m_joinTableDelegate = nullptr;  ///< 联表被联表下拉（候选=项目表名）
+  QStringList m_viewRefOptions;                        ///< 字段引用候选（字段列+联表 ref）
+  QStringList m_viewBaselineOrder;                     ///< 回填时的字段呈现行序（判断用户是否移动过行）
+  QStringList m_sortColOptions;                        ///< 排序列候选（字段列+联表 ref）
   QLabel *m_validateLabel = nullptr;          ///< 交叉校验状态行（随编辑被动刷新）
   QVector<JsonTableEnum> m_enums;             ///< 表内枚举编辑态（主从表联动的数据侧）
   int m_enumCurRow = -1;                      ///< 当前编辑的枚举行（-1=无）

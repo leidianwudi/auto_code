@@ -57,10 +57,20 @@ inline constexpr const char *kProjFile =
     "project.acproj";  ///< 项目配置文件（项目根标记 + meta 生成配置；与 .jsontable 同目录）
 inline constexpr const char *kFrontend =
     "frontend";  ///< 生成前端页面开关（缺省 true；仅 false 落键 = 纯 API 模块）
-inline constexpr const char *kAppQuery = "appQuery";  ///< 生成 C 端只读查询模块（缺省 false）
+inline constexpr const char *kAppQuery = "appQuery";  ///< 生成 C 端模块（缺省 false）
+inline constexpr const char *kAppQueryMode =
+    "appQueryMode";  ///< C 端接口形态：缺省=只读查询 / "empty"=空接口（仅骨架）
 inline constexpr const char *kAppAuth =
     "appAuth";  ///< C 端鉴权：public=公开 / user=需登录（缺省 user）
+inline constexpr const char *kAppOutCols =
+    "appOutCols";  ///< C 端出参白名单（列名数组；空=直接回实体）
+inline constexpr const char *kGenCache = "genCache";  ///< 生成表缓存骨架（缺省 false）
 inline constexpr const char *kButtons = "buttons";  ///< 操作按钮（ButtonConfig[]，键名与 .jsonvue 一致）
+// 页面基础按钮生成开关（缺省 true；仅 false 落键，合成 meta 时取反为 noAdd/noEdit/...）
+inline constexpr const char *kGenAdd = "genAdd";      ///< 生成新增按钮（工具栏）
+inline constexpr const char *kGenEdit = "genEdit";    ///< 生成行内编辑按钮
+inline constexpr const char *kGenDelete = "genDelete";  ///< 生成删除按钮（行内删除 + 工具栏批量删除）
+inline constexpr const char *kGenDetail = "genDetail";  ///< 生成行内详情按钮
 inline constexpr const char *kExcludeColumns =
     "excludeColumns";  ///< 从数据库刷新时忽略的列（设计器使用，生成期不消费；存 table.extra）
 // tables 键
@@ -95,6 +105,15 @@ inline constexpr const char *kJoinFk = "joinFk";      ///< 本表外键列（∈
 inline constexpr const char *kJoinPk = "joinPk";      ///< 目标表主键列（缺省 id）
 inline constexpr const char *kIsJoinRelations =
     "isJoinRelations";  ///< true=有效声明；false=该条目不生效（旧 .json 同名）
+// 联表查询声明（新格式 joinTables：声明式 JOIN，生成 QuerySpec 联表流水线）
+inline constexpr const char *kJoinTables = "joinTables";  ///< 联表查询声明数组（新格式）
+inline constexpr const char *kJoinSpecType = "type";    ///< JOIN 类型：LEFT/INNER（缺省 LEFT）
+inline constexpr const char *kJoinSpecOn = "on";        ///< [主表列, 被联表列]（表名由规格自带）
+inline constexpr const char *kJoinSpecCol = "col";      ///< 输出列名（∈ 被联表列）
+inline constexpr const char *kJoinSpecFilter = "filter";  ///< 筛选：like/eq/""（空=只输出）
+// 编辑表单（jsonvue 一致键名；editCols[] 元素级）
+inline constexpr const char *kEditEditable = "editEditable";  ///< 表单内可编辑（false=只读展示）
+inline constexpr const char *kWritable = "writable";  ///< 进写参数 InUpd（false=只读展示但不写入）
 inline constexpr const char *kSelCols = "selCols";      ///< 列表读模型（[{ref,label,width}]，ref 支持联表路径）
 inline constexpr const char *kSelColsEq = "selColsEq";  ///< 精确查询列（[{ref,visible}]，支持联表路径）
 inline constexpr const char *kSelColsGap = "selColsGap";        ///< 范围查询列（展开 _min/_max）
@@ -139,8 +158,11 @@ inline constexpr const char *kDomainSourceFile =
     "domainSourceFile";  ///< enum/static 引用的数据源文件（全局枚举固定基名 global_enum.jsonsource）
 inline constexpr const char *kDomainSourceId = "domainSourceId";  ///< enum/static 引用的数据源 id
 inline constexpr const char *kDomainUrl = "domainUrl";  ///< remote 手动数据源 URL
+inline constexpr const char *kTitle = "title";  ///< 列级显示标题（字段呈现标题列；空=回退列注释）
 inline constexpr const char *kEnums = "enums";                  ///< 表内枚举
 inline constexpr const char *kGlobalEnumCols = "globalEnumCols";  ///< 引用全局枚举的列名
+inline constexpr const char *kViewOrder =
+    "viewOrder";  ///< 字段呈现行序（ref 数组；设计器专属，生成端不消费）
 inline constexpr const char *kI18n = "i18n";                    ///< 多语言翻译表配置
 // 枚举键（kName 复用列名常量；kComment 复用列注释常量）
 inline constexpr const char *kColumn = "column";  ///< 枚举对应列名
@@ -162,9 +184,12 @@ inline constexpr const char *kLangFrom = "langFrom";      ///< 语言码来源 b
  * @struct JsonTableColumn
  * @brief .jsontable 中的一列：纯 MySQL 元数据（建表与生成同源）
  *
- * 页面呈现（标题/显隐/控件）全部由表级三视图接管：selCols（列表）/
+ * 页面呈现（显隐/控件）由表级三视图接管：selCols（列表）/
  * selColsEq/Like/Gap（查询）/ editCols（编辑）；历史 list/search/form/
  * required 列角色均已退役。
+ * 显示标题为列级属性（title，字段呈现标题列编辑落此），列表/查询/编辑
+ * 三视图共用；视图内 label 键仍可单独覆盖（回退链：视图 label > title >
+ * 列注释 > ref）。
  */
 struct JsonTableColumn {
   QString name;                                  ///< 列名
@@ -175,6 +200,7 @@ struct JsonTableColumn {
   bool isAutoInc = false;   ///< 自增
   QString defaultValue;     ///< 默认值（JSON 键 "default"；空串=无默认值）
   QString comment;          ///< 列注释
+  QString title;            ///< 显示标题（字段呈现标题列；空=回退列注释，三视图共用）
 
   // ── 字段取值域（jsonvue 方案 B 列级中心化；空=未声明）──
   // 单处存储三视图共用；生成侧列级域优先，enums/globalEnumCols 旧机制回退
@@ -210,6 +236,38 @@ struct JsonTableJoin {
   QJsonObject toJsonObject() const;
   static JsonTableJoin fromJsonObject(const QJsonObject &obj);
   bool operator==(const JsonTableJoin &other) const;
+};
+
+/**
+ * @struct JsonTableJoinCol
+ * @brief 联表查询输出列（joinTables[].cols[] 元素，新格式）
+ */
+struct JsonTableJoinCol {
+  QString col;     ///< 联表输出列名（∈ 被联表列）
+  QString filter;  ///< 筛选：like=模糊 / eq=精确 / ""=只输出不筛
+
+  QJsonObject toJsonObject() const;
+  static JsonTableJoinCol fromJsonObject(const QJsonObject &obj);
+  bool operator==(const JsonTableJoinCol &other) const;
+};
+
+/**
+ * @struct JsonTableJoinSpec
+ * @brief 联表查询声明（joinTables[] 元素，新格式；生成端产出 QuerySpec 联表流水线）
+ *
+ * 声明式 JOIN：被联表名 + ON 两列（on[0]=主表列, on[1]=被联表列，表名由
+ * QuerySpec/Join 自带不重复写）+ 输出列（别名固定 = 表名_列名，前端统一字段名）。
+ * 关系基数（1:1 / 多:1）由 on 两列语义自然表达，不单独建模。
+ */
+struct JsonTableJoinSpec {
+  QString table;  ///< 被联表名（∈ 项目已扫描 .jsontable）
+  QString type = QStringLiteral("LEFT");  ///< LEFT / INNER
+  QStringList on;                         ///< [主表列, 被联表列]（恰好 2 元素）
+  QVector<JsonTableJoinCol> cols;         ///< 输出列（filter 空 = 只输出）
+
+  QJsonObject toJsonObject() const;
+  static JsonTableJoinSpec fromJsonObject(const QJsonObject &obj);
+  bool operator==(const JsonTableJoinSpec &other) const;
 };
 
 /**
@@ -249,7 +307,7 @@ struct JsonTableQueryCol {
 
 /**
  * @struct JsonTableEditCol
- * @brief 编辑视图的一列（editCols 数组元素；仅物理列，联表列只读进不来）
+ * @brief 编辑视图的一列（editCols 数组元素；物理列可编辑，联表输出别名只读展示）
  *
  * 显式列出的列 = 进编辑表单（未列出 = 不进，原 form:"none" 语义被取代）；
  * widget 空 = 按 mysqlType 推导（varchar→input、int/decimal→number、
@@ -257,9 +315,11 @@ struct JsonTableQueryCol {
  * 进表单、控件按类型推导（零配置等价旧行为）。
  */
 struct JsonTableEditCol {
-  QString ref;          ///< 列引用（仅本表物理列名）
+  QString ref;          ///< 列引用（本表物理列名 或 联表输出别名 表名_列名）
   QString label;        ///< 编辑标题（空 = 回退列注释/列名）
   bool visible = true;  ///< 前端是否渲染表单项（false=参数仍生成，仅 UI 不渲染）
+  bool editEditable = true;  ///< 表单内可编辑（false=只读展示；联表输出别名固定 false）
+  bool writable = true;      ///< 是否进写参数（InUpd/ToEntity/ToUpdates）；false=展示但不写入
   QString widget;       ///< 控件类型：input/textarea/select/date/number/image/upload/boolean
   bool required = false;  ///< 必填（→ InsertParams binding:"required"）
 
@@ -368,12 +428,21 @@ struct JsonTableTable {
   QString tableComment;            ///< 表注释
   bool manualUpdateTime = false;   ///< 手动维护更新时间（不走 DB ON UPDATE）
   bool frontend = true;            ///< 生成前端页面（缺省 true；仅 false 落键 = 纯 API 模块）
-  bool appQuery = false;           ///< 生成 C 端只读查询模块（缺省 false；只出 selectByIn/selectById）
+  bool appQuery = false;           ///< 生成 C 端模块（缺省 false）
+  QString appQueryMode;            ///< C 端接口形态：空=只读查询 / "empty"=空接口（仅骨架不生成只读接口）
   QString appAuth = QStringLiteral("user");  ///< C 端鉴权：public=公开 / user=需登录
+  QStringList appOutCols;  ///< C 端出参白名单（空=直接回实体）
+  bool genCache = false;  ///< 生成 data 层表缓存骨架（缺省 false；仅首次骨架，不覆盖）
+  // 页面基础按钮生成开关（缺省 true；生成端合成 meta 时取反为 noAdd/noEdit/noDelete/noDetail）
+  bool genAdd = true;      ///< 生成新增按钮（工具栏）
+  bool genEdit = true;     ///< 生成行内编辑按钮
+  bool genDelete = true;   ///< 生成删除按钮（行内删除 + 工具栏批量删除同一开关）
+  bool genDetail = true;   ///< 生成行内详情按钮
   QVector<JsonTableColumn> columns;  ///< 列定义（顺序即建表顺序；含列级取值域）
   QVector<JsonTableIndex> indexes;   ///< 索引定义
   // ── 表级进阶键（v2 结构化，此前走 extra）──
-  QVector<JsonTableJoin> joinTable;  ///< 联表声明（多对一列表联查/一对多详情聚合）
+  QVector<JsonTableJoin> joinTable;  ///< 联表声明（多对一列表联查/一对多详情聚合，旧格式遗留）
+  QVector<JsonTableJoinSpec> joinTables;  ///< 联表查询声明（新格式，生成 QuerySpec 流水线）
   QVector<JsonTableSelCol> selCols;  ///< 列表视图（ref 支持联表路径 joinEnClassPro.column）
   QVector<JsonTableQueryCol> selColsEq;   ///< 查询视图：精确（visible=false 仅后端）
   QVector<JsonTableQueryCol> selColsGap;  ///< 查询视图：范围（每列展开 _min/_max）

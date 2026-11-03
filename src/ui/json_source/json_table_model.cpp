@@ -32,6 +32,10 @@ QJsonObject JsonTableColumn::toJsonObject() const {
     obj[QString::fromLatin1(JsonTableKey::kDefault)] = defaultValue;
   }
   obj[QString::fromLatin1(JsonTableKey::kComment)] = comment;
+  // title 空串表示回退列注释，不落键
+  if (!title.isEmpty()) {
+    obj[QString::fromLatin1(JsonTableKey::kTitle)] = title;
+  }
   // 取值域（空串=未声明不落键）
   if (!domainType.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kDomainType)] = domainType;
   if (!domainSourceFile.isEmpty())
@@ -59,6 +63,7 @@ JsonTableColumn JsonTableColumn::fromJsonObject(const QJsonObject &obj) {
     c.defaultValue = QString::number(dv.toDouble());
   }
   c.comment = obj.value(QString::fromLatin1(JsonTableKey::kComment)).toString();
+  c.title = obj.value(QString::fromLatin1(JsonTableKey::kTitle)).toString();
   c.domainType = obj.value(QString::fromLatin1(JsonTableKey::kDomainType)).toString();
   c.domainSourceFile = obj.value(QString::fromLatin1(JsonTableKey::kDomainSourceFile)).toString();
   c.domainSourceId = obj.value(QString::fromLatin1(JsonTableKey::kDomainSourceId)).toString();
@@ -70,7 +75,8 @@ bool JsonTableColumn::operator==(const JsonTableColumn &other) const {
   return name == other.name && mysqlType == other.mysqlType && isUnsigned == other.isUnsigned &&
          nullable == other.nullable && isPrimary == other.isPrimary &&
          isAutoInc == other.isAutoInc && defaultValue == other.defaultValue &&
-         comment == other.comment && domainType == other.domainType &&
+         comment == other.comment && title == other.title &&
+         domainType == other.domainType &&
          domainSourceFile == other.domainSourceFile && domainSourceId == other.domainSourceId &&
          domainUrl == other.domainUrl;
 }
@@ -140,6 +146,64 @@ bool JsonTableJoin::operator==(const JsonTableJoin &other) const {
          isJoinRelations == other.isJoinRelations;
 }
 
+QJsonObject JsonTableJoinCol::toJsonObject() const {
+  QJsonObject obj;
+  obj[QString::fromLatin1(JsonTableKey::kJoinSpecCol)] = col;
+  // filter 空（只输出）不落键
+  if (!filter.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kJoinSpecFilter)] = filter;
+  return obj;
+}
+
+JsonTableJoinCol JsonTableJoinCol::fromJsonObject(const QJsonObject &obj) {
+  JsonTableJoinCol c;
+  c.col = obj.value(QString::fromLatin1(JsonTableKey::kJoinSpecCol)).toString();
+  c.filter = obj.value(QString::fromLatin1(JsonTableKey::kJoinSpecFilter)).toString();
+  return c;
+}
+
+bool JsonTableJoinCol::operator==(const JsonTableJoinCol &other) const {
+  return col == other.col && filter == other.filter;
+}
+
+QJsonObject JsonTableJoinSpec::toJsonObject() const {
+  QJsonObject obj;
+  obj[QString::fromLatin1(JsonTableKey::kTable)] = table;
+  // type 非空即落键（含缺省 LEFT：手写配置显式写出时保存不丢失）
+  if (!type.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kJoinSpecType)] = type;
+  if (on.size() == 2) {
+    QJsonArray onArr;
+    onArr.append(on.at(0));
+    onArr.append(on.at(1));
+    obj[QString::fromLatin1(JsonTableKey::kJoinSpecOn)] = onArr;
+  }
+  if (!cols.isEmpty()) {
+    QJsonArray colArr;
+    for (const auto &c : cols) colArr.append(c.toJsonObject());
+    obj[QString::fromLatin1(JsonTableKey::kCols)] = colArr;
+  }
+  return obj;
+}
+
+JsonTableJoinSpec JsonTableJoinSpec::fromJsonObject(const QJsonObject &obj) {
+  JsonTableJoinSpec j;
+  j.table = obj.value(QString::fromLatin1(JsonTableKey::kTable)).toString();
+  j.type = obj.value(QString::fromLatin1(JsonTableKey::kJoinSpecType))
+               .toString(QStringLiteral("LEFT"));
+  const QJsonArray onArr = obj.value(QString::fromLatin1(JsonTableKey::kJoinSpecOn)).toArray();
+  for (const auto &v : onArr) {
+    if (v.isString()) j.on.append(v.toString());
+  }
+  const QJsonArray colArr = obj.value(QString::fromLatin1(JsonTableKey::kCols)).toArray();
+  for (const auto &v : colArr) {
+    if (v.isObject()) j.cols.append(JsonTableJoinCol::fromJsonObject(v.toObject()));
+  }
+  return j;
+}
+
+bool JsonTableJoinSpec::operator==(const JsonTableJoinSpec &other) const {
+  return table == other.table && type == other.type && on == other.on && cols == other.cols;
+}
+
 QJsonObject JsonTableSelCol::toJsonObject() const {
   QJsonObject obj;
   obj[QString::fromLatin1(JsonTableKey::kRef)] = ref;
@@ -194,6 +258,10 @@ QJsonObject JsonTableEditCol::toJsonObject() const {
   obj[QString::fromLatin1(JsonTableKey::kRef)] = ref;
   if (!label.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kLabel)] = label;
   if (!visible) obj[QString::fromLatin1(JsonTableKey::kVisible)] = false;
+  // editEditable 缺省 true 不落键（false=表单内只读展示）
+  if (!editEditable) obj[QString::fromLatin1(JsonTableKey::kEditEditable)] = false;
+  // writable 缺省 true 不落键（false=只读展示且不进写参数）
+  if (!writable) obj[QString::fromLatin1(JsonTableKey::kWritable)] = false;
   if (!widget.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kWidget)] = widget;
   if (required) obj[QString::fromLatin1(JsonTableKey::kRequired)] = true;
   // 上传绑定与编辑缩略图（空/0=未配置不落键）
@@ -223,6 +291,8 @@ JsonTableEditCol JsonTableEditCol::fromJsonObject(const QJsonObject &obj) {
   c.ref = obj.value(QString::fromLatin1(JsonTableKey::kRef)).toString();
   c.label = obj.value(QString::fromLatin1(JsonTableKey::kLabel)).toString();
   c.visible = obj.value(QString::fromLatin1(JsonTableKey::kVisible)).toBool(true);
+  c.editEditable = obj.value(QString::fromLatin1(JsonTableKey::kEditEditable)).toBool(true);
+  c.writable = obj.value(QString::fromLatin1(JsonTableKey::kWritable)).toBool(true);
   c.widget = obj.value(QString::fromLatin1(JsonTableKey::kWidget)).toString();
   c.required = obj.value(QString::fromLatin1(JsonTableKey::kRequired)).toBool(false);
   c.uploadSourceFile = obj.value(QString::fromLatin1(JsonTableKey::kUploadSourceFile)).toString();
@@ -243,6 +313,7 @@ JsonTableEditCol JsonTableEditCol::fromJsonObject(const QJsonObject &obj) {
 
 bool JsonTableEditCol::operator==(const JsonTableEditCol &other) const {
   return ref == other.ref && label == other.label && visible == other.visible &&
+         editEditable == other.editEditable && writable == other.writable &&
          widget == other.widget && required == other.required &&
          uploadSourceFile == other.uploadSourceFile && uploadSourceId == other.uploadSourceId &&
          editThumbWidth == other.editThumbWidth && editThumbHeight == other.editThumbHeight &&
@@ -360,12 +431,28 @@ QJsonObject JsonTableTable::toJsonObject() const {
   obj[QString::fromLatin1(JsonTableKey::kManualUpdateTime)] = manualUpdateTime;
   // frontend 缺省 true 不落键（仅 false 落键 = 纯 API 模块，前端链跳过）
   if (!frontend) obj[QString::fromLatin1(JsonTableKey::kFrontend)] = false;
-  // appQuery 缺省 false 不落键；启用时同时写鉴权方式（缺省 user）
+  // appQuery 缺省 false 不落键；启用时同时写接口形态与鉴权方式（缺省=只读查询/user）
   if (appQuery) {
     obj[QString::fromLatin1(JsonTableKey::kAppQuery)] = true;
+    if (appQueryMode == QStringLiteral("empty")) {
+      obj[QString::fromLatin1(JsonTableKey::kAppQueryMode)] = appQueryMode;
+    }
     obj[QString::fromLatin1(JsonTableKey::kAppAuth)] =
         appAuth.isEmpty() ? QStringLiteral("user") : appAuth;
   }
+  // C 端出参白名单：空不落键（直接回实体）
+  if (!appOutCols.isEmpty()) {
+    QJsonArray outArr;
+    for (const auto &col : appOutCols) outArr.append(col);
+    obj[QString::fromLatin1(JsonTableKey::kAppOutCols)] = outArr;
+  }
+  // 表缓存骨架缺省 false 不落键；仅勾选时写 true（生成 data/<表>/<表>_cache.go）
+  if (genCache) obj[QString::fromLatin1(JsonTableKey::kGenCache)] = true;
+  // 页面基础按钮开关：缺省 true 不落键（仅 false 落键 = 不生成该按钮）
+  if (!genAdd) obj[QString::fromLatin1(JsonTableKey::kGenAdd)] = false;
+  if (!genEdit) obj[QString::fromLatin1(JsonTableKey::kGenEdit)] = false;
+  if (!genDelete) obj[QString::fromLatin1(JsonTableKey::kGenDelete)] = false;
+  if (!genDetail) obj[QString::fromLatin1(JsonTableKey::kGenDetail)] = false;
 
   QJsonArray colArr;
   for (const auto &c : columns) colArr.append(c.toJsonObject());
@@ -400,6 +487,13 @@ QJsonObject JsonTableTable::toJsonObject() const {
     QJsonArray joinArr;
     for (const auto &j : joinTable) joinArr.append(j.toJsonObject());
     obj.insert(QString::fromLatin1(JsonTableKey::kJoinTable), joinArr);
+  }
+
+  // 联表查询声明 joinTables[]（新格式：{table,type,on[2],cols[{col,filter}]}）
+  if (!joinTables.isEmpty()) {
+    QJsonArray jtArr;
+    for (const auto &j : joinTables) jtArr.append(j.toJsonObject());
+    obj.insert(QString::fromLatin1(JsonTableKey::kJoinTables), jtArr);
   }
 
   if (!selCols.isEmpty()) {
@@ -455,11 +549,19 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
   t.extra.remove(QString::fromLatin1(JsonTableKey::kManualUpdateTime));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kFrontend));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kAppQuery));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kAppQueryMode));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kAppAuth));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kAppOutCols));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kGenCache));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kGenAdd));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kGenEdit));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kGenDelete));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kGenDetail));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kButtons));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kColumns));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kIndexes));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kJoinTable));
+  t.extra.remove(QString::fromLatin1(JsonTableKey::kJoinTables));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kSelCols));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kSelColsEq));
   t.extra.remove(QString::fromLatin1(JsonTableKey::kSelColsGap));
@@ -477,10 +579,22 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
       obj.value(QString::fromLatin1(JsonTableKey::kManualUpdateTime)).toBool(false);
   // frontend 缺省/空/null = true（生成前端页面）；仅显式 false 生效
   t.frontend = obj.value(QString::fromLatin1(JsonTableKey::kFrontend)).toBool(true);
-  // appQuery 缺省 false；appAuth 缺省 user
+  // appQuery 缺省 false；appQueryMode 缺省空=只读查询；appAuth 缺省 user
   t.appQuery = obj.value(QString::fromLatin1(JsonTableKey::kAppQuery)).toBool(false);
+  t.appQueryMode = obj.value(QString::fromLatin1(JsonTableKey::kAppQueryMode)).toString();
   t.appAuth = obj.value(QString::fromLatin1(JsonTableKey::kAppAuth)).toString();
   if (t.appAuth.isEmpty()) t.appAuth = QStringLiteral("user");
+  const QJsonArray outArr = obj.value(QString::fromLatin1(JsonTableKey::kAppOutCols)).toArray();
+  for (const auto &v : outArr) {
+    if (v.isString()) t.appOutCols.append(v.toString());
+  }
+  // genCache 缺省 false：仅显式 true 时生成 data 层表缓存骨架
+  t.genCache = obj.value(QString::fromLatin1(JsonTableKey::kGenCache)).toBool(false);
+  // 页面基础按钮开关缺省 true（仅显式 false 不生成）
+  t.genAdd = obj.value(QString::fromLatin1(JsonTableKey::kGenAdd)).toBool(true);
+  t.genEdit = obj.value(QString::fromLatin1(JsonTableKey::kGenEdit)).toBool(true);
+  t.genDelete = obj.value(QString::fromLatin1(JsonTableKey::kGenDelete)).toBool(true);
+  t.genDetail = obj.value(QString::fromLatin1(JsonTableKey::kGenDetail)).toBool(true);
 
   const QJsonArray colArr = obj.value(QString::fromLatin1(JsonTableKey::kColumns)).toArray();
   for (const auto &v : colArr) {
@@ -533,6 +647,12 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
     if (v.isObject()) t.joinTable.append(JsonTableJoin::fromJsonObject(v.toObject()));
   }
 
+  // 联表查询声明 joinTables[]（新格式：{table,type,on[2],cols[{col,filter}]}）
+  const QJsonArray jtArr = obj.value(QString::fromLatin1(JsonTableKey::kJoinTables)).toArray();
+  for (const auto &v : jtArr) {
+    if (v.isObject()) t.joinTables.append(JsonTableJoinSpec::fromJsonObject(v.toObject()));
+  }
+
   // 列表读模型 selCols[]（{ref,label}；ref 支持联表路径）
   const QJsonArray selArr = obj.value(QString::fromLatin1(JsonTableKey::kSelCols)).toArray();
   for (const auto &v : selArr) {
@@ -577,9 +697,13 @@ JsonTableTable JsonTableTable::fromJsonObject(const QJsonObject &obj) {
 bool JsonTableTable::operator==(const JsonTableTable &other) const {
   return tableName == other.tableName && modelName == other.modelName &&
          tableComment == other.tableComment && manualUpdateTime == other.manualUpdateTime &&
-         frontend == other.frontend && appQuery == other.appQuery && appAuth == other.appAuth &&
+         frontend == other.frontend && appQuery == other.appQuery &&
+         appQueryMode == other.appQueryMode && appAuth == other.appAuth &&
+         genCache == other.genCache && appOutCols == other.appOutCols &&
+         genAdd == other.genAdd && genEdit == other.genEdit && genDelete == other.genDelete &&
+         genDetail == other.genDetail &&
          columns == other.columns && indexes == other.indexes &&
-         joinTable == other.joinTable && selCols == other.selCols &&
+         joinTable == other.joinTable && joinTables == other.joinTables && selCols == other.selCols &&
          selColsEq == other.selColsEq && selColsGap == other.selColsGap &&
          selColsLike == other.selColsLike && editCols == other.editCols &&
          selColsSort == other.selColsSort && enums == other.enums &&

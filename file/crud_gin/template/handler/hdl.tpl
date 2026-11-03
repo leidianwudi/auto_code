@@ -1,8 +1,8 @@
 ${# ============================================================================}
-${# Handler 模板（split 布局）：modules/admin/{dataDir}/{tableName}_handler_.go  }
+${# Handler 模板：modules/admin/{dataDir}/{tableName}_handler_.go  }
 ${# ----------------------------------------------------------------------------}
 ${#   - 4 接口：selectByIn / selectById / update / delete（无 insert，save 单接口）}
-${#   - common.Bind 绑定 + common.OK/Fail/NewOutPage 统一响应                   }
+${#   - common.Bind 绑定 + common.OK/FailErr + httpx 分页/入参统一响应         }
 ${# 数据来源：pkgName/handlerClass/serviceClass/updClass/selClass/dataAlias      }
 ${#           hdlImports/tableComment/tableName                                 }
 ${# ============================================================================}
@@ -12,7 +12,7 @@ package ${pkgName}
 ${hdlImports}
 
 // ${handlerClass} ${tableComment}(${tableName}) HTTP 层
-// 薄层：参数绑定 → service → 统一响应（common.OK/common.Fail）
+// 薄层：参数绑定 → service → 统一响应（common.OK/common.FailErr）
 // 自定义 HTTP 方法写在手写件 ${tableName}_handler.go
 type ${handlerClass} struct {
 	Svc *${serviceClass}
@@ -31,21 +31,21 @@ func (h *${handlerClass}) SelectByIn(c *gin.Context) {
 	}
 	list, total, err := h.Svc.SelectByIn(&sel)
 	if err != nil {
-		common.Fail(c, err.Error())
+		common.FailErr(c, err)
 		return
 	}
-	common.OK(c, common.NewOutPage(list, total))
+	common.OK(c, httpx.NewOutPage(list, total))
 }
 
 // SelectById 根据id查询
 func (h *${handlerClass}) SelectById(c *gin.Context) {
-	body, ok := common.Bind[common.InSelId](c)
+	body, ok := common.Bind[httpx.InSelId](c)
 	if !ok {
 		return
 	}
 	entity, err := h.Svc.SelectById(body.Id)
 	if err != nil {
-		common.Fail(c, err.Error())
+		common.FailErr(c, err)
 		return
 	}
 	common.OK(c, entity)
@@ -59,7 +59,7 @@ func (h *${handlerClass}) Update(c *gin.Context) {
 	}
 	id, err := h.Svc.Save(&data)
 	if err != nil {
-		common.Fail(c, err.Error())
+		common.FailErr(c, err)
 		return
 	}
 	common.OK(c, gin.H{"id": id})
@@ -67,13 +67,13 @@ func (h *${handlerClass}) Update(c *gin.Context) {
 
 // Delete 删除记录（支持多条）
 func (h *${handlerClass}) Delete(c *gin.Context) {
-	body, ok := common.Bind[common.InDelIds](c)
+	body, ok := common.Bind[httpx.InDelIds](c)
 	if !ok {
 		return
 	}
 	affected, err := h.Svc.Delete(body.Ids)
 	if err != nil {
-		common.Fail(c, err.Error())
+		common.FailErr(c, err)
 		return
 	}
 	common.OK(c, gin.H{"affected": affected})

@@ -1,5 +1,16 @@
 {
   table: {
+    appAuth: 'user',
+    appOutCols: [
+      'id',
+      'level',
+      'nick',
+      'head_img_url',
+      'fans_count',
+      'like_count',
+    ],
+    appQuery: true,
+    appQueryMode: 'empty',
     columns: [
       {
         comment: '主键',
@@ -46,6 +57,7 @@
         mysqlType: 'int',
         name: 'is_real_name',
         nullable: false,
+        title: '是否实名',
         unsigned: false,
       },
       {
@@ -198,34 +210,127 @@
     ],
     editCols: [
       {
-        label: '用户vip等级',
-        ref: 'level',
+        editEditable: false,
+        label: '主键',
+        ref: 'id',
+        visible: false,
+      },
+      {
+        editEditable: false,
+        label: '账户',
+        ref: 'user_ext_account',
+        writable: false,
       },
       {
         label: '昵称',
         ref: 'nick',
+        required: true,
+      },
+      {
+        label: '用户vip等级',
+        ref: 'level',
+        required: true,
+      },
+      {
+        editEditable: false,
+        label: '是否实名',
+        ref: 'is_real_name',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '金币余额',
+        ref: 'coin',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '充值金币',
+        ref: 'recharge_coin',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '充值金额',
+        ref: 'recharge_money',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '活动获得金币',
+        ref: 'activity_coin',
+        writable: false,
+      },
+      {
+        label: '备注',
+        ref: 'desc',
       },
       {
         label: '头像url',
         ref: 'head_img_url',
       },
       {
-        label: '是否实名;0:未实名;1:已实名',
-        ref: 'is_real_name',
-      },
-      {
+        editEditable: false,
         label: '粉丝数量',
         ref: 'fans_count',
+        writable: false,
       },
       {
+        editEditable: false,
         label: '获赞数量',
         ref: 'like_count',
+        writable: false,
       },
       {
+        editEditable: false,
         label: '获踩数量',
         ref: 'dislike_count',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '自己关注数量',
+        ref: 'following_count',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '上级',
+        ref: 'up1',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '上级的上级',
+        ref: 'up2',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '收益金币',
+        ref: 'earn_coin',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '消费金币',
+        ref: 'spend_coin',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '转出金币',
+        ref: 'out_coin',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '道具数量',
+        ref: 'item_count',
+        writable: false,
       },
     ],
+    genCache: true,
     indexes: [
       {
         cols: [
@@ -235,11 +340,68 @@
         unique: false,
       },
     ],
+    joinTables: [
+      {
+        cols: [
+          {
+            col: 'account',
+          },
+        ],
+        on: [
+          'id',
+          'user_id',
+        ],
+        table: 'user_ext',
+        type: 'LEFT',
+      },
+    ],
     manualUpdateTime: false,
     modelName: 'user',
+    selCols: [
+      {
+        label: '账户',
+        ref: 'user_ext_account',
+      },
+      {
+        label: '昵称',
+        ref: 'nick',
+      },
+      {
+        label: '用户vip等级',
+        ref: 'level',
+      },
+      {
+        label: '是否实名',
+        ref: 'is_real_name',
+        width: 60,
+      },
+      {
+        label: '金币余额',
+        ref: 'coin',
+      },
+      {
+        label: '充值金币',
+        ref: 'recharge_coin',
+      },
+      {
+        label: '充值金额',
+        ref: 'recharge_money',
+      },
+      {
+        label: '活动获得金币',
+        ref: 'activity_coin',
+      },
+      {
+        label: '备注',
+        ref: 'desc',
+      },
+    ],
     selColsEq: [
       {
         ref: 'id',
+      },
+      {
+        ref: 'user_ext_account',
       },
     ],
     selColsLike: [
@@ -249,5 +411,28 @@
     ],
     tableComment: '用户表',
     tableName: 'user',
+    viewOrder: [
+      'id',
+      'user_ext_account',
+      'nick',
+      'level',
+      'is_real_name',
+      'coin',
+      'recharge_coin',
+      'recharge_money',
+      'activity_coin',
+      'desc',
+      'head_img_url',
+      'fans_count',
+      'like_count',
+      'dislike_count',
+      'following_count',
+      'up1',
+      'up2',
+      'earn_coin',
+      'spend_coin',
+      'out_coin',
+      'item_count',
+    ],
   },
 }

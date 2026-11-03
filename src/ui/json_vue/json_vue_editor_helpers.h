@@ -14,6 +14,7 @@
 #include <QComboBox>
 #include <QFileInfo>
 #include <QItemSelectionModel>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QStyleOption>
 #include <QTableWidget>
@@ -26,68 +27,10 @@
 /// 接口鉴权/连接配置文件（baseUrl、authHeader、postData），从 .jsonvue 所在目录向上查找
 inline const QString kApiAuthDataAcFile = QStringLiteral("api_auth_data.ac");
 
-/// 自绘 QComboBox：无边框，只有文字 + 箭头，文字区域不受原生样式限制。
-/// 弹层高度保证复用通用机制（AuiComboBox::ensurePopupFit，全局过滤器兜底），
-/// 这里仅在弹出前显式调用一次，让固定高度赶在 Qt 原生几何计算之前生效。
-class NoBorderCombo : public QComboBox {
-public:
-  explicit NoBorderCombo(QWidget *parent = nullptr) : QComboBox(parent) {}
-
-protected:
-  void showPopup() override {
-    AuiComboBox::ensurePopupFit(this);
-    QComboBox::showPopup();
-  }
-
-  void paintEvent(QPaintEvent *) override {
-    QPainter p(this);
-    p.setRenderHint(QPainter::Antialiasing);
-
-    // 所在行选中联动：表格的行选中背景会被不透明的控件盖住（只有文本项列能看到
-    // 高亮）。这里检测所在行的选中态，用表格的选中色绘制背景与文字，保证
-    // "点任意单元格 = 整行选中"的视觉反馈完整。
-    QWidget *vp = parentWidget();
-    auto *table = vp ? qobject_cast<QTableWidget *>(vp->parentWidget()) : nullptr;
-    bool rowSelected = false;
-    if (table && vp) {
-      const int row = table->rowAt(mapTo(vp, QPoint(0, 0)).y());
-      rowSelected = row >= 0 && table->selectionModel()->isRowSelected(row);
-    }
-
-    QColor bg;
-    QColor fg;
-    if (rowSelected) {
-      bg = table->palette().color(QPalette::Highlight);
-      fg = table->palette().color(QPalette::HighlightedText);
-    } else if (hasFocus()) {
-      bg = AuiStyle::listSelectionBackground();
-      fg = AuiStyle::textColor();
-    } else {
-      bg = AuiStyle::panelBackground();
-      fg = AuiStyle::textColor();
-    }
-
-    // 背景（直接用主题色，深色主题下也能看清）
-    p.fillRect(rect(), bg);
-
-    // 文字
-    QRect textRect = rect().adjusted(2, 0, -18, 0);
-    p.setPen(fg);
-    p.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, currentText());
-
-    // 向下箭头
-    QRect arrowRect(rect().right() - 18, 0, 18, rect().height());
-    QStyleOption arrowOpt;
-    arrowOpt.rect = arrowRect.adjusted(3, 0, -3, 0);
-    arrowOpt.palette = palette();
-    arrowOpt.state = QStyle::State_Enabled;
-    p.setPen(fg);
-    style()->drawPrimitive(QStyle::PE_IndicatorArrowDown, &arrowOpt, &p, this);
-  }
-};
-
-/// 创建用于表格单元格的 QComboBox（自绘，无边框，文字区域最大）
-inline QComboBox *newTableCombo() { return new NoBorderCombo; }
+/// 创建用于表格单元格的下拉框：统一控件（AuiComboBox::createForTable）——
+/// 无边框自绘、跟随行选中态、点右侧箭头展开、双击不弹、弹层防闪收；
+/// 值变化请用 AuiComboBox::connectValueCommitted 接线（单击/聚焦不误报变化）
+inline QComboBox *newTableCombo() { return AuiComboBox::createForTable(); }
 
 /// 将 ColumnConfig 的所有配置存储到 QPushButton 的动态属性中
 inline void storeColumnConfig(QPushButton *btn, const ColumnConfig &col) {

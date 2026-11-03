@@ -38,6 +38,24 @@
         unsigned: false,
       },
     ],
+    editCols: [
+      {
+        label: '主键',
+        ref: 'id',
+      },
+      {
+        label: '角色ID，关联sys_role.id',
+        ref: 'role_id',
+      },
+      {
+        label: '菜单ID，关联sys_menu.id',
+        ref: 'menu_id',
+      },
+      {
+        label: '创建时间',
+        ref: 'created_at',
+      },
+    ],
     frontend: false,
     indexes: [
       {
@@ -49,10 +67,23 @@
         unique: true,
       },
     ],
-    layout: 'split',
     manualUpdateTime: false,
     modelName: 'sys_role_menu',
     moduleDir: 'sys/sys_role_menu',
+    selColsEq: [
+      {
+        ref: 'role_id',
+      },
+      {
+        ref: 'menu_id',
+      },
+    ],
+    selColsSort: [
+      [
+        'id',
+        'DESC',
+      ],
+    ],
     tableComment: '角色菜单关联',
     tableName: 'sys_role_menu',
   },

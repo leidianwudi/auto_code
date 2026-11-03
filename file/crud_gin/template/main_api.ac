@@ -16,35 +16,59 @@
 ///     │ tables[]   │  列定义     │ (加工器) │   渲染数据   │ /svc/hdl  │
 ///     └────────────┘            └──────────┘             └─────┬─────┘
 ///                                             renderTpl()      ▼
-///                                              modules/<moduleDir>/{model,dto,...}/*.go
+///                                              data/<表目录>/ + modules/{admin,app}/<表目录>/
 ///
 /// 接收的项目参数（params 对象）：
-///   - goBasePath     Go 项目根目录（modules/... 写到这里）；
+///   - goBasePath     Go 项目根目录（data/、modules/... 写到这里）；
 ///                    省略时用 .jsontable 的 meta.goBasePath
 ///   - jsonTablePath  可选，.jsontable 配置文件绝对路径；
 ///                    省略时收集勾选文件中的 .jsontable
 ///   - genGlobalEnum  可选，false 跳过全局枚举收集（缺省/true 收集）
-///   - templates      可选，模板配置数组（省略时使用本文件默认模板）
 ///
-/// 输出布局（对齐 gin-vue-admin 式模块化架子）：
-///   modules/<moduleDir>/{model,dto,repo,service,handler,router}.go
-///   + {tableName}_custom.go 自定义层（仅首次生成，fileExists 守卫）
-///   moduleDir 缺省 <tableName>/<tableName>，系统表可在 .jsontable 配
-///   moduleDir（如 sys/menu）与手写架子目录对齐；包名 = 目录末段。
-///   路由集中注册在 {goBasePath}/router/router.go（手写文件，生成器不注入，
-///   生成结束打印提醒清单）。
+/// 输出布局（data 共享层 + 按端分模块）：
+///   data/<前缀>/<表>/：en_<表>_.go、in_sel_<表>_.go、<表>_repo_.go（+手写扩展件）
+///   modules/{admin,app}/<前缀>/<表>/：in_upd_<表>_.go、handler/service/router 生成件
+///   （app 端另含 out_<表>_.go），手写扩展件首次生成骨架、重新生成不覆盖。
+///   路由集中注册：生成器独占 {goBasePath}/router/routes_.go，每次生成按
+///   modules/{admin,app} 树扫描 *_router_.go 整体重写（幂等，见
+///   regenRouteRegistration）；手写模块与 RegisterCustomRoutes 钩子仍在
+///   router/router.go 手动注册。
 /// ----------------------------------------------------------------------------
 
-import { Param, FieldDef, buildGoImports, escapeGoStr, sanitizeGoComment, tabChar } from "./core/param_go.ac";
+import { Param, FieldDef, buildGoImports, escapeGoStr, sanitizeGoComment, tabChar,
+         mapTypeToGo, zeroKindOfGoType } from "./core/param_go.ac";
 import { QueryData, SelFieldDef } from "./core/query_data.ac";
 import { snakeToPascal, snakeToCamel, isNumericStr } from "../../tool/tool_str.ac";
 import { findGlobalEnumFiles, mergeGlobalEnumFiles } from "../../tool/tool_global_enum.ac";
-import { dirnameOf, findProjPath } from "../../tool/tool_jsontable.ac";
+import { dirnameOf, findProjPath, relDirUnder } from "../../tool/tool_jsontable.ac";
 
 /// @brief 模板配置（一个模板对应一个生成的代码文件）
 class TemplateConfig {
   let tpl: String = "";  // 模板文件路径（相对入口脚本目录）
   let out: String = "";  // 输出文件路径模板，用 {key} 占位符从 tplData 取值
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 〇、生成覆盖守卫（防手写文件被误覆盖）
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// @brief 生成覆盖守卫：目标文件已存在但缺少 AutoCode 生成标记时跳过覆盖
+/// @param path 输出文件路径
+/// @return true=可写入（文件不存在，或内容含生成标记属于本生成器产物）；
+///         false=跳过写入（已输出红字提示，疑似用户手写文件）
+/// 检测标记取两条生成链模板头注释的公共子串：
+///   vue 链"//此文件为AutoCode编译器生成，请勿手动修改"、
+///   Go 链"// 此代码为AutoCode编译器生成，请勿手动修改"
+export function canOverwriteGenerated(path: String): Bool {
+  if (!fileExists(path)) {
+    return true;
+  }
+  let old: String = readFile(path);
+  if (old.indexOf("AutoCode编译器生成") >= 0) {
+    return true;
+  }
+  printError("跳过覆盖: " + path + "（已存在但缺少 AutoCode 生成标记，疑似手写文件；确认要覆盖请先删除该文件再重新生成）");
+  return false;
 }
 
 /// @brief 生成 Go 后端 API 代码
@@ -151,6 +175,9 @@ export function generateApiMain(params: Object): Number {
       printError("错误：.jsontable 缺少顶层 table 键: " + file);
       return 0;
     }
+    // 目录结构 = 模块结构：记录相对扫描根（入口脚本目录）的目录段，
+    // 供 moduleDir 缺省推导（4 节预扫描）；不在扫描根下时为 ""（回退旧缺省）
+    t["_relDir"] = relDirUnder(file, scriptDir());
     tables.append(t);
   }
   printLog("tables count: " + tables.length);
@@ -158,7 +185,7 @@ export function generateApiMain(params: Object): Number {
   // ── 2.5 i18n 翻译表派生：启用 i18n 且无显式翻译表配置时按惯例派生 ────
   //      派生规则见 deriveI18nTable（与 C++ json_table_model.cpp 镜像）；
   //      显式 {table}0.jsontable 存在时优先（用户完全控制权），仅缺省时派生。
-  //      派生表与显式表同路进入 4 节预扫描（i18nRefs 标记 → 只生成实体）
+  //      派生表与显式表同路进入 4 节预扫描（与普通表一样参与生成）
   let explicitNames: Object = {};
   for (t in tables) {
     explicitNames[t["tableName"]] = true;
@@ -205,8 +232,12 @@ export function generateApiMain(params: Object): Number {
     printError("错误：go.mod 不存在或缺 module 行，跳过全部表生成: " + goBasePath + "/go.mod");
     return 0;
   }
-  // 架子公共包 import 路径（响应统一走 common.OK/Fail，路由挂 middleware.JWTAuth）
+  // 架子公共包 import 路径（响应统一走 common.OK/Fail，路由挂 middleware.AdminAuth）
   let commonPath: String = moduleName + "/common";
+  let dbPath: String = commonPath + "/db";
+  let coinPath: String = commonPath + "/coin";
+  let httpxPath: String = commonPath + "/httpx";
+  let redisxPath: String = commonPath + "/redisx";
   let middlewarePath: String = moduleName + "/middleware";
   printLog("Go 项目: " + goBasePath + "（module: " + moduleName + "）");
 
@@ -233,11 +264,7 @@ export function generateApiMain(params: Object): Number {
     printLog("genGlobalEnum=false，跳过全局枚举收集");
   }
 
-  // ── 4. 预扫描：i18n 引用标记 + 表名/模型名去重 + 模块目录预计算 ──────
-  //      被某表 i18n.table 引用的表（如 shop0）只生成实体文件，
-  //      跳过 repo/service/handler/router 生成（翻译表是主表从属）
-  let i18nRefs: Object = {};
-  let i18nOwner: Object = {};      // 翻译表名 → 主表表名（翻译实体落主表模块目录用）
+  // ── 4. 预扫描：表名/模型名去重 + 模块目录预计算 ────────────────────
   let tablesByName: Object = {};   // tableName → 表配置（i18n 翻译表列定义查找用）
   let tablesByModel: Object = {};  // modelName → 表配置（joinTable 联表目标定位用）
   let genTables: Object[] = [];    // 去重后的待生成表配置
@@ -263,11 +290,19 @@ export function generateApiMain(params: Object): Number {
     }
     tablesByModel[mn] = t;
     // ── 模块目录预计算（modules/<moduleDir>/，包名 = 目录末段）────────
-    //    moduleDir 缺省 <tableName>/<tableName>；系统表配 sys/menu 等
-    //    与手写架子目录对齐。仅允许相对子路径（禁 ..，去首尾斜杠）
+    //    moduleDir 缺省 = .jsontable 相对扫描根的目录段 + 表名
+    //    （目录结构 = 模块结构：user/user_ext.jsontable → user/user_ext）；
+    //    与扫描根同目录时回退 <tableName>/<tableName>；
+    //    系统表可显式配 moduleDir（如 sys/menu）与手写架子目录对齐。
+    //    仅允许相对子路径（禁 ..，去首尾斜杠）
     let md: String = t["moduleDir"];
     if (md == null || md.length == 0) {
-      md = tn + "/" + tn;
+      let rel: String = t["_relDir"];
+      if (rel != null && rel.length > 0) {
+        md = rel + "/" + tn;
+      } else {
+        md = tn + "/" + tn;
+      }
     }
     md = md.replace("\\", "/");
     while (md.startsWith("/")) {
@@ -284,37 +319,8 @@ export function generateApiMain(params: Object): Number {
     t["moduleDir"] = md;
     t["pkgName"] = segs[segs.length - 1];
     genTables.append(t);
-    let i18nCfg: Object = t["i18n"];
-    if (i18nCfg != null && i18nCfg["table"] != null) {
-      i18nRefs[i18nCfg["table"]] = true;
-      i18nOwner[i18nCfg["table"]] = tn;
-    }
   }
 
-  // ── 5. 模板配置：一个模板对应一个生成的代码文件 ───────────────────
-  //      覆盖层（model/dto/repo/service/handler/router）每次重新生成；
-  //      自定义层 {tableName}_custom.go 由模板内 fileExists(outputPath) 守卫，
-  //      仅首次生成（自定义逻辑全写这里，重新生成不会覆盖）
-  let templates: TemplateConfig[] = params["templates"];
-  if (templates == null) {
-    templates = [
-      { tpl: "../../crud_gin/template/model/entity.tpl",  out: "{goBasePath}/modules/{moduleDir}/model.go" },
-      { tpl: "../../crud_gin/template/model/params.tpl",  out: "{goBasePath}/modules/{moduleDir}/dto.go" },
-      { tpl: "../../crud_gin/template/repo/repo.tpl",     out: "{goBasePath}/modules/{moduleDir}/repo.go" },
-      { tpl: "../../crud_gin/template/service/svc.tpl",   out: "{goBasePath}/modules/{moduleDir}/service.go" },
-      { tpl: "../../crud_gin/template/handler/hdl.tpl",   out: "{goBasePath}/modules/{moduleDir}/handler.go" },
-      { tpl: "../../crud_gin/template/router.tpl",        out: "{goBasePath}/modules/{moduleDir}/router.go" },
-      { tpl: "../../crud_gin/template/custom.tpl",        out: "{goBasePath}/modules/{moduleDir}/{tableName}_custom.go" }
-    ];
-  }
-  // 枚举/路由模板路径（支持 params 覆盖，相对入口脚本目录）
-  let enumTplPath: String = params["enumTpl"];
-  if (enumTplPath == null || enumTplPath.length == 0) {
-    enumTplPath = "../../crud_gin/template/model/enum.tpl";
-  }
-
-  // 集中注册提醒清单（modules/<moduleDir>，生成结束统一打印）
-  let regModules: String[] = [];
   // 配置缺陷被跳过的表数量（结束时报错汇总）
   let missingTableCount: Number = 0;
 
@@ -325,7 +331,6 @@ export function generateApiMain(params: Object): Number {
     if (modelName == null || modelName.length == 0) {
       modelName = tableName;  // 模型名缺省回退表名
     }
-    let tableComment: String = sanitizeGoComment(json["tableComment"]);
 
     // ── 6.1 列定义校验（生成期不连库，无列 = 无从生成）────────────
     let columns: Object[] = json["columns"];
@@ -336,600 +341,22 @@ export function generateApiMain(params: Object): Number {
     }
     printLog("[" + tableName + "] columns count: " + columns.length);
 
-    // ── 6.1b split 布局分支：data/ + modules/admin/ 新规范 ─────────
-    //      表配置 layout="split" 才走新布局；未配置的表跳过（避免误覆盖
-    //      尚未迁移的模块）。生成逻辑见 generateSplitTable。
-    let layoutCfg: String = json["layout"];
-    if (layoutCfg != "split") {
-      printLog("表 '" + tableName + "' 未配置 layout=split，跳过生成（待迁移）");
-      continue;
-    }
-    let splitModuleDir: String = json["moduleDir"];
-    let splitPkgName: String = json["pkgName"];
-    let splitCount: Number = generateSplitTable(json, goBasePath, moduleName,
-        commonPath, middlewarePath, splitModuleDir, splitPkgName,
-        globalEnumDefs, emittedGlobalEnums);
-    generatedFileCount = generatedFileCount + splitCount;
-    regModules.append(splitModuleDir);
-    continue;
-
-    // ── 6.2 翻译表分支：被 i18n 引用的表只生成实体文件 ─────────────
-    //      跳过 repo/service/handler/router 生成（其 CRUD 由主表 repo 的
-    //      i18n 辅助方法承接，翻译表不需要独立接口）；
-    //      翻译实体落主表模块目录（与主表同包，repo 直接引用类型）
-    if (i18nRefs[tableName] == true) {
-      let ownerName: String = i18nOwner[tableName];
-      if (ownerName == null) {
-        ownerName = tableName;
-      }
-      let ownerTable: Object = tablesByName[ownerName];
-      let ownerDir: String = ownerTable["moduleDir"];
-      let ownerPkg: String = ownerTable["pkgName"];
-      printLog("表 '" + tableName + "' 为 i18n 翻译表（被引用），只生成实体文件（入主表模块 modules/" + ownerDir + "），跳过其余文件生成");
-      let iParam: Param = new Param();
-      iParam.setTableData(json);
-      let iTplData: Object = buildEntityData(iParam);
-      iTplData["pkgName"] = ownerPkg;
-      let iOutPath: String = formatPath("{goBasePath}/modules/{moduleDir}/en_{tableName}.go", {
-        goBasePath: goBasePath,
-        tableName: tableName,
-        moduleDir: ownerDir
-      });
-      let iEntityTpl: String = entityTplPath(templates);
-      if (iEntityTpl != "") {
-        let iResult = renderTpl(iEntityTpl, iTplData);
-        if (iResult) {
-          let iOk: Bool = writeFile(iOutPath, iResult);
-          if (iOk) {
-            generatedFileCount = generatedFileCount + 1;
-          }
-          printLog("生成文件: " + iOutPath);
-        }
-      }
-      continue;
-    }
-
-    // ── 6.2b 模块目录与包名（预扫描已写入表配置）──────────────────
-    let moduleDir: String = json["moduleDir"];
-    let pkgName: String = json["pkgName"];
-    printLog("[" + tableName + "] module: modules/" + moduleDir + "（package " + pkgName + "）");
-
-    // ── 6.3 Param 加工：.jsontable 列 → goType/标签/参数字段集 ────
-    let param: Param = new Param();
-    param.setTableData(json);
-    // SelectById/Update/Delete 依赖主键，无主键的表无法生成 CRUD
-    if (param.primaryField == null) {
-      printError("错误：表 '" + tableName + "' 未声明主键列（isPrimary），已跳过生成");
-      missingTableCount = missingTableCount + 1;
-      continue;
-    }
-    printLog("[" + tableName + "] fields count: " + param.fields.length);
-
-    // ── 6.4 联表加工（joinTable → joinDefs + 平铺字段 + JOIN/SELECT 片段）──
-    //      joinEnClass/joinEnClassPro/joinType/isJoinRelations 沿用旧 .json 命名；
-    //      joinFk=本表外键列，joinPk=目标主键列（缺省 id）。
-    //      ManyToOne → 列表 LEFT/INNER JOIN + 联表列平铺（返回键 = 引用名_列名）；
-    //      OneToMany → 详情聚合 v1 未支持，打印提示跳过。
-    let joinDefs: Object[] = [];   // 有效 ManyToOne 条目 {pro, fk, pk, target, joinEnClass}
-    let joinCfgs: Object[] = json["joinTable"];
-    if (joinCfgs != null) {
-      for (jc in joinCfgs) {
-        if (jc["isJoinRelations"] == false) {
-          continue;  // 未启用条目不生效（旧 .json 同名约定）
-        }
-        let jt: String = (jc["joinType"] != null && jc["joinType"] != "") ? jc["joinType"] : "ManyToOne";
-        let pro: String = jc["joinEnClassPro"];
-        let cls: String = jc["joinEnClass"];
-        if (pro == null || pro == "" || cls == null || cls == "") {
-          printError("错误：表 '" + tableName + "' 联表缺少 joinEnClassPro/joinEnClass，该条目已跳过");
-          continue;
-        }
-        if (jt == "OneToMany") {
-          printLog("提示：表 '" + tableName + "' 联表 '" + pro + "' 为 OneToMany（详情聚合），" +
-                   "第一版未支持，已跳过（详情子列表请用子表独立接口）");
-          continue;
-        }
-        if (jt != "ManyToOne") {
-          printError("错误：表 '" + tableName + "' 联表 '" + pro + "' 的 joinType '" + jt +
-                     "' 仅支持 ManyToOne/OneToMany，该条目已跳过");
-          continue;
-        }
-        // 引用名不得与主表列名冲突（平铺返回键 pro_col 与主表列冲突在 ref 收集时校验）
-        let proClash: Bool = false;
-        for (pf in param.fields) {
-          if (pf.name == pro) { proClash = true; }
-        }
-        if (proClash) {
-          printError("错误：表 '" + tableName + "' 联表引用名 '" + pro +
-                     "' 与主表列名冲突，该条目已跳过");
-          continue;
-        }
-        // 引用名去重（Go 同结构体字段/SQL 别名禁重复）
-        let proDup: Bool = false;
-        for (jd in joinDefs) {
-          if (jd["pro"] == pro) { proDup = true; }
-        }
-        if (proDup) {
-          printError("错误：表 '" + tableName + "' 联表引用名 '" + pro + "' 重复，该条目已跳过");
-          continue;
-        }
-        // 外键列（ManyToOne 必填，∈ 主表列）
-        let fk: String = jc["joinFk"];
-        let fkField: FieldDef = null;
-        for (pf in param.fields) {
-          if (pf.name == fk) { fkField = pf; }
-        }
-        if (fkField == null) {
-          printError("错误：表 '" + tableName + "' 联表 '" + pro + "' 的外键列 joinFk('" +
-                     (fk == null ? "" : fk) + "') 不在主表列中，该条目已跳过");
-          continue;
-        }
-        // 目标表按 modelName 定位（joinEnClass 填目标表模型名）
-        let target: Object = tablesByModel[cls];
-        if (target == null) {
-          printError("错误：表 '" + tableName + "' 联表 '" + pro + "' 的目标 '" + cls +
-                     "' 不在本文件 tables[] 中（joinEnClass 填目标表模型名），该条目已跳过");
-          continue;
-        }
-        // 主键列（缺省 id，∈ 目标表列）
-        let pk: String = (jc["joinPk"] != null && jc["joinPk"] != "") ? jc["joinPk"] : "id";
-        let pkOk: Bool = false;
-        let tcols: Object[] = target["columns"];
-        for (tc in tcols) {
-          if (tc["name"] == pk) { pkOk = true; }
-        }
-        if (!pkOk) {
-          printError("错误：表 '" + tableName + "' 联表 '" + pro + "' 的主键列 joinPk('" +
-                     pk + "') 不在目标表 " + cls + " 中，该条目已跳过");
-          continue;
-        }
-        joinDefs.append({ pro: pro, fk: fk, pk: pk, target: target, joinEnClass: cls });
-      }
-    }
-    let hasJoin: Bool = (joinDefs.length > 0);
-
-    // ── 6.4b 查询场景数据（复刻 query_data.ac 产出形态，类型换 goType）──
-    //      selFields       - SelectParams 查询字段（selColsEq + selColsLike/Gap，支持联表 ref）
-    //      sortInfo        - 排序信息（selColsSort，缺省主键 DESC；联表 ref → `pro`.`col`）
-    //      whereConditions - repo getWhereByIn 的 Go 条件块
-    let queryData: QueryData = new QueryData();
-    let selFields: SelFieldDef[] = queryData.buildSelFields(json, param, joinDefs, hasJoin);
-    let sortInfo = queryData.buildSortInfo(json, param, param.primaryField.name, joinDefs, hasJoin);
-    let whereConditions: String[] = queryData.buildWhereConditions(selFields);
-
-    // ── 6.4c 联表平铺字段与 JOIN/SELECT 片段（按 ref 使用集按需生成）─────
-    //      被 selCols/selColsEq/Like/Gap/Sort 引用的联表 ref 才生成平铺字段
-    //      （实体非 DB 列 gorm:"column:别名;->" 只读，SELECT 时 AS 别名自动扫描）；
-    //      LEFT JOIN 无匹配为 NULL → 平铺字段一律指针类型
-    let joinFlatFields: FieldDef[] = [];   // 实体平铺字段（返回键 = 引用名_列名）
-    let joinSelectParts: String[] = [];    // SELECT 片段（`pro`.`col` AS `pro_col`）
-    let joinClauses: String[] = [];        // JOIN 子句（每有效联表一条）
-    for (jd in joinDefs) {
-      let joinKind: String = "LEFT JOIN";
-      // joinKind 固定 LEFT（inner 语义未开放配置；LEFT 保证主表数据不丢）
-      joinClauses.append(joinKind + " `" + jd["target"]["tableName"] + "` `" + jd["pro"] +
-                         "` ON `" + jd["pro"] + "`.`" + jd["pk"] + "` = `t`.`" + jd["fk"] + "`");
-    }
-    // ref 收集：selCols[].ref + selColsEq/Like/Gap（[{ref,visible}]）+ selColsSort 键中带点的
-    let usedJoinRefs: String[] = [];
-    let selColCfgs: Object[] = json["selCols"];
-    if (selColCfgs != null) {
-      for (sc in selColCfgs) {
-        let r: String = sc["ref"];
-        if (r != null && r.indexOf(".") > 0 && !usedJoinRefs.includes(r)) {
-          usedJoinRefs.append(r);
-        }
-      }
-    }
-    let eqCfgs: Object[] = json["selColsEq"];
-    let gapCfgs: Object[] = json["selColsGap"];
-    let likeCfgs: Object[] = json["selColsLike"];
-    let sortCfg: Object = json["selColsSort"];
-    for (qc in eqCfgs) {
-      let r: String = qc["ref"];
-      if (r != null && r.indexOf(".") > 0 && !usedJoinRefs.includes(r)) { usedJoinRefs.append(r); }
-    }
-    for (qc in gapCfgs) {
-      let r: String = qc["ref"];
-      if (r != null && r.indexOf(".") > 0 && !usedJoinRefs.includes(r)) { usedJoinRefs.append(r); }
-    }
-    for (qc in likeCfgs) {
-      let r: String = qc["ref"];
-      if (r != null && r.indexOf(".") > 0 && !usedJoinRefs.includes(r)) { usedJoinRefs.append(r); }
-    }
-    if (sortCfg != null && sortCfg.length) {
-      for (pair in sortCfg) {
-        let r: String = pair[0];
-        if (r != null && r.indexOf(".") > 0 && !usedJoinRefs.includes(r)) { usedJoinRefs.append(r); }
-      }
-    }
-    // 解析使用集 → 平铺字段（别名冲突/目标列缺失报错跳过，与设计器校验同源）
-    for (ref in usedJoinRefs) {
-      let dot: Number = ref.indexOf(".");
-      let pro: String = ref.substring(0, dot);
-      let col: String = ref.substring(dot + 1);
-      let jd: Object = null;
-      for (d in joinDefs) {
-        if (d["pro"] == pro) { jd = d; }
-      }
-      if (jd == null) {
-        printError("错误：表 '" + tableName + "' 读模型引用 '" + ref +
-                   "' 的引用名未声明为启用的 ManyToOne 联表，该列已跳过");
-        continue;
-      }
-      let tcol: Object = null;
-      let tcols2: Object[] = jd["target"]["columns"];
-      for (tc in tcols2) {
-        if (tc["name"] == col) { tcol = tc; }
-      }
-      if (tcol == null) {
-        printError("错误：表 '" + tableName + "' 读模型引用 '" + ref + "' 的目标列在联表 " +
-                   jd["joinEnClass"] + " 中不存在，该列已跳过");
-        continue;
-      }
-      let alias: String = pro + "_" + col;
-      // 别名不得与主表列名/已生成别名冲突（同键覆盖会静默错数据）
-      let aliasClash: Bool = false;
-      for (pf in param.fields) {
-        if (pf.name == alias) { aliasClash = true; }
-      }
-      for (ff in joinFlatFields) {
-        if (ff.name == alias) { aliasClash = true; }
-      }
-      if (aliasClash) {
-        printError("错误：表 '" + tableName + "' 联表别名 '" + alias + "'（ref " + ref +
-                   "）与主表列名或其它联表别名冲突，该列已跳过");
-        continue;
-      }
-      let ff: FieldDef = new FieldDef();
-      ff.name = alias;
-      ff.comment = sanitizeGoComment(tcol["comment"]);
-      ff.colType = tcol["mysqlType"];
-      ff.unsigned = (tcol["unsigned"] == true);
-      ff.goType = mapTypeToGo(ff.colType, ff.unsigned);
-      ff.goName = snakeToPascal(alias);
-      // LEFT JOIN 无匹配为 NULL → 一律指针类型；只读列（JOIN SELECT 自动扫描填充）
-      ff.declType = "*" + ff.goType;
-      ff.ptrType = "*" + ff.goType;
-      ff.isPtr = true;
-      ff.gormTag = "gorm:\"column:" + alias + ";->\"";
-      ff.jsonTag = "json:\"" + alias + "\"";
-      joinFlatFields.append(ff);
-      joinSelectParts.append("`" + pro + "`.`" + col + "` AS `" + alias + "`");
-    }
-    let hasJoinFlat: Bool = (joinSelectParts.length > 0);
-    let joinSelectStr: String = "`t`.*";
-    if (hasJoinFlat) {
-      joinSelectStr = joinSelectStr + ", " + joinSelectParts.join(", ");
-    }
-
-    // ── 6.4d 唯一性预检（indexes[].unique 自动推导）───────────────────
-    //      每个 unique 索引组生成 Insert/Update 前置查重块（Update 排除自身主键）；
-    //      并发窗口由 DB 唯一索引兜底，此处提升错误可读性。可空列 NULL 不互斥
-    //      （NULL = NULL 永假），天然跳过未传值。
-    let uniqInsChecks: String[] = [];
-    let uniqUpdChecks: String[] = [];
-    let idxCfgs: Object[] = json["indexes"];
-    if (idxCfgs != null) {
-      for (ix in idxCfgs) {
-        if (ix["unique"] != true) { continue; }
-        let ucols: String[] = ix["cols"];
-        if (ucols == null || ucols.length == 0) { continue; }
-        // 组内列须都在主表（跨表/缺列的唯一索引组跳过）
-        let allExist: Bool = true;
-        for (c in ucols) {
-          let found: Bool = false;
-          for (pf in param.fields) {
-            if (pf.name == c) { found = true; }
-          }
-          if (!found) { allExist = false; }
-        }
-        if (!allExist) {
-          printLog("警告：唯一索引 '" + ix["name"] + "' 含主表不存在的列，跳过唯一性预检生成");
-          continue;
-        }
-        let whereStr: String = "";
-        let argsStr: String = "";
-        let firstC: Bool = true;
-        for (c in ucols) {
-          if (!firstC) {
-            whereStr = whereStr + " AND ";
-            argsStr = argsStr + ", ";
-          }
-          firstC = false;
-          whereStr = whereStr + "`" + c + "` = ?";
-          argsStr = argsStr + "data." + snakeToPascal(c);
-        }
-        let dupMsg: String = "duplicate: " + ix["name"] + "(" + ucols.join(",") + ")";
-        // Insert 前置查重（返回签名 0, err；modules 模式同包，实体类型免 model. 前缀）
-        uniqInsChecks.append(
-          "  {\n"
-          + "    var cnt int64\n"
-          + "    if err := db.Model(&" + param.entityClass + "{}).Where(\"" + whereStr + "\", " + argsStr + ").Count(&cnt).Error; err != nil {\n"
-          + "      return 0, err\n"
-          + "    }\n"
-          + "    if cnt > 0 {\n"
-          + "      return 0, errors.New(\"" + escapeGoStr(dupMsg) + "\")\n"
-          + "    }\n"
-          + "  }");
-        // Update 前置查重（额外排除自身主键）
-        uniqUpdChecks.append(
-          "  {\n"
-          + "    var cnt int64\n"
-          + "    if err := db.Model(&" + param.entityClass + "{}).Where(\"" + whereStr + "\", " + argsStr + ").Where(\"`" + param.primaryField.name + "` <> ?\", data." + param.primaryField.goName + ").Count(&cnt).Error; err != nil {\n"
-          + "      return 0, err\n"
-          + "    }\n"
-          + "    if cnt > 0 {\n"
-          + "      return 0, errors.New(\"" + escapeGoStr(dupMsg) + "\")\n"
-          + "    }\n"
-          + "  }");
-        printLog("[" + tableName + "] 唯一索引 '" + ix["name"] + "' 生成 Insert/Update 唯一性预检");
-      }
-    }
-    let hasUniqCheck: Bool = (uniqInsChecks.length > 0);
-
-    // ── 6.5 枚举数据（表级 enums 节点 + globalEnumCols 全局枚举列）──
-    let enums: Object[] = buildTableEnums(json, param, globalEnumDefs, emittedGlobalEnums, pkgName);
-    let hasEnums: Bool = (enums.length > 0);
-
-    // ── 6.6 i18n 多语言配置处理 ────────────────────────────────────
-    //      json 配置 i18n 节点时生成"主表 + 翻译表"多语言 API：
-    //        - 翻译表必须也在 tables[] 中（生成期不连库，列定义来自配置），
-    //          其实体文件由 6.2 翻译表分支生成（只生成实体）
-    //        - 查询平铺当前语言文本（缺失回退 defaultLang），详情附全语言 map
-    //        - 写入事务内 upsert 翻译行（依赖翻译表 uk(extKey, langKey) 唯一键）
-    //      i18n 格式：{ table: 'shop0', extKey: 'ext_id', langKey: 'lang',
-    //                   fields: ['name','intro'], defaultLang: 'zh' }
-    let hasI18n: Bool = false;
-    let i18nEntityClass: String = "";
-    let i18nEntityClassFile: String = "";
-    let i18nExtKey: String = "";
-    let i18nLangKey: String = "";
-    let i18nExtGoName: String = "";      // 外键列导出名（UpsertI18n 赋值用）
-    let i18nLangGoName: String = "";     // 语言列导出名（GetI18nMap 取键用）
-    let i18nExtGoType: String = "int64"; // 外键列 Go 类型（辅助方法签名用）
-    let i18nDefaultLang: String = "zh";
-    let i18nFlatFields: FieldDef[] = []; // 平铺进主表返回结构的翻译字段
-    let i18nMapType: String = "";        // 全语言翻译 map 类型名，如 ShopI18nMap
-    let i18nColsStr: String = "";        // UpsertI18n DoUpdates 列清单（"name", "intro"）
-    let i18nCfg: Object = json["i18n"];
-    if (i18nCfg != null) {
-      let i18nTable: String = i18nCfg["table"];
-      let iTableDef: Object = tablesByName[i18nTable];
-      if (iTableDef == null) {
-        printError("错误：i18n 翻译表 '" + i18nTable + "' 不在 .jsontable tables[] 中" +
-                   "（Go 链生成期不连库，翻译表列定义必须进配置），主表 " + tableName + " 的 i18n 配置被跳过");
-      } else {
-        // 用 Param 加工翻译表配置（复用全部字段映射逻辑，得 Shop0 与字段/goType）
-        let iParam: Param = new Param();
-        iParam.setTableData(iTableDef);
-        i18nEntityClass = iParam.entityClass;
-        i18nEntityClassFile = "en_" + i18nTable;
-
-        // extKey / langKey 列存在性校验（写入与查询都依赖这两列）
-        i18nExtKey = i18nCfg["extKey"];
-        i18nLangKey = i18nCfg["langKey"];
-        let extField: FieldDef = null;
-        let langField: FieldDef = null;
-        for (f in iParam.fields) {
-          if (f.name == i18nExtKey) { extField = f; }
-          if (f.name == i18nLangKey) { langField = f; }
-        }
-        if (extField == null || langField == null) {
-          printError("错误：i18n 配置的 extKey('" + i18nExtKey + "') 或 langKey('" + i18nLangKey +
-                     "') 列在翻译表 " + i18nTable + " 中不存在，i18n 配置被跳过");
-        } else {
-          i18nExtGoName = extField.goName;
-          i18nLangGoName = langField.goName;
-          i18nExtGoType = extField.goType;
-
-          // defaultLang：语言回退目标（查询不到当前语言时用它的文本）
-          if (i18nCfg["defaultLang"] != null && i18nCfg["defaultLang"] != "") {
-            i18nDefaultLang = i18nCfg["defaultLang"];
-          }
-          // langFrom：v1 仅支持 body（语言码放请求体），配 header 时提示
-          if (i18nCfg["langFrom"] == "header") {
-            printLog("提示：i18n.langFrom=header 第一版未支持，已按 body.lang 生成（语言码放请求体）");
-          }
-
-          // 平铺字段收集：fields 中每列必须在翻译表中存在，且不与主表列重名
-          //   与主表重名时平铺会覆盖主表数据 → 报错跳过 i18n
-          let fieldCfg: String[] = i18nCfg["fields"];
-          let i18nInvalid: Bool = false;
-          for (fname in fieldCfg) {
-            let found: FieldDef = null;
-            for (f in iParam.fields) {
-              if (f.name == fname) { found = f; break; }
-            }
-            if (found == null) {
-              printError("错误：i18n.fields 中的列 '" + fname + "' 在翻译表 " + i18nTable + " 中不存在，i18n 配置被跳过");
-              i18nInvalid = true;
-              break;
-            }
-            for (mf in param.fields) {
-              if (mf.name == fname) {
-                printError("错误：i18n.fields 中的列 '" + fname + "' 与主表 " + tableName +
-                           " 的列重名，平铺会覆盖主表数据，i18n 配置被跳过");
-                i18nInvalid = true;
-                break;
-              }
-            }
-            if (i18nInvalid) { break; }
-            // 平铺字段：主表实体里的非 DB 列（gorm:"-"），类型/标签取翻译列
-            let ff: FieldDef = new FieldDef();
-            ff.name = found.name;
-            ff.comment = found.comment;
-            ff.goType = found.goType;
-            ff.declType = found.declType;
-            ff.goName = found.goName;
-            ff.gormTag = "gorm:\"-\"";
-            ff.jsonTag = found.jsonTag;
-            i18nFlatFields.append(ff);
-          }
-
-          if (!i18nInvalid) {
-            hasI18n = true;
-            i18nMapType = param.entityClass + "I18nMap";
-            // UpsertI18n 的 DoUpdates 列清单（"name", "intro"）
-            let firstCol: Bool = true;
-            for (iff in i18nFlatFields) {
-              if (firstCol) {
-                firstCol = false;
-              } else {
-                i18nColsStr = i18nColsStr + ", ";
-              }
-              i18nColsStr = i18nColsStr + "\"" + iff.name + "\"";
-            }
-          }
-        }
-      }
-    }
-
-    // ── 6.7 组装传给模板的数据对象 tplData ────────────────────
-    //      模板中的所有 ${变量名} 都从这里取值
-    let tplData: Object = {};
-    // 顶层标识
-    tplData["moduleName"] = moduleName;
-    tplData["modelName"] = modelName;
-    tplData["tableName"] = param.tableName;
-    tplData["tableComment"] = param.tableDesc;
-    tplData["moduleDir"] = moduleDir;     // modules/<moduleDir>（预扫描计算）
-    tplData["pkgName"] = pkgName;         // 包名 = moduleDir 末段
-    tplData["commonPath"] = commonPath;   // 架子 common 包（OK/Fail 响应）
-    tplData["middlewarePath"] = middlewarePath;  // 架子 middleware 包（JWTAuth）
-    // 类名/文件名族（Go 结构体名与文件名均由表名派生）
-    tplData["entityClass"] = param.entityClass;                      // 如 Shop
-    tplData["repoClass"] = param.entityClass + "Repo";               // 如 ShopRepo
-    tplData["serviceClass"] = param.entityClass + "Service";         // 如 ShopService
-    tplData["handlerClass"] = param.entityClass + "Handler";         // 如 ShopHandler
-    tplData["selClass"] = param.entityClass + "SelectParams";        // 如 ShopSelectParams
-    tplData["insClass"] = param.entityClass + "InsertParams";        // 如 ShopInsertParams
-    tplData["updClass"] = param.entityClass + "UpdateParams";        // 如 ShopUpdateParams
-    // 主键信息（SelectById/Update/Delete 与各处定位用）
-    tplData["idGoType"] = param.primaryField.goType;
-    tplData["idGoName"] = param.primaryField.goName;
-    tplData["idColName"] = param.primaryField.name;
-    // 字段族
-    tplData["fields"] = param.fields;          // 实体字段循环
-    tplData["insFields"] = param.insFields;    // InsertParams 字段循环
-    tplData["updFields"] = param.updFields;    // UpdateParams 字段循环
-    tplData["selFields"] = selFields;          // SelectParams 查询字段循环
-    tplData["whereConditions"] = whereConditions;  // getWhereByIn 条件块循环
-    tplData["sortDesc"] = sortInfo.sortDesc;              // 排序描述（注释用）
-    tplData["orderByDef"] = sortInfo.orderByDef;          // 排序字面量串（预留）
-    tplData["defaultOrderField"] = sortInfo.defaultOrderField;  // 默认排序 ref
-    tplData["defaultOrderSql"] = sortInfo.defaultOrderSql;      // 默认排序 SQL 列限定
-    tplData["defaultOrderDir"] = sortInfo.defaultOrderDir;      // 默认排序方向
-    // 联表数据（hasJoin 时 SelectByIn 走 Table+Joins+Select 平铺）
-    tplData["hasJoin"] = hasJoin;
-    tplData["joinClauses"] = joinClauses;      // JOIN 子句循环（LEFT JOIN ... ON ...）
-    tplData["joinSelectStr"] = joinSelectStr;  // SELECT 串（`t`.*, `pro`.`col` AS `pro_col`...）
-    tplData["hasJoinFlat"] = hasJoinFlat;
-    tplData["joinFlatFields"] = joinFlatFields;  // 实体平铺只读字段循环
-    // 唯一性预检（indexes[].unique 自动推导；Insert/Update 各一组前置查重块）
-    tplData["hasUniqCheck"] = hasUniqCheck;
-    tplData["uniqInsChecks"] = uniqInsChecks;
-    tplData["uniqUpdChecks"] = uniqUpdChecks;
-    // 枚举数据
-    tplData["enums"] = enums;              // ${each enum in enums} 循环
-    tplData["hasEnums"] = hasEnums;        // ${if hasEnums} 是否生成枚举文件
-    // i18n 数据
-    tplData["hasI18n"] = hasI18n;
-    tplData["i18nEntityClass"] = i18nEntityClass;
-    tplData["i18nEntityClassFile"] = i18nEntityClassFile;
-    tplData["i18nExtKey"] = i18nExtKey;
-    tplData["i18nLangKey"] = i18nLangKey;
-    tplData["i18nExtGoName"] = i18nExtGoName;
-    tplData["i18nLangGoName"] = i18nLangGoName;
-    tplData["i18nExtGoType"] = i18nExtGoType;
-    tplData["i18nDefaultLang"] = i18nDefaultLang;
-    tplData["i18nFlatFields"] = i18nFlatFields;
-    tplData["i18nMapType"] = i18nMapType;
-    tplData["i18nColsStr"] = i18nColsStr;
-
-    // import 块（文本预拼，模板直接 ${xxxImports} 输出；modules 模式同包免层间 import）
-    tplData["entityImports"] = buildEntityImports(param, i18nFlatFields, joinFlatFields);
-    tplData["inImports"] = buildInImports(param, selFields);
-    let repoExt: String[] = [];
-    repoExt.append("gorm.io/gorm");
-    if (hasI18n) {
-      repoExt.append("gorm.io/gorm/clause");
-    }
-    let repoStd: String[] = [];
-    if (hasUniqCheck) {
-      repoStd.append("errors");
-    }
-    tplData["repoImports"] = buildGoImports(repoStd, repoExt);
-    let svcExt: String[] = [];
-    svcExt.append("gorm.io/gorm");
-    tplData["svcImports"] = buildGoImports([], svcExt);
-    let hdlExt: String[] = [];
-    hdlExt.append("github.com/gin-gonic/gin");
-    hdlExt.append(commonPath);
-    tplData["hdlImports"] = buildGoImports([], hdlExt);
-    // router.go（每模块自包含：gin + JWT 中间件 + common）
-    let routerExt: String[] = [];
-    routerExt.append("github.com/gin-gonic/gin");
-    routerExt.append(middlewarePath);
-    routerExt.append(commonPath);
-    tplData["routerImports"] = buildGoImports([], routerExt);
-
-    // ── 6.8 遍历模板配置，逐个渲染并写入文件 ──────────────────
-    //      每个模板 cfg 的输出路径由 cfg.out 模板 + formatPath 替换得到；
-    //      自定义层模板内部用 ${if !fileExists(outputPath)} 守卫，存在即跳过
-    for (cfg in templates) {
-      let outPath: String = formatPath(cfg.out, {
-        goBasePath: goBasePath,
-        tableName: param.tableName,
-        modelName: modelName,
-        moduleDir: moduleDir
-      });
-      tplData["outputPath"] = outPath;  // 供模板内的 fileExists(outputPath) 守卫使用
-
-      // 核心：调用模板引擎，把 tpl 中的 ${变量名} 替换为实际值
-      let result = renderTpl(cfg.tpl, tplData);
-
-      // 渲染成功 → 写入磁盘（自定义层已存在时模板返回空串，不写）
-      if (result) {
-        let writeOk: Bool = writeFile(outPath, result);
-        if (writeOk) {
-          generatedFileCount = generatedFileCount + 1;
-        }
-        printLog("生成文件: " + outPath);
-      }
-    }
-
-    // ── 6.9 枚举文件（无枚举不生成）───────────────────────────
-    if (hasEnums) {
-      let enumOutPath: String = formatPath("{goBasePath}/modules/{moduleDir}/{tableName}_enum.go", {
-        goBasePath: goBasePath,
-        tableName: param.tableName,
-        moduleDir: moduleDir
-      });
-      let enumResult = renderTpl(enumTplPath, tplData);
-      if (enumResult) {
-        let enumOk: Bool = writeFile(enumOutPath, enumResult);
-        if (enumOk) {
-          generatedFileCount = generatedFileCount + 1;
-        }
-        printLog("生成文件: " + enumOutPath);
-      }
-    }
-
-    // ── 6.10 集中注册提醒（modules 模式不自动注入手写 router/router.go）──
-    regModules.append(moduleDir);
+    // ── 6.1b 分层布局：data/ + modules/admin/ 新规范 ─────────────
+    //      开发期无旧格式包袱，layout 门禁已移除：所有表统一走新布局，
+    //      生成逻辑见 generateLayeredTable。
+    let layeredModuleDir: String = json["moduleDir"];
+    let layeredPkgName: String = json["pkgName"];
+    let layeredCount: Number = generateLayeredTable(json, goBasePath, moduleName,
+        commonPath, middlewarePath, layeredModuleDir, layeredPkgName,
+        globalEnumDefs, emittedGlobalEnums, tablesByName);
+    generatedFileCount = generatedFileCount + layeredCount;
   }  // end for (json in genTables)
 
-  // ── 7. 集中注册清单 ────────────────────────────────────────────────
-  //      每个模块自带 router.go（RegisterRoutes，内含 Handler→Service→Repo
-  //      装配与 JWT 路由组）；集中注册在 {goBasePath}/router/router.go
-  //      （手写文件）加一行 <pkg>.RegisterRoutes(api)，生成器不自动注入
-  if (regModules.length > 0) {
-    printLog("── 请在 router/router.go 集中注册以下模块（<pkg>.RegisterRoutes(api)）──");
-    for (m in regModules) {
-      printLog("  modules/" + m);
-    }
-  }
+  // ── 7. 生成模块路由集中注册 ────────────────────────────────────────
+  //      生成器独占 {goBasePath}/router/routes_.go：按 modules/{admin,app}
+  //      树扫描 *_router_.go 生成覆盖件并整体重写（幂等），生成模块无需再
+  //      手动到 router.go 注册（详见 regenRouteRegistration）
+  let regenCount: Number = regenRouteRegistration(goBasePath);
 
   // ── 8. 汇总 ────────────────────────────────────────────────────────
   if (missingTableCount > 0) {
@@ -937,6 +364,109 @@ export function generateApiMain(params: Object): Number {
   }
   printLog("--- 代码生成结束，共生成 " + generatedFileCount + " 个文件 ---");
   return generatedFileCount;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 生成模块路由集中注册（routes_.go 独占重写；命名遵循 *_ 尾下划线约定，
+// 与模块内 *_handler_.go / *_service_.go / *_router_.go 等生成覆盖件一致）
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// @brief 重写 {goBasePath}/router/routes_.go（生成器独占文件，整体重写，幂等）
+/// @param goBasePath Go 项目根目录
+/// @return 注册的生成模块数量；写入失败/找不到 go.mod 返回 -1
+/// 扫描 modules/admin 与 modules/app 下全部 *_router_.go 生成覆盖件：
+///   - admin 侧注册到 api 组（<pkg>.RegisterRoutes(api)），包名 = 目录末段；
+///   - app 侧注册到 appGroup 组，别名 = "app" + 包名帕斯卡（与 admin 侧包名
+///     天然不撞，admin/app 同名包在同一 import 块靠别名区分，如 appShop）；
+///   - 手写模块（auth/usermgr/upload/app 等）与 RegisterCustomRoutes 钩子
+///     不在本文件，仍由 router/router.go 手动注册。
+/// 每次生成按目录树整体重算：新增模块自动进入、删除模块重生成后自动移除，
+/// 无需人工维护；import 行按扫描顺序（listFilesDeep 已按路径排序）天然有序。
+export function regenRouteRegistration(goBasePath: String): Number {
+  let root: String = goBasePath.replace("\\", "/");
+  while (root.endsWith("/") && root.length > 1) {
+    root = root.substring(0, root.length - 1);
+  }
+
+  // Go module 名（go.mod 的 module 行）作为 import 前缀，如 shop_api
+  let modName: String = readGoModuleName(root);
+  if (modName == "") {
+    printError("routes_.go 跳过：go.mod 不存在或缺 module 行: " + root + "/go.mod");
+    return -1;
+  }
+
+  // 两侧扫描：dir → 相对 goBasePath 的模块根；group → 注册目标路由组参数
+  let sides: Object[] = [
+    { dir: "modules/admin", group: "api" },
+    { dir: "modules/app", group: "appGroup", appSide: true }
+  ];
+  let imports: String[] = [];
+  let calls: String[] = [];
+  let usedAlias: Object = {};
+  let regCount: Number = 0;
+  for (s in sides) {
+    let scanDir: String = root + "/" + s["dir"];
+    if (!fileExists(scanDir)) {
+      continue;
+    }
+    // listFilesDeep 结果已按路径排序，拼接后 import 块有序，gofmt 稳定
+    let files: String[] = listFilesDeep(scanDir, "_router_.go");
+    for (f in files) {
+      // f 形如 user/user_ext/user_ext_router_.go → rel 取所在目录
+      let rel: String = relDirUnder(scanDir + "/" + f, scanDir);
+      if (rel == "") {
+        continue;
+      }
+      // 包名 = 目录末段（AutoCode模板规范约定）
+      let sep: Number = rel.lastIndexOf("/");
+      let pkg: String = sep < 0 ? rel : rel.substring(sep + 1);
+      let alias: String = pkg;
+      if (s["appSide"] == true) {
+        alias = "app" + snakeToPascal(pkg);
+      }
+      // 同名兜底去重（规范下不会发生，防目录异常导致重复别名编译错误）
+      if (usedAlias[alias] == true) {
+        let n: Number = 2;
+        while (usedAlias[alias + n] == true) {
+          n = n + 1;
+        }
+        alias = alias + n;
+      }
+      usedAlias[alias] = true;
+      imports.append(alias + " \"" + modName + "/" + s["dir"] + "/" + rel + "\"");
+      // .ac 字符串不支持 \t 转义，缩进用 tabChar()（param_go.ac 提供）
+      calls.append(tabChar() + alias + ".RegisterRoutes(" + s["group"] + ")");
+      regCount = regCount + 1;
+    }
+  }
+
+  // 组装文件：生成头第一行 + 空行 + 包注释紧贴 package（对齐生成件风格）
+  let nl: String = "\n";
+  let content: String = "// 此代码为AutoCode编译器生成，请勿手动修改" + nl + nl;
+  content = content + "// Package router 生成模块集中注册件（AutoCode 独占：每次生成按 modules 树整体重写）" + nl;
+  content = content + "// - modules/{admin,app}/**/*_router_.go（生成覆盖件）在此自动注册 RegisterRoutes；" + nl;
+  content = content + "// - 手写模块与 RegisterCustomRoutes 钩子仍在 router.go 手动注册。" + nl;
+  content = content + "package router" + nl + nl;
+  content = content + "import (" + nl;
+  // gin 单独一组（对齐 router.go 既有风格：三方库与项目模块之间空行分组）
+  content = content + tabChar() + "\"github.com/gin-gonic/gin\"" + nl + nl;
+  for (imp in imports) {
+    content = content + tabChar() + imp + nl;
+  }
+  content = content + ")" + nl + nl;
+  content = content + "// registerGeneratedRoutes 注册全部 AutoCode 生成模块的路由（router.Setup 调用一次）" + nl;
+  content = content + "func registerGeneratedRoutes(api *gin.RouterGroup, appGroup *gin.RouterGroup) {" + nl;
+  for (c in calls) {
+    content = content + c + nl;
+  }
+  content = content + "}" + nl;
+
+  let outPath: String = root + "/router/routes_.go";
+  if (!writeFile(outPath, content)) {
+    return -1;
+  }
+  printLog("生成模块路由集中注册已重写: " + outPath + "（" + regCount + " 个生成模块）");
+  return regCount;
 }
 
 /// @brief 从启用 i18n 的主表按惯例派生翻译表定义（0 表）
@@ -1056,84 +586,6 @@ export function readGoModuleName(goBasePath: String): String {
   return "";
 }
 
-/// @brief 从模板配置数组中取出实体模板路径（翻译表分支复用 entity.tpl）
-/// @param templates 模板配置数组
-/// @return 实体模板路径；找不到返回空串（调用方按空跳过渲染）
-export function entityTplPath(templates: TemplateConfig[]): String {
-  for (cfg in templates) {
-    if (cfg.tpl.indexOf("entity.tpl") >= 0) {
-      return cfg.tpl;
-    }
-  }
-  return "";
-}
-
-/// @brief 构建主表实体文件的 import 块（含 i18n/联表平铺字段的类型探测）
-/// @param param 已加工的表参数
-/// @param flatFields i18n 平铺字段（可能引入 time/datatypes 类型）
-/// @param joinFlat 联表平铺字段（可能引入 time/datatypes 类型）
-/// @return 完整 import 块文本（无导入时为空串）
-export function buildEntityImports(param: Param, flatFields: FieldDef[], joinFlat: FieldDef[]): String {
-  let needTime: Bool = param.hasTimeField;
-  let needDatatypes: Bool = param.hasJsonField;
-  for (ff in flatFields) {
-    if (ff.goType == "time.Time") { needTime = true; }
-    if (ff.goType == "datatypes.JSON") { needDatatypes = true; }
-  }
-  for (ff in joinFlat) {
-    if (ff.goType == "time.Time") { needTime = true; }
-    if (ff.goType == "datatypes.JSON") { needDatatypes = true; }
-  }
-  let std: String[] = [];
-  let ext: String[] = [];
-  if (needTime) { std.append("time"); }
-  if (needDatatypes) { ext.append("gorm.io/datatypes"); }
-  return buildGoImports(std, ext);
-}
-
-/// @brief 构建请求结构文件（{model}_in.go）的 import 块
-/// @param param 已加工的表参数（insFields/updFields 扫描）
-/// @param selFields 查询字段（声明类型可能为 *time.Time）
-/// @return 完整 import 块文本（无导入时为空串）
-export function buildInImports(param: Param, selFields: SelFieldDef[]): String {
-  let needTime: Bool = false;
-  let needDatatypes: Bool = false;
-  for (f in param.insFields) {
-    if (f.declType.includes("time.Time")) { needTime = true; }
-    if (f.declType.includes("datatypes.JSON")) { needDatatypes = true; }
-  }
-  for (f in param.updFields) {
-    if (f.declType.includes("time.Time")) { needTime = true; }
-    if (f.declType.includes("datatypes.JSON")) { needDatatypes = true; }
-  }
-  for (sf in selFields) {
-    if (sf.declType.includes("time.Time")) { needTime = true; }
-  }
-  let std: String[] = [];
-  let ext: String[] = [];
-  if (needTime) { std.append("time"); }
-  if (needDatatypes) { ext.append("gorm.io/datatypes"); }
-  return buildGoImports(std, ext);
-}
-
-/// @brief 构建翻译实体文件（en.tpl）的模板数据（主表实体直接用 tplData，无需本函数）
-/// @param param 已加工的翻译表参数
-/// @return tplData：{entityClass, tableName, tableComment, fields, entityImports, hasI18n}
-export function buildEntityData(param: Param): Object {
-  let d: Object = {};
-  d["entityClass"] = param.entityClass;
-  d["tableName"] = param.tableName;
-  d["tableComment"] = param.tableDesc;
-  d["fields"] = param.fields;
-  d["hasI18n"] = false;  // 翻译实体自身无 i18n 块
-  let std: String[] = [];
-  let ext: String[] = [];
-  if (param.hasTimeField) { std.append("time"); }
-  if (param.hasJsonField) { ext.append("gorm.io/datatypes"); }
-  d["entityImports"] = buildGoImports(std, ext);
-  return d;
-}
-
 /// @brief 构建表枚举数据：globalEnumCols 全局枚举列 + 表级 enums 节点
 /// @param table .jsontable 表配置
 /// @param param 已加工的表参数（列注释回退用）
@@ -1247,10 +699,10 @@ export function buildEnumEntry(enumName: String, columnName: String, comment: St
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// split 布局（data/ + modules/admin/，生成件以 `_` 结尾）
+// 分层布局（data/ + modules/admin/，生成件以 `_` 结尾）
 // ----------------------------------------------------------------------------
-// 由 .jsontable 的 layout="split" 触发；与旧 modules/<mod>/ 单文件布局并存，
-// 未配置 layout 的表仍走旧流程（避免误覆盖未迁移模块）。
+// 由 .jsontable 触发的模块级新布局（data/ + modules/admin/），
+// 所有 .jsontable 统一走此流程（开发期无旧格式，layout 门禁已移除）。
 // 为保证生成结果与手写黄金文件逐字节一致，结构体/常量/map 的列对齐在这里
 // 用 padTo 预渲染成行数组，模板只做逐行输出（不依赖外部 gofmt）。
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1286,7 +738,7 @@ export function buildEnFieldLines(fields: FieldDef[]): String[] {
 
 /// @brief InSel 结构体字段行（嵌入 BasePage + 全指针筛选 + Sort，三列对齐）
 export function buildSelFieldLines(selFields: SelFieldDef[]): String[] {
-  let baseName: String = "common.BasePage";
+  let baseName: String = "httpx.BasePage";
   let maxName: Number = baseName.length;
   let maxType: Number = 0;
   let maxTag: Number = 0;
@@ -1353,27 +805,447 @@ export function buildColLines(fields: FieldDef[]): String[] {
   return lines;
 }
 
-/// @brief 排序白名单 map 行（键列对齐）
-export function buildSortEntryLines(cols: String[], dirs: String[]): String[] {
-  let maxKey: Number = 0;
-  for (let i = 0; i < cols.length; i = i + 1) {
-    let k: String = "Col" + snakeToPascal(cols[i]) + ":";
-    if (k.length > maxKey) { maxKey = k.length; }
-  }
-  let lines: String[] = [];
-  for (let i = 0; i < cols.length; i = i + 1) {
-    let k: String = "Col" + snakeToPascal(cols[i]) + ":";
-    lines.append(tabChar() + padTo(k, maxKey) + " \"" + dirs[i] + "\",");
-  }
-  return lines;
+/// @brief 取联表条目的输出列数组（Any → Object[]，供 for-in 类型检查）
+export function joinColsOf(je: Object): Object[] {
+  return je["cols"];
 }
 
-/// @brief 生成一张 split 布局的表（data/ + modules/admin/）
+/// @brief 分层布局联表数据构建（.jsontable 表节点新键 joinTables）
+/// ----------------------------------------------------------------------------
+/// 配置形态（数组；未配置 = 无联表，生成物与单表版完全一致）：
+///   "joinTables": [
+///     { "table": "user_ext",           // 被联表名（∈ 本项目已扫描 .jsontable）
+///       "type": "LEFT",                // LEFT / INNER，缺省 LEFT
+///       "on": ["id", "user_id"],       // [主表列, 联表列]，表名由规格自带不重复写
+///       "cols": [ { "col": "account" } ] } ]  // 联表输出列（∈ 联表列；只管列表输出）
+/// 查询能力与主表列同源：查询视图 selColsEq/selColsLike 里引用输出别名
+/// （如 "user_ext_account"）即生成对应筛选字段；cols[].filter 为旧写法仍兼容
+/// 派生规则（与 shop_api 手写黄金样板逐字对齐）：
+///   - 常量：col<表><列> = 真实列名；view<表><列> = 输出别名（统一 = 表名_列名）
+///   - EnXxxView：匿名嵌入主表实体 + 联表列平铺（值类型，gorm/json tag = 输出别名）
+///   - querySpec：Table + Joins + Order（排序白名单 = selColsSort）
+///   - 入参字段：查询视图（selColsEq/Like）命中的输出别名 → InSelXxx 指针字段
+///   - 条件行：querySpec.Where*（裸列名/输出别名由 QuerySpec.qualify 解析表限定）
+/// @return { hasJoin, joinEntries, viewFields, joinConstLines, enViewFieldLines,
+///           joinSpecBlock, joinSelFields, joinWhereLines }
+export function buildLayeredJoinData(json: Object, param: Param, tablesByName: Object,
+    sortCols: String[], sortDirs: String[]): Object {
+  let result: Object = {
+    hasJoin: false, joinEntries: [], viewFields: [], joinConstLines: [],
+    enViewFieldLines: [], joinSpecBlock: "", joinSelFields: [], joinWhereLines: [],
+    aliasMap: {}
+  };
+  let joinCfgs: Object[] = json["joinTables"];
+  if (joinCfgs == null) {
+    joinCfgs = [];
+  }
+  let joinEntries: Object[] = [];
+  let usedAliasGo: Object = {};  // 输出字段 Go 名去重（同结构体字段/SQL 别名禁重复）
+  for (jc in joinCfgs) {
+    let tbl: String = jc["table"];
+    if (tbl == null || tbl == "") {
+      printError("错误：表 '" + param.tableName + "' 联表缺少 table，该条目已跳过");
+      continue;
+    }
+    if (tbl == param.tableName) {
+      printError("错误：表 '" + param.tableName + "' 联表目标不能是本表，该条目已跳过");
+      continue;
+    }
+    let target: Object = tablesByName[tbl];
+    if (target == null) {
+      printError("错误：表 '" + param.tableName + "' 联表目标 '" + tbl +
+                 "' 不在本项目已扫描的 .jsontable 中，该条目已跳过");
+      continue;
+    }
+    let joinType: String = jc["type"];
+    if (joinType == null || joinType == "") { joinType = "LEFT"; }
+    if (joinType != "LEFT" && joinType != "INNER") {
+      printError("错误：表 '" + param.tableName + "' 联表 '" + tbl + "' 的 type '" + joinType +
+                 "' 仅支持 LEFT/INNER，该条目已跳过");
+      continue;
+    }
+    let onArr: Object = jc["on"];
+    if (onArr == null || onArr.length != 2) {
+      printError("错误：表 '" + param.tableName + "' 联表 '" + tbl +
+                 "' 的 on 须为 [主表列, 联表列]，该条目已跳过");
+      continue;
+    }
+    let on0: String = onArr[0];
+    let on1: String = onArr[1];
+    let on0Field: FieldDef = null;
+    for (f in param.fields) {
+      if (f.name == on0) { on0Field = f; }
+    }
+    if (on0Field == null) {
+      printError("错误：表 '" + param.tableName + "' 联表 '" + tbl + "' 的 on[0]('" +
+                 (on0 == null ? "" : on0) + "') 不在主表列中，该条目已跳过");
+      continue;
+    }
+    let tcols: Object[] = target["columns"];
+    let on1Col: Object = null;
+    if (tcols != null) {
+      for (c in tcols) {
+        if (c["name"] == on1) { on1Col = c; }
+      }
+    }
+    if (on1Col == null) {
+      printError("错误：表 '" + param.tableName + "' 联表 '" + tbl + "' 的 on[1]('" +
+                 (on1 == null ? "" : on1) + "') 不在联表列中，该条目已跳过");
+      continue;
+    }
+    // 输出列加工（filter 生效值：""=只输出 / like / eq；like 仅字符串列）
+    let colEntries: Object[] = [];
+    let colSeen: Object = {};
+    let cfgCols: Object[] = jc["cols"];
+    if (cfgCols != null) {
+      for (cc in cfgCols) {
+        let colName: String = cc["col"];
+        if (colName == null || colName == "") {
+          printError("错误：表 '" + param.tableName + "' 联表 '" + tbl +
+                     "' 存在缺少 col 的输出列，已跳过该列");
+          continue;
+        }
+        if (colSeen[colName] != null) { continue; }
+        colSeen[colName] = true;
+        let tcol: Object = null;
+        for (c in tcols) {
+          if (c["name"] == colName) { tcol = c; }
+        }
+        if (tcol == null) {
+          printError("错误：表 '" + param.tableName + "' 联表 '" + tbl + "' 的输出列 '" +
+                     colName + "' 不在联表列中，已跳过该列");
+          continue;
+        }
+        let goType: String = mapTypeToGo(tcol["mysqlType"], tcol["unsigned"] == true);
+        if (goType == "datatypes.JSON") {
+          printLog("提示：联表 '" + tbl + "' 输出列 '" + colName +
+                   "' 为 JSON 类型，不支持联表输出，已跳过该列");
+          continue;
+        }
+        let filter: String = cc["filter"];
+        if (filter == null) { filter = ""; }
+        if (filter != "" && filter != "like" && filter != "eq") {
+          printLog("提示：联表 '" + tbl + "' 输出列 '" + colName + "' 的 filter '" + filter +
+                   "' 仅支持 like/eq，已按只输出处理");
+          filter = "";
+        }
+        if (filter == "like" && goType != "string") {
+          printLog("提示：联表输出列 '" + tbl + "." + colName + "' 非字符串，filter=like 已按 eq 生成");
+          filter = "eq";
+        }
+        let alias: String = tbl + "_" + colName;
+        let aliasGo: String = snakeToPascal(alias);
+        let clash: Bool = false;
+        for (f in param.fields) {
+          if (f.goName == aliasGo) { clash = true; }
+        }
+        if (usedAliasGo[aliasGo] != null) { clash = true; }
+        if (clash) {
+          printError("错误：表 '" + param.tableName + "' 联表输出字段 '" + aliasGo +
+                     "' 与主表列名/已有联表字段冲突，已跳过该列");
+          continue;
+        }
+        usedAliasGo[aliasGo] = true;
+        colEntries.append({
+          col: colName,
+          comment: sanitizeGoComment(tcol["comment"]),
+          goType: goType,
+          filter: filter,
+          alias: alias,
+          aliasGo: aliasGo,
+          colConst: "col" + snakeToPascal(tbl) + snakeToPascal(colName),
+          viewConst: "view" + aliasGo
+        });
+      }
+    }
+    joinEntries.append({
+      table: tbl,
+      joinType: joinType,
+      on0: on0,
+      on1: on1,
+      on0Const: "Col" + on0Field.goName,
+      on1Const: "col" + snakeToPascal(tbl) + snakeToPascal(on1),
+      cols: colEntries
+    });
+  }
+  // ── 联表列名常量（colXxx 真实列名 + viewXxx 输出别名；去重，ON/输出同列只一条）
+  let constDefs: Object[] = [];
+  for (je in joinEntries) {
+    let onExists: Bool = false;
+    for (cd in constDefs) {
+      if (cd["name"] == je["on1Const"]) { onExists = true; }
+    }
+    if (!onExists) {
+      constDefs.append({ name: je["on1Const"], value: je["on1"],
+        comment: je["table"] + "." + je["on1"] + "（ON 条件用）" });
+    }
+    for (ce in joinColsOf(je)) {
+      let isOn: Bool = (ce["col"] == je["on1"]);
+      let cmt: String = je["table"] + "." + ce["col"] + (isOn ? "（ON 条件用）" : "（真实列名）");
+      let colExists: Bool = false;
+      for (cd in constDefs) {
+        if (cd["name"] == ce["colConst"]) { colExists = true; }
+      }
+      if (!colExists) {
+        constDefs.append({ name: ce["colConst"], value: ce["col"], comment: cmt });
+      }
+    }
+  }
+  for (je in joinEntries) {
+    for (ce in joinColsOf(je)) {
+      let viewExists: Bool = false;
+      for (cd in constDefs) {
+        if (cd["name"] == ce["viewConst"]) { viewExists = true; }
+      }
+      if (!viewExists) {
+        constDefs.append({ name: ce["viewConst"], value: ce["alias"],
+          comment: "输出别名 = 前端统一字段名（输出/入参/排序同名）" });
+      }
+    }
+  }
+  let tb: String = tabChar();
+  let maxName: Number = 0;
+  let maxValue: Number = 0;
+  for (cd in constDefs) {
+    if (cd["name"].length > maxName) { maxName = cd["name"].length; }
+    let vl: Number = ("\"" + cd["value"] + "\"").length;
+    if (vl > maxValue) { maxValue = vl; }
+  }
+  let joinConstLines: String[] = [];
+  for (cd in constDefs) {
+    let v: String = "\"" + cd["value"] + "\"";
+    joinConstLines.append(tb + padTo(cd["name"], maxName) + " = " + padTo(v, maxValue)
+      + " // " + cd["comment"]);
+  }
+
+  // ── EnXxxView 字段行（嵌入行 + 联表列平铺，gorm/json tag = 输出别名）──
+  let viewFields: Object[] = [];
+  for (je in joinEntries) {
+    for (ce in joinColsOf(je)) {
+      viewFields.append({ goName: ce["aliasGo"], goType: ce["goType"], alias: ce["alias"],
+        comment: ce["comment"] + "（" + je["table"] + "." + ce["col"] + "）" });
+    }
+  }
+  let maxVn: Number = 0;
+  let maxVt: Number = 0;
+  let maxVtag: Number = 0;
+  for (vf in viewFields) {
+    if (vf["goName"].length > maxVn) { maxVn = vf["goName"].length; }
+    if (vf["goType"].length > maxVt) { maxVt = vf["goType"].length; }
+    let tl: Number = ("`gorm:\"column:" + vf["alias"] + "\" json:\"" + vf["alias"] + "\"`").length;
+    if (tl > maxVtag) { maxVtag = tl; }
+  }
+  let enViewFieldLines: String[] = [];
+  enViewFieldLines.append(tb + param.enClass);
+  for (vf in viewFields) {
+    let tag: String = "`gorm:\"column:" + vf["alias"] + "\" json:\"" + vf["alias"] + "\"`";
+    enViewFieldLines.append(tb + padTo(vf["goName"], maxVn) + " " + padTo(vf["goType"], maxVt)
+      + " " + padTo(tag, maxVtag) + " // " + vf["comment"]);
+  }
+
+  // ── 查询字段来源（优先级：查询视图 selColsEq/Like 的输出别名 > cols[].filter 旧写法）──
+  // aliasMap：输出别名 → true（generateLayeredTable 据此把别名 ref 从主查询字段剥离）
+  let aliasMap: Object = {};
+  for (je in joinEntries) {
+    for (ce in joinColsOf(je)) {
+      aliasMap[ce["alias"]] = true;
+    }
+  }
+  // filterOf：输出别名 → like/eq（cols[].filter 先落底，查询视图按 eq 优先合并）
+  let filterOf: Object = {};
+  for (je in joinEntries) {
+    for (ce in joinColsOf(je)) {
+      if (ce["filter"] != "") { filterOf[ce["alias"]] = ce["filter"]; }
+    }
+  }
+  let eqCfgs: Object[] = json["selColsEq"];
+  if (eqCfgs != null) {
+    for (qc in eqCfgs) {
+      let ref: String = qc["ref"];
+      if (ref != null && ref != "" && aliasMap[ref] != null) { filterOf[ref] = "eq"; }
+    }
+  }
+  let likeCfgs: Object[] = json["selColsLike"];
+  if (likeCfgs != null) {
+    for (qc in likeCfgs) {
+      let ref: String = qc["ref"];
+      if (ref != null && ref != "" && aliasMap[ref] != null && filterOf[ref] == null) {
+        filterOf[ref] = "like";
+      }
+    }
+  }
+  let gapCfgs: Object[] = json["selColsGap"];
+  if (gapCfgs != null) {
+    for (qc in gapCfgs) {
+      let ref: String = qc["ref"];
+      if (ref != null && ref != "" && aliasMap[ref] != null) {
+        printLog("提示：联表输出列 '" + ref + "' 暂不支持范围查询，已跳过");
+      }
+    }
+  }
+
+  // ── 入参字段（查询视图/cols[].filter 命中的输出列 → InSel 指针字段，json = 输出别名）──
+  let joinSelFields: SelFieldDef[] = [];
+  let joinWhereLines: String[] = [];
+  for (je in joinEntries) {
+    for (ce in joinColsOf(je)) {
+      let flt: String = filterOf[ce["alias"]];
+      if (flt == null || flt == "") { continue; }
+      let sf: SelFieldDef = new SelFieldDef();
+      sf.name = ce["alias"];
+      sf.baseName = ce["alias"];
+      sf.comment = ce["comment"] + (flt == "like" ? "（模糊，联表 " : "（联表 ")
+        + je["table"] + "）";
+      sf.goType = ce["goType"];
+      sf.goName = ce["aliasGo"];
+      sf.kind = zeroKindOfGoType(ce["goType"]);
+      sf.declType = "*" + ce["goType"];
+      sf.isLike = (flt == "like");
+      joinSelFields.append(sf);
+      let val: String = "sel." + ce["aliasGo"];
+      if (ce["goType"] != "time.Time") { val = "*" + val; }
+      let fn: String = flt == "like" ? "querySpec.WhereLike" : "querySpec.WhereEq";
+      joinWhereLines.append(tb + "if sel." + ce["aliasGo"] + " != nil {\n"
+        + tb + tb + "db = " + fn + "(db, " + ce["viewConst"] + ", " + val + ")\n"
+        + tb + "}");
+    }
+  }
+
+  // ── querySpec 块（Table + Joins + Order；键对齐与 gofmt 一致）────────
+  //      Order 的键用生成好的列常量（ColXxx / viewXxx），列名拼错编译期就报错；
+  //      解析顺序与 QuerySpec.qualify 一致：联表输出列优先，其次主表列。
+  let mainConstByRef: Object = {};
+  for (f in param.fields) {
+    mainConstByRef[f.name] = "Col" + f.goName;
+  }
+  let joinConstByRef: Object = {};
+  for (je in joinEntries) {
+    for (ce in joinColsOf(je)) {
+      // 联表排序只认输出别名（前端统一字段名）；裸列名不作为 Order 键
+      if (joinConstByRef[ce["alias"]] == null) {
+        joinConstByRef[ce["alias"]] = ce["viewConst"];
+      }
+    }
+  }
+  let orderKeyExprs: String[] = [];
+  let orderDirs: String[] = [];
+  for (let i = 0; i < sortCols.length; i = i + 1) {
+    let ref: String = sortCols[i];
+    let keyExpr: String = joinConstByRef[ref];
+    if (keyExpr == null) {
+      keyExpr = mainConstByRef[ref];
+    }
+    if (keyExpr == null) {
+      printError("错误：表 '" + param.tableName + "' 的 selColsSort 字段 '" + ref +
+                 "' 不是主表列或联表输出别名，已跳过该排序项");
+      continue;
+    }
+    orderKeyExprs.append(keyExpr);
+    orderDirs.append(sortDirs[i]);
+  }
+  let orderEntryLines: String[] = [];
+  let maxKey: Number = 0;
+  for (let i = 0; i < orderKeyExprs.length; i = i + 1) {
+    let k: String = orderKeyExprs[i] + ":";
+    if (k.length > maxKey) { maxKey = k.length; }
+  }
+  for (let i = 0; i < orderKeyExprs.length; i = i + 1) {
+    let k: String = orderKeyExprs[i] + ":";
+    orderEntryLines.append(tb + tb + padTo(k, maxKey) + " \"" + orderDirs[i] + "\",");
+  }
+  let spec: String = "// querySpec 列表查询规格（" + param.tableName
+    + ".jsontable 生成）：主表 + 排序白名单（有联表时附带 JOIN）\n";
+  for (je in joinEntries) {
+    let colList: String = "";
+    for (ce in joinColsOf(je)) {
+      colList = colList + (colList == "" ? "" : "、") + ce["col"];
+    }
+    if (colList == "") { colList = "无输出列"; }
+    spec = spec + "// 联表 " + je["table"] + "：输出 " + colList + "；"
+      + je["joinType"] + " JOIN 保证 " + je["table"] + " 无行时主表仍返回\n";
+  }
+  spec = spec + "var querySpec = cdb.QuerySpec{\n";
+  spec = spec + tb + "Table: \"" + param.tableName + "\",\n";
+  if (joinEntries.length > 0) {
+    spec = spec + tb + "Joins: []cdb.Join{\n";
+    for (je in joinEntries) {
+      // Join 类型常量名：JoinLeft / JoinInner（配置大写 → Go 常量驼峰）
+      let joinConst: String = je["joinType"] == "LEFT" ? "cdb.JoinLeft" : "cdb.JoinInner";
+      let colsInline: String = "";
+      for (ce in joinColsOf(je)) {
+        colsInline = colsInline + (colsInline == "" ? "" : ", ")
+          + "{Col: " + ce["colConst"] + ", Alias: " + ce["viewConst"] + "}";
+      }
+      spec = spec + tb + tb + "{\n";
+      spec = spec + tb + tb + tb + "Table: \"" + je["table"] + "\",\n";
+      spec = spec + tb + tb + tb + "Type:  " + joinConst + ",\n";
+      spec = spec + tb + tb + tb + "On:    [2]string{" + je["on0Const"] + ", " + je["on1Const"] + "},\n";
+      spec = spec + tb + tb + tb + "Cols:  []cdb.OutCol{" + colsInline + "},\n";
+      spec = spec + tb + tb + "},\n";
+    }
+    spec = spec + tb + "},\n";
+  }
+  if (orderEntryLines.length == 0) {
+    spec = spec + tb + "Order: map[string]string{},\n";
+  } else {
+    spec = spec + tb + "Order: map[string]string{\n";
+    for (ol in orderEntryLines) {
+      spec = spec + ol + "\n";
+    }
+    spec = spec + tb + "},\n";
+  }
+  spec = spec + "}";
+
+  result["hasJoin"] = (joinEntries.length > 0);
+  result["joinEntries"] = joinEntries;
+  result["viewFields"] = viewFields;
+  result["joinConstLines"] = joinConstLines;
+  result["enViewFieldLines"] = enViewFieldLines;
+  result["joinSpecBlock"] = spec;
+  result["joinSelFields"] = joinSelFields;
+  result["joinWhereLines"] = joinWhereLines;
+  result["aliasMap"] = aliasMap;
+  return result;
+}
+
+/// @brief 复制表配置并剥离查询视图里的联表输出别名 ref
+/// （别名由 buildLayeredJoinData 的 joinSelFields 承接，避免主查询字段
+///   生成端把它当本表列解析而报"不存在"警告）
+export function stripJoinQueryRefs(json: Object, aliasMap: Object): Object {
+  if (aliasMap == null) { aliasMap = {}; }
+  let copy: Object = {};
+  for (k in json) {
+    copy[k] = json[k];
+  }
+  copy["selColsEq"] = filterJoinRefs(json["selColsEq"], aliasMap);
+  copy["selColsLike"] = filterJoinRefs(json["selColsLike"], aliasMap);
+  copy["selColsGap"] = filterJoinRefs(json["selColsGap"], aliasMap);
+  return copy;
+}
+
+/// @brief 过滤查询列数组：剔除 ref 为联表输出别名的条目
+export function filterJoinRefs(arr: Object, aliasMap: Object): Object[] {
+  let out: Object[] = [];
+  if (arr != null) {
+    for (qc in arr) {
+      let ref: String = qc["ref"];
+      if (ref != null && aliasMap[ref] != null) { continue; }
+      out.append(qc);
+    }
+  }
+  return out;
+}
+
+/// @brief 生成一张分层布局的表（data/ + modules/admin/）
 /// @return 实际写入文件数
-export function generateSplitTable(json: Object, goBasePath: String, moduleName: String,
+export function generateLayeredTable(json: Object, goBasePath: String, moduleName: String,
     commonPath: String, middlewarePath: String, moduleDir: String, pkgName: String,
-    globalEnumDefs: Object, emitted: Object): Number {
+    globalEnumDefs: Object, emitted: Object, tablesByName: Object): Number {
   let tplDir: String = "../../crud_gin/template";
+  let dbPath: String = commonPath + "/db";
+  let coinPath: String = commonPath + "/coin";
+  let httpxPath: String = commonPath + "/httpx";
+  let redisxPath: String = commonPath + "/redisx";
   let tableName: String = json["tableName"];
   let param: Param = new Param();
   param.setTableData(json);
@@ -1389,13 +1261,7 @@ export function generateSplitTable(json: Object, goBasePath: String, moduleName:
   let idName: String = param.primaryField.goName;
   let idCol: String = param.primaryField.name;
 
-  // ── 查询场景：过滤字段全指针 + common.Where* 条件 ───────────────
-  let qd: QueryData = new QueryData();
-  qd.pointerMode = true;
-  let selFields: SelFieldDef[] = qd.buildSelFields(json, param, [], false);
-  let whereConds: String[] = qd.buildWhereConditionsPointer(selFields);
-
-  // ── 排序白名单：selColsSort 顺序（跳过联表 ref）──────────────────
+  // ── 排序白名单：selColsSort 顺序（所有表统一进 querySpec.Order）────
   let sortCols: String[] = [];
   let sortDirs: String[] = [];
   let sortPairs: Object[] = json["selColsSort"];
@@ -1409,18 +1275,44 @@ export function generateSplitTable(json: Object, goBasePath: String, moduleName:
       sortDirs.append(dir);
     }
   }
-  let sortWhitelistName: String = snakeToCamel(tableName) + "SortWhitelist";
-  let sortEntryLines: String[] = buildSortEntryLines(sortCols, sortDirs);
+
+  // ── 联表（joinTables 新格式）：视图/常量/querySpec/入参字段/条件行 ──
+  //      所有表统一走 querySpec 流水线（无联表时 Joins 为空），排序白名单
+  //      一律进 querySpec.Order；SelectByIn 返回 EnXxxView（有联表）或 EnXxx。
+  let jd: Object = buildLayeredJoinData(json, param, tablesByName, sortCols, sortDirs);
+  let hasJoin: Bool = jd["hasJoin"];
+
+  // ── 查询场景：过滤字段全指针 + 条件行（联表模式条件走 querySpec.Where*，
+  //      主表裸列名由 QuerySpec 自动限定）────────────────────────────
+  let qd: QueryData = new QueryData();
+  qd.pointerMode = true;
+  let aliasMap: Object = jd["aliasMap"];
+  let mainSelFields: SelFieldDef[] = qd.buildSelFields(stripJoinQueryRefs(json, aliasMap), param, [], false);
+  let selFields: SelFieldDef[] = mainSelFields;
+  let joinSelFields: SelFieldDef[] = jd["joinSelFields"];
+  for (jsf in joinSelFields) {
+    selFields.append(jsf);
+  }
+  let whereConds: String[] = [];
+  // 条件统一走 querySpec.Where*：裸列名由 QuerySpec.qualify 自动限定表名
+  let rawConds: String[] = qd.buildWhereConditionsPointer(mainSelFields);
+  for (c in rawConds) {
+    whereConds.append(c.replace("cdb.Where", "querySpec.Where"));
+  }
+  let joinWhere: String[] = jd["joinWhereLines"];
+  for (c in joinWhere) {
+    whereConds.append(c);
+  }
 
   // ── 预渲染行（逐字节对齐）─────────────────────────────────────
   let enFieldLines: String[] = buildEnFieldLines(param.fields);
   let colLines: String[] = buildColLines(param.fields);
   let selFieldLines: String[] = buildSelFieldLines(selFields);
-  let updFieldLines: String[] = buildUpdFieldLines(param.allWritableFields, idName, idType);
+  let updFieldLines: String[] = buildUpdFieldLines(param.updFields, idName, idType);
   let toEntityLines: String[] = [];
   let toUpdatesLines: String[] = [];
-  for (f in param.allWritableFields) {
-    toEntityLines.append(tabChar() + "common.CopyNonNil(&e." + f.goName + ", in." + f.goName + ")");
+  for (f in param.updFields) {
+    toEntityLines.append(tabChar() + "cdb.CopyNonNil(&e." + f.goName + ", in." + f.goName + ")");
     toUpdatesLines.append(tabChar() + tabChar() + dataAlias + ".Col" + f.goName + ", in." + f.goName + ",");
   }
   // service 结构体两列对齐（DB/Repo）
@@ -1438,51 +1330,117 @@ export function generateSplitTable(json: Object, goBasePath: String, moduleName:
   svcFieldLines.append(tabChar() + padTo(svcName2, svcMaxName) + " " + svcType2);
 
   // ── import 块 ────────────────────────────────────────────────
+  //      金额列（coin.Coin）只依赖架子 coin 包：repo/in_sel/in_upd
+  //      与联表实体恒有 common，无需处理；仅单表实体原本无 common，需补
   let needTime: Bool = false;
   for (f in param.fields) {
     if (f.goType == "time.Time") { needTime = true; }
+  }
+  // InUpd 按 editCols 收敛后可能已无时间列；import 只看实际写入参数字段
+  let updNeedTime: Bool = false;
+  let updNeedCoin: Bool = false;
+  for (uf in param.updFields) {
+    if (uf.ptrType.includes("time.Time")) { updNeedTime = true; }
+    if (uf.goType == "coin.Coin") { updNeedCoin = true; }
   }
   let selNeedTime: Bool = false;
   for (sf in selFields) {
     if (sf.goType == "time.Time") { selNeedTime = true; }
   }
   let tb: String = tabChar();
-  let enImports: String = needTime ? "import \"time\"" : "";
+  let joinNeedTime: Bool = false;
+  if (hasJoin) {
+    // 联表模式：querySpec 引用 common；联表输出列为 time.Time 时需要 time 包
+    let viewFieldList: Object[] = jd["viewFields"];
+    for (vf in viewFieldList) {
+      if (vf["goType"] == "time.Time") { joinNeedTime = true; }
+    }
+  }
+  let enTime: Bool = (needTime || joinNeedTime);
+  let enImports: String = "";
+  let enStd: String[] = [];
+  let enExt: String[] = [];
+  if (enTime) { enStd.append("time"); }
+  if (param.hasDecimalField) { enExt.append(coinPath); }
+  // 所有表都生成 querySpec（无联表时 Joins 为空），实体文件必须引用 cdb
+  enExt.append(dbPath);
+  enImports = buildGoImports(enStd, enExt);
+
   let selImports: String = "";
-  if (selNeedTime) {
-    selImports = "import (\n" + tb + "\"" + commonPath + "\"\n" + tb + "\"time\"\n)";
-  } else {
-    selImports = "import \"" + commonPath + "\"";
+  let selStd: String[] = [];
+  let selExt: String[] = [];
+  if (selNeedTime) { selStd.append("time"); }
+  selExt.append(httpxPath);
+  selImports = buildGoImports(selStd, selExt);
+
+  let repoImports: String = buildGoImports([dbPath], ["gorm.io/gorm"]);
+
+  let updImports: String = "import (\n";
+  if (updNeedTime) {
+    updImports = updImports + tb + "\"time\"\n\n";
   }
-  let repoImports: String = "import (\n" + tb + "\"" + commonPath + "\"\n\n" + tb
-    + "\"gorm.io/gorm\"\n)";
-  let updImports: String = "";
-  if (needTime) {
-    updImports = "import (\n" + tb + "\"time\"\n\n" + tb + "\"" + commonPath + "\"\n"
-      + tb + dataAlias + " \"" + dataPath + "\"\n)";
-  } else {
-    updImports = "import (\n" + tb + "\"" + commonPath + "\"\n" + tb + dataAlias
-      + " \"" + dataPath + "\"\n)";
+  if (updNeedCoin) {
+    updImports = updImports + tb + "\"" + coinPath + "\"\n";
   }
+  updImports = updImports + tb + "\"" + dbPath + "\"\n";
+  updImports = updImports + tb + dataAlias + " \"" + dataPath + "\"\n)";
+
   let hdlImports: String = "import (\n" + tb + "\"github.com/gin-gonic/gin\"\n\n" + tb + "\""
-    + commonPath + "\"\n" + tb + dataAlias + " \"" + dataPath + "\"\n)";
+    + commonPath + "\"\n" + tb + "\"" + httpxPath + "\"\n" + tb + dataAlias
+    + " \"" + dataPath + "\"\n)";
   let svcImports: String = "import (\n" + tb + "\"gorm.io/gorm\"\n\n" + tb + dataAlias
     + " \"" + dataPath + "\"\n)";
   let routerImports: String = "import (\n" + tb + "\"github.com/gin-gonic/gin\"\n\n" + tb + "\""
-    + commonPath + "\"\n" + tb + "\"" + middlewarePath + "\"\n)";
+    + dbPath + "\"\n" + tb + "\"" + middlewarePath + "\"\n)";
 
-  // ── C 端只读模块（modules/app）配置 ──────────────────────────
-  //      appQuery 缺省 false；appAuth 缺省 user（宁可漏开放、不可误开放）
+  // ── C 端模块（modules/app）配置 ──────────────────────────────
+  //      appQuery 缺省 false；appAuth 缺省 user（宁可漏开放、不可误开放）；
+  //      appQueryMode 缺省=只读查询，"empty"=空接口（仅骨架，不生成只读接口）
   let appQuery: Bool = (json["appQuery"] == true);
+  let appEmpty: Bool = (appQuery && json["appQueryMode"] == "empty");
   let appAuth: String = json["appAuth"];
   if (appAuth == null || appAuth == "") {
     appAuth = "user";
   }
   let appIsPublic: Bool = (appAuth == "public");
+  // C 端出参白名单（appOutCols）：空=直接回实体；非空生成 out_<表>_.go
+  let appOutCols: Object[] = json["appOutCols"];
+  let appHasOut: Bool = appQuery && appOutCols != null && appOutCols.length > 0;
+  let appOutFields: Object[] = [];
+  if (appHasOut) {
+    // 按 appOutCols 的配置顺序输出，出参 JSON 字段顺序与配置一致
+    for (oc in appOutCols) {
+      for (f in param.fields) {
+        if (oc == f.name) {
+          appOutFields.append(f);
+        }
+      }
+    }
+  }
+  let appOutClass: String = appHasOut ? ("Out" + param.tableClass) : (dataAlias + "." + param.enClass);
+  // 出参字段行预对齐（gofmt 格式）
+  let appOutFieldLines: String[] = [];
+  let appOutAssignLines: String[] = [];
+  if (appHasOut) {
+    let outMaxName: Number = 0;
+    let outMaxType: Number = 0;
+    for (f in appOutFields) {
+      if (f.goName.length > outMaxName) { outMaxName = f.goName.length; }
+      if (f.declType.length > outMaxType) { outMaxType = f.declType.length; }
+    }
+    for (f in appOutFields) {
+      let tag: String = "`json:\"" + f.name + "\"`";
+      appOutFieldLines.append(tabChar() + padTo(f.goName, outMaxName) + " "
+        + padTo(f.declType, outMaxType) + " " + tag);
+      appOutAssignLines.append(tabChar() + tabChar() + padTo(f.goName + ":", outMaxName + 1)
+        + " e." + f.goName + ",");
+    }
+  }
   let appPkgComment: String = json["appPkgComment"];
   if (appPkgComment == null || appPkgComment == "") {
     appPkgComment = param.tableDesc
-      + (appIsPublic ? " C 端模块（公开只读查询）" : " C 端模块（需登录只读查询）");
+      + (appEmpty ? " C 端模块（空接口，自定义接口写扩展件）"
+                  : (appIsPublic ? " C 端模块（公开只读查询）" : " C 端模块（需登录只读查询）"));
   }
   let appRouterMountNote: String = appIsPublic
     ? "本模块生成配置为公开浏览，故不挂 UserAuth。"
@@ -1493,16 +1451,21 @@ export function generateSplitTable(json: Object, goBasePath: String, moduleName:
   let appRouterImports: String = "";
   if (appIsPublic) {
     appRouterImports = "import (\n" + tb + "\"github.com/gin-gonic/gin\"\n\n" + tb
-      + "\"" + commonPath + "\"\n)";
+      + "\"" + dbPath + "\"\n)";
   } else {
     appRouterImports = "import (\n" + tb + "\"github.com/gin-gonic/gin\"\n\n" + tb
-      + "\"" + commonPath + "\"\n" + tb + "\"" + middlewarePath + "\"\n)";
+      + "\"" + dbPath + "\"\n" + tb + "\"" + middlewarePath + "\"\n)";
   }
+
+  // ── 表缓存骨架（data 层手写件）────────────────────────────────
+  //      genCache 缺省 false：仅对读多写少、且本表是缓存主数据源的表勾选；
+  //      生成 data/<前缀>/<表>/<表>_cache.go（fileExists 守卫，仅首次骨架不覆盖）
+  let genCache: Bool = (json["genCache"] == true);
 
   // ── 包注释文案（表级配置，缺省按表注释兜底）───────────────────
   let dataPkgComment: String = json["dataPkgComment"];
   if (dataPkgComment == null || dataPkgComment == "") {
-    dataPkgComment = param.tableDesc + "表共享数据层（admin 端与 app 端复用）";
+    dataPkgComment = param.tableDesc + "共享数据层（admin 端与 app 端复用）";
   }
   let adminPkgComment: String = json["adminPkgComment"];
   if (adminPkgComment == null || adminPkgComment == "") {
@@ -1523,6 +1486,10 @@ export function generateSplitTable(json: Object, goBasePath: String, moduleName:
   tplData["dataPath"] = dataPath;
   tplData["dataAlias"] = dataAlias;
   tplData["commonPath"] = commonPath;
+  tplData["dbPath"] = dbPath;
+  tplData["coinPath"] = coinPath;
+  tplData["httpxPath"] = httpxPath;
+  tplData["redisxPath"] = redisxPath;
   tplData["middlewarePath"] = middlewarePath;
   tplData["dataPkgComment"] = dataPkgComment;
   tplData["adminPkgComment"] = adminPkgComment;
@@ -1545,8 +1512,11 @@ export function generateSplitTable(json: Object, goBasePath: String, moduleName:
   tplData["toUpdatesLines"] = toUpdatesLines;
   tplData["svcFieldLines"] = svcFieldLines;
   tplData["whereConditions"] = whereConds;
-  tplData["sortWhitelistName"] = sortWhitelistName;
-  tplData["sortEntryLines"] = sortEntryLines;
+  let listType: String = param.enClass;
+  if (hasJoin) {
+    listType = param.enClass + "View";
+  }
+  tplData["listType"] = listType;
   tplData["enImports"] = enImports;
   tplData["selImports"] = selImports;
   tplData["repoImports"] = repoImports;
@@ -1555,6 +1525,16 @@ export function generateSplitTable(json: Object, goBasePath: String, moduleName:
   tplData["svcImports"] = svcImports;
   tplData["routerImports"] = routerImports;
   tplData["appQuery"] = appQuery;
+  tplData["appHasOut"] = appHasOut;
+  tplData["appOutClass"] = appOutClass;
+  tplData["appOutFields"] = appOutFields;
+  tplData["appOutFieldLines"] = appOutFieldLines;
+  tplData["appOutAssignLines"] = appOutAssignLines;
+  tplData["appEmpty"] = appEmpty;
+  // app 空接口：handler 生成件只剩 struct + New（同包类型），无 gin/common/实体
+  // 引用 → import 必须为空。用独立键 appHdlImports：若直接清空 hdlImports，
+  // admin handler 生成件（共用该键）会一起丢掉 import 而编译失败
+  tplData["appHdlImports"] = appEmpty ? "" : hdlImports;
   tplData["appIsPublic"] = appIsPublic;
   tplData["appPkgComment"] = appPkgComment;
   tplData["appRouterMountNote"] = appRouterMountNote;
@@ -1563,17 +1543,48 @@ export function generateSplitTable(json: Object, goBasePath: String, moduleName:
   tplData["hasEnums"] = hasEnums;
   tplData["enums"] = enums;
 
-  // ── 模板清单（data 读面 → admin 写面 → 首次骨架）──────────────
+  // ── 联表（joinTables）模板数据 ─────────────────────────────────
+  tplData["hasJoin"] = hasJoin;
+  tplData["joinConstLines"] = jd["joinConstLines"];
+  tplData["enViewFieldLines"] = jd["enViewFieldLines"];
+  tplData["joinSpecBlock"] = jd["joinSpecBlock"];
+  tplData["listType"] = hasJoin ? param.enClass + "View" : param.enClass;
+  let selComment: String = "分页查询列表数据，返回数据列表和总记录数";
+  if (hasJoin) {
+    let joinEntryList: Object[] = jd["joinEntries"];
+    let jl: String = "";
+    for (je in joinEntryList) {
+      jl = jl + (jl == "" ? "" : " + ") + je["table"];
+    }
+    selComment = "分页联表查询列表数据（" + param.tableName + " + " + jl + "），返回视图列表和总记录数";
+  }
+  tplData["selComment"] = selComment;
+
+  // ── 模板清单（data 读面 → admin 写面；repo_ext 为手写扩展首次骨架）──
   let templates: TemplateConfig[] = [
     { tpl: tplDir + "/model/entity.tpl",  out: "{goBasePath}/data/{dataDir}/en_{tableName}_.go" },
     { tpl: tplDir + "/model/in_sel.tpl",  out: "{goBasePath}/data/{dataDir}/in_sel_{tableName}_.go" },
     { tpl: tplDir + "/repo/repo.tpl",     out: "{goBasePath}/data/{dataDir}/{tableName}_repo_.go" },
+    // repo 手写扩展件（首次骨架，fileExists 守卫）：自定义查询/统计方法写这里
+    // （生成件不调用其中的方法，无编译契约；service 写路径已并入 *_service_.go 覆盖件）
+    { tpl: tplDir + "/repo/repo_ext.tpl", out: "{goBasePath}/data/{dataDir}/{tableName}_repo.go" },
     { tpl: tplDir + "/model/in_upd.tpl",  out: "{goBasePath}/modules/admin/{dataDir}/in_upd_{tableName}_.go" },
     { tpl: tplDir + "/handler/hdl.tpl",   out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_handler_.go" },
     { tpl: tplDir + "/service/svc.tpl",   out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_service_.go" },
-    { tpl: tplDir + "/router.tpl",        out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_router_.go" },
-    { tpl: tplDir + "/service/svc_write.tpl", out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_service.go" }
+    // 手写扩展三件套（首次骨架，fileExists 守卫）：自定义业务/接口写这里；
+    // 命名约定 = 生成覆盖件去尾下划线（与 *_repo.go 一致）；
+    // {tableName}_router.go 的 RegisterExtRoutes 由下方 router_.go 生成件调用（须先生成）
+    { tpl: tplDir + "/service/svc_ext.tpl",   out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_service.go" },
+    { tpl: tplDir + "/handler/hdl_ext.tpl",   out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_handler.go" },
+    { tpl: tplDir + "/router_ext.tpl",        out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_router.go" },
+    { tpl: tplDir + "/router.tpl",        out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_router_.go" }
   ];
+
+  // 表缓存骨架（opt-in，genCache=true）：data 层手写件，仅首次生成，存在即跳过
+  if (genCache) {
+    templates.append({ tpl: tplDir + "/cache.tpl",
+      out: "{goBasePath}/data/{dataDir}/{tableName}_cache.go" });
+  }
 
   // C 端只读模块：只生成 selectByIn/selectById 三件（service/handler/router），
   // 永不生成写接口；路由是否挂 UserAuth 由 appAuth 决定
@@ -1584,6 +1595,19 @@ export function generateSplitTable(json: Object, goBasePath: String, moduleName:
       out: "{goBasePath}/modules/app/{dataDir}/{tableName}_handler_.go" });
     templates.append({ tpl: tplDir + "/app/router.tpl",
       out: "{goBasePath}/modules/app/{dataDir}/{tableName}_router_.go" });
+    // C 端出参白名单（appOutCols 非空时生成 out_<表>_.go）
+    if (appHasOut) {
+      templates.append({ tpl: tplDir + "/app/out.tpl",
+        out: "{goBasePath}/modules/app/{dataDir}/out_{tableName}_.go" });
+    }
+    // C 端手写扩展三件套（首次骨架；{tableName}_router.go 的 RegisterExtRoutes
+    // 由 app router_.go 调用；命名约定同 admin 侧）
+    templates.append({ tpl: tplDir + "/app/svc_ext.tpl",
+      out: "{goBasePath}/modules/app/{dataDir}/{tableName}_service.go" });
+    templates.append({ tpl: tplDir + "/app/hdl_ext.tpl",
+      out: "{goBasePath}/modules/app/{dataDir}/{tableName}_handler.go" });
+    templates.append({ tpl: tplDir + "/app/router_ext.tpl",
+      out: "{goBasePath}/modules/app/{dataDir}/{tableName}_router.go" });
   }
 
   let count: Number = 0;
@@ -1597,10 +1621,12 @@ export function generateSplitTable(json: Object, goBasePath: String, moduleName:
     tplData["outputPath"] = outPath;
     let result = renderTpl(cfg.tpl, tplData);
     if (result) {
-      if (writeFile(outPath, result)) {
-        count = count + 1;
+      if (canOverwriteGenerated(outPath)) {
+        if (writeFile(outPath, result)) {
+          count = count + 1;
+        }
+        printLog("生成文件: " + outPath);
       }
-      printLog("生成文件: " + outPath);
     }
   }
 
@@ -1613,13 +1639,15 @@ export function generateSplitTable(json: Object, goBasePath: String, moduleName:
     });
     let enumResult = renderTpl(tplDir + "/model/enum.tpl", tplData);
     if (enumResult) {
-      if (writeFile(enumOutPath, enumResult)) {
-        count = count + 1;
+      if (canOverwriteGenerated(enumOutPath)) {
+        if (writeFile(enumOutPath, enumResult)) {
+          count = count + 1;
+        }
+        printLog("生成文件: " + enumOutPath);
       }
-      printLog("生成文件: " + enumOutPath);
     }
   }
 
-  printLog("[" + tableName + "] split 布局：data/" + dataDir + " + modules/admin/" + dataDir);
+  printLog("[" + tableName + "] 分层布局：data/" + dataDir + " + modules/admin/" + dataDir);
   return count;
 }

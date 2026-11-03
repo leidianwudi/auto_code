@@ -16,6 +16,16 @@
  *  - 实现 syncCodeToVisualImpl()/syncVisualToCodeImpl() 完成实际数据搬运
  *    （m_syncing 防循环标志由基类统一管理）；
  *  - 把可视化编辑器的「内容变化」信号连接到 onVisualContentChanged()。
+ *
+ * 误报「已修改」防护（重要）：
+ *  - 可视化侧的交互信号不等于内容变化：单击/聚焦/双击单元格、下拉弹层同步、
+ *    程序性 setCurrentIndex/setEditText 都可能触发编辑器的变化信号。
+ *    子类应在广播前比较内容指纹：内容未变则不调用 onVisualContentChanged()。
+ *  - 打开文件后的指纹基线必须用「回填完成后的完整序列化」（与
+ *    syncVisualToCodeImpl 写回时同一口径）。若用解析值做基线，规范化产物
+ *    （键补齐/默认值回写等）会与之不等，用户第一次单击/失焦就会被误标已修改。
+ *  - 结构性/顺序类键（如行序）只在用户真正改变时才落盘，未变化时保持文件原状，
+ *    否则打开后第一次广播就会因新增键而判成内容变化。
  */
 
 #pragma once

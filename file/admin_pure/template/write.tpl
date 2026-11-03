@@ -8,7 +8,8 @@ ${#     详情模式仅预览；上传动作瘦包装调用共享上传函数 up
 ${#   - 表单验证规则（根据配置的 required 字段生成）                              }
 ${#   - 新增记录默认值注入（hasDefaultValues，watch actionType=add 后 nextTick）  }
 ${#   - 详情模式：el-form 整体 disabled；editEditable=false 字段单独 disabled     }
-${# 数据来源（tplData）：columns 列数组（键同 admin_vue/write.tpl 头注释），       }
+${# 数据来源（tplData）：formColumns 表单列数组（按 editCols/字段呈现行序排序，       }
+${#   与列表演示顺序解耦；键同 admin_vue/write.tpl 头注释），                        }
 ${#   另有 main_admin.ac enrichPureTplData 补充：isDatetimeFormat 等              }
 ${# POST 后缀式约定：submit 由 updateApi 承接（POST {model}/update，无 id 新增、   }
 ${#   有 id 更新，与 admin_vue 链及 crud_gin router.tpl 对齐）                     }
@@ -43,7 +44,7 @@ const isDetail = computed(() => props.actionType === 'detail');
 const formRef = ref<FormInstance>();
 const form = reactive<Record<string, any>>({
   id: null,
-${each col in columns}${if col.editVisible}${if col.isInt}  ${col.dataName}: null,
+${each col in formColumns}${if col.editVisible}${if col.isInt}  ${col.dataName}: null,
 ${else if col.isFloat}  ${col.dataName}: null,
 ${else if col.isMoney}  ${col.dataName}: null,
 ${else if col.isDate}  ${col.dataName}: null,
@@ -56,14 +57,14 @@ watch(
   row => {
     if (row) {
       form.id = row.id ?? null;
-${each col in columns}${if col.editVisible}${if col.isInt}      form.${col.dataName} = row.${col.dataName} ?? null;
+${each col in formColumns}${if col.editVisible}${if col.isInt}      form.${col.dataName} = row.${col.dataName} ?? null;
 ${else if col.isFloat}      form.${col.dataName} = row.${col.dataName} ?? null;
 ${else if col.isMoney}      form.${col.dataName} = row.${col.dataName} ?? null;
 ${else if col.isDate}      form.${col.dataName} = row.${col.dataName} ?? null;
 ${else}      form.${col.dataName} = row.${col.dataName} ?? "";
 ${/if}${/if}${/each}    } else {
       form.id = null;
-${each col in columns}${if col.editVisible}${if col.isInt}      form.${col.dataName} = null;
+${each col in formColumns}${if col.editVisible}${if col.isInt}      form.${col.dataName} = null;
 ${else if col.isFloat}      form.${col.dataName} = null;
 ${else if col.isMoney}      form.${col.dataName} = null;
 ${else if col.isDate}      form.${col.dataName} = null;
@@ -76,7 +77,7 @@ ${/if}${/if}${/each}    }
 ${if hasUploadFields}
 // ==================== 图片上传（引用 .jsonupload 上传预设）====================
 // 上传逻辑需在模板渲染前定义：上传卡片直接引用这些函数与列表
-${each col in columns}${if col.hasUpload}${if col.editVisible}
+${each col in formColumns}${if col.hasUpload}${if col.editVisible}
 // ── ${col.editName}${if col.hasUploadLabel}（${col.uploadLabel}）${/if}：上传后路径写入表单字段，随保存接口一起提交
 const ${col.dataName}FileList = reactive<any[]>([]);
 watch(() => props.currentRow, (row: any) => {
@@ -116,7 +117,7 @@ const onceOptions = async (key: string, loader: () => Promise<any[]> | any[]) =>
   optionCache[key] = list;
   return list;
 };
-${each col in columns}${if col.isSelect}${if col.hasSelectApi}
+${each col in formColumns}${if col.isSelect}${if col.hasSelectApi}
 // ${col.editName} 下拉选项（引用数据源：${col.selectApiName}）
 const ${col.dataNamePascal}Options = ref<any[]>([]);
 const load${col.dataNamePascal}Options = async () => {
@@ -131,7 +132,7 @@ const load${col.dataNamePascal}Options = async () => {
 };
 load${col.dataNamePascal}Options();
 ${/if}${/if}${/each}
-${each col in columns}${if col.isBooleanSwitch}${if col.hasBoolApi}
+${each col in formColumns}${if col.isBooleanSwitch}${if col.hasBoolApi}
 // ${col.editName} 布尔开关选项（引用静态数据源：${col.boolApiName}）
 const ${col.dataNamePascal}Options = ref<any[]>([]);
 const load${col.dataNamePascal}Options = async () => {
@@ -146,7 +147,7 @@ const load${col.dataNamePascal}Options = async () => {
 };
 load${col.dataNamePascal}Options();
 ${/if}${/if}${/each}
-${each col in columns}${if col.isBooleanEdit}${if col.hasBoolApi}
+${each col in formColumns}${if col.isBooleanEdit}${if col.hasBoolApi}
 // ${col.editName} 布尔下拉选项（引用静态数据源：${col.boolApiName}）
 const ${col.dataNamePascal}Options = ref<any[]>([]);
 const load${col.dataNamePascal}Options = async () => {
@@ -164,7 +165,7 @@ ${/if}${/if}${/each}
 ${/if}
 // 表单验证规则（根据配置的 required 字段生成；选择/日期类触发 change）
 const formRules = reactive<FormRules>({
-${each col in columns}${if col.required}${if col.editVisible}${if col.isSelect}  ${col.dataName}: [{ required: true, message: '请选择${col.editName}', trigger: 'change' }],
+${each col in formColumns}${if col.required}${if col.editVisible}${if col.isSelect}  ${col.dataName}: [{ required: true, message: '请选择${col.editName}', trigger: 'change' }],
 ${else if col.isBooleanSwitch}  ${col.dataName}: [{ required: true, message: '请选择${col.editName}', trigger: 'change' }],
 ${else if col.isTagSwitch}  ${col.dataName}: [{ required: true, message: '请选择${col.editName}', trigger: 'change' }],
 ${else if col.isBooleanEdit}  ${col.dataName}: [{ required: true, message: '请选择${col.editName}', trigger: 'change' }],
@@ -185,7 +186,7 @@ defineExpose({ submit });
 ${if hasDefaultValues}
 // 新增记录时的默认值（数值类型不带引号，其余类型带引号）
 const defaultValues: Record<string, any> = {
-${each col in columns}${if col.hasDefaultValue}  ${col.dataName}: ${col.defaultValueLiteral},
+${each col in formColumns}${if col.hasDefaultValue}  ${col.dataName}: ${col.defaultValueLiteral},
 ${/if}${/each}};
 
 // 新增时设置默认值（在表单重置后通过 nextTick 注入）
@@ -202,7 +203,7 @@ ${/if}
 <template>
   <el-form ref="formRef" :model="form" :rules="formRules" :disabled="isDetail" label-width="110px">
     <el-row>
-${each col in columns}${if col.editVisible}
+${each col in formColumns}${if col.editVisible}
       <el-col :span="${col.formSpan}">
         <el-form-item label="${col.editName}" prop="${col.dataName}">
 ${if col.isBooleanSwitch}${if col.hasBoolApi}          <el-select v-model="form.${col.dataName}" clearable placeholder="请选择" style="width: 100%"${if !col.editEditable} disabled${/if}>

@@ -21,9 +21,14 @@ JsonTableWidget::JsonTableWidget(QWidget *parent) : CodeVisualSyncWidget(parent)
 
   setCurrentIndex(0);
 
-  // 可视化编辑器配置变化时，写回代码编辑器并广播（基类统一入口）
-  connect(m_visual, &JsonTableEditor::configChanged, this,
-          &CodeVisualSyncWidget::onVisualContentChanged);
+  // 可视化编辑器配置变化时，写回代码编辑器并广播（基类统一入口）。
+  // 先比较内容指纹：单击/聚焦单元格等无值变化的操作不应把文件标成「已修改」
+  connect(m_visual, &JsonTableEditor::configChanged, this, [this]() {
+    const QByteArray hash = UtilJson::fingerprint(m_visual->collectMergedObject());
+    if (hash == m_lastVisualHash) return;
+    m_lastVisualHash = hash;
+    onVisualContentChanged();
+  });
 }
 
 // ════════════════════════════════════════════════════════════
@@ -48,7 +53,10 @@ void JsonTableWidget::syncCodeToVisualImpl() {
   const QByteArray hash = UtilJson::fingerprint(table.toJsonObject());
   if (hash != m_lastVisualHash) {
     m_visual->loadConfig(table);
-    m_lastVisualHash = hash;
+    // 基线改用「回填后的完整序列化」，与「可视化 → 代码」的指纹同口径。
+    // 若用解析值做基线，collectTable 的规范化产物（标题回写/新增键等）与之不等，
+    // 用户第一次单击或失焦就会被判成「内容变化」而误标已修改
+    m_lastVisualHash = UtilJson::fingerprint(m_visual->collectMergedObject());
   }
 }
 

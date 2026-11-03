@@ -6,6 +6,7 @@
 #include "fun_builtin.h"
 
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -50,6 +51,7 @@ void FunBuiltin::init() {
           {QString::fromLatin1(AcBuiltin::kFileName), fileName},
           {QString::fromLatin1(AcBuiltin::kFileExists), fileExists},
           {QString::fromLatin1(AcBuiltin::kListFiles), listFiles},
+          {QString::fromLatin1(AcBuiltin::kListFilesDeep), listFilesDeep},
           {QString::fromLatin1(AcBuiltin::kFormatPath), formatPath},
           {QString::fromLatin1(AcBuiltin::kAssert), assertFn},
       });
@@ -317,6 +319,48 @@ accore::AcJsonValue FunBuiltin::listFiles(const accore::AcJsonValue &args) {
     if (suffix.isEmpty() || n.endsWith(suffix, Qt::CaseInsensitive)) {
       out.append(accore::AcJsonValue(n));
     }
+  }
+  return out;
+}
+
+// ============================================================================
+// listFilesDeep — 递归列出目录下匹配后缀的文件相对路径数组
+// ============================================================================
+
+accore::AcJsonValue FunBuiltin::listFilesDeep(const accore::AcJsonValue &args) {
+  if (!FunArgs::requireString(args, 0,
+                              QStringLiteral("listFilesDeep() requires a directory path argument")))
+    return accore::AcJsonValue();
+
+  const QString dirPath = args.at(0).toString();
+  // 后缀可选：省略/为空返回全部文件
+  QString suffix;
+  if (args.size() > 1 && args.at(1).isString()) {
+    suffix = args.at(1).toString();
+  }
+
+  QDir baseDir(dirPath);
+  if (!baseDir.exists()) {
+    FunMgr::setError(QStringLiteral("listFilesDeep() directory not found: '%1'").arg(dirPath));
+    return accore::AcJsonValue();
+  }
+
+  // 递归遍历，返回相对 dir 的路径（POSIX 斜杠，调用方按路径排序使用）
+  QStringList relPaths;
+  QDirIterator it(dirPath, QDir::Files, QDirIterator::Subdirectories);
+  while (it.hasNext()) {
+    const QString abs = it.next();
+    QString rel = baseDir.relativeFilePath(abs);
+    rel.replace(QLatin1Char('\\'), QLatin1Char('/'));
+    if (suffix.isEmpty() || rel.endsWith(suffix, Qt::CaseInsensitive)) {
+      relPaths.append(rel);
+    }
+  }
+  relPaths.sort(Qt::CaseInsensitive);
+
+  accore::AcJsonValue out = accore::AcJsonValue::makeArray();
+  for (const QString &p : relPaths) {
+    out.append(accore::AcJsonValue(p));
   }
   return out;
 }

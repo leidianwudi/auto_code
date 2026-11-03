@@ -129,7 +129,8 @@ void JsonVueEditor::connectCellWidgetSignals(QWidget *widget) {
       if (!m_loading) emit configChanged();
     });
   } else if (auto *combo = qobject_cast<QComboBox *>(widget)) {
-    connect(combo, &QComboBox::currentTextChanged, this, [this]() {
+    // 只在用户真正改变值时上报：单击/聚焦/程序性同步都不应标记「已修改」
+    AuiComboBox::connectValueCommitted(combo, this, [this]() {
       if (!m_loading) emit configChanged();
     });
   }

@@ -1292,6 +1292,7 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
   let noDelete: Bool = meta.noDelete;
   let noEdit: Bool = meta.noEdit;
   let noDetail: Bool = meta.noDetail;
+  let noAdd: Bool = meta.noAdd;  // 缺省 false=生成工具栏新增按钮
   // API 请求地址（供 api.tpl 生成 .ts 使用）："/" + 接口基名 + "/" + 请求后缀
   // 请求后缀由 main_admin.ac 传入（apiSelect/apiUpdate/apiDelete），缺省为默认值
   let selSuffix: String = "selectByIn";
@@ -1666,6 +1667,9 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
   if (actionColumnWidth < 48) {
     actionColumnWidth = 48;  // 最小宽度兜底（单个图标按钮）
   }
+  // 操作列是否需要生成：基础按钮（详情/编辑/删除）全关且无自定义行按钮时，
+  // 整列不渲染（否则会留一列 48px 空白）
+  let hasActionColumn: Bool = (baseActionCount > 0 || rowButtons.length > 0);
   let hasCustomButtons = (buttons.length > 0);
 
   // ── 检查是否有 tag / image 类型的列（需要导入 ElTag / ElImage）──
@@ -1763,9 +1767,11 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
   tplData["hasSelectApiColumns"] = hasSelectApiColumns;  // ${if hasSelectApiColumns} 是否有下拉框显示列
   tplData["boolSourceImportLines"] = boolSourceImportLines;  // ${boolSourceImportLines} 布尔/下拉显示列 source import 行
   tplData["hasBoolSourceImports"] = hasBoolSourceImports;  // ${if hasBoolSourceImports} 是否导入 source api
+  tplData["noAdd"] = noAdd;                        // ${if !noAdd} 不生成工具栏新增按钮
   tplData["noDelete"] = noDelete;                  // ${if !noDelete} 不可删除
   tplData["noEdit"] = noEdit;                      // ${if !noEdit} 不可编辑
   tplData["noDetail"] = noDetail;                  // ${if !noDetail} 不可查看详情
+  tplData["hasActionColumn"] = hasActionColumn;    // ${if hasActionColumn} 是否生成操作列
   tplData["columns"] = columns;                    // ${each col in columns} 列循环
   tplData["queryFields"] = queryFields;            // ${each q in queryFields} 查询字段循环
   // 自定义按钮相关数据

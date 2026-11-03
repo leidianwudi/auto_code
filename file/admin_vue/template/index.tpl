@@ -50,11 +50,19 @@ ${if hasLinkButtons}const { push } = useRouter();${/if}
 // 使用 CRUD Hook
 const { crudState, tableRegister, tableState, crudMethods } = uiCrudLogic({
   fetchDataApi: async () => {
+    // 查询参数清洗：空串/空值不传给服务端（后端按字段精确匹配，传空串会查出 0 条；
+    // 保留有意义的 0/false 等值）
+    const clean = (obj: Record<string, any>) =>
+      Object.fromEntries(
+        Object.entries(obj).filter(
+          ([, v]) => v !== "" && v !== null && v !== undefined
+        )
+      );
     // 构建请求参数，包含分页和搜索参数
     const params = {
       page: tableState.currentPage.value,
       pageSize: tableState.pageSize.value,
-      ...unref(crudState.searchParams)
+      ...clean(unref(crudState.searchParams))
     };
     // 设置查询接口
     const response = await ${queryApi}(params);

@@ -159,6 +159,10 @@ QString AuiStyle::mainStyleSheet() {
              "QGroupBox { color: %2; }"
              "QSpinBox, QDoubleSpinBox, QDateTimeEdit { color: %2; }"
              "QLineEdit { color: %2; }"
+             // 输入控件禁用态：文字降为弱色（QComboBox 箭头由 AuiComboBoxWidget
+             // 绘制，其禁用色在 paintEvent 内同步处理），视觉上明确"当前不可用"
+             "QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, "
+             "QDateTimeEdit:disabled, QLineEdit:disabled { color: %8; }"
              "QTableWidget, QTreeWidget, QListWidget, QListView, QTreeView, QTableView { color: "
              "%2; }"
              "QHeaderView::section { color: %2; }"
@@ -194,7 +198,7 @@ QString AuiStyle::mainStyleSheet() {
              "}")
       .arg(background().name(), textColor().name(), hoverBackground().name(),
            borderDarkColor().name(), borderColor().name(), panelBackground().name(),
-           titleBarBackground().name());
+           titleBarBackground().name(), mutedTextColor().name());
 }
 
 QString AuiStyle::dialogStyleSheet() {

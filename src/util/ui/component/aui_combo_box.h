@@ -10,6 +10,11 @@
 
 #include <QComboBox>
 
+#include <functional>
+#include <memory>
+
+class QLineEdit;
+
 /**
  * @class AuiComboBox
  * @brief 样式化下拉框工厂类
@@ -20,11 +25,39 @@
  * combo->addItem("选项 1");
  * combo->addItem("选项 2");
  * @endcode
+ *
+ * 表格单元格内一律用 createForTable() 创建并配合 connectValueCommitted() 接线：
+ * 控件自动适配「点箭头才展开、双击不弹、弹层防闪收、无边框」等表格交互，
+ * 接线只在用户真正改变值时回调，避免单击/聚焦单元格就误标文件「已修改」。
+ *
+ * 表格单元格下拉约定（避免重复踩坑）：
+ * 1) 创建：createForTable() + setCellWidget()。不要用委托编辑器（QStyledItemDelegate
+ *    或 setItemDelegateForColumn），编辑器失焦会 closeEditor 并连带销毁弹层，
+ *    表现为「下拉一出现就收起」；也不要另写一套无边框 QComboBox 子类，
+ *    否则表格交互（双击/展开/防闪收）会漏配并随实现漂移。
+ * 2) 接线：值变化统一用 connectValueCommitted()。禁止把
+ *    currentTextChanged / currentIndexChanged / QLineEdit::textChanged 直接接到
+ *    「内容已修改」广播上——单击、聚焦、失焦、程序性 setCurrentIndex/setEditText
+ *    都可能触发这些信号，造成没改内容也标「已修改」。
+ * 3) 顺序：先填好条目与当前值，再建立接线（回填阶段产生的信号不应上报变化）。
+ * 4) 不要再自行安装双击/展开事件过滤器或 300ms 防闪收补丁，控件已内建。
  */
 class AuiComboBox {
 public:
   /// 创建带有向下三角箭头图标的样式化下拉框
   static QComboBox *create(QWidget *parent = nullptr);
+
+  /// 创建用于表格单元格的下拉框（无边框、文字占满、跟随行选中态）：
+  /// 自动获得表格内交互（点右侧箭头展开、双击不弹、弹层防闪收），
+  /// 放入表格请用 setCellWidget
+  static QComboBox *createForTable(QWidget *parent = nullptr);
+
+  /// 「值提交」接线：只有用户真正改变值时才回调——
+  /// 弹层中选择候选（activated）或可编辑下拉结束编辑且确有输入（textEdited）。
+  /// 单击、聚焦、程序性 setCurrentIndex/setEditText 都不会触发，
+  /// 表格行内下拉统一用它，避免无值变化被误报成「已修改」
+  static void connectValueCommitted(QComboBox *combo, QObject *context,
+                                    const std::function<void()> &slot);
 
   /// 对已有下拉框应用样式（含自定义三角箭头）
   static void applyStyle(QComboBox *combo);

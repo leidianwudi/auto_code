@@ -114,12 +114,105 @@
         unsigned: false,
       },
     ],
+    editCols: [
+      {
+        label: '主键',
+        ref: 'id',
+      },
+      {
+        label: '父菜单ID，0=顶级',
+        ref: 'pid',
+      },
+      {
+        label: '菜单标题',
+        ref: 'title',
+      },
+      {
+        label: '类型 1:菜单 2:按钮',
+        ref: 'type',
+      },
+      {
+        label: '路由路径',
+        ref: 'path',
+      },
+      {
+        label: '组件路径（views 下相对路径，如 shop/shop）',
+        ref: 'component',
+      },
+      {
+        label: '图标（iconify 名称）',
+        ref: 'icon',
+      },
+      {
+        label: '排序（越小越靠前）',
+        ref: 'sort',
+      },
+      {
+        label: '按钮权限标识（type=2 时生效，如 perm:add）',
+        ref: 'perm',
+      },
+      {
+        label: '是否显示 0:隐藏 1:显示',
+        ref: 'visible',
+      },
+      {
+        label: '创建时间',
+        ref: 'created_at',
+      },
+      {
+        label: '更新时间',
+        ref: 'updated_at',
+      },
+    ],
     frontend: false,
-    layout: 'split',
     manualUpdateTime: false,
     modelName: 'sys_menu',
     moduleDir: 'sys/sys_menu',
+    selColsEq: [
+      {
+        ref: 'pid',
+      },
+      {
+        ref: 'type',
+      },
+      {
+        ref: 'visible',
+      },
+    ],
+    selColsLike: [
+      {
+        ref: 'title',
+      },
+    ],
+    selColsSort: [
+      [
+        'id',
+        'DESC',
+      ],
+      [
+        'sort',
+        'ASC',
+      ],
+      [
+        'created_at',
+        'DESC',
+      ],
+    ],
     tableComment: '系统菜单',
     tableName: 'sys_menu',
+    viewOrder: [
+      'id',
+      'pid',
+      'title',
+      'type',
+      'path',
+      'component',
+      'icon',
+      'sort',
+      'perm',
+      'visible',
+      'created_at',
+      'updated_at',
+    ],
   },
 }

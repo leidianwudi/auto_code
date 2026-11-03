@@ -109,6 +109,11 @@ private:
   /// @param args [0] 目录路径，[1] 后缀（如 ".json"，空/省略返回全部文件）
   static accore::AcJsonValue listFiles(const accore::AcJsonValue &args);
 
+  /// 递归列出目录下匹配后缀的文件相对路径数组（含子目录，按路径排序）
+  /// @param args [0] 目录路径，[1] 后缀（如 "_router_.go"，空/省略返回全部文件）
+  /// @return 相对 dir 的文件路径（POSIX 斜杠，如 "user/user_ext/user_ext_router_.go"）
+  static accore::AcJsonValue listFilesDeep(const accore::AcJsonValue &args);
+
   /// 格式化路径：用 {key} 占位符从数据对象中取值替换
   /// @param args [0] 路径模板（如 "{basePath}/{name}.ts"），[1] 数据对象
   static accore::AcJsonValue formatPath(const accore::AcJsonValue &args);

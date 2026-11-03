@@ -1,8 +1,8 @@
 ${# ============================================================================}
-${# InUpd 模板（split 布局）：modules/admin/{dataDir}/in_upd_{tableName}_.go     }
+${# InUpd 模板：modules/admin/{dataDir}/in_upd_{tableName}_.go     }
 ${# ----------------------------------------------------------------------------}
 ${#   - Id 值类型（0=新增/>0=更新）+ 其余列全指针（nil=不改，非 nil 含 0 也写）  }
-${#   - ToEntity 用 common.CopyNonNil；ToUpdates 用 common.BuildUpdates 成对    }
+${#   - ToEntity 用 cdb.CopyNonNil；ToUpdates 用 cdb.BuildUpdates 成对        }
 ${# 数据来源：pkgName/updClass/enClass/dataAlias/idGoType/idGoName/tableComment  }
 ${#           updImports/updFieldLines/toEntityLines/toUpdatesLines             }
 ${# ============================================================================}
@@ -29,7 +29,7 @@ ${/each}
 
 // ToUpdates 更新用：nil 字段不写；key 一律用 data 层列名常量
 func (in *${updClass}) ToUpdates() map[string]any {
-	return common.BuildUpdates(
+	return cdb.BuildUpdates(
 ${each line in toUpdatesLines}
 ${line}
 ${/each}
