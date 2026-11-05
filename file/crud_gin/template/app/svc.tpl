@@ -3,6 +3,7 @@ ${# C 端 Service 模板：modules/app/{dataDir}/{tableName}_service_.go        
 ${# ----------------------------------------------------------------------------}
 ${#   - 只读：仅 SelectByIn/SelectById 转发 data 层 repo                        }
 ${#   - 永不生成写接口（C 端写操作都是业务流程，手写）                           }
+${#   - Repo 自带连接，生成件不再把 db 传给 repo 方法                            }
 ${# ============================================================================}
 // 此代码为AutoCode编译器生成，请勿手动修改
 package ${pkgName}
@@ -18,13 +19,13 @@ ${/each}}
 
 // New${serviceClass} 创建业务层对象
 func New${serviceClass}(db *gorm.DB) *${serviceClass} {
-	return &${serviceClass}{DB: db, Repo: ${dataAlias}.New${repoClass}()}
+	return &${serviceClass}{DB: db, Repo: ${dataAlias}.New${repoClass}(db)}
 }
 
 ${if appHasOut}
 // SelectByIn ${selComment}
 func (s *${serviceClass}) SelectByIn(sel *${dataAlias}.${selClass}) ([]${appOutClass}, int64, error) {
-	list, total, err := s.Repo.SelectByIn(s.DB, sel)
+	list, total, err := s.Repo.SelectByIn(sel)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -37,7 +38,7 @@ func (s *${serviceClass}) SelectByIn(sel *${dataAlias}.${selClass}) ([]${appOutC
 
 // SelectById 根据id查询单条记录
 func (s *${serviceClass}) SelectById(id ${idGoType}) (*${appOutClass}, error) {
-	e, err := s.Repo.SelectById(s.DB, id)
+	e, err := s.Repo.SelectById(id)
 	if err != nil {
 		return nil, err
 	}
@@ -46,11 +47,11 @@ func (s *${serviceClass}) SelectById(id ${idGoType}) (*${appOutClass}, error) {
 ${else}
 // SelectByIn ${selComment}
 func (s *${serviceClass}) SelectByIn(sel *${dataAlias}.${selClass}) ([]${dataAlias}.${listType}, int64, error) {
-	return s.Repo.SelectByIn(s.DB, sel)
+	return s.Repo.SelectByIn(sel)
 }
 
 // SelectById 根据id查询单条记录
 func (s *${serviceClass}) SelectById(id ${idGoType}) (*${dataAlias}.${enClass}, error) {
-	return s.Repo.SelectById(s.DB, id)
+	return s.Repo.SelectById(id)
 }
 ${/if}

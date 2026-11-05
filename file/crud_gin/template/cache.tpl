@@ -20,8 +20,6 @@ package ${pkgName}
 import (
 	"time"
 
-	"gorm.io/gorm"
-
 	"${redisxPath}"
 )
 
@@ -42,9 +40,11 @@ func New${tableClass}Cache(repo *${tableClass}Repo) *${tableClass}Cache {
 }
 
 // GetById 按主键读缓存：命中直接返回；miss 回源并回填（查不到不回填）
-func (c *${tableClass}Cache) GetById(db *gorm.DB, id int64) (*${enClass}, error) {
+// repo 自带连接，且每次查出来的实体都是新实例（快照基线是实体私有字段）：
+// 业务改字段前会自行 TakeSnapshot，不会污染缓存值，所以不需要 clone / capture，直接返回查询结果
+func (c *${tableClass}Cache) GetById(id ${idGoType}) (*${enClass}, error) {
 	return redisx.GetOrLoad(c.keyById(id), cache${tableClass}TTL, func() (*${enClass}, error) {
-		return c.repo.SelectById(db, id)
+		return c.repo.SelectById(id)
 	})
 }
 

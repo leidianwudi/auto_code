@@ -1,10 +1,12 @@
 ${# ============================================================================}
 ${# 实体模板：data/{dataDir}/en_{tableName}_.go                    }
 ${# ----------------------------------------------------------------------------}
-${#   - 生成头第一行 → 空行 → 包注释（紧贴 package）→ 实体 → TableName → Col 常量}
-${#   - 字段行由 main_api.ac 预渲染（go fmt 列对齐），模板只逐行输出            }
+${#   - C 方案：普通列值类型 + 仅数据库可空列指针 + 快照 diff 更新             }
+${#   - 结构体 / 常量行由 main_api.ac 预渲染（go fmt 列对齐），模板逐行输出      }
+${#   - TakeSnapshot() 记基线；changedColumns() 覆盖除主键外全部列              }
 ${# 数据来源：pkgName/dataPkgComment/enClass/tableComment/tableName/enImports   }
-${#           enFieldLines/colLines                                             }
+${#           enFieldLines/colLines/hasAutoIncPk/hasNullableField/idGoName       }
+${#           enSnapshotLines/enChangedLines/enChangedCount                    }
 ${# ============================================================================}
 // 此代码为AutoCode编译器生成，请勿手动修改
 
@@ -15,14 +17,45 @@ ${if enImports}
 ${enImports}
 
 ${/if}// ${enClass} ${tableComment}(${tableName}) 实体
-// 整数统一 int64（覆盖数据库 int/int unsigned，类型少、避免 uint/int 混用）
+// 普通列一律值类型（整数统一 int64，覆盖数据库 int/int unsigned）；
+// 仅数据库允许 NULL 的列为指针：nil = SQL NULL，非 nil = 按它写入（含 0、空串）。
+// 更新走快照 diff：改字段前先 TakeSnapshot()，Update 只写与基线不同的列。
 type ${enClass} struct {
 ${each line in enFieldLines}
 ${line}
-${/each}}
+${/each}
+
+	orig *${enClass} // 原值快照，nil = 未拍快照
+}
 
 // TableName 表名
 func (${enClass}) TableName() string { return "${tableName}" }
+
+// TakeSnapshot 把当前值记为基线，之后 Update 只写与基线不同的列。
+// 必须在修改字段之前调用。
+func (e *${enClass}) TakeSnapshot() {
+	s := *e
+${if hasNullableField}	// 可空列是指针：必须深拷贝（后续 *e.X = v 就地修改，共享指针会同时改到基线而漏检）
+${each line in enSnapshotLines}
+${line}
+${/each}
+${/if}	s.orig = nil
+	e.orig = &s
+}
+
+// changedColumns 返回与快照相比发生变化的列（key 为列名常量）
+// 覆盖除主键外的全部列；orig 为 nil（未拍快照）时返回 nil
+func (e *${enClass}) changedColumns() map[string]any {
+	o := e.orig
+	if o == nil {
+		return nil
+	}
+	m := make(map[string]any, ${enChangedCount})
+${each line in enChangedLines}
+${line}
+${/each}
+	return m
+}
 
 ${if hasJoin}// ${enClass}View 用户列表视图（联表）：主表实体 + 联表列
 // 匿名嵌入 ${enClass}：GORM Scan 自动展开主表列，JSON 序列化字段平铺
@@ -47,3 +80,15 @@ const (
 ${each line in colLines}
 ${line}
 ${/each})
+
+// 数据层错误常量（调用方可用 errors.Is 判断）
+var (
+	// ErrNilEntity 实体为 nil
+	ErrNilEntity = errors.New("${tableName}: 实体为 nil")
+	// ErrNoSnapshot 更新前未拍快照
+	ErrNoSnapshot = errors.New("${tableName}: 更新前必须先调用 TakeSnapshot")
+	// ErrInsertWithId 新增时实体已带自增主键
+	ErrInsertWithId = errors.New("${tableName}: 新增时实体主键必须为 0（由数据库生成）")
+	// ErrInvalidId 主键参数不合法
+	ErrInvalidId = errors.New("${tableName}: 主键非法，必须大于 0")
+)

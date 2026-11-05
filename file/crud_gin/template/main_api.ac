@@ -717,21 +717,106 @@ export function padTo(s: String, w: Number): String {
 }
 
 /// @brief 实体结构体字段行（gorm tag + json tag + 注释，三列对齐）
+/// 声明类型取 enDeclType（C 方案：普通列值类型，可空列指针）
 export function buildEnFieldLines(fields: FieldDef[]): String[] {
   let maxName: Number = 0;
   let maxType: Number = 0;
   let maxTag: Number = 0;
   for (f in fields) {
     if (f.goName.length > maxName) { maxName = f.goName.length; }
-    if (f.goType.length > maxType) { maxType = f.goType.length; }
+    if (f.enDeclType.length > maxType) { maxType = f.enDeclType.length; }
     let tl: Number = ("`" + f.gormTag + " " + f.jsonTag + "`").length;
     if (tl > maxTag) { maxTag = tl; }
   }
   let lines: String[] = [];
   for (f in fields) {
     let tag: String = "`" + f.gormTag + " " + f.jsonTag + "`";
-    lines.append(tabChar() + padTo(f.goName, maxName) + " " + padTo(f.goType, maxType)
+    lines.append(tabChar() + padTo(f.goName, maxName) + " " + padTo(f.enDeclType, maxType)
       + " " + padTo(tag, maxTag) + " // " + f.comment);
+  }
+  return lines;
+}
+
+/// @brief TakeSnapshot 的可空指针列深拷贝行
+/// 值类型列由 `s := *e` 整体浅拷贝覆盖；指针列必须重新分配，
+/// 否则业务就地 *e.X = v 修改会同时改到基线，diff 永远为空（漏写）。
+export function buildSnapshotCloneLines(fields: FieldDef[]): String[] {
+  let lines: String[] = [];
+  for (f in fields) {
+    if (!f.enIsPtr) { continue; }
+    lines.append(tabChar() + "if e." + f.goName + " != nil {");
+    lines.append(tabChar() + tabChar() + "v := *e." + f.goName);
+    lines.append(tabChar() + tabChar() + "s." + f.goName + " = &v");
+    lines.append(tabChar() + "}");
+  }
+  return lines;
+}
+
+/// @brief 生成"不相等"表达式（按 Go 类型分流，避免对不可比较类型用 ==）
+/// time.Time 用 Equal()；coin.Coin 用 IsEqual()（内含 decimal，== 会误判）；
+/// datatypes.JSON 是 []byte，转 string 再比；其余基础类型直接用 !=
+/// @param lhs / rhs 表达式，如 "e.X"、"(*e.X)"、"*o.X"
+export function notEqualExpr(f: FieldDef, lhs: String, rhs: String): String {
+  if (f.goType == "time.Time") {
+    return "!" + lhs + ".Equal(" + rhs + ")";
+  }
+  if (f.goType == "coin.Coin") {
+    return "!" + lhs + ".IsEqual(" + rhs + ")";
+  }
+  if (f.goType == "datatypes.JSON") {
+    return "string(" + lhs + ") != string(" + rhs + ")";
+  }
+  return lhs + " != " + rhs;
+}
+
+/// @brief changedColumns 的比较行（覆盖除主键外全部列，不做"可更新列"白名单）
+/// 比较按字段类型分流：time.Time 用 Equal()、coin.Coin 用 IsEqual()（不能 ==）；
+/// 可空指针列 nil 与 nil 相等，一方 nil 不等，都非 nil 再按类型比。
+export function buildChangedLines(fields: FieldDef[], idName: String): String[] {
+  let lines: String[] = [];
+  for (f in fields) {
+    if (f.goName == idName || f.isPrimary) { continue; }
+    let lhs: String = "e." + f.goName;
+    let rhs: String = "o." + f.goName;
+    let col: String = "Col" + f.goName;
+    if (f.enIsPtr) {
+      // 可空列：nil 变为 nil 视为未改；变为 nil 时 map 里放 nil（GORM 写 SET col = NULL）
+      lines.append(tabChar() + "if " + lhs + " == nil {");
+      lines.append(tabChar() + tabChar() + "if " + rhs + " != nil {");
+      lines.append(tabChar() + tabChar() + tabChar() + "m[" + col + "] = nil");
+      lines.append(tabChar() + tabChar() + "}");
+      lines.append(tabChar() + "} else if " + rhs + " == nil {");
+      lines.append(tabChar() + tabChar() + "m[" + col + "] = *" + lhs);
+      lines.append(tabChar() + "} else if " + notEqualExpr(f, "(*" + lhs + ")", "*" + rhs) + " {");
+      lines.append(tabChar() + tabChar() + "m[" + col + "] = *" + lhs);
+      lines.append(tabChar() + "}");
+    } else {
+      lines.append(tabChar() + "if " + notEqualExpr(f, lhs, rhs) + " {");
+      lines.append(tabChar() + tabChar() + "m[" + col + "] = " + lhs);
+      lines.append(tabChar() + "}");
+    }
+  }
+  return lines;
+}
+
+/// @brief InUpd.ToEntity / ApplyTo 的行：只覆盖入参非 nil 的字段（nil = 本次不改）
+/// 可空指针列：实体字段是 *T，必须新分配并拷贝值（不能共享入参指针，也不能用
+///   cdb.CopyNonNil(&e.X, in.X)，那会要求入参是 **T）；
+/// JSON 列：入参本身是值类型（无"未传"语义），直接赋值；
+/// 其余值类型列：cdb.CopyNonNil(&e.X, in.X)。
+export function buildApplyLines(fields: FieldDef[]): String[] {
+  let lines: String[] = [];
+  for (f in fields) {
+    if (f.enIsPtr) {
+      lines.append(tabChar() + "if in." + f.goName + " != nil {");
+      lines.append(tabChar() + tabChar() + "v := *in." + f.goName);
+      lines.append(tabChar() + tabChar() + "e." + f.goName + " = &v");
+      lines.append(tabChar() + "}");
+    } else if (f.ptrType == f.goType) {
+      lines.append(tabChar() + "e." + f.goName + " = in." + f.goName);
+    } else {
+      lines.append(tabChar() + "cdb.CopyNonNil(&e." + f.goName + ", in." + f.goName + ")");
+    }
   }
   return lines;
 }
@@ -1306,15 +1391,26 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
 
   // ── 预渲染行（逐字节对齐）─────────────────────────────────────
   let enFieldLines: String[] = buildEnFieldLines(param.fields);
+  // TakeSnapshot 的可空指针列深拷贝行（无指针列时为空，值类型浅拷贝即可）
+  let enSnapshotLines: String[] = buildSnapshotCloneLines(param.fields);
+  // changedColumns 的比较行：覆盖除主键外全部列（不做可更新列白名单）
+  let enChangedLines: String[] = buildChangedLines(param.fields, idName);
+  let enChangedCount: Number = 0;
+  for (f in param.fields) {
+    if (!f.isPrimary) { enChangedCount = enChangedCount + 1; }
+  }
   let colLines: String[] = buildColLines(param.fields);
   let selFieldLines: String[] = buildSelFieldLines(selFields);
   let updFieldLines: String[] = buildUpdFieldLines(param.updFields, idName, idType);
-  let toEntityLines: String[] = [];
-  let toUpdatesLines: String[] = [];
-  for (f in param.updFields) {
-    toEntityLines.append(tabChar() + "cdb.CopyNonNil(&e." + f.goName + ", in." + f.goName + ")");
-    toUpdatesLines.append(tabChar() + tabChar() + dataAlias + ".Col" + f.goName + ", in." + f.goName + ",");
-  }
+  // InUpd.ToEntity / ApplyTo 共用行：仅复制入参非 nil 的字段（nil = 本次不改）
+  let applyToLines: String[] = buildApplyLines(param.updFields);
+  // 主键零值/非法判断（自增主键实际为整数；字符串主键兜底空串）
+  let idNumeric: Bool = idType.includes("int") || idType.includes("float") || idType == "coin.Coin";
+  let idZeroExpr: String = idNumeric ? "0" : "\"\"";
+  let idInvalidCond: String = idNumeric ? ("id <= " + idZeroExpr) : ("id == " + idZeroExpr);
+  // Update(e) 的护栏：主键取自实体字段，条件表达式直接用 e.<主键>
+  let idInvalidEntityCond: String = "e." + idName + (idNumeric ? (" <= " + idZeroExpr) : (" == " + idZeroExpr));
+  let idInsertWithIdCond: String = "e." + idName + " != " + idZeroExpr;
   // service 结构体两列对齐（DB/Repo）
   let svcName1: String = "DB";
   let svcType1: String = "*gorm.DB";
@@ -1360,6 +1456,8 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   let enImports: String = "";
   let enStd: String[] = [];
   let enExt: String[] = [];
+  // 实体文件固定带数据层错误常量（ErrNilEntity 等），统一需要 errors
+  enStd.append("errors");
   if (enTime) { enStd.append("time"); }
   if (param.hasDecimalField) { enExt.append(coinPath); }
   // 所有表都生成 querySpec（无联表时 Joins 为空），实体文件必须引用 cdb
@@ -1375,6 +1473,11 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
 
   let repoImports: String = buildGoImports([dbPath], ["gorm.io/gorm"]);
 
+  // InUpd 里 cdb 只被 CopyNonNil 使用：全可空指针列 / JSON 列 / 无可写列时不需要
+  let updNeedCdb: Bool = false;
+  for (uf in param.updFields) {
+    if (!uf.enIsPtr && uf.ptrType != uf.goType) { updNeedCdb = true; }
+  }
   let updImports: String = "import (\n";
   if (updNeedTime) {
     updImports = updImports + tb + "\"time\"\n\n";
@@ -1382,7 +1485,9 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   if (updNeedCoin) {
     updImports = updImports + tb + "\"" + coinPath + "\"\n";
   }
-  updImports = updImports + tb + "\"" + dbPath + "\"\n";
+  if (updNeedCdb) {
+    updImports = updImports + tb + "\"" + dbPath + "\"\n";
+  }
   updImports = updImports + tb + dataAlias + " \"" + dataPath + "\"\n)";
 
   let hdlImports: String = "import (\n" + tb + "\"github.com/gin-gonic/gin\"\n\n" + tb + "\""
@@ -1419,22 +1524,46 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   }
   let appOutClass: String = appHasOut ? ("Out" + param.tableClass) : (dataAlias + "." + param.enClass);
   // 出参字段行预对齐（gofmt 格式）
+  // C 方案：实体普通列已是值类型，出参直接赋值，无需解引用兜底；
+  // 仅数据库可空列仍是 *T，出参声明类型同步取 enDeclType（JSON 输出 null）
   let appOutFieldLines: String[] = [];
   let appOutAssignLines: String[] = [];
+  let appOutNeedTime: Bool = false;
+  let appOutNeedCoin: Bool = false;
+  let appOutNeedJson: Bool = false;
   if (appHasOut) {
     let outMaxName: Number = 0;
     let outMaxType: Number = 0;
     for (f in appOutFields) {
       if (f.goName.length > outMaxName) { outMaxName = f.goName.length; }
-      if (f.declType.length > outMaxType) { outMaxType = f.declType.length; }
+      if (f.enDeclType.length > outMaxType) { outMaxType = f.enDeclType.length; }
     }
     for (f in appOutFields) {
       let tag: String = "`json:\"" + f.name + "\"`";
       appOutFieldLines.append(tabChar() + padTo(f.goName, outMaxName) + " "
-        + padTo(f.declType, outMaxType) + " " + tag);
+        + padTo(f.enDeclType, outMaxType) + " " + tag);
       appOutAssignLines.append(tabChar() + tabChar() + padTo(f.goName + ":", outMaxName + 1)
         + " e." + f.goName + ",");
+      if (f.goType == "time.Time") { appOutNeedTime = true; }
+      if (f.goType == "coin.Coin") { appOutNeedCoin = true; }
+      if (f.goType == "datatypes.JSON") { appOutNeedJson = true; }
     }
+  }
+  let appOutImports: String = "";
+  if (appHasOut) {
+    let outStd: String[] = [];
+    let outExt: String[] = [];
+    if (appOutNeedTime) { outStd.append("time"); }
+    if (appOutNeedCoin) { outExt.append(coinPath); }
+    if (appOutNeedJson) { outExt.append("gorm.io/datatypes"); }
+    outExt.append(dataAlias + " \"" + dataPath + "\"");
+    appOutImports = "import (\n";
+    for (s in outStd) { appOutImports = appOutImports + tb + "\"" + s + "\"\n"; }
+    if (outStd.length > 0) { appOutImports = appOutImports + "\n"; }
+    for (e in outExt) {
+      appOutImports = appOutImports + tb + (e.indexOf(" ") > 0 ? e : ("\"" + e + "\"")) + "\n";
+    }
+    appOutImports = appOutImports + ")";
   }
   let appPkgComment: String = json["appPkgComment"];
   if (appPkgComment == null || appPkgComment == "") {
@@ -1503,13 +1632,21 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   tplData["idGoType"] = idType;
   tplData["idGoName"] = idName;
   tplData["idColName"] = idCol;
+  tplData["idZeroExpr"] = idZeroExpr;
+  tplData["idInvalidCond"] = idInvalidCond;
+  tplData["hasAutoIncPk"] = param.hasAutoIncPk;
+  tplData["hasNullableField"] = param.hasNullableField;
   tplData["permPrefix"] = tableName;
   tplData["enFieldLines"] = enFieldLines;
+  tplData["enSnapshotLines"] = enSnapshotLines;
+  tplData["enChangedLines"] = enChangedLines;
+  tplData["enChangedCount"] = enChangedCount;
   tplData["colLines"] = colLines;
   tplData["selFieldLines"] = selFieldLines;
   tplData["updFieldLines"] = updFieldLines;
-  tplData["toEntityLines"] = toEntityLines;
-  tplData["toUpdatesLines"] = toUpdatesLines;
+  tplData["applyToLines"] = applyToLines;
+  tplData["idInvalidEntityCond"] = idInvalidEntityCond;
+  tplData["idInsertWithIdCond"] = idInsertWithIdCond;
   tplData["svcFieldLines"] = svcFieldLines;
   tplData["whereConditions"] = whereConds;
   let listType: String = param.enClass;
@@ -1530,6 +1667,7 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   tplData["appOutFields"] = appOutFields;
   tplData["appOutFieldLines"] = appOutFieldLines;
   tplData["appOutAssignLines"] = appOutAssignLines;
+  tplData["appOutImports"] = appOutImports;
   tplData["appEmpty"] = appEmpty;
   // app 空接口：handler 生成件只剩 struct + New（同包类型），无 gin/common/实体
   // 引用 → import 必须为空。用独立键 appHdlImports：若直接清空 hdlImports，

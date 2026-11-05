@@ -161,9 +161,11 @@ export class FieldDef {
   let colType: String = "";        // 原始 MySQL 类型，如 "varchar(64)"
   let unsigned: Bool = false;      // 是否无符号
   let goType: String = "";         // Go 基础类型（int64/string/time.Time/...）
-  let declType: String = "";       // 声明类型（可空 → 指针；json 类型保持原样）
+  let declType: String = "";       // 值类型声明（InSel/Out 出参等值语义场景用）
   let isPtr: Bool = false;         // ptrType 是否为指针（模板解引用行为分支）
-  let ptrType: String = "";        // 指针声明类型（UpdateParams 用，全部指针）
+  let ptrType: String = "";        // 指针声明类型（InUpd 入参用，全部指针）
+  let enDeclType: String = "";     // 实体声明类型：普通列值类型，可空列指针
+  let enIsPtr: Bool = false;       // 实体字段是否指针（仅可空列；快照/diff 据此分支）
   let goName: String = "";         // 导出驼峰（snakeToPascal），如 user_name → UserName
   let gormTag: String = "";        // gorm:"column:xx;type:...[;primaryKey][;autoIncrement]"
   let jsonTag: String = "";        // json:"name"
@@ -205,6 +207,8 @@ export class Param {
   let updFields: FieldDef[] = [];    // UpdateParams 字段集（排除自动时间列与主键）
   let allWritableFields: FieldDef[] = []; // 除主键外全部列（InUpd 用，含 create_time 等时间列）
   let primaryField: FieldDef = null; // 主键列（SelectById/Update/Delete 依赖；无主键时报错跳表）
+  let hasAutoIncPk: Bool = false;    // 是否有自增主键（决定是否生成 Update(e)）
+  let hasNullableField: Bool = false; // 是否有可空列（快照需深拷贝指针列）
   let hasTimeField: Bool = false;    // 是否有 time.Time 列（实体 import "time"）
   let hasJsonField: Bool = false;    // 是否有 datatypes.JSON 列（实体 import gorm.io/datatypes）
   let hasDecimalField: Bool = false; // 是否有 coin.Coin 金额列（单表实体需补 import common）
@@ -290,13 +294,28 @@ export class Param {
       field.goType = mapTypeToGo(field.colType, field.unsigned);
       field.goName = snakeToPascal(field.name);
 
-      // 实体声明类型统一值类型（整数统一 int64，可空列也用值类型：
-      // 数据库默认值/零值兜底，避免实体字段到处解引用）
+      // 值类型声明（InSel 查询参数 / 出参等值语义场景用；整数统一 int64）
       field.declType = field.goType;
       field.ptrType = (field.goType != "datatypes.JSON") ? "*" + field.goType : field.goType;
       // UpdateParams 用 ptrType（全指针）；isPtr 标记模板解引用行为
       // （JSON 类型非指针，赋值不解引用）
       field.isPtr = (field.ptrType != field.goType);
+
+      // 实体声明类型（C 方案：值类型 + 快照 diff）：
+      // 普通列一律值类型；仅数据库允许 NULL 的列用指针（*T），
+      // nil 才有意义（区分"写入 NULL"与"写入 0/空串"）。
+      // json 列例外：datatypes.JSON（[]byte 语义）本身可空，保持值类型。
+      field.enIsPtr = (field.nullable == true) && (field.goType != "datatypes.JSON");
+      field.enDeclType = field.enIsPtr ? ("*" + field.goType) : field.goType;
+      if (field.isPrimary && field.isAutoInc) {
+        this.hasAutoIncPk = true;
+        // 自增主键不可能可空，这里显式兜底成值类型
+        field.enIsPtr = false;
+        field.enDeclType = field.goType;
+      }
+      if (field.enIsPtr) {
+        this.hasNullableField = true;
+      }
 
       // 标签拼装
       field.gormTag = this.buildGormTag(field);
