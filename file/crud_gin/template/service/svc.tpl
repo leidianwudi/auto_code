@@ -69,7 +69,7 @@ func (s *${serviceClass}) Save(data *${updClass}) (${idGoType}, error) {
 }
 ${else}// Save 保存（save 单接口）：本表无自增主键，Repo 未生成 Update(e)
 // TODO 更新语义无法按主键 diff：请在手写件 ${tableName}_service.go 按业务键实现，
-// 或用 s.Repo.UpdateById(事务 db, id, updates) 这一底层原语。
+// 或用 s.Repo.UpdateById(id, updates)（事务内先 s.Repo.Tx(tx) 派生实例）。
 func (s *${serviceClass}) Save(data *${updClass}) (${idGoType}, error) {
 	if ${tableClass}SaveHook != nil {
 		return ${tableClass}SaveHook(s, data)

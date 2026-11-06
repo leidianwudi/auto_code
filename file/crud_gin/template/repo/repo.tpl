@@ -70,7 +70,7 @@ func (r *${repoClass}) SelectById(id ${idGoType}) (*${enClass}, error) {
 }
 
 ${if hasAutoIncPk}// Insert 新增一条记录：主键必须为 0（由数据库自增），成功后 GORM 回填 e.${idGoName}
-// 可空列（指针）为 nil 时 GORM 直接写 SQL NULL
+// 可空列（指针）为 nil 时 GORM 直接写 SQL NULL；成功后重拍快照，可直接改字段再 Update
 func (r *${repoClass}) Insert(e *${enClass}) error {
 	if e == nil {
 		return ErrNilEntity
@@ -78,7 +78,11 @@ func (r *${repoClass}) Insert(e *${enClass}) error {
 	if ${idInsertWithIdCond} {
 		return ErrInsertWithId
 	}
-	return r.db.Create(e).Error
+	if err := r.db.Create(e).Error; err != nil {
+		return err
+	}
+	e.TakeSnapshot()
+	return nil
 }
 
 // Update 按主键更新：只写与 TakeSnapshot 基线不同的列，空 diff 直接返回 (0, nil)
@@ -97,7 +101,7 @@ func (r *${repoClass}) Update(e *${enClass}) (int64, error) {
 	if len(updates) == 0 {
 		return 0, nil
 	}
-	n, err := r.UpdateById(r.db, e.${idGoName}, updates)
+	n, err := r.UpdateById(e.${idGoName}, updates)
 	if err != nil {
 		return 0, err
 	}
@@ -105,34 +109,27 @@ func (r *${repoClass}) Update(e *${enClass}) (int64, error) {
 	return n, nil
 }
 ${else}// Insert 新增一条记录（本表无自增主键：主键由调用方指定，不做自增检查）
-// 可空列（指针）为 nil 时 GORM 直接写 SQL NULL
+// 可空列（指针）为 nil 时 GORM 直接写 SQL NULL；成功后重拍快照
 // TODO 复合/业务主键表不生成 Update(e)：更新请在手写件按业务键实现
 func (r *${repoClass}) Insert(e *${enClass}) error {
 	if e == nil {
 		return ErrNilEntity
 	}
-	return r.db.Create(e).Error
+	if err := r.db.Create(e).Error; err != nil {
+		return err
+	}
+	e.TakeSnapshot()
+	return nil
 }
 ${/if}
 
 // UpdateById 按主键更新（updates 的 key 用列名常量），空更新集直接返回 0
-// 底层原语：保留 db 首参，供事务内或自定义 SQL 场景直接调用
-func (r *${repoClass}) UpdateById(db *gorm.DB, id ${idGoType}, updates map[string]any) (int64, error) {
-	if len(updates) == 0 {
-		return 0, nil
-	}
-	query := cdb.WhereEq(db.Model(&${enClass}{}).Omit(Col${idGoName}), Col${idGoName}, id).Updates(updates)
-	if query.Error != nil {
-		return 0, query.Error
-	}
-	return query.RowsAffected, nil
+// 用 repo 自身连接；需要事务时先 Tx(tx) 派生新实例再调用
+func (r *${repoClass}) UpdateById(id ${idGoType}, updates map[string]any) (int64, error) {
+	return cdb.UpdateByEq(r.db, &${enClass}{}, Col${idGoName}, id, updates)
 }
 
 // Delete 删除记录（支持多条），返回受影响行数
 func (r *${repoClass}) Delete(ids []${idGoType}) (int64, error) {
-	res := cdb.WhereIn(r.db, Col${idGoName}, ids).Delete(&${enClass}{})
-	if res.Error != nil {
-		return 0, res.Error
-	}
-	return res.RowsAffected, nil
+	return cdb.DeleteByIn(r.db, &${enClass}{}, Col${idGoName}, ids)
 }
