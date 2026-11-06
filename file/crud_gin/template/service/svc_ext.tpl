@@ -18,6 +18,6 @@ package ${pkgName}
 
 // （示例）扩展业务方法：ext_handler / ext_router 按需调用
 // func (s *${serviceClass}) Approve(id ${idGoType}) error {
-// 	return s.DB.Model(&${dataAlias}.${enClass}{}).Where("id = ?", id).Update("status", 1).Error
+// 	return cdb.WhereEq(s.DB.Model(&${dataAlias}.${enClass}{}), ${dataAlias}.ColId, id).Update(${dataAlias}.ColEnable, 1).Error // Update 列按该表实际要改的列常量替换（如 ColEnable / ColLevel / ColIsDisable）
 // }
 ${/if}
