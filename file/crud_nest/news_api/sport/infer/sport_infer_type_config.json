@@ -1,0 +1,43 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\infer\\sport_infer_type_config",
+      "tableName": "sport_infer_type_config",
+      "selCols": [
+        "schedule_id",
+        "type_id",
+        "base_value",
+        "base_side",
+        "close_value"
+      ],
+      "selColsSort": {
+        "id": "DESC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportLeagueSchedule",
+          "joinEnClass_Url": "src/sport/sport_league_schedule/entities/en_sport_league_schedule",
+          "joinEnClassPro": "sportLeagueSchedule",
+          "joinType": "ManyToOne",
+          "joinColumn": {
+            "name": "schedule_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        },
+        {
+          "joinEnClass": "EnSportInferType",
+          "joinEnClass_Url": "src/sport/infer/sport_infer_type/entities/en_sport_infer_type",
+          "joinEnClassPro": "sportInferType",
+          "joinType": "ManyToOne",
+          "joinColumn": {
+            "name": "type_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}

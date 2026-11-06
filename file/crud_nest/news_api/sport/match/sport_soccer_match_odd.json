@@ -1,0 +1,35 @@
+{
+  "$schema": "/crud_nest/template/tool/param.schema.json",
+  "tables": [
+    {
+      "modelName": "sport\\match\\sport_soccer_match_odd",
+      "tableName": "sport_soccer_match_odd",
+      "selCols": [
+        "schedule_id",
+        "market",
+        "company_abbr"
+      ],
+      "selColsLike": [
+        "company_name"
+      ],
+      "selColsSort": {
+        "schedule_id": "ASC",
+        "market": "ASC",
+        "id": "ASC"
+      },
+      "joinTable": [
+        {
+          "joinEnClass": "EnSportLeagueSchedule",
+          "joinEnClass_Url": "src/sport/sport_league_schedule/entities/en_sport_league_schedule",
+          "joinEnClassPro": "sportLeagueSchedule",
+          "joinType": "ManyToOne",
+          "joinColumn": {
+            "name": "schedule_id",
+            "referencedColumnName": "id"
+          },
+          "isJoinRelations": true
+        }
+      ]
+    }
+  ]
+}
