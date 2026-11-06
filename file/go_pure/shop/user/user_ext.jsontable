@@ -213,6 +213,7 @@
       },
       {
         comment: '注册时间',
+        default: 'now()',
         isAutoInc: false,
         isPrimary: false,
         mysqlType: 'datetime',
@@ -241,11 +242,12 @@
       },
       {
         comment: '最后登陆时间',
+        default: 'CURRENT_TIMESTAMP',
         isAutoInc: false,
         isPrimary: false,
         mysqlType: 'datetime',
         name: 'last_time',
-        nullable: false,
+        nullable: true,
         unsigned: false,
       },
       {
@@ -505,7 +507,7 @@
         ref: 'account',
       },
     ],
-    tableComment: '用户扩展',
+    tableComment: '用户扩展表',
     tableName: 'user_ext',
     viewOrder: [
       'id',

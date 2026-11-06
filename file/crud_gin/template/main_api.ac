@@ -1495,7 +1495,7 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
     + " \"" + dataPath + "\"\n)";
   // 新增路径必须显式填"NOT NULL 且无可依赖 DB 默认值"的创建时间列：
   // 值类型 time.Time 零值 0001-01-01 在 STRICT_TRANS_TABLES + NO_ZERO_DATE 下插入会报 1292。
-  // 可空 *time.Time 的 created_at 由实体 autoCreateTime tag 维护，不在此重复赋值。
+  // 可空 *time.Time 的 created_at 由数据库默认值或业务显式赋值维护，不在此重复赋值。
   let svcCreateTimeLines: String[] = [];
   let svcNeedTime: Bool = false;
   for (cf in param.fields) {

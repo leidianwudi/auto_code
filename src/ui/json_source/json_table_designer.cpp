@@ -233,6 +233,18 @@ QString quote(QString literal) {
   return QStringLiteral("'%1'").arg(literal);
 }
 
+/// 是否"数据库侧默认值"（建表 DDL 中不加引号）：含成对括号或命中时间关键字。
+/// 与 file/crud_gin/template/core/param_go.ac 的 isDbDefault 保持一致，两处需同步维护。
+bool isDbDefaultExpr(const QString &value) {
+  const QString v = value.trimmed();
+  if (v.isEmpty() || v.contains(QLatin1Char(';'))) return false;
+  if (v.contains(QLatin1Char('(')) && v.contains(QLatin1Char(')'))) return true;
+  const QString lv = v.toLower();
+  return lv == QStringLiteral("current_timestamp") || lv == QStringLiteral("current_date") ||
+         lv == QStringLiteral("current_time") || lv == QStringLiteral("localtimestamp") ||
+         lv == QStringLiteral("now");
+}
+
 /// 弹窗显示 FunMgr 错误通道里的最近错误（空则用 fallback 文案）
 void showFunDbError(QWidget *parent, const QString &title, const QString &fallback) {
   QString err = FunMgr::takeError();
@@ -3416,7 +3428,12 @@ static QString createDdlText(const QString &tableName, const QString &tableComme
     parts << tick(c.name) << c.mysqlType.trimmed();
     if (c.isUnsigned) parts << QStringLiteral("unsigned");
     parts << (c.nullable ? QStringLiteral("NULL") : QStringLiteral("NOT NULL"));
-    if (!c.defaultValue.isEmpty()) parts << QStringLiteral("DEFAULT %1").arg(quote(c.defaultValue));
+    if (!c.defaultValue.isEmpty()) {
+      // 表达式默认值（now()/CURRENT_TIMESTAMP）不加引号，否则 datetime 列 DDL 非法
+      parts << QStringLiteral("DEFAULT %1").arg(isDbDefaultExpr(c.defaultValue)
+                                                    ? c.defaultValue.trimmed()
+                                                    : quote(c.defaultValue));
+    }
     if (c.isAutoInc) parts << QStringLiteral("AUTO_INCREMENT");
     if (!c.comment.isEmpty()) parts << QStringLiteral("COMMENT %1").arg(quote(c.comment));
     defs << QStringLiteral("  ") + parts.join(QLatin1Char(' '));
