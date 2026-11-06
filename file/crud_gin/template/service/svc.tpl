@@ -53,7 +53,9 @@ func (s *${serviceClass}) Save(data *${updClass}) (${idGoType}, error) {
 	}
 	if data.${idGoName} == ${idZeroExpr} {
 		e := data.ToEntity()
-		if err := s.Repo.Insert(e); err != nil {
+${each line in svcCreateTimeLines}
+${line}
+${/each}		if err := s.Repo.Insert(e); err != nil {
 			return ${idZeroExpr}, err
 		}
 		return e.${idGoName}, nil

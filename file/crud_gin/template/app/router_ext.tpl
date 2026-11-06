@@ -11,7 +11,7 @@ ${if !fileExists(outputPath)}
 // ${tableComment}(${tableName}) 扩展路由（C 端）：自定义接口挂载点
 //   1. 生成件 ${tableName}_router_.go 每次重新生成都会调用 RegisterExtRoutes，
 //      请勿删除该函数（函数体可自由修改）
-//   2. rg 复用 mount${tableClass} 的路由组；${appRouterMountNote}
+//   2. g 复用 mount${tableClass} 的路由组；${appRouterMountNote}
 //      逐接口不同的认证/限流策略自行调用 middleware
 //   3. 扩展 Handler 方法建议写在 ${tableName}_handler.go
 //   4. 使用第三方包时自行补 import 块
@@ -21,8 +21,9 @@ package ${pkgName}
 import "github.com/gin-gonic/gin"
 
 // RegisterExtRoutes 挂载${tableComment}C 端扩展路由（生成件 ${tableName}_router_.go 调用）
-func RegisterExtRoutes(rg *gin.RouterGroup) {
-	// 示例：rg.GET("/my", h.MyList)
-	_ = rg
+// g 已配好路径与中间件，h 是该模块的 handler（复用生成件同一实例，勿再 New）
+func RegisterExtRoutes(g *gin.RouterGroup, h *${handlerClass}) {
+	// 示例：g.GET("/my", h.MyList)
+	_ = g
 }
 ${/if}

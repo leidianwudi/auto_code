@@ -215,7 +215,9 @@ export class Param {
 
   /// @brief 拼接单列的 gorm tag
   ///   形如 gorm:"column:name;type:varchar(64)"，主键追加 ;primaryKey，
-  ///   自增追加 ;autoIncrement；unsigned 附加到 type 后（type:bigint unsigned）
+  ///   自增追加 ;autoIncrement；unsigned 附加到 type 后（type:bigint unsigned）；
+  ///   可空审计时间列追加 ;autoCreateTime / ;autoUpdateTime，由 GORM 兜底填值
+  ///   （指针列 nil 时 GORM 会显式写 NULL，MySQL 不会套用 DEFAULT/ON UPDATE）
   function buildGormTag(field: FieldDef): String {
     let tag: String = "column:" + field.name + ";type:" + field.colType;
     // 无符号：列配置 unsigned=true 且类型串未自带 unsigned 时附加
@@ -227,6 +229,13 @@ export class Param {
     }
     if (field.isAutoInc) {
       tag = tag + ";autoIncrement";
+    }
+    // 仅可空指针列需要 tag 兜底：非空值类型由新增路径显式赋值（见 svc.tpl）
+    if (field.isCreateDate && field.enIsPtr) {
+      tag = tag + ";autoCreateTime";
+    }
+    if (field.isUpdateDate && field.enIsPtr) {
+      tag = tag + ";autoUpdateTime";
     }
     return "gorm:\"" + tag + "\"";
   }
@@ -317,7 +326,16 @@ export class Param {
         this.hasNullableField = true;
       }
 
-      // 标签拼装
+      // 自动维护时间列：create_time/created_at 恒自动（DB 默认值或 gorm
+      // autoCreateTime）；update_time/updated_at 未配 manualUpdateTime 时
+      // 由 DB ON UPDATE 或 gorm autoUpdateTime 维护——两者均不入增改参数
+      let isDateTime = field.colType.toLowerCase().includes("datetime")
+        || field.colType.toLowerCase().includes("timestamp");
+      field.isCreateDate = (field.name == "create_time" || field.name == "created_at") && isDateTime;
+      field.isUpdateDate = (field.name == "update_time" || field.name == "updated_at") && isDateTime && !manualUpdateTime;
+      field.isAutoTime = field.isCreateDate || field.isUpdateDate;
+
+      // 标签拼装（依赖上面的 isCreateDate/isUpdateDate）
       field.gormTag = this.buildGormTag(field);
       field.jsonTag = "json:\"" + field.name + "\"";
       if (field.required) {
@@ -326,15 +344,6 @@ export class Param {
         field.bindingTag = " binding:\"omitempty\"";
       }
       field.zeroKind = zeroKindOfGoType(field.goType);
-
-      // 自动维护时间列：create_time/created_at 恒自动（DB 默认值或 gorm
-      // CreatedAt 约定）；update_time/updated_at 未配 manualUpdateTime 时
-      // 由 DB ON UPDATE 或 gorm UpdatedAt 约定维护——两者均不入增改参数
-      let isDateTime = field.colType.toLowerCase().includes("datetime")
-        || field.colType.toLowerCase().includes("timestamp");
-      field.isCreateDate = (field.name == "create_time" || field.name == "created_at") && isDateTime;
-      field.isUpdateDate = (field.name == "update_time" || field.name == "updated_at") && isDateTime && !manualUpdateTime;
-      field.isAutoTime = field.isCreateDate || field.isUpdateDate;
 
       // 参数字段集合：editCols 显式列出 = 进表单；writable 决定是否进写参数
       // （visible=false 仍可写，仅前端不渲染；editEditable 只影响 Vue，不影响 Go）

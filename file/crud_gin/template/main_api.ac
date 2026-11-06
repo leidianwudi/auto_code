@@ -1493,7 +1493,25 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   let hdlImports: String = "import (\n" + tb + "\"github.com/gin-gonic/gin\"\n\n" + tb + "\""
     + commonPath + "\"\n" + tb + "\"" + httpxPath + "\"\n" + tb + dataAlias
     + " \"" + dataPath + "\"\n)";
-  let svcImports: String = "import (\n" + tb + "\"gorm.io/gorm\"\n\n" + tb + dataAlias
+  // 新增路径必须显式填"NOT NULL 且无可依赖 DB 默认值"的创建时间列：
+  // 值类型 time.Time 零值 0001-01-01 在 STRICT_TRANS_TABLES + NO_ZERO_DATE 下插入会报 1292。
+  // 可空 *time.Time 的 created_at 由实体 autoCreateTime tag 维护，不在此重复赋值。
+  let svcCreateTimeLines: String[] = [];
+  let svcNeedTime: Bool = false;
+  for (cf in param.fields) {
+    if (cf.isCreateDate && !cf.enIsPtr) {
+      svcCreateTimeLines.append(tb + tb + "e." + cf.goName + " = time.Now()");
+      svcNeedTime = true;
+    }
+  }
+  let svcImports: String = "import (\n";
+  if (svcNeedTime) {
+    svcImports = svcImports + tb + "\"time\"\n\n";
+  }
+  svcImports = svcImports + tb + "\"gorm.io/gorm\"\n\n" + tb + dataAlias
+    + " \"" + dataPath + "\"\n)";
+  // C 端只读 service 不写库，不需要 time（svcImports 可能因创建时间列带 time）
+  let appSvcImports: String = "import (\n" + tb + "\"gorm.io/gorm\"\n\n" + tb + dataAlias
     + " \"" + dataPath + "\"\n)";
   let routerImports: String = "import (\n" + tb + "\"github.com/gin-gonic/gin\"\n\n" + tb + "\""
     + dbPath + "\"\n" + tb + "\"" + middlewarePath + "\"\n)";
@@ -1660,6 +1678,8 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   tplData["updImports"] = updImports;
   tplData["hdlImports"] = hdlImports;
   tplData["svcImports"] = svcImports;
+  tplData["appSvcImports"] = appSvcImports;
+  tplData["svcCreateTimeLines"] = svcCreateTimeLines;
   tplData["routerImports"] = routerImports;
   tplData["appQuery"] = appQuery;
   tplData["appHasOut"] = appHasOut;
