@@ -96,6 +96,7 @@ enum UCols {
   UColRef = 0,   ///< 字段引用（本表列名 或 引用名.目标列，可编辑下拉）
   UColTitle,     ///< 标题（生效值 = selCols.label > 列注释 > ref；写回 selCols.label）
   UColWritable,  ///< 写入参数勾（Go InUpd 包含该字段）
+  UColOutput,    ///< 输出勾（Go 实体 json:"-"：取消后 API 响应不含该列）
   UColQuery,     ///< 查询模式（cell widget：不查询/精确/模糊/范围/仅接口）
   UColList,      ///< 列表勾选（在 selCols 中）
   UColVisible,   ///< 表单展示勾（Vue 渲染表单项）
@@ -1085,6 +1086,7 @@ void JsonTableDesigner::setupUI() {
   m_viewTable = makeConfigTable({{QStringLiteral("字段引用"), QHeaderView::Interactive, 150},
                                  {QStringLiteral("标题"), QHeaderView::Interactive, 130},
                                  {QStringLiteral("写入"), QHeaderView::Interactive, 56},
+                                 {QStringLiteral("输出"), QHeaderView::Interactive, 56},
                                  {QStringLiteral("查询"), QHeaderView::Interactive, 88},
                                  {QStringLiteral("列表"), QHeaderView::Interactive, 56},
                                  {QStringLiteral("展示"), QHeaderView::Interactive, 56},
@@ -1103,6 +1105,10 @@ void JsonTableDesigner::setupUI() {
                                   "表单内是否可输入由 ⚙ 里的「表单可编辑」控制")},
       {UColWritable, QStringLiteral("☑ 进入写参数 InUpd，接口可写入该字段\n"
                                    "☐ 不写入（只展示或完全不参与）；与「展示」独立组合")},
+      {UColOutput, QStringLiteral("☑ 接口正常输出该列\n"
+                                 "☐ 不输出（如密码）：实体 json 标记为 json:\"-\"，"
+                                 "所有 API 响应都不含该列\n"
+                                 "写参数 InUpd 不受影响（编辑表单仍可提交该字段）")},
       {UColCfg, QStringLiteral("配置：⚙ 列表样式=列表展示类型、表单控件/表单可编辑/必填；"
                                "双击单元格打开设置")}};
   m_viewHeader = m_viewTable->horizontalHeader();
@@ -1254,7 +1260,7 @@ void JsonTableDesigner::setupUI() {
   m_appOutBtn = makeCompactButton(QStringLiteral("C端出参: 全部"), this);
   m_appOutBtn->setToolTip(QStringLiteral(
       "C 端出参白名单：勾选后生成 out_<表>_.go，只输出所选列\n"
-      "留空 = 直接返回完整实体（敏感列靠 json:\"-\" 挡住）\n"
+      "留空 = 直接返回完整实体（「输出」未勾选的列始终不出现）\n"
       "只对主表字段生效，联表输出列暂不支持"));
   genRow->addWidget(m_appOutBtn);
   addVSep();
@@ -1762,10 +1768,11 @@ void JsonTableDesigner::connectChangeSignals() {
   for (QComboBox *combo : findChildren<QComboBox *>()) {
     connect(combo, &QComboBox::currentIndexChanged, this, onChange);
   }
-  // 「表单展示」勾选变化 → 刷新该行配置摘要（表单可编辑状态段随之显隐）
+  // 「表单展示」「输出」勾选变化 → 刷新该行配置摘要
   connect(m_viewTable, &QTableWidget::itemChanged, this, [this](QTableWidgetItem *it) {
     if (!it || m_loading || it->row() < 0) return;
-    if (it->column() == UColVisible) refreshViewCfgSummary(it->row());
+    if (it->column() == UColVisible || it->column() == UColOutput)
+      refreshViewCfgSummary(it->row());
   });
 }
 
@@ -2143,8 +2150,12 @@ QVector<JsonTableJoinSpec> JsonTableDesigner::collectJoins() const {
 /// 空值按缺省语义显示（displayType 空=text、widget 空=text、未配置不显示该段）；
 /// domainType 来自列级取值域（物理列）——⚙ 面板取值域区
 static QString viewCfgSummary(const JsonTableSelCol &sc, const JsonTableEditCol &ec,
-                              const QString &domainType, bool inForm = true) {
+                              const QString &domainType, bool inForm = true,
+                              bool noOutput = false) {
   QStringList parts;
+  if (noOutput) {
+    parts << QStringLiteral("不输出");
+  }
   if (!domainType.isEmpty()) {
     parts << (QStringLiteral("取值域:") + domainType);
   }
@@ -2226,6 +2237,8 @@ void JsonTableDesigner::fillViewTable() {
   for (const auto &c : m_table.columns) colComments.insert(c.name, c.comment);
   QHash<QString, QString> colTitles;
   for (const auto &c : m_table.columns) colTitles.insert(c.name, c.title);
+  QHash<QString, bool> colHidden;  ///< 列是否「不输出」（实体 json:"-"）
+  for (const auto &c : m_table.columns) colHidden.insert(c.name, c.hidden);
 
   // 模式判定需区分键归属，循环三键填 mode2（ref → {mode, visible}）
   QHash<QString, QPair<QString, bool>> mode2;
@@ -2354,10 +2367,21 @@ void JsonTableDesigner::fillViewTable() {
     };
     m_viewTable->setItem(row, UColVisible, makeCheck(showField));
     m_viewTable->setItem(row, UColWritable, makeCheck(writeField));
+    // 输出（实体 json）：联表输出列由 joinTables 控制，本列不适用 → 灰显「—」
+    const bool noOutput = isJoinRow ? false : colHidden.value(ref, false);
+    if (isJoinRow) {
+      auto *outItem = new QTableWidgetItem(QStringLiteral("—"));
+      outItem->setFlags(Qt::ItemIsEnabled);
+      outItem->setTextAlignment(Qt::AlignCenter);
+      outItem->setToolTip(QStringLiteral("联表输出列由「联表与索引」的输出列控制"));
+      m_viewTable->setItem(row, UColOutput, outItem);
+    } else {
+      m_viewTable->setItem(row, UColOutput, makeCheck(!noOutput));
+    }
     // 配置列（⚙ 与摘要合成一列，对齐 jsonvue；双击单元格打开设置面板）
     auto *cfgItem =
         new QTableWidgetItem(QStringLiteral("⚙ ") +
-                             viewCfgSummary(selMeta, editMeta, dType, showField));
+                             viewCfgSummary(selMeta, editMeta, dType, showField, noOutput));
     cfgItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
     m_viewTable->setItem(row, UColCfg, cfgItem);
     // 编辑可编辑/必填槽位（+24/+25；必填在 ⚙ 字段设置面板编辑，联表行固定只读不校验）
@@ -2446,6 +2470,12 @@ void JsonTableDesigner::appendViewJoinRow(const QString &ref) {
   };
   addViewCheck(UColVisible, true);
   addViewCheck(UColWritable, !ref.contains(QLatin1Char('.')));
+  // 输出列不适用联表行（由「联表与索引」的输出列控制）
+  auto *outItem = new QTableWidgetItem(QStringLiteral("—"));
+  outItem->setFlags(Qt::ItemIsEnabled);
+  outItem->setTextAlignment(Qt::AlignCenter);
+  outItem->setToolTip(QStringLiteral("联表输出列由「联表与索引」的输出列控制"));
+  m_viewTable->setItem(row, UColOutput, outItem);
   // 配置列（⚙ 与摘要合成一列；联表行为只读展示，摘要显式标注「表单只读」）
   JsonTableSelCol joinSc;
   JsonTableEditCol joinEc;
@@ -2598,9 +2628,13 @@ void JsonTableDesigner::collectViewTable(JsonTableTable *out) const {
     // 列级标题 → 回写物理列定义（三视图共用一个标题；与注释/引用相同的值
     // 视为未覆写不落键，避免批量固化注释导致后续注释修改无法传导）
     if (!ref.contains(QLatin1Char('.'))) {
+      const QTableWidgetItem *outIt = m_viewTable->item(r, UColOutput);
+      const bool noOutput = outIt && outIt->flags().testFlag(Qt::ItemIsUserCheckable) &&
+                            outIt->checkState() != Qt::Checked;
       for (auto &c : out->columns) {
         if (c.name == ref) {
           c.title = (title.isEmpty() || title == ref || title == c.comment) ? QString() : title;
+          c.hidden = noOutput;
           break;
         }
       }
@@ -2712,7 +2746,11 @@ void JsonTableDesigner::refreshViewCfgSummary(int row) {
   const QString domainType = refIt->data(Qt::UserRole + 11).toString();
   const QTableWidgetItem *showIt = m_viewTable->item(row, UColVisible);
   const bool inForm = showIt && showIt->checkState() != Qt::Unchecked;
-  cfgIt->setText(QStringLiteral("⚙ ") + viewCfgSummary(sc, ec, domainType, inForm));
+  // 输出勾：不勾 = 实体 json:"-"（联表行的「—」不可勾选，按正常输出处理）
+  const QTableWidgetItem *outIt = m_viewTable->item(row, UColOutput);
+  const bool noOutput = outIt && outIt->flags().testFlag(Qt::ItemIsUserCheckable) &&
+                        outIt->checkState() != Qt::Checked;
+  cfgIt->setText(QStringLiteral("⚙ ") + viewCfgSummary(sc, ec, domainType, inForm, noOutput));
 }
 // ════════════════════════════════════════════════════════════
 //  表级进阶键：查询配置 / 排序 / 表内枚举 / i18n
@@ -2748,7 +2786,7 @@ void JsonTableDesigner::updateAppOutBtn() {
                               : m_appOutCols.join(QStringLiteral(", "));
   m_appOutBtn->setToolTip(QStringLiteral(
       "C 端出参白名单：勾选后生成 out_<表>_.go，只输出所选列\n"
-      "留空 = 直接返回完整实体（敏感列靠 json:\"-\" 挡住）\n"
+      "留空 = 直接返回完整实体（「输出」未勾选的列始终不出现）\n"
       "只对主表字段生效，联表输出列暂不支持\n"
       "当前：%1").arg(current));
 }
@@ -2761,7 +2799,7 @@ void JsonTableDesigner::editAppOutCols() {
 
   auto *tip = new QLabel(
       QStringLiteral("勾选 C 端接口（App / 小程序等客户端）允许输出的列（只支持主表字段）；"
-                     "留空 = 返回完整实体。"),
+                     "留空 = 返回完整实体。标记「不输出」的列不在此列出（生成时也不会输出）。"),
       &dlg);
   tip->setWordWrap(true);
   frame.contentLayout->addWidget(tip);
@@ -2784,9 +2822,19 @@ void JsonTableDesigner::editAppOutCols() {
       &dlg, 200);
   table->setSelectionMode(QAbstractItemView::NoSelection);
   table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+  QSet<QString> hiddenCols;  // 「输出」未勾选的列：白名单不列出（生成侧也会过滤）
+  for (int r = 0; r < m_viewTable->rowCount(); ++r) {
+    const QString ref = viewRefText(r);
+    if (ref.isEmpty() || ref.contains(QLatin1Char('.'))) continue;
+    const QTableWidgetItem *outIt = m_viewTable->item(r, UColOutput);
+    if (outIt && outIt->flags().testFlag(Qt::ItemIsUserCheckable) &&
+        outIt->checkState() != Qt::Checked) {
+      hiddenCols.insert(ref);
+    }
+  }
   for (int r = 0; r < m_colsTable->rowCount(); ++r) {
     const QString name = cellText(r, ColColName);
-    if (name.isEmpty()) continue;
+    if (name.isEmpty() || hiddenCols.contains(name)) continue;
     const int row = table->rowCount();
     table->insertRow(row);
     auto *check = new QTableWidgetItem;

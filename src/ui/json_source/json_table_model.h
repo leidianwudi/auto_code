@@ -90,6 +90,8 @@ inline constexpr const char *kIsPrimary = "isPrimary";
 inline constexpr const char *kIsAutoInc = "isAutoInc";
 inline constexpr const char *kDefault = "default";  ///< 空串/缺省/null=无默认值
 inline constexpr const char *kComment = "comment";
+inline constexpr const char *kHidden =
+    "hidden";  ///< 列不输出（true=实体 json:"-"，API 响应不含该列；写入/编辑照常）
 // 列前端角色（gva 式，字段级）：列表/搜索/表单角色全部退役——页面呈现由
 // 表级三视图接管（selCols 列表 / selColsEq/Like/Gap 查询 / editCols 编辑）
 // 索引键
@@ -201,6 +203,7 @@ struct JsonTableColumn {
   QString defaultValue;     ///< 默认值（JSON 键 "default"；空串=无默认值）
   QString comment;          ///< 列注释
   QString title;            ///< 显示标题（字段呈现标题列；空=回退列注释，三视图共用）
+  bool hidden = false;      ///< 接口不输出（true=实体 json:"-"，如密码；写入/编辑不受影响）
 
   // ── 字段取值域（jsonvue 方案 B 列级中心化；空=未声明）──
   // 单处存储三视图共用；生成侧列级域优先，enums/globalEnumCols 旧机制回退

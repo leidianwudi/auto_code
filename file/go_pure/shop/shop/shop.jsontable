@@ -2,8 +2,17 @@
   table: {
     adminPkgComment: '商店管理端模块（CRUD）',
     appAuth: 'public',
+    appOutCols: [
+      'id',
+      'logo_img',
+      'level',
+      'sell_count',
+      'like',
+      'follow',
+      'is_open',
+      'status',
+    ],
     appQuery: true,
-    appOutCols: ['id', 'logo_img', 'level', 'sell_count', 'like', 'follow', 'is_open', 'status'],
     columns: [
       {
         comment: '主键',
@@ -154,9 +163,9 @@
         ref: 'logo_img',
       },
       {
+        editEditable: false,
         label: '掌柜id',
         ref: 'user_id',
-        editEditable: false,
         writable: false,
       },
       {
@@ -171,21 +180,21 @@
         writable: false,
       },
       {
+        editEditable: false,
         label: '总售件数',
         ref: 'sell_count',
-        editEditable: false,
         writable: false,
       },
       {
+        editEditable: false,
         label: '总营业额',
         ref: 'sell_money',
-        editEditable: false,
         writable: false,
       },
       {
+        editEditable: false,
         label: '好评',
         ref: 'like',
-        editEditable: false,
         writable: false,
       },
       {
@@ -205,15 +214,15 @@
         ref: 'id',
       },
       {
+        editEditable: false,
         label: '差评',
         ref: 'dis_like',
-        editEditable: false,
         writable: false,
       },
       {
+        editEditable: false,
         label: '关注数量',
         ref: 'follow',
-        editEditable: false,
         writable: false,
       },
       {

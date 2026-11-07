@@ -43,6 +43,7 @@
       },
       {
         comment: '密码',
+        hidden: true,
         isAutoInc: false,
         isPrimary: false,
         mysqlType: 'varchar(64)',
@@ -52,6 +53,7 @@
       },
       {
         comment: '微信登陆token',
+        hidden: true,
         isAutoInc: false,
         isPrimary: false,
         mysqlType: 'varchar(64)',

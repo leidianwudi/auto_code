@@ -168,7 +168,9 @@ export class FieldDef {
   let enIsPtr: Bool = false;       // 实体字段是否指针（仅可空列；快照/diff 据此分支）
   let goName: String = "";         // 导出驼峰（snakeToPascal），如 user_name → UserName
   let gormTag: String = "";        // gorm:"column:xx;type:...[;primaryKey][;autoIncrement]"
-  let jsonTag: String = "";        // json:"name"
+  let jsonTag: String = "";        // json:"name"（InSel/InUpd 等入参结构用）
+  let enJsonTag: String = "";      // 实体 json tag（hidden 列 = json:"-"）
+  let hidden: Bool = false;        // 接口不输出（true → 实体 json:"-"，如密码）
   let bindingTag: String = "";     // binding:"required" / binding:"omitempty"（含前导空格）
   let nullable: Bool = false;      // 是否可空（→ 指针类型）
   let isPrimary: Bool = false;     // 是否主键
@@ -376,6 +378,9 @@ export class Param {
       // 标签拼装（依赖上面的 isCreateDate/isUpdateDate）
       field.gormTag = this.buildGormTag(field);
       field.jsonTag = "json:\"" + field.name + "\"";
+      // 不输出列：仅实体标签为 json:"-"，入参（InUpd 等）仍用正常列名（密码可写入）
+      field.hidden = (col["hidden"] == true);
+      field.enJsonTag = field.hidden ? "json:\"-\"" : field.jsonTag;
       if (field.required) {
         field.bindingTag = " binding:\"required\"";
       } else {

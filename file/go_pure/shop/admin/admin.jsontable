@@ -21,6 +21,7 @@
       },
       {
         comment: '密码',
+        hidden: true,
         isAutoInc: false,
         isPrimary: false,
         mysqlType: 'varchar(255)',
@@ -88,6 +89,7 @@
       },
       {
         comment: '登录凭证',
+        hidden: true,
         isAutoInc: false,
         isPrimary: false,
         mysqlType: 'varchar(255)',
@@ -97,6 +99,7 @@
       },
       {
         comment: '刷新凭证',
+        hidden: true,
         isAutoInc: false,
         isPrimary: false,
         mysqlType: 'varchar(255)',

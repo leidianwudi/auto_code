@@ -725,12 +725,12 @@ export function buildEnFieldLines(fields: FieldDef[]): String[] {
   for (f in fields) {
     if (f.goName.length > maxName) { maxName = f.goName.length; }
     if (f.enDeclType.length > maxType) { maxType = f.enDeclType.length; }
-    let tl: Number = ("`" + f.gormTag + " " + f.jsonTag + "`").length;
+    let tl: Number = ("`" + f.gormTag + " " + f.enJsonTag + "`").length;
     if (tl > maxTag) { maxTag = tl; }
   }
   let lines: String[] = [];
   for (f in fields) {
-    let tag: String = "`" + f.gormTag + " " + f.jsonTag + "`";
+    let tag: String = "`" + f.gormTag + " " + f.enJsonTag + "`";
     lines.append(tabChar() + padTo(f.goName, maxName) + " " + padTo(f.enDeclType, maxType)
       + " " + padTo(tag, maxTag) + " // " + f.comment);
   }
@@ -1534,10 +1534,15 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
     // 按 appOutCols 的配置顺序输出，出参 JSON 字段顺序与配置一致
     for (oc in appOutCols) {
       for (f in param.fields) {
-        if (oc == f.name) {
+        // 「输出」未勾选的列即使出现在白名单也不输出（与实体 json:"-" 双保险）
+        if (oc == f.name && f.hidden != true) {
           appOutFields.append(f);
         }
       }
+    }
+    // 白名单命中的列全部被标记「不输出」→ 回退完整实体（隐藏列仍由 json:"-" 挡住）
+    if (appOutFields.length == 0) {
+      appHasOut = false;
     }
   }
   let appOutClass: String = appHasOut ? ("Out" + param.tableClass) : (dataAlias + "." + param.enClass);

@@ -628,6 +628,11 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
       col["selectLabelField"] = labelColOfTarget(
           joinContext != null ? joinContext[fkInfo["pro"]]["types"] : null);
     }
+    // 「输出」未勾选的列（如密码）：接口响应不含该列，列表页强制不展示；
+    // 编辑表单仍保留（可提交新值），列表勾选不会把它拉回来
+    if (rc["hidden"] == true) {
+      col["queryVisible"] = false;
+    }
     cols.append(col);
   }
   // 列表收敛：配了 selCols 时，未命中的本表列 queryVisible=false；

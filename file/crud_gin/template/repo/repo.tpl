@@ -40,14 +40,17 @@ func (r *${repoClass}) Transaction(fn func(tx *gorm.DB) error) error {
 }
 
 ${if hasAutoIncPk}// Patch 按主键读取 → 拍快照 → 应用 fn → 按 diff 更新，省去手写样板。
+// fn 返回非 nil 错误时中止本次更新（不会落库），错误原样返回给调用方。
 // 注意：读改写不是并发安全的；需要防丢更新时配合乐观锁/CAS。
-func (r *${repoClass}) Patch(id ${idGoType}, fn func(e *${enClass})) (int64, error) {
+func (r *${repoClass}) Patch(id ${idGoType}, fn func(e *${enClass}) error) (int64, error) {
 	e, err := r.SelectById(id)
 	if err != nil {
 		return 0, err
 	}
 	e.TakeSnapshot()
-	fn(e)
+	if err := fn(e); err != nil {
+		return 0, err
+	}
 	return r.Update(e)
 }
 ${/if}
