@@ -34,6 +34,24 @@ func (r *${repoClass}) Tx(tx *gorm.DB) *${repoClass} {
 	return &${repoClass}{db: tx}
 }
 
+// Transaction 在事务内执行 fn，回调拿到 *gorm.DB；支持在同一个事务里操作多张表。
+func (r *${repoClass}) Transaction(fn func(tx *gorm.DB) error) error {
+	return r.db.Transaction(fn)
+}
+
+${if hasAutoIncPk}// Patch 按主键读取 → 拍快照 → 应用 fn → 按 diff 更新，省去手写样板。
+// 注意：读改写不是并发安全的；需要防丢更新时配合乐观锁/CAS。
+func (r *${repoClass}) Patch(id ${idGoType}, fn func(e *${enClass})) (int64, error) {
+	e, err := r.SelectById(id)
+	if err != nil {
+		return 0, err
+	}
+	e.TakeSnapshot()
+	fn(e)
+	return r.Update(e)
+}
+${/if}
+
 ${if hasJoin}// SelectByIn 分页联表查询，返回视图列表和总记录数
 // 列表返回 ${listType}（主表实体 + 联表输出列）
 ${else}// SelectByIn 分页查询，返回数据列表和总记录数
@@ -45,7 +63,7 @@ func (r *${repoClass}) SelectByIn(sel *${selClass}) ([]${listType}, int64, error
 	var list []${listType}
 	total, err := cdb.Paginate(query, sel.Page, sel.PageSize, &list)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, cdb.WrapErr("${tableName}.SelectByIn", err)
 	}
 	return list, total, nil
 }
@@ -64,7 +82,7 @@ ${/each}
 func (r *${repoClass}) SelectById(id ${idGoType}) (*${enClass}, error) {
 	var entity ${enClass}
 	if err := cdb.WhereEq(r.db, Col${idGoName}, id).First(&entity).Error; err != nil {
-		return nil, err
+		return nil, cdb.WrapErr("${tableName}.SelectById", err)
 	}
 	return &entity, nil
 }
@@ -79,7 +97,7 @@ func (r *${repoClass}) Insert(e *${enClass}) error {
 		return ErrInsertWithId
 	}
 	if err := r.db.Create(e).Error; err != nil {
-		return err
+		return cdb.WrapErr("${tableName}.Insert", err)
 	}
 	e.TakeSnapshot()
 	return nil
@@ -116,7 +134,7 @@ func (r *${repoClass}) Insert(e *${enClass}) error {
 		return ErrNilEntity
 	}
 	if err := r.db.Create(e).Error; err != nil {
-		return err
+		return cdb.WrapErr("${tableName}.Insert", err)
 	}
 	e.TakeSnapshot()
 	return nil
@@ -126,10 +144,12 @@ ${/if}
 // UpdateById 按主键更新（updates 的 key 用列名常量），空更新集直接返回 0
 // 用 repo 自身连接；需要事务时先 Tx(tx) 派生新实例再调用
 func (r *${repoClass}) UpdateById(id ${idGoType}, updates map[string]any) (int64, error) {
-	return cdb.UpdateByEq(r.db, &${enClass}{}, Col${idGoName}, id, updates)
+	n, err := cdb.UpdateByEq(r.db, &${enClass}{}, Col${idGoName}, id, updates)
+	return n, cdb.WrapErr("${tableName}.UpdateById", err)
 }
 
 // Delete 删除记录（支持多条），返回受影响行数
 func (r *${repoClass}) Delete(ids []${idGoType}) (int64, error) {
-	return cdb.DeleteByIn(r.db, &${enClass}{}, Col${idGoName}, ids)
+	n, err := cdb.DeleteByIn(r.db, &${enClass}{}, Col${idGoName}, ids)
+	return n, cdb.WrapErr("${tableName}.Delete", err)
 }

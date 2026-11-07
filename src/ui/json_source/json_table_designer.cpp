@@ -43,6 +43,7 @@
 #include "src/ui/json_vue/button_config_dialog.h"
 #include "src/ui/json_vue/config_dialog_common.h"
 #include "src/ui/json_vue/json_vue_model.h"
+#include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_icon.h"
 #include "src/util/ui/component/aui_input_dialog.h"
@@ -1218,11 +1219,26 @@ void JsonTableDesigner::setupUI() {
   addVSep();
   // C 端模块（modules/app）：三态（不生成/只读查询/空接口），鉴权默认需登录
   genRow->addWidget(new QLabel(QStringLiteral("C端模块:"), this));
+  // ? 帮助：解释「C端」概念与本段三个控件的含义（悬停看摘要、点击看完整说明）
+  genRow->addWidget(AuiButton::createHelpButton(
+      QStringLiteral("C端模块说明"),
+      QStringLiteral(
+          "C端 = 面向终端用户的客户端（App / 小程序 / H5 / 前台网站），\n"
+          "本段控制生成到 modules/app/<模块目录> 的只读接口（永不生成写接口）；\n"
+          "后台管理端页面与写接口走 modules/admin，两端共用 data 共享层。\n\n"
+          "不生成：该表只在后台管理端使用\n"
+          "只读查询：生成 selectByIn / selectById 两个查询接口\n"
+          "空接口：只生成 service/handler/router 骨架与手写扩展三件套，\n"
+          "        业务接口写在 *_ext_* 三件套（RegisterExtRoutes 自动挂载）\n\n"
+          "鉴权：公开浏览 = 不挂 UserAuth（如商品列表）；需登录 = 默认\n"
+          "C端出参：出参白名单，只输出所选列（out_<表>_.go）；留空 = 返回完整实体"),
+      this));
   m_appQueryCombo = AuiComboBox::create(this);
   m_appQueryCombo->addItem(QStringLiteral("不生成"), QStringLiteral("none"));
   m_appQueryCombo->addItem(QStringLiteral("只读查询"), QStringLiteral("query"));
   m_appQueryCombo->addItem(QStringLiteral("空接口"), QStringLiteral("empty"));
   m_appQueryCombo->setToolTip(QStringLiteral(
+      "C端 = 客户端（App/小程序/H5/前台网站），生成到 modules/app\n"
       "只读查询 = 生成 selectByIn/selectById 两接口（永不生成写接口）\n"
       "空接口 = 仅生成 service/handler/router 骨架与手写扩展三件套，"
       "不生成只读接口；自定义接口写在 *_ext_* 三件套，RegisterExtRoutes 自动挂载\n"
@@ -2744,7 +2760,8 @@ void JsonTableDesigner::editAppOutCols() {
       &dlg, QStringLiteral("C端出参白名单 - %1").arg(m_nameEdit->text().trimmed()));
 
   auto *tip = new QLabel(
-      QStringLiteral("勾选 C 端接口允许输出的列（只支持主表字段）；留空 = 返回完整实体。"),
+      QStringLiteral("勾选 C 端接口（App / 小程序等客户端）允许输出的列（只支持主表字段）；"
+                     "留空 = 返回完整实体。"),
       &dlg);
   tip->setWordWrap(true);
   frame.contentLayout->addWidget(tip);
