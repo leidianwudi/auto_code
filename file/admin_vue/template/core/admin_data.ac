@@ -250,6 +250,8 @@ export function processColumns(rawColumns: Object[], sourceMap: Object,
     }
     col["switchActiveTextExpr"] = switchActiveTextExpr;
     col["switchInactiveTextExpr"] = switchInactiveTextExpr;
+    // 文字是运行时表达式（数据源）还是字面量：index.tpl 据此决定普通属性或 :绑定
+    col["switchTextIsExpr"] = (boolApiName != "");
 
     // 判断是否为多行文本
     let isTextArea = false;

@@ -398,7 +398,7 @@ export function labelColOfTarget(types: Object): String {
 }
 
 export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, joinContext: Object,
-                               aliasMeta: Object): Object {
+                               aliasMeta: Object, i18nMeta: Object): Object {
   let modelName: String = table["modelName"];
   if (modelName == null || modelName == "") {
     modelName = table["tableName"];
@@ -868,6 +868,19 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
     }
   }
 
+  // i18n 平铺字段：列表虚拟列（编辑表单由 write.vue 的多语言 Tab 承接）
+  if (i18nMeta != null) {
+    let i18nFieldList: Object[] = i18nMeta["fields"];
+    for (iff in i18nFieldList) {
+      let rcI: Object = { name: iff["name"], mysqlType: iff["mysqlType"], comment: iff["comment"] };
+      let colI: Object = buildJsonvueColumn(rcI, null, null);
+      colI["queryName"] = iff["label"];
+      colI["queryVisible"] = true;   // 恒进列表（接口已按 lang 平铺）
+      colI["editVisible"] = false;   // 编辑表单走语言 Tab，不重复渲染
+      cols.append(colI);
+    }
+  }
+
   let pascal: String = snakeToPascal(modelName);
   return {
     meta: {
@@ -893,7 +906,9 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
     queryFields: queryFields,
     // 操作按钮（键名与 .jsonvue buttons 完全一致；无按钮时为 null，
     // 加工器 processButtons 对空/缺失键防御性处理）
-    buttons: table["buttons"]
+    buttons: table["buttons"],
+    // i18n 元数据（write.tpl 语言 Tab / 详情回填 / base_lang 语言清单）
+    i18n: i18nMeta
   };
 }
 
@@ -1532,6 +1547,49 @@ export function generateAdminMain(params: Object): Void {
     let vuePath: String = resolveJsonvuePath(modelName, basePath, checkedVueFiles);
     let pageJson: Object = null;
     let filePath: String = "";
+    // i18n 元数据：主表 i18n.table → 翻译表列定义（字段名/标题/类型）
+    let i18nMeta: Object = null;
+    let i18nNode2: Object = table["i18n"];
+    if (i18nNode2 != null && i18nNode2["table"] != null && i18nNode2["table"] != "") {
+      let tgt: Object = null;
+      for (tt in tables) {
+        if (tt["tableName"] == i18nNode2["table"]) { tgt = tt; break; }
+      }
+      if (i18nNode2 != null) {
+        let dl: String = i18nNode2["defaultLang"];
+        if (dl == null || dl == "") { dl = "zh"; }
+        i18nMeta = { defaultLang: dl, table: i18nNode2["table"], fields: [] };
+        let metaFields: Object[] = [];
+        let fnames: String[] = i18nNode2["fields"];
+        let labels: Object = i18nNode2["labels"];
+        if (fnames != null) {
+          for (fn in fnames) {
+            let tc: Object = null;
+            if (tgt != null) {
+              let tcols: Object[] = tgt["columns"];
+              for (c in tcols) {
+                if (c["name"] == fn) { tc = c; break; }
+              }
+            }
+            let label: String = fn;
+            let mt: String = "varchar(255)";
+            if (labels != null && labels[fn] != null && labels[fn] != "") { label = labels[fn]; }
+            if (tc != null) {
+              if (label == fn && tc["comment"] != null && tc["comment"] != "") { label = tc["comment"]; }
+              if (tc["mysqlType"] != null) { mt = tc["mysqlType"]; }
+            }
+            let mtLow: String = mt.toLowerCase();
+            let isLong: Bool = (mtLow.indexOf("text") >= 0 || mtLow.indexOf("intro") >= 0 ||
+                                fn.indexOf("intro") >= 0 || fn.indexOf("desc") >= 0 ||
+                                fn.indexOf("content") >= 0);
+            let fld: Object = { name: fn, label: label, comment: label, mysqlType: mt,
+                                widget: (isLong ? "textarea" : "input") };
+            metaFields.append(fld);
+          }
+        }
+        i18nMeta = { defaultLang: dl, table: i18nNode2["table"], fields: metaFields };
+      }
+    }
     if (vuePath != "") {
       // 双轨·高级页：同名 .jsonvue 存在，完全按 .jsonvue 走（可视化编辑全能力）
       pageJson = readJson(vuePath);
@@ -1540,7 +1598,7 @@ export function generateAdminMain(params: Object): Void {
       printLog("高级页（.jsonvue 双轨）：" + vuePath);
     } else {
       // 双轨·标准页：从 .jsontable 读模型合成 jsonvue 形状（零额外配置）
-      pageJson = buildJsonvueFromTable(table, globalEnumNames, joinContext, aliasMeta);
+      pageJson = buildJsonvueFromTable(table, globalEnumNames, joinContext, aliasMeta, i18nMeta);
       filePath = basePath + "/src/views/" + modelName + "/" + modelName + "/" + modelName + ".jsonvue";
       printLog("标准页（.jsontable 合成）：" + modelName);
     }
@@ -1601,6 +1659,20 @@ export function generateAdminMain(params: Object): Void {
     // pure-admin 专用派生键补全（isDatetimeFormat/needMessageBox 等）
     // 注意：ac 的 Object 是 COW 语义，必须接收返回值，否则补全全部丢失
     tplData = enrichPureTplData(tplData);
+    // i18n 元数据（write.tpl 语言 Tab 消费；null = 本表未启用多语言）
+    let i18nInfo: Object = pages[pg]["json"]["i18n"];
+    tplData["hasI18n"] = (i18nInfo != null);
+    tplData["i18nJson"] = "_null_";
+    if (i18nInfo != null) {
+      tplData["i18nJson"] = JSON.stringify(i18nInfo);
+    }
+    // 详情接口（write.vue 编辑时拉取全语言翻译 map）
+    let selUrlI: String = tplData["selectUrl"];
+    if (selUrlI != null) {
+      tplData["detailUrl"] = selUrlI.replace("selectByIn", "selectById");
+    } else {
+      tplData["detailUrl"] = "";
+    }
     // 表单列数组：按 .jsontable editCols（字段呈现行序）从最终 columns 重取，
     // 与列表列顺序（selCols 勾选）解耦；高级页（.jsonvue）无 editCols 时按 columns 顺序
     let editCfgsForm: Object[] = pages[pg]["json"]["editCols"];

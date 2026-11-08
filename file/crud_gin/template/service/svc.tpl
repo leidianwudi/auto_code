@@ -51,7 +51,9 @@ func (s *${serviceClass}) Save(data *${updClass}) (${idGoType}, error) {
 	if ${tableClass}SaveHook != nil {
 		return ${tableClass}SaveHook(s, data)
 	}
-	if data.${idGoName} == ${idZeroExpr} {
+${if hasI18n}	// i18n：主表与翻译表同事务写入（实现见 ${tableName}_service_i18n_.go）
+	return s.saveI18n(data)
+${else}	if data.${idGoName} == ${idZeroExpr} {
 		e := data.ToEntity()
 ${each line in svcCreateTimeLines}
 ${line}
@@ -68,7 +70,7 @@ ${/each}		if err := s.Repo.Insert(e); err != nil {
 	e.TakeSnapshot()
 	data.ApplyTo(e)
 	return s.Repo.Update(e)
-}
+${/if}}
 ${else}// Save 保存（save 单接口）：本表无自增主键，Repo 未生成 Update(e)
 // TODO 更新语义无法按主键 diff：请在手写件 ${tableName}_service.go 按业务键实现，
 // 或用 s.Repo.UpdateById(id, updates)（事务内先 s.Repo.Tx(tx) 派生实例）。
@@ -88,5 +90,7 @@ func (s *${serviceClass}) Delete(ids []${idGoType}) (int64, error) {
 	if ${tableClass}DeleteHook != nil {
 		return ${tableClass}DeleteHook(s, ids)
 	}
-	return s.Repo.Delete(ids)
-}
+${if hasI18n}	// i18n：主表与翻译表同事务删除（实现见 ${tableName}_service_i18n_.go）
+	return s.deleteI18n(ids)
+${else}	return s.Repo.Delete(ids)
+${/if}}

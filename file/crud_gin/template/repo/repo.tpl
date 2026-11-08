@@ -68,7 +68,7 @@ func (r *${repoClass}) SelectByIn(sel *${selClass}) ([]${listType}, int64, error
 	if err != nil {
 		return nil, 0, cdb.WrapErr("${tableName}.SelectByIn", err)
 	}
-	return list, total, nil
+${i18nFillCall}	return list, total, nil
 }
 
 ${# getWhereByIn 的 db 参数是"查询流水线"而非连接参数（条件块内部以 db 作累加器）}
@@ -87,7 +87,7 @@ func (r *${repoClass}) SelectById(id ${idGoType}) (*${enClass}, error) {
 	if err := cdb.WhereEq(r.db, Col${idGoName}, id).First(&entity).Error; err != nil {
 		return nil, cdb.WrapErr("${tableName}.SelectById", err)
 	}
-	return &entity, nil
+${i18nDetailCall}	return &entity, nil
 }
 
 ${if hasAutoIncPk}// Insert 新增一条记录：主键必须为 0（由数据库自增），成功后 GORM 回填 e.${idGoName}

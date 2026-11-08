@@ -394,9 +394,11 @@ ${each col in columns}${if col.queryVisible}${if col.isBooleanSwitch}
               :model-value="row.${col.dataName} == 1"
               :disabled="${col.switchDisabledStr}"
               inline-prompt
-              :active-text="${col.switchActiveTextExpr}"
+${if col.switchTextIsExpr}              :active-text="${col.switchActiveTextExpr}"
               :inactive-text="${col.switchInactiveTextExpr}"
-              @change="onSwitchChange(row, '${col.dataName}', row.${col.dataName} == 1 ? 0 : 1)"
+${else}              active-text="${col.switchActiveText}"
+              inactive-text="${col.switchInactiveText}"
+${/if}              @change="onSwitchChange(row, '${col.dataName}', row.${col.dataName} == 1 ? 0 : 1)"
             />
           </template>
         </el-table-column>
