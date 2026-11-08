@@ -24,18 +24,30 @@ Auto Code 是一个**代码生成工具**，通过自定义脚本语言（.ac）
 
 ```
 src/
+├── core/                       # 与 UI 无关的底层类型（仅 QtCore，禁 QtGui）
+│   ├── common/                 # 驻留标识池等编译器基础设施
+│   └── json/                   # AcJsonValue 值模型 + parse/write
 ├── engine/                     # 脚本引擎 + 模板引擎
 │   ├── ac_language.h           # 语言常量中心（关键字、内置函数、类、模板标记）
 │   ├── ac_value_str.h          # 值转字符串辅助
 │   ├── json_validator.h/.cpp   # JSON 校验器
 │   ├── schema_validator.h/.cpp # Schema 校验器
 │   ├── validation_result.h     # 校验结果
-│   ├── script/                 # .ac 脚本引擎（Lexer → Parser → Interpreter）
+│   ├── script/                 # .ac 脚本引擎（Lexer → Parser → 编译器/解释器/VM，
+│   │                           #   含字节码缓存、诊断、headless 运行器）
 │   ├── tpl/                    # .tpl 模板引擎（Lexer → Parser → Renderer）
+│   ├── semantic/               # 工作区索引（跨文件跳转/引用/补全）
+│   ├── rename/                 # 符号重命名
 │   └── function/               # C++ 函数注册中心（FunMgr）
 ├── ui/                         # 界面层
 │   ├── main_dev/               # 主开发界面（代码编辑器 + 文件树 + 输出面板）
-│   ├── json_vue/               # JSON Vue 可视化编辑器
+│   ├── json_vue/               # JSON Vue 可视化编辑器（.jsonvue）
+│   ├── json_source/            # 数据源编辑器 + .jsontable 设计器
+│   ├── json_global_enum/       # 全局枚举编辑器（.jsonglobalenum）
+│   ├── schema_json/            # Schema JSON 编辑器
+│   ├── setting/                # 设置界面
+│   ├── help/                   # 帮助文档 / 关于对话框
+│   ├── common/                 # UI 公共定义（按钮类型等）
 │   ├── create/                 # 创建项目界面
 │   └── demo/                   # 演示界面
 └── util/                       # 工具层

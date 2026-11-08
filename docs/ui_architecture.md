@@ -23,9 +23,12 @@ src/util/ui/
 │   ├── aui_combo_box.h/.cpp    # 无边框下拉框（全局下弹/防滚轮误改）
 │   ├── aui_combo_delete.h/.cpp # 带删除项的下拉框
 │   ├── aui_multi_check_combo.h/.cpp  # 多选复选下拉
+│   ├── aui_check_box.h/.cpp    # 复选框
 │   ├── aui_tab_bar.h/.cpp      # 可拖拽标签栏（拆分/移动）
 │   ├── aui_code_tab_bar.h/.cpp # 代码编辑器标签栏
 │   ├── aui_tree.h/.cpp         # 树控件
+│   ├── aui_tree_combo.h/.cpp   # 树形下拉
+│   ├── aui_splitter.h/.cpp     # 分隔条
 │   ├── aui_message_box.h/.cpp  # 自定义消息框
 │   ├── aui_input_dialog.h/.cpp # 输入对话框
 │   └── aui_error_tool_tip.h/.cpp  # 错误提示浮层
@@ -73,6 +76,23 @@ src/util/ui/
 | `applyWindowFrame(window, titleBar, content)` | 应用窗口外框（1px 边框） |
 | `installModalOverlay(dialog)` | 模态遮罩 |
 | `enableWin32Resize(window)` | Win32 拉伸边框 |
+
+### 2.2 业务界面模块（src/ui）
+
+`src/util/ui` 是通用控件与基础设施；具体业务界面在 `src/ui` 下，按编辑的文件类型分模块：
+
+| 模块 | 职责 |
+|------|------|
+| `main_dev/` | 主开发界面（代码编辑器 + 项目文件树 + 输出面板） |
+| `json_vue/` | `.jsonvue` 可视化编辑器（列 / 查询 / 按钮 / 取值域 / 上传预设配置） |
+| `json_source/` | `.jsonsource` 数据源编辑器 + `.jsontable` 表设计器 |
+| `json_global_enum/` | `.jsonglobalenum` 全局枚举编辑器 |
+| `schema_json/` | Schema JSON 编辑器 |
+| `setting/` | 设置界面（主题 / 字体 / 高亮） |
+| `help/` | 帮助文档、关于对话框 |
+| `create/` | 创建项目界面 |
+| `demo/` | 演示界面 |
+| `common/` | UI 公共定义（按钮类型等） |
 
 ## 3. 对话框开发规范
 
