@@ -34,11 +34,6 @@ func (r *${repoClass}) Tx(tx *gorm.DB) *${repoClass} {
 	return &${repoClass}{db: tx}
 }
 
-// Transaction 在事务内执行 fn，回调拿到 *gorm.DB；支持在同一个事务里操作多张表。
-func (r *${repoClass}) Transaction(fn func(tx *gorm.DB) error) error {
-	return r.db.Transaction(fn)
-}
-
 ${if hasAutoIncPk}// Patch 按主键读取 → 拍快照 → 应用 fn → 按 diff 更新，省去手写样板。
 // fn 返回非 nil 错误时中止本次更新（不会落库），错误原样返回给调用方。
 // 注意：读改写不是并发安全的；需要防丢更新时配合乐观锁/CAS。

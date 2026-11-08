@@ -15,7 +15,9 @@ package ${pkgName}
 import (
 ${if i18nNeedTime}	"time"
 
-${/if}	"gorm.io/gorm"
+${/if}	"${dbPath}"
+
+	"gorm.io/gorm"
 
 	${dataAlias} "${dataPath}"
 )
@@ -23,7 +25,7 @@ ${/if}	"gorm.io/gorm"
 // saveI18n 主表与翻译表同事务写入（Id=0 新增；Id>0 查库 → 快照 → 应用入参 → diff 更新）
 func (s *${serviceClass}) saveI18n(data *${updClass}) (${idGoType}, error) {
 	var savedId ${idGoType}
-	err := s.DB.Transaction(func(tx *gorm.DB) error {
+	err := cdb.WithTxDB(s.DB, func(tx *gorm.DB) error {
 		repo := s.Repo.Tx(tx)
 		if data.${idGoName} == ${idZeroExpr} {
 			e := data.ToEntity()
@@ -79,7 +81,7 @@ ${/each}
 // deleteI18n 主表与翻译表同事务删除
 func (s *${serviceClass}) deleteI18n(ids []${idGoType}) (int64, error) {
 	var n int64
-	err := s.DB.Transaction(func(tx *gorm.DB) error {
+	err := cdb.WithTxDB(s.DB, func(tx *gorm.DB) error {
 		repo := s.Repo.Tx(tx)
 		var err error
 		n, err = repo.Delete(ids)
