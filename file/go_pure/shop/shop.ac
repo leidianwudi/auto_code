@@ -42,11 +42,14 @@ main {
 
   // ── 3. Go 后端生成 ────────────────────────────────────────────────
   //     genGlobalEnum: false 可跳过全局枚举生成（缺省生成）；
+  //     enumRegPath: 枚举字典注册包（枚举生成件 init() 注册，C 端
+  //     /api/app/enum/dict 汇总输出）；不配则生成件不含注册代码；
   //     frontend=false 的表（纯 API 模块）后端链照常生成
   let apiParams: Object = {
     projPath: projPath,
     jsonTablePaths: files,
-    genGlobalEnum: true
+    genGlobalEnum: true,
+    enumRegPath: "shop_api/common/enumreg"
   };
   generateApiMain(apiParams);
 

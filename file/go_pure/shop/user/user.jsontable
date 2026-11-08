@@ -6,6 +6,7 @@
       'level',
       'nick',
       'head_img_url',
+      'is_real_name',
       'fans_count',
       'like_count',
     ],
@@ -232,10 +233,9 @@
         required: true,
       },
       {
-        editEditable: false,
         label: '是否实名',
         ref: 'is_real_name',
-        writable: false,
+        widget: 'boolean',
       },
       {
         editEditable: false,
@@ -328,6 +328,26 @@
         label: '道具数量',
         ref: 'item_count',
         writable: false,
+      },
+    ],
+    enums: [
+      {
+        column: 'is_real_name',
+        comment: '是否实名',
+        items: [
+          {
+            key: 'no',
+            label: '未实名',
+            value: '0',
+            valueType: 'number',
+          },
+          {
+            key: 'yes',
+            label: '已实名',
+            value: '1',
+            valueType: 'number',
+          },
+        ],
       },
     ],
     genCache: true,

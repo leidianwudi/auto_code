@@ -239,6 +239,13 @@ export function generateApiMain(params: Object): Number {
   let httpxPath: String = commonPath + "/httpx";
   let redisxPath: String = commonPath + "/redisx";
   let middlewarePath: String = moduleName + "/middleware";
+  // 枚举字典注册包 import 路径（可选，如 "shop_api/common/enumreg"）：
+  // 非空时每个枚举生成件在 init() 中注册自身映射，供 C 端 /app/enum/dict 汇总；
+  // 空值保持旧产物（未建该骨架包的项目生成后不会引入新依赖）
+  let enumRegPath: String = params["enumRegPath"];
+  if (enumRegPath == null) {
+    enumRegPath = "";
+  }
   printLog("Go 项目: " + goBasePath + "（module: " + moduleName + "）");
 
   // ── 3.5 全局枚举收集（tool_global_enum.ac 直接复用）────────────────
@@ -377,7 +384,7 @@ export function generateApiMain(params: Object): Number {
     let layeredPkgName: String = json["pkgName"];
     let layeredCount: Number = generateLayeredTable(json, goBasePath, moduleName,
         commonPath, middlewarePath, layeredModuleDir, layeredPkgName,
-        globalEnumDefs, emittedGlobalEnums, tablesByName);
+        globalEnumDefs, emittedGlobalEnums, tablesByName, enumRegPath);
     generatedFileCount = generatedFileCount + layeredCount;
   }  // end for (json in genTables)
 
@@ -661,7 +668,9 @@ export function buildTableEnums(table: Object, param: Param, globalEnumDefs: Obj
         continue;
       }
       emitted[dedupKey] = true;
-      enums.append(buildEnumEntry(geName, gcol, gDef["remark"], gDef["options"]));
+      // 注册名用枚举名本身：全局枚举可能被多表引用，按表名注册会因
+      // 「同包只生成一份」而只留下首个表名，其它表查不到
+      enums.append(buildEnumEntry(geName, gcol, gDef["remark"], gDef["options"], geName));
     }
   }
 
@@ -686,7 +695,9 @@ export function buildTableEnums(table: Object, param: Param, globalEnumDefs: Obj
           if (f.name == colName) { comment = f.comment; }
         }
       }
-      enums.append(buildEnumEntry(enumName, colName, comment, te["items"]));
+      // 注册名 = 表名.列名（如 user.is_real_name），C 端枚举字典的查找键
+      enums.append(buildEnumEntry(enumName, colName, comment, te["items"],
+          table.tableName + "." + colName));
     }
   }
   return enums;
@@ -697,9 +708,12 @@ export function buildTableEnums(table: Object, param: Param, globalEnumDefs: Obj
 /// @param columnName 列名（注释定位用）
 /// @param comment 枚举说明
 /// @param rawItems 原始选项数组 [{key,label,value,valueType}]
-/// @return {enumName, columnName, comment, mapKeyType, items:[{key,label,valueStr}]}
+/// @param regName 枚举字典注册名（表名.列名；全局枚举传枚举名），供 enum.tpl
+///        生成 init() 注册语句（enumRegPath 为空时不消费）
+/// @return {enumName, columnName, comment, mapKeyType, regName,
+///          items:[{key,label,valueStr}]}
 ///   值字面量：valueType=number → 数字字面量（map 键 int）；其余 → 双引号字符串
-export function buildEnumEntry(enumName: String, columnName: String, comment: String, rawItems: Object[]): Object {
+export function buildEnumEntry(enumName: String, columnName: String, comment: String, rawItems: Object[], regName: String): Object {
   let items: Object[] = [];
   let mapKeyType: String = "string";
   let first: Bool = true;
@@ -739,6 +753,7 @@ export function buildEnumEntry(enumName: String, columnName: String, comment: St
     columnName: columnName,
     comment: sanitizeGoComment(comment),
     mapKeyType: mapKeyType,
+    regName: regName,
     items: items
   };
 }
@@ -1370,7 +1385,8 @@ export function filterJoinRefs(arr: Object, aliasMap: Object): Object[] {
 /// @return 实际写入文件数
 export function generateLayeredTable(json: Object, goBasePath: String, moduleName: String,
     commonPath: String, middlewarePath: String, moduleDir: String, pkgName: String,
-    globalEnumDefs: Object, emitted: Object, tablesByName: Object): Number {
+    globalEnumDefs: Object, emitted: Object, tablesByName: Object,
+    enumRegPath: String): Number {
   let tplDir: String = "../../crud_gin/template";
   let dbPath: String = commonPath + "/db";
   let coinPath: String = commonPath + "/coin";
@@ -1920,6 +1936,7 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   tplData["dataPath"] = dataPath;
   tplData["dataAlias"] = dataAlias;
   tplData["commonPath"] = commonPath;
+  tplData["enumRegPath"] = enumRegPath;
   tplData["dbPath"] = dbPath;
   tplData["coinPath"] = coinPath;
   tplData["httpxPath"] = httpxPath;

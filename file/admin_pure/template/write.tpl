@@ -50,6 +50,8 @@ ${/if}${each col in formColumns}${if col.editVisible}${if col.isInt}  ${col.data
 ${else if col.isFloat}  ${col.dataName}: null,
 ${else if col.isMoney}  ${col.dataName}: null,
 ${else if col.isDate}  ${col.dataName}: null,
+${else if col.isBooleanEdit}  ${col.dataName}: null,
+${else if col.isTagEdit}  ${col.dataName}: null,
 ${else}  ${col.dataName}: "",
 ${/if}${/if}${/each}});
 
@@ -123,6 +125,8 @@ ${/if}${each col in formColumns}${if col.editVisible}${if col.isInt}      form.$
 ${else if col.isFloat}      form.${col.dataName} = row.${col.dataName} ?? null;
 ${else if col.isMoney}      form.${col.dataName} = row.${col.dataName} ?? null;
 ${else if col.isDate}      form.${col.dataName} = row.${col.dataName} ?? null;
+${else if col.isBooleanEdit}      form.${col.dataName} = row.${col.dataName} ?? null;
+${else if col.isTagEdit}      form.${col.dataName} = row.${col.dataName} ?? null;
 ${else}      form.${col.dataName} = row.${col.dataName} ?? "";
 ${/if}${/if}${/each}    } else {
       form.id = null;
@@ -132,6 +136,8 @@ ${/if}${each col in formColumns}${if col.editVisible}${if col.isInt}      form.$
 ${else if col.isFloat}      form.${col.dataName} = null;
 ${else if col.isMoney}      form.${col.dataName} = null;
 ${else if col.isDate}      form.${col.dataName} = null;
+${else if col.isBooleanEdit}      form.${col.dataName} = null;
+${else if col.isTagEdit}      form.${col.dataName} = null;
 ${else}      form.${col.dataName} = "";
 ${/if}${/if}${/each}    }
   },
@@ -279,7 +285,7 @@ ${else}          <el-select v-model="form.${col.dataName}" placeholder="请选�
           </el-select>
 ${/if}
 ${else if col.isTagSwitch}          <el-select v-model="form.${col.dataName}" placeholder="请选择" style="width: 100%"${if !col.editEditable} disabled${/if}>
-${each t in col.tagItems}            <el-option label="${t.textEsc}" value="${t.valueEsc}" />
+${each t in col.tagItems}            <el-option label="${t.textEsc}"${if t.isNumberValue} :value="${t.valueEsc}"${else} value="${t.valueEsc}"${/if} />
 ${/each}          </el-select>
 ${else if col.isSelect}${if col.hasSelectApi}          <el-select v-model="form.${col.dataName}" clearable placeholder="请选择" style="width: 100%"${if !col.editEditable} disabled${/if}>
             <el-option v-for="it in ${col.dataNamePascal}Options" :key="String(it.${col.selectValueField})" :label="it.${col.selectLabelField}" :value="it.${col.selectValueField}" />
@@ -287,7 +293,7 @@ ${else if col.isSelect}${if col.hasSelectApi}          <el-select v-model="form.
 ${else}          <el-select v-model="form.${col.dataName}" clearable placeholder="请选择" style="width: 100%" />
 ${/if}
 ${else if col.isTagEdit}          <el-select v-model="form.${col.dataName}" placeholder="请选择" style="width: 100%"${if !col.editEditable} disabled${/if}>
-${each t in col.tagItems}            <el-option label="${t.textEsc}" value="${t.valueEsc}" />
+${each t in col.tagItems}            <el-option label="${t.textEsc}"${if t.isNumberValue} :value="${t.valueEsc}"${else} value="${t.valueEsc}"${/if} />
 ${/each}          </el-select>
 ${else if col.isBooleanEdit}${if col.hasBoolApi}          <el-select v-model="form.${col.dataName}" clearable placeholder="请选择" style="width: 100%"${if !col.editEditable} disabled${/if}>
             <el-option v-for="it in ${col.dataNamePascal}Options" :key="String(it.value)" :label="it.label" :value="it.value" />

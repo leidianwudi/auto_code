@@ -220,6 +220,7 @@ export function buildJsonvueColumn(rawCol: Object, enumDef: Object, editCol: Obj
         let item: Object = {
           value: opt["value"],
           text: opt["label"],
+          valueType: opt["valueType"],
           color: tagColorOf(oi)
         };
         items.append(item);

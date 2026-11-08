@@ -257,6 +257,7 @@
         ],
       },
     ],
+    genCache: true,
     i18n: {
       defaultLang: 'zh',
       extKey: 'ext_id',
@@ -264,15 +265,10 @@
         'name',
         'intro',
       ],
-      labels: {
-        name: '商店名称',
-        intro: '简介',
-      },
       langFrom: 'header',
       langKey: 'lang',
       table: 'shop0',
     },
-    genCache: true,
     manualUpdateTime: false,
     modelName: 'shop',
     selCols: [

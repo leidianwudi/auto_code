@@ -525,6 +525,10 @@ export function processColumns(rawColumns: Object[], sourceMap: Object,
       ti2["value"] = rawTi.value;
       ti2["text"] = rawTi.text;
       ti2["color"] = rawTi.color;
+      // 值类型（number=数字字面量）：模板按它决定 :value / value 输出，
+      // 避免整型枚举列提交字符串导致后端 binding 失败
+      ti2["valueType"] = rawTi.valueType;
+      ti2["isNumberValue"] = (rawTi.valueType == "number");
       // 转义后的值（供模板中单引号字符串使用）
       ti2["valueEsc"] = escapeJsStr(rawTi.value);
       ti2["textEsc"] = escapeJsStr(rawTi.text);
