@@ -760,6 +760,10 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
       boolFalseText: "禁用",
       tagItems: vTagItems,
       displayType: (vTagItems.length > 0 ? "tag" : ""),
+      // 共享枚举字典的查表键：目标表名.列名（如 user.is_real_name），
+      // 与后端 enumreg 注册名一致；无枚举映射时为空
+      enumKey: (vTagItems.length > 0 && am != null
+                ? (am["enumOwner"] + "." + am["enumCol"]) : ""),
       dateFormat: "",
       editStyle: "text"
     });
@@ -1159,6 +1163,18 @@ export function generateAdminMain(params: Object): Void {
     ];
   }
 
+  // ── 2.3 表级枚举字典配置：本次生成的全部表枚举汇总成一个共享文件 ──────
+  //    输出与 global_enum.ts 同目录（src/api/source/），页面 import 后按
+  //    '表名.列名' 查文字/颜色；未配置时用相对入口脚本目录的缺省模板
+  let tableEnumTpl: String = params["tableEnumTpl"];
+  if (tableEnumTpl == null || tableEnumTpl == "") {
+    tableEnumTpl = "../template/table_enum.tpl";
+  }
+  let tableEnumOut: String = params["tableEnumOut"];
+  if (tableEnumOut == null || tableEnumOut == "") {
+    tableEnumOut = "{basePath}/src/api/source/table_enum.ts";
+  }
+
   // ── 3. 读取多份 .jsontable：单表新格式逐文件收集（事实源，不连库）──
   //    一文件一表：{ table: {...} }，翻译表内嵌在表的 i18n 配置；
   //    旧多表格式（tables 键）明确报错指路拆分脚本；
@@ -1299,7 +1315,8 @@ export function generateAdminMain(params: Object): Void {
           }
         }
         aliasMeta[jtName + "_" + cn] = { comment: cm, mysqlType: mt, title: tt,
-                                         enumItems: jtEnums[cn] };
+                                         enumItems: jtEnums[cn],
+                                         enumOwner: jtName, enumCol: cn };
       }
     }
   }
@@ -1653,6 +1670,9 @@ export function generateAdminMain(params: Object): Void {
     suffixes["prefix"] = params["apiPrefix"];
   }
   let pgLen = pages.length;
+  // 表级枚举汇总表：键（表名.列名）→ tagItems 映射字符串，循环内逐页收集，
+  // 循环后统一渲染成跨页面共享的 src/api/source/table_enum.ts
+  let tableEnums: Object = {};
   for (let pg = 0; pg < pgLen; pg = pg + 1) {
     let tplData: Object = buildAdminTplData(pages[pg]["json"], pages[pg]["filePath"],
                                             suffixes, sourceFiles, uploadFiles,
@@ -1675,14 +1695,16 @@ export function generateAdminMain(params: Object): Void {
       tplData["detailUrl"] = "";
     }
     // 表单列数组：按 .jsontable editCols（字段呈现行序）从最终 columns 重取，
-    // 与列表列顺序（selCols 勾选）解耦；高级页（.jsonvue）无 editCols 时按 columns 顺序
+    // 与列表列顺序（selCols 勾选）解耦；高级页（.jsonvue）无 editCols 时按 columns 顺序。
+    // 主键列不进表单列：write.tpl 已固定 form.id 隐藏携带（L47），再列一次会生成
+    // 重复键（TS1117）且渲染出多余的主键输入框
     let editCfgsForm: Object[] = pages[pg]["json"]["editCols"];
     let colsAllForm: Object[] = tplData["columns"];
     let formColsArr: Object[] = [];
     if (editCfgsForm != null && editCfgsForm.length > 0) {
       for (ecForm2 in editCfgsForm) {
         let rForm2: String = ecForm2["ref"];
-        if (rForm2 == null || rForm2 == "") { continue; }
+        if (rForm2 == null || rForm2 == "" || rForm2 == "id") { continue; }
         let cLenFc = colsAllForm.length;
         for (let fiC = 0; fiC < cLenFc; fiC = fiC + 1) {
           if (colsAllForm[fiC]["dataName"] == rForm2 && colsAllForm[fiC]["editVisible"] == true) {
@@ -1695,7 +1717,9 @@ export function generateAdminMain(params: Object): Void {
     if (formColsArr.length == 0) {
       let cLenFd = colsAllForm.length;
       for (let fiD = 0; fiD < cLenFd; fiD = fiD + 1) {
-        if (colsAllForm[fiD]["editVisible"] == true) { formColsArr.append(colsAllForm[fiD]); }
+        if (colsAllForm[fiD]["editVisible"] == true && colsAllForm[fiD]["dataName"] != "id") {
+          formColsArr.append(colsAllForm[fiD]);
+        }
       }
     }
     tplData["formColumns"] = formColsArr;
@@ -1713,6 +1737,31 @@ export function generateAdminMain(params: Object): Void {
     }
     let pagePath: String = tplData["pagePath"];
     printLog("processing page: " + pagePath);
+
+    // ── 收集本页 tag 列进共享枚举字典 ────────────────────────────────
+    //    键 = 表名.列名（联表虚拟列已在构造时写入「目标表名.列名」）；
+    //    物理列此处补键；index.tpl 改查 tableEnumMap，不再局部定义 tagMaps
+    let permPfxEn: String = pages[pg]["permPrefix"];
+    let colsEnum: Object[] = tplData["columns"];
+    let ceLen = colsEnum.length;
+    for (let ce = 0; ce < ceLen; ce = ce + 1) {
+      let ceCol: Object = colsEnum[ce];
+      if (ceCol["isTagDisplay"] != true) {
+        continue;
+      }
+      let ek: String = ceCol["enumKey"];
+      if (ek == null || ek == "") {
+        ek = permPfxEn + "." + ceCol["dataName"];
+        ceCol["enumKey"] = ek;
+        colsEnum[ce] = ceCol;   // COW 语义：数组元素修改需写回
+      }
+      let mapStrEn: String = ceCol["tagItemsMapStr"];
+      if (mapStrEn != null && mapStrEn != "{}") {
+        tableEnums[ek] = mapStrEn;
+      }
+    }
+    // COW 语义：列数组在循环内被修改过，必须回写 tplData 后模板才能读到 enumKey
+    tplData["columns"] = colsEnum;
 
     let tplLen = templates.length;
     for (let ct = 0; ct < tplLen; ct = ct + 1) {
@@ -1737,6 +1786,31 @@ export function generateAdminMain(params: Object): Void {
         }
       }
     }
+  }
+
+  // ── 8.1 表级枚举字典（跨页面共享，src/api/source/table_enum.ts）──────
+  //     汇总本次生成的全部 tag 列映射，页面统一 import 查表；
+  //     无枚举时不生成，避免空文件干扰
+  let teKeys: String[] = [];
+  for (teKey in tableEnums) { teKeys.append(teKey); }
+  if (teKeys.length > 0) {
+    let teList: Object[] = [];
+    for (teK in teKeys) {
+      teList.append({ keyEsc: escapeJsStr(teK), mapStr: tableEnums[teK] });
+    }
+    let teData: Object = { tableEnums: teList };
+    let tePath: String = formatPath(tableEnumOut, { basePath: basePath });
+    let teResult: String = renderTpl(tableEnumTpl, teData);
+    if (teResult) {
+      if (canOverwriteGenerated(tePath)) {
+        if (writeFile(tePath, teResult) == true) {
+          generatedFileCount = generatedFileCount + 1;
+        }
+        printLog("生成文件: " + tePath + "（表级枚举 " + teKeys.length + " 组）");
+      }
+    }
+  } else {
+    printLog("无表级枚举（tag 列），跳过 table_enum.ts");
   }
 
   printLog("--- pure-admin 代码生成结束，共生成 " + generatedFileCount + " 个文件 ---");

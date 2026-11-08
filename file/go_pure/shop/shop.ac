@@ -63,6 +63,8 @@ main {
     projPath: projPath,
     jsonTablePaths: files,
     apiPrefix: "/api",
+    // 表级枚举字典（跨页面共享）：全部 tag 列汇总输出 src/api/source/table_enum.ts
+    tableEnumTpl: tplDir + "/table_enum.tpl",
     templates: [
       { tpl: tplDir + "/index.tpl", out: "{basePath}/src/views/{pagePath}/index.vue" },
       { tpl: tplDir + "/write.tpl", out: "{basePath}/src/views/{pagePath}/components/write.vue" },

@@ -41,6 +41,8 @@ import { http } from "@/utils/http";
 ${/if}
 import Write from "./components/write.vue";
 import { ${apiImports} } from "@/api/${apiModule}/${pageName}";
+${if hasTagColumns}import { tableEnumMap } from "@/api/source/table_enum";
+${/if}
 ${if hasSelectApi}import { ${selectApiImports} } from "@/api/${apiModule}/${pageName}";
 ${/if}${if hasBoolSourceImports}${boolSourceImportLines}
 ${/if}${if hasLinkButtons}import { useRouter } from "vue-router";
@@ -172,12 +174,6 @@ const formatMoney = (v: any, precision: number) => {
   if (isNaN(num)) return String(v);
   return num.toLocaleString('zh-CN', { minimumFractionDigits: precision, maximumFractionDigits: precision });
 };
-${/if}
-${if hasTagColumns}
-// tag 列映射表（提前构造，避免每次单元格渲染都重建对象）
-const tagMaps: Record<string, Record<string, { text: string; color: string }>> = {
-${each col in columns}${if col.isTagDisplay}  '${col.dataName}': ${col.tagItemsMapStr},
-${/if}${/each}};
 ${/if}
 // ── 编辑弹窗（与 admin_vue 交互同构：write.vue 挂在弹窗内，新增/编辑/详情共用）──
 const dialogVisible = ref(false);
@@ -424,8 +420,8 @@ ${else if col.isMoneyDisplay}
 ${else if col.isTagDisplay}
         <el-table-column label="${col.label}" prop="${col.dataName}" show-overflow-tooltip${if col.hasColumnWidth} width="${col.columnWidth}"${/if}${if col.hasColumnFixed} fixed="${col.columnFixed}"${/if}>
           <template #default="{ row }">
-            <el-tag v-if="tagMaps['${col.dataName}']?.[String(row.${col.dataName})]" :type="(tagMaps['${col.dataName}']?.[String(row.${col.dataName})]?.color as any)">
-              {{ tagMaps['${col.dataName}']?.[String(row.${col.dataName})]?.text }}
+            <el-tag v-if="tableEnumMap['${col.enumKey}']?.[String(row.${col.dataName})]" :type="(tableEnumMap['${col.enumKey}']?.[String(row.${col.dataName})]?.color as any)">
+              {{ tableEnumMap['${col.enumKey}']?.[String(row.${col.dataName})]?.text }}
             </el-tag>
             <span v-else>{{ row.${col.dataName} }}</span>
           </template>

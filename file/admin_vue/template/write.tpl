@@ -361,16 +361,3 @@ defineExpose({
   <Form :rules="isDetail ? {} : rules" @register="formRegister" :schema="formSchemaComputed" />
 </template>
 
-<style>
-/* 上传控件由 formSchema 的插槽（JSX）渲染：VNode 不携带 SFC 的 scope 属性，
-   scoped 选择器（.xxx[data-v-xxx]）匹配不到，故用全局样式；
-   类名统一 ac-up- 前缀避免与页面样式冲突。各生成页面的这份规则完全相同，
-   同名全局规则重复加载无副作用 */
-.ac-up-cards { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.ac-up-card { position: relative; width: 160px; height: 80px; border: 1px solid #dcdfe6; border-radius: 6px; overflow: hidden; }
-.ac-up-thumb { width: 100%; height: 100%; display: block; }
-.ac-up-mask { position: absolute; top: 0; right: 0; left: 0; bottom: 0; display: none; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.4); }
-.ac-up-card:hover .ac-up-mask { display: flex; }
-.ac-up-del { color: #fff; font-size: 20px; cursor: pointer; line-height: 1; }
-.ac-up-plus { font-size: 24px; color: #909399; }
-</style>
