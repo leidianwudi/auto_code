@@ -20,6 +20,8 @@ ${svcImports}
 // ${serviceClass} ${tableComment}(${tableName}) 业务层
 // CRUD 全量生成；自定义方法（生成件不调用）写在手写件 ${tableName}_service.go。
 // DB 供手写件做自定义 SQL；写路径统一走 Repo（事务用 s.Repo.Tx(tx)）。
+// 禁止在 Repo.Transaction 回调内使用 s.DB：它会从连接池另借一条连接、静默脱离事务
+// （Rollback 撤不回该连接上的写），事务内必须用 s.Repo.Tx(tx) 派生的实例。
 type ${serviceClass} struct {
 ${each line in svcFieldLines}
 ${line}
