@@ -268,6 +268,7 @@
       {
         label: '头像url',
         ref: 'head_img_url',
+        widget: 'image',
       },
       {
         editEditable: false,
@@ -414,6 +415,12 @@
       {
         label: '备注',
         ref: 'desc',
+      },
+      {
+        displayType: 'image',
+        label: '头像url',
+        ref: 'head_img_url',
+        width: 60,
       },
     ],
     selColsEq: [
