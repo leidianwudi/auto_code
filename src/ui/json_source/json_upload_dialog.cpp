@@ -62,6 +62,14 @@ void JsonUploadDialog::setupUI() {
   m_remarkEdit->setPlaceholderText(QStringLiteral("如: 商品主图上传"));
   form->addRow(QStringLiteral("说明:"), m_remarkEdit);
 
+  m_funcNameEdit = new QLineEdit(this);
+  m_funcNameEdit->setPlaceholderText(
+      QStringLiteral("可选，如 uploadUserHead；留空按上传地址自动派生"));
+  m_funcNameEdit->setToolTip(QStringLiteral(
+      "生成 src/api/upload/*.ts 中的导出函数名（仅字母/数字/下划线/美元符，且不能以数字开头）。\n"
+      "多个预设共用同一上传地址时建议显式命名，否则自动派生同名函数会被追加序号（xxx2、xxx3）"));
+  form->addRow(QStringLiteral("函数名:"), m_funcNameEdit);
+
   m_urlEdit = new QLineEdit(this);
   m_urlEdit->setPlaceholderText(QStringLiteral("如 upload/image（相对路径，走目标项目 axios）"));
   form->addRow(QStringLiteral("上传地址:"), m_urlEdit);
@@ -210,6 +218,7 @@ QVector<JsonUploadParam> JsonUploadDialog::collectParams() const {
 
 void JsonUploadDialog::setUpload(const JsonUpload &u) {
   m_remarkEdit->setText(u.remark);
+  m_funcNameEdit->setText(u.funcName);
   m_urlEdit->setText(u.url);
   comboSelectData(m_methodCombo, u.method);
   m_fileFieldEdit->setText(u.fileField.isEmpty() ? QStringLiteral("file") : u.fileField);
@@ -228,6 +237,7 @@ void JsonUploadDialog::setUpload(const JsonUpload &u) {
 JsonUpload JsonUploadDialog::upload() const {
   JsonUpload u;
   u.remark = m_remarkEdit->text().trimmed();
+  u.funcName = m_funcNameEdit->text().trimmed();
   u.url = m_urlEdit->text().trimmed();
   u.method = m_methodCombo->currentData().toString();
   u.fileField = m_fileFieldEdit->text().trimmed();

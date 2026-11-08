@@ -34,6 +34,7 @@ inline constexpr const char *kUploads = "uploads";
 // 上传预设通用
 inline constexpr const char *kId = "id";
 inline constexpr const char *kRemark = "remark";
+inline constexpr const char *kFuncName = "funcName";  ///< 生成的上传函数名（可选，缺省按 url 派生）
 inline constexpr const char *kUrl = "url";
 inline constexpr const char *kMethod = "method";
 inline constexpr const char *kFileField = "fileField";
@@ -84,6 +85,10 @@ struct JsonUpload {
   QString id;
   /// 预设说明（备注）
   QString remark;
+  /// 生成的上传函数名（可选）：留空按 url 派生（upload/image → uploadImage）；
+  /// 多预设共用同一 url 时建议显式命名（如 uploadUserHead / uploadShopLogo），
+  /// 否则生成同名函数会被追加序号，可读性差
+  QString funcName;
   /// 上传接口相对路径（如 "upload/image"，生成代码走目标项目 axios baseURL）
   QString url;
   /// 请求方式（默认 POST）

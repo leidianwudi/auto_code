@@ -27,6 +27,9 @@ main {
   let files: String[] = [];
   for (f in getCheckedFiles(scriptDir())) {
     if (!fileExists(f)) { continue; }
+    // 只收表配置；勾选的 .jsonupload/.jsonsource/.jsonvue 由 main_admin/mmain_api
+    // 各自按后缀收集，混进 jsonTablePaths 会被当成 .jsontable 解析而报错
+    if (!f.endsWith(".jsontable")) { continue; }
     // basename() 返回去扩展名的文件名（base_lang / shop0），不是含 .jsontable 的文件名
     let b: String = basename(f);
     if (b == "base_lang" || b == "shop0") { continue; }

@@ -58,6 +58,7 @@ void JsonUploadEditor::setupUI() {
 
   m_table = makeConfigTable(
       {{QStringLiteral("说明"), QHeaderView::Interactive, 150},
+       {QStringLiteral("函数名"), QHeaderView::Interactive, 140},
        {QStringLiteral("上传地址"), QHeaderView::Interactive, 220},
        {QStringLiteral("文件字段"), QHeaderView::Interactive, 90},
        {QStringLiteral("张数"), QHeaderView::Interactive, 60},
@@ -159,6 +160,9 @@ void JsonUploadEditor::onAddUpload() {
     int row = m_table->rowCount();
     m_table->insertRow(row);
     m_table->setItem(row, JUColRemark, new QTableWidgetItem(u.remark));
+    m_table->setItem(row, JUColFuncName,
+                     new QTableWidgetItem(u.funcName.isEmpty() ? QStringLiteral("（自动派生）")
+                                                              : u.funcName));
     m_table->setItem(row, JUColUrl, new QTableWidgetItem(u.url));
     m_table->setItem(row, JUColFileField, new QTableWidgetItem(u.fileField));
     m_table->setItem(row, JUColMaxCount, new QTableWidgetItem(QString::number(u.maxCount)));
@@ -179,6 +183,9 @@ void JsonUploadEditor::onEditUpload() {
     if (u.id.isEmpty()) u.id = m_uploads[row].id;
     m_uploads[row] = u;
     m_table->item(row, JUColRemark)->setText(u.remark);
+    if (auto *fnItem = m_table->item(row, JUColFuncName)) {
+      fnItem->setText(u.funcName.isEmpty() ? QStringLiteral("（自动派生）") : u.funcName);
+    }
     m_table->item(row, JUColUrl)->setText(u.url);
     m_table->item(row, JUColFileField)->setText(u.fileField);
     m_table->item(row, JUColMaxCount)->setText(QString::number(u.maxCount));
@@ -258,6 +265,9 @@ void JsonUploadEditor::loadConfig(const JsonUploadConfig &config) {
     int row = m_table->rowCount();
     m_table->insertRow(row);
     m_table->setItem(row, JUColRemark, new QTableWidgetItem(u.remark));
+    m_table->setItem(row, JUColFuncName,
+                     new QTableWidgetItem(u.funcName.isEmpty() ? QStringLiteral("（自动派生）")
+                                                              : u.funcName));
     m_table->setItem(row, JUColUrl, new QTableWidgetItem(u.url));
     m_table->setItem(row, JUColFileField, new QTableWidgetItem(u.fileField));
     m_table->setItem(row, JUColMaxCount, new QTableWidgetItem(QString::number(u.maxCount)));
