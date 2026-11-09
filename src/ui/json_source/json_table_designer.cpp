@@ -6,6 +6,7 @@
 #include "json_table_designer.h"
 
 #include <QAbstractItemView>
+#include <QAction>
 #include <QBrush>
 #include <QCheckBox>
 #include <QColor>
@@ -44,6 +45,7 @@
 #include "src/ui/json_vue/config_dialog_common.h"
 #include "src/ui/json_vue/json_vue_model.h"
 #include "src/util/ui/component/aui_button.h"
+#include "src/util/ui/component/aui_cell_edit_combo.h"
 #include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_icon.h"
 #include "src/util/ui/component/aui_input_dialog.h"
@@ -81,6 +83,28 @@ QStringList colTypePresets() {
           QStringLiteral("boolean")};
 }
 
+/// 查询模式下拉候选（显示文本 ↔ 配置值双向映射；下拉只显示文本，收集时转回值）
+QStringList queryModePresets() {
+  return {QStringLiteral("不查询"), QStringLiteral("精确"), QStringLiteral("模糊"),
+          QStringLiteral("范围"),   QStringLiteral("仅接口")};
+}
+
+QString queryModeData(const QString &display) {
+  if (display == QStringLiteral("精确")) return QStringLiteral("eq");
+  if (display == QStringLiteral("模糊")) return QStringLiteral("like");
+  if (display == QStringLiteral("范围")) return QStringLiteral("gap");
+  if (display == QStringLiteral("仅接口")) return QStringLiteral("api");
+  return QStringLiteral("none");
+}
+
+QString queryModeDisplay(const QString &data) {
+  if (data == QStringLiteral("eq")) return QStringLiteral("精确");
+  if (data == QStringLiteral("like")) return QStringLiteral("模糊");
+  if (data == QStringLiteral("gap")) return QStringLiteral("范围");
+  if (data == QStringLiteral("api")) return QStringLiteral("仅接口");
+  return QStringLiteral("不查询");
+}
+
 /// 联表声明表格列索引（joinTable）
 enum JoinCols {
   JoinColTable = 0,  ///< 被联表名（joinTables[].table，可编辑下拉=项目表名）
@@ -110,34 +134,6 @@ enum IndexCols {
   IndexColCols,      ///< 列（逗号分隔文本）
   IndexColUnique,    ///< unique 复选框
   IndexColCount
-};
-
-/// 点击常驻下拉（表格 cellWidget）时把所在行设为当前行：cellWidget 会吞掉
-/// 表格本身的选中处理，不补这一步「上移/下移/删除/⚙」会用到旧当前行。
-class RowActivateFilter : public QObject {
-public:
-  RowActivateFilter(QTableWidget *table, int col, QObject *parent = nullptr)
-      : QObject(parent), m_table(table), m_col(col) {}
-
-  bool eventFilter(QObject *obj, QEvent *e) override {
-    if (e->type() == QEvent::MouseButtonPress) {
-      QWidget *hit = qobject_cast<QWidget *>(obj);
-      // 输入框（可编辑下拉的文字区）→ 归属它的下拉；其他控件即自身
-      if (auto *le = qobject_cast<QLineEdit *>(hit))
-        hit = qobject_cast<QWidget *>(le->parentWidget());
-      for (int r = 0; r < (m_table ? m_table->rowCount() : 0); ++r) {
-        if (m_table->cellWidget(r, m_col) == hit) {
-          m_table->setCurrentCell(r, m_col);
-          break;
-        }
-      }
-    }
-    return QObject::eventFilter(obj, e);
-  }
-
-private:
-  QTableWidget *m_table = nullptr;
-  int m_col = 0;
 };
 
 /// 可编辑下拉框委托：预设项下拉 + 自由输入，提交编辑框文本
@@ -1862,31 +1858,27 @@ void JsonTableDesigner::appendColumnRow(const JsonTableColumn &c) {
   m_colsTable->setItem(row, ColColComment, new QTableWidgetItem(c.comment));
 }
 
-/// @brief 为字段表格某行绑定 MySQL 类型列的常驻可编辑下拉
+/// @brief 为字段表格某行绑定 MySQL 类型列的常驻输入框 + ▾ 下拉
 void JsonTableDesigner::bindColTypeCombo(int row, const QString &type) {
-  auto *combo = AuiComboBox::create(m_colsTable);
-  combo->setEditable(true);
-  combo->addItems(colTypePresets());
-  combo->setEditText(type.isEmpty() ? QStringLiteral("bigint") : type);  // 与收集时兜底一致
-  // 点箭头展开候选；点击时把所在行设为当前行（cellWidget 会吞掉表格的选中处理）
-  if (combo->lineEdit())
-    combo->lineEdit()->installEventFilter(new RowActivateFilter(m_colsTable, ColColType, combo));
-  combo->installEventFilter(new RowActivateFilter(m_colsTable, ColColType, combo));
-  connect(combo, &QComboBox::currentIndexChanged, this, [this](int) {
+  auto *cell = new AuiCellEditCombo(m_colsTable, ColColType, colTypePresets(), m_colsTable);
+  cell->setText(type.isEmpty() ? QStringLiteral("bigint") : type);  // 与收集时兜底一致
+  // 值变化统一上报：点候选走 valueCommitted（值变化才触发）；手输走 textEdited。
+  // cellWidget 在构造之后才创建，connectChangeSignals 的 findChildren 覆盖不到，
+  // 必须在此接线
+  cell->valueCommitted = [this] {
+    if (!m_loading) emit configChanged();
+  };
+  connect(cell->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &) {
     if (!m_loading) emit configChanged();
   });
-  if (combo->lineEdit()) {
-    connect(combo->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &) {
-      if (!m_loading) emit configChanged();
-    });
-  }
-  m_colsTable->setCellWidget(row, ColColType, combo);
+  m_colsTable->setCellWidget(row, ColColType, cell);
 }
 
 QString JsonTableDesigner::cellText(int row, int col) const {
-  // 类型列是常驻下拉（cellWidget），文本以控件为准
-  if (auto *combo = qobject_cast<QComboBox *>(m_colsTable->cellWidget(row, col)))
-    return combo->currentText().trimmed();
+  // 类型列是常驻编辑控件（AuiCellEditCombo：输入框 + ▾ 下拉），文本以控件为准
+  // （AuiCellEditCombo 无 Q_OBJECT，不能用 qobject_cast，走 dynamic_cast）
+  if (auto *cell = dynamic_cast<AuiCellEditCombo *>(m_colsTable->cellWidget(row, col)))
+    return cell->text().trimmed();
   const QTableWidgetItem *it = m_colsTable->item(row, col);
   return it ? it->text().trimmed() : QString();
 }
@@ -1983,32 +1975,25 @@ void JsonTableDesigner::moveViewRow(int delta) {
   const int row = m_viewTable->currentRow();
   const int target = row + delta;
   if (row < 0 || target < 0 || target >= m_viewTable->rowCount()) return;
-  // 字段引用：交换两行的可编辑下拉文本（元数据仍随 takeItem 搬运）
-  auto *refA = qobject_cast<QComboBox *>(m_viewTable->cellWidget(row, UColRef));
-  auto *refB = qobject_cast<QComboBox *>(m_viewTable->cellWidget(target, UColRef));
+  // 字段引用：交换两行的下拉文本（元数据仍随 item 槽位交换；
+  // 程序性 setText 不触发用户信号，无需块信号）
+  auto *refA = dynamic_cast<AuiCellEditCombo *>(m_viewTable->cellWidget(row, UColRef));
+  auto *refB = dynamic_cast<AuiCellEditCombo *>(m_viewTable->cellWidget(target, UColRef));
   if (refA && refB) {
-    const QString ta = refA->currentText();
-    const QString tb = refB->currentText();
-    refA->blockSignals(true);
-    refB->blockSignals(true);
-    refA->setEditText(tb);
-    refB->setEditText(ta);
-    refA->blockSignals(false);
-    refB->blockSignals(false);
+    const QString ta = refA->text();
+    const QString tb = refB->text();
+    refA->setText(tb);
+    refB->setText(ta);
   }
   for (int c = 0; c < UColCount; ++c) {
     if (c == UColQuery) {
-      auto *a = qobject_cast<QComboBox *>(m_viewTable->cellWidget(row, c));
-      auto *b = qobject_cast<QComboBox *>(m_viewTable->cellWidget(target, c));
-      if (a && b && a->currentIndex() != b->currentIndex()) {
-        const int ia = a->currentIndex();
-        const int ib = b->currentIndex();
-        a->blockSignals(true);
-        b->blockSignals(true);
-        a->setCurrentIndex(ib);
-        b->setCurrentIndex(ia);
-        a->blockSignals(false);
-        b->blockSignals(false);
+      auto *a = dynamic_cast<AuiCellEditCombo *>(m_viewTable->cellWidget(row, c));
+      auto *b = dynamic_cast<AuiCellEditCombo *>(m_viewTable->cellWidget(target, c));
+      if (a && b) {
+        const QString ta = a->text();
+        const QString tb = b->text();
+        a->setText(tb);
+        b->setText(ta);
       }
       continue;
     }
@@ -2053,20 +2038,14 @@ bool JsonTableDesigner::swapConfigRows(QTableWidget *tw, int a, int b) {
     QTableWidgetItem *ib = tw->takeItem(b, c);
     tw->setItem(a, c, ib);
     tw->setItem(b, c, ia);
-    // cellWidget 下拉交换当前文本
-    auto *wa = qobject_cast<QComboBox *>(tw->cellWidget(a, c));
-    auto *wb = qobject_cast<QComboBox *>(tw->cellWidget(b, c));
+    // cellWidget 下拉交换当前文本（程序性 setText 不触发用户信号，无需块信号）
+    auto *wa = dynamic_cast<AuiCellEditCombo *>(tw->cellWidget(a, c));
+    auto *wb = dynamic_cast<AuiCellEditCombo *>(tw->cellWidget(b, c));
     if (!wa || !wb) continue;
-    const QString ta = wa->currentText();
-    const QString tb = wb->currentText();
-    wa->blockSignals(true);
-    wb->blockSignals(true);
-    if (wa->isEditable()) wa->setEditText(tb);
-    else wa->setCurrentIndex(wa->findText(tb));
-    if (wb->isEditable()) wb->setEditText(ta);
-    else wb->setCurrentIndex(wb->findText(ta));
-    wa->blockSignals(false);
-    wb->blockSignals(false);
+    const QString ta = wa->text();
+    const QString tb = wb->text();
+    wa->setText(tb);
+    wb->setText(ta);
   }
   tw->blockSignals(false);
   return true;
@@ -2181,8 +2160,10 @@ void JsonTableDesigner::fillJoins(const QVector<JsonTableJoinSpec> &joins) {
   for (int r = 0; r < joins.size() && r < m_joinTable->rowCount(); ++r) {
     const JsonTableJoinSpec &j = joins[r];
     m_joinTable->setItem(r, JoinColTable, new QTableWidgetItem(j.table));
-    auto *typeCombo = qobject_cast<QComboBox *>(m_joinTable->cellWidget(r, JoinColType));
-    if (typeCombo) comboSelectData(typeCombo, j.type);
+    auto *typeCombo = dynamic_cast<AuiCellEditCombo *>(m_joinTable->cellWidget(r, JoinColType));
+    if (typeCombo)
+      typeCombo->setText(j.type == QStringLiteral("INNER") ? QStringLiteral("INNER")
+                                                           : QStringLiteral("LEFT"));
     if (j.on.size() == 2) {
       m_joinTable->setItem(r, JoinColOnMain, new QTableWidgetItem(j.on.at(0)));
       m_joinTable->setItem(r, JoinColOnJoin, new QTableWidgetItem(j.on.at(1)));
@@ -2200,9 +2181,14 @@ void JsonTableDesigner::appendJoinRow() {
   const int row = m_joinTable->rowCount();
   m_joinTable->insertRow(row);
   m_joinTable->setItem(row, JoinColTable, new QTableWidgetItem(QString()));
-  auto *typeCombo = AuiComboBox::create(this);
-  typeCombo->addItem(QStringLiteral("LEFT"), QStringLiteral("LEFT"));
-  typeCombo->addItem(QStringLiteral("INNER"), QStringLiteral("INNER"));
+  // JOIN 类型：常驻只读下拉（文字可拖选/双击全选/Ctrl+C 复制，点箭头展开候选）
+  auto *typeCombo = new AuiCellEditCombo(m_joinTable, JoinColType,
+                                         {QStringLiteral("LEFT"), QStringLiteral("INNER")}, this,
+                                         true);
+  typeCombo->setText(QStringLiteral("LEFT"));
+  typeCombo->valueCommitted = [this] {
+    if (!m_loading) emit configChanged();
+  };
   m_joinTable->setCellWidget(row, JoinColType, typeCombo);
   m_joinTable->setItem(row, JoinColOnMain, new QTableWidgetItem(QString()));
   m_joinTable->setItem(row, JoinColOnJoin, new QTableWidgetItem(QString()));
@@ -2215,8 +2201,8 @@ QVector<JsonTableJoinSpec> JsonTableDesigner::collectJoins() const {
   for (int r = 0; r < m_joinTable->rowCount(); ++r) {
     JsonTableJoinSpec j;
     j.table = cellOf(m_joinTable, r, JoinColTable).trimmed();
-    auto *typeCombo = qobject_cast<QComboBox *>(m_joinTable->cellWidget(r, JoinColType));
-    j.type = typeCombo ? typeCombo->currentData().toString() : QStringLiteral("LEFT");
+    auto *typeCombo = dynamic_cast<AuiCellEditCombo *>(m_joinTable->cellWidget(r, JoinColType));
+    j.type = typeCombo ? typeCombo->text().trimmed() : QStringLiteral("LEFT");
     if (j.type.isEmpty()) j.type = QStringLiteral("LEFT");
     j.on.append(cellOf(m_joinTable, r, JoinColOnMain).trimmed());
     j.on.append(cellOf(m_joinTable, r, JoinColOnJoin).trimmed());
@@ -2433,13 +2419,8 @@ void JsonTableDesigner::fillViewTable() {
     listItem->setCheckState(selOf.contains(ref) ? Qt::Checked : Qt::Unchecked);
     listItem->setTextAlignment(Qt::AlignCenter);
     m_viewTable->setItem(row, UColList, listItem);
-    // 查询模式下拉（不查询/精确/模糊/范围/仅接口）
-    auto *modeCombo = AuiComboBox::create(this);
-    modeCombo->addItem(QStringLiteral("不查询"), QStringLiteral("none"));
-    modeCombo->addItem(QStringLiteral("精确"), QStringLiteral("eq"));
-    modeCombo->addItem(QStringLiteral("模糊"), QStringLiteral("like"));
-    modeCombo->addItem(QStringLiteral("范围"), QStringLiteral("gap"));
-    modeCombo->addItem(QStringLiteral("仅接口"), QStringLiteral("api"));
+    // 查询模式下拉（不查询/精确/模糊/范围/仅接口；只读，文字可拖选复制）
+    auto *modeCombo = new AuiCellEditCombo(m_viewTable, UColQuery, queryModePresets(), this, true);
     QString mode = QStringLiteral("none");
     bool qVisible = true;
     if (const auto mIt = mode2.constFind(ref); mIt != mode2.constEnd()) {
@@ -2447,10 +2428,10 @@ void JsonTableDesigner::fillViewTable() {
       qVisible = mIt.value().second;
     }
     if (!qVisible) mode = QStringLiteral("api");
-    comboSelectData(modeCombo, mode);
-    connect(modeCombo, &QComboBox::currentIndexChanged, this, [this](int) {
+    modeCombo->setText(queryModeDisplay(mode));
+    modeCombo->valueCommitted = [this] {
       if (!m_loading) emit configChanged();
-    });
+    };
     m_viewTable->setCellWidget(row, UColQuery, modeCombo);
     // 展示 / 写入：未配置 editCols 时缺省 true（全列可写可展示）；
     // 联表行固定只读展示（visible=true, writable=false）。
@@ -2554,16 +2535,11 @@ void JsonTableDesigner::appendViewJoinRow(const QString &ref) {
   listItem->setCheckState(Qt::Checked);
   listItem->setTextAlignment(Qt::AlignCenter);
   m_viewTable->setItem(row, UColList, listItem);
-  auto *modeCombo = AuiComboBox::create(this);
-  modeCombo->addItem(QStringLiteral("不查询"), QStringLiteral("none"));
-  modeCombo->addItem(QStringLiteral("精确"), QStringLiteral("eq"));
-  modeCombo->addItem(QStringLiteral("模糊"), QStringLiteral("like"));
-  modeCombo->addItem(QStringLiteral("范围"), QStringLiteral("gap"));
-  modeCombo->addItem(QStringLiteral("仅接口"), QStringLiteral("api"));
-  modeCombo->setCurrentIndex(1);  // 缺省精确
-  connect(modeCombo, &QComboBox::currentIndexChanged, this, [this](int) {
+  auto *modeCombo = new AuiCellEditCombo(m_viewTable, UColQuery, queryModePresets(), this, true);
+  modeCombo->setText(queryModeDisplay(QStringLiteral("eq")));  // 缺省精确
+  modeCombo->valueCommitted = [this] {
     if (!m_loading) emit configChanged();
-  });
+  };
   m_viewTable->setCellWidget(row, UColQuery, modeCombo);
   auto addViewCheck = [this, row](int col, bool on) {
     auto *it = new QTableWidgetItem;
@@ -2660,8 +2636,9 @@ void JsonTableDesigner::collectViewTable(JsonTableTable *out) const {
       out->selCols.append(c);
     }
     // 查询视图（模式下拉）
-    auto *modeCombo = qobject_cast<QComboBox *>(m_viewTable->cellWidget(r, UColQuery));
-    const QString mode = modeCombo ? modeCombo->currentData().toString() : QStringLiteral("none");
+    auto *modeCombo = dynamic_cast<AuiCellEditCombo *>(m_viewTable->cellWidget(r, UColQuery));
+    const QString mode =
+        modeCombo ? queryModeData(modeCombo->text().trimmed()) : QStringLiteral("none");
     if (mode != QStringLiteral("none")) {
       JsonTableQueryCol qc;
       qc.ref = ref;
@@ -3018,32 +2995,34 @@ void JsonTableDesigner::appendSortRow(const QString &col, const QString &dir) {
   m_sortTable->insertRow(row);
   // 排序列：常驻可编辑下拉（候选 = 字段列 + 联表 ref，可自由输入）
   m_sortTable->setItem(row, 0, new QTableWidgetItem);
-  auto *refCombo = AuiComboBox::create(this);
-  refCombo->setEditable(true);
-  refCombo->addItems(m_sortColOptions);
-  refCombo->setEditText(col);
-  connect(refCombo, &QComboBox::currentIndexChanged, this, [this](int) {
+  auto *refCombo = new AuiCellEditCombo(m_sortTable, 0, m_sortColOptions, this);
+  refCombo->setText(col);
+  refCombo->valueCommitted = [this] {
+    if (!m_loading) emit configChanged();
+  };
+  connect(refCombo->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &) {
     if (!m_loading) emit configChanged();
   });
   m_sortTable->setCellWidget(row, 0, refCombo);
-  auto *dirCombo = AuiComboBox::create(this);
-  dirCombo->addItem(QStringLiteral("ASC"), QStringLiteral("ASC"));
-  dirCombo->addItem(QStringLiteral("DESC"), QStringLiteral("DESC"));
-  comboSelectData(dirCombo, dir.isEmpty() ? QStringLiteral("DESC") : dir);
-  connect(dirCombo, &QComboBox::currentIndexChanged, this, [this](int) {
+  // 方向：常驻只读下拉（ASC/DESC，文字可拖选复制，点箭头展开候选）
+  auto *dirCombo = new AuiCellEditCombo(m_sortTable, 1,
+                                        {QStringLiteral("ASC"), QStringLiteral("DESC")}, this,
+                                        true);
+  dirCombo->setText(dir.isEmpty() ? QStringLiteral("DESC") : dir);
+  dirCombo->valueCommitted = [this] {
     if (!m_loading) emit configChanged();
-  });
+  };
   m_sortTable->setCellWidget(row, 1, dirCombo);
 }
 
 QVector<QPair<QString, QString>> JsonTableDesigner::collectSort() const {
   QVector<QPair<QString, QString>> out;
   for (int r = 0; r < m_sortTable->rowCount(); ++r) {
-    auto *refCombo = qobject_cast<QComboBox *>(m_sortTable->cellWidget(r, 0));
-    const QString col = refCombo ? refCombo->currentText().trimmed() : QString();
+    auto *refCombo = dynamic_cast<AuiCellEditCombo *>(m_sortTable->cellWidget(r, 0));
+    const QString col = refCombo ? refCombo->text().trimmed() : QString();
     if (col.isEmpty()) continue;  // 跳过排序列为空的行
-    auto *dirCombo = qobject_cast<QComboBox *>(m_sortTable->cellWidget(r, 1));
-    QString dir = dirCombo ? dirCombo->currentData().toString() : QString();
+    auto *dirCombo = dynamic_cast<AuiCellEditCombo *>(m_sortTable->cellWidget(r, 1));
+    QString dir = dirCombo ? dirCombo->text().trimmed() : QString();
     if (dir.isEmpty()) dir = QStringLiteral("DESC");
     out.append({col, dir});
   }
@@ -3054,43 +3033,30 @@ QVector<QPair<QString, QString>> JsonTableDesigner::collectSort() const {
 void JsonTableDesigner::setViewRefOptions(const QStringList &opts) {
   m_viewRefOptions = opts;
   for (int r = 0; r < m_viewTable->rowCount(); ++r) {
-    auto *combo = qobject_cast<QComboBox *>(m_viewTable->cellWidget(r, UColRef));
-    if (!combo) continue;
-    const QString keep = combo->currentText();
-    combo->blockSignals(true);  // 重建候选不广播 configChanged
-    combo->clear();
-    combo->addItems(opts);
-    combo->setEditText(keep);
-    combo->blockSignals(false);
+    // setPresets 只更新候选列表，不动已填文本（等价原 clear/addItems/setEditText(keep)）
+    if (auto *cell = dynamic_cast<AuiCellEditCombo *>(m_viewTable->cellWidget(r, UColRef)))
+      cell->setPresets(opts);
   }
 }
 
 /// @brief 为字段呈现表某行绑定常驻可编辑下拉（字段引用列，点箭头展开候选）
 void JsonTableDesigner::bindViewRefCombo(int row, const QString &ref) {
-  auto *combo = AuiComboBox::create(m_viewTable);
-  combo->setEditable(true);
-  combo->addItems(m_viewRefOptions);
-  combo->setEditText(ref);
-  // 点箭头展开候选；同时把所在行设为当前行（cellWidget 会吞掉表格的选中处理）
-  if (combo->lineEdit())
-    combo->lineEdit()->installEventFilter(new RowActivateFilter(m_viewTable, UColRef, combo));
-  combo->installEventFilter(new RowActivateFilter(m_viewTable, UColRef, combo));
-  connect(combo, &QComboBox::currentIndexChanged, this, [this](int) {
+  auto *combo = new AuiCellEditCombo(m_viewTable, UColRef, m_viewRefOptions, m_viewTable);
+  combo->setText(ref);
+  combo->valueCommitted = [this] {
+    if (!m_loading) emit configChanged();
+  };
+  connect(combo->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &) {
     if (!m_loading) emit configChanged();
   });
-  if (combo->lineEdit()) {
-    connect(combo->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &) {
-      if (!m_loading) emit configChanged();
-    });
-  }
   m_viewTable->setCellWidget(row, UColRef, combo);
 }
 
 /// @brief 读取字段呈现表某行的字段引用（优先下拉当前文本）
 QString JsonTableDesigner::viewRefText(int row) const {
   if (row < 0 || row >= m_viewTable->rowCount()) return QString();
-  if (auto *combo = qobject_cast<QComboBox *>(m_viewTable->cellWidget(row, UColRef)))
-    return combo->currentText().trimmed();
+  if (auto *cell = dynamic_cast<AuiCellEditCombo *>(m_viewTable->cellWidget(row, UColRef)))
+    return cell->text().trimmed();
   return cellOf(m_viewTable, row, UColRef);
 }
 
@@ -3098,14 +3064,8 @@ QString JsonTableDesigner::viewRefText(int row) const {
 void JsonTableDesigner::setSortOptions(const QStringList &opts) {
   m_sortColOptions = opts;
   for (int r = 0; r < m_sortTable->rowCount(); ++r) {
-    auto *refCombo = qobject_cast<QComboBox *>(m_sortTable->cellWidget(r, 0));
-    if (!refCombo) continue;
-    const QString keep = refCombo->currentText();
-    refCombo->blockSignals(true);  // 重建候选不广播 configChanged
-    refCombo->clear();
-    refCombo->addItems(opts);
-    refCombo->setEditText(keep);
-    refCombo->blockSignals(false);
+    if (auto *cell = dynamic_cast<AuiCellEditCombo *>(m_sortTable->cellWidget(r, 0)))
+      cell->setPresets(opts);
   }
 }
 
@@ -3231,10 +3191,14 @@ void JsonTableDesigner::fillEnumOptions(int row) {
       m_enumOptTable->setItem(r, 0, new QTableWidgetItem(o.key));
       m_enumOptTable->setItem(r, 1, new QTableWidgetItem(o.label));
       m_enumOptTable->setItem(r, 2, new QTableWidgetItem(o.value));
-      auto *typeCombo = AuiComboBox::create(this);
-      typeCombo->addItem(QStringLiteral("string"), QStringLiteral("string"));
-      typeCombo->addItem(QStringLiteral("number"), QStringLiteral("number"));
-      comboSelectData(typeCombo, o.valueType.isEmpty() ? QStringLiteral("string") : o.valueType);
+      // 值类型：常驻只读下拉（string/number，文字可拖选复制，点箭头展开候选）
+      auto *typeCombo = new AuiCellEditCombo(m_enumOptTable, 3,
+                                             {QStringLiteral("string"), QStringLiteral("number")},
+                                             this, true);
+      typeCombo->setText(o.valueType.isEmpty() ? QStringLiteral("string") : o.valueType);
+      typeCombo->valueCommitted = [this] {
+        if (!m_loading) emit configChanged();
+      };
       m_enumOptTable->setCellWidget(r, 3, typeCombo);
     }
   }
@@ -3247,9 +3211,14 @@ void JsonTableDesigner::appendEnumOptRow() {
   m_enumOptTable->setItem(row, 0, new QTableWidgetItem(QString()));
   m_enumOptTable->setItem(row, 1, new QTableWidgetItem(QString()));
   m_enumOptTable->setItem(row, 2, new QTableWidgetItem(QString()));
-  auto *typeCombo = AuiComboBox::create(this);
-  typeCombo->addItem(QStringLiteral("string"), QStringLiteral("string"));
-  typeCombo->addItem(QStringLiteral("number"), QStringLiteral("number"));
+  // 值类型：常驻只读下拉（string/number，文字可拖选复制，点箭头展开候选）
+  auto *typeCombo = new AuiCellEditCombo(m_enumOptTable, 3,
+                                         {QStringLiteral("string"), QStringLiteral("number")},
+                                         this, true);
+  typeCombo->setText(QStringLiteral("string"));
+  typeCombo->valueCommitted = [this] {
+    if (!m_loading) emit configChanged();
+  };
   m_enumOptTable->setCellWidget(row, 3, typeCombo);
   m_enumOptTable->setCurrentCell(row, 0);
 }
@@ -3264,8 +3233,8 @@ QVector<JsonTableEnumOption> JsonTableDesigner::collectEnumOptions() const {
     o.key = keyIt ? keyIt->text().trimmed() : QString();
     o.label = labelIt ? labelIt->text().trimmed() : QString();
     o.value = valIt ? valIt->text().trimmed() : QString();
-    auto *typeCombo = qobject_cast<QComboBox *>(m_enumOptTable->cellWidget(r, 3));
-    o.valueType = typeCombo ? typeCombo->currentData().toString() : QString();
+    auto *typeCombo = dynamic_cast<AuiCellEditCombo *>(m_enumOptTable->cellWidget(r, 3));
+    o.valueType = typeCombo ? typeCombo->text().trimmed() : QString();
     if (o.value.isEmpty()) continue;  // 跳过未填 value 的行（value 是必填键）
     out.append(o);
   }
