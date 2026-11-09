@@ -292,8 +292,8 @@
       },
     ],
     manualUpdateTime: false,
-    modelName: '',
-    tableComment: '',
-    tableName: '',
+    modelName: 'salary_apply',
+    tableComment: '待遇调整申请',
+    tableName: 'salary_apply',
   },
 }

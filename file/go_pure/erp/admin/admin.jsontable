@@ -243,26 +243,6 @@
         ref: 'updated_at',
       },
     ],
-    enums: [
-      {
-        column: 'permission_id',
-        comment: '管理员',
-        items: [
-          {
-            key: 'Super',
-            label: '超级管理员',
-            value: '0',
-            valueType: 'string',
-          },
-          {
-            key: 'Common',
-            label: '普通管理员',
-            value: '1',
-            valueType: 'string',
-          },
-        ],
-      },
-    ],
     frontend: false,
     indexes: [
       {

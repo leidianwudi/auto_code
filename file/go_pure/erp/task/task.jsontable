@@ -121,8 +121,8 @@
       },
     ],
     manualUpdateTime: false,
-    modelName: '',
-    tableComment: '',
-    tableName: '',
+    modelName: 'task',
+    tableComment: '任务表',
+    tableName: 'task',
   },
 }

@@ -295,8 +295,8 @@
       },
     ],
     manualUpdateTime: false,
-    modelName: '',
-    tableComment: '',
-    tableName: '',
+    modelName: 'report_month_retire',
+    tableComment: '退休月报表',
+    tableName: 'report_month_retire',
   },
 }

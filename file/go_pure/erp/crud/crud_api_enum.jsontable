@@ -109,8 +109,8 @@
       },
     ],
     manualUpdateTime: false,
-    modelName: '',
-    tableComment: '',
-    tableName: '',
+    modelName: 'crud_api_enum',
+    tableComment: '自动生成代码，服务端枚举',
+    tableName: 'crud_api_enum',
   },
 }

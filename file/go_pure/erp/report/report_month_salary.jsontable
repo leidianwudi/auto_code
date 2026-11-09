@@ -180,8 +180,8 @@
     ],
     frontend: false,
     manualUpdateTime: false,
-    modelName: '',
-    tableComment: '',
-    tableName: '',
+    modelName: 'report_month_salary',
+    tableComment: '待遇调整月报表',
+    tableName: 'report_month_salary',
   },
 }

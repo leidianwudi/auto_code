@@ -336,8 +336,8 @@
       },
     ],
     manualUpdateTime: false,
-    modelName: '',
+    modelName: 'retire_people_apply',
     tableComment: '退休人员申请操作表',
-    tableName: '',
+    tableName: 'retire_people_apply',
   },
 }

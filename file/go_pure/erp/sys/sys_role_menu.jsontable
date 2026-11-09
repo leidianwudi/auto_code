@@ -67,8 +67,8 @@
       },
     ],
     manualUpdateTime: false,
-    modelName: '',
-    tableComment: '',
-    tableName: '',
+    modelName: 'sys_role_menu',
+    tableComment: '角色-菜单关联表',
+    tableName: 'sys_role_menu',
   },
 }

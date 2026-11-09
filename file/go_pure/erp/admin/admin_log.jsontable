@@ -119,8 +119,8 @@
       },
     ],
     manualUpdateTime: false,
-    modelName: '',
-    tableComment: '',
-    tableName: '',
+    modelName: 'admin_log',
+    tableComment: '管理员操作',
+    tableName: 'admin_log',
   },
 }

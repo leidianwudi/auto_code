@@ -98,8 +98,8 @@
     ],
     frontend: false,
     manualUpdateTime: false,
-    modelName: '',
-    tableComment: '',
-    tableName: '',
+    modelName: 'system_task',
+    tableComment: '用于测试前端代码生成',
+    tableName: 'system_task',
   },
 }

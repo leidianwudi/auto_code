@@ -384,8 +384,8 @@
     ],
     frontend: false,
     manualUpdateTime: false,
-    modelName: '',
-    tableComment: '',
-    tableName: '',
+    modelName: 'retire_people',
+    tableComment: '退休人员',
+    tableName: 'retire_people',
   },
 }

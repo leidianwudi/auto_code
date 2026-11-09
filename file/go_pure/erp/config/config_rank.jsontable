@@ -183,8 +183,8 @@
     ],
     frontend: false,
     manualUpdateTime: false,
-    modelName: '',
-    tableComment: '',
-    tableName: '',
+    modelName: 'config_rank',
+    tableComment: '职级配置',
+    tableName: 'config_rank',
   },
 }
