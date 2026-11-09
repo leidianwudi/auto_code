@@ -1,0 +1,126 @@
+{
+  table: {
+    columns: [
+      {
+        comment: '',
+        isAutoInc: true,
+        isPrimary: true,
+        mysqlType: 'int',
+        name: 'id',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '账户',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'account',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '操作类型，直接定义在代码里',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'oper_code',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '操作时间',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'datetime',
+        name: 'create_at',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '操作内容',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'json',
+        name: 'oper_content',
+        nullable: true,
+        unsigned: false,
+      },
+      {
+        comment: '旧内容',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'json',
+        name: 'old_content',
+        nullable: true,
+        unsigned: false,
+      },
+      {
+        comment: '说明，写上来源表和sn',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(128)',
+        name: 'desc',
+        nullable: false,
+        unsigned: false,
+      },
+    ],
+    editCols: [
+      {
+        ref: 'id',
+      },
+      {
+        label: '账户',
+        ref: 'account',
+      },
+      {
+        label: '操作类型，直接定义在代码里',
+        ref: 'oper_code',
+      },
+      {
+        label: '操作时间',
+        ref: 'create_at',
+      },
+      {
+        label: '操作内容',
+        ref: 'oper_content',
+      },
+      {
+        label: '旧内容',
+        ref: 'old_content',
+      },
+      {
+        label: '说明，写上来源表和sn',
+        ref: 'desc',
+      },
+    ],
+    frontend: false,
+    indexes: [
+      {
+        cols: [
+          'account',
+        ],
+        name: 'account',
+        unique: false,
+      },
+      {
+        cols: [
+          'create_at',
+        ],
+        name: 'create_at',
+        unique: false,
+      },
+      {
+        cols: [
+          'oper_code',
+        ],
+        name: 'oper_code',
+        unique: false,
+      },
+    ],
+    manualUpdateTime: false,
+    modelName: '',
+    tableComment: '',
+    tableName: '',
+  },
+}
