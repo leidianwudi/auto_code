@@ -1,0 +1,80 @@
+{
+  table: {
+    columns: [
+      {
+        comment: '主键',
+        isAutoInc: true,
+        isPrimary: true,
+        mysqlType: 'int',
+        name: 'id',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: 'salary_apply表id',
+        default: '0',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'salary_apply_id',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '身份证',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'card_id',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '是否启用',
+        default: '0',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'enable',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '备注',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(512)',
+        name: 'desc',
+        nullable: false,
+        unsigned: false,
+      },
+    ],
+    editCols: [
+      {
+        label: '主键',
+        ref: 'id',
+      },
+      {
+        label: 'salary_apply表id',
+        ref: 'salary_apply_id',
+      },
+      {
+        label: '身份证',
+        ref: 'card_id',
+      },
+      {
+        label: '是否启用',
+        ref: 'enable',
+      },
+      {
+        label: '备注',
+        ref: 'desc',
+      },
+    ],
+    frontend: false,
+    manualUpdateTime: false,
+    modelName: '',
+    tableComment: '',
+    tableName: '',
+  },
+}

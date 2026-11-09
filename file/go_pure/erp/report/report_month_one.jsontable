@@ -1,0 +1,10 @@
+{
+  table: {
+    columns: [],
+    frontend: false,
+    manualUpdateTime: false,
+    modelName: '',
+    tableComment: '',
+    tableName: '',
+  },
+}

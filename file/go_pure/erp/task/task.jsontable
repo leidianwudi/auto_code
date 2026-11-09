@@ -1,0 +1,128 @@
+{
+  table: {
+    columns: [
+      {
+        comment: 'id主键',
+        isAutoInc: true,
+        isPrimary: true,
+        mysqlType: 'int',
+        name: 'id',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '任务编码',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'code',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '任务名称',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'name',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '任务值',
+        default: '0',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'value',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '是否启用',
+        default: '0',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'enable',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '尝试开始时间',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'time',
+        name: 'beg_time',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '尝试结束时间. 超过此时间不在尝试执行任务',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'time',
+        name: 'end_time',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '任务描述',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(255)',
+        name: 'desc',
+        nullable: false,
+        unsigned: false,
+      },
+    ],
+    editCols: [
+      {
+        label: 'id主键',
+        ref: 'id',
+      },
+      {
+        label: '任务编码',
+        ref: 'code',
+      },
+      {
+        label: '任务名称',
+        ref: 'name',
+      },
+      {
+        label: '任务值',
+        ref: 'value',
+      },
+      {
+        label: '是否启用',
+        ref: 'enable',
+      },
+      {
+        label: '尝试开始时间',
+        ref: 'beg_time',
+      },
+      {
+        label: '尝试结束时间. 超过此时间不在尝试执行任务',
+        ref: 'end_time',
+      },
+      {
+        label: '任务描述',
+        ref: 'desc',
+      },
+    ],
+    frontend: false,
+    indexes: [
+      {
+        cols: [
+          'code',
+        ],
+        name: 'code',
+        unique: true,
+      },
+    ],
+    manualUpdateTime: false,
+    modelName: '',
+    tableComment: '',
+    tableName: '',
+  },
+}

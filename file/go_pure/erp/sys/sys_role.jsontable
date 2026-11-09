@@ -1,0 +1,10 @@
+{
+  table: {
+    columns: [],
+    frontend: false,
+    manualUpdateTime: false,
+    modelName: 'sys_role',
+    tableComment: '角色表',
+    tableName: 'sys_role',
+  },
+}
