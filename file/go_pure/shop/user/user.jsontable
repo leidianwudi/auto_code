@@ -48,6 +48,7 @@
         mysqlType: 'varchar(256)',
         name: 'head_img_url',
         nullable: false,
+        title: '头像',
         unsigned: false,
       },
       {
@@ -266,7 +267,9 @@
         ref: 'desc',
       },
       {
-        label: '头像url',
+        editThumbHeight: 60,
+        editThumbWidth: 120,
+        label: '头像',
         ref: 'head_img_url',
         uploadSourceFile: 'D:/work/github/auto_code/file/go_pure/shop/upload/img.jsonupload',
         uploadSourceId: 'user_head',
@@ -420,9 +423,11 @@
       },
       {
         displayType: 'image',
-        label: '头像url',
+        label: '头像',
+        listThumbHeight: 40,
+        listThumbWidth: 40,
         ref: 'head_img_url',
-        width: 60,
+        width: 80,
       },
     ],
     selColsEq: [

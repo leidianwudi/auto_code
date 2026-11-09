@@ -10,6 +10,7 @@
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QHBoxLayout>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -25,6 +26,32 @@
 #include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_style.h"
 #include "src/util/ui/component/aui_tree_combo.h"
+
+namespace {
+
+/// 带特殊占位文本的 SpinBox：修复「跟随预设」态下无法直接打字输入数字的问题。
+///
+/// Qt 行为：value == minimum 且设置了 specialValueText 时，输入框显示的是特殊
+/// 文本（如「跟随预设」），此时打字会把数字追加到该文本后面，校验必然失败，
+/// 表现为「无法输入数值」。这里在特殊文本态收到首个数字键时先清空显示文本，
+/// 让后续数字正常进入并参与校验。
+class ThumbSpinBox : public QSpinBox {
+public:
+  using QSpinBox::QSpinBox;
+
+protected:
+  void keyPressEvent(QKeyEvent *e) override {
+    if (value() == minimum() && !specialValueText().isEmpty()) {
+      const QString t = e->text();
+      if (!t.isEmpty() && t.at(0).isDigit()) {
+        lineEdit()->clear();  // 清掉「跟随预设」占位显示，允许直接输入数字
+      }
+    }
+    QSpinBox::keyPressEvent(e);
+  }
+};
+
+}  // namespace
 
 // ════════════════════════════════════════════════════════════
 //  构造 / 界面构建
@@ -149,8 +176,8 @@ void ViewFieldConfigDialog::setupUI() {
   auto *listThumbLay = new QHBoxLayout(m_listThumbRow);
   listThumbLay->setContentsMargins(0, 0, 0, 0);
   listThumbLay->setSpacing(4);
-  m_listThumbW = new QSpinBox(m_listThumbRow);
-  m_listThumbH = new QSpinBox(m_listThumbRow);
+  m_listThumbW = new ThumbSpinBox(m_listThumbRow);
+  m_listThumbH = new ThumbSpinBox(m_listThumbRow);
   for (QSpinBox *spin : {m_listThumbW, m_listThumbH}) {
     spin->setRange(0, 999);
     spin->setSpecialValueText(QStringLiteral("跟随预设"));
@@ -236,8 +263,8 @@ void ViewFieldConfigDialog::setupUI() {
   auto *editThumbLay = new QHBoxLayout(m_editThumbRow);
   editThumbLay->setContentsMargins(0, 0, 0, 0);
   editThumbLay->setSpacing(4);
-  m_editThumbW = new QSpinBox(m_editThumbRow);
-  m_editThumbH = new QSpinBox(m_editThumbRow);
+  m_editThumbW = new ThumbSpinBox(m_editThumbRow);
+  m_editThumbH = new ThumbSpinBox(m_editThumbRow);
   for (QSpinBox *spin : {m_editThumbW, m_editThumbH}) {
     spin->setRange(0, 999);
     spin->setSpecialValueText(QStringLiteral("跟随预设"));

@@ -1130,9 +1130,15 @@ void JsonTableDesigner::setupUI() {
   sortHeader->addStretch();
   auto *addSortBtn = makeCompactButton(QStringLiteral("+ 加排序"), this);
   auto *delSortBtn = makeCompactButton(QStringLiteral("- 删排序"), this);
+  auto *upSortBtn = makeCompactButton(QStringLiteral("↑ 上移"), this);
+  auto *downSortBtn = makeCompactButton(QStringLiteral("↓ 下移"), this);
   sortHeader->addWidget(addSortBtn);
   sortHeader->addWidget(delSortBtn);
+  sortHeader->addWidget(upSortBtn);
+  sortHeader->addWidget(downSortBtn);
   sortLay->addLayout(sortHeader);
+  connect(upSortBtn, &QPushButton::clicked, this, [this]() { moveSortRow(-1); });
+  connect(downSortBtn, &QPushButton::clicked, this, [this]() { moveSortRow(1); });
 
   m_sortTable = makeConfigTable({{QStringLiteral("排序列"), QHeaderView::Interactive, 140},
                                  {QStringLiteral("方向"), QHeaderView::Stretch, 0}},
@@ -1149,8 +1155,12 @@ void JsonTableDesigner::setupUI() {
   btnHeader->addStretch();
   auto *addBtnBtn = makeCompactButton(QStringLiteral("+ 加按钮"), this);
   auto *delBtnBtn = makeCompactButton(QStringLiteral("- 删按钮"), this);
+  auto *upBtnBtn = makeCompactButton(QStringLiteral("↑ 上移"), this);
+  auto *downBtnBtn = makeCompactButton(QStringLiteral("↓ 下移"), this);
   btnHeader->addWidget(addBtnBtn);
   btnHeader->addWidget(delBtnBtn);
+  btnHeader->addWidget(upBtnBtn);
+  btnHeader->addWidget(downBtnBtn);
   btnLay->addLayout(btnHeader);
 
   m_buttonTable = makeConfigTable({{QStringLiteral("按钮文字"), QHeaderView::Interactive, 140},
@@ -1165,6 +1175,8 @@ void JsonTableDesigner::setupUI() {
   btnLay->addWidget(m_buttonTable, 1);
   connect(addBtnBtn, &QPushButton::clicked, this, &JsonTableDesigner::onAddButton);
   connect(delBtnBtn, &QPushButton::clicked, this, &JsonTableDesigner::onRemoveButton);
+  connect(upBtnBtn, &QPushButton::clicked, this, [this]() { moveButtonRow(-1); });
+  connect(downBtnBtn, &QPushButton::clicked, this, [this]() { moveButtonRow(1); });
   connect(m_buttonTable, &QTableWidget::cellDoubleClicked, this,
           [this](int row, int) { onEditButton(row); });
   fillButtons();
@@ -1291,8 +1303,14 @@ void JsonTableDesigner::setupUI() {
   joinHeader->addStretch();
   auto *addJoinBtn = makeCompactButton(QStringLiteral("+ 加联表"), this);
   auto *delJoinBtn = makeCompactButton(QStringLiteral("- 删联表"), this);
+  auto *upJoinBtn = makeCompactButton(QStringLiteral("↑ 上移"), this);
+  auto *downJoinBtn = makeCompactButton(QStringLiteral("↓ 下移"), this);
   joinHeader->addWidget(addJoinBtn);
   joinHeader->addWidget(delJoinBtn);
+  joinHeader->addWidget(upJoinBtn);
+  joinHeader->addWidget(downJoinBtn);
+  connect(upJoinBtn, &QPushButton::clicked, this, [this]() { moveJoinRow(-1); });
+  connect(downJoinBtn, &QPushButton::clicked, this, [this]() { moveJoinRow(1); });
 
   // 上下两段可拖动：联表声明 / 索引
   auto *joinSplit = new AuiSplitter(Qt::Vertical, this);
@@ -1377,8 +1395,14 @@ void JsonTableDesigner::setupUI() {
   optHeader->addStretch();
   auto *addOptBtn = makeCompactButton(QStringLiteral("+ 加选项"), this);
   auto *delOptBtn = makeCompactButton(QStringLiteral("- 删选项"), this);
+  auto *upOptBtn = makeCompactButton(QStringLiteral("↑ 上移"), this);
+  auto *downOptBtn = makeCompactButton(QStringLiteral("↓ 下移"), this);
   optHeader->addWidget(addOptBtn);
   optHeader->addWidget(delOptBtn);
+  optHeader->addWidget(upOptBtn);
+  optHeader->addWidget(downOptBtn);
+  connect(upOptBtn, &QPushButton::clicked, this, [this]() { moveEnumOptRow(-1); });
+  connect(downOptBtn, &QPushButton::clicked, this, [this]() { moveEnumOptRow(1); });
   auto *optLay = makeSection(enumSplit);
   optLay->addLayout(optHeader);
   enumSplit->addWidget(optLay->parentWidget());
@@ -2008,6 +2032,86 @@ void JsonTableDesigner::moveViewRow(int delta) {
     m_viewTable->setItem(target, c, it1);
   }
   m_viewTable->setCurrentCell(target, UColRef);
+  if (!m_loading) emit configChanged();
+}
+
+// ════════════════════════════════════════════════════════════
+//  其余配置表行上移/下移（排序 / 操作按钮 / 联表 / 枚举选项）
+// ════════════════════════════════════════════════════════════
+
+/// @brief 通用两行整行交换：普通条目 takeItem 搬运；cellWidget 下拉逐列交换文本。
+/// 交换全程块信号（表格 model 信号 + 下拉自身信号），避免逐项触发 configChanged，
+/// 由调用方在成功后显式广播一次。可编辑下拉用 setEditText，固定项下拉按文本回选。
+bool JsonTableDesigner::swapConfigRows(QTableWidget *tw, int a, int b) {
+  if (!tw || a < 0 || b < 0 || a >= tw->rowCount() || b >= tw->rowCount() || a == b) {
+    return false;
+  }
+  tw->blockSignals(true);
+  for (int c = 0; c < tw->columnCount(); ++c) {
+    // 普通条目交换（widget 列取到的是 nullptr，setItem(nullptr) 等价清位）
+    QTableWidgetItem *ia = tw->takeItem(a, c);
+    QTableWidgetItem *ib = tw->takeItem(b, c);
+    tw->setItem(a, c, ib);
+    tw->setItem(b, c, ia);
+    // cellWidget 下拉交换当前文本
+    auto *wa = qobject_cast<QComboBox *>(tw->cellWidget(a, c));
+    auto *wb = qobject_cast<QComboBox *>(tw->cellWidget(b, c));
+    if (!wa || !wb) continue;
+    const QString ta = wa->currentText();
+    const QString tb = wb->currentText();
+    wa->blockSignals(true);
+    wb->blockSignals(true);
+    if (wa->isEditable()) wa->setEditText(tb);
+    else wa->setCurrentIndex(wa->findText(tb));
+    if (wb->isEditable()) wb->setEditText(ta);
+    else wb->setCurrentIndex(wb->findText(ta));
+    wa->blockSignals(false);
+    wb->blockSignals(false);
+  }
+  tw->blockSignals(false);
+  return true;
+}
+
+void JsonTableDesigner::moveSortRow(int delta) {
+  const int row = m_sortTable->currentRow();
+  const int target = row + delta;
+  if (row < 0 || target < 0 || target >= m_sortTable->rowCount()) return;
+  if (swapConfigRows(m_sortTable, row, target)) {
+    m_sortTable->setCurrentCell(target, 0);
+    if (!m_loading) emit configChanged();
+  }
+}
+
+void JsonTableDesigner::moveJoinRow(int delta) {
+  const int row = m_joinTable->currentRow();
+  const int target = row + delta;
+  if (row < 0 || target < 0 || target >= m_joinTable->rowCount()) return;
+  if (swapConfigRows(m_joinTable, row, target)) {
+    m_joinTable->setCurrentCell(target, JoinColTable);
+    if (!m_loading) emit configChanged();
+  }
+}
+
+void JsonTableDesigner::moveButtonRow(int delta) {
+  const int row = m_buttonTable->currentRow();
+  const int target = row + delta;
+  if (row < 0 || target < 0 || target >= m_buttons.size()) return;
+  m_buttons.swapItemsAt(row, target);
+  fillButtons();  // 按钮表格条目是摘要（真实数据在 m_buttons），整表重建最可靠
+  m_buttonTable->selectRow(target);
+  if (!m_loading) emit configChanged();
+}
+
+void JsonTableDesigner::moveEnumOptRow(int delta) {
+  if (m_enumCurRow < 0 || m_enumCurRow >= m_enums.size()) return;
+  syncEnumDrafts();  // 选项表的当前编辑内容先落 draft（切行同款语义）
+  auto &opts = m_enums[m_enumCurRow].options;
+  const int row = m_enumOptTable->currentRow();
+  const int target = row + delta;
+  if (row < 0 || target < 0 || target >= opts.size()) return;
+  opts.swapItemsAt(row, target);
+  fillEnumOptions(m_enumCurRow);  // 按新顺序重建选项表（含值类型下拉）
+  m_enumOptTable->setCurrentCell(target, 0);
   if (!m_loading) emit configChanged();
 }
 
