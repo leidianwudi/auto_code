@@ -16,6 +16,7 @@
 #include <QVBoxLayout>
 
 #include "src/ui/json_vue/config_dialog_common.h"
+#include "src/util/ui/component/aui_cell_edit_combo.h"
 #include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_message_box.h"
 
@@ -126,11 +127,12 @@ void JsonGlobalEnumDialog::onAddOption() {
   for (int c = 0; c < GEOColValueType; ++c) {
     m_optionTable->setItem(row, c, new QTableWidgetItem());
   }
-  // 类型列：字符串（默认）/ 数字；固定最小宽度保证下拉箭头完整可点
-  auto *combo = AuiComboBox::create(m_optionTable);
-  combo->addItem(QStringLiteral("字符串"), QString());
-  combo->addItem(QStringLiteral("数字"), QStringLiteral("number"));
-  combo->setMinimumWidth(80);
+  // 类型列：常驻只读下拉（字符串默认/数字；文字可拖选/双击全选/Ctrl+C 复制，
+  // 点箭头展开候选）——与 jsontable 设计器的单元格下拉同款控件
+  auto *combo = new AuiCellEditCombo(m_optionTable, GEOColValueType,
+                                     {QStringLiteral("字符串"), QStringLiteral("数字")},
+                                     m_optionTable, true);
+  combo->setText(QStringLiteral("字符串"));
   m_optionTable->setCellWidget(row, GEOColValueType, combo);
   m_optionTable->setCurrentCell(row, GEOColKey);
 }
@@ -165,13 +167,13 @@ void JsonGlobalEnumDialog::swapRows(int a, int b) {
     m_optionTable->setItem(b, c, ia);
   }
   // cellWidget 不能直接交换指针：setCellWidget 会删除目标单元格旧控件，产生悬垂引用
-  // （上移/下移后再点添加选项即崩溃），改为交换下拉框当前选中项
-  auto *ca = qobject_cast<QComboBox *>(m_optionTable->cellWidget(a, GEOColValueType));
-  auto *cb = qobject_cast<QComboBox *>(m_optionTable->cellWidget(b, GEOColValueType));
+  // （上移/下移后再点添加选项即崩溃），改为交换下拉框当前文本（程序性赋值不触发用户信号）
+  auto *ca = dynamic_cast<AuiCellEditCombo *>(m_optionTable->cellWidget(a, GEOColValueType));
+  auto *cb = dynamic_cast<AuiCellEditCombo *>(m_optionTable->cellWidget(b, GEOColValueType));
   if (ca && cb) {
-    const int idxA = ca->currentIndex();
-    ca->setCurrentIndex(cb->currentIndex());
-    cb->setCurrentIndex(idxA);
+    const QString ta = ca->text();
+    ca->setText(cb->text());
+    cb->setText(ta);
   }
 }
 
@@ -195,8 +197,8 @@ QVector<JsonGlobalEnumOption> JsonGlobalEnumDialog::collectOptions(QString *erro
       }
       return {};
     }
-    if (auto *combo = qobject_cast<QComboBox *>(m_optionTable->cellWidget(r, GEOColValueType))) {
-      o.valueType = combo->currentData().toString();
+    if (auto *combo = dynamic_cast<AuiCellEditCombo *>(m_optionTable->cellWidget(r, GEOColValueType))) {
+      o.valueType = combo->text() == QStringLiteral("数字") ? QStringLiteral("number") : QString();
     }
     out.append(o);
   }
@@ -211,11 +213,11 @@ void JsonGlobalEnumDialog::populateOptions(const QVector<JsonGlobalEnumOption> &
     m_optionTable->setItem(row, GEOColKey, new QTableWidgetItem(o.key));
     m_optionTable->setItem(row, GEOColLabel, new QTableWidgetItem(o.label));
     m_optionTable->setItem(row, GEOColValue, new QTableWidgetItem(o.value));
-    auto *combo = AuiComboBox::create(m_optionTable);
-    combo->addItem(QStringLiteral("字符串"), QString());
-    combo->addItem(QStringLiteral("数字"), QStringLiteral("number"));
-    combo->setMinimumWidth(80);
-    combo->setCurrentIndex(o.valueType == QStringLiteral("number") ? 1 : 0);
+    auto *combo = new AuiCellEditCombo(m_optionTable, GEOColValueType,
+                                       {QStringLiteral("字符串"), QStringLiteral("数字")},
+                                       m_optionTable, true);
+    combo->setText(o.valueType == QStringLiteral("number") ? QStringLiteral("数字")
+                                                           : QStringLiteral("字符串"));
     m_optionTable->setCellWidget(row, GEOColValueType, combo);
   }
 }

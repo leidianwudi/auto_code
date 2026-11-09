@@ -39,6 +39,7 @@
 #include "src/util/common/code_constants.h"
 #include "src/util/common/util_json.h"
 #include "src/util/ui/component/aui_button.h"
+#include "src/util/ui/component/aui_cell_edit_combo.h"
 #include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_style.h"
 
@@ -128,11 +129,31 @@ void JsonVueEditor::connectCellWidgetSignals(QWidget *widget) {
     connect(cb, &QCheckBox::stateChanged, this, [this]() {
       if (!m_loading) emit configChanged();
     });
+  } else if (auto *cell = dynamic_cast<AuiCellEditCombo *>(widget)) {
+    // 单元格下拉：只在用户真正改变值时上报（点候选 valueCommitted / 编辑提交 textEdited）
+    cell->valueCommitted = [this]() {
+      if (!m_loading) emit configChanged();
+    };
   } else if (auto *combo = qobject_cast<QComboBox *>(widget)) {
     // 只在用户真正改变值时上报：单击/聚焦/程序性同步都不应标记「已修改」
     AuiComboBox::connectValueCommitted(combo, this, [this]() {
       if (!m_loading) emit configChanged();
     });
+  }
+}
+
+void JsonVueEditor::refreshQueryRowSummary(AuiCellEditCombo *styleCell) {
+  // 输入样式变化时同步刷新该行配置按钮摘要（摘要依赖 inputStyle 分支）
+  for (int r = 0; r < m_queryTable->rowCount(); ++r) {
+    if (m_queryTable->cellWidget(r, QColInputStyle) != styleCell) continue;
+    auto *cfg = qobject_cast<QPushButton *>(m_queryTable->cellWidget(r, QColConfig));
+    if (cfg) {
+      QueryFieldConfig qq;
+      readQueryConfig(cfg, qq);
+      qq.inputStyle = stringToQueryInputStyle(styleCell->text());
+      cfg->setText(queryConfigSummary(qq));
+    }
+    break;
   }
 }
 
@@ -444,41 +465,32 @@ void JsonVueEditor::loadConfig(const JsonVueConfig &config) {
 
     m_queryTable->setItem(row, QColDisplayName, new QTableWidgetItem(q.displayName));
 
-    auto *dataCombo = newTableCombo();
-    dataCombo->addItems(columnDataNames());
-    dataCombo->setCurrentText(q.dataName);
-    m_queryTable->setCellWidget(row, QColDataName, dataCombo);
-    connectCellWidgetSignals(dataCombo);
+    auto *dataCell = new AuiCellEditCombo(m_queryTable, QColDataName, columnDataNames(),
+                                          m_queryTable, true);
+    dataCell->setText(q.dataName);
+    m_queryTable->setCellWidget(row, QColDataName, dataCell);
+    connectCellWidgetSignals(dataCell);
 
-    auto *inputStyle = newTableCombo();
-    inputStyle->addItems({QString::fromLatin1(JsonVueStyle::kText),
-                          QString::fromLatin1(JsonVueStyle::kDate),
-                          QString::fromLatin1(JsonVueStyle::kSelect)});
-    inputStyle->setCurrentText(queryInputStyleToString(q.inputStyle));
-    m_queryTable->setCellWidget(row, QColInputStyle, inputStyle);
-    connectCellWidgetSignals(inputStyle);
+    auto *styleCell = new AuiCellEditCombo(
+        m_queryTable, QColInputStyle,
+        {QString::fromLatin1(JsonVueStyle::kText), QString::fromLatin1(JsonVueStyle::kDate),
+         QString::fromLatin1(JsonVueStyle::kSelect)},
+        m_queryTable, true);
+    styleCell->setText(queryInputStyleToString(q.inputStyle));
+    m_queryTable->setCellWidget(row, QColInputStyle, styleCell);
+    connectCellWidgetSignals(styleCell);
     // 输入样式变化时同步刷新该行配置按钮摘要（摘要依赖 inputStyle 分支）
-    connect(inputStyle, &QComboBox::currentTextChanged, this, [this, inputStyle]() {
-      for (int r = 0; r < m_queryTable->rowCount(); ++r) {
-        if (m_queryTable->cellWidget(r, QColInputStyle) != inputStyle) continue;
-        auto *cfg = qobject_cast<QPushButton *>(m_queryTable->cellWidget(r, QColConfig));
-        if (cfg) {
-          QueryFieldConfig qq;
-          readQueryConfig(cfg, qq);
-          qq.inputStyle = stringToQueryInputStyle(inputStyle->currentText());
-          cfg->setText(queryConfigSummary(qq));
-        }
-        break;
-      }
-    });
+    styleCell->valueCommitted = [this, styleCell]() {
+      refreshQueryRowSummary(styleCell);
+      if (!m_loading) emit configChanged();
+    };
 
-    auto *relCombo = newTableCombo();
-    relCombo->addItem(QStringLiteral("普通"), QStringLiteral("="));
-    relCombo->addItem(QStringLiteral("范围"), QString::fromLatin1(JsonVueStyle::kRange));
-    int relIdx = relCombo->findData(queryRelationToString(q.relation));
-    if (relIdx >= 0) relCombo->setCurrentIndex(relIdx);
-    m_queryTable->setCellWidget(row, QColRelation, relCombo);
-    connectCellWidgetSignals(relCombo);
+    auto *relCell = new AuiCellEditCombo(m_queryTable, QColRelation,
+                                         {QStringLiteral("普通"), QStringLiteral("范围")},
+                                         m_queryTable, true);
+    relCell->setText(queryRelDataToText(queryRelationToString(q.relation)));
+    m_queryTable->setCellWidget(row, QColRelation, relCell);
+    connectCellWidgetSignals(relCell);
 
     // 配置按钮（⚙ + 摘要文本）
     auto *qConfigBtn = new QPushButton(queryConfigSummary(q), this);
@@ -558,15 +570,13 @@ JsonVueConfig JsonVueEditor::collectConfig() const {
     QueryFieldConfig q;
     auto *dnItem = m_queryTable->item(row, QColDisplayName);
     if (dnItem) q.displayName = dnItem->text().trimmed();
-    auto *dataCombo = qobject_cast<QComboBox *>(m_queryTable->cellWidget(row, QColDataName));
-    if (dataCombo) q.dataName = dataCombo->currentText();
-    auto *inputStyle = qobject_cast<QComboBox *>(m_queryTable->cellWidget(row, QColInputStyle));
-    if (inputStyle) q.inputStyle = stringToQueryInputStyle(inputStyle->currentText());
-    auto *relCombo = qobject_cast<QComboBox *>(m_queryTable->cellWidget(row, QColRelation));
-    if (relCombo) {
-      QVariant d = relCombo->currentData();
-      q.relation = stringToQueryRelation(d.isValid() ? d.toString() : relCombo->currentText());
-    }
+    auto *dataCell = dynamic_cast<AuiCellEditCombo *>(m_queryTable->cellWidget(row, QColDataName));
+    if (dataCell) q.dataName = dataCell->text();
+    auto *styleCell =
+        dynamic_cast<AuiCellEditCombo *>(m_queryTable->cellWidget(row, QColInputStyle));
+    if (styleCell) q.inputStyle = stringToQueryInputStyle(styleCell->text());
+    auto *relCell = dynamic_cast<AuiCellEditCombo *>(m_queryTable->cellWidget(row, QColRelation));
+    if (relCell) q.relation = stringToQueryRelation(queryRelTextToData(relCell->text()));
     // 读取所有配置
     auto *qConfigBtn = qobject_cast<QPushButton *>(m_queryTable->cellWidget(row, QColConfig));
     if (qConfigBtn) {
