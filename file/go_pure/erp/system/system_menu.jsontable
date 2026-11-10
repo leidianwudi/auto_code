@@ -167,8 +167,8 @@
     ],
     frontend: false,
     manualUpdateTime: false,
-    modelName: 'sys_menu',
+    modelName: 'system_menu',
     tableComment: '菜单+权限表',
-    tableName: 'sys_menu',
+    tableName: 'system_menu',
   },
 }

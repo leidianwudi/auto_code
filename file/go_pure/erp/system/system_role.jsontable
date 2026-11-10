@@ -98,8 +98,8 @@
     ],
     frontend: false,
     manualUpdateTime: false,
-    modelName: 'sys_role',
+    modelName: 'system_role',
     tableComment: '角色表',
-    tableName: 'sys_role',
+    tableName: 'system_role',
   },
 }
