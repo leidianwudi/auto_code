@@ -94,7 +94,57 @@
         ref: 'desc',
       },
     ],
-    frontend: false,
+    selCols: [
+      {
+        label: '账户',
+        ref: 'account',
+        width: 120,
+      },
+      {
+        label: '操作类型',
+        ref: 'oper_code',
+        width: 110,
+      },
+      {
+        label: '操作时间',
+        ref: 'create_at',
+        width: 160,
+      },
+      {
+        label: '操作内容',
+        ref: 'oper_content',
+      },
+      {
+        label: '说明',
+        ref: 'desc',
+      },
+    ],
+    selColsEq: [
+      {
+        ref: 'account',
+      },
+      {
+        ref: 'oper_code',
+      },
+    ],
+    selColsLike: [
+      {
+        ref: 'oper_content',
+      },
+    ],
+    selColsGap: [
+      {
+        ref: 'create_at',
+      },
+    ],
+        selColsSort: [
+      [
+        'id',
+        'DESC',
+      ],
+    ],
+    frontend: true,
+
     indexes: [
       {
         cols: [

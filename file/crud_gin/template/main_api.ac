@@ -1726,21 +1726,30 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   // InUpd 按 editCols 收敛后可能已无时间列；import 只看实际写入参数字段
   let updNeedTime: Bool = false;
   let updNeedCoin: Bool = false;
+  let updNeedDatatypes: Bool = false;
   for (uf in param.updFields) {
     if (uf.ptrType.includes("time.Time")) { updNeedTime = true; }
     if (uf.goType == "coin.Coin") { updNeedCoin = true; }
+    if (uf.goType == "datatypes.JSON") { updNeedDatatypes = true; }
   }
   let selNeedTime: Bool = false;
   for (sf in selFields) {
     if (sf.goType == "time.Time") { selNeedTime = true; }
   }
+  // InSel 含 json 列（模糊/等值查询）时需要 datatypes 包
+  let selNeedDatatypes: Bool = false;
+  for (sf in selFields) {
+    if (sf.goType == "datatypes.JSON") { selNeedDatatypes = true; }
+  }
   let tb: String = tabChar();
   let joinNeedTime: Bool = false;
+  let joinNeedCoin: Bool = false;
   if (hasJoin) {
-    // 联表模式：querySpec 引用 common；联表输出列为 time.Time 时需要 time 包
+    // 联表模式：querySpec 引用 common；联表输出列为 time.Time / coin.Coin 时需要对应包
     let viewFieldList: Object[] = jd["viewFields"];
     for (vf in viewFieldList) {
       if (vf["goType"] == "time.Time") { joinNeedTime = true; }
+      if (vf["goType"] == "coin.Coin") { joinNeedCoin = true; }
     }
   }
   let enTime: Bool = (needTime || joinNeedTime);
@@ -1751,6 +1760,10 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   enStd.append("errors");
   if (enTime) { enStd.append("time"); }
   if (param.hasDecimalField) { enExt.append(coinPath); }
+  // 联表输出列含金额列时，View 结构体使用 coin.Coin，需补 coin 包
+  if (joinNeedCoin) { enExt.append(coinPath); }
+  // json 列实体字段类型为 datatypes.JSON（值类型），需补 datatypes 包
+  if (param.hasJsonField) { enExt.append("gorm.io/datatypes"); }
   // 所有表都生成 querySpec（无联表时 Joins 为空），实体文件必须引用 cdb
   enExt.append(dbPath);
   enImports = buildGoImports(enStd, enExt);
@@ -1759,6 +1772,7 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   let selStd: String[] = [];
   let selExt: String[] = [];
   if (selNeedTime) { selStd.append("time"); }
+  if (selNeedDatatypes) { selExt.append("gorm.io/datatypes"); }
   selExt.append(httpxPath);
   selImports = buildGoImports(selStd, selExt);
 
@@ -1775,6 +1789,9 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   }
   if (updNeedCoin) {
     updImports = updImports + tb + "\"" + coinPath + "\"\n";
+  }
+  if (updNeedDatatypes) {
+    updImports = updImports + tb + "\"gorm.io/datatypes\"\n";
   }
   if (updNeedCdb) {
     updImports = updImports + tb + "\"" + dbPath + "\"\n";

@@ -171,76 +171,30 @@
     ],
     editCols: [
       {
+        editEditable: false,
         label: '主键',
         ref: 'id',
+        visible: false,
       },
       {
         label: '申请名称',
         ref: 'title',
-      },
-      {
-        label: '申请管理员',
-        ref: 'apply_admin_account',
-      },
-      {
-        label: '申请管理员昵称',
-        ref: 'apply_admin_nick',
-      },
-      {
-        label: '申请时间',
-        ref: 'apply_time',
+        required: true,
       },
       {
         label: '申请说明',
         ref: 'apply_desc',
+        widget: 'textarea',
       },
       {
         label: '计划补发时间',
         ref: 'plan_active_time',
-      },
-      {
-        label: '实际补发时间',
-        ref: 'active_time',
-      },
-      {
-        label: '待遇调整执行时间',
-        ref: 'exe_time',
-      },
-      {
-        label: '待遇调整是否已执行,0未执行。本字段未使用',
-        ref: 'is_execute',
-      },
-      {
-        label: '调整人数',
-        ref: 'people_count',
-      },
-      {
-        label: '待遇调整项数',
-        ref: 'apply_count',
+        widget: 'date',
       },
       {
         label: '补发月数',
         ref: 'adjust_month_count',
-      },
-      {
-        label: '状态枚举，0:编辑中；1:待审核；2:已审核；3:已拒绝',
-        ref: 'status',
-      },
-      {
-        label: '审核管理员',
-        ref: 'audit_admin_account',
-      },
-      {
-        label: '审核管理员昵称',
-        ref: 'audit_admin_nick',
-      },
-      {
-        label: '审核时间',
-        ref: 'audit_time',
-      },
-      {
-        label: '审核说明',
-        ref: 'audit_desc',
+        widget: 'number',
       },
     ],
     enums: [
@@ -252,36 +206,97 @@
             key: 'editing',
             label: '编辑中',
             value: '0',
-            valueType: 'string',
+            valueType: 'number',
           },
           {
             key: 'Auditing',
             label: '待审核',
             value: '1',
-            valueType: 'string',
+            valueType: 'number',
           },
           {
             key: 'Audited',
             label: '已审核',
             value: '2',
-            valueType: 'string',
+            valueType: 'number',
           },
           {
             key: 'Rejected',
             label: '已拒绝',
             value: '3',
-            valueType: 'string',
-          },
-          {
-            key: 'ApplyResumeTreatment',
-            label: '申请恢复待遇',
-            value: '5',
-            valueType: 'string',
+            valueType: 'number',
           },
         ],
       },
     ],
-    frontend: false,
+    selCols: [
+      {
+        label: '申请名称',
+        ref: 'title',
+        width: 180,
+      },
+      {
+        label: '申请管理员',
+        ref: 'apply_admin_nick',
+        width: 100,
+      },
+      {
+        label: '申请时间',
+        ref: 'apply_time',
+        width: 160,
+      },
+      {
+        label: '调整人数',
+        ref: 'people_count',
+        width: 90,
+      },
+      {
+        label: '调整项数',
+        ref: 'apply_count',
+        width: 90,
+      },
+      {
+        label: '补发月数',
+        ref: 'adjust_month_count',
+        width: 90,
+      },
+      {
+        label: '计划补发时间',
+        ref: 'plan_active_time',
+        width: 120,
+      },
+      {
+        label: '状态',
+        ref: 'status',
+        width: 100,
+      },
+      {
+        label: '审核管理员',
+        ref: 'audit_admin_nick',
+        width: 100,
+      },
+      {
+        label: '审核说明',
+        ref: 'audit_desc',
+      },
+    ],
+    selColsEq: [
+      {
+        ref: 'status',
+      },
+    ],
+    selColsLike: [
+      {
+        ref: 'title',
+      },
+    ],
+    selColsSort: [
+      [
+        'id',
+        'DESC',
+      ],
+    ],
+    frontend: true,
     indexes: [
       {
         cols: [

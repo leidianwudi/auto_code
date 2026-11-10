@@ -109,7 +109,69 @@
         ref: 'desc',
       },
     ],
-    frontend: false,
+    selCols: [
+      {
+        label: '统计月份',
+        ref: 'month',
+        width: 120,
+      },
+      {
+        label: '人员姓名',
+        ref: 'name',
+        width: 100,
+      },
+      {
+        label: '身份证',
+        ref: 'card_id',
+        width: 170,
+      },
+      {
+        label: '职级名称',
+        ref: 'rank_name',
+        width: 110,
+      },
+      {
+        label: '补发金额',
+        ref: 'money',
+        width: 130,
+      },
+      {
+        label: '添加时间',
+        ref: 'add_time',
+        width: 160,
+      },
+      {
+        label: '备注',
+        ref: 'desc',
+      },
+    ],
+    selColsEq: [
+    ],
+    selColsLike: [
+      {
+        ref: 'name',
+      },
+      {
+        ref: 'card_id',
+      },
+    ],
+    selColsGap: [
+      {
+        ref: 'month',
+      },
+    ],
+    selColsSort: [
+      [
+        'month',
+        'DESC',
+      ],
+      [
+        'id',
+        'DESC',
+      ],
+    ],
+    frontend: true,
+
     manualUpdateTime: false,
     modelName: 'report_month_one',
     tableComment: '一次性补发月报表',

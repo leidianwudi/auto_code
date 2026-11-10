@@ -276,7 +276,124 @@
         ref: 'desc',
       },
     ],
-    frontend: false,
+    selCols: [
+      {
+        label: '统计月份',
+        ref: 'month',
+        width: 120,
+      },
+      {
+        label: '姓名',
+        ref: 'name',
+        width: 100,
+      },
+      {
+        label: '身份证',
+        ref: 'card_id',
+        width: 170,
+      },
+      {
+        label: '职级名称',
+        ref: 'rank_name',
+        width: 110,
+      },
+      {
+        label: '基础退休费',
+        ref: 'base_money',
+        width: 110,
+      },
+      {
+        label: '职级退休费',
+        ref: 'rank_money',
+        width: 110,
+      },
+      {
+        label: '生活补贴',
+        ref: 'live_money',
+        width: 110,
+      },
+      {
+        label: '物业补贴',
+        ref: 'hoa_money',
+        width: 110,
+      },
+      {
+        label: '地方住房补贴',
+        ref: 'house_area_money',
+        width: 130,
+      },
+      {
+        label: '部队住房补贴',
+        ref: 'house_army_money',
+        width: 130,
+      },
+      {
+        label: '地区补贴',
+        ref: 'area_money',
+        width: 100,
+      },
+      {
+        label: '高龄补贴',
+        ref: 'age_money',
+        width: 100,
+      },
+      {
+        label: '高温补贴',
+        ref: 'high_temperature_money',
+        width: 120,
+      },
+      {
+        label: '护理费',
+        ref: 'nursing_money',
+        width: 100,
+      },
+      {
+        label: '丧葬费',
+        ref: 'dead_money',
+        width: 100,
+      },
+      {
+        label: '一次性补发',
+        ref: 'one_time_money',
+        width: 120,
+      },
+      {
+        label: '总计',
+        ref: 'sum_money',
+        width: 130,
+      },
+      {
+        label: '说明',
+        ref: 'desc',
+      },
+    ],
+    selColsEq: [
+    ],
+    selColsLike: [
+      {
+        ref: 'name',
+      },
+      {
+        ref: 'card_id',
+      },
+    ],
+    selColsGap: [
+      {
+        ref: 'month',
+      },
+    ],
+    selColsSort: [
+      [
+        'month',
+        'DESC',
+      ],
+      [
+        'id',
+        'DESC',
+      ],
+    ],
+    frontend: true,
+
     indexes: [
       {
         cols: [

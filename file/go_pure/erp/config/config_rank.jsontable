@@ -181,7 +181,85 @@
         ref: 'desc',
       },
     ],
-    frontend: false,
+    selCols: [
+      {
+        label: '职级',
+        ref: 'rank_id',
+        width: 80,
+      },
+      {
+        label: '职级名称',
+        ref: 'rank_name',
+        width: 140,
+      },
+      {
+        label: '基础退休费',
+        ref: 'base_money',
+        width: 110,
+      },
+      {
+        label: '职级退休费年增',
+        ref: 'rank_money_year_add',
+        width: 140,
+      },
+      {
+        label: '职级退休费',
+        ref: 'rank_money',
+        width: 110,
+      },
+      {
+        label: '生活补贴',
+        ref: 'live_money',
+        width: 110,
+      },
+      {
+        label: '物业补贴',
+        ref: 'hoa_money',
+        width: 110,
+      },
+      {
+        label: '地方住房补贴',
+        ref: 'house_area_money',
+        width: 130,
+      },
+      {
+        label: '部队住房补贴',
+        ref: 'house_army_money',
+        width: 130,
+      },
+      {
+        label: '地区补贴',
+        ref: 'area_money',
+        width: 100,
+      },
+      {
+        label: '是否启用',
+        ref: 'enable',
+        width: 90,
+      },
+      {
+        label: '说明',
+        ref: 'desc',
+      },
+    ],
+    selColsEq: [
+      {
+        ref: 'enable',
+      },
+    ],
+    selColsLike: [
+      {
+        ref: 'rank_name',
+      },
+    ],
+        selColsSort: [
+      [
+        'rank_id',
+        'ASC',
+      ],
+    ],
+    frontend: true,
+
     manualUpdateTime: false,
     modelName: 'config_rank',
     tableComment: '职级配置',

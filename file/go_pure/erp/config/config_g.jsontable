@@ -83,7 +83,50 @@
         ref: 'desc',
       },
     ],
-    frontend: false,
+    selCols: [
+      {
+        label: '排序',
+        ref: 'sort',
+        width: 70,
+      },
+      {
+        label: '配置键',
+        ref: 'key',
+        width: 180,
+      },
+      {
+        label: '值',
+        ref: 'value',
+        width: 220,
+      },
+      {
+        label: '是否起效',
+        ref: 'enable',
+        width: 90,
+      },
+      {
+        label: '说明',
+        ref: 'desc',
+      },
+    ],
+    selColsEq: [
+      {
+        ref: 'enable',
+      },
+    ],
+    selColsLike: [
+      {
+        ref: 'key',
+      },
+    ],
+        selColsSort: [
+      [
+        'sort',
+        'ASC',
+      ],
+    ],
+    frontend: true,
+
     indexes: [
       {
         cols: [

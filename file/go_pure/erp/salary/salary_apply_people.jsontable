@@ -51,8 +51,10 @@
     ],
     editCols: [
       {
+        editEditable: false,
         label: '主键',
         ref: 'id',
+        visible: false,
       },
       {
         label: 'salary_apply表id',
@@ -61,17 +63,129 @@
       {
         label: '身份证',
         ref: 'card_id',
+        required: true,
       },
       {
         label: '是否启用',
         ref: 'enable',
+        widget: 'boolean',
       },
       {
         label: '备注',
         ref: 'desc',
       },
     ],
-    frontend: false,
+    enums: [
+      {
+        column: 'enable',
+        comment: '是否启用',
+        items: [
+          {
+            key: 'invalid',
+            label: '停用',
+            value: '0',
+            valueType: 'number',
+          },
+          {
+            key: 'valid',
+            label: '启用',
+            value: '1',
+            valueType: 'number',
+          },
+        ],
+      },
+    ],
+    joinTables: [
+      {
+        cols: [
+          {
+            col: 'name',
+          },
+          {
+            col: 'rank_id',
+          },
+          {
+            col: 'money_scale',
+          },
+          {
+            col: 'status',
+          },
+        ],
+        on: [
+          'card_id',
+          'card_id',
+        ],
+        table: 'retire_people',
+        type: 'LEFT',
+      },
+      {
+        cols: [
+          {
+            col: 'title',
+          },
+        ],
+        on: [
+          'salary_apply_id',
+          'id',
+        ],
+        table: 'salary_apply',
+        type: 'LEFT',
+      },
+    ],
+    selCols: [
+      {
+        label: '申请名称',
+        ref: 'salary_apply_title',
+        width: 180,
+      },
+      {
+        label: '姓名',
+        ref: 'retire_people_name',
+        width: 100,
+      },
+      {
+        label: '身份证',
+        ref: 'card_id',
+        width: 170,
+      },
+      {
+        label: '计发比例(%)',
+        ref: 'retire_people_money_scale',
+        width: 110,
+      },
+      {
+        label: '是否启用',
+        ref: 'enable',
+        width: 90,
+      },
+      {
+        label: '备注',
+        ref: 'desc',
+      },
+    ],
+    selColsEq: [
+      {
+        ref: 'salary_apply_id',
+      },
+      {
+        ref: 'enable',
+      },
+    ],
+    selColsLike: [
+      {
+        ref: 'retire_people_name',
+      },
+      {
+        ref: 'card_id',
+      },
+    ],
+    selColsSort: [
+      [
+        'id',
+        'DESC',
+      ],
+    ],
+    frontend: true,
     manualUpdateTime: false,
     modelName: 'salary_apply_people',
     tableComment: '待遇调整的人员',

@@ -62,8 +62,10 @@
     ],
     editCols: [
       {
+        editEditable: false,
         label: '主键',
         ref: 'id',
+        visible: false,
       },
       {
         label: '待遇调整表id,salary_apply.id',
@@ -72,21 +74,146 @@
       {
         label: '待遇编码,枚举',
         ref: 'code',
+        required: true,
       },
       {
         label: '新待遇金额',
         ref: 'new_money',
+        widget: 'money',
       },
       {
         label: '是否启用',
         ref: 'enable',
+        widget: 'boolean',
       },
       {
         label: '备注',
         ref: 'desc',
       },
     ],
-    frontend: false,
+    enums: [
+      {
+        column: 'code',
+        comment: '待遇编码,枚举',
+        items: [
+          {
+            key: 'base_money',
+            label: '基础退休费',
+            value: 'base_money',
+            valueType: 'string',
+          },
+          {
+            key: 'rank_money',
+            label: '职级退休费',
+            value: 'rank_money',
+            valueType: 'string',
+          },
+          {
+            key: 'live_money',
+            label: '生活补贴',
+            value: 'live_money',
+            valueType: 'string',
+          },
+          {
+            key: 'house_army_money',
+            label: '部队住房补贴',
+            value: 'house_army_money',
+            valueType: 'string',
+          },
+          {
+            key: 'hoa_money',
+            label: '物业补贴',
+            value: 'hoa_money',
+            valueType: 'string',
+          },
+          {
+            key: 'house_area_money',
+            label: '地方住房补贴',
+            value: 'house_area_money',
+            valueType: 'string',
+          },
+        ],
+      },
+      {
+        column: 'enable',
+        comment: '是否启用',
+        items: [
+          {
+            key: 'invalid',
+            label: '停用',
+            value: '0',
+            valueType: 'number',
+          },
+          {
+            key: 'valid',
+            label: '启用',
+            value: '1',
+            valueType: 'number',
+          },
+        ],
+      },
+    ],
+    joinTables: [
+      {
+        cols: [
+          {
+            col: 'title',
+          },
+        ],
+        on: [
+          'salary_apply_id',
+          'id',
+        ],
+        table: 'salary_apply',
+        type: 'LEFT',
+      },
+    ],
+    selCols: [
+      {
+        label: '申请名称',
+        ref: 'salary_apply_title',
+        width: 180,
+      },
+      {
+        label: '待遇编码',
+        ref: 'code',
+        width: 130,
+      },
+      {
+        label: '新待遇金额',
+        ref: 'new_money',
+        width: 130,
+      },
+      {
+        label: '是否启用',
+        ref: 'enable',
+        width: 90,
+      },
+      {
+        label: '备注',
+        ref: 'desc',
+      },
+    ],
+    selColsEq: [
+      {
+        ref: 'salary_apply_id',
+      },
+      {
+        ref: 'enable',
+      },
+    ],
+        selColsLike: [
+      {
+        ref: 'salary_apply_title',
+      },
+    ],
+    selColsSort: [
+      [
+        'id',
+        'DESC',
+      ],
+    ],
+    frontend: true,
     manualUpdateTime: false,
     modelName: 'salary_apply_item',
     tableComment: '待遇调整的项',

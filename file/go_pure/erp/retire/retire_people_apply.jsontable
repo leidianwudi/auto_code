@@ -262,19 +262,19 @@
             key: 'Auditing',
             label: '待审核',
             value: '0',
-            valueType: 'string',
+            valueType: 'number',
           },
           {
             key: 'Audited',
             label: '已审核',
             value: '1',
-            valueType: 'string',
+            valueType: 'number',
           },
           {
             key: 'Rejected',
             label: '已拒绝',
             value: '2',
-            valueType: 'string',
+            valueType: 'number',
           },
         ],
       },
@@ -286,24 +286,87 @@
             key: 'Dead',
             label: '病故',
             value: '0',
-            valueType: 'string',
+            valueType: 'number',
           },
           {
             key: 'StopTreatment',
             label: '暂停待遇',
             value: '1',
-            valueType: 'string',
+            valueType: 'number',
           },
           {
             key: 'RecoverTreatment',
             label: '恢复待遇',
             value: '2',
-            valueType: 'string',
+            valueType: 'number',
           },
         ],
       },
     ],
-    frontend: false,
+    selCols: [
+      {
+        label: '姓名',
+        ref: 'name',
+        width: 100,
+      },
+      {
+        label: '身份证',
+        ref: 'card_id',
+        width: 170,
+      },
+      {
+        label: '申请类型',
+        ref: 'apply_type',
+        width: 100,
+      },
+      {
+        label: '申请管理员',
+        ref: 'apply_admin_nick',
+        width: 100,
+      },
+      {
+        label: '申请时间',
+        ref: 'apply_time',
+        width: 160,
+      },
+      {
+        label: '状态',
+        ref: 'status',
+        width: 100,
+      },
+      {
+        label: '审核管理员',
+        ref: 'audit_admin_nick',
+        width: 100,
+      },
+      {
+        label: '审核说明',
+        ref: 'audit_desc',
+      },
+    ],
+    selColsEq: [
+      {
+        ref: 'status',
+      },
+      {
+        ref: 'apply_type',
+      },
+    ],
+    selColsLike: [
+      {
+        ref: 'name',
+      },
+      {
+        ref: 'card_id',
+      },
+    ],
+    selColsSort: [
+      [
+        'id',
+        'DESC',
+      ],
+    ],
+    frontend: true,
     indexes: [
       {
         cols: [

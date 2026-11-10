@@ -347,7 +347,8 @@ export class QueryData {
         continue;
       }
       let val: String = "sel." + sf.goName;
-      if (sf.goType != "time.Time") {
+      // time 传指针；datatypes.JSON 是值类型（[]byte 语义）不可解引用
+      if (sf.goType != "time.Time" && sf.goType != "datatypes.JSON") {
         val = "*" + val;
       }
       if (sf.isLike) {

@@ -52,7 +52,7 @@ main {
     projPath: projPath,
     jsonTablePaths: files,
     genGlobalEnum: true,
-    enumRegPath: "erp_api/common/enumreg"
+    enumRegPath: "shop_api/common/enumreg"
   };
   generateApiMain(apiParams);
 
