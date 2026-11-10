@@ -20,6 +20,7 @@
 
 #include "src/ui/json_vue/config_dialog_common.h"
 #include "src/util/common/code_constants.h"
+#include "src/util/ui/component/aui_cell_edit_combo.h"
 #include "src/util/ui/component/aui_combo_box.h"
 
 // ════════════════════════════════════════════════════════════
@@ -35,9 +36,13 @@ enum ParamCols {
   ParamColCount
 };
 
-/// 值类型下拉选项 → 存储标记（""=字符串 / "number"=数字）
-inline QString comboDataToValueType(const QComboBox *combo) {
-  return combo ? combo->currentData().toString() : QString();
+/// 值类型下拉显示文本 ↔ 存储标记（"字符串"→"" / "数字"→"number"）
+inline QString valueTypeTextToData(const QString &text) {
+  return text == QStringLiteral("数字") ? QStringLiteral("number") : QString();
+}
+
+inline QString valueTypeDataToText(const QString &data) {
+  return data == QStringLiteral("number") ? QStringLiteral("数字") : QStringLiteral("字符串");
 }
 }  // namespace
 
@@ -163,9 +168,10 @@ void JsonUploadDialog::setupUI() {
     m_paramsTable->insertRow(row);
     m_paramsTable->setItem(row, ParamColName, new QTableWidgetItem(QString()));
     m_paramsTable->setItem(row, ParamColValue, new QTableWidgetItem(QString()));
-    auto *typeCombo = AuiComboBox::create(this);
-    typeCombo->addItem(QStringLiteral("字符串"), QString());
-    typeCombo->addItem(QStringLiteral("数字"), QStringLiteral("number"));
+    // 值类型：常驻只读下拉（字符串默认/数字；文字可拖选复制，点箭头展开候选）
+    auto *typeCombo = new AuiCellEditCombo(m_paramsTable, ParamColValueType,
+                                           {QStringLiteral("字符串"), QStringLiteral("数字")},
+                                           this, true);
     m_paramsTable->setCellWidget(row, ParamColValueType, typeCombo);
     m_paramsTable->setCellWidget(row, ParamColDelete,
                                  makeTableDeleteButton(m_paramsTable, ParamColDelete, this));
@@ -186,10 +192,10 @@ void JsonUploadDialog::fillParams(const QVector<JsonUploadParam> &params) {
     m_paramsTable->insertRow(row);
     m_paramsTable->setItem(row, ParamColName, new QTableWidgetItem(p.name));
     m_paramsTable->setItem(row, ParamColValue, new QTableWidgetItem(p.value));
-    auto *typeCombo = AuiComboBox::create(this);
-    typeCombo->addItem(QStringLiteral("字符串"), QString());
-    typeCombo->addItem(QStringLiteral("数字"), QStringLiteral("number"));
-    comboSelectData(typeCombo, p.valueType);
+    auto *typeCombo = new AuiCellEditCombo(m_paramsTable, ParamColValueType,
+                                           {QStringLiteral("字符串"), QStringLiteral("数字")},
+                                           this, true);
+    typeCombo->setText(valueTypeDataToText(p.valueType));
     m_paramsTable->setCellWidget(row, ParamColValueType, typeCombo);
     m_paramsTable->setCellWidget(row, ParamColDelete,
                                  makeTableDeleteButton(m_paramsTable, ParamColDelete, this));
@@ -204,8 +210,9 @@ QVector<JsonUploadParam> JsonUploadDialog::collectParams() const {
     const QTableWidgetItem *valueItem = m_paramsTable->item(r, ParamColValue);
     p.name = nameItem ? nameItem->text().trimmed() : QString();
     p.value = valueItem ? valueItem->text() : QString();
-    p.valueType = comboDataToValueType(
-        qobject_cast<QComboBox *>(m_paramsTable->cellWidget(r, ParamColValueType)));
+    auto *typeCombo =
+        dynamic_cast<AuiCellEditCombo *>(m_paramsTable->cellWidget(r, ParamColValueType));
+    p.valueType = typeCombo ? valueTypeTextToData(typeCombo->text()) : QString();
     if (p.name.isEmpty()) continue;  // 跳过未填参数名的行
     out.append(p);
   }
