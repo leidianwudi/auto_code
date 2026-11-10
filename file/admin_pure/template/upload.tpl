@@ -24,7 +24,13 @@ ${/each}  // 换图时带上旧图地址，后端删除旧文件避免垃圾图�
   if (oldImgUrl) fd.append('oldImgUrl', String(oldImgUrl));
   fd.append('${up.fileField}', file);
   try {
-    const res: any = await http.request<any>("post", "${up.url}", { data: fd });
+    // 必须覆盖全局默认的 Content-Type: application/json：否则 axios 的
+    // transformRequest 会把 FormData 当 JSON 序列化（文件字段丢失，后端收不到 file）。
+    // 传 multipart/form-data 后 axios 会再清空该头，由浏览器自动补 boundary
+    const res: any = await http.request<any>("post", "${up.url}", {
+      data: fd,
+      headers: { "Content-Type": "multipart/form-data" }
+    });
     return ${up.resChain} ?? "";
   } catch (e: any) {
     console.error("上传失败:", e?.message ?? e);

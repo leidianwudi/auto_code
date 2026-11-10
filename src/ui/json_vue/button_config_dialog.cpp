@@ -22,8 +22,32 @@
 #include "icon_loader.h"
 #include "icon_picker_dialog.h"
 #include "src/util/common/code_constants.h"
+#include "src/util/ui/component/aui_cell_edit_combo.h"
 #include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_style.h"
+
+namespace {
+
+/// 编辑样式下拉 显示文本 ↔ 存储值（JsonVueStyle::k* 常量）
+QString editStyleTextToData(const QString &text) {
+  if (text == QStringLiteral("整数")) return QString::fromLatin1(JsonVueStyle::kInt);
+  if (text == QStringLiteral("小数")) return QString::fromLatin1(JsonVueStyle::kFloat);
+  if (text == QStringLiteral("日期")) return QString::fromLatin1(JsonVueStyle::kDate);
+  if (text == QStringLiteral("下拉")) return QString::fromLatin1(JsonVueStyle::kSelect);
+  if (text == QStringLiteral("文本域")) return QString::fromLatin1(JsonVueStyle::kTextarea);
+  return QString::fromLatin1(JsonVueStyle::kText);
+}
+
+QString editStyleDataToText(const QString &data) {
+  if (data == QString::fromLatin1(JsonVueStyle::kInt)) return QStringLiteral("整数");
+  if (data == QString::fromLatin1(JsonVueStyle::kFloat)) return QStringLiteral("小数");
+  if (data == QString::fromLatin1(JsonVueStyle::kDate)) return QStringLiteral("日期");
+  if (data == QString::fromLatin1(JsonVueStyle::kSelect)) return QStringLiteral("下拉");
+  if (data == QString::fromLatin1(JsonVueStyle::kTextarea)) return QStringLiteral("文本域");
+  return QStringLiteral("文本");
+}
+
+}  // namespace
 
 // ════════════════════════════════════════════════════════════
 //  构造
@@ -315,13 +339,13 @@ void ButtonConfigDialog::onAddDialogField() {
   m_dialogFieldsTable->setCellWidget(row, 1, nameEdit);
 
   // 样式
-  auto *styleCombo = AuiComboBox::create();
-  styleCombo->addItem(QStringLiteral("文本"), QString::fromLatin1(JsonVueStyle::kText));
-  styleCombo->addItem(QStringLiteral("整数"), QString::fromLatin1(JsonVueStyle::kInt));
-  styleCombo->addItem(QStringLiteral("小数"), QString::fromLatin1(JsonVueStyle::kFloat));
-  styleCombo->addItem(QStringLiteral("日期"), QString::fromLatin1(JsonVueStyle::kDate));
-  styleCombo->addItem(QStringLiteral("下拉"), QString::fromLatin1(JsonVueStyle::kSelect));
-  styleCombo->addItem(QStringLiteral("文本域"), QString::fromLatin1(JsonVueStyle::kTextarea));
+  // 样式：常驻只读下拉（文字可拖选/双击全选/Ctrl+C 复制，点箭头展开候选）
+  auto *styleCombo = new AuiCellEditCombo(m_dialogFieldsTable, 2,
+                                          {QStringLiteral("文本"), QStringLiteral("整数"),
+                                           QStringLiteral("小数"), QStringLiteral("日期"),
+                                           QStringLiteral("下拉"), QStringLiteral("文本域")},
+                                          m_dialogFieldsTable, true);
+  styleCombo->setText(QStringLiteral("文本"));
   m_dialogFieldsTable->setCellWidget(row, 2, styleCombo);
 
   // 必填
@@ -369,21 +393,19 @@ void ButtonConfigDialog::onAddDialogField() {
   m_dialogFieldsData.append(f);
 
   // 样式改变时同步到 m_dialogFieldsData，并更新配置按钮状态
-  connect(styleCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-          [this, styleCombo](int) {
-            for (int i = 0; i < m_dialogFieldsTable->rowCount(); ++i) {
-              if (m_dialogFieldsTable->cellWidget(i, 2) == styleCombo) {
-                QString styleStr = styleCombo->currentData().toString();
-                m_dialogFieldsData[i].editStyle = stringToEditStyle(styleStr);
-                // 仅 select 样式启用配置按钮
-                auto *btn = qobject_cast<QPushButton *>(m_dialogFieldsTable->cellWidget(i, 4));
-                if (btn) {
-                  btn->setEnabled(m_dialogFieldsData[i].editStyle == EditStyle::Select);
-                }
-                break;
-              }
-            }
-          });
+  styleCombo->valueCommitted = [this, styleCombo]() {
+    for (int i = 0; i < m_dialogFieldsTable->rowCount(); ++i) {
+      if (m_dialogFieldsTable->cellWidget(i, 2) != styleCombo) continue;
+      m_dialogFieldsData[i].editStyle =
+          stringToEditStyle(editStyleTextToData(styleCombo->text()));
+      // 仅 select 样式启用配置按钮
+      auto *btn = qobject_cast<QPushButton *>(m_dialogFieldsTable->cellWidget(i, 4));
+      if (btn) {
+        btn->setEnabled(m_dialogFieldsData[i].editStyle == EditStyle::Select);
+      }
+      break;
+    }
+  };
 }
 
 void ButtonConfigDialog::onRemoveDialogField(int row) {
@@ -401,12 +423,11 @@ void ButtonConfigDialog::onConfigureFieldStyle(int row) {
     return;
   }
   // 确保基本属性同步到 m_dialogFieldsData
-  auto *styleCombo = qobject_cast<QComboBox *>(m_dialogFieldsTable->cellWidget(row, 2));
-  if (!styleCombo) {
+  auto *styleCell = dynamic_cast<AuiCellEditCombo *>(m_dialogFieldsTable->cellWidget(row, 2));
+  if (!styleCell) {
     return;
   }
-  QString styleStr = styleCombo->currentData().toString();
-  m_dialogFieldsData[row].editStyle = stringToEditStyle(styleStr);
+  m_dialogFieldsData[row].editStyle = stringToEditStyle(editStyleTextToData(styleCell->text()));
 
   // select 样式：弹出 ComboboxConfigDialog
   if (m_dialogFieldsData[row].editStyle == EditStyle::Select) {
@@ -461,7 +482,7 @@ QVector<DialogFieldConfig> ButtonConfigDialog::collectDialogFields() const {
     // 从表格控件获取基本属性
     auto *labelEdit = qobject_cast<QLineEdit *>(m_dialogFieldsTable->cellWidget(i, 0));
     auto *nameEdit = qobject_cast<QLineEdit *>(m_dialogFieldsTable->cellWidget(i, 1));
-    auto *styleCombo = qobject_cast<QComboBox *>(m_dialogFieldsTable->cellWidget(i, 2));
+    auto *styleCell = dynamic_cast<AuiCellEditCombo *>(m_dialogFieldsTable->cellWidget(i, 2));
     auto *requiredCheck = qobject_cast<QCheckBox *>(m_dialogFieldsTable->cellWidget(i, 3));
     if (nameEdit) {
       f.fieldName = nameEdit->text();
@@ -469,8 +490,8 @@ QVector<DialogFieldConfig> ButtonConfigDialog::collectDialogFields() const {
     if (labelEdit) {
       f.label = labelEdit->text();
     }
-    if (styleCombo) {
-      f.editStyle = stringToEditStyle(styleCombo->currentData().toString());
+    if (styleCell) {
+      f.editStyle = stringToEditStyle(editStyleTextToData(styleCell->text()));
     }
     if (requiredCheck) {
       f.required = requiredCheck->isChecked();
@@ -494,7 +515,7 @@ void ButtonConfigDialog::fillDialogFields(const QVector<DialogFieldConfig> &fiel
     m_dialogFieldsData[row] = f;
     auto *labelEdit = qobject_cast<QLineEdit *>(m_dialogFieldsTable->cellWidget(row, 0));
     auto *nameEdit = qobject_cast<QLineEdit *>(m_dialogFieldsTable->cellWidget(row, 1));
-    auto *styleCombo = qobject_cast<QComboBox *>(m_dialogFieldsTable->cellWidget(row, 2));
+    auto *styleCell = dynamic_cast<AuiCellEditCombo *>(m_dialogFieldsTable->cellWidget(row, 2));
     auto *requiredCheck = qobject_cast<QCheckBox *>(m_dialogFieldsTable->cellWidget(row, 3));
     if (nameEdit) {
       nameEdit->setText(f.fieldName);
@@ -502,16 +523,12 @@ void ButtonConfigDialog::fillDialogFields(const QVector<DialogFieldConfig> &fiel
     if (labelEdit) {
       labelEdit->setText(f.label);
     }
-    if (styleCombo) {
-      int idx = styleCombo->findData(editStyleToString(f.editStyle));
-      if (idx >= 0) {
-        styleCombo->setCurrentIndex(idx);  // 触发信号，此时 m_dialogFieldsData[row] 已更新
-      } else {
-        // 没找到匹配项时手动更新配置按钮状态
-        auto *btn = qobject_cast<QPushButton *>(m_dialogFieldsTable->cellWidget(row, 4));
-        if (btn) {
-          btn->setEnabled(f.editStyle == EditStyle::Select);
-        }
+    if (styleCell) {
+      styleCell->setText(editStyleDataToText(editStyleToString(f.editStyle)));
+      // 配置按钮启用态随样式同步（原实现依赖 setCurrentIndex 触发信号，此处显式同步）
+      auto *btn = qobject_cast<QPushButton *>(m_dialogFieldsTable->cellWidget(row, 4));
+      if (btn) {
+        btn->setEnabled(f.editStyle == EditStyle::Select);
       }
     }
     if (requiredCheck) {

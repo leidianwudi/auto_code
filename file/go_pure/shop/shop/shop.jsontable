@@ -2,8 +2,17 @@
   table: {
     adminPkgComment: '商店管理端模块（CRUD）',
     appAuth: 'public',
+    appOutCols: [
+      'id',
+      'logo_img',
+      'level',
+      'sell_count',
+      'like',
+      'follow',
+      'is_open',
+      'status',
+    ],
     appQuery: true,
-    appOutCols: ['id', 'logo_img', 'level', 'sell_count', 'like', 'follow', 'is_open', 'status'],
     columns: [
       {
         comment: '主键',
@@ -154,9 +163,9 @@
         ref: 'logo_img',
       },
       {
+        editEditable: false,
         label: '掌柜id',
         ref: 'user_id',
-        editEditable: false,
         writable: false,
       },
       {
@@ -171,21 +180,21 @@
         writable: false,
       },
       {
+        editEditable: false,
         label: '总售件数',
         ref: 'sell_count',
-        editEditable: false,
         writable: false,
       },
       {
+        editEditable: false,
         label: '总营业额',
         ref: 'sell_money',
-        editEditable: false,
         writable: false,
       },
       {
+        editEditable: false,
         label: '好评',
         ref: 'like',
-        editEditable: false,
         writable: false,
       },
       {
@@ -205,15 +214,15 @@
         ref: 'id',
       },
       {
+        editEditable: false,
         label: '差评',
         ref: 'dis_like',
-        editEditable: false,
         writable: false,
       },
       {
+        editEditable: false,
         label: '关注数量',
         ref: 'follow',
-        editEditable: false,
         writable: false,
       },
       {
@@ -230,25 +239,48 @@
           {
             key: 'Auditing',
             label: '审核中',
-            value: '0',
+            value: '1',
             valueType: 'number',
           },
           {
             key: 'Normal',
             label: '正常',
-            value: '1',
+            value: '2',
             valueType: 'number',
           },
           {
             key: 'Closed',
             label: '关闭',
-            value: '2',
+            value: '4',
             valueType: 'number',
+          },
+          {
+            key: 'Editing',
+            label: '编辑中',
+            value: '0',
+            valueType: 'string',
+          },
+          {
+            key: 'Failed',
+            label: '审核失败',
+            value: '3',
+            valueType: 'string',
           },
         ],
       },
     ],
     genCache: true,
+    i18n: {
+      defaultLang: 'zh',
+      extKey: 'ext_id',
+      fields: [
+        'name',
+        'intro',
+      ],
+      langFrom: 'header',
+      langKey: 'lang',
+      table: 'shop0',
+    },
     manualUpdateTime: false,
     modelName: 'shop',
     selCols: [

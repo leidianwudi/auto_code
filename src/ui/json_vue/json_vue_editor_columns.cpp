@@ -15,6 +15,7 @@
 #include "json_vue_editor.h"
 
 #include "src/util/ui/component/aui_check_box.h"
+#include "src/util/ui/component/aui_cell_edit_combo.h"
 #include "json_vue_editor_helpers.h"
 #include "src/util/ui/component/aui_message_box.h"
 
@@ -109,37 +110,29 @@ void JsonVueEditor::onAddQueryField() {
 
   m_queryTable->setItem(row, QColDisplayName, new QTableWidgetItem());
 
-  auto *dataCombo = newTableCombo();
-  dataCombo->addItems(columnDataNames());
-  m_queryTable->setCellWidget(row, QColDataName, dataCombo);
-  connectCellWidgetSignals(dataCombo);
+  auto *dataCell = new AuiCellEditCombo(m_queryTable, QColDataName, columnDataNames(),
+                                        m_queryTable, true);
+  m_queryTable->setCellWidget(row, QColDataName, dataCell);
+  connectCellWidgetSignals(dataCell);
 
-  auto *inputStyle = newTableCombo();
-  inputStyle->addItems({QString::fromLatin1(JsonVueStyle::kText),
-                        QString::fromLatin1(JsonVueStyle::kDate),
-                        QString::fromLatin1(JsonVueStyle::kSelect)});
-  m_queryTable->setCellWidget(row, QColInputStyle, inputStyle);
-  connectCellWidgetSignals(inputStyle);
+  auto *styleCell = new AuiCellEditCombo(
+      m_queryTable, QColInputStyle,
+      {QString::fromLatin1(JsonVueStyle::kText), QString::fromLatin1(JsonVueStyle::kDate),
+       QString::fromLatin1(JsonVueStyle::kSelect)},
+      m_queryTable, true);
+  m_queryTable->setCellWidget(row, QColInputStyle, styleCell);
+  connectCellWidgetSignals(styleCell);
   // 输入样式变化时同步刷新该行配置按钮摘要（摘要依赖 inputStyle 分支）
-  connect(inputStyle, &QComboBox::currentTextChanged, this, [this, inputStyle]() {
-    for (int r = 0; r < m_queryTable->rowCount(); ++r) {
-      if (m_queryTable->cellWidget(r, QColInputStyle) != inputStyle) continue;
-      auto *cfg = qobject_cast<QPushButton *>(m_queryTable->cellWidget(r, QColConfig));
-      if (cfg) {
-        QueryFieldConfig qq;
-        readQueryConfig(cfg, qq);
-        qq.inputStyle = stringToQueryInputStyle(inputStyle->currentText());
-        cfg->setText(queryConfigSummary(qq));
-      }
-      break;
-    }
-  });
+  styleCell->valueCommitted = [this, styleCell]() {
+    refreshQueryRowSummary(styleCell);
+    if (!m_loading) emit configChanged();
+  };
 
-  auto *relCombo = newTableCombo();
-  relCombo->addItem(QStringLiteral("普通"), QStringLiteral("="));
-  relCombo->addItem(QStringLiteral("范围"), QString::fromLatin1(JsonVueStyle::kRange));
-  m_queryTable->setCellWidget(row, QColRelation, relCombo);
-  connectCellWidgetSignals(relCombo);
+  auto *relCell = new AuiCellEditCombo(m_queryTable, QColRelation,
+                                       {QStringLiteral("普通"), QStringLiteral("范围")},
+                                       m_queryTable, true);
+  m_queryTable->setCellWidget(row, QColRelation, relCell);
+  connectCellWidgetSignals(relCell);
 
   // 配置按钮（⚙ + 摘要文本）
   QueryFieldConfig emptyQ;
@@ -200,15 +193,10 @@ QStringList JsonVueEditor::columnDataNames() const {
 }
 
 void JsonVueEditor::refreshQueryFieldDataNames() {
-  QStringList names = columnDataNames();
+  const QStringList names = columnDataNames();
   for (int row = 0; row < m_queryTable->rowCount(); ++row) {
-    auto *combo = qobject_cast<QComboBox *>(m_queryTable->cellWidget(row, QColDataName));
-    if (combo) {
-      QString cur = combo->currentText();
-      combo->clear();
-      combo->addItems(names);
-      int idx = combo->findText(cur);
-      if (idx >= 0) combo->setCurrentIndex(idx);
-    }
+    // setPresets 只更新候选列表，已填文本保留（等价原 clear/addItems/保留当前值）
+    if (auto *cell = dynamic_cast<AuiCellEditCombo *>(m_queryTable->cellWidget(row, QColDataName)))
+      cell->setPresets(names);
   }
 }

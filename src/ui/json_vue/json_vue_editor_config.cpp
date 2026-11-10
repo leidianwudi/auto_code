@@ -21,6 +21,7 @@
 #include "json_vue_editor.h"
 #include "json_vue_editor_helpers.h"
 #include "src/util/ui/component/aui_button.h"
+#include "src/util/ui/component/aui_cell_edit_combo.h"
 #include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/component/aui_tree_combo.h"
 #include "style_config_dialog.h"
@@ -160,9 +161,10 @@ void JsonVueEditor::onConfigureQuerySelect() {
   if (!configBtn) return;
 
   // 读取当前查询输入样式
-  auto *inputStyle = qobject_cast<QComboBox *>(m_queryTable->cellWidget(row, QColInputStyle));
-  if (!inputStyle) return;
-  QueryInputStyle style = stringToQueryInputStyle(inputStyle->currentText());
+  auto *styleCell =
+      dynamic_cast<AuiCellEditCombo *>(m_queryTable->cellWidget(row, QColInputStyle));
+  if (!styleCell) return;
+  QueryInputStyle style = stringToQueryInputStyle(styleCell->text());
 
   // 读取当前配置到临时 QueryFieldConfig
   QueryFieldConfig q;
@@ -174,8 +176,9 @@ void JsonVueEditor::onConfigureQuerySelect() {
     //   沿用（默认）→ 生成时从同名列取值域实时推导（含布尔枚举列，自动带「全部」空选项），
     //                 列配置修改后查询自动跟随；
     //   覆盖 → 从静态源/全局枚举候选中选择独立数据源（写入查询字段自身引用键）
-    auto *dataCombo = qobject_cast<QComboBox *>(m_queryTable->cellWidget(row, QColDataName));
-    const QString dataName = dataCombo ? dataCombo->currentText().trimmed() : QString();
+    auto *dataCell =
+        dynamic_cast<AuiCellEditCombo *>(m_queryTable->cellWidget(row, QColDataName));
+    const QString dataName = dataCell ? dataCell->text().trimmed() : QString();
 
     // 找同名列的取值域（摘要展示 + 继承默认值判定）
     ColumnConfig col;

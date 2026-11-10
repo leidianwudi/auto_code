@@ -133,6 +133,18 @@ private:
   void moveViewRow(int delta);
   /// 打开 ⚙ 字段设置面板（ViewFieldConfigDialog：取值域/列表展示/编辑表单）
   void openViewFieldConfig(int row);
+  // ── 其余配置表行上移/下移 ──
+  /// 通用两行整行交换：普通条目 takeItem 搬运；cellWidget 下拉逐列交换文本
+  /// （块信号，避免交换过程逐项广播 configChanged）
+  bool swapConfigRows(QTableWidget *tw, int a, int b);
+  /// 默认排序行上移/下移（delta=-1 上移，1 下移）
+  void moveSortRow(int delta);
+  /// 操作按钮行上移/下移（m_buttons 随之交换，delta=-1 上移，1 下移）
+  void moveButtonRow(int delta);
+  /// 联表行上移/下移（delta=-1 上移，1 下移）
+  void moveJoinRow(int delta);
+  /// 枚举选项行上移/下移（写回当前枚举 draft 后交换并重建，delta=-1 上移，1 下移）
+  void moveEnumOptRow(int delta);
   // ── 操作按钮（buttons：键名与 .jsonvue ButtonConfig 一致）──
   /// 用 m_buttons 全量重建按钮表格
   void fillButtons();

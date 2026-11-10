@@ -1,0 +1,24 @@
+{
+  uploads: [
+    {
+      editThumbHeight: 160,
+      editThumbWidth: 160,
+      fileField: 'file',
+      funcName: 'uploadUserHead',
+      id: 'user_head',
+      listThumbHeight: 40,
+      listThumbWidth: 80,
+      maxCount: 1,
+      method: 'POST',
+      params: [
+        {
+          name: 'type',
+          value: 'head',
+        },
+      ],
+      remark: '上传用户头像',
+      responsePath: 'data.url',
+      url: '/api/upload/img',
+    },
+  ],
+}

@@ -6,6 +6,7 @@
       'level',
       'nick',
       'head_img_url',
+      'is_real_name',
       'fans_count',
       'like_count',
     ],
@@ -47,6 +48,7 @@
         mysqlType: 'varchar(256)',
         name: 'head_img_url',
         nullable: false,
+        title: '头像',
         unsigned: false,
       },
       {
@@ -232,10 +234,9 @@
         required: true,
       },
       {
-        editEditable: false,
         label: '是否实名',
         ref: 'is_real_name',
-        writable: false,
+        widget: 'boolean',
       },
       {
         editEditable: false,
@@ -266,8 +267,13 @@
         ref: 'desc',
       },
       {
-        label: '头像url',
+        editThumbHeight: 60,
+        editThumbWidth: 120,
+        label: '头像',
         ref: 'head_img_url',
+        uploadSourceFile: 'D:/work/github/auto_code/file/go_pure/shop/upload/img.jsonupload',
+        uploadSourceId: 'user_head',
+        widget: 'image',
       },
       {
         editEditable: false,
@@ -328,6 +334,26 @@
         label: '道具数量',
         ref: 'item_count',
         writable: false,
+      },
+    ],
+    enums: [
+      {
+        column: 'is_real_name',
+        comment: '是否实名',
+        items: [
+          {
+            key: 'no',
+            label: '未实名',
+            value: '0',
+            valueType: 'number',
+          },
+          {
+            key: 'yes',
+            label: '已实名',
+            value: '1',
+            valueType: 'number',
+          },
+        ],
       },
     ],
     genCache: true,
@@ -394,6 +420,14 @@
       {
         label: '备注',
         ref: 'desc',
+      },
+      {
+        displayType: 'image',
+        label: '头像',
+        listThumbHeight: 40,
+        listThumbWidth: 40,
+        ref: 'head_img_url',
+        width: 80,
       },
     ],
     selColsEq: [

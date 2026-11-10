@@ -239,6 +239,13 @@ export function generateApiMain(params: Object): Number {
   let httpxPath: String = commonPath + "/httpx";
   let redisxPath: String = commonPath + "/redisx";
   let middlewarePath: String = moduleName + "/middleware";
+  // 枚举字典注册包 import 路径（可选，如 "shop_api/common/enumreg"）：
+  // 非空时每个枚举生成件在 init() 中注册自身映射，供 C 端 /app/enum/dict 汇总；
+  // 空值保持旧产物（未建该骨架包的项目生成后不会引入新依赖）
+  let enumRegPath: String = params["enumRegPath"];
+  if (enumRegPath == null) {
+    enumRegPath = "";
+  }
   printLog("Go 项目: " + goBasePath + "（module: " + moduleName + "）");
 
   // ── 3.5 全局枚举收集（tool_global_enum.ac 直接复用）────────────────
@@ -262,6 +269,17 @@ export function generateApiMain(params: Object): Number {
     }
   } else {
     printLog("genGlobalEnum=false，跳过全局枚举收集");
+  }
+
+  // ── 3.6 i18n 翻译表识别：主表 i18n.table 指向的表（显式或派生）────────
+  //      翻译表只生成 data 层（实体/仓储），不生成 admin/app 模块与路由；
+  //      其 extKey/langKey/defaultLang/fields 从主表 i18n 节点透传
+  let i18nParentOf: Object = {};
+  for (t in tables) {
+    let icfg: Object = t["i18n"];
+    if (icfg != null && icfg["table"] != null && icfg["table"].length > 0) {
+      i18nParentOf[icfg["table"]] = t;
+    }
   }
 
   // ── 4. 预扫描：表名/模型名去重 + 模块目录预计算 ────────────────────
@@ -318,6 +336,24 @@ export function generateApiMain(params: Object): Number {
     let segs: String[] = md.split("/");
     t["moduleDir"] = md;
     t["pkgName"] = segs[segs.length - 1];
+    // i18n 翻译表标记：翻译表依附主表，不单独生成代码包
+    let i18nParent: Object = i18nParentOf[tn];
+    if (i18nParent != null) {
+      t["_i18nTable"] = true;
+      t["_i18nEmbedded"] = true;
+      t["_i18nParent"] = i18nParent["tableName"];
+      let icfg: Object = i18nParent["i18n"];
+      t["_i18nExtKey"] = (icfg["extKey"] == null || icfg["extKey"] == "") ? "ext_id" : icfg["extKey"];
+      t["_i18nLangKey"] = (icfg["langKey"] == null || icfg["langKey"] == "") ? "lang" : icfg["langKey"];
+      t["_i18nDefaultLang"] = (icfg["defaultLang"] == null || icfg["defaultLang"] == "") ? "zh" : icfg["defaultLang"];
+      t["_i18nFields"] = icfg["fields"];
+      // 只供主表生成期查列定义（不进入 genTables）
+      tablesByName[tn] = t;
+      continue;
+    }
+    // moduleDir/pkgName/i18n 标记已补全，回写查找表（对象按值复制，早写会漏掉后补字段）
+    tablesByName[tn] = t;
+    tablesByModel[mn] = t;
     genTables.append(t);
   }
 
@@ -348,7 +384,7 @@ export function generateApiMain(params: Object): Number {
     let layeredPkgName: String = json["pkgName"];
     let layeredCount: Number = generateLayeredTable(json, goBasePath, moduleName,
         commonPath, middlewarePath, layeredModuleDir, layeredPkgName,
-        globalEnumDefs, emittedGlobalEnums, tablesByName);
+        globalEnumDefs, emittedGlobalEnums, tablesByName, enumRegPath);
     generatedFileCount = generatedFileCount + layeredCount;
   }  // end for (json in genTables)
 
@@ -559,7 +595,23 @@ export function deriveI18nTable(mainTable: Object): Object {
     frontend: false,
     columns: newCols,
     indexes: idxs,
+    // 生成期标记（不落 .jsontable）：翻译表不单独成表生成，
+    // 只在主表 data 包内生成一个实体文件（en_{翻译表}_.go）
+    _i18nTable: true,
+    _i18nEmbedded: true,
+    _i18nParent: mainTable["tableName"],
+    _i18nExtKey: extKey,
+    _i18nLangKey: langKey,
+    _i18nDefaultLang: (cfg["defaultLang"] == null || cfg["defaultLang"] == "") ? "zh" : cfg["defaultLang"],
+    _i18nFields: cfg["fields"],
   };
+  let rel: String = mainTable["_relDir"];
+  if (rel != null && rel.length > 0) {
+    t["_relDir"] = rel;
+  } else {
+    // 主表在扫描根目录：翻译表跟主表模块目录同层（如 t → t/t0）
+    t["_relDir"] = mainTable["tableName"];
+  }
   return t;
 }
 
@@ -616,7 +668,9 @@ export function buildTableEnums(table: Object, param: Param, globalEnumDefs: Obj
         continue;
       }
       emitted[dedupKey] = true;
-      enums.append(buildEnumEntry(geName, gcol, gDef["remark"], gDef["options"]));
+      // 注册名用枚举名本身：全局枚举可能被多表引用，按表名注册会因
+      // 「同包只生成一份」而只留下首个表名，其它表查不到
+      enums.append(buildEnumEntry(geName, gcol, gDef["remark"], gDef["options"], geName));
     }
   }
 
@@ -641,7 +695,9 @@ export function buildTableEnums(table: Object, param: Param, globalEnumDefs: Obj
           if (f.name == colName) { comment = f.comment; }
         }
       }
-      enums.append(buildEnumEntry(enumName, colName, comment, te["items"]));
+      // 注册名 = 表名.列名（如 user.is_real_name），C 端枚举字典的查找键
+      enums.append(buildEnumEntry(enumName, colName, comment, te["items"],
+          table.tableName + "." + colName));
     }
   }
   return enums;
@@ -652,9 +708,12 @@ export function buildTableEnums(table: Object, param: Param, globalEnumDefs: Obj
 /// @param columnName 列名（注释定位用）
 /// @param comment 枚举说明
 /// @param rawItems 原始选项数组 [{key,label,value,valueType}]
-/// @return {enumName, columnName, comment, mapKeyType, items:[{key,label,valueStr}]}
+/// @param regName 枚举字典注册名（表名.列名；全局枚举传枚举名），供 enum.tpl
+///        生成 init() 注册语句（enumRegPath 为空时不消费）
+/// @return {enumName, columnName, comment, mapKeyType, regName,
+///          items:[{key,label,valueStr}]}
 ///   值字面量：valueType=number → 数字字面量（map 键 int）；其余 → 双引号字符串
-export function buildEnumEntry(enumName: String, columnName: String, comment: String, rawItems: Object[]): Object {
+export function buildEnumEntry(enumName: String, columnName: String, comment: String, rawItems: Object[], regName: String): Object {
   let items: Object[] = [];
   let mapKeyType: String = "string";
   let first: Bool = true;
@@ -694,6 +753,7 @@ export function buildEnumEntry(enumName: String, columnName: String, comment: St
     columnName: columnName,
     comment: sanitizeGoComment(comment),
     mapKeyType: mapKeyType,
+    regName: regName,
     items: items
   };
 }
@@ -725,12 +785,12 @@ export function buildEnFieldLines(fields: FieldDef[]): String[] {
   for (f in fields) {
     if (f.goName.length > maxName) { maxName = f.goName.length; }
     if (f.enDeclType.length > maxType) { maxType = f.enDeclType.length; }
-    let tl: Number = ("`" + f.gormTag + " " + f.jsonTag + "`").length;
+    let tl: Number = ("`" + f.gormTag + " " + f.enJsonTag + "`").length;
     if (tl > maxTag) { maxTag = tl; }
   }
   let lines: String[] = [];
   for (f in fields) {
-    let tag: String = "`" + f.gormTag + " " + f.jsonTag + "`";
+    let tag: String = "`" + f.gormTag + " " + f.enJsonTag + "`";
     lines.append(tabChar() + padTo(f.goName, maxName) + " " + padTo(f.enDeclType, maxType)
       + " " + padTo(tag, maxTag) + " // " + f.comment);
   }
@@ -1325,7 +1385,8 @@ export function filterJoinRefs(arr: Object, aliasMap: Object): Object[] {
 /// @return 实际写入文件数
 export function generateLayeredTable(json: Object, goBasePath: String, moduleName: String,
     commonPath: String, middlewarePath: String, moduleDir: String, pkgName: String,
-    globalEnumDefs: Object, emitted: Object, tablesByName: Object): Number {
+    globalEnumDefs: Object, emitted: Object, tablesByName: Object,
+    enumRegPath: String): Number {
   let tplDir: String = "../../crud_gin/template";
   let dbPath: String = commonPath + "/db";
   let coinPath: String = commonPath + "/coin";
@@ -1345,6 +1406,129 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   let idType: String = param.primaryField.goType;
   let idName: String = param.primaryField.goName;
   let idCol: String = param.primaryField.name;
+
+  // ── i18n 多语言：主表 + 翻译表（如 shop + shop0）────────────────────
+  //    翻译表依附主表：只在主表 data 包内生成 en_{翻译表}_.go（实体 + 列常量），
+  //    翻译读写方法挂在主表 Repo 上；主表查询按 lang 平铺当前语言文本、
+  //    缺失回退 defaultLang；详情附全语言 map；保存事务内 upsert 翻译行。
+  let hasI18n: Bool = false;
+  let i18nTable: String = "";
+  let i18nDefaultLang: String = "zh";
+  let i18nExtKey: String = "ext_id";
+  let i18nLangKey: String = "lang";
+  let i18nFlatFields: Object[] = [];
+  let i18nTypeName: String = param.tableClass + "I18n";
+  let i18nCfg: Object = json["i18n"];
+  if (i18nCfg != null && i18nCfg["table"] != null && i18nCfg["table"].length > 0) {
+    i18nTable = i18nCfg["table"];
+    i18nDefaultLang = (i18nCfg["defaultLang"] == null || i18nCfg["defaultLang"] == "") ? "zh" : i18nCfg["defaultLang"];
+    i18nExtKey = (i18nCfg["extKey"] == null || i18nCfg["extKey"] == "") ? "ext_id" : i18nCfg["extKey"];
+    i18nLangKey = (i18nCfg["langKey"] == null || i18nCfg["langKey"] == "") ? "lang" : i18nCfg["langKey"];
+    let i18nTcfg: Object = tablesByName[i18nTable];
+    if (i18nTcfg == null) {
+      printError("错误：i18n 翻译表 '" + i18nTable + "' 不存在（主表 " + tableName + " 的 i18n 已跳过）");
+    } else if (!param.hasAutoIncPk) {
+      printError("错误：i18n 只支持自增主键表（主表 " + tableName + " 无自增主键，i18n 已跳过）");
+    } else {
+      let i18nTCols: Object[] = i18nTcfg["columns"];
+      let i18nValid: Bool = true;
+      // extKey / langKey 必须存在于翻译表
+      let extOk: Bool = false;
+      let langOk: Bool = false;
+      for (c in i18nTCols) {
+        if (c["name"] == i18nExtKey) { extOk = true; }
+        if (c["name"] == i18nLangKey) { langOk = true; }
+      }
+      if (!extOk || !langOk) {
+        printError("错误：i18n 的 extKey('" + i18nExtKey + "') 或 langKey('" + i18nLangKey +
+                   "') 在翻译表 " + i18nTable + " 中不存在，i18n 已跳过");
+        i18nValid = false;
+      }
+      let i18nFields: String[] = i18nCfg["fields"];
+      if (i18nFields == null || i18nFields.length == 0) {
+        printError("错误：i18n.fields 为空（主表 " + tableName + " 的 i18n 已跳过）");
+        i18nValid = false;
+      } else if (i18nValid) {
+        for (fn in i18nFields) {
+          let tc: Object = null;
+          for (c in i18nTCols) {
+            if (c["name"] == fn) { tc = c; break; }
+          }
+          if (tc == null) {
+            printError("错误：i18n.fields 中的列 '" + fn + "' 在翻译表 " + i18nTable + " 中不存在，i18n 已跳过");
+            i18nValid = false;
+            break;
+          }
+          // 与主表列重名时平铺会覆盖主表数据 → 报错跳过
+          for (mf in param.fields) {
+            if (mf.name == fn) {
+              printError("错误：i18n.fields 中的列 '" + fn + "' 与主表 " + tableName + " 的列重名，i18n 已跳过");
+              i18nValid = false;
+              break;
+            }
+          }
+          if (!i18nValid) { break; }
+          let iff: Object = {};
+          iff["name"] = fn;
+          iff["goName"] = snakeToPascal(fn);
+          iff["goType"] = mapTypeToGo(tc["mysqlType"], tc["unsigned"] == true);
+          let fcomment: String = tc["comment"];
+          if (fcomment == null || fcomment == "") { fcomment = fn; }
+          iff["comment"] = fcomment;
+          i18nFlatFields.append(iff);
+        }
+      }
+      if (i18nValid) { hasI18n = true; }
+    }
+  }
+
+  // 翻译实体（主表 data 包内生成，不单独成包）
+  let i18nEnClass: String = "";
+  let i18nTableComment: String = "";
+  let i18nExtGoName: String = "";
+  let i18nLangGoName: String = "";
+  let i18nExtGoType: String = idType;
+  let i18nEntityFieldLines: String[] = [];
+  let i18nColLines: String[] = [];
+  let i18nEntityNeedTime: Bool = false;
+  let i18nUpdateCols: String = "";
+  let i18nColPrefix: String = "";
+  if (hasI18n) {
+    let tcfg: Object = tablesByName[i18nTable];
+    let tparam: Param = new Param();
+    tparam.setTableData(tcfg);
+    i18nEnClass = tparam.enClass;
+    i18nColPrefix = "Col" + snakeToPascal(i18nTable);
+    i18nTableComment = tcfg["tableComment"];
+    if (i18nTableComment == null || i18nTableComment == "") { i18nTableComment = "多语言表"; }
+    i18nExtGoName = snakeToPascal(i18nExtKey);
+    i18nLangGoName = snakeToPascal(i18nLangKey);
+    i18nEntityFieldLines = buildEnFieldLines(tparam.fields);
+    // 列常量加翻译表前缀（ColShop0Id），避免与主表 ColId 等同名冲突
+    let colMax: Number = 0;
+    for (tf in tparam.fields) {
+      let cn: String = i18nColPrefix + tf.goName;
+      if (cn.length > colMax) { colMax = cn.length; }
+    }
+    for (tf in tparam.fields) {
+      let cn: String = i18nColPrefix + tf.goName;
+      i18nColLines.append(tabChar() + padTo(cn, colMax) + " = \"" + tf.name + "\"");
+      if (tf.goType == "time.Time") { i18nEntityNeedTime = true; }
+      if (tf.name == i18nExtKey) { i18nExtGoType = tf.goType; }
+    }
+    // upsert 命中冲突时更新翻译字段 + updated_at
+    for (iff in i18nFlatFields) {
+      if (i18nUpdateCols != "") { i18nUpdateCols = i18nUpdateCols + ", "; }
+      i18nUpdateCols = i18nUpdateCols + i18nColPrefix + iff["goName"];
+    }
+    for (tf in tparam.fields) {
+      if (tf.name == "updated_at") {
+        if (i18nUpdateCols != "") { i18nUpdateCols = i18nUpdateCols + ", "; }
+        i18nUpdateCols = i18nUpdateCols + i18nColPrefix + "UpdatedAt";
+        break;
+      }
+    }
+  }
 
   // ── 排序白名单：selColsSort 顺序（所有表统一进 querySpec.Order）────
   let sortCols: String[] = [];
@@ -1389,8 +1573,100 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
     whereConds.append(c);
   }
 
+  // ── i18n 生成数据（实体虚拟字段 / InUpd map / repo 填充 / 出参）──────
+  let i18nEntityFields: FieldDef[] = [];
+  let i18nOutFields: FieldDef[] = [];
+  let i18nTypeLines: String[] = [];
+  let i18nTypeBlock: String = "";
+  let i18nUpdField: FieldDef = null;
+  let i18nFillAssignLines: String[] = [];
+  let i18nDetailAssignLines: String[] = [];
+  let i18nMapAssignLine: String = "";
+  let i18nTransAssignLines: String[] = [];
+  let i18nFillCall: String = "";
+  let i18nDetailCall: String = "";
+  if (hasI18n) {
+    // 实体虚拟字段（gorm:"-"）：当前语言平铺 + 全语言 map（详情接口）
+    for (iff in i18nFlatFields) {
+      let vf: FieldDef = new FieldDef();
+      vf.name = iff["name"];
+      vf.goName = iff["goName"];
+      vf.goType = iff["goType"];
+      vf.enDeclType = iff["goType"];
+      vf.gormTag = "gorm:\"-\"";
+      vf.enJsonTag = "json:\"" + iff["name"] + "\"";
+      vf.comment = iff["comment"] + "（当前语言）";
+      i18nEntityFields.append(vf);
+      i18nOutFields.append(vf);
+    }
+    let mapField: FieldDef = new FieldDef();
+    mapField.name = "i18n";
+    mapField.goName = "I18n";
+    mapField.goType = "map";
+    mapField.enDeclType = "map[string]" + i18nTypeName;
+    mapField.gormTag = "gorm:\"-\"";
+    mapField.enJsonTag = "json:\"i18n,omitempty\"";
+    mapField.comment = "全语言翻译（详情接口返回）";
+    i18nEntityFields.append(mapField);
+
+    // 翻译数据类型（InUpd 的 i18n map value / 详情 map value）
+    let typeMaxName: Number = 0;
+    let typeMaxType: Number = 0;
+    for (iff in i18nFlatFields) {
+      if (iff["goName"].length > typeMaxName) { typeMaxName = iff["goName"].length; }
+      if (iff["goType"].length > typeMaxType) { typeMaxType = iff["goType"].length; }
+    }
+    i18nTypeLines.append("// " + i18nTypeName + " 多语言翻译数据（翻译表 " + i18nTable +
+                         " 的字段子集；ext/lang 由服务端维护）");
+    i18nTypeLines.append("type " + i18nTypeName + " struct {");
+    for (iff in i18nFlatFields) {
+      i18nTypeLines.append(tabChar() + padTo(iff["goName"], typeMaxName) + " "
+        + padTo(iff["goType"], typeMaxType) + " `json:\"" + iff["name"] + "\"` // " + iff["comment"]);
+    }
+    i18nTypeLines.append("}");
+    for (l in i18nTypeLines) {
+      if (i18nTypeBlock == "") { i18nTypeBlock = l; }
+      else { i18nTypeBlock = i18nTypeBlock + "\n" + l; }
+    }
+
+    // InUpd 的 i18n map 字段（与普通列一起提交）
+    let uf: FieldDef = new FieldDef();
+    uf.name = "i18n";
+    uf.goName = "I18n";
+    uf.goType = "map";
+    uf.ptrType = "map[string]" + dataAlias + "." + i18nTypeName;
+    uf.jsonTag = "json:\"i18n\"";
+    uf.comment = "多语言翻译：{ \"en\": {...} }（ext/lang 由服务端维护）";
+    i18nUpdField = uf;
+
+    // repo 填充赋值行（join 视图取内嵌实体）
+    let fillTarget: String = hasJoin ? ("list[i]." + param.enClass + ".") : "list[i].";
+    for (iff in i18nFlatFields) {
+      i18nFillAssignLines.append(tabChar() + tabChar() + tabChar() + fillTarget + iff["goName"]
+        + " = tr." + iff["goName"]);
+      i18nDetailAssignLines.append(tabChar() + tabChar() + tabChar() + "e." + iff["goName"]
+        + " = tr." + iff["goName"]);
+      i18nTransAssignLines.append(tabChar() + tabChar() + "e." + iff["goName"] + " = tr." + iff["goName"]);
+    }
+    let initParts: String = "";
+    for (iff in i18nFlatFields) {
+      if (initParts != "") { initParts = initParts + ", "; }
+      initParts = initParts + iff["goName"] + ": tr." + iff["goName"];
+    }
+    i18nMapAssignLine = tabChar() + tabChar() + "e.I18n[tr." + i18nLangGoName + "] = "
+      + i18nTypeName + "{" + initParts + "}";
+
+    i18nFillCall = tabChar() + "if err := r.fillI18n(list, sel.Lang); err != nil {\n"
+      + tabChar() + tabChar() + "return nil, 0, err\n" + tabChar() + "}\n";
+    i18nDetailCall = tabChar() + "if err := r.fillI18nDetail(&entity); err != nil {\n"
+      + tabChar() + tabChar() + "return nil, err\n" + tabChar() + "}\n";
+  }
+
   // ── 预渲染行（逐字节对齐）─────────────────────────────────────
-  let enFieldLines: String[] = buildEnFieldLines(param.fields);
+  let enFieldsAll: FieldDef[] = [];
+  for (f in param.fields) { enFieldsAll.append(f); }
+  for (f in i18nEntityFields) { enFieldsAll.append(f); }
+  let enFieldLines: String[] = buildEnFieldLines(enFieldsAll);
   // TakeSnapshot 的可空指针列深拷贝行（无指针列时为空，值类型浅拷贝即可）
   let enSnapshotLines: String[] = buildSnapshotCloneLines(param.fields);
   // changedColumns 的比较行：覆盖除主键外全部列（不做可更新列白名单）
@@ -1400,8 +1676,23 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
     if (!f.isPrimary) { enChangedCount = enChangedCount + 1; }
   }
   let colLines: String[] = buildColLines(param.fields);
+  // i18n：查询入参追加 lang（当前语言码；空=默认语言）
+  if (hasI18n) {
+    let lf: SelFieldDef = new SelFieldDef();
+    lf.name = "lang";
+    lf.baseName = "lang";
+    lf.goName = "Lang";
+    lf.goType = "string";
+    lf.declType = "string";
+    lf.comment = "语言码（空=默认语言 " + i18nDefaultLang + "）";
+    selFields.append(lf);
+  }
   let selFieldLines: String[] = buildSelFieldLines(selFields);
-  let updFieldLines: String[] = buildUpdFieldLines(param.updFields, idName, idType);
+  // i18n：保存入参追加 i18n map（普通列仍全指针）
+  let updFieldsAll: FieldDef[] = [];
+  for (uf in param.updFields) { updFieldsAll.append(uf); }
+  if (hasI18n && i18nUpdField != null) { updFieldsAll.append(i18nUpdField); }
+  let updFieldLines: String[] = buildUpdFieldLines(updFieldsAll, idName, idType);
   // InUpd.ToEntity / ApplyTo 共用行：仅复制入参非 nil 的字段（nil = 本次不改）
   let applyToLines: String[] = buildApplyLines(param.updFields);
   // 主键零值/非法判断（自增主键实际为整数；字符串主键兜底空串）
@@ -1435,21 +1726,30 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   // InUpd 按 editCols 收敛后可能已无时间列；import 只看实际写入参数字段
   let updNeedTime: Bool = false;
   let updNeedCoin: Bool = false;
+  let updNeedDatatypes: Bool = false;
   for (uf in param.updFields) {
     if (uf.ptrType.includes("time.Time")) { updNeedTime = true; }
     if (uf.goType == "coin.Coin") { updNeedCoin = true; }
+    if (uf.goType == "datatypes.JSON") { updNeedDatatypes = true; }
   }
   let selNeedTime: Bool = false;
   for (sf in selFields) {
     if (sf.goType == "time.Time") { selNeedTime = true; }
   }
+  // InSel 含 json 列（模糊/等值查询）时需要 datatypes 包
+  let selNeedDatatypes: Bool = false;
+  for (sf in selFields) {
+    if (sf.goType == "datatypes.JSON") { selNeedDatatypes = true; }
+  }
   let tb: String = tabChar();
   let joinNeedTime: Bool = false;
+  let joinNeedCoin: Bool = false;
   if (hasJoin) {
-    // 联表模式：querySpec 引用 common；联表输出列为 time.Time 时需要 time 包
+    // 联表模式：querySpec 引用 common；联表输出列为 time.Time / coin.Coin 时需要对应包
     let viewFieldList: Object[] = jd["viewFields"];
     for (vf in viewFieldList) {
       if (vf["goType"] == "time.Time") { joinNeedTime = true; }
+      if (vf["goType"] == "coin.Coin") { joinNeedCoin = true; }
     }
   }
   let enTime: Bool = (needTime || joinNeedTime);
@@ -1460,6 +1760,10 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   enStd.append("errors");
   if (enTime) { enStd.append("time"); }
   if (param.hasDecimalField) { enExt.append(coinPath); }
+  // 联表输出列含金额列时，View 结构体使用 coin.Coin，需补 coin 包
+  if (joinNeedCoin) { enExt.append(coinPath); }
+  // json 列实体字段类型为 datatypes.JSON（值类型），需补 datatypes 包
+  if (param.hasJsonField) { enExt.append("gorm.io/datatypes"); }
   // 所有表都生成 querySpec（无联表时 Joins 为空），实体文件必须引用 cdb
   enExt.append(dbPath);
   enImports = buildGoImports(enStd, enExt);
@@ -1468,6 +1772,7 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   let selStd: String[] = [];
   let selExt: String[] = [];
   if (selNeedTime) { selStd.append("time"); }
+  if (selNeedDatatypes) { selExt.append("gorm.io/datatypes"); }
   selExt.append(httpxPath);
   selImports = buildGoImports(selStd, selExt);
 
@@ -1485,6 +1790,9 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   if (updNeedCoin) {
     updImports = updImports + tb + "\"" + coinPath + "\"\n";
   }
+  if (updNeedDatatypes) {
+    updImports = updImports + tb + "\"gorm.io/datatypes\"\n";
+  }
   if (updNeedCdb) {
     updImports = updImports + tb + "\"" + dbPath + "\"\n";
   }
@@ -1493,7 +1801,26 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   let hdlImports: String = "import (\n" + tb + "\"github.com/gin-gonic/gin\"\n\n" + tb + "\""
     + commonPath + "\"\n" + tb + "\"" + httpxPath + "\"\n" + tb + dataAlias
     + " \"" + dataPath + "\"\n)";
-  let svcImports: String = "import (\n" + tb + "\"gorm.io/gorm\"\n\n" + tb + dataAlias
+  // 新增路径必须显式填"NOT NULL 且无可依赖 DB 默认值"的创建时间列：
+  // 值类型 time.Time 零值 0001-01-01 在 STRICT_TRANS_TABLES + NO_ZERO_DATE 下插入会报 1292。
+  // 可空 *time.Time 的 created_at 由数据库默认值或业务显式赋值维护，不在此重复赋值。
+  let svcCreateTimeLines: String[] = [];
+  let svcNeedTime: Bool = false;
+  for (cf in param.fields) {
+    if (cf.isCreateDate && !cf.enIsPtr) {
+      svcCreateTimeLines.append(tb + tb + "e." + cf.goName + " = time.Now()");
+      svcNeedTime = true;
+    }
+  }
+  let svcImports: String = "import (\n";
+  // i18n 表的创建时间赋值在 svc_i18n_.go，主 service 不再需要 time
+  if (svcNeedTime && !hasI18n) {
+    svcImports = svcImports + tb + "\"time\"\n\n";
+  }
+  svcImports = svcImports + tb + "\"gorm.io/gorm\"\n\n" + tb + dataAlias
+    + " \"" + dataPath + "\"\n)";
+  // C 端只读 service 不写库，不需要 time（svcImports 可能因创建时间列带 time）
+  let appSvcImports: String = "import (\n" + tb + "\"gorm.io/gorm\"\n\n" + tb + dataAlias
     + " \"" + dataPath + "\"\n)";
   let routerImports: String = "import (\n" + tb + "\"github.com/gin-gonic/gin\"\n\n" + tb + "\""
     + dbPath + "\"\n" + tb + "\"" + middlewarePath + "\"\n)";
@@ -1516,10 +1843,21 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
     // 按 appOutCols 的配置顺序输出，出参 JSON 字段顺序与配置一致
     for (oc in appOutCols) {
       for (f in param.fields) {
-        if (oc == f.name) {
+        // 「输出」未勾选的列即使出现在白名单也不输出（与实体 json:"-" 双保险）
+        if (oc == f.name && f.hidden != true) {
           appOutFields.append(f);
         }
       }
+    }
+    // 白名单命中的列全部被标记「不输出」→ 回退完整实体（隐藏列仍由 json:"-" 挡住）
+    if (appOutFields.length == 0) {
+      appHasOut = false;
+    }
+  }
+  // i18n：出参在白名单列之后平铺当前语言文本（实体已按 lang 填充）
+  if (appHasOut && hasI18n) {
+    for (vf in i18nOutFields) {
+      appOutFields.append(vf);
     }
   }
   let appOutClass: String = appHasOut ? ("Out" + param.tableClass) : (dataAlias + "." + param.enClass);
@@ -1615,6 +1953,7 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   tplData["dataPath"] = dataPath;
   tplData["dataAlias"] = dataAlias;
   tplData["commonPath"] = commonPath;
+  tplData["enumRegPath"] = enumRegPath;
   tplData["dbPath"] = dbPath;
   tplData["coinPath"] = coinPath;
   tplData["httpxPath"] = httpxPath;
@@ -1644,6 +1983,34 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   tplData["colLines"] = colLines;
   tplData["selFieldLines"] = selFieldLines;
   tplData["updFieldLines"] = updFieldLines;
+  // ── i18n 模板数据 ─────────────────────────────────────────────
+  tplData["hasI18n"] = hasI18n;
+  tplData["i18nTypeBlock"] = i18nTypeBlock;
+  tplData["i18nTypeName"] = i18nTypeName;
+  tplData["i18nDefaultLang"] = i18nDefaultLang;
+  tplData["i18nEnClass"] = i18nEnClass;
+  tplData["i18nTable"] = i18nTable;
+  tplData["i18nTableComment"] = i18nTableComment;
+  tplData["i18nEntityFieldLines"] = i18nEntityFieldLines;
+  tplData["i18nColLines"] = i18nColLines;
+  tplData["i18nEntityNeedTime"] = i18nEntityNeedTime;
+  tplData["i18nExtGoName"] = i18nExtGoName;
+  tplData["i18nLangGoName"] = i18nLangGoName;
+  tplData["i18nExtGoType"] = i18nExtGoType;
+  tplData["i18nColPrefix"] = i18nColPrefix;
+  tplData["i18nUpdateCols"] = i18nUpdateCols;
+  tplData["i18nFillCall"] = i18nFillCall;
+  tplData["i18nDetailCall"] = i18nDetailCall;
+  tplData["i18nAssignLines"] = i18nFillAssignLines;
+  tplData["i18nDetailAssignLines"] = i18nDetailAssignLines;
+  tplData["i18nMapAssignLine"] = i18nMapAssignLine;
+  tplData["i18nTransAssignLines"] = i18nTransAssignLines;
+  tplData["i18nNeedTime"] = svcNeedTime;
+  // saveI18n 的创建时间赋值在 if 块内，需比主 service 多一级缩进
+  let i18nCreateTimeLines: String[] = [];
+  for (ctl in svcCreateTimeLines) { i18nCreateTimeLines.append(tabChar() + ctl); }
+  tplData["i18nCreateTimeLines"] = i18nCreateTimeLines;
+  tplData["i18nIdExpr"] = hasJoin ? ("list[i]." + param.enClass + "." + idName) : ("list[i]." + idName);
   tplData["applyToLines"] = applyToLines;
   tplData["idInvalidEntityCond"] = idInvalidEntityCond;
   tplData["idInsertWithIdCond"] = idInsertWithIdCond;
@@ -1660,6 +2027,8 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   tplData["updImports"] = updImports;
   tplData["hdlImports"] = hdlImports;
   tplData["svcImports"] = svcImports;
+  tplData["appSvcImports"] = appSvcImports;
+  tplData["svcCreateTimeLines"] = svcCreateTimeLines;
   tplData["routerImports"] = routerImports;
   tplData["appQuery"] = appQuery;
   tplData["appHasOut"] = appHasOut;
@@ -1699,24 +2068,44 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   tplData["selComment"] = selComment;
 
   // ── 模板清单（data 读面 → admin 写面；repo_ext 为手写扩展首次骨架）──
+  //     i18n 翻译表（_i18nTable）只生成 data 层：实体 + 查询入参 + 仓储
   let templates: TemplateConfig[] = [
     { tpl: tplDir + "/model/entity.tpl",  out: "{goBasePath}/data/{dataDir}/en_{tableName}_.go" },
     { tpl: tplDir + "/model/in_sel.tpl",  out: "{goBasePath}/data/{dataDir}/in_sel_{tableName}_.go" },
-    { tpl: tplDir + "/repo/repo.tpl",     out: "{goBasePath}/data/{dataDir}/{tableName}_repo_.go" },
-    // repo 手写扩展件（首次骨架，fileExists 守卫）：自定义查询/统计方法写这里
-    // （生成件不调用其中的方法，无编译契约；service 写路径已并入 *_service_.go 覆盖件）
-    { tpl: tplDir + "/repo/repo_ext.tpl", out: "{goBasePath}/data/{dataDir}/{tableName}_repo.go" },
-    { tpl: tplDir + "/model/in_upd.tpl",  out: "{goBasePath}/modules/admin/{dataDir}/in_upd_{tableName}_.go" },
-    { tpl: tplDir + "/handler/hdl.tpl",   out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_handler_.go" },
-    { tpl: tplDir + "/service/svc.tpl",   out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_service_.go" },
-    // 手写扩展三件套（首次骨架，fileExists 守卫）：自定义业务/接口写这里；
-    // 命名约定 = 生成覆盖件去尾下划线（与 *_repo.go 一致）；
-    // {tableName}_router.go 的 RegisterExtRoutes 由下方 router_.go 生成件调用（须先生成）
-    { tpl: tplDir + "/service/svc_ext.tpl",   out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_service.go" },
-    { tpl: tplDir + "/handler/hdl_ext.tpl",   out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_handler.go" },
-    { tpl: tplDir + "/router_ext.tpl",        out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_router.go" },
-    { tpl: tplDir + "/router.tpl",        out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_router_.go" }
+    { tpl: tplDir + "/repo/repo.tpl",     out: "{goBasePath}/data/{dataDir}/{tableName}_repo_.go" }
   ];
+  // i18n：翻译实体（主表 data 包内 en_{翻译表}_.go）+ 仓储填充 + 保存事务
+  if (hasI18n) {
+    templates.append({ tpl: tplDir + "/model/entity_i18n.tpl",
+      out: "{goBasePath}/data/{dataDir}/en_{i18nTable}_.go" });
+    templates.append({ tpl: tplDir + "/repo/i18n_repo.tpl",
+      out: "{goBasePath}/data/{dataDir}/{tableName}_repo_i18n_.go" });
+  }
+  // repo 手写扩展件（首次骨架，fileExists 守卫）：自定义查询/统计方法写这里
+  // （生成件不调用其中的方法，无编译契约；service 写路径已并入 *_service_.go 覆盖件）
+  templates.append({ tpl: tplDir + "/repo/repo_ext.tpl",
+    out: "{goBasePath}/data/{dataDir}/{tableName}_repo.go" });
+  templates.append({ tpl: tplDir + "/model/in_upd.tpl",
+    out: "{goBasePath}/modules/admin/{dataDir}/in_upd_{tableName}_.go" });
+  templates.append({ tpl: tplDir + "/handler/hdl.tpl",
+    out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_handler_.go" });
+  templates.append({ tpl: tplDir + "/service/svc.tpl",
+    out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_service_.go" });
+  if (hasI18n) {
+    templates.append({ tpl: tplDir + "/service/svc_i18n.tpl",
+      out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_service_i18n_.go" });
+  }
+  // 手写扩展三件套（首次骨架，fileExists 守卫）：自定义业务/接口写这里；
+  // 命名约定 = 生成覆盖件去尾下划线（与 *_repo.go 一致）；
+  // {tableName}_router.go 的 RegisterExtRoutes 由下方 router_.go 生成件调用（须先生成）
+  templates.append({ tpl: tplDir + "/service/svc_ext.tpl",
+    out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_service.go" });
+  templates.append({ tpl: tplDir + "/handler/hdl_ext.tpl",
+    out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_handler.go" });
+  templates.append({ tpl: tplDir + "/router_ext.tpl",
+    out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_router.go" });
+  templates.append({ tpl: tplDir + "/router.tpl",
+    out: "{goBasePath}/modules/admin/{dataDir}/{tableName}_router_.go" });
 
   // 表缓存骨架（opt-in，genCache=true）：data 层手写件，仅首次生成，存在即跳过
   if (genCache) {
@@ -1754,7 +2143,8 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
       goBasePath: goBasePath,
       dataDir: dataDir,
       tableName: param.tableName,
-      moduleDir: moduleDir
+      moduleDir: moduleDir,
+      i18nTable: i18nTable
     });
     tplData["outputPath"] = outPath;
     let result = renderTpl(cfg.tpl, tplData);

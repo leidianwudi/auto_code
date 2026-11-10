@@ -1,0 +1,167 @@
+{
+  table: {
+    columns: [
+      {
+        comment: '主键id',
+        isAutoInc: true,
+        isPrimary: true,
+        mysqlType: 'int',
+        name: 'id',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '任务编码',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'task_code',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '任务名称',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'task_name',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '任务目标时间, 比如的2026年五月报表任务目标时间是2026-5-x',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'date',
+        name: 'task_date',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '添加时间',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'datetime',
+        name: 'add_time',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '任务日志值',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'value',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '备注',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(255)',
+        name: 'desc',
+        nullable: false,
+        unsigned: false,
+      },
+    ],
+    editCols: [
+      {
+        label: '主键id',
+        ref: 'id',
+      },
+      {
+        label: '任务编码',
+        ref: 'task_code',
+      },
+      {
+        label: '任务名称',
+        ref: 'task_name',
+      },
+      {
+        label: '任务目标时间, 比如的2026年五月报表任务目标时间是2026-5-x',
+        ref: 'task_date',
+      },
+      {
+        label: '添加时间',
+        ref: 'add_time',
+      },
+      {
+        label: '任务日志值',
+        ref: 'value',
+      },
+      {
+        label: '备注',
+        ref: 'desc',
+      },
+    ],
+    selCols: [
+      {
+        label: '任务编码',
+        ref: 'task_code',
+        width: 200,
+      },
+      {
+        label: '任务名称',
+        ref: 'task_name',
+        width: 200,
+      },
+      {
+        label: '任务目标时间',
+        ref: 'task_date',
+        width: 150,
+      },
+      {
+        label: '添加时间',
+        ref: 'add_time',
+        width: 150,
+      },
+      {
+        label: '任务日志值',
+        ref: 'value',
+        width: 110,
+      },
+      {
+        label: '备注',
+        ref: 'desc',
+      },
+    ],
+    selColsEq: [
+      {
+        ref: 'task_code',
+      },
+    ],
+    selColsLike: [
+      {
+        ref: 'task_name',
+      },
+    ],
+    selColsGap: [
+      {
+        ref: 'task_date',
+      },
+    ],
+        selColsSort: [
+      [
+        'id',
+        'DESC',
+      ],
+    ],
+    frontend: true,
+
+    indexes: [
+      {
+        cols: [
+          'task_code',
+          'add_time',
+        ],
+        name: 'task_code_add_time',
+        unique: false,
+      },
+    ],
+    manualUpdateTime: false,
+    modelName: 'task_log',
+    tableComment: '任务日志表',
+    tableName: 'task_log',
+  },
+}

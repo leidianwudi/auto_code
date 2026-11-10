@@ -11,6 +11,7 @@ ${if !fileExists(outputPath)}
 // ${tableComment}(${tableName}) 扩展业务层（C 端）：自定义业务方法写这里
 //   1. 建议定义为 *${serviceClass} 的方法（与生成件 ${tableName}_service_.go 同包，
 //      直接用 s.DB / s.Repo；生成件每次重写请勿手改）
+//      注意：cdb.WithTxDB 回调内禁止用 s.DB（会另借连接、脱离事务），须用 s.Repo.Tx(tx) 派生实例
 //   2. 禁止与生成件方法重名（重复定义编译错误）
 //   3. 使用第三方包时自行补 import 块
 // ─────────────────────────────────────────────────────────────────
@@ -18,6 +19,6 @@ package ${pkgName}
 
 // （示例）扩展业务方法：ext_handler / ext_router 按需调用
 // func (s *${serviceClass}) MyBusiness(id ${idGoType}) error {
-// 	return s.DB.Model(&${dataAlias}.${enClass}{}).Where("id = ?", id).Update("status", 1).Error
+// 	return cdb.WhereEq(s.DB.Model(&${dataAlias}.${enClass}{}), ${dataAlias}.ColId, id).Update(${dataAlias}.ColEnable, 1).Error // Update 列按该表实际要改的列常量替换（如 ColEnable / ColLevel / ColIsDisable）
 // }
 ${/if}

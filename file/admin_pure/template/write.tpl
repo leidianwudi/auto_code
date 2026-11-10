@@ -17,10 +17,11 @@ ${# ============================================================================
 <script setup lang="ts">
 //此文件为AutoCode编译器生成，请勿手动修改
 // ==================== ${commentTitle}（${pageName}）编辑界面 ====================
-import { reactive, ref, computed, watch${if hasDefaultValues}, nextTick${/if} } from "vue";
+import { reactive, ref, computed, watch${if hasDefaultValues}, nextTick${/if}${if hasI18n}, onMounted${/if} } from "vue";
 import type { PropType } from "vue";
 import type { FormInstance, FormRules } from "element-plus";
 ${if hasUploadFields}import { ElMessage } from "element-plus";
+${/if}${if hasI18n}import { http } from "@/utils/http";
 ${/if}import { ${updateApi} } from "@/api/${apiModule}/${pageName}";
 ${if hasSelectApi}import { ${selectApiImports} } from "@/api/${apiModule}/${pageName}";
 ${/if}${if hasSourceImports}${sourceImportLines}
@@ -44,30 +45,99 @@ const isDetail = computed(() => props.actionType === 'detail');
 const formRef = ref<FormInstance>();
 const form = reactive<Record<string, any>>({
   id: null,
-${each col in formColumns}${if col.editVisible}${if col.isInt}  ${col.dataName}: null,
+${if hasI18n}  i18n: {},
+${/if}${each col in formColumns}${if col.editVisible}${if col.isInt}  ${col.dataName}: null,
 ${else if col.isFloat}  ${col.dataName}: null,
 ${else if col.isMoney}  ${col.dataName}: null,
 ${else if col.isDate}  ${col.dataName}: null,
+${else if col.isBooleanEdit}  ${col.dataName}: null,
+${else if col.isTagEdit}  ${col.dataName}: null,
 ${else}  ${col.dataName}: "",
 ${/if}${/if}${/each}});
 
+${if hasI18n}
+// ==================== 多语言（i18n）====================
+// i18nInfo：{ defaultLang, table, fields:[{name,label,mysqlType,widget}] }
+const i18nInfo = ${i18nJson};
+const i18nActive = ref<string>(i18nInfo.defaultLang);
+const i18nLangs = ref<any[]>([{ lang: i18nInfo.defaultLang, name: i18nInfo.defaultLang }]);
+const i18nFields: any[] = i18nInfo.fields || [];
+
+// 确保每种语言的对象与字段都存在（模板里 v-model 直接绑 form.i18n[lang][field]）
+const ensureI18n = () => {
+  const langs: string[] = i18nLangs.value.map((l: any) => l.lang);
+  if (!langs.includes(i18nInfo.defaultLang)) langs.unshift(i18nInfo.defaultLang);
+  langs.forEach((lang: string) => {
+    if (!form.i18n[lang]) form.i18n[lang] = {};
+    i18nFields.forEach((f: any) => {
+      if (form.i18n[lang][f.name] == null) form.i18n[lang][f.name] = "";
+    });
+  });
+};
+
+// 语言清单来自 base_lang（enable=1；取不到时只用默认语言）
+const loadI18nLangs = async () => {
+  try {
+    const res: any = await http.request<any>("post", "/api/base_lang/selectByIn", {
+      data: { page: 1, pageSize: 100, enable: 1 }
+    });
+    const list: any[] = res?.data?.list || [];
+    if (list.length > 0) {
+      i18nLangs.value = list.map((x: any) => ({ lang: x.lang, name: x.name || x.lang }));
+    }
+  } catch (e) {
+    // base_lang 不可用：保留默认语言
+  }
+  ensureI18n();
+};
+
+// 编辑/详情：拉详情拿到全语言翻译 map（列表行只平铺当前语言文本）
+const loadI18nDetail = async (id: any) => {
+  if (id == null || id === "") { ensureI18n(); return; }
+  try {
+    const res: any = await http.request<any>("post", "${detailUrl}", { data: { id } });
+    if (res?.code === 0 && res.data?.i18n) {
+      form.i18n = res.data.i18n;
+    }
+  } catch (e) {
+    // 详情失败：保留默认语言平铺值
+  }
+  ensureI18n();
+};
+onMounted(loadI18nLangs);
+${/if}
 // 回填：编辑/详情把当前行写入表单（含 id）；新增（currentRow=null）清空
 watch(
   () => props.currentRow,
   row => {
     if (row) {
       form.id = row.id ?? null;
-${each col in formColumns}${if col.editVisible}${if col.isInt}      form.${col.dataName} = row.${col.dataName} ?? null;
+${if hasI18n}      form.i18n = row.i18n ? JSON.parse(JSON.stringify(row.i18n)) : {};
+      ensureI18n();
+      // 详情未返回前先用列表行的当前语言平铺值兜底
+      i18nFields.forEach((f: any) => {
+        if (form.i18n[i18nInfo.defaultLang][f.name] === "" && row[f.name] != null) {
+          form.i18n[i18nInfo.defaultLang][f.name] = row[f.name];
+        }
+      });
+      loadI18nDetail(row.id);
+${/if}${each col in formColumns}${if col.editVisible}${if col.isInt}      form.${col.dataName} = row.${col.dataName} ?? null;
 ${else if col.isFloat}      form.${col.dataName} = row.${col.dataName} ?? null;
 ${else if col.isMoney}      form.${col.dataName} = row.${col.dataName} ?? null;
 ${else if col.isDate}      form.${col.dataName} = row.${col.dataName} ?? null;
+${else if col.isBooleanEdit}      form.${col.dataName} = row.${col.dataName} ?? null;
+${else if col.isTagEdit}      form.${col.dataName} = row.${col.dataName} ?? null;
 ${else}      form.${col.dataName} = row.${col.dataName} ?? "";
 ${/if}${/if}${/each}    } else {
       form.id = null;
-${each col in formColumns}${if col.editVisible}${if col.isInt}      form.${col.dataName} = null;
+${if hasI18n}      form.i18n = {};
+      ensureI18n();
+${/if}${each col in formColumns}${if col.editVisible}${if col.isInt}      form.${col.dataName} = null;
 ${else if col.isFloat}      form.${col.dataName} = null;
 ${else if col.isMoney}      form.${col.dataName} = null;
 ${else if col.isDate}      form.${col.dataName} = null;
+${else if col.isBooleanEdit}      form.${col.dataName} = null;
+${else if col.isTagEdit}      form.${col.dataName} = null;
 ${else}      form.${col.dataName} = "";
 ${/if}${/if}${/each}    }
   },
@@ -215,7 +285,7 @@ ${else}          <el-select v-model="form.${col.dataName}" placeholder="请选�
           </el-select>
 ${/if}
 ${else if col.isTagSwitch}          <el-select v-model="form.${col.dataName}" placeholder="请选择" style="width: 100%"${if !col.editEditable} disabled${/if}>
-${each t in col.tagItems}            <el-option label="${t.textEsc}" value="${t.valueEsc}" />
+${each t in col.tagItems}            <el-option label="${t.textEsc}"${if t.isNumberValue} :value="${t.valueEsc}"${else} value="${t.valueEsc}"${/if} />
 ${/each}          </el-select>
 ${else if col.isSelect}${if col.hasSelectApi}          <el-select v-model="form.${col.dataName}" clearable placeholder="请选择" style="width: 100%"${if !col.editEditable} disabled${/if}>
             <el-option v-for="it in ${col.dataNamePascal}Options" :key="String(it.${col.selectValueField})" :label="it.${col.selectLabelField}" :value="it.${col.selectValueField}" />
@@ -223,7 +293,7 @@ ${else if col.isSelect}${if col.hasSelectApi}          <el-select v-model="form.
 ${else}          <el-select v-model="form.${col.dataName}" clearable placeholder="请选择" style="width: 100%" />
 ${/if}
 ${else if col.isTagEdit}          <el-select v-model="form.${col.dataName}" placeholder="请选择" style="width: 100%"${if !col.editEditable} disabled${/if}>
-${each t in col.tagItems}            <el-option label="${t.textEsc}" value="${t.valueEsc}" />
+${each t in col.tagItems}            <el-option label="${t.textEsc}"${if t.isNumberValue} :value="${t.valueEsc}"${else} value="${t.valueEsc}"${/if} />
 ${/each}          </el-select>
 ${else if col.isBooleanEdit}${if col.hasBoolApi}          <el-select v-model="form.${col.dataName}" clearable placeholder="请选择" style="width: 100%"${if !col.editEditable} disabled${/if}>
             <el-option v-for="it in ${col.dataNamePascal}Options" :key="String(it.value)" :label="it.label" :value="it.value" />
@@ -260,19 +330,24 @@ ${/if}
         </el-form-item>
       </el-col>
 ${/if}${/each}
+${if hasI18n}
+      <el-col :span="24">
+        <el-divider content-position="left">多语言内容</el-divider>
+        <el-tabs v-model="i18nActive">
+          <el-tab-pane v-for="lg in i18nLangs" :key="lg.lang" :label="lg.name" :name="lg.lang">
+            <el-row>
+              <el-col :span="24" v-for="f in i18nFields" :key="f.name">
+                <el-form-item :label="f.label">
+                  <el-input v-if="f.widget === 'textarea'" v-model="form.i18n[lg.lang][f.name]" type="textarea" :rows="3" />
+                  <el-input v-else v-model="form.i18n[lg.lang][f.name]" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-tab-pane>
+        </el-tabs>
+      </el-col>
+${/if}
     </el-row>
   </el-form>
 </template>
 
-<style>
-/* 上传控件由模板内联渲染（el-upload/el-image）：卡片墙样式沿用 admin_vue 约定，
-   类名统一 ac-up- 前缀避免与页面样式冲突；各生成页面的这份规则完全相同，
-   同名全局规则重复加载无副作用 */
-.ac-up-cards { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.ac-up-card { position: relative; width: 160px; height: 80px; border: 1px solid #dcdfe6; border-radius: 6px; overflow: hidden; }
-.ac-up-thumb { width: 100%; height: 100%; display: block; }
-.ac-up-mask { position: absolute; top: 0; right: 0; left: 0; bottom: 0; display: none; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.4); }
-.ac-up-card:hover .ac-up-mask { display: flex; }
-.ac-up-del { color: #fff; font-size: 20px; cursor: pointer; line-height: 1; }
-.ac-up-plus { font-size: 24px; color: #909399; }
-</style>

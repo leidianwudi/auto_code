@@ -19,6 +19,7 @@
 #include "src/ui/json_vue/config_dialog_common.h"
 #include "src/ui/json_vue/select_source_panel.h"
 #include "src/util/common/code_constants.h"
+#include "src/util/ui/component/aui_cell_edit_combo.h"
 #include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/component/aui_style.h"
@@ -200,11 +201,12 @@ void JsonSourceDialog::onAddOption() {
   m_optionTable->insertRow(row);
   m_optionTable->setItem(row, 0, new QTableWidgetItem());
   m_optionTable->setItem(row, 1, new QTableWidgetItem());
-  // 类型列：字符串（默认）/ 数字；固定最小宽度保证下拉箭头完整可点
-  auto *combo = AuiComboBox::create(m_optionTable);
-  combo->addItem(QStringLiteral("字符串"), QString());
-  combo->addItem(QStringLiteral("数字"), QStringLiteral("number"));
-  combo->setMinimumWidth(80);
+  // 类型列：常驻只读下拉（字符串默认/数字；文字可拖选/双击全选/Ctrl+C 复制，
+  // 点箭头展开候选）——与 jsontable 设计器的单元格下拉同款控件
+  auto *combo = new AuiCellEditCombo(m_optionTable, 2,
+                                     {QStringLiteral("字符串"), QStringLiteral("数字")},
+                                     m_optionTable, true);
+  combo->setText(QStringLiteral("字符串"));
   m_optionTable->setCellWidget(row, 2, combo);
   m_optionTable->setCurrentCell(row, 0);
 }
@@ -238,13 +240,13 @@ void JsonSourceDialog::swapRows(int a, int b) {
     m_optionTable->setItem(b, c, ia);
   }
   // 类型列是 cellWidget：setCellWidget 会删除目标单元格旧控件，直接交换指针
-  // 会产生悬垂引用（上移/下移后再点添加选项即崩溃），改为交换下拉框当前选中项
-  auto *ca = qobject_cast<QComboBox *>(m_optionTable->cellWidget(a, 2));
-  auto *cb = qobject_cast<QComboBox *>(m_optionTable->cellWidget(b, 2));
+  // 会产生悬垂引用（上移/下移后再点添加选项即崩溃），改为交换下拉框当前文本
+  auto *ca = dynamic_cast<AuiCellEditCombo *>(m_optionTable->cellWidget(a, 2));
+  auto *cb = dynamic_cast<AuiCellEditCombo *>(m_optionTable->cellWidget(b, 2));
   if (ca && cb) {
-    const int idxA = ca->currentIndex();
-    ca->setCurrentIndex(cb->currentIndex());
-    cb->setCurrentIndex(idxA);
+    const QString ta = ca->text();
+    ca->setText(cb->text());
+    cb->setText(ta);
   }
 }
 
@@ -256,9 +258,9 @@ QVector<JsonSourceOption> JsonSourceDialog::collectOptions() const {
     auto *value = m_optionTable->item(r, 1);
     o.label = label ? label->text().trimmed() : QString();
     o.value = value ? value->text().trimmed() : QString();
-    // 类型列（cellWidget）：字符串（data 空）/ 数字（data="number"）
-    if (auto *combo = qobject_cast<QComboBox *>(m_optionTable->cellWidget(r, 2))) {
-      o.valueType = combo->currentData().toString();
+    // 类型列（cellWidget）：字符串（存储空）/ 数字（存储 "number"）
+    if (auto *combo = dynamic_cast<AuiCellEditCombo *>(m_optionTable->cellWidget(r, 2))) {
+      o.valueType = combo->text() == QStringLiteral("数字") ? QStringLiteral("number") : QString();
     }
     if (!o.label.isEmpty() || !o.value.isEmpty()) out.append(o);
   }
@@ -272,11 +274,11 @@ void JsonSourceDialog::populateOptions(const QVector<JsonSourceOption> &options)
     m_optionTable->insertRow(row);
     m_optionTable->setItem(row, 0, new QTableWidgetItem(o.label));
     m_optionTable->setItem(row, 1, new QTableWidgetItem(o.value));
-    auto *combo = AuiComboBox::create(m_optionTable);
-    combo->addItem(QStringLiteral("字符串"), QString());
-    combo->addItem(QStringLiteral("数字"), QStringLiteral("number"));
-    combo->setMinimumWidth(80);
-    combo->setCurrentIndex(o.valueType == QStringLiteral("number") ? 1 : 0);
+    auto *combo = new AuiCellEditCombo(m_optionTable, 2,
+                                       {QStringLiteral("字符串"), QStringLiteral("数字")},
+                                       m_optionTable, true);
+    combo->setText(o.valueType == QStringLiteral("number") ? QStringLiteral("数字")
+                                                           : QStringLiteral("字符串"));
     m_optionTable->setCellWidget(row, 2, combo);
   }
 }

@@ -211,6 +211,8 @@ private:
   void connectStaticControlSignals();
   /// 连接单个 cell widget 的编辑信号到 configChanged
   void connectCellWidgetSignals(QWidget *widget);
+  /// 输入样式变化时同步刷新该行配置按钮摘要（摘要依赖 inputStyle 分支）
+  void refreshQueryRowSummary(class AuiCellEditCombo *styleCell);
 };
 
 /// 列配置表格列索引

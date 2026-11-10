@@ -1,0 +1,14 @@
+{
+  meta: {
+    db: {
+      database: 'erp_new',
+      host: '192.168.5.103',
+      password: '123456',
+      port: 3306,
+      user: 'root',
+    },
+    goBasePath: 'D:/work/github/erp/erp_api',
+    webBasePath: 'D:/work/github/erp/erp_admin',
+  },
+  name: 'erp',
+}

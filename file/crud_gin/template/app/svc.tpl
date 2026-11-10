@@ -8,7 +8,7 @@ ${# ============================================================================
 // 此代码为AutoCode编译器生成，请勿手动修改
 package ${pkgName}
 
-${svcImports}
+${appSvcImports}
 
 // ${serviceClass} ${tableComment}(${tableName}) C 端业务层（只读）
 // 生成件只提供查询转发；C 端不生成写接口，业务流程写在手写件。

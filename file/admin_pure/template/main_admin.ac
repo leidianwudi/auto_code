@@ -220,6 +220,7 @@ export function buildJsonvueColumn(rawCol: Object, enumDef: Object, editCol: Obj
         let item: Object = {
           value: opt["value"],
           text: opt["label"],
+          valueType: opt["valueType"],
           color: tagColorOf(oi)
         };
         items.append(item);
@@ -398,7 +399,7 @@ export function labelColOfTarget(types: Object): String {
 }
 
 export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, joinContext: Object,
-                               aliasMeta: Object): Object {
+                               aliasMeta: Object, i18nMeta: Object): Object {
   let modelName: String = table["modelName"];
   if (modelName == null || modelName == "") {
     modelName = table["tableName"];
@@ -628,6 +629,11 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
       col["selectLabelField"] = labelColOfTarget(
           joinContext != null ? joinContext[fkInfo["pro"]]["types"] : null);
     }
+    // 「输出」未勾选的列（如密码）：接口响应不含该列，列表页强制不展示；
+    // 编辑表单仍保留（可提交新值），列表勾选不会把它拉回来
+    if (rc["hidden"] == true) {
+      col["queryVisible"] = false;
+    }
     cols.append(col);
   }
   // 列表收敛：配了 selCols 时，未命中的本表列 queryVisible=false；
@@ -754,6 +760,10 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
       boolFalseText: "禁用",
       tagItems: vTagItems,
       displayType: (vTagItems.length > 0 ? "tag" : ""),
+      // 共享枚举字典的查表键：目标表名.列名（如 user.is_real_name），
+      // 与后端 enumreg 注册名一致；无枚举映射时为空
+      enumKey: (vTagItems.length > 0 && am != null
+                ? (am["enumOwner"] + "." + am["enumCol"]) : ""),
       dateFormat: "",
       editStyle: "text"
     });
@@ -863,6 +873,19 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
     }
   }
 
+  // i18n 平铺字段：列表虚拟列（编辑表单由 write.vue 的多语言 Tab 承接）
+  if (i18nMeta != null) {
+    let i18nFieldList: Object[] = i18nMeta["fields"];
+    for (iff in i18nFieldList) {
+      let rcI: Object = { name: iff["name"], mysqlType: iff["mysqlType"], comment: iff["comment"] };
+      let colI: Object = buildJsonvueColumn(rcI, null, null);
+      colI["queryName"] = iff["label"];
+      colI["queryVisible"] = true;   // 恒进列表（接口已按 lang 平铺）
+      colI["editVisible"] = false;   // 编辑表单走语言 Tab，不重复渲染
+      cols.append(colI);
+    }
+  }
+
   let pascal: String = snakeToPascal(modelName);
   return {
     meta: {
@@ -888,7 +911,9 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
     queryFields: queryFields,
     // 操作按钮（键名与 .jsonvue buttons 完全一致；无按钮时为 null，
     // 加工器 processButtons 对空/缺失键防御性处理）
-    buttons: table["buttons"]
+    buttons: table["buttons"],
+    // i18n 元数据（write.tpl 语言 Tab / 详情回填 / base_lang 语言清单）
+    i18n: i18nMeta
   };
 }
 
@@ -1138,6 +1163,18 @@ export function generateAdminMain(params: Object): Void {
     ];
   }
 
+  // ── 2.3 表级枚举字典配置：本次生成的全部表枚举汇总成一个共享文件 ──────
+  //    输出与 global_enum.ts 同目录（src/api/source/），页面 import 后按
+  //    '表名.列名' 查文字/颜色；未配置时用相对入口脚本目录的缺省模板
+  let tableEnumTpl: String = params["tableEnumTpl"];
+  if (tableEnumTpl == null || tableEnumTpl == "") {
+    tableEnumTpl = "../template/table_enum.tpl";
+  }
+  let tableEnumOut: String = params["tableEnumOut"];
+  if (tableEnumOut == null || tableEnumOut == "") {
+    tableEnumOut = "{basePath}/src/api/source/table_enum.ts";
+  }
+
   // ── 3. 读取多份 .jsontable：单表新格式逐文件收集（事实源，不连库）──
   //    一文件一表：{ table: {...} }，翻译表内嵌在表的 i18n 配置；
   //    旧多表格式（tables 键）明确报错指路拆分脚本；
@@ -1278,7 +1315,8 @@ export function generateAdminMain(params: Object): Void {
           }
         }
         aliasMeta[jtName + "_" + cn] = { comment: cm, mysqlType: mt, title: tt,
-                                         enumItems: jtEnums[cn] };
+                                         enumItems: jtEnums[cn],
+                                         enumOwner: jtName, enumCol: cn };
       }
     }
   }
@@ -1527,6 +1565,49 @@ export function generateAdminMain(params: Object): Void {
     let vuePath: String = resolveJsonvuePath(modelName, basePath, checkedVueFiles);
     let pageJson: Object = null;
     let filePath: String = "";
+    // i18n 元数据：主表 i18n.table → 翻译表列定义（字段名/标题/类型）
+    let i18nMeta: Object = null;
+    let i18nNode2: Object = table["i18n"];
+    if (i18nNode2 != null && i18nNode2["table"] != null && i18nNode2["table"] != "") {
+      let tgt: Object = null;
+      for (tt in tables) {
+        if (tt["tableName"] == i18nNode2["table"]) { tgt = tt; break; }
+      }
+      if (i18nNode2 != null) {
+        let dl: String = i18nNode2["defaultLang"];
+        if (dl == null || dl == "") { dl = "zh"; }
+        i18nMeta = { defaultLang: dl, table: i18nNode2["table"], fields: [] };
+        let metaFields: Object[] = [];
+        let fnames: String[] = i18nNode2["fields"];
+        let labels: Object = i18nNode2["labels"];
+        if (fnames != null) {
+          for (fn in fnames) {
+            let tc: Object = null;
+            if (tgt != null) {
+              let tcols: Object[] = tgt["columns"];
+              for (c in tcols) {
+                if (c["name"] == fn) { tc = c; break; }
+              }
+            }
+            let label: String = fn;
+            let mt: String = "varchar(255)";
+            if (labels != null && labels[fn] != null && labels[fn] != "") { label = labels[fn]; }
+            if (tc != null) {
+              if (label == fn && tc["comment"] != null && tc["comment"] != "") { label = tc["comment"]; }
+              if (tc["mysqlType"] != null) { mt = tc["mysqlType"]; }
+            }
+            let mtLow: String = mt.toLowerCase();
+            let isLong: Bool = (mtLow.indexOf("text") >= 0 || mtLow.indexOf("intro") >= 0 ||
+                                fn.indexOf("intro") >= 0 || fn.indexOf("desc") >= 0 ||
+                                fn.indexOf("content") >= 0);
+            let fld: Object = { name: fn, label: label, comment: label, mysqlType: mt,
+                                widget: (isLong ? "textarea" : "input") };
+            metaFields.append(fld);
+          }
+        }
+        i18nMeta = { defaultLang: dl, table: i18nNode2["table"], fields: metaFields };
+      }
+    }
     if (vuePath != "") {
       // 双轨·高级页：同名 .jsonvue 存在，完全按 .jsonvue 走（可视化编辑全能力）
       pageJson = readJson(vuePath);
@@ -1535,7 +1616,7 @@ export function generateAdminMain(params: Object): Void {
       printLog("高级页（.jsonvue 双轨）：" + vuePath);
     } else {
       // 双轨·标准页：从 .jsontable 读模型合成 jsonvue 形状（零额外配置）
-      pageJson = buildJsonvueFromTable(table, globalEnumNames, joinContext, aliasMeta);
+      pageJson = buildJsonvueFromTable(table, globalEnumNames, joinContext, aliasMeta, i18nMeta);
       filePath = basePath + "/src/views/" + modelName + "/" + modelName + "/" + modelName + ".jsonvue";
       printLog("标准页（.jsontable 合成）：" + modelName);
     }
@@ -1589,6 +1670,9 @@ export function generateAdminMain(params: Object): Void {
     suffixes["prefix"] = params["apiPrefix"];
   }
   let pgLen = pages.length;
+  // 表级枚举汇总表：键（表名.列名）→ tagItems 映射字符串，循环内逐页收集，
+  // 循环后统一渲染成跨页面共享的 src/api/source/table_enum.ts
+  let tableEnums: Object = {};
   for (let pg = 0; pg < pgLen; pg = pg + 1) {
     let tplData: Object = buildAdminTplData(pages[pg]["json"], pages[pg]["filePath"],
                                             suffixes, sourceFiles, uploadFiles,
@@ -1596,15 +1680,31 @@ export function generateAdminMain(params: Object): Void {
     // pure-admin 专用派生键补全（isDatetimeFormat/needMessageBox 等）
     // 注意：ac 的 Object 是 COW 语义，必须接收返回值，否则补全全部丢失
     tplData = enrichPureTplData(tplData);
+    // i18n 元数据（write.tpl 语言 Tab 消费；null = 本表未启用多语言）
+    let i18nInfo: Object = pages[pg]["json"]["i18n"];
+    tplData["hasI18n"] = (i18nInfo != null);
+    tplData["i18nJson"] = "_null_";
+    if (i18nInfo != null) {
+      tplData["i18nJson"] = JSON.stringify(i18nInfo);
+    }
+    // 详情接口（write.vue 编辑时拉取全语言翻译 map）
+    let selUrlI: String = tplData["selectUrl"];
+    if (selUrlI != null) {
+      tplData["detailUrl"] = selUrlI.replace("selectByIn", "selectById");
+    } else {
+      tplData["detailUrl"] = "";
+    }
     // 表单列数组：按 .jsontable editCols（字段呈现行序）从最终 columns 重取，
-    // 与列表列顺序（selCols 勾选）解耦；高级页（.jsonvue）无 editCols 时按 columns 顺序
+    // 与列表列顺序（selCols 勾选）解耦；高级页（.jsonvue）无 editCols 时按 columns 顺序。
+    // 主键列不进表单列：write.tpl 已固定 form.id 隐藏携带（L47），再列一次会生成
+    // 重复键（TS1117）且渲染出多余的主键输入框
     let editCfgsForm: Object[] = pages[pg]["json"]["editCols"];
     let colsAllForm: Object[] = tplData["columns"];
     let formColsArr: Object[] = [];
     if (editCfgsForm != null && editCfgsForm.length > 0) {
       for (ecForm2 in editCfgsForm) {
         let rForm2: String = ecForm2["ref"];
-        if (rForm2 == null || rForm2 == "") { continue; }
+        if (rForm2 == null || rForm2 == "" || rForm2 == "id") { continue; }
         let cLenFc = colsAllForm.length;
         for (let fiC = 0; fiC < cLenFc; fiC = fiC + 1) {
           if (colsAllForm[fiC]["dataName"] == rForm2 && colsAllForm[fiC]["editVisible"] == true) {
@@ -1617,7 +1717,9 @@ export function generateAdminMain(params: Object): Void {
     if (formColsArr.length == 0) {
       let cLenFd = colsAllForm.length;
       for (let fiD = 0; fiD < cLenFd; fiD = fiD + 1) {
-        if (colsAllForm[fiD]["editVisible"] == true) { formColsArr.append(colsAllForm[fiD]); }
+        if (colsAllForm[fiD]["editVisible"] == true && colsAllForm[fiD]["dataName"] != "id") {
+          formColsArr.append(colsAllForm[fiD]);
+        }
       }
     }
     tplData["formColumns"] = formColsArr;
@@ -1635,6 +1737,31 @@ export function generateAdminMain(params: Object): Void {
     }
     let pagePath: String = tplData["pagePath"];
     printLog("processing page: " + pagePath);
+
+    // ── 收集本页 tag 列进共享枚举字典 ────────────────────────────────
+    //    键 = 表名.列名（联表虚拟列已在构造时写入「目标表名.列名」）；
+    //    物理列此处补键；index.tpl 改查 tableEnumMap，不再局部定义 tagMaps
+    let permPfxEn: String = pages[pg]["permPrefix"];
+    let colsEnum: Object[] = tplData["columns"];
+    let ceLen = colsEnum.length;
+    for (let ce = 0; ce < ceLen; ce = ce + 1) {
+      let ceCol: Object = colsEnum[ce];
+      if (ceCol["isTagDisplay"] != true) {
+        continue;
+      }
+      let ek: String = ceCol["enumKey"];
+      if (ek == null || ek == "") {
+        ek = permPfxEn + "." + ceCol["dataName"];
+        ceCol["enumKey"] = ek;
+        colsEnum[ce] = ceCol;   // COW 语义：数组元素修改需写回
+      }
+      let mapStrEn: String = ceCol["tagItemsMapStr"];
+      if (mapStrEn != null && mapStrEn != "{}") {
+        tableEnums[ek] = mapStrEn;
+      }
+    }
+    // COW 语义：列数组在循环内被修改过，必须回写 tplData 后模板才能读到 enumKey
+    tplData["columns"] = colsEnum;
 
     let tplLen = templates.length;
     for (let ct = 0; ct < tplLen; ct = ct + 1) {
@@ -1659,6 +1786,31 @@ export function generateAdminMain(params: Object): Void {
         }
       }
     }
+  }
+
+  // ── 8.1 表级枚举字典（跨页面共享，src/api/source/table_enum.ts）──────
+  //     汇总本次生成的全部 tag 列映射，页面统一 import 查表；
+  //     无枚举时不生成，避免空文件干扰
+  let teKeys: String[] = [];
+  for (teKey in tableEnums) { teKeys.append(teKey); }
+  if (teKeys.length > 0) {
+    let teList: Object[] = [];
+    for (teK in teKeys) {
+      teList.append({ keyEsc: escapeJsStr(teK), mapStr: tableEnums[teK] });
+    }
+    let teData: Object = { tableEnums: teList };
+    let tePath: String = formatPath(tableEnumOut, { basePath: basePath });
+    let teResult: String = renderTpl(tableEnumTpl, teData);
+    if (teResult) {
+      if (canOverwriteGenerated(tePath)) {
+        if (writeFile(tePath, teResult) == true) {
+          generatedFileCount = generatedFileCount + 1;
+        }
+        printLog("生成文件: " + tePath + "（表级枚举 " + teKeys.length + " 组）");
+      }
+    }
+  } else {
+    printLog("无表级枚举（tag 列），跳过 table_enum.ts");
   }
 
   printLog("--- pure-admin 代码生成结束，共生成 " + generatedFileCount + " 个文件 ---");

@@ -36,6 +36,10 @@ QJsonObject JsonTableColumn::toJsonObject() const {
   if (!title.isEmpty()) {
     obj[QString::fromLatin1(JsonTableKey::kTitle)] = title;
   }
+  // hidden 仅在 true 时落键（缺省 false = 正常输出）
+  if (hidden) {
+    obj[QString::fromLatin1(JsonTableKey::kHidden)] = true;
+  }
   // 取值域（空串=未声明不落键）
   if (!domainType.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kDomainType)] = domainType;
   if (!domainSourceFile.isEmpty())
@@ -64,6 +68,7 @@ JsonTableColumn JsonTableColumn::fromJsonObject(const QJsonObject &obj) {
   }
   c.comment = obj.value(QString::fromLatin1(JsonTableKey::kComment)).toString();
   c.title = obj.value(QString::fromLatin1(JsonTableKey::kTitle)).toString();
+  c.hidden = obj.value(QString::fromLatin1(JsonTableKey::kHidden)).toBool(false);
   c.domainType = obj.value(QString::fromLatin1(JsonTableKey::kDomainType)).toString();
   c.domainSourceFile = obj.value(QString::fromLatin1(JsonTableKey::kDomainSourceFile)).toString();
   c.domainSourceId = obj.value(QString::fromLatin1(JsonTableKey::kDomainSourceId)).toString();
@@ -75,7 +80,7 @@ bool JsonTableColumn::operator==(const JsonTableColumn &other) const {
   return name == other.name && mysqlType == other.mysqlType && isUnsigned == other.isUnsigned &&
          nullable == other.nullable && isPrimary == other.isPrimary &&
          isAutoInc == other.isAutoInc && defaultValue == other.defaultValue &&
-         comment == other.comment && title == other.title &&
+         comment == other.comment && title == other.title && hidden == other.hidden &&
          domainType == other.domainType &&
          domainSourceFile == other.domainSourceFile && domainSourceId == other.domainSourceId &&
          domainUrl == other.domainUrl;

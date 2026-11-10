@@ -51,6 +51,10 @@ QJsonObject JsonUpload::toJson() const {
   QJsonObject obj;
   obj[QString::fromLatin1(JsonUploadKey::kId)] = id;
   obj[QString::fromLatin1(JsonUploadKey::kRemark)] = remark;
+  // funcName 仅非空（显式命名）时写出，缺省由生成链按 url 派生
+  if (!funcName.isEmpty()) {
+    obj[QString::fromLatin1(JsonUploadKey::kFuncName)] = funcName;
+  }
   obj[QString::fromLatin1(JsonUploadKey::kUrl)] = url;
   obj[QString::fromLatin1(JsonUploadKey::kMethod)] = method;
   obj[QString::fromLatin1(JsonUploadKey::kFileField)] = fileField;
@@ -83,6 +87,7 @@ JsonUpload JsonUpload::fromJson(const QJsonObject &obj) {
   JsonUpload u;
   u.id = obj.value(QString::fromLatin1(JsonUploadKey::kId)).toString();
   u.remark = obj.value(QString::fromLatin1(JsonUploadKey::kRemark)).toString();
+  u.funcName = obj.value(QString::fromLatin1(JsonUploadKey::kFuncName)).toString();
   u.url = obj.value(QString::fromLatin1(JsonUploadKey::kUrl)).toString();
   u.method =
       obj.value(QString::fromLatin1(JsonUploadKey::kMethod)).toString(QStringLiteral("POST"));

@@ -20,6 +20,8 @@ ${svcImports}
 // ${serviceClass} ${tableComment}(${tableName}) 业务层
 // CRUD 全量生成；自定义方法（生成件不调用）写在手写件 ${tableName}_service.go。
 // DB 供手写件做自定义 SQL；写路径统一走 Repo（事务用 s.Repo.Tx(tx)）。
+// 禁止在 cdb.WithTxDB 回调内使用 s.DB：它会从连接池另借一条连接、静默脱离事务
+// （Rollback 撤不回该连接上的写），事务内必须用 s.Repo.Tx(tx) 派生的实例。
 type ${serviceClass} struct {
 ${each line in svcFieldLines}
 ${line}
@@ -51,9 +53,13 @@ func (s *${serviceClass}) Save(data *${updClass}) (${idGoType}, error) {
 	if ${tableClass}SaveHook != nil {
 		return ${tableClass}SaveHook(s, data)
 	}
-	if data.${idGoName} == ${idZeroExpr} {
+${if hasI18n}	// i18n：主表与翻译表同事务写入（实现见 ${tableName}_service_i18n_.go）
+	return s.saveI18n(data)
+${else}	if data.${idGoName} == ${idZeroExpr} {
 		e := data.ToEntity()
-		if err := s.Repo.Insert(e); err != nil {
+${each line in svcCreateTimeLines}
+${line}
+${/each}		if err := s.Repo.Insert(e); err != nil {
 			return ${idZeroExpr}, err
 		}
 		return e.${idGoName}, nil
@@ -66,7 +72,7 @@ func (s *${serviceClass}) Save(data *${updClass}) (${idGoType}, error) {
 	e.TakeSnapshot()
 	data.ApplyTo(e)
 	return s.Repo.Update(e)
-}
+${/if}}
 ${else}// Save 保存（save 单接口）：本表无自增主键，Repo 未生成 Update(e)
 // TODO 更新语义无法按主键 diff：请在手写件 ${tableName}_service.go 按业务键实现，
 // 或用 s.Repo.UpdateById(id, updates)（事务内先 s.Repo.Tx(tx) 派生实例）。
@@ -86,5 +92,7 @@ func (s *${serviceClass}) Delete(ids []${idGoType}) (int64, error) {
 	if ${tableClass}DeleteHook != nil {
 		return ${tableClass}DeleteHook(s, ids)
 	}
-	return s.Repo.Delete(ids)
-}
+${if hasI18n}	// i18n：主表与翻译表同事务删除（实现见 ${tableName}_service_i18n_.go）
+	return s.deleteI18n(ids)
+${else}	return s.Repo.Delete(ids)
+${/if}}

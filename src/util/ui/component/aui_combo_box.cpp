@@ -6,12 +6,15 @@
 #include "aui_combo_box.h"
 
 #include <QAbstractItemView>
+#include <QClipboard>
 #include <QComboBox>
 #include <QDateTime>
 #include <QElapsedTimer>
 #include <QEvent>
 #include <QGuiApplication>
 #include <QItemSelectionModel>
+#include <QKeyEvent>
+#include <QKeySequence>
 #include <QLineEdit>
 #include <QMouseEvent>
 #include <QPainter>
@@ -195,12 +198,43 @@ protected:
   void mouseDoubleClickEvent(QMouseEvent *e) override {
     // 表格单元格内的常驻下拉：双击不展开（Qt 默认双击会 showPopup，可能同步
     // 当前项并触发 currentIndexChanged，导致「没改内容也变成已修改」）。
-    // 展开入口仍只有点箭头；可编辑下拉文字区的双击由内部 QLineEdit 处理（选词）
+    // 展开入口仍只有点箭头。
     if (e->button() == Qt::LeftButton && inItemView()) {
+      // 可编辑下拉（如 jsontable 的 MySQL 类型列）：双击编辑区改为「选中全文」。
+      // 此前无条件吞掉双击，内部输入框收不到双击，单元格里的文字无法选词/复制；
+      // 这里只对常驻单元格控件生效，委托编辑器的双击保持原样（仍不展开）。
+      if (isEditable() && isCellWidget()) {
+        if (auto *le = lineEdit()) {
+          QStyleOptionComboBox opt;
+          initStyleOption(&opt);
+          const QRect editRect = style()->subControlRect(
+              QStyle::CC_ComboBox, &opt, QStyle::SC_ComboBoxEditField, this);
+          if (editRect.contains(e->position().toPoint())) {
+            le->setFocus(Qt::MouseFocusReason);
+            le->selectAll();  // 双击=全选当前文本，可直接 Ctrl+C 复制
+          }
+        }
+      }
       e->accept();
       return;
     }
     QComboBox::mouseDoubleClickEvent(e);
+  }
+
+  void keyPressEvent(QKeyEvent *e) override {
+    // 可编辑下拉：Ctrl+C 复制输入框文本（有选区复制选区，无选区复制全文）。
+    // 焦点被代理到下拉框本身时，内部输入框的原生复制不会触发，这里做兜底。
+    if (isEditable() && e->matches(QKeySequence::Copy)) {
+      if (auto *le = lineEdit()) {
+        const QString text = le->hasSelectedText() ? le->selectedText() : le->text();
+        if (!text.isEmpty()) {
+          QGuiApplication::clipboard()->setText(text);
+          e->accept();
+          return;
+        }
+      }
+    }
+    QComboBox::keyPressEvent(e);
   }
 
   void paintEvent(QPaintEvent *e) override {

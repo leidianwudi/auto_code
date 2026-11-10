@@ -1,5 +1,9 @@
 # auto_code
-自动生成代码程序，支持生成nest，vue代码
+
+基于自定义脚本语言（`.ac`）与模板引擎（`.tpl`）的代码生成工具：以 `.jsontable` 表配置为事实源，一次配置生成前后端代码。
+
+- 后端：NestJS（`file/crud_nest`）、Go + gin + gorm（`file/crud_gin`）
+- 前端：Vue 3 管理端（`file/admin_vue` 基于 Element Plus、`file/admin_pure` 基于 vue-pure-admin）
 
 ## 文档
 

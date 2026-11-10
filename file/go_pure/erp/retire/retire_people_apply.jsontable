@@ -1,0 +1,406 @@
+{
+  table: {
+    columns: [
+      {
+        comment: '主键',
+        isAutoInc: true,
+        isPrimary: true,
+        mysqlType: 'int',
+        name: 'id',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: 'retire_people表的card_id',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'card_id',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '退休人员姓名, retire_people表的name',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'name',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '申请类型, 0 表示病故类型, 1 表示暂停待遇类型, 2 表示恢复待遇',
+        default: '0',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'apply_type',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '申请管理员账号',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(255)',
+        name: 'apply_admin_account',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '申请管理员昵称',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(255)',
+        name: 'apply_admin_nick',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '申请时间, 后端自动生成, 插入时间',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'datetime',
+        name: 'apply_time',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '申请暂停待遇开始的月份 ( 含 )',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'date',
+        name: 'apply_stop_begin',
+        nullable: true,
+        unsigned: false,
+      },
+      {
+        comment: '申请暂停待遇的时长, 单位: 月',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'apply_stop_duration',
+        nullable: true,
+        unsigned: false,
+      },
+      {
+        comment: '病故日期',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'date',
+        name: 'apply_dead_date',
+        nullable: true,
+        unsigned: false,
+      },
+      {
+        comment: '病故地点',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(512)',
+        name: 'apply_dead_location',
+        nullable: true,
+        unsigned: false,
+      },
+      {
+        comment: '恢复待遇时间',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'date',
+        name: 'apply_recover_date',
+        nullable: true,
+        unsigned: false,
+      },
+      {
+        comment: '申请说明, 病故原因或暂停待遇原因',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(512)',
+        name: 'apply_desc',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '状态, 0 表示未审核, 1 表示已审核, 2 表示审核未通过',
+        default: '0',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'status',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '审核管理员账号',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(255)',
+        name: 'audit_admin_account',
+        nullable: true,
+        unsigned: false,
+      },
+      {
+        comment: '审核管理员昵称',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(255)',
+        name: 'audit_admin_nick',
+        nullable: true,
+        unsigned: false,
+      },
+      {
+        comment: '审核时间, 后端自动生成',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'datetime',
+        name: 'audit_time',
+        nullable: true,
+        unsigned: false,
+      },
+      {
+        comment: '审核说明',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(512)',
+        name: 'audit_desc',
+        nullable: true,
+        unsigned: false,
+      },
+      {
+        comment: '说明',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(512)',
+        name: 'desc',
+        nullable: false,
+        unsigned: false,
+      },
+    ],
+    editCols: [
+      {
+        label: '主键',
+        ref: 'id',
+      },
+      {
+        label: 'retire_people表的card_id',
+        ref: 'card_id',
+      },
+      {
+        label: '退休人员姓名, retire_people表的name',
+        ref: 'name',
+      },
+      {
+        label: '申请类型, 0 表示病故类型, 1 表示暂停待遇类型, 2 表示恢复待遇',
+        ref: 'apply_type',
+      },
+      {
+        label: '申请管理员账号',
+        ref: 'apply_admin_account',
+      },
+      {
+        label: '申请管理员昵称',
+        ref: 'apply_admin_nick',
+      },
+      {
+        label: '申请时间, 后端自动生成, 插入时间',
+        ref: 'apply_time',
+      },
+      {
+        label: '申请暂停待遇开始的月份 ( 含 )',
+        ref: 'apply_stop_begin',
+      },
+      {
+        label: '申请暂停待遇的时长, 单位: 月',
+        ref: 'apply_stop_duration',
+      },
+      {
+        label: '病故日期',
+        ref: 'apply_dead_date',
+      },
+      {
+        label: '病故地点',
+        ref: 'apply_dead_location',
+      },
+      {
+        label: '恢复待遇时间',
+        ref: 'apply_recover_date',
+      },
+      {
+        label: '申请说明, 病故原因或暂停待遇原因',
+        ref: 'apply_desc',
+      },
+      {
+        label: '状态, 0 表示未审核, 1 表示已审核, 2 表示审核未通过',
+        ref: 'status',
+      },
+      {
+        label: '审核管理员账号',
+        ref: 'audit_admin_account',
+      },
+      {
+        label: '审核管理员昵称',
+        ref: 'audit_admin_nick',
+      },
+      {
+        label: '审核时间, 后端自动生成',
+        ref: 'audit_time',
+      },
+      {
+        label: '审核说明',
+        ref: 'audit_desc',
+      },
+      {
+        label: '说明',
+        ref: 'desc',
+      },
+    ],
+    enums: [
+      {
+        column: 'status',
+        comment: '审核状态',
+        items: [
+          {
+            key: 'Auditing',
+            label: '待审核',
+            value: '0',
+            valueType: 'number',
+          },
+          {
+            key: 'Audited',
+            label: '已审核',
+            value: '1',
+            valueType: 'number',
+          },
+          {
+            key: 'Rejected',
+            label: '已拒绝',
+            value: '2',
+            valueType: 'number',
+          },
+        ],
+      },
+      {
+        column: 'apply_type',
+        comment: '待遇状态',
+        items: [
+          {
+            key: 'Dead',
+            label: '病故',
+            value: '0',
+            valueType: 'number',
+          },
+          {
+            key: 'StopTreatment',
+            label: '暂停待遇',
+            value: '1',
+            valueType: 'number',
+          },
+          {
+            key: 'RecoverTreatment',
+            label: '恢复待遇',
+            value: '2',
+            valueType: 'number',
+          },
+        ],
+      },
+    ],
+    selCols: [
+      {
+        label: '姓名',
+        ref: 'name',
+        width: 100,
+      },
+      {
+        label: '身份证',
+        ref: 'card_id',
+        width: 170,
+      },
+      {
+        label: '申请类型',
+        ref: 'apply_type',
+        width: 100,
+      },
+      {
+        label: '申请管理员',
+        ref: 'apply_admin_nick',
+        width: 100,
+      },
+      {
+        label: '申请时间',
+        ref: 'apply_time',
+        width: 160,
+      },
+      {
+        label: '状态',
+        ref: 'status',
+        width: 100,
+      },
+      {
+        label: '审核管理员',
+        ref: 'audit_admin_nick',
+        width: 100,
+      },
+      {
+        label: '审核说明',
+        ref: 'audit_desc',
+      },
+    ],
+    selColsEq: [
+      {
+        ref: 'status',
+      },
+      {
+        ref: 'apply_type',
+      },
+    ],
+    selColsLike: [
+      {
+        ref: 'name',
+      },
+      {
+        ref: 'card_id',
+      },
+    ],
+    selColsSort: [
+      [
+        'id',
+        'DESC',
+      ],
+    ],
+    frontend: true,
+    indexes: [
+      {
+        cols: [
+          'apply_time',
+        ],
+        name: 'apply_time',
+        unique: false,
+      },
+      {
+        cols: [
+          'card_id',
+        ],
+        name: 'card_id',
+        unique: false,
+      },
+      {
+        cols: [
+          'name',
+        ],
+        name: 'name',
+        unique: false,
+      },
+      {
+        cols: [
+          'status',
+          'apply_type',
+        ],
+        name: 'status apply_type',
+        unique: false,
+      },
+    ],
+    manualUpdateTime: false,
+    modelName: 'retire_people_apply',
+    tableComment: '退休人员申请操作表',
+    tableName: 'retire_people_apply',
+  },
+}

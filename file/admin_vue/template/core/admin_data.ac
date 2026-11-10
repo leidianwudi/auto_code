@@ -250,6 +250,8 @@ export function processColumns(rawColumns: Object[], sourceMap: Object,
     }
     col["switchActiveTextExpr"] = switchActiveTextExpr;
     col["switchInactiveTextExpr"] = switchInactiveTextExpr;
+    // 文字是运行时表达式（数据源）还是字面量：index.tpl 据此决定普通属性或 :绑定
+    col["switchTextIsExpr"] = (boolApiName != "");
 
     // 判断是否为多行文本
     let isTextArea = false;
@@ -523,6 +525,10 @@ export function processColumns(rawColumns: Object[], sourceMap: Object,
       ti2["value"] = rawTi.value;
       ti2["text"] = rawTi.text;
       ti2["color"] = rawTi.color;
+      // 值类型（number=数字字面量）：模板按它决定 :value / value 输出，
+      // 避免整型枚举列提交字符串导致后端 binding 失败
+      ti2["valueType"] = rawTi.valueType;
+      ti2["isNumberValue"] = (rawTi.valueType == "number");
       // 转义后的值（供模板中单引号字符串使用）
       ti2["valueEsc"] = escapeJsStr(rawTi.value);
       ti2["textEsc"] = escapeJsStr(rawTi.text);
@@ -1130,8 +1136,32 @@ export function buildSourceTplData(json: Object, file: String): Object {
 // ---------------------------------------------------------------------------
 // 5-4) 上传预设加工：.jsonupload 的 uploads 转换为共享上传函数的 tplData
 // ---------------------------------------------------------------------------
-// 每条预设生成一个上传函数（funcName 由 url 派生：upload/image → uploadImage，
-// 同文件重名追加序号），生成 src/api/upload/{uploadName}.ts 供多页面 import 复用
+/// @brief 判断是否为合法 JS 标识符（函数名用）
+/// 规则：仅字母/数字/下划线/美元符，且首字符不能是数字。
+/// 显式 funcName 非法时回退 url 派生，避免生成出语法错误的 TS
+export function isJsIdentName(s: String): Bool {
+  if (s == null || s.length == 0) {
+    return false;
+  }
+  let n = s.length;
+  for (let i = 0; i < n; i = i + 1) {
+    let c = s[i];
+    let isDigit = (c >= "0" && c <= "9");
+    let isLower = (c >= "a" && c <= "z");
+    let isUpper = (c >= "A" && c <= "Z");
+    if (!isDigit && !isLower && !isUpper && c != "_" && c != "$") {
+      return false;
+    }
+    if (i == 0 && isDigit) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// 每条预设生成一个上传函数（funcName 显式配置优先，缺省由 url 派生：
+// upload/image → uploadImage，同文件重名追加序号），
+// 生成 src/api/upload/{uploadName}.ts 供多页面 import 复用
 export function processUploads(rawUploads: Object[], uploadName: String): Object[] {
   let uploads: Object[] = [];
   let rawLen = rawUploads.length;
@@ -1150,10 +1180,23 @@ export function processUploads(rawUploads: Object[], uploadName: String): Object
     up["url"] = upUrl;
     // 所属文件基名（write.vue 生成 import '@/api/upload/{uploadName}' 用）
     up["uploadName"] = uploadName;
-    // 函数名：url 驼峰派生（upload/image → uploadImage）——用补斜杠前的原始 url
-    let funcName = urlToFuncName(raw.url);
+    // 函数名：显式 funcName 优先（须为合法标识符）；缺省按 url 驼峰派生
+    // （upload/image → uploadImage）——用补斜杠前的原始 url
+    let funcName: String = "";
+    let explicitFn: String = raw["funcName"];
+    if (isNotEmpty(explicitFn)) {
+      if (isJsIdentName(explicitFn)) {
+        funcName = explicitFn;
+      } else {
+        printError("警告：上传预设 '" + up["remark"] + "' 的 funcName '" + explicitFn +
+                   "' 不是合法 JS 标识符，已回退按上传地址派生");
+      }
+    }
     if (funcName == "") {
-      funcName = "upload" + sourceCamel + (i + 1);
+      funcName = urlToFuncName(raw.url);
+      if (funcName == "") {
+        funcName = "upload" + sourceCamel + (i + 1);
+      }
     }
     if (nameSet[funcName] != null) {
       let n = 2;

@@ -2,7 +2,7 @@
  * @file json_upload_dialog.h
  * @brief .jsonupload 单条上传预设编辑对话框
  *
- * 编辑一条上传预设：说明 / 上传地址 / 请求方式 / 文件字段名 /
+ * 编辑一条上传预设：说明 / 函数名 / 上传地址 / 请求方式 / 文件字段名 /
  * 响应提取路径 / 最多张数 / 提交值形态 / 缩略图尺寸 / 附加 form 参数表格。
  * 通过 setUpload() 预填，upload() 取回编辑结果（getter 模式，无信号回写）。
  */
@@ -43,6 +43,7 @@ private:
   void fillParams(const QVector<JsonUploadParam> &params);
 
   QLineEdit *m_remarkEdit = nullptr;        ///< 说明
+  QLineEdit *m_funcNameEdit = nullptr;      ///< 生成的上传函数名（可选）
   QLineEdit *m_urlEdit = nullptr;           ///< 上传地址
   QComboBox *m_methodCombo = nullptr;       ///< 请求方式
   QLineEdit *m_fileFieldEdit = nullptr;     ///< form-data 文件字段名

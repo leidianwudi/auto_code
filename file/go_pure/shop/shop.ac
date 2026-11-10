@@ -19,10 +19,25 @@ import { generateAdminMain } from "../../admin_pure/template/main_admin.ac";
 main {
 
   // ── 1. 表清单：由项目树勾选的 .jsontable 决定 ────────────────────
-  //      不传 jsonTablePaths：go 链与前端链都回退到 getCheckedFiles(scriptDir())，
   //      勾选哪些 .jsontable 就重新生成哪些表；新增表只需勾选，无需改本脚本。
-  //      如需 CI/固定清单，可临时传 jsonTablePaths 覆盖（优先级高于勾选）。
+  //      base_lang 是项目基础设施表，始终参与生成（不依赖勾选状态）。
+  //      i18n 翻译表（shop0）由 shop.jsontable 的 i18n 配置派生，
+  //      只生成主表 data 包内的实体文件，不再单独生成一整套代码。
   let projPath: String = scriptDir() + "/project.acproj";
+  let files: String[] = [];
+  for (f in getCheckedFiles(scriptDir())) {
+    if (!fileExists(f)) { continue; }
+    // 只收表配置；勾选的 .jsonupload/.jsonsource/.jsonvue 由 main_admin/mmain_api
+    // 各自按后缀收集，混进 jsonTablePaths 会被当成 .jsontable 解析而报错
+    if (!f.endsWith(".jsontable")) { continue; }
+    // basename() 返回去扩展名的文件名（base_lang / shop0），不是含 .jsontable 的文件名
+    let b: String = basename(f);
+    if (b == "base_lang" || b == "shop0") { continue; }
+    files.append(f);
+  }
+  // base_lang：项目语言配置表（后台语言清单 / C端 lang 校验数据源）
+  files.append(scriptDir() + "/base/base_lang.jsontable");
+  printLog("参与生成: " + files.length + " 份 .jsontable");
 
   // ── 2. 目标项目根目录来自 project.acproj 的 meta.goBasePath /
   //      meta.webBasePath（换机器只改 proj，不改脚本）──
@@ -30,10 +45,14 @@ main {
 
   // ── 3. Go 后端生成 ────────────────────────────────────────────────
   //     genGlobalEnum: false 可跳过全局枚举生成（缺省生成）；
+  //     enumRegPath: 枚举字典注册包（枚举生成件 init() 注册，C 端
+  //     /api/app/enum/dict 汇总输出）；不配则生成件不含注册代码；
   //     frontend=false 的表（纯 API 模块）后端链照常生成
   let apiParams: Object = {
     projPath: projPath,
-    genGlobalEnum: true
+    jsonTablePaths: files,
+    genGlobalEnum: true,
+    enumRegPath: "shop_api/common/enumreg"
   };
   generateApiMain(apiParams);
 
@@ -45,7 +64,10 @@ main {
   let tplDir: String = "../../admin_pure/template";
   let adminParams: Object = {
     projPath: projPath,
+    jsonTablePaths: files,
     apiPrefix: "/api",
+    // 表级枚举字典（跨页面共享）：全部 tag 列汇总输出 src/api/source/table_enum.ts
+    tableEnumTpl: tplDir + "/table_enum.tpl",
     templates: [
       { tpl: tplDir + "/index.tpl", out: "{basePath}/src/views/{pagePath}/index.vue" },
       { tpl: tplDir + "/write.tpl", out: "{basePath}/src/views/{pagePath}/components/write.vue" },

@@ -19,23 +19,30 @@ main {
     database: "shop"
   });
 
-  // ── 1. 超级管理员角色 ─────────────────────────────────────────────
+  // ── 1. 管理员角色：优先沿用 admin 账号已有 role_id ────────────────
+  //      避免重复创建「超级管理员」导致菜单授权到错误角色
+  let adminRows = db.query({sql: "SELECT id, role_id FROM admin WHERE account = 'admin' LIMIT 1"});
   let roleId: Number = 0;
-  let roleRows = db.query({sql: "SELECT id FROM sys_role WHERE name = '超级管理员' LIMIT 1"});
-  if (roleRows.length > 0) {
-    roleId = roleRows[0].id;
-    printLog("角色已存在: 超级管理员 (id=" + roleId + ")");
-  } else {
-    db.exec({sql: "INSERT INTO sys_role (name, remark, sort, status) VALUES ('超级管理员', '内置角色，拥有全部菜单', 1, 1)"});
-    let r2 = db.query({sql: "SELECT id FROM sys_role WHERE name = '超级管理员' LIMIT 1"});
-    roleId = r2[0].id;
-    printLog("角色已创建: 超级管理员 (id=" + roleId + ")");
+  if (adminRows.length > 0) {
+    roleId = adminRows[0].role_id;
+    printLog("沿用 admin 现有角色: role_id=" + roleId);
+  }
+  if (roleId <= 0) {
+    let roleRows = db.query({sql: "SELECT id FROM sys_role WHERE name = '超级管理员' LIMIT 1"});
+    if (roleRows.length > 0) {
+      roleId = roleRows[0].id;
+      printLog("角色已存在: 超级管理员 (id=" + roleId + ")");
+    } else {
+      db.exec({sql: "INSERT INTO sys_role (name, remark, sort, status) VALUES ('超级管理员', '内置角色，拥有全部菜单', 1, 1)"});
+      let r2 = db.query({sql: "SELECT id FROM sys_role WHERE name = '超级管理员' LIMIT 1"});
+      roleId = r2[0].id;
+      printLog("角色已创建: 超级管理员 (id=" + roleId + ")");
+    }
   }
 
   // ── 2. admin 账号（密码 123456）───────────────────────────────────
-  let adminRows = db.query({sql: "SELECT id FROM admin WHERE account = 'admin' LIMIT 1"});
   if (adminRows.length > 0) {
-    printLog("管理员已存在: admin (id=" + adminRows[0].id + ")");
+    printLog("管理员已存在: admin (id=" + adminRows[0].id + ", role_id=" + roleId + ")");
   } else {
     db.exec({sql: "INSERT INTO admin (account, password, nick, role_id, enable, ip) VALUES ('admin', '$2a$10$P.cpY2OLAx88.1SKoAnHwOPeL8dkyHZUl8lu6s6Tek25AU.1ad.g.', '超级管理员', " + roleId + ", 1, '')"});
     printLog("管理员已创建: admin（密码 123456）");
@@ -48,12 +55,34 @@ main {
   ensureMenu(db, "店铺列表", shopDirId, "/shop/list", "shop/shop/shop.vue", "ep:shop", 1);
   ensureMenu(db, "用户列表", shopDirId, "/shop/user", "user/user/user.vue", "ep:user", 2);
 
+  // ── 3.5 基础设置 / 语言设置（base_lang 管理页 + 接口权限）──────────
+  let baseDirId: Number = ensureMenu(db, "基础设置", 0, "/base", "", "ep:setting", 20);
+  let langMenuId: Number = ensureMenu(db, "语言设置", baseDirId, "/base/lang",
+                                      "base/base_lang/index", "ep:reading", 1);
+  ensurePerm(db, "查询", langMenuId, "base_lang:list", 1);
+  ensurePerm(db, "新增", langMenuId, "base_lang:add", 2);
+  ensurePerm(db, "编辑", langMenuId, "base_lang:edit", 3);
+  ensurePerm(db, "删除", langMenuId, "base_lang:delete", 4);
+
   // ── 4. 全部菜单分配给超级管理员 ──────────────────────────────────
   db.exec({sql: "INSERT INTO sys_role_menu (role_id, menu_id) SELECT " + roleId + ", id FROM sys_menu WHERE id NOT IN (SELECT menu_id FROM sys_role_menu WHERE role_id = " + roleId + ")"});
   printLog("菜单已全部分配给角色 id=" + roleId);
 
   db.disconnect();
   printLog("--- 种子数据完成 ---");
+}
+
+/// @brief 幂等插入一条按钮权限（type=2），返回菜单 id
+export function ensurePerm(db: DB, title: String, pid: Number, perm: String, sort: Number): Number {
+  let rows = db.query({sql: "SELECT id FROM sys_menu WHERE title = '" + title + "' AND pid = " + pid + " AND type = 2 LIMIT 1"});
+  if (rows.length > 0) {
+    printLog("权限已存在: " + title + " (" + perm + ")");
+    return rows[0].id;
+  }
+  db.exec({sql: "INSERT INTO sys_menu (pid, title, type, path, component, icon, sort, perm, visible) VALUES (" + pid + ", '" + title + "', 2, '', '', '', " + sort + ", '" + perm + "', 1)"});
+  let r2 = db.query({sql: "SELECT id FROM sys_menu WHERE title = '" + title + "' AND pid = " + pid + " AND type = 2 LIMIT 1"});
+  printLog("权限已创建: " + title + " (" + perm + ")");
+  return r2[0].id;
 }
 
 /// @brief 幂等插入一条菜单，返回菜单 id

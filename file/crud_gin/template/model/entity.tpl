@@ -16,6 +16,8 @@ package ${pkgName}
 ${if enImports}
 ${enImports}
 
+${/if}${if hasI18n}${i18nTypeBlock}
+
 ${/if}// ${enClass} ${tableComment}(${tableName}) 实体
 // 普通列一律值类型（整数统一 int64，覆盖数据库 int/int unsigned）；
 // 仅数据库允许 NULL 的列为指针：nil = SQL NULL，非 nil = 按它写入（含 0、空串）。

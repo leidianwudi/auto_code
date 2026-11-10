@@ -1,0 +1,74 @@
+{
+  table: {
+    columns: [
+      {
+        comment: '',
+        isAutoInc: true,
+        isPrimary: true,
+        mysqlType: 'int',
+        name: 'id',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '角色ID',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'role_id',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '菜单/按钮ID',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'menu_id',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '',
+        default: 'CURRENT_TIMESTAMP',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'datetime',
+        name: 'created_at',
+        nullable: true,
+        unsigned: false,
+      },
+    ],
+    editCols: [
+      {
+        ref: 'id',
+      },
+      {
+        label: '角色ID',
+        ref: 'role_id',
+      },
+      {
+        label: '菜单/按钮ID',
+        ref: 'menu_id',
+      },
+      {
+        ref: 'created_at',
+      },
+    ],
+    frontend: false,
+    indexes: [
+      {
+        cols: [
+          'role_id',
+          'menu_id',
+        ],
+        name: 'uk_role_menu',
+        unique: true,
+      },
+    ],
+    manualUpdateTime: false,
+    modelName: 'system_role_menu',
+    tableComment: '角色-菜单关联表',
+    tableName: 'system_role_menu',
+  },
+}

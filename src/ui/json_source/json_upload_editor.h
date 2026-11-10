@@ -86,6 +86,7 @@ private:
 /// 上传预设表格列索引
 enum JsonUploadTableCols {
   JUColRemark = 0,   ///< 说明
+  JUColFuncName,     ///< 生成的函数名（空=按上传地址自动派生）
   JUColUrl,          ///< 上传地址
   JUColFileField,    ///< 文件字段名
   JUColMaxCount,     ///< 最多张数

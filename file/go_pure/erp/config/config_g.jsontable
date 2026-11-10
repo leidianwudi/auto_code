@@ -1,0 +1,144 @@
+{
+  table: {
+    columns: [
+      {
+        comment: 'id',
+        isAutoInc: true,
+        isPrimary: true,
+        mysqlType: 'int',
+        name: 'id',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '排序',
+        default: '0',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'sort',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '配置键',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'key',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '值',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(256)',
+        name: 'value',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '是否起效，0:无效；1:有效',
+        default: '0',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'enable',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '说明',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(256)',
+        name: 'desc',
+        nullable: false,
+        unsigned: false,
+      },
+    ],
+    editCols: [
+      {
+        ref: 'id',
+      },
+      {
+        label: '排序',
+        ref: 'sort',
+      },
+      {
+        label: '配置键',
+        ref: 'key',
+      },
+      {
+        label: '值',
+        ref: 'value',
+      },
+      {
+        label: '是否起效，0:无效；1:有效',
+        ref: 'enable',
+      },
+      {
+        label: '说明',
+        ref: 'desc',
+      },
+    ],
+    selCols: [
+      {
+        label: '排序',
+        ref: 'sort',
+        width: 70,
+      },
+      {
+        label: '配置键',
+        ref: 'key',
+        width: 180,
+      },
+      {
+        label: '值',
+        ref: 'value',
+        width: 220,
+      },
+      {
+        label: '是否起效',
+        ref: 'enable',
+        width: 90,
+      },
+      {
+        label: '说明',
+        ref: 'desc',
+      },
+    ],
+    selColsEq: [
+      {
+        ref: 'enable',
+      },
+    ],
+    selColsLike: [
+      {
+        ref: 'key',
+      },
+    ],
+        selColsSort: [
+      [
+        'sort',
+        'ASC',
+      ],
+    ],
+    frontend: true,
+
+    indexes: [
+      {
+        cols: [
+          'key',
+        ],
+        name: 'key',
+        unique: true,
+      },
+    ],
+    manualUpdateTime: false,
+    modelName: 'config_g',
+    tableComment: '全局配置',
+    tableName: 'config_g',
+  },
+}

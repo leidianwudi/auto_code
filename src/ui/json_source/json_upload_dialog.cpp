@@ -20,6 +20,7 @@
 
 #include "src/ui/json_vue/config_dialog_common.h"
 #include "src/util/common/code_constants.h"
+#include "src/util/ui/component/aui_cell_edit_combo.h"
 #include "src/util/ui/component/aui_combo_box.h"
 
 // ════════════════════════════════════════════════════════════
@@ -35,9 +36,13 @@ enum ParamCols {
   ParamColCount
 };
 
-/// 值类型下拉选项 → 存储标记（""=字符串 / "number"=数字）
-inline QString comboDataToValueType(const QComboBox *combo) {
-  return combo ? combo->currentData().toString() : QString();
+/// 值类型下拉显示文本 ↔ 存储标记（"字符串"→"" / "数字"→"number"）
+inline QString valueTypeTextToData(const QString &text) {
+  return text == QStringLiteral("数字") ? QStringLiteral("number") : QString();
+}
+
+inline QString valueTypeDataToText(const QString &data) {
+  return data == QStringLiteral("number") ? QStringLiteral("数字") : QStringLiteral("字符串");
 }
 }  // namespace
 
@@ -61,6 +66,14 @@ void JsonUploadDialog::setupUI() {
   m_remarkEdit = new QLineEdit(this);
   m_remarkEdit->setPlaceholderText(QStringLiteral("如: 商品主图上传"));
   form->addRow(QStringLiteral("说明:"), m_remarkEdit);
+
+  m_funcNameEdit = new QLineEdit(this);
+  m_funcNameEdit->setPlaceholderText(
+      QStringLiteral("可选，如 uploadUserHead；留空按上传地址自动派生"));
+  m_funcNameEdit->setToolTip(QStringLiteral(
+      "生成 src/api/upload/*.ts 中的导出函数名（仅字母/数字/下划线/美元符，且不能以数字开头）。\n"
+      "多个预设共用同一上传地址时建议显式命名，否则自动派生同名函数会被追加序号（xxx2、xxx3）"));
+  form->addRow(QStringLiteral("函数名:"), m_funcNameEdit);
 
   m_urlEdit = new QLineEdit(this);
   m_urlEdit->setPlaceholderText(QStringLiteral("如 upload/image（相对路径，走目标项目 axios）"));
@@ -155,9 +168,10 @@ void JsonUploadDialog::setupUI() {
     m_paramsTable->insertRow(row);
     m_paramsTable->setItem(row, ParamColName, new QTableWidgetItem(QString()));
     m_paramsTable->setItem(row, ParamColValue, new QTableWidgetItem(QString()));
-    auto *typeCombo = AuiComboBox::create(this);
-    typeCombo->addItem(QStringLiteral("字符串"), QString());
-    typeCombo->addItem(QStringLiteral("数字"), QStringLiteral("number"));
+    // 值类型：常驻只读下拉（字符串默认/数字；文字可拖选复制，点箭头展开候选）
+    auto *typeCombo = new AuiCellEditCombo(m_paramsTable, ParamColValueType,
+                                           {QStringLiteral("字符串"), QStringLiteral("数字")},
+                                           this, true);
     m_paramsTable->setCellWidget(row, ParamColValueType, typeCombo);
     m_paramsTable->setCellWidget(row, ParamColDelete,
                                  makeTableDeleteButton(m_paramsTable, ParamColDelete, this));
@@ -178,10 +192,10 @@ void JsonUploadDialog::fillParams(const QVector<JsonUploadParam> &params) {
     m_paramsTable->insertRow(row);
     m_paramsTable->setItem(row, ParamColName, new QTableWidgetItem(p.name));
     m_paramsTable->setItem(row, ParamColValue, new QTableWidgetItem(p.value));
-    auto *typeCombo = AuiComboBox::create(this);
-    typeCombo->addItem(QStringLiteral("字符串"), QString());
-    typeCombo->addItem(QStringLiteral("数字"), QStringLiteral("number"));
-    comboSelectData(typeCombo, p.valueType);
+    auto *typeCombo = new AuiCellEditCombo(m_paramsTable, ParamColValueType,
+                                           {QStringLiteral("字符串"), QStringLiteral("数字")},
+                                           this, true);
+    typeCombo->setText(valueTypeDataToText(p.valueType));
     m_paramsTable->setCellWidget(row, ParamColValueType, typeCombo);
     m_paramsTable->setCellWidget(row, ParamColDelete,
                                  makeTableDeleteButton(m_paramsTable, ParamColDelete, this));
@@ -196,8 +210,9 @@ QVector<JsonUploadParam> JsonUploadDialog::collectParams() const {
     const QTableWidgetItem *valueItem = m_paramsTable->item(r, ParamColValue);
     p.name = nameItem ? nameItem->text().trimmed() : QString();
     p.value = valueItem ? valueItem->text() : QString();
-    p.valueType = comboDataToValueType(
-        qobject_cast<QComboBox *>(m_paramsTable->cellWidget(r, ParamColValueType)));
+    auto *typeCombo =
+        dynamic_cast<AuiCellEditCombo *>(m_paramsTable->cellWidget(r, ParamColValueType));
+    p.valueType = typeCombo ? valueTypeTextToData(typeCombo->text()) : QString();
     if (p.name.isEmpty()) continue;  // 跳过未填参数名的行
     out.append(p);
   }
@@ -210,6 +225,7 @@ QVector<JsonUploadParam> JsonUploadDialog::collectParams() const {
 
 void JsonUploadDialog::setUpload(const JsonUpload &u) {
   m_remarkEdit->setText(u.remark);
+  m_funcNameEdit->setText(u.funcName);
   m_urlEdit->setText(u.url);
   comboSelectData(m_methodCombo, u.method);
   m_fileFieldEdit->setText(u.fileField.isEmpty() ? QStringLiteral("file") : u.fileField);
@@ -228,6 +244,7 @@ void JsonUploadDialog::setUpload(const JsonUpload &u) {
 JsonUpload JsonUploadDialog::upload() const {
   JsonUpload u;
   u.remark = m_remarkEdit->text().trimmed();
+  u.funcName = m_funcNameEdit->text().trimmed();
   u.url = m_urlEdit->text().trimmed();
   u.method = m_methodCombo->currentData().toString();
   u.fileField = m_fileFieldEdit->text().trimmed();

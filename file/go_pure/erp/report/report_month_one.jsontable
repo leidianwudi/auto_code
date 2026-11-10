@@ -1,0 +1,180 @@
+{
+  table: {
+    columns: [
+      {
+        comment: '主键',
+        isAutoInc: true,
+        isPrimary: true,
+        mysqlType: 'int',
+        name: 'id',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '统计月份',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'date',
+        name: 'month',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '人员姓名',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'name',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '身份证',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'card_id',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '职级名称',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'rank_name',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '补发金额',
+        default: '0.00',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'decimal(20,2)',
+        name: 'money',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '添加时间',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'datetime',
+        name: 'add_time',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '备注',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(512)',
+        name: 'desc',
+        nullable: false,
+        unsigned: false,
+      },
+    ],
+    editCols: [
+      {
+        label: '主键',
+        ref: 'id',
+      },
+      {
+        label: '统计月份',
+        ref: 'month',
+      },
+      {
+        label: '人员姓名',
+        ref: 'name',
+      },
+      {
+        label: '身份证',
+        ref: 'card_id',
+      },
+      {
+        label: '职级名称',
+        ref: 'rank_name',
+      },
+      {
+        label: '补发金额',
+        ref: 'money',
+      },
+      {
+        label: '添加时间',
+        ref: 'add_time',
+      },
+      {
+        label: '备注',
+        ref: 'desc',
+      },
+    ],
+    selCols: [
+      {
+        label: '统计月份',
+        ref: 'month',
+        width: 120,
+      },
+      {
+        label: '人员姓名',
+        ref: 'name',
+        width: 100,
+      },
+      {
+        label: '身份证',
+        ref: 'card_id',
+        width: 170,
+      },
+      {
+        label: '职级名称',
+        ref: 'rank_name',
+        width: 110,
+      },
+      {
+        label: '补发金额',
+        ref: 'money',
+        width: 130,
+      },
+      {
+        label: '添加时间',
+        ref: 'add_time',
+        width: 160,
+      },
+      {
+        label: '备注',
+        ref: 'desc',
+      },
+    ],
+    selColsEq: [
+    ],
+    selColsLike: [
+      {
+        ref: 'name',
+      },
+      {
+        ref: 'card_id',
+      },
+    ],
+    selColsGap: [
+      {
+        ref: 'month',
+      },
+    ],
+    selColsSort: [
+      [
+        'month',
+        'DESC',
+      ],
+      [
+        'id',
+        'DESC',
+      ],
+    ],
+    frontend: true,
+
+    manualUpdateTime: false,
+    modelName: 'report_month_one',
+    tableComment: '一次性补发月报表',
+    tableName: 'report_month_one',
+  },
+}

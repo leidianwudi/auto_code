@@ -168,7 +168,9 @@ export class FieldDef {
   let enIsPtr: Bool = false;       // 实体字段是否指针（仅可空列；快照/diff 据此分支）
   let goName: String = "";         // 导出驼峰（snakeToPascal），如 user_name → UserName
   let gormTag: String = "";        // gorm:"column:xx;type:...[;primaryKey][;autoIncrement]"
-  let jsonTag: String = "";        // json:"name"
+  let jsonTag: String = "";        // json:"name"（InSel/InUpd 等入参结构用）
+  let enJsonTag: String = "";      // 实体 json tag（hidden 列 = json:"-"）
+  let hidden: Bool = false;        // 接口不输出（true → 实体 json:"-"，如密码）
   let bindingTag: String = "";     // binding:"required" / binding:"omitempty"（含前导空格）
   let nullable: Bool = false;      // 是否可空（→ 指针类型）
   let isPrimary: Bool = false;     // 是否主键
@@ -178,6 +180,7 @@ export class FieldDef {
   let isCreateDate: Bool = false;  // create_time 时间列（DB 默认值维护，不入增改参数）
   let isUpdateDate: Bool = false;  // update_time 时间列且未配 manualUpdateTime（DB ON UPDATE 维护）
   let isAutoTime: Bool = false;    // 由 DB 自动维护的时间列（不入 InsertParams/UpdateParams）
+  let defaultValue: String = "";   // 列级 default 原值；仅表达式默认值会输出 ;default: tag
   let isInsParam: Bool = false;    // 是否进 InsertParams（排除自动维护时间列与自增主键）
   let isUpdParam: Bool = false;    // 是否进 UpdateParams（排除自动维护时间列与主键）
 }
@@ -213,9 +216,37 @@ export class Param {
   let hasJsonField: Bool = false;    // 是否有 datatypes.JSON 列（实体 import gorm.io/datatypes）
   let hasDecimalField: Bool = false; // 是否有 coin.Coin 金额列（单表实体需补 import common）
 
+  /// @brief 判断列默认值是否为"数据库侧默认值"（仅这类才输出 ;default: tag）
+  ///   含成对括号（now() / CURRENT_TIMESTAMP(6)），或忽略大小写等于
+  ///   current_timestamp / current_date / current_time / localtimestamp / now；
+  ///   空串、null、含 ';'、字面量（0 / 0.00 / 空串）均不命中。
+  ///   与设计器 json_table_designer.cpp 的 isDbDefaultExpr 保持一致，两处需同步维护。
+  function isDbDefault(raw: String): Bool {
+    let v: String = raw.trim();
+    if (v == "") {
+      return false;
+    }
+    let lv: String = v.toLowerCase();
+    if (lv == "null" || v.includes(";")) {
+      return false;
+    }
+    if (v.includes("(") && v.includes(")")) {
+      return true;
+    }
+    if (lv == "current_timestamp" || lv == "current_date" || lv == "current_time"
+        || lv == "localtimestamp" || lv == "now") {
+      return true;
+    }
+    return false;
+  }
+
   /// @brief 拼接单列的 gorm tag
   ///   形如 gorm:"column:name;type:varchar(64)"，主键追加 ;primaryKey，
-  ///   自增追加 ;autoIncrement；unsigned 附加到 type 后（type:bigint unsigned）
+  ///   自增追加 ;autoIncrement；unsigned 附加到 type 后（type:bigint unsigned）；
+  ///   可空审计时间列追加 ;autoUpdateTime，由 GORM 兜底更新
+  ///   （指针列 nil 时 GORM 会显式写 NULL，MySQL 不会套用 ON UPDATE）；
+  ///   表达式默认值追加 ;default:<原值>，零值时 GORM 省略该列、交给数据库默认值，
+  ///   字面量默认值不输出（保持 GORM 显式写入的既有行为）
   function buildGormTag(field: FieldDef): String {
     let tag: String = "column:" + field.name + ";type:" + field.colType;
     // 无符号：列配置 unsigned=true 且类型串未自带 unsigned 时附加
@@ -227,6 +258,20 @@ export class Param {
     }
     if (field.isAutoInc) {
       tag = tag + ";autoIncrement";
+    }
+    // 可空审计时间列由 GORM 维护更新时间；非空值类型由新增路径显式赋值（见 svc.tpl）
+    if (field.isUpdateDate && field.enIsPtr) {
+      tag = tag + ";autoUpdateTime";
+    }
+    // 数据库侧默认值：零值时 GORM 省略该列、由 DB 填值；
+    // 值含 ';' 会拆坏 tag，跳过并报错（不自行加引号，交给 GORM 解析）
+    let dv: String = field.defaultValue;
+    if (dv != null && dv != "") {
+      if (dv.includes(";")) {
+        printError("gorm default 值含分号，跳过 tag：列 " + field.name + " default=" + dv);
+      } else if (this.isDbDefault(dv)) {
+        tag = tag + ";default:" + dv.trim();
+      }
     }
     return "gorm:\"" + tag + "\"";
   }
@@ -317,24 +362,31 @@ export class Param {
         this.hasNullableField = true;
       }
 
-      // 标签拼装
+      // 列级默认值：default 是 AC 关键字，必须用方括号访问；
+      // 仅表达式默认值（now()/CURRENT_TIMESTAMP）会输出 ;default: tag，字面量保持现状
+      field.defaultValue = col["default"];
+
+      // 自动维护时间列：create_time/created_at 恒自动（DB 默认值）；
+      // update_time/updated_at 未配 manualUpdateTime 时由 DB ON UPDATE 或
+      // gorm autoUpdateTime 维护——两者均不入增改参数
+      let isDateTime = field.colType.toLowerCase().includes("datetime")
+        || field.colType.toLowerCase().includes("timestamp");
+      field.isCreateDate = (field.name == "create_time" || field.name == "created_at") && isDateTime;
+      field.isUpdateDate = (field.name == "update_time" || field.name == "updated_at") && isDateTime && !manualUpdateTime;
+      field.isAutoTime = field.isCreateDate || field.isUpdateDate;
+
+      // 标签拼装（依赖上面的 isCreateDate/isUpdateDate）
       field.gormTag = this.buildGormTag(field);
       field.jsonTag = "json:\"" + field.name + "\"";
+      // 不输出列：仅实体标签为 json:"-"，入参（InUpd 等）仍用正常列名（密码可写入）
+      field.hidden = (col["hidden"] == true);
+      field.enJsonTag = field.hidden ? "json:\"-\"" : field.jsonTag;
       if (field.required) {
         field.bindingTag = " binding:\"required\"";
       } else {
         field.bindingTag = " binding:\"omitempty\"";
       }
       field.zeroKind = zeroKindOfGoType(field.goType);
-
-      // 自动维护时间列：create_time/created_at 恒自动（DB 默认值或 gorm
-      // CreatedAt 约定）；update_time/updated_at 未配 manualUpdateTime 时
-      // 由 DB ON UPDATE 或 gorm UpdatedAt 约定维护——两者均不入增改参数
-      let isDateTime = field.colType.toLowerCase().includes("datetime")
-        || field.colType.toLowerCase().includes("timestamp");
-      field.isCreateDate = (field.name == "create_time" || field.name == "created_at") && isDateTime;
-      field.isUpdateDate = (field.name == "update_time" || field.name == "updated_at") && isDateTime && !manualUpdateTime;
-      field.isAutoTime = field.isCreateDate || field.isUpdateDate;
 
       // 参数字段集合：editCols 显式列出 = 进表单；writable 决定是否进写参数
       // （visible=false 仍可写，仅前端不渲染；editEditable 只影响 Vue，不影响 Go）

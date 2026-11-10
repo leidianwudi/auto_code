@@ -1,0 +1,116 @@
+{
+  table: {
+    columns: [
+      {
+        comment: '主键',
+        isAutoInc: true,
+        isPrimary: true,
+        mysqlType: 'int',
+        name: 'id',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '排序',
+        default: '0',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'sort',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '表名',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'table',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '列名',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'column',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '枚举key',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'key',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '枚举value',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'value',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '备注',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(256)',
+        name: 'desc',
+        nullable: false,
+        unsigned: false,
+      },
+    ],
+    editCols: [
+      {
+        label: '主键',
+        ref: 'id',
+      },
+      {
+        label: '排序',
+        ref: 'sort',
+      },
+      {
+        label: '表名',
+        ref: 'table',
+      },
+      {
+        label: '列名',
+        ref: 'column',
+      },
+      {
+        label: '枚举key',
+        ref: 'key',
+      },
+      {
+        label: '枚举value',
+        ref: 'value',
+      },
+      {
+        label: '备注',
+        ref: 'desc',
+      },
+    ],
+    frontend: false,
+    indexes: [
+      {
+        cols: [
+          'table',
+          'column',
+          'key',
+        ],
+        name: 'table column key',
+        unique: true,
+      },
+    ],
+    manualUpdateTime: false,
+    modelName: 'crud_api_enum',
+    tableComment: '自动生成代码，服务端枚举',
+    tableName: 'crud_api_enum',
+  },
+}

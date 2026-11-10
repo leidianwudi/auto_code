@@ -4,33 +4,32 @@
  *
  * 原 json_vue_editor.cpp 匿名 namespace 中的辅助逻辑，被拆分后的多个实现文件
  * （json_vue_editor.cpp / _http.cpp / _columns.cpp / _config.cpp）共用：
- * - 自绘无边框下拉框 NoBorderCombo 与工厂 newTableCombo
  * - 列配置 / 查询字段 / 操作按钮配置的 QPushButton 动态属性存取与摘要文本
  * - 接口鉴权配置文件常量 kApiAuthDataAcFile
  */
 
 #pragma once
 
-#include <QComboBox>
 #include <QFileInfo>
-#include <QItemSelectionModel>
-#include <QMouseEvent>
-#include <QPainter>
-#include <QStyleOption>
 #include <QTableWidget>
 
 #include "json_vue_model.h"
 #include "src/util/common/code_constants.h"
-#include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_style.h"
 
 /// 接口鉴权/连接配置文件（baseUrl、authHeader、postData），从 .jsonvue 所在目录向上查找
 inline const QString kApiAuthDataAcFile = QStringLiteral("api_auth_data.ac");
 
-/// 创建用于表格单元格的下拉框：统一控件（AuiComboBox::createForTable）——
-/// 无边框自绘、跟随行选中态、点右侧箭头展开、双击不弹、弹层防闪收；
-/// 值变化请用 AuiComboBox::connectValueCommitted 接线（单击/聚焦不误报变化）
-inline QComboBox *newTableCombo() { return AuiComboBox::createForTable(); }
+/// 查询关系下拉 显示文本 ↔ 存储值（"普通"→"=" / "范围"→JsonVueStyle::kRange）
+inline QString queryRelTextToData(const QString &text) {
+  return text == QStringLiteral("范围") ? QString::fromLatin1(JsonVueStyle::kRange)
+                                        : QStringLiteral("=");
+}
+
+inline QString queryRelDataToText(const QString &data) {
+  return data == QString::fromLatin1(JsonVueStyle::kRange) ? QStringLiteral("范围")
+                                                           : QStringLiteral("普通");
+}
 
 /// 将 ColumnConfig 的所有配置存储到 QPushButton 的动态属性中
 inline void storeColumnConfig(QPushButton *btn, const ColumnConfig &col) {
