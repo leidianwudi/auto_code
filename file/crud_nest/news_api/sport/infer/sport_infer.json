@@ -7,13 +7,17 @@
       "selCols": [
         "option_id",
         "schedule_id",
+        "sport_id",
         "result",
         "coin",
         "is_vip_free",
-        "uid"
+        "uid",
+        "status"
       ],
       "selColsSort": {
-        "id": "DESC"
+        "id": "DESC",
+        "like_count": "DESC",
+        "create_time": "DESC"
       },
       "joinTable": [
         {
