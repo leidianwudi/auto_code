@@ -163,12 +163,28 @@
           isJoinRelations: false
         },
         {
-          joinEnClass: "EnChatGroupBlack",
-          joinEnClass_Url: "src/chat/chat_group_black/entities/en_chat_group_black",
-          joinEnClassPro: "chatGroupBlack",
-          joinType: "OneToMany",
-          inverseJoinEnClassPro: "groupBlackedUser",
-          isJoinRelations: false
+          "joinEnClass": "EnChatGroupBlack",
+          "joinEnClass_Url": "src/chat/chat_group_black/entities/en_chat_group_black",
+          "joinEnClassPro": "chatGroupBlack",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "groupBlackedUser",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnSportInferOrder",
+          "joinEnClass_Url": "src/sport/infer/sport_infer_order/entities/en_sport_infer_order",
+          "joinEnClassPro": "sportInferOrders",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "user",
+          "isJoinRelations": false
+        },
+        {
+          "joinEnClass": "EnReply",
+          "joinEnClass_Url": "src/reply/reply/entities/en_reply",
+          "joinEnClassPro": "replys",
+          "joinType": "OneToMany",
+          "inverseJoinEnClassPro": "user",
+          "isJoinRelations": false
         }
       ]
     }

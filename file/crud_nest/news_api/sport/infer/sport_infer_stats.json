@@ -12,7 +12,9 @@
         "uid"
       ],
       "selColsSort": {
-        "id": "DESC"
+        "id": "DESC",
+        "last_count": "DESC",
+        "success_count": "DESC"
       },
       "joinTable": [
         {
