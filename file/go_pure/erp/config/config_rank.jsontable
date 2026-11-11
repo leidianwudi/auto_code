@@ -130,117 +130,130 @@
     ],
     editCols: [
       {
-        ref: 'id',
+        "ref": "id",
+        "visible": false
       },
       {
-        label: '职级',
-        ref: 'rank_id',
+        "label": "职级ID",
+        "ref": "rank_id",
+        "required": true
       },
       {
-        label: '职级名称',
-        ref: 'rank_name',
+        "label": "职级名称",
+        "ref": "rank_name",
+        "required": true
       },
       {
-        label: '基础退休费',
-        ref: 'base_money',
+        "label": "基础退休费",
+        "ref": "base_money",
+        "required": true
       },
       {
-        label: '职级退休费每年1月滚动增加的金额',
-        ref: 'rank_money_year_add',
+        "label": "职级费每年增加",
+        "ref": "rank_money_year_add",
+        "required": false
       },
       {
-        label: '职级退休费',
-        ref: 'rank_money',
+        "label": "职级退休费",
+        "ref": "rank_money",
+        "required": true
       },
       {
-        label: '生活补贴',
-        ref: 'live_money',
+        "label": "生活补贴",
+        "ref": "live_money",
+        "required": true
       },
       {
-        label: '物业补贴',
-        ref: 'hoa_money',
+        "label": "物业补贴",
+        "ref": "hoa_money",
+        "required": true
       },
       {
-        label: '地方住房补贴',
-        ref: 'house_area_money',
+        "label": "地方住房补贴",
+        "ref": "house_area_money",
+        "required": true
       },
       {
-        label: '部队住房补贴',
-        ref: 'house_army_money',
+        "label": "部队住房补贴",
+        "ref": "house_army_money",
+        "required": true
       },
       {
-        label: '地区补贴',
-        ref: 'area_money',
+        "label": "地区补贴",
+        "ref": "area_money",
+        "required": true
       },
       {
-        label: '是否启用',
-        ref: 'enable',
+        "label": "是否启用",
+        "ref": "enable",
+        "required": false
       },
       {
-        label: '说明',
-        ref: 'desc',
-      },
+        "label": "备注",
+        "ref": "desc",
+        "required": false
+      }
     ],
     selCols: [
       {
-        label: '职级',
-        ref: 'rank_id',
-        width: 80,
+        "label": "职级ID",
+        "ref": "rank_id",
+        "width": 80
       },
       {
-        label: '职级名称',
-        ref: 'rank_name',
-        width: 140,
+        "label": "职级名称",
+        "ref": "rank_name",
+        "width": 140
       },
       {
-        label: '基础退休费',
-        ref: 'base_money',
-        width: 110,
+        "label": "基础退休费",
+        "ref": "base_money",
+        "width": 110
       },
       {
-        label: '职级退休费年增',
-        ref: 'rank_money_year_add',
-        width: 140,
+        "label": "职级费每年增加",
+        "ref": "rank_money_year_add",
+        "width": 140
       },
       {
-        label: '职级退休费',
-        ref: 'rank_money',
-        width: 110,
+        "label": "职级退休费",
+        "ref": "rank_money",
+        "width": 110
       },
       {
-        label: '生活补贴',
-        ref: 'live_money',
-        width: 110,
+        "label": "生活补贴",
+        "ref": "live_money",
+        "width": 110
       },
       {
-        label: '物业补贴',
-        ref: 'hoa_money',
-        width: 110,
+        "label": "物业补贴",
+        "ref": "hoa_money",
+        "width": 110
       },
       {
-        label: '地方住房补贴',
-        ref: 'house_area_money',
-        width: 130,
+        "label": "地方住房补贴",
+        "ref": "house_area_money",
+        "width": 130
       },
       {
-        label: '部队住房补贴',
-        ref: 'house_army_money',
-        width: 130,
+        "label": "部队住房补贴",
+        "ref": "house_army_money",
+        "width": 130
       },
       {
-        label: '地区补贴',
-        ref: 'area_money',
-        width: 100,
+        "label": "地区补贴",
+        "ref": "area_money",
+        "width": 100
       },
       {
-        label: '是否启用',
-        ref: 'enable',
-        width: 90,
+        "label": "是否启用",
+        "ref": "enable",
+        "width": 90
       },
       {
-        label: '说明',
-        ref: 'desc',
-      },
+        "label": "说明",
+        "ref": "desc"
+      }
     ],
     selColsEq: [
       {
@@ -249,14 +262,37 @@
     ],
     selColsLike: [
       {
-        ref: 'rank_name',
+        "ref": "rank_name"
       },
+      {
+        "ref": "rank_id"
+      }
     ],
         selColsSort: [
       [
         'rank_id',
         'ASC',
       ],
+    ],
+    enums: [
+      {
+        "column": "enable",
+        "comment": "是否启用",
+        "items": [
+          {
+            "key": "invalid",
+            "value": "0",
+            "valueType": "number",
+            "label": "禁用"
+          },
+          {
+            "key": "valid",
+            "value": "1",
+            "valueType": "number",
+            "label": "启用"
+          }
+        ]
+      }
     ],
     frontend: true,
 

@@ -60,54 +60,60 @@
     ],
     editCols: [
       {
-        ref: 'id',
+        "ref": "id",
+        "visible": false
       },
       {
-        label: '排序',
-        ref: 'sort',
+        "label": "排序",
+        "ref": "sort",
+        "required": false
       },
       {
-        label: '配置键',
-        ref: 'key',
+        "label": "配置",
+        "ref": "key",
+        "required": true
       },
       {
-        label: '值',
-        ref: 'value',
+        "label": "值",
+        "ref": "value",
+        "required": true
       },
       {
-        label: '是否起效，0:无效；1:有效',
-        ref: 'enable',
+        "label": "是否启用",
+        "ref": "enable",
+        "required": false
       },
       {
-        label: '说明',
-        ref: 'desc',
-      },
+        "label": "说明",
+        "ref": "desc",
+        "required": false
+      }
     ],
     selCols: [
       {
-        label: '排序',
-        ref: 'sort',
-        width: 70,
+        "label": "排序",
+        "ref": "sort",
+        "width": 70
       },
       {
-        label: '配置键',
-        ref: 'key',
-        width: 180,
+        "label": "配置",
+        "ref": "key",
+        "width": 180
       },
       {
-        label: '值',
-        ref: 'value',
-        width: 220,
+        "label": "值",
+        "ref": "value",
+        "width": 220
       },
       {
-        label: '是否起效',
-        ref: 'enable',
-        width: 90,
+        "label": "是否启用",
+        "ref": "enable",
+        "width": 90
       },
       {
-        label: '说明',
-        ref: 'desc',
-      },
+        "label": "说明",
+        "ref": "desc"
+      }
     ],
     selColsEq: [
       {
@@ -124,6 +130,26 @@
         'sort',
         'ASC',
       ],
+    ],
+    enums: [
+      {
+        "column": "enable",
+        "comment": "是否启用",
+        "items": [
+          {
+            "key": "invalid",
+            "value": "0",
+            "valueType": "number",
+            "label": "禁用"
+          },
+          {
+            "key": "valid",
+            "value": "1",
+            "valueType": "number",
+            "label": "启用"
+          }
+        ]
+      }
     ],
     frontend: true,
 

@@ -51,49 +51,50 @@
     ],
     editCols: [
       {
-        editEditable: false,
-        label: '主键',
-        ref: 'id',
-        visible: false,
+        "ref": "id",
+        "visible": false
       },
       {
-        label: 'salary_apply表id',
-        ref: 'salary_apply_id',
+        "label": "申请名称",
+        "ref": "salary_apply_id",
+        "required": true
       },
       {
-        label: '身份证',
-        ref: 'card_id',
-        required: true,
+        "label": "调整人员",
+        "ref": "card_id",
+        "required": true
       },
       {
-        label: '是否启用',
-        ref: 'enable',
-        widget: 'boolean',
+        "label": "是否启用",
+        "ref": "enable",
+        "widget": "boolean",
+        "required": true
       },
       {
-        label: '备注',
-        ref: 'desc',
-      },
+        "label": "备注",
+        "ref": "desc",
+        "required": false
+      }
     ],
     enums: [
       {
-        column: 'enable',
-        comment: '是否启用',
-        items: [
+        "column": "enable",
+        "comment": "是否启用",
+        "items": [
           {
-            key: 'invalid',
-            label: '停用',
-            value: '0',
-            valueType: 'number',
+            "key": "valid",
+            "label": "是",
+            "value": "1",
+            "valueType": "number"
           },
           {
-            key: 'valid',
-            label: '启用',
-            value: '1',
-            valueType: 'number',
-          },
-        ],
-      },
+            "key": "invalid",
+            "label": "否",
+            "value": "0",
+            "valueType": "number"
+          }
+        ]
+      }
     ],
     joinTables: [
       {
@@ -134,34 +135,42 @@
     ],
     selCols: [
       {
-        label: '申请名称',
-        ref: 'salary_apply_title',
-        width: 180,
+        "label": "申请名称",
+        "ref": "salary_apply_title",
+        "width": 180
       },
       {
-        label: '姓名',
-        ref: 'retire_people_name',
-        width: 100,
+        "label": "姓名",
+        "ref": "retire_people_name",
+        "width": 100
       },
       {
-        label: '身份证',
-        ref: 'card_id',
-        width: 170,
+        "label": "身份证",
+        "ref": "card_id",
+        "width": 170
       },
       {
-        label: '计发比例(%)',
-        ref: 'retire_people_money_scale',
-        width: 110,
+        "ref": "retire_people_rank_id",
+        "label": "职级"
       },
       {
-        label: '是否启用',
-        ref: 'enable',
-        width: 90,
+        "label": "退休计发比例(%)",
+        "ref": "retire_people_money_scale",
+        "width": 110
       },
       {
-        label: '备注',
-        ref: 'desc',
+        "ref": "retire_people_status",
+        "label": "人员状态"
       },
+      {
+        "label": "是否启用",
+        "ref": "enable",
+        "width": 90
+      },
+      {
+        "label": "备注",
+        "ref": "desc"
+      }
     ],
     selColsEq: [
       {

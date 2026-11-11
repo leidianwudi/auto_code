@@ -78,73 +78,81 @@
     ],
     editCols: [
       {
-        label: 'id主键',
-        ref: 'id',
+        "ref": "id",
+        "visible": false
       },
       {
-        label: '任务编码',
-        ref: 'code',
+        "label": "编码",
+        "ref": "code",
+        "required": true,
+        "editEditable": false
       },
       {
-        label: '任务名称',
-        ref: 'name',
+        "label": "名称",
+        "ref": "name",
+        "required": true
       },
       {
-        label: '任务值',
-        ref: 'value',
+        "label": "值",
+        "ref": "value",
+        "required": true
       },
       {
-        label: '是否启用',
-        ref: 'enable',
+        "label": "是否启用",
+        "ref": "enable",
+        "required": true
       },
       {
-        label: '尝试开始时间',
-        ref: 'beg_time',
+        "label": "开始时间",
+        "ref": "beg_time",
+        "required": true
       },
       {
-        label: '尝试结束时间. 超过此时间不在尝试执行任务',
-        ref: 'end_time',
+        "label": "结束时间",
+        "ref": "end_time",
+        "required": true
       },
       {
-        label: '任务描述',
-        ref: 'desc',
-      },
+        "label": "说明",
+        "ref": "desc",
+        "required": false
+      }
     ],
     selCols: [
       {
-        label: '任务编码',
-        ref: 'code',
-        width: 200,
+        "label": "编码",
+        "ref": "code",
+        "width": 200
       },
       {
-        label: '任务名称',
-        ref: 'name',
-        width: 200,
+        "label": "名称",
+        "ref": "name",
+        "width": 200
       },
       {
-        label: '任务值',
-        ref: 'value',
-        width: 120,
+        "label": "值",
+        "ref": "value",
+        "width": 120
       },
       {
-        label: '是否启用',
-        ref: 'enable',
-        width: 90,
+        "label": "是否启用",
+        "ref": "enable",
+        "width": 90
       },
       {
-        label: '尝试开始时间',
-        ref: 'beg_time',
-        width: 160,
+        "label": "开始时间",
+        "ref": "beg_time",
+        "width": 160
       },
       {
-        label: '尝试结束时间',
-        ref: 'end_time',
-        width: 160,
+        "label": "结束时间",
+        "ref": "end_time",
+        "width": 160
       },
       {
-        label: '任务描述',
-        ref: 'desc',
-      },
+        "label": "说明",
+        "ref": "desc"
+      }
     ],
     selColsEq: [
       {
@@ -164,6 +172,26 @@
         'id',
         'ASC',
       ],
+    ],
+    enums: [
+      {
+        "column": "enable",
+        "comment": "是否启用",
+        "items": [
+          {
+            "key": "invalid",
+            "value": "0",
+            "valueType": "number",
+            "label": "禁用"
+          },
+          {
+            "key": "valid",
+            "value": "1",
+            "valueType": "number",
+            "label": "启用"
+          }
+        ]
+      }
     ],
     frontend: true,
 
