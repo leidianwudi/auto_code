@@ -143,6 +143,8 @@ private:
   void moveButtonRow(int delta);
   /// 联表行上移/下移（delta=-1 上移，1 下移）
   void moveJoinRow(int delta);
+  /// 表内枚举主表行上移/下移（写回 draft 后交换并重建，delta=-1 上移，1 下移）
+  void moveEnumRow(int delta);
   /// 枚举选项行上移/下移（写回当前枚举 draft 后交换并重建，delta=-1 上移，1 下移）
   void moveEnumOptRow(int delta);
   // ── 操作按钮（buttons：键名与 .jsonvue ButtonConfig 一致）──

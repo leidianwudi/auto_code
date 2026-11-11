@@ -22,6 +22,7 @@
 #include "src/util/ui/component/aui_cell_edit_combo.h"
 #include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_message_box.h"
+#include "src/util/ui/component/aui_required_label.h"
 #include "src/util/ui/component/aui_style.h"
 
 // ════════════════════════════════════════════════════════════
@@ -73,8 +74,7 @@ void JsonSourceDialog::setupStaticPage() {
   // 函数 URL（必填）：作为生成 api 函数名的依据（文件名Static + url名），
   // 避免用序号命名。与动态数据源 url 类似，如 enableState
   auto *urlRow = new QHBoxLayout;
-  auto *urlLabel = new QLabel(QStringLiteral("函数URL:"), page);
-  urlLabel->setStyleSheet(QStringLiteral("color: #d03050;"));
+  auto *urlLabel = new AuiRequiredLabel(QStringLiteral("函数URL:"), page);
   urlRow->addWidget(urlLabel);
   m_staticUrlEdit = new QLineEdit(page);
   m_staticUrlEdit->setPlaceholderText(

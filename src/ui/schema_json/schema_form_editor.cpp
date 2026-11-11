@@ -28,6 +28,7 @@
 #include "src/util/common/code_constants.h"
 #include "src/util/common/util_json.h"
 #include "src/util/ui/component/aui_combo_box.h"
+#include "src/util/ui/component/aui_required_label.h"
 
 /// 让标签文本可选中复制（QLabel 默认不可选，不便于复制字段名/说明/标题）
 static inline void makeSelectable(QLabel *l) {
@@ -256,19 +257,14 @@ QWidget *makeLabelColumn(const QString &name, const QString &desc, bool required
   auto *nameRow = new QHBoxLayout;
   nameRow->setContentsMargins(0, 0, 0, 0);
   nameRow->setSpacing(0);
-  auto *key = new QLabel(name);
-  key->setTextFormat(Qt::PlainText);
+  // 必填字段用统一的「红色星号 + 文字」标签（星号在文字前，与其它界面一致）
+  QLabel *key = required ? new AuiRequiredLabel(name) : new QLabel(name);
   makeSelectable(key);
   if (!desc.isEmpty()) key->setToolTip(desc);  // 鼠标悬停属性名时提示说明
   QFont f = key->font();
   f.setWeight(QFont::Medium);
   key->setFont(f);
   nameRow->addWidget(key);
-  if (required) {
-    auto *star = new QLabel(QStringLiteral("*"));
-    star->setStyleSheet(QStringLiteral("color: #e8463a; font-weight: 600;"));
-    nameRow->addWidget(star);
-  }
   nameRow->addStretch(1);
   v->addLayout(nameRow);
   return col;

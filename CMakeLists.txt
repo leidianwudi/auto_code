@@ -222,6 +222,7 @@ qt_add_executable(auto_code
     src/util/ui/component/aui_combo_box.cpp
     src/util/ui/component/aui_cell_edit_combo.h
     src/util/ui/component/aui_cell_edit_combo.cpp
+    src/util/ui/component/aui_required_label.h
     src/util/ui/component/aui_splitter.h
     src/util/ui/component/aui_splitter.cpp
     src/util/ui/component/aui_combo_delete.h

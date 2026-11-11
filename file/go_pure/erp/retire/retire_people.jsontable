@@ -245,166 +245,187 @@
     ],
     editCols: [
       {
-        ref: 'id',
+        "ref": "id",
+        "visible": false
       },
       {
-        label: '姓名',
-        ref: 'name',
+        "label": "姓名",
+        "ref": "name",
+        "required": true
       },
       {
-        label: '身份证',
-        ref: 'card_id',
+        "label": "身份证",
+        "ref": "card_id",
+        "required": true
       },
       {
-        label: '手机号',
-        ref: 'tel',
+        "label": "手机号",
+        "ref": "tel",
+        "required": true
       },
       {
-        label: '地址',
-        ref: 'address',
+        "label": "地址",
+        "ref": "address",
+        "required": false
       },
       {
-        label: '出生日期',
-        ref: 'birth',
+        "label": "出生日期",
+        "ref": "birth",
+        "required": true
       },
       {
-        label: '年龄',
-        ref: 'age',
+        "label": "年龄",
+        "ref": "age",
+        "required": true
       },
       {
-        label: '军龄',
-        ref: 'army_age',
+        "label": "军龄",
+        "ref": "army_age",
+        "required": true
       },
       {
-        label: '开始退休时间',
-        ref: 'retire_beg',
+        "label": "开始退休时间",
+        "ref": "retire_beg",
+        "required": true
       },
       {
-        label: '职级',
-        ref: 'rank_id',
+        "label": "职级名称",
+        "ref": "rank_id",
+        "required": true
       },
       {
-        label: '个人退休计发比例(百分比)',
-        ref: 'money_scale',
+        "label": "退休计发比例(%)",
+        "ref": "money_scale",
+        "required": true
       },
       {
-        label: '基础退休费',
-        ref: 'base_money',
+        "label": "基础退休费",
+        "ref": "base_money",
+        "required": true
       },
       {
-        label: '职级退休费',
-        ref: 'rank_money',
+        "label": "职级退休费",
+        "ref": "rank_money",
+        "required": true
       },
       {
-        label: '生活补贴',
-        ref: 'live_money',
+        "label": "生活补贴",
+        "ref": "live_money",
+        "required": true
       },
       {
-        label: '物业补贴',
-        ref: 'hoa_money',
+        "label": "物业补贴",
+        "ref": "hoa_money",
+        "required": true
       },
       {
-        label: '地方住房补贴',
-        ref: 'house_area_money',
+        "label": "地方住房补贴",
+        "ref": "house_area_money",
+        "required": true
       },
       {
-        label: '部队住房补贴',
-        ref: 'house_army_money',
+        "label": "部队住房补贴",
+        "ref": "house_army_money",
+        "required": true
       },
       {
-        label: '地区补贴',
-        ref: 'area_money',
+        "label": "地区补贴",
+        "ref": "area_money",
+        "required": true
       },
       {
-        label: '高龄补贴',
-        ref: 'age_money',
+        "label": "高龄补贴",
+        "ref": "age_money",
+        "required": true
       },
       {
-        label: '护理费',
-        ref: 'nursing_money',
+        "label": "护理费",
+        "ref": "nursing_money",
+        "required": true
       },
       {
-        label: '状态;0:正常;1:病故;2:暂停待遇;3:申请病故;4:申请暂停待遇',
-        ref: 'status',
+        "label": "状态",
+        "ref": "status",
+        "required": true,
+        "editEditable": false
       },
       {
-        label: '病故时间',
-        ref: 'dead_date',
+        "label": "病故日期",
+        "ref": "dead_date",
+        "required": false
       },
       {
-        label: '添加时间',
-        ref: 'add_time',
+        "label": "是否启用",
+        "ref": "enable",
+        "required": true
       },
       {
-        label: '是否启用',
-        ref: 'enable',
-      },
-      {
-        label: '说明',
-        ref: 'desc',
-      },
+        "label": "说明",
+        "ref": "desc",
+        "required": false
+      }
     ],
     enums: [
       {
-        column: 'status',
-        comment: '人员状态',
-        items: [
+        "column": "status",
+        "comment": "人员状态",
+        "items": [
           {
-            key: 'Normal',
-            label: '正常',
-            value: '0',
-            valueType: 'number',
+            "key": "Normal",
+            "label": "正常",
+            "value": "0",
+            "valueType": "number"
           },
           {
-            key: 'Dead',
-            label: '病故',
-            value: '1',
-            valueType: 'number',
+            "key": "Dead",
+            "label": "病故",
+            "value": "1",
+            "valueType": "number"
           },
           {
-            key: 'StopTreatment',
-            label: '暂停待遇',
-            value: '2',
-            valueType: 'number',
+            "key": "StopTreatment",
+            "label": "暂停待遇",
+            "value": "2",
+            "valueType": "number"
           },
           {
-            key: 'ApplyDead',
-            label: '申请病故',
-            value: '3',
-            valueType: 'number',
+            "key": "ApplyDead",
+            "label": "申请病故",
+            "value": "3",
+            "valueType": "number"
           },
           {
-            key: 'ApplyStopTreatment',
-            label: '申请暂停待遇',
-            value: '4',
-            valueType: 'number',
+            "key": "ApplyStopTreatment",
+            "label": "申请暂停待遇",
+            "value": "4",
+            "valueType": "number"
           },
           {
-            key: 'ApplyResumeTreatment',
-            label: '申请恢复待遇',
-            value: '5',
-            valueType: 'number',
-          },
-        ],
+            "key": "ApplyResumeTreatment",
+            "label": "申请恢复待遇",
+            "value": "5",
+            "valueType": "number"
+          }
+        ]
       },
       {
-        column: 'enable',
-        comment: '是否启用',
-        items: [
+        "column": "enable",
+        "comment": "是否启用",
+        "items": [
           {
-            key: 'invalid',
-            label: '停用',
-            value: '0',
-            valueType: 'number',
+            "key": "invalid",
+            "label": "禁用",
+            "value": "0",
+            "valueType": "number"
           },
           {
-            key: 'valid',
-            label: '启用',
-            value: '1',
-            valueType: 'number',
-          },
-        ],
-      },
+            "key": "valid",
+            "label": "启用",
+            "value": "1",
+            "valueType": "number"
+          }
+        ]
+      }
     ],
     joinTables: [
       {
@@ -423,55 +444,83 @@
     ],
     selCols: [
       {
-        label: '姓名',
-        ref: 'name',
-        width: 100,
+        "label": "姓名",
+        "ref": "name",
+        "width": 100
       },
       {
-        label: '身份证',
-        ref: 'card_id',
-        width: 170,
+        "label": "身份证",
+        "ref": "card_id",
+        "width": 170
       },
       {
-        label: '手机号',
-        ref: 'tel',
-        width: 120,
+        "label": "手机号",
+        "ref": "tel",
+        "width": 120
       },
       {
-        label: '职级名称',
-        ref: 'config_rank_rank_name',
-        width: 110,
+        "ref": "age",
+        "label": "年龄"
       },
       {
-        label: '计发比例(%)',
-        ref: 'money_scale',
-        width: 100,
+        "label": "职级名称",
+        "ref": "config_rank_rank_name",
+        "width": 110
       },
       {
-        label: '基础退休费',
-        ref: 'base_money',
-        width: 110,
+        "label": "退休计发比例(%)",
+        "ref": "money_scale",
+        "width": 100
       },
       {
-        label: '职级退休费',
-        ref: 'rank_money',
-        width: 110,
+        "label": "基础退休费",
+        "ref": "base_money",
+        "width": 110
       },
       {
-        label: '高龄补贴',
-        ref: 'age_money',
-        width: 100,
+        "label": "职级退休费",
+        "ref": "rank_money",
+        "width": 110
       },
       {
-        label: '状态',
-        ref: 'status',
-        width: 110,
+        "ref": "live_money",
+        "label": "生活补贴"
       },
       {
-        label: '是否启用',
-        ref: 'enable',
-        width: 90,
+        "ref": "hoa_money",
+        "label": "物业补贴"
       },
+      {
+        "ref": "house_area_money",
+        "label": "地方住房补贴"
+      },
+      {
+        "ref": "house_army_money",
+        "label": "部队住房补贴"
+      },
+      {
+        "ref": "area_money",
+        "label": "地区补贴"
+      },
+      {
+        "label": "高龄补贴",
+        "ref": "age_money",
+        "width": 100
+      },
+      {
+        "ref": "nursing_money",
+        "label": "护理费"
+      },
+      {
+        "label": "状态",
+        "ref": "status",
+        "width": 110
+      },
+      {
+        "label": "是否启用",
+        "ref": "enable",
+        "width": 90
+      }
     ],
     selColsEq: [
       {
@@ -483,11 +532,14 @@
     ],
     selColsLike: [
       {
-        ref: 'name',
+        "ref": "name"
       },
       {
-        ref: 'card_id',
+        "ref": "card_id"
       },
+      {
+        "ref": "tel"
+      }
     ],
     selColsSort: [
       [

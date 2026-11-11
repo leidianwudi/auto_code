@@ -77,73 +77,77 @@
     ],
     editCols: [
       {
-        label: '主键',
-        ref: 'id',
+        "ref": "id",
+        "visible": false
       },
       {
-        label: '统计月份',
-        ref: 'month',
+        "label": "统计月份",
+        "ref": "month",
+        "required": true
       },
       {
-        label: '人员姓名',
-        ref: 'name',
+        "label": "姓名",
+        "ref": "name",
+        "required": true,
+        "editEditable": false
       },
       {
-        label: '身份证',
-        ref: 'card_id',
+        "label": "身份证",
+        "ref": "card_id",
+        "required": true,
+        "editEditable": false
       },
       {
-        label: '职级名称',
-        ref: 'rank_name',
+        "label": "职级名称",
+        "ref": "rank_name",
+        "required": true
       },
       {
-        label: '补发金额',
-        ref: 'money',
+        "label": "补发金额",
+        "ref": "money",
+        "required": true
       },
       {
-        label: '添加时间',
-        ref: 'add_time',
-      },
-      {
-        label: '备注',
-        ref: 'desc',
-      },
+        "label": "备注",
+        "ref": "desc",
+        "required": false
+      }
     ],
     selCols: [
       {
-        label: '统计月份',
-        ref: 'month',
-        width: 120,
+        "label": "统计月份",
+        "ref": "month",
+        "width": 120
       },
       {
-        label: '人员姓名',
-        ref: 'name',
-        width: 100,
+        "label": "姓名",
+        "ref": "name",
+        "width": 100
       },
       {
-        label: '身份证',
-        ref: 'card_id',
-        width: 170,
+        "label": "身份证",
+        "ref": "card_id",
+        "width": 170
       },
       {
-        label: '职级名称',
-        ref: 'rank_name',
-        width: 110,
+        "label": "职级名称",
+        "ref": "rank_name",
+        "width": 110
       },
       {
-        label: '补发金额',
-        ref: 'money',
-        width: 130,
+        "label": "补发金额",
+        "ref": "money",
+        "width": 130
       },
       {
-        label: '添加时间',
-        ref: 'add_time',
-        width: 160,
+        "label": "添加时间",
+        "ref": "add_time",
+        "width": 160
       },
       {
-        label: '备注',
-        ref: 'desc',
-      },
+        "label": "备注",
+        "ref": "desc"
+      }
     ],
     selColsEq: [
     ],
