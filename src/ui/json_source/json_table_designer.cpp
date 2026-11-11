@@ -1774,6 +1774,10 @@ void JsonTableDesigner::connectChangeSignals() {
   // 表格：模型级变更（条目编辑/行增删/搬运）全部覆盖；行内下拉在创建点单独接线
   auto onChange = [this]() {
     if (m_loading) return;
+    // 枚举主从联动（fillEnumOptions/rebuildEnumMaster）会重建表格，产生的
+    // dataChanged/rowsInserted 是程序性刷新而非用户编辑，不能误报「已修改」
+    //（典型路径：点表内枚举任意一行 → 联动重建选项表 → 若不挡会立即亮保存）
+    if (m_enumSyncing) return;
     emit configChanged();
     updateValidateStatus();
   };
