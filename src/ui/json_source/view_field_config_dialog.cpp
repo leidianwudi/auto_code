@@ -29,25 +29,28 @@
 
 namespace {
 
-/// 带特殊占位文本的 SpinBox：修复「跟随预设」态下无法直接打字输入数字的问题。
+/// 缩略图尺寸输入框：0 = 跟随预设（显示为空 + 灰色占位文本「跟随预设」）。
 ///
-/// Qt 行为：value == minimum 且设置了 specialValueText 时，输入框显示的是特殊
-/// 文本（如「跟随预设」），此时打字会把数字追加到该文本后面，校验必然失败，
-/// 表现为「无法输入数值」。这里在特殊文本态收到首个数字键时先清空显示文本，
-/// 让后续数字正常进入并参与校验。
+/// QSpinBox 原生 specialValueText 有交互缺陷：占位文本态下，键盘数字会把数字
+/// 追加到占位文本后面、粘贴/输入法（IME 预编辑）同样无法改写占位文本，校验
+/// 必然失败，表现为「跟随预设时无法输入数值」。这里改用 lineEdit 原生
+/// placeholder 承载「跟随预设」提示：textFromValue(0) 返回空文本 → 输入框显示
+/// 灰色占位，任何输入路径（键盘 / 输入法 / 粘贴）都从空文本开始，天然可用；
+/// 清空失焦后 valueFromText("") 回到 0（跟随预设）。
 class ThumbSpinBox : public QSpinBox {
 public:
   using QSpinBox::QSpinBox;
 
+  /// 「跟随预设」占位提示（0 = 跟随预设；空文本时显示灰色占位）
+  void setFollowPresetText(const QString &text) { lineEdit()->setPlaceholderText(text); }
+
 protected:
-  void keyPressEvent(QKeyEvent *e) override {
-    if (value() == minimum() && !specialValueText().isEmpty()) {
-      const QString t = e->text();
-      if (!t.isEmpty() && t.at(0).isDigit()) {
-        lineEdit()->clear();  // 清掉「跟随预设」占位显示，允许直接输入数字
-      }
-    }
-    QSpinBox::keyPressEvent(e);
+  QString textFromValue(int v) const override {
+    return v == minimum() ? QString() : QSpinBox::textFromValue(v);
+  }
+
+  int valueFromText(const QString &text) const override {
+    return text.isEmpty() ? minimum() : QSpinBox::valueFromText(text);
   }
 };
 
@@ -180,7 +183,8 @@ void ViewFieldConfigDialog::setupUI() {
   m_listThumbH = new ThumbSpinBox(m_listThumbRow);
   for (QSpinBox *spin : {m_listThumbW, m_listThumbH}) {
     spin->setRange(0, 999);
-    spin->setSpecialValueText(QStringLiteral("跟随预设"));
+    static_cast<ThumbSpinBox *>(spin)->setFollowPresetText(QStringLiteral("跟随预设"));
+    spin->setMinimumWidth(80);  // 容纳「跟随预设」占位文字（默认宽度按数字算，占位显示不全）
     listThumbLay->addWidget(spin);
   }
   listThumbLay->addWidget(new QLabel(QStringLiteral("宽×高（0=跟随预设）"), m_listThumbRow));
@@ -267,7 +271,8 @@ void ViewFieldConfigDialog::setupUI() {
   m_editThumbH = new ThumbSpinBox(m_editThumbRow);
   for (QSpinBox *spin : {m_editThumbW, m_editThumbH}) {
     spin->setRange(0, 999);
-    spin->setSpecialValueText(QStringLiteral("跟随预设"));
+    static_cast<ThumbSpinBox *>(spin)->setFollowPresetText(QStringLiteral("跟随预设"));
+    spin->setMinimumWidth(80);  // 容纳「跟随预设」占位文字（默认宽度按数字算，占位显示不全）
     editThumbLay->addWidget(spin);
   }
   editThumbLay->addWidget(new QLabel(QStringLiteral("宽×高（0=跟随预设）"), m_editThumbRow));

@@ -19,6 +19,7 @@
 #include "src/util/ui/component/aui_cell_edit_combo.h"
 #include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_message_box.h"
+#include "src/util/ui/component/aui_required_label.h"
 
 // ════════════════════════════════════════════════════════════
 //  构造 / 界面构建
@@ -33,8 +34,7 @@ void JsonGlobalEnumDialog::setupUI() {
 
   // ── 名称 + 说明 ──
   auto *topRow = new QHBoxLayout;
-  auto *nameLabel = new QLabel(QStringLiteral("名称:"), frame.contentWidget);
-  nameLabel->setStyleSheet(QStringLiteral("color: #d03050;"));
+  auto *nameLabel = new AuiRequiredLabel(QStringLiteral("名称:"), frame.contentWidget);
   topRow->addWidget(nameLabel);
   m_nameEdit = new QLineEdit(frame.contentWidget);
   m_nameEdit->setPlaceholderText(
