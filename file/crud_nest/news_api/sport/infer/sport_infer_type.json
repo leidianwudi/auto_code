@@ -5,6 +5,7 @@
       "modelName": "sport\\infer\\sport_infer_type",
       "tableName": "sport_infer_type",
       "selCols": [
+        "id",
         "sport_id",
         "option_count"
       ],

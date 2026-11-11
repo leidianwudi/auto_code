@@ -5,6 +5,7 @@
       "modelName": "sport\\sport_league_schedule",
       "tableName": "sport_league_schedule",
       "selCols": [
+        "id",
         "sport_id",
         "league_id",
         "stage_id",
