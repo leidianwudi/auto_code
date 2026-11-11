@@ -1366,8 +1366,12 @@ void JsonTableDesigner::setupUI() {
   enumHeader->addStretch();
   auto *addEnumBtn = makeCompactButton(QStringLiteral("+ 加枚举"), this);
   auto *delEnumBtn = makeCompactButton(QStringLiteral("- 删枚举"), this);
+  auto *upEnumBtn = makeCompactButton(QStringLiteral("↑ 上移"), this);
+  auto *downEnumBtn = makeCompactButton(QStringLiteral("↓ 下移"), this);
   enumHeader->addWidget(addEnumBtn);
   enumHeader->addWidget(delEnumBtn);
+  enumHeader->addWidget(upEnumBtn);
+  enumHeader->addWidget(downEnumBtn);
 
   // 上下两段可拖动：枚举主表 / 枚举选项
   auto *enumSplit = new AuiSplitter(Qt::Vertical, this);
@@ -1606,6 +1610,8 @@ void JsonTableDesigner::setupUI() {
     const int next = qMin(row, m_enumTable->rowCount() - 1);
     if (next >= 0) m_enumTable->selectRow(next);
   });
+  connect(upEnumBtn, &QPushButton::clicked, this, [this]() { moveEnumRow(-1); });
+  connect(downEnumBtn, &QPushButton::clicked, this, [this]() { moveEnumRow(1); });
   connect(addOptBtn, &QPushButton::clicked, this, [this]() {
     if (m_enumCurRow < 0) return;
     appendEnumOptRow();
@@ -2078,6 +2084,18 @@ void JsonTableDesigner::moveButtonRow(int delta) {
   m_buttons.swapItemsAt(row, target);
   fillButtons();  // 按钮表格条目是摘要（真实数据在 m_buttons），整表重建最可靠
   m_buttonTable->selectRow(target);
+  if (!m_loading) emit configChanged();
+}
+
+/// @brief 表内枚举主表行上移/下移（delta=-1 上移，1 下移）
+void JsonTableDesigner::moveEnumRow(int delta) {
+  const int row = m_enumTable->currentRow();
+  const int target = row + delta;
+  if (row < 0 || target < 0 || target >= m_enumTable->rowCount()) return;
+  syncEnumDrafts();  // 主表/选项表的当前编辑内容先落 draft（切行同款语义）
+  m_enums.swapItemsAt(row, target);
+  rebuildEnumMaster();  // 按新顺序重建主表（内部 m_enumSyncing 守卫）
+  m_enumTable->selectRow(target);  // 触发主从联动：选项表跟随新选中枚举
   if (!m_loading) emit configChanged();
 }
 
