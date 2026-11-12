@@ -9,11 +9,11 @@
 // 一次执行同时生成两端；生成期不连数据库。
 //
 // ★ 项目模板：新建同形态项目时复制本目录（project.acproj + *.jsontable +
-//   本脚本）再改名，然后只改 main 里的多语言开关 enableI18n（§0）：
-//   - false（本项目默认）：清单只收勾选的 .jsontable，无任何多语言配置；
-//   - true（多语言项目）：base/base_lang.jsontable 基础表固定参与生成
-//     （需一并复制 base/ 目录，缺失会明确报错）；主表 jsontable 配 i18n
-//     节点后，翻译表被勾选时自动识别，只生成 data 包实体（同 shop 形态）。
+//   本脚本）再改名；多语言由文件存在性识别，无需改脚本（§0）：
+//   - 无 base/base_lang.jsontable（本项目默认）：清单只收勾选的 .jsontable；
+//   - 有 base/base_lang.jsontable（多语言项目）：基础表固定参与生成，主表
+//     jsontable 配 i18n 节点后，翻译表被勾选时自动识别，只生成 data 包
+//     实体（同 shop 形态）；判定只看该文件，base/ 目录里放其它表配置不影响。
 //
 // 流程：
 //   1. 配置 .jsontable 路径与双端项目根目录
@@ -25,36 +25,46 @@ import { generateAdminMain } from "../../admin_pure/template/main_admin.ac";
 
 main {
 
-  // ── 0. 多语言开关 ────────────────────────────────────────────────
-  //      启用：base/base_lang.jsontable 基础表固定参与生成（需复制 base/
-  //            目录，缺失会明确报错）；勾选到的 base_lang 重复项被排除；
-  //            主表 i18n 翻译表照常放行（main_api 自动识别，只生成实体）。
-  //      关闭（本项目默认）：清单只收勾选的 .jsontable，无任何多语言配置。
-  let enableI18n: Bool = false;
+  // ── 0. 多语言识别（无需开关）─────────────────────────────────────
+  //      项目目录存在 base/base_lang.jsontable（基础语言表）即为多语言
+  //      项目；只认这个文件，base/ 目录里放其它表配置不算。
+  //      基础表固定参与生成（不依赖勾选），勾选到的重复项被排除；
+  //      主表 i18n 翻译表照常放行（main_api 自动识别，只生成 data 包实体）。
+  //      本项目默认无该文件，即非多语言项目。
   let baseLangFile: String = scriptDir() + "/base/base_lang.jsontable";
+  let i18nEnabled: Bool = fileExists(baseLangFile);
+  let baseLangName: String = basename(baseLangFile);
+  if (!i18nEnabled) {
+    // 安全网：表里配了 i18n 却缺基础语言表（多半漏拷 base/），明确报错
+    for (f in getCheckedFiles(scriptDir())) {
+      if (!f.endsWith(".jsontable")) { continue; }
+      let j: Object = readJson(f);
+      if (j == null) { continue; }
+      let t: Object = j["table"];
+      if (t == null) { continue; }
+      assert(t["i18n"] == null,
+             "检测到表内 i18n 配置但缺少基础语言表：" + baseLangFile +
+             "（应放置该文件，或移除表内 i18n 配置）");
+    }
+  }
 
   // ── 1. 表清单：由项目树勾选的 .jsontable 决定 ────────────────────
   //      勾选哪些 .jsontable 就重新生成哪些表；新增表只需勾选，无需改本脚本。
   let projPath: String = scriptDir() + "/project.acproj";
   let files: String[] = [];
-  let baseLangName: String = basename(baseLangFile);
   for (f in getCheckedFiles(scriptDir())) {
     if (!fileExists(f)) { continue; }
     // 只收表配置；勾选的 .jsonupload/.jsonsource/.jsonvue 由 main_admin/mmain_api
     // 各自按后缀收集，混进 jsonTablePaths 会被当成 .jsontable 解析而报错
     if (!f.endsWith(".jsontable")) { continue; }
     // 多语言项目：base_lang 由下方固定追加，勾选到的重复项在这里排除
-    if (enableI18n && basename(f) == baseLangName) { continue; }
+    if (i18nEnabled && basename(f) == baseLangName) { continue; }
     files.append(f);
   }
-  if (enableI18n) {
+  if (i18nEnabled) {
     // base_lang：项目语言配置表（后台语言清单 / C端 lang 校验数据源），
     // 基础设施表固定参与生成（不依赖勾选状态）
-    if (!fileExists(baseLangFile)) {
-      printError("启用了多语言（enableI18n=true）但缺少基础语言表：" + baseLangFile);
-    } else {
-      files.append(baseLangFile);
-    }
+    files.append(baseLangFile);
   }
   printLog("参与生成: " + files.length + " 份 .jsontable");
 
