@@ -101,6 +101,26 @@ public:
 
   // ── 接口：查找/替换 ──
 
+  /// 批量替换参数
+  struct ReplaceOptions {
+    QString find;                ///< 查找内容（非空）
+    QString replace;             ///< 替换内容（可为空 = 删除匹配）
+    bool caseSensitive = false;  ///< 区分大小写
+    bool wholeWord = false;      ///< 全词匹配
+    bool regex = false;          ///< 正则表达式模式
+  };
+
+  /// 批量替换结果
+  struct ReplaceResult {
+    int count = 0;      ///< 替换处数（valid=false 时无意义）
+    bool valid = true;  ///< false = 正则表达式非法，未修改文档
+  };
+
+  /// 批量替换全文匹配项。
+  /// 由编辑器统一保证：编辑块成对闭合、文档 modified 置位、视口重绘。
+  /// @return 替换处数与正则有效性
+  ReplaceResult replaceAll(const ReplaceOptions &options);
+
   /// 显示查找/替换栏（Ctrl+F）
   void showFindBar();
   /// 隐藏查找/替换栏

@@ -43,6 +43,29 @@
 #include "src/util/ui/highlighter/light_ts.h"
 #include "src/util/ui/setting_store.h"
 
+namespace {
+/**
+ * @class ScopedEditBlock
+ * @brief 成对管理 QTextCursor 编辑块的 RAII 守卫
+ *
+ * begin/endEditBlock 实际是文档级操作，但必须作用于同一个游标对象。批量替换时
+ * 查找游标会被 find() 反复替换成新对象，若用同一变量开关编辑块，嵌套会错位，
+ * 导致文档 modified 不置位（保存按钮不亮）、撤销分组异常与界面局部不刷新。
+ * 本类持有私有游标且禁止拷贝/赋值，从根上杜绝该误用。
+ */
+class ScopedEditBlock {
+public:
+  explicit ScopedEditBlock(QTextDocument *doc) : m_cursor(doc) { m_cursor.beginEditBlock(); }
+  ~ScopedEditBlock() { m_cursor.endEditBlock(); }
+
+  ScopedEditBlock(const ScopedEditBlock &) = delete;
+  ScopedEditBlock &operator=(const ScopedEditBlock &) = delete;
+
+private:
+  QTextCursor m_cursor;  ///< 私有且不可重新赋值：begin/end 永远作用于同一游标
+};
+}  // namespace
+
 /**
  * @class FixedLineHeightLayout
  * @brief 统一行高的文档布局（消除中文输入导致的行高“抖动”）
@@ -1169,4 +1192,58 @@ void CodeEditor::updateFindBarLayout() {
   // 行号区域也要同步调整
   m_lineNumberArea->setGeometry(
       QRect(cr.left(), cr.top() + topMargin, lineNumberAreaWidth(), cr.height() - topMargin));
+}
+
+CodeEditor::ReplaceResult CodeEditor::replaceAll(const ReplaceOptions &options) {
+  ReplaceResult result;
+  QTextDocument *doc = document();
+  if (!doc || options.find.isEmpty()) return result;
+
+  {
+    // 编辑块成对闭合：ScopedEditBlock 内部持有固定游标，查找游标可自由替换。
+    // 限定作用域，保证修改标记与重绘发生在编辑块闭合之后。
+    ScopedEditBlock editBlock(doc);
+
+    QTextCursor cursor(doc);
+    cursor.movePosition(QTextCursor::Start);
+
+    if (options.regex) {
+      QRegularExpression regex(options.find,
+                               options.caseSensitive ? QRegularExpression::NoPatternOption
+                                                     : QRegularExpression::CaseInsensitiveOption);
+      if (!regex.isValid()) {
+        result.valid = false;
+        return result;  // RAII 析构自动闭合编辑块，不改文档
+      }
+
+      const QString text = doc->toPlainText();
+      QString newText = text;
+      newText.replace(regex, options.replace);
+      cursor.select(QTextCursor::Document);
+      cursor.insertText(newText);
+
+      QRegularExpressionMatchIterator it = regex.globalMatch(text);
+      while (it.hasNext()) {
+        it.next();
+        ++result.count;
+      }
+    } else {
+      QTextDocument::FindFlags flags;
+      if (options.caseSensitive) flags |= QTextDocument::FindCaseSensitively;
+      if (options.wholeWord) flags |= QTextDocument::FindWholeWords;
+
+      while (true) {
+        cursor = doc->find(options.find, cursor, flags);
+        if (cursor.isNull()) break;
+        cursor.insertText(options.replace);
+        ++result.count;
+      }
+    }
+  }  // 编辑块闭合
+
+  // 兜底置脏：modifiedChanged 驱动保存按钮与标签页/目录树的修改标记
+  if (result.count > 0) doc->setModified(true);
+  // 批量编辑后局部刷新区域可能不完整，强制整视口重绘
+  viewport()->update();
+  return result;
 }

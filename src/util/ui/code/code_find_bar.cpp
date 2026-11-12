@@ -59,7 +59,7 @@ static QIcon createArrowIcon(Qt::ArrowType type) {
 //  构造
 // ══════════════════════════════════════════════════════════════════════════════
 
-CodeFindBar::CodeFindBar(QPlainTextEdit *editor, QWidget *parent)
+CodeFindBar::CodeFindBar(CodeEditor *editor, QWidget *parent)
     : QWidget(parent), m_editor(editor) {
   setupUI();
   hide();
@@ -219,10 +219,13 @@ void CodeFindBar::setupUI() {
 void CodeFindBar::showFindBar() {
   m_intendedVisible = true;
   show();
-  // 如果编辑器有选中文本，自动填入查找框
+  // 如果编辑器有选中文本，自动填入查找框（仅限单行）
   if (m_editor) {
     QString selected = m_editor->textCursor().selectedText();
-    if (!selected.isEmpty() && !selected.contains(QLatin1Char('\n'))) {
+    // selectedText() 的换行为 U+2029（段落分隔符）而非 '\n'，两种都要排除，
+    // 否则多行选中会把整段文本塞进查找框（配合替换会把整行清成空白）
+    if (!selected.isEmpty() && !selected.contains(QLatin1Char('\n')) &&
+        !selected.contains(QChar(0x2029))) {
       m_findEdit->setText(selected);
     }
   }
@@ -329,11 +332,8 @@ void CodeFindBar::applyFindHighlight(const QList<QTextEdit::ExtraSelection> &sel
   if (!m_editor) return;
   // 将查找高亮写入 CodeEditor 的「find」高亮层（统一高亮层结构），
   // 然后调用 highlightCurrentLine() 合并所有 ExtraSelection（行高亮+括号+错误+查找）
-  auto *editor = static_cast<CodeEditor *>(parentWidget());
-  if (editor) {
-    editor->setLayerSelections(QStringLiteral("find"), selections);
-    editor->highlightCurrentLine();
-  }
+  m_editor->setLayerSelections(QStringLiteral("find"), selections);
+  m_editor->highlightCurrentLine();
 }
 
 void CodeFindBar::findNext() { find(1); }
@@ -522,45 +522,24 @@ void CodeFindBar::replaceCurrent() {
 void CodeFindBar::replaceAll() {
   if (!m_editor || findText().isEmpty()) return;
 
-  QTextCursor cursor(m_editor->document());
-  cursor.beginEditBlock();
+  // 文档修改统一交给 CodeEditor：编辑块闭合、modified 置位、重绘由其内部保证
+  CodeEditor::ReplaceOptions options;
+  options.find = findText();
+  options.replace = replaceText();
+  options.caseSensitive = m_caseCheck->isChecked();
+  options.wholeWord = m_wordCheck->isChecked();
+  options.regex = m_regexCheck->isChecked();
 
-  int count = 0;
-  // 从文档开头查找所有匹配
-  cursor.movePosition(QTextCursor::Start);
+  const CodeEditor::ReplaceResult result = m_editor->replaceAll(options);
+  if (!result.valid) return;  // 正则非法：不改文档（匹配计数区会提示“正则错误”）
 
-  if (m_regexCheck->isChecked()) {
-    QRegularExpression regex(findText(), m_caseCheck->isChecked()
-                                             ? QRegularExpression::NoPatternOption
-                                             : QRegularExpression::CaseInsensitiveOption);
-    if (!regex.isValid()) return;
+  // 替换后文档已变化：旧匹配高亮的位置/文本全部失效，按新文本重算
+  //（通常已无匹配 → 清空），否则残留的查找选区会覆盖替换结果。
+  onFindTextChanged();
 
-    QString text = m_editor->document()->toPlainText();
-    // 构建替换后的文本
-    QString newText = text;
-    newText.replace(regex, replaceText());
-    cursor.select(QTextCursor::Document);
-    cursor.insertText(newText);
-    // 计算替换次数
-    count = 0;
-    QRegularExpressionMatchIterator it = regex.globalMatch(text);
-    while (it.hasNext()) {
-      it.next();
-      ++count;
-    }
-  } else {
-    QTextDocument::FindFlags flags = findFlags();
-    while (true) {
-      cursor = m_editor->document()->find(findText(), cursor, flags);
-      if (cursor.isNull()) break;
-      cursor.insertText(replaceText());
-      ++count;
-    }
-  }
-
-  cursor.endEditBlock();
-  m_matchLabel->setText(count > 0 ? QStringLiteral("替换了 %1 处").arg(count)
-                                  : QStringLiteral("无匹配"));
+  m_matchLabel->setText(result.count > 0
+                            ? QStringLiteral("替换了 %1 处").arg(result.count)
+                            : QStringLiteral("无匹配"));
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

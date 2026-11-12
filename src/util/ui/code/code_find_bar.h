@@ -14,10 +14,10 @@
 #include <QTimer>
 #include <QWidget>
 
+class CodeEditor;
 class QCheckBox;
 class QLabel;
 class QPushButton;
-class QPlainTextEdit;
 
 /**
  * @class CodeFindBar
@@ -31,7 +31,7 @@ class CodeFindBar : public QWidget {
   Q_OBJECT
 
 public:
-  explicit CodeFindBar(QPlainTextEdit *editor, QWidget *parent = nullptr);
+  explicit CodeFindBar(CodeEditor *editor, QWidget *parent = nullptr);
 
   /// 显示查找栏（自动聚焦查找输入框）
   void showFindBar();
@@ -82,7 +82,7 @@ private:
   /// 获取替换文本
   QString replaceText() const;
 
-  QPlainTextEdit *m_editor = nullptr;
+  CodeEditor *m_editor = nullptr;
 
   // 查找区域
   QLineEdit *m_findEdit = nullptr;
