@@ -5,8 +5,9 @@
 //   ../../crud_gin/template/main_api.ac     → Go 后端（gin+gorm）
 //   ../../admin_pure/template/main_admin.ac → pure-admin 前端
 //
-// 配置事实源：erp.jsontable（同目录）——表结构 + 字段前端角色只配一遍，
-// 一次执行同时生成两端；生成期不连数据库。
+// 配置事实源：各模块目录中的 .jsontable；生成期不连数据库。
+// ERP 已迁移的前端页面含手写业务，配置 frontend=false 保留现有页面及 API 文件；
+// 后端实体、查询和更新参数继续按配置生成。新标准页需显式启用 frontend。
 //
 // ★ 项目模板：新建同形态项目时复制本目录（project.acproj + *.jsontable +
 //   本脚本）再改名；多语言由文件存在性识别，无需改脚本（§0）：
@@ -18,7 +19,7 @@
 // 流程：
 //   1. 配置 .jsontable 路径与双端项目根目录
 //   2. generateApiMain()   生成 Go 后端代码
-//   3. generateAdminMain() 生成 pure-admin 前端代码
+//   3. generateAdminMain() 同步数据源；仅 frontend=true 的表生成前端页面
 // ============================================================================
 import { generateApiMain } from "../../crud_gin/template/main_api.ac";
 import { generateAdminMain } from "../../admin_pure/template/main_admin.ac";
@@ -95,7 +96,7 @@ main {
     projPath: projPath,
     jsonTablePaths: files,
     apiPrefix: "/api",
-    // 使用项目内 ReListTable 管理列宽、显示列和本地记忆。
+    // 仅新启用生成的标准页使用 ReListTable；已有定制页由 frontend=false 保护。
     useListTable: true,
     // 表级枚举字典（跨页面共享）：全部 tag 列汇总输出 src/api/source/table_enum.ts
     tableEnumTpl: tplDir + "/table_enum.tpl",

@@ -76,8 +76,14 @@
       },
     ],
     editCols: [
+      // 保留已迁移业务使用的后端更新字段，避免生成 InUpd 时删除原有字段。
       {
         "ref": "id",
+        "visible": false
+      },
+      {
+        "ref": "add_time",
+        "label": "添加时间",
         "visible": false
       },
       {
@@ -174,7 +180,8 @@
         'DESC',
       ],
     ],
-    frontend: true,
+    // 页面及 API 已包含迁移后的手写业务，重新生成时保留。
+    frontend: false,
 
     manualUpdateTime: false,
     modelName: 'report_month_one',

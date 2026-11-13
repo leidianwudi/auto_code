@@ -4,7 +4,7 @@ ${# ----------------------------------------------------------------------------
 ${#   - 4 接口：selectByIn / selectById / update / delete（无 insert，save 单接口）}
 ${#   - common.Bind 绑定 + common.OK/FailErr + httpx 分页/入参统一响应         }
 ${# 数据来源：pkgName/handlerClass/serviceClass/updClass/selClass/dataAlias      }
-${#           hdlImports/tableComment/tableName                                 }
+${#           hdlImports/tableComment/tableName/adminSaveWithAdmin              }
 ${# ============================================================================}
 // 此代码为AutoCode编译器生成，请勿手动修改
 package ${pkgName}
@@ -57,7 +57,9 @@ func (h *${handlerClass}) Update(c *gin.Context) {
 	if !ok {
 		return
 	}
-	id, err := h.Svc.Save(&data)
+${if adminSaveWithAdmin}	id, err := h.Svc.SaveForAdmin(&data, c.GetInt64(common.CtxAdminID))
+${else}	id, err := h.Svc.Save(&data)
+${/if}
 	if err != nil {
 		common.FailErr(c, err)
 		return

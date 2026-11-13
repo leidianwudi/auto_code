@@ -215,7 +215,8 @@
         'DESC',
       ],
     ],
-    frontend: true,
+    // 页面及 API 已包含迁移后的手写业务，重新生成时保留。
+    frontend: false,
     manualUpdateTime: false,
     modelName: 'salary_apply_item',
     tableComment: '待遇调整的项',

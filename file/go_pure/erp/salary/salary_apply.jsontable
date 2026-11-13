@@ -311,7 +311,10 @@
         'DESC',
       ],
     ],
-    frontend: true,
+    // 页面及 API 已接入审核、撤销等手写业务，禁止通用模板覆盖。
+    frontend: false,
+    // 保存时由登录上下文填写申请人，服务层已提供 SaveForAdmin。
+    adminSaveWithAdmin: true,
     indexes: [
       {
         cols: [

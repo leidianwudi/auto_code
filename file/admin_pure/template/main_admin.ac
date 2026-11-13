@@ -1531,6 +1531,7 @@ export function generateAdminMain(params: Object): Void {
   //    保证两种来源输出位置相同（src/views/{module}/{pageName}/）
   let pages: Object[] = [];
   let consumedVue: Object = {};
+  let disabledModels: Object = {};
   // 先收集全部 i18n 翻译表名（与 crud_gin 同规则）：翻译表只随主表实体/接口联动，
   // 不生成独立管理页
   let i18nTables: Object = {};
@@ -1560,6 +1561,9 @@ export function generateAdminMain(params: Object): Void {
     // 纯 API 模块开关：frontend 仅显式 false 生效（键缺失=null ≠ false，缺省生成）；
     // 后端链照常生成 API，这里只裁剪前端产物
     if (table["frontend"] == false) {
+      // 同名 .jsonvue 即使单独勾选也受表级开关约束，不能从后续独立页分支绕过。
+      disabledModels[modelName] = true;
+      disabledModels[table["tableName"]] = true;
       printLog("表 '" + table["tableName"] + "' frontend=false（纯 API 模块），跳过页面生成");
       continue;
     }
@@ -1641,6 +1645,10 @@ export function generateAdminMain(params: Object): Void {
   for (let vi = 0; vi < cvLen; vi = vi + 1) {
     let cvPath: String = checkedVueFiles[vi];
     if (consumedVue[cvPath] == true) {
+      continue;
+    }
+    if (disabledModels[basename(cvPath)] == true) {
+      printLog("跳过 .jsonvue：对应表 frontend=false：" + cvPath);
       continue;
     }
     let cvJson: Object = readJson(cvPath);

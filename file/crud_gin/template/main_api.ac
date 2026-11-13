@@ -1766,9 +1766,8 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   // 实体文件固定带数据层错误常量（ErrNilEntity 等），统一需要 errors
   enStd.append("errors");
   if (enTime) { enStd.append("time"); }
-  if (param.hasDecimalField) { enExt.append(coinPath); }
-  // 联表输出列含金额列时，View 结构体使用 coin.Coin，需补 coin 包
-  if (joinNeedCoin) { enExt.append(coinPath); }
+  // 主表和联表输出共用 coin 包，只导入一次，避免金额联表生成重复 import。
+  if (param.hasDecimalField || joinNeedCoin) { enExt.append(coinPath); }
   // json 列实体字段类型为 datatypes.JSON（值类型），需补 datatypes 包
   if (param.hasJsonField) { enExt.append("gorm.io/datatypes"); }
   // 所有表都生成 querySpec（无联表时 Joins 为空），实体文件必须引用 cdb
@@ -1977,6 +1976,8 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   tplData["repoClass"] = param.repoClass;
   tplData["serviceClass"] = param.serviceClass;
   tplData["handlerClass"] = param.handlerClass;
+  // 需要记录操作管理员的模块，由手写服务提供 SaveForAdmin(data, adminID)。
+  tplData["adminSaveWithAdmin"] = (json["adminSaveWithAdmin"] == true);
   tplData["idGoType"] = idType;
   tplData["idGoName"] = idName;
   tplData["idColName"] = idCol;
