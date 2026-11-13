@@ -22,6 +22,9 @@ ${# ============================================================================
 //此文件为AutoCode编译器生成，请勿手动修改
 // ==================== ${commentTitle}（${pageName}）查询列表 ====================
 import { reactive, ref, unref } from "vue";
+${if useListTable}
+import ReListTable from "@/components/ReListTable";
+${/if}
 import { message } from "@/utils/message";
 import { hasPerms } from "@/utils/auth";
 ${if !noDetail}
@@ -374,13 +377,18 @@ ${/if}${/each}
     </el-form>
 ${/if}
     <!-- 工具栏 + 表格 + 分页（同属上方卡片，内边距由卡片统一提供） -->
-      <div class="mb-3">
+${if useListTable}      <ReListTable table-key="${permPrefix}" :loading="loading" :data="dataList"${if !noDelete} @selection-change="onSelectionChange"${/if}${if hasTableDefaultSort} :default-sort="{ prop: '${defaultSortField}', order: '${defaultSortOrder}' }"${/if}>
+        <template #toolbar>
+${else}      <div class="mb-3">
+${/if}
 ${if !noAdd}        <el-button type="primary" :disabled="!hasPerms(['${permPrefix}:add'])" @click="addAction">新增</el-button>
 ${/if}${if !noDelete}        <el-button type="danger" :disabled="selectedRows.length === 0 || !hasPerms(['${permPrefix}:delete'])" @click="delData()">删除</el-button>
 ${/if}${each btn in toolbarButtons}        <el-button${if btn.hasType} type="${btn.type}"${/if} @click="onCustomAction(null, '${btn.key}')">${btn.label}</el-button>
-${/each}      </div>
+${/each}${if useListTable}        </template>
+${else}      </div>
 
       <el-table v-loading="loading" :data="dataList"${if !noDelete} @selection-change="onSelectionChange"${/if}${if hasTableDefaultSort} :default-sort="{ prop: '${defaultSortField}', order: '${defaultSortOrder}' }"${/if}>
+${/if}
 ${if !noDelete}        <el-table-column type="selection" width="55" />
 ${/if}
 ${each col in columns}${if col.queryVisible}${if col.isBooleanSwitch}
@@ -491,7 +499,9 @@ ${/each}
           </template>
         </el-table-column>
 ${/if}
-      </el-table>
+${if useListTable}      </ReListTable>
+${else}      </el-table>
+${/if}
 
       <div class="mt-3 flex justify-end">
         <el-pagination

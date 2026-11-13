@@ -42,6 +42,7 @@
 ///   - projectApiPath 可选，对应后端 API 项目目录（如 file/crud_gin/shop_api），
 ///     其下全部 *.jsonglobalenum 作为项目级枚举参与合并（就近覆盖）
 ///   - genGlobalEnum  可选，false 跳过全局枚举数据源同步（缺省/true 同步）
+///   - useListTable   可选，true 使用项目内 ReListTable（需已安装该组件）
 ///   - templates / sourceTemplates / uploadTemplates 可选，模板配置数组
 ///     （tpl 路径相对入口脚本目录，省略时使用本文件默认模板）
 /// ----------------------------------------------------------------------------
@@ -1680,6 +1681,8 @@ export function generateAdminMain(params: Object): Void {
     // pure-admin 专用派生键补全（isDatetimeFormat/needMessageBox 等）
     // 注意：ac 的 Object 是 COW 语义，必须接收返回值，否则补全全部丢失
     tplData = enrichPureTplData(tplData);
+    // 已接入通用列表的项目显式启用；其它项目继续使用原有表格，避免缺少组件。
+    tplData["useListTable"] = (params["useListTable"] == true);
     // i18n 元数据（write.tpl 语言 Tab 消费；null = 本表未启用多语言）
     let i18nInfo: Object = pages[pg]["json"]["i18n"];
     tplData["hasI18n"] = (i18nInfo != null);
