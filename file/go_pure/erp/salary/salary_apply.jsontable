@@ -318,7 +318,8 @@
           'title',
         ],
         name: 'title',
-        unique: true,
+        // 已审核名称可复用；未办结唯一约束由 ERP 迁移的 active_title 生成列维护。
+        unique: false,
       },
     ],
     manualUpdateTime: false,
