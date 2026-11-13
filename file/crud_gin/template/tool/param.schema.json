@@ -366,7 +366,7 @@
           type: 'array',
         },
         indexes: {
-          description: '索引定义（表设计器 DDL 用；生成期不消费）',
+          description: '索引定义（表设计器 DDL 与 Go 唯一冲突提示使用；生成期不连数据库）',
           items: 'IndexConfig',
           type: 'array',
         },

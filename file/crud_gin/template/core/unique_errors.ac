@@ -1,0 +1,72 @@
+/// @file unique_errors.ac — 生成唯一索引的中文提示映射。
+import { escapeGoStr, tabChar } from "./param_go.ac";
+
+/// @brief 优先采用编辑表单标签，其次采用列注释，保证提示与用户看到的字段名称一致。
+export function uniqueFieldLabel(table: Object, column: String): String {
+  let roles: String[] = ["editCols", "insCols"];
+  for (role in roles) {
+    let fields: Object[] = table[role];
+    if (fields == null) { continue; }
+    for (field in fields) {
+      if (field["ref"] == column && field["label"] != null && field["label"] != "") {
+        return field["label"];
+      }
+    }
+  }
+  let columns: Object[] = table["columns"];
+  for (field in columns) {
+    if (field["name"] != column) { continue; }
+    let comment: String = field["comment"];
+    if (comment != null && comment.trim() != "") {
+      let end: Number = comment.indexOf(";");
+      let chineseEnd: Number = comment.indexOf("；");
+      if (chineseEnd >= 0 && (end < 0 || chineseEnd < end)) { end = chineseEnd; }
+      let label: String = end < 0 ? comment.trim() : comment.substring(0, end).trim();
+      if (label != "") { return label; }
+    }
+  }
+  return column;
+}
+
+/// @brief 为数据库实际拒绝的唯一索引冲突生成字段映射，不增加查询或改变唯一规则。
+export function uniqueIndexLines(table: Object): String[] {
+  let indexes: Object[] = [];
+  let primary: String[] = [];
+  let columns: Object[] = table["columns"];
+  for (column in columns) {
+    if (column["isPrimary"] == true) { primary.append(column["name"]); }
+  }
+  if (primary.length > 0) { indexes.append({ name: "PRIMARY", cols: primary, unique: true }); }
+  let configured: Object[] = table["indexes"];
+  if (configured != null) {
+    for (index in configured) {
+      if (index["unique"] == true && index["name"] != "PRIMARY") { indexes.append(index); }
+    }
+  }
+  let lines: String[] = [];
+  for (index in indexes) {
+    let name: String = index["name"];
+    let cols: String[] = index["cols"];
+    if (name == null || name == "" || cols == null || cols.length == 0) { continue; }
+    let labels: String[] = [];
+    for (column in cols) {
+      labels.append("\"" + escapeGoStr(uniqueFieldLabel(table, column)) + "\"");
+    }
+    lines.append(tabChar() + tabChar() + "{Name: \"" + escapeGoStr(name) + "\", Fields: []string{" + labels.join(", ") + "}},");
+  }
+  return lines;
+}
+
+/// @brief 将表相关索引提示嵌入实体，公共的错误识别与转换由 Go 框架维护。
+export function uniqueIndexBlock(table: Object): String {
+  let lines: String[] = uniqueIndexLines(table);
+  return "// AutoCode: unique indexes begin\n"
+    + "// 注册本表的唯一索引字段名，供公共错误处理生成重复提示。\n"
+    + "func init() {\n"
+    + tabChar() + "cdb.RegisterUniqueIndexes(\"" + escapeGoStr(table["tableName"]) + "\", []cdb.UniqueIndex{\n"
+    + lines.join("\n") + "\n"
+    + tabChar() + "})\n"
+    + "}\n\n"
+    + "// AutoCode: unique indexes end";
+}
+

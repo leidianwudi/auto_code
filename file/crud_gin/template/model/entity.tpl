@@ -33,6 +33,8 @@ ${/each}
 // TableName 表名
 func (${enClass}) TableName() string { return "${tableName}" }
 
+${uniqueIndexBlock}
+
 // TakeSnapshot 把当前值记为基线，之后 Update 只写与基线不同的列。
 // 必须在修改字段之前调用。
 func (e *${enClass}) TakeSnapshot() {

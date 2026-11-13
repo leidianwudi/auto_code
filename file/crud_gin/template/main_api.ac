@@ -38,6 +38,7 @@
 import { Param, FieldDef, buildGoImports, escapeGoStr, sanitizeGoComment, tabChar,
          mapTypeToGo, zeroKindOfGoType } from "./core/param_go.ac";
 import { QueryData, SelFieldDef } from "./core/query_data.ac";
+import { uniqueIndexBlock } from "./core/unique_errors.ac";
 import { snakeToPascal, snakeToCamel, isNumericStr } from "../../tool/tool_str.ac";
 import { findGlobalEnumFiles, mergeGlobalEnumFiles } from "../../tool/tool_global_enum.ac";
 import { dirnameOf, findProjPath, relDirUnder } from "../../tool/tool_jsontable.ac";
@@ -359,6 +360,12 @@ export function generateApiMain(params: Object): Number {
 
   // 配置缺陷被跳过的表数量（结束时报错汇总）
   let missingTableCount: Number = 0;
+
+  // 公共转换由框架维护；生成器只输出表相关元数据，不覆盖公共业务架构文件。
+  if (!fileExists(goBasePath + "/common/db/unique_error.go")) {
+    printError("错误：缺少公共唯一索引错误处理 common/db/unique_error.go，请先接入框架公共层（见 docs/go_unique_errors.md）");
+    return 0;
+  }
 
   // ── 6. 对每张表执行一次完整的生成流程 ──────────────────────────────
   for (json in genTables) {
@@ -1947,6 +1954,8 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   let tplData: Object = {};
   tplData["moduleName"] = moduleName;
   tplData["tableName"] = param.tableName;
+  tplData["uniqueIndexBlock"] = uniqueIndexBlock(json);
+  tplData["i18nUniqueIndexBlock"] = hasI18n ? uniqueIndexBlock(tablesByName[i18nTable]) : "";
   tplData["tableComment"] = param.tableDesc;
   tplData["dataDir"] = dataDir;
   tplData["pkgName"] = pkgName;

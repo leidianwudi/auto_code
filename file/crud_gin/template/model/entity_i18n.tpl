@@ -10,11 +10,13 @@ ${# ============================================================================
 // 此代码为AutoCode编译器生成，请勿手动修改
 package ${pkgName}
 
-${if i18nEntityNeedTime}import (
-	"time"
+import (
+${if i18nEntityNeedTime}	"time"
+
+${/if}	"${dbPath}"
 )
 
-${/if}// ${i18nEnClass} ${i18nTableComment}(${i18nTable}) 翻译实体
+// ${i18nEnClass} ${i18nTableComment}(${i18nTable}) 翻译实体
 // 由主表 ${tableName} 的 i18n 配置派生，仅供本包翻译读写使用，不对外暴露 CRUD。
 type ${i18nEnClass} struct {
 ${each line in i18nEntityFieldLines}
@@ -23,6 +25,8 @@ ${/each}}
 
 // TableName 表名
 func (${i18nEnClass}) TableName() string { return "${i18nTable}" }
+
+${i18nUniqueIndexBlock}
 
 // 列名常量（翻译读写引用）
 const (
