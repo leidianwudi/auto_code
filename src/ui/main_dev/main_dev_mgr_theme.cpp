@@ -13,6 +13,7 @@
 #include <QDialog>
 #include <QLabel>
 
+#include "editor_lookup.h"
 #include "main_dev_mgr.h"
 #include "main_dev_ui.h"
 #include "src/ui/json_vue/json_vue_editor.h"
@@ -57,15 +58,8 @@ void MainDevMgr::refreshTheme() {
     if (!tabs) continue;
     for (int i = 0; i < tabs->count(); ++i) {
       QWidget *w = tabs->widget(i);
-      if (auto *ed = qobject_cast<CodeEditor *>(w)) {
-        ed->reloadColors();
-      } else if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) {
-        if (jvw->codeEditor()) jvw->codeEditor()->reloadColors();
-        if (jvw->visualEditor()) jvw->visualEditor()->reloadStyle();
-      } else if (auto *sjw = qobject_cast<SchemaJsonWidget *>(w)) {
-        if (sjw->codeEditor()) sjw->codeEditor()->reloadColors();
-        sjw->reloadStyle();
-      }
+      if (auto *editor = editorFromWidget(w)) editor->reloadColors();
+      if (auto *visual = qobject_cast<CodeVisualSyncWidget *>(w)) visual->reloadStyle();
     }
   }
 
@@ -141,11 +135,7 @@ void MainDevMgr::refreshHighlightColors() {
     if (!tabs) continue;
     for (int i = 0; i < tabs->count(); ++i) {
       QWidget *w = tabs->widget(i);
-      if (auto *ed = qobject_cast<CodeEditor *>(w)) {
-        ed->reloadColors();
-      } else if (auto *jvw = qobject_cast<JsonVueWidget *>(w)) {
-        if (jvw->codeEditor()) jvw->codeEditor()->reloadColors();
-      }
+      if (auto *editor = editorFromWidget(w)) editor->reloadColors();
     }
   }
 }

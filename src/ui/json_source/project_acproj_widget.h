@@ -29,7 +29,11 @@ public:
   /// 获取可视化编辑页
   ProjectConfigEditor *visualEditor() const { return m_visual; }
 
+  /// 刷新项目表单主题。
+  void reloadStyle() override;
+
 protected:
+  QByteArray visualFingerprint() const override;
   QWidget *visualView() const override;
   void syncCodeToVisualImpl() override;
   void syncVisualToCodeImpl() override;

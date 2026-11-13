@@ -31,7 +31,11 @@ public:
   /// 缓存磁盘原始 .jsonglobalenum 内容，供可视化写回时保真合并
   void setPreservedSource(const QString &src);
 
+  /// 刷新可视化编辑页主题。
+  void reloadStyle() override;
+
 protected:
+  QByteArray visualFingerprint() const override;
   QWidget *visualView() const override;
   void syncCodeToVisualImpl() override;
   void syncVisualToCodeImpl() override;

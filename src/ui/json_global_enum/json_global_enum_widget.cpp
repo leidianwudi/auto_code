@@ -6,6 +6,7 @@
 #include "json_global_enum_widget.h"
 
 #include "json_global_enum_editor.h"
+#include "src/util/common/util_json.h"
 #include "src/util/ui/code/code_editor.h"
 
 // ════════════════════════════════════════════════════════════
@@ -27,6 +28,10 @@ JsonGlobalEnumWidget::JsonGlobalEnumWidget(QWidget *parent) : CodeVisualSyncWidg
 // ════════════════════════════════════════════════════════════
 //  数据同步（基类骨架回调）
 // ════════════════════════════════════════════════════════════
+
+QByteArray JsonGlobalEnumWidget::visualFingerprint() const {
+  return UtilJson::fingerprint(m_visual->collectMergedObject());
+}
 
 QWidget *JsonGlobalEnumWidget::visualView() const { return m_visual; }
 
@@ -50,3 +55,5 @@ void JsonGlobalEnumWidget::syncVisualToCodeImpl() {
 void JsonGlobalEnumWidget::setPreservedSource(const QString &src) {
   m_visual->setPreservedSource(src);
 }
+
+void JsonGlobalEnumWidget::reloadStyle() { m_visual->reloadStyle(); }

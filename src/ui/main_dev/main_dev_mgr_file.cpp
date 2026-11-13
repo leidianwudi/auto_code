@@ -12,6 +12,7 @@
 #include <QTextStream>
 
 #include "debug_controller.h"
+#include "editor_factory.h"
 #include "editor_lookup.h"
 #include "main_dev_mgr.h"
 #include "main_dev_model.h"
@@ -36,24 +37,6 @@
 // ──────────────────────────────────────────────────────────────
 //  创建 / 打开编辑器
 // ──────────────────────────────────────────────────────────────
-
-CodeEditor *MainDevMgr::createEditorForFile(const QString &filePath) {
-  auto *editor = new CodeEditor;
-
-  if (filePath.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive)) {
-    editor->setSyntaxHighlighter(new LightJson(editor->document()));
-    editor->setValidationMode(CodeEditor::JsonValidation);
-  } else if (filePath.endsWith(AcFileSuffix::kAc, Qt::CaseInsensitive)) {
-    editor->setSyntaxHighlighter(new LightAc(editor->document()));
-    editor->setValidationMode(CodeEditor::AcValidation);
-  } else {
-    // .tpl 及其他未知类型统一按模板处理
-    editor->setSyntaxHighlighter(new LightTpl(editor->document()));
-    editor->setValidationMode(CodeEditor::TemplateValidation);
-  }
-
-  return editor;
-}
 
 /// 查重：在所有编辑面板中查找已打开指定文件的编辑器（未打开返回 nullptr）。
 /// 命中时可选输出所在面板组与索引（供选中/聚焦该标签）
@@ -89,111 +72,22 @@ QString MainDevMgr::resolveHttpConfigAcPath(const QString &filePath) const {
 QWidget *MainDevMgr::createEditorTab(const QString &filePath, const QString &content,
                                      CodeEditor **editorOut) {
   CodeEditor *editor = nullptr;
-  QWidget *tabWidget = nullptr;
-
-  // .jsonvue / .jsonsource / .jsonupload / .jsontable / .jsonglobalenum / .acproj 文件
-  // 使用可视化包装器（CodeEditor + 可视化编辑器）
-  const bool isJsonVue = filePath.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive);
-  const bool isJsonSource = filePath.endsWith(AcFileSuffix::kJsonsource, Qt::CaseInsensitive);
-  const bool isJsonUpload = filePath.endsWith(AcFileSuffix::kJsonupload, Qt::CaseInsensitive);
-  const bool isJsonTable = filePath.endsWith(AcFileSuffix::kJsontable, Qt::CaseInsensitive);
-  const bool isJsonGlobalEnum =
-      filePath.endsWith(AcFileSuffix::kJsonglobalenum, Qt::CaseInsensitive);
-  const bool isAcProj = filePath.endsWith(AcFileSuffix::kAcProj, Qt::CaseInsensitive);
-  const QString acPath = resolveHttpConfigAcPath(filePath);
-
-  if (isJsonVue) {
-    auto *jvw = new JsonVueWidget;
-    editor = jvw->codeEditor();
-    editor->setPlainText(content);
-    // 缓存磁盘原文：可视化写回时以它为底做保真合并，防止未加载时保存把 dataName 数据清空
-    jvw->setPreservedSource(content);
-    // 记录文件路径：供可视化编辑器推导 .jsonsource 数据源搜索根目录
-    jvw->setSourceFilePath(filePath);
-    tabWidget = jvw;
-    // 加载 HTTP 配置（供动态数据源"测试"按钮使用）
-    if (!acPath.isEmpty()) jvw->loadHttpConfigFromAcFile(acPath);
-    // 可视化按钮生效时，自动以可视化方式打开
-    if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) jvw->switchToVisual();
-  } else if (isJsonSource) {
-    auto *jdw = new JsonSourceWidget;
-    editor = jdw->codeEditor();
-    editor->setPlainText(content);
-    jdw->setPreservedSource(content);
-    tabWidget = jdw;
-    // 加载 HTTP 配置（供动态数据源"测试"按钮使用）
-    if (!acPath.isEmpty()) {
-      QString baseUrl, authHeader, postData;
-      JsonVueEditor::loadHttpConfigFromAcFile(acPath, &baseUrl, &authHeader, &postData);
-      jdw->setHttpConfig(baseUrl, authHeader, postData);
-    }
-    // 可视化按钮生效时，自动以可视化方式打开
-    if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) jdw->switchToVisual();
-  } else if (isJsonUpload) {
-    auto *juw = new JsonUploadWidget;
-    editor = juw->codeEditor();
-    editor->setPlainText(content);
-    juw->setPreservedSource(content);
-    tabWidget = juw;
-    // 注：上传预设无"测试请求"按钮，不需要 HTTP 配置
-    // 可视化按钮生效时，自动以可视化方式打开
-    if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) juw->switchToVisual();
-  } else if (isJsonTable) {
-    auto *jtw = new JsonTableWidget;
-    editor = jtw->codeEditor();
-    editor->setPlainText(content);
-    editor->setObjectName(filePath);  // 供表设计器定位项目 meta 与数据源作用域
-    jtw->setPreservedSource(content);
-    tabWidget = jtw;
-    // 注：表结构配置无"测试请求"按钮，不需要 HTTP 配置
-    // 可视化按钮生效时，自动以可视化方式打开
-    if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) jtw->switchToVisual();
-  } else if (isJsonGlobalEnum) {
-    auto *gew = new JsonGlobalEnumWidget;
-    editor = gew->codeEditor();
-    editor->setPlainText(content);
-    gew->setPreservedSource(content);
-    tabWidget = gew;
-    // 注：全局枚举为纯静态选项，无"测试请求"按钮，不需要 HTTP 配置
-    // 可视化按钮生效时，自动以可视化方式打开
-    if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) gew->switchToVisual();
-  } else if (isAcProj) {
-    // .acproj 项目配置：代码 + 项目设置表单双视图
-    auto *pcw = new ProjectAcprojWidget;
-    editor = pcw->codeEditor();
-    editor->setPlainText(content);
-    tabWidget = pcw;
-    // 注：项目设置无"测试请求"按钮，不需要 HTTP 配置
-    // 可视化按钮生效时，自动以可视化方式打开
-    if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) pcw->switchToVisual();
-  } else {
-    CodeEditor *plain = createEditorForFile(filePath);
-    plain->setPlainText(content);
-    editor = plain;
-
-    // 所有 .json 统一用 SchemaJsonWidget 包装：schema 由包装器按 $schema 解析加载；
-    // 空文件/无 $schema 也可视化（表单顶部模板下拉选择 .schema.json 后编辑）。
-    // 例外：*.schema.json 本身就是模板定义，没有 $schema 概念，
-    // 套无关 schema 做表单编辑可能改写 schema 结构 —— 只保留代码模式
-    const bool isJson = filePath.endsWith(AcFileSuffix::kJson, Qt::CaseInsensitive);
-    const bool isSchemaFile = filePath.endsWith(AcFileSuffix::kSchemaJson, Qt::CaseInsensitive);
-    if (isJson && !isSchemaFile) {
-      auto *sjw = new SchemaJsonWidget;
-      sjw->setSourceFilePath(filePath);
-      sjw->codeEditor()->setPlainText(content);
-      editor = sjw->codeEditor();
-      tabWidget = sjw;
-      // 可视化按钮生效时，自动以可视化方式打开
-      if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) sjw->switchToVisual();
-      // 普通 editor 已被包装器内的 CodeEditor 取代，释放避免泄漏
-      delete plain;
-      plain = nullptr;
-    }
-    if (!tabWidget) tabWidget = editor;
+  QWidget *tab =
+      EditorFactory::create(filePath, content, resolveHttpConfigAcPath(filePath), &editor);
+  if (auto *visual = qobject_cast<CodeVisualSyncWidget *>(tab)) {
+    connect(visual, &CodeVisualSyncWidget::synchronizationFailed, this,
+            [this, filePath](const QString &error) {
+              m_ui->appendOutput(QStringLiteral("%1: %2").arg(filePath, error), true);
+            });
+    connect(visual, &CodeVisualSyncWidget::contentChanged, this, [this, editor]() {
+      editor->document()->setModified(true);
+      updateSaveButtonState();
+    });
+    if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) visual->switchToVisual();
   }
 
   if (editorOut) *editorOut = editor;
-  return tabWidget;
+  return tab;
 }
 
 CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *target) {
@@ -250,7 +144,7 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
   if (m_model->openFiles.isEmpty()) m_ui->adjustMainSplitter();
 
   // ── 记录状态 ──
-  m_model->registerFile(filePath, content, editor);
+  m_model->registerFile(filePath, editor);
   // 必须先设置 objectName（文件路径），再触发验证；
   // 否则验证时 m_filePath 为空，import 解析被跳过，导致误报 "class X has no method" 类型错误
   editor->setObjectName(filePath);
@@ -298,14 +192,6 @@ CodeEditor *MainDevMgr::openFileInEditor(const QString &filePath, QTabWidget *ta
     updateSaveButtonState();
   }
 
-  // ── 可视化包装器（jsonvue / jsonsource / schema json）：可视化内容变化时也触发修改标记 ──
-  if (auto *cv = qobject_cast<CodeVisualSyncWidget *>(tabWidget)) {
-    connect(cv, &CodeVisualSyncWidget::contentChanged, this, [this, editor]() {
-      editor->document()->setModified(true);
-      updateSaveButtonState();
-    });
-  }
-
   // ── 打开文件后保存当前打开列表，供下次启动还原 ──
   saveOpenFilesToSettings();
 
@@ -346,7 +232,12 @@ void MainDevMgr::connectModifiedTracking(QTabWidget *tabs, CodeEditor *editor,
 
 bool MainDevMgr::saveAndSync(CodeEditor *editor) {
   if (!editor) return false;
-  if (!m_model->saveEditor(editor)) return false;
+  QString error;
+  if (!m_model->saveEditor(editor, &error)) {
+    AuiMessageBox::show(m_ui, QStringLiteral("保存失败"),
+                        QStringLiteral("%1\n%2").arg(editor->objectName(), error));
+    return false;
+  }
   // 保存成功后，同步其他打开同一文件的编辑器实例内容
   syncEditorsForFile(editor->objectName(), editor->toPlainText(), editor);
   // 该文件的缓冲修改已落盘，清除缓冲
@@ -479,11 +370,8 @@ void MainDevMgr::applyRenameOrMove(const QString &oldPath, const QString &newPat
           }
         }
         // 更新 model 中的注册信息
-        QString content = m_model->fileContents.value(filePath);
         m_model->openFiles.remove(filePath);
-        m_model->fileContents.remove(filePath);
         m_model->openFiles.insert(newFilePath, editor);
-        m_model->fileContents.insert(newFilePath, content);
       }
     }
   } else {
@@ -511,11 +399,8 @@ void MainDevMgr::applyRenameOrMove(const QString &oldPath, const QString &newPat
         }
       }
       // 更新 model 中的注册信息
-      QString content = m_model->fileContents.value(oldPath);
       m_model->openFiles.remove(oldPath);
-      m_model->fileContents.remove(oldPath);
       m_model->openFiles.insert(newPath, editor);
-      m_model->fileContents.insert(newPath, content);
     }
   }
 
@@ -623,7 +508,6 @@ void MainDevMgr::onDeleteFile(const QString &path) {
           }
         }
         m_model->openFiles.remove(filePath);
-        m_model->fileContents.remove(filePath);
       }
     }
 
@@ -648,7 +532,6 @@ void MainDevMgr::onDeleteFile(const QString &path) {
         }
       }
       m_model->openFiles.remove(path);
-      m_model->fileContents.remove(path);
     }
 
     QFile file(path);

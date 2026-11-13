@@ -6,6 +6,7 @@
 #include "json_source_widget.h"
 
 #include "json_source_editor.h"
+#include "src/util/common/util_json.h"
 #include "src/util/ui/code/code_editor.h"
 #include "src/util/ui/code/format_code.h"
 
@@ -28,6 +29,10 @@ JsonSourceWidget::JsonSourceWidget(QWidget *parent) : CodeVisualSyncWidget(paren
 // ════════════════════════════════════════════════════════════
 //  数据同步（基类骨架回调）
 // ════════════════════════════════════════════════════════════
+
+QByteArray JsonSourceWidget::visualFingerprint() const {
+  return UtilJson::fingerprint(m_visual->collectMergedObject());
+}
 
 QWidget *JsonSourceWidget::visualView() const { return m_visual; }
 
@@ -57,3 +62,5 @@ void JsonSourceWidget::setHttpConfig(const QString &baseUrl, const QString &auth
                                      const QString &postData) {
   m_visual->setHttpConfig(baseUrl, authHeader, postData);
 }
+
+void JsonSourceWidget::reloadStyle() { m_visual->reloadStyle(); }

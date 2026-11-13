@@ -953,6 +953,8 @@ static void testDeriveI18nTable() {
   CHECK(d2.columns[2].name == QStringLiteral("lang"));
 }
 
+int runRefactorServiceTests();
+
 int main() {
   // 无缓冲输出：崩溃前也能看到进度（stdout 重定向到文件是块缓冲，崩溃会丢缓冲）
   std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -982,11 +984,12 @@ int main() {
   const int functionFailed = runFunctionTests();
   const int renameFailed = runRenameTests();
   const int goldenFailed = runGoldenScriptTests();
+  const int refactorFailed = runRefactorServiceTests();
 
   const int totalFailed = g_failed + extraFailed + jsonValueFailed + identPoolFailed +
                           interpreterFailed + diagnosticFailed + vmFailed + cacheFailed +
                           recoveryFailed + semanticFailed + tplFailed + functionFailed +
-                          renameFailed + goldenFailed;
+                          renameFailed + goldenFailed + refactorFailed;
   std::printf("%d checks, %d failed\n", g_total, totalFailed);
   return totalFailed == 0 ? 0 : 1;
 }

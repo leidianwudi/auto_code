@@ -11,8 +11,6 @@
 
 #include "json_vue_editor.h"
 
-#include "src/util/ui/component/aui_check_box.h"
-
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
@@ -23,24 +21,25 @@
 #include <QItemSelectionModel>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QTabWidget>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
 #include <QPushButton>
 #include <QSplitter>
+#include <QTabWidget>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
 
-#include "config_dialog_common.h"
 #include "json_vue_editor_helpers.h"
 #include "src/util/common/code_constants.h"
 #include "src/util/common/util_json.h"
 #include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_cell_edit_combo.h"
+#include "src/util/ui/component/aui_check_box.h"
 #include "src/util/ui/component/aui_combo_box.h"
+#include "src/util/ui/component/aui_config_dialog.h"
 #include "src/util/ui/component/aui_style.h"
 
 // ════════════════════════════════════════════════════════════

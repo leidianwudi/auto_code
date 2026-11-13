@@ -5,9 +5,11 @@
 
 #include "code_visual_sync_widget.h"
 
+#include <QScopedValueRollback>
 #include <QTimer>
 
 #include "code_editor.h"
+#include "src/util/common/util_json.h"
 #include "src/util/ui/highlighter/light_json.h"
 
 // ════════════════════════════════════════════════════════════
@@ -46,7 +48,7 @@ void CodeVisualSyncWidget::switchToCode() {
 
 void CodeVisualSyncWidget::switchToVisual() {
   if (currentIndex() == 1) return;
-  syncCodeToVisual();
+  if (!syncCodeToVisual()) return;
   setCurrentIndex(1);
   emit modeChanged(true);
 }
@@ -63,23 +65,44 @@ void CodeVisualSyncWidget::toggleMode() {
 //  数据同步
 // ════════════════════════════════════════════════════════════
 
-void CodeVisualSyncWidget::syncCodeToVisual() {
-  m_syncing = true;
-  syncCodeToVisualImpl();
-  m_syncing = false;
+bool CodeVisualSyncWidget::validateVisualSource(QString *error) const {
+  return UtilJson::parseObject(m_editor->toPlainText(), nullptr, error, true);
 }
 
-void CodeVisualSyncWidget::syncVisualToCode() {
-  // 仅当处于可视化模式时才把可视化数据写回代码编辑器：
-  // 代码模式下用户可能直接改过代码，此时代码是权威来源，覆盖会导致修改丢失
-  if (!isVisualMode()) return;
-  m_syncing = true;
+bool CodeVisualSyncWidget::syncCodeToVisual() {
+  if (m_syncDebounceTimer) m_syncDebounceTimer->stop();
+  m_visualReady = false;
+  if (!validateVisualSource(&m_syncError)) {
+    emit synchronizationFailed(m_syncError);
+    return false;
+  }
+  QScopedValueRollback<bool> syncing(m_syncing, true);
+  syncCodeToVisualImpl();
+  // 用回填后的收集结果作基线，避免控件补默认值或格式化导致首次交互误标修改。
+  m_visualBaseline = visualFingerprint();
+  m_visualReady = true;
+  return true;
+}
+
+bool CodeVisualSyncWidget::syncVisualToCode() {
+  if (m_syncDebounceTimer) m_syncDebounceTimer->stop();
+  if (!isVisualMode() || !m_visualReady) return false;
+  // 无实际编辑时不重新序列化：仅排版、键顺序和默认值差异不应改动源文件。
+  if (visualFingerprint() == m_visualBaseline) return false;
+  const QString previousText = m_editor->toPlainText();
+  QScopedValueRollback<bool> syncing(m_syncing, true);
   syncVisualToCodeImpl();
-  m_syncing = false;
+  m_visualBaseline = visualFingerprint();
+  return m_editor->toPlainText() != previousText;
 }
 
 void CodeVisualSyncWidget::onVisualContentChanged() {
-  if (m_syncing) return;
+  if (m_syncing || !isVisualMode() || !m_visualReady) return;
+  if (visualFingerprint() == m_visualBaseline) {
+    // 防抖期间改回原值，或点击/失焦只发出同值通知：撤销尚未发生的写回。
+    if (m_syncDebounceTimer) m_syncDebounceTimer->stop();
+    return;
+  }
   // 防抖 300ms：可视化侧连续输入（每字符触发）时，全量序列化 + setPlainText
   // 全文重建 + 全文重高亮的开销是每键 O(文档)，停顿后合并为一次写回。
   // 顺序必须保持「先写回、后广播 contentChanged」：
@@ -92,9 +115,8 @@ void CodeVisualSyncWidget::onVisualContentChanged() {
     m_syncDebounceTimer->setSingleShot(true);
     m_syncDebounceTimer->setInterval(300);
     connect(m_syncDebounceTimer, &QTimer::timeout, this, [this]() {
-      if (m_syncing) return;
-      syncVisualToCode();
-      emit contentChanged();
+      if (m_syncing || !isVisualMode() || !m_visualReady) return;
+      if (syncVisualToCode()) emit contentChanged();
     });
   }
   m_syncDebounceTimer->start();

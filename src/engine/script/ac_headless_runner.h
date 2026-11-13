@@ -56,18 +56,19 @@ inline int runAcScriptHeadless(const QStringList &args) {
   // 注册 C++ 函数 -> FunMgr（headless 独立初始化/释放，不依赖 GUI 路径）
   FunMgr::init();
 
-  AcEngine::ins().setRootDir(rootDir);
-  if (useVm) AcEngine::ins().setExecMode(AcExecMode::kBytecode);
-  AcEngine::ins().setLogCallback([](const QString &text, bool isError) {
+  AcEngine engine;
+  engine.setRootDir(rootDir);
+  if (useVm) engine.setExecMode(AcExecMode::kBytecode);
+  engine.setLogCallback([](const QString &text, bool isError) {
     QTextStream ts(stdout);
     ts << (isError ? QStringLiteral("[ERR] ") : QString()) << text << Qt::endl;
   });
 
-  const QString runErr = AcEngine::ins().execute(scriptPath);
+  const QString runErr = engine.execute(scriptPath);
 
   QTextStream ts(stdout);
   ts << "[generated]" << Qt::endl;
-  for (const QString &f : AcEngine::ins().generatedFiles()) ts << f << Qt::endl;
+  for (const QString &f : engine.generatedFiles()) ts << f << Qt::endl;
   if (!runErr.isEmpty()) ts << "[ERROR] " << runErr << Qt::endl;
 
   FunMgr::cleanup();

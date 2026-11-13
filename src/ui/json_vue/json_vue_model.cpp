@@ -551,15 +551,7 @@ JsonVueConfig JsonVueConfig::fromJson(const QJsonObject &obj) {
 }
 
 JsonVueConfig JsonVueConfig::fromJsonString(const QString &jsonStr, QString *error) {
-  if (jsonStr.trimmed().isEmpty()) {
-    return JsonVueConfig{};  // 空文件返回默认配置
-  }
-
-  QJsonParseError parseErr;
-  QJsonDocument doc = UtilJson::fromJson(jsonStr, &parseErr);
-  if (parseErr.error != QJsonParseError::NoError) {
-    if (error) *error = parseErr.errorString();
-    return JsonVueConfig{};
-  }
-  return fromJson(doc.object());
+  QJsonObject root;
+  if (!UtilJson::parseObject(jsonStr, &root, error, true)) return {};
+  return fromJson(root);
 }

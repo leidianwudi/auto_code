@@ -1,6 +1,6 @@
 /**
- * @file config_dialog_common.h
- * @brief json_vue 配置对话框公共工具
+ * @file aui_config_dialog.h
+ * @brief 配置对话框和字段表格的通用界面工具
  *
  * 三个配置对话框（ButtonConfigDialog / ColumnStyleDialog / QueryStyleDialog）的
  * 重复样板统一封装：
@@ -26,6 +26,7 @@ class QComboBox;
 class QDialog;
 class QPushButton;
 class QTableWidget;
+class QTableWidgetItem;
 class QVBoxLayout;
 class AuiTreeCombo;
 class QWidget;
@@ -71,48 +72,14 @@ QPushButton *makeTableDeleteButton(QTableWidget *table, int column, QWidget *par
 /// 创建紧凑小按钮（适合表格单元格内使用，主题色随 AuiStyle 变化）
 QPushButton *makeCompactButton(const QString &text, QWidget *parent = nullptr);
 
-/// jsonsource 数据源作用域帮助文案（供数据源类下拉框旁的问号帮助按钮共用）。
-/// 说明「右键设为项目」对数据源下拉框内容的影响：项目根过滤 + 未设项目时的回退规则
-QString jsonVueSourceScopeHelpText();
-
-/// jsonupload 上传预设作用域帮助文案（供上传预设下拉框旁的问号帮助按钮共用）。
-/// 结构与 jsonVueSourceScopeHelpText 相同，措辞针对 .jsonupload 上传预设文件
-QString jsonVueUploadScopeHelpText();
-
-// ── 数据源函数名推导（与 AC 脚本 tool_str.ac / admin_data.ac 保持一致）──
-
-/// 下划线命名 → 帕斯卡命名（"user_role" → "UserRole"）
-QString snakeToPascal(const QString &str);
-
-/// 下划线命名 → 小驼峰命名（"user_role" → "userRole"）
-QString snakeToCamel(const QString &str);
-
-/// 数据源 url → 函数名（第一段小驼峰，后续段帕斯卡拼接）
-/// "enableState" → "enableState"；"vipprice/getTime" → "vippriceGetTime"
-QString sourceUrlToFuncName(const QString &url);
-
-/// 静态数据源函数名（与 admin_data.ac processSources 一致）：
-/// 文件名小驼峰 + "Static" + url名（帕斯卡），
-/// boolean.jsonsource + enableState → booleanStaticEnableState
-QString staticSourceFuncName(const QString &sourceName, const QString &url);
-
-/// 构建取值域数据源候选树（方案 B：列样式配置与查询设置共用）。
-/// 候选 = 作用域内 .jsonsource 数据源（静态源 + 动态源，动态源条目显示接口 url）
-/// + 全局枚举；enumOnly=true 仅列恰好 2 项的静态源（枚举域）；
-/// boolTexts 输出 ref→{真值文字,假值文字}（仅静态源），previews 输出 ref→选项预览，
-/// optionCounts 输出 ref→选项数（动态源为 -1，供"恰 2 项 = 枚举能力"的推导），
-/// dynamicFlags 输出 ref→是否动态源
-void buildDomainSourceCandidates(AuiTreeCombo *combo, const QString &searchRoot, bool enumOnly,
-                                 QHash<QString, QPair<QString, QString>> *boolTexts,
-                                 QHash<QString, QString> *previews,
-                                 QHash<QString, int> *optionCounts,
-                                 QHash<QString, bool> *dynamicFlags = nullptr);
+/// 创建纯复选框单元格，统一勾选、选择和居中绘制语义。
+QTableWidgetItem *makeConfigCheckItem(bool checked);
 
 /// 配置表格单列定义（供 makeConfigTable 批量设置列头 / 列宽模式 / 固定宽度）
 struct ConfigTableColumn {
-  QString header;                                        ///< 列头文本
+  QString header;                                           ///< 列头文本
   QHeaderView::ResizeMode mode = QHeaderView::Interactive;  ///< 列宽模式
-  int width = 0;                                         ///< 固定宽度（>0 时设置，并将模式视为 Interactive）
+  int width = 0;  ///< 固定宽度（>0 时设置，并将模式视为 Interactive）
 };
 
 /**
@@ -124,7 +91,7 @@ struct ConfigTableColumn {
  *   - 纯复选框单元格（无文本有勾选态）的勾选框自动居中（绘制与点击命中）
  * 特殊行为（事件过滤器、NoEditTriggers 等）由调用方在返回后自行设置。
  */
-QTableWidget *makeConfigTable(const std::initializer_list<ConfigTableColumn> &columns,
-                              QWidget *parent = nullptr, int minHeight = 60, int maxHeight = 0,
-                              QAbstractItemView::SelectionBehavior selection =
-                                  QAbstractItemView::SelectItems);
+QTableWidget *makeConfigTable(
+    const std::initializer_list<ConfigTableColumn> &columns, QWidget *parent = nullptr,
+    int minHeight = 60, int maxHeight = 0,
+    QAbstractItemView::SelectionBehavior selection = QAbstractItemView::SelectItems);

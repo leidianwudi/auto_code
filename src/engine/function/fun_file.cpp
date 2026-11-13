@@ -14,6 +14,7 @@
 #include "../ac_language.h"
 #include "fun_args.h"
 #include "fun_mgr.h"
+#include "src/util/common/util_file.h"
 
 void FunFile::init() {
   FunMgr::ins().registerFuncs(QString::fromLatin1(AcFile::kClassName),
@@ -66,26 +67,14 @@ accore::AcJsonValue FunFile::write(const accore::AcJsonValue &args) {
   const QString path = args.at(0).toString();
   const QString content = args.at(1).toString();
 
-  QDir().mkpath(QFileInfo(path).absolutePath());
-
-  // 打开文件，只写模式（不开 Text 模式：避免 Windows 把 \n 自动转成 \r\n，
-  // 下方已显式移除 \r，保证生成文件统一 LF 换行）
-  QFile file(path);
-  if (!file.open(QIODevice::WriteOnly)) {
-    FunMgr::setError(QStringLiteral("File::write() cannot open file for writing: '%1'").arg(path));
-    return accore::AcJsonValue();
-  }
-
-  // UTF-8 编码写入，强制使用 Unix 换行符 (\n)
-  QTextStream out(&file);
-  out.setEncoding(QStringConverter::Utf8);
-  out.setGenerateByteOrderMark(false);
-
+  // 生成产物统一 LF；原子提交成功后才报告生成成功。
   QString cleanContent = content;
   cleanContent.remove(QLatin1Char('\r'));
-
-  out << cleanContent;
-  file.close();
+  QString error;
+  if (!UtilFile::writeUtf8(path, cleanContent, &error, true)) {
+    FunMgr::setError(QStringLiteral("File::write() failed: '%1': %2").arg(path, error));
+    return accore::AcJsonValue();
+  }
 
   return accore::AcJsonValue(true);
 }

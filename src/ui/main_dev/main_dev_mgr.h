@@ -17,8 +17,8 @@
 #include <QMap>
 #include <QObject>
 
-#include "src/engine/validation_result.h"
 #include "src/engine/rename/symbol_rename.h"
+#include "src/engine/validation_result.h"
 #include "src/ui/main_dev/main_dev_ui_ext.h"
 #include "src/ui/main_dev/navigation_history.h"
 #include "src/ui/main_dev/pending_change_store.h"
@@ -146,8 +146,6 @@ private:
   void connectEditorPanels();  ///< 编辑器面板信号 + 事件过滤器
   /// 连接单个编辑器面板的信号（关闭/切换/标签栏交互）
   void connectEditorPanel(QTabWidget *tabs);
-  /// 为文件路径创建编辑器实例（含高亮器 + 验证模式）
-  CodeEditor *createEditorForFile(const QString &filePath);
   /// 在编辑器中打开文件（查重 → 读取 → 创建 → 显示）
   CodeEditor *openFileInEditor(const QString &filePath, QTabWidget *target = nullptr);
   /// 查重：在所有编辑面板中查找已打开指定文件的编辑器；未打开返回 nullptr。
@@ -229,9 +227,9 @@ protected:
   PendingChangeStore m_pendingChanges;
 
   /// 保存所有已打开且被修改的编辑器（保存全部按钮 / 退出保存共用）
-  void saveAllEditors();
+  bool saveAllEditors();
   /// 把未打开文件的缓冲修改写盘并清除树目录黄色标记（保存全部 / 退出保存用）
-  void flushPendingChanges();
+  bool flushPendingChanges();
   /// 清除某文件的缓冲修改（保存或打开后）
   void clearPendingChange(const QString &filePath);
   /// 退出确认：无未保存→true；有未保存则弹窗三选（保存/不保存/取消），取消→false

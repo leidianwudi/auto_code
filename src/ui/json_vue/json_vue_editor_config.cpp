@@ -17,11 +17,12 @@
 
 #include "button_config_dialog.h"
 #include "combobox_config_dialog.h"
-#include "config_dialog_common.h"
 #include "json_vue_editor.h"
 #include "json_vue_editor_helpers.h"
+#include "src/ui/common/domain_source_service.h"
 #include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_cell_edit_combo.h"
+#include "src/util/ui/component/aui_config_dialog.h"
 #include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/component/aui_tree_combo.h"
 #include "style_config_dialog.h"

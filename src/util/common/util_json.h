@@ -49,6 +49,10 @@ public:
    */
   static QJsonDocument fromJson(const QByteArray &data, QJsonParseError *error = nullptr);
 
+  /// 解析配置根对象；失败时保留 out 原值并返回可展示错误，空文档仅在新建场景允许。
+  static bool parseObject(const QString &text, QJsonObject *out, QString *error = nullptr,
+                          bool allowEmpty = false);
+
   /**
    * @brief 按原文顺序提取响应中第一个数组首元素的顶层键名列表
    * @param jsonText 原始 JSON 响应文本（严格 JSON，无需支持注释/JSON5）

@@ -35,10 +35,15 @@ JsonVueWidget::JsonVueWidget(QWidget *parent) : CodeVisualSyncWidget(parent) {
 //  数据同步（基类骨架回调）
 // ════════════════════════════════════════════════════════════
 
+QByteArray JsonVueWidget::visualFingerprint() const {
+  return UtilJson::fingerprint(m_visual->collectMergedObject());
+}
+
 QWidget *JsonVueWidget::visualView() const { return m_visual; }
 
 void JsonVueWidget::syncCodeToVisualImpl() {
   QString jsonStr = m_editor->toPlainText();
+  m_visual->setPreservedSource(jsonStr);
   QString error;
   JsonVueConfig config = JsonVueConfig::fromJsonString(jsonStr, &error);
   // 内容与可视化页当前一致时跳过整表重建：反复切换/来回点击时不卡顿
@@ -79,3 +84,5 @@ void JsonVueWidget::loadHttpConfigFromAcFile(const QString &acFilePath) {
 QString JsonVueWidget::findNearestApiAuthDataAc(const QString &jsonvueFilePath) {
   return JsonVueEditor::findNearestApiAuthDataAc(jsonvueFilePath);
 }
+
+void JsonVueWidget::reloadStyle() { m_visual->reloadStyle(); }

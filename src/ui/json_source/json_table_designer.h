@@ -20,6 +20,8 @@
 
 #include "json_table_model.h"
 
+struct DatabaseTableSnapshot;
+
 class QCheckBox;
 class QComboBox;
 class QCompleter;
@@ -43,6 +45,9 @@ public:
   /// （联表目标跨文件解析 + .jsonsource/.jsonupload 搜索根）
   explicit JsonTableDesigner(const JsonTableTable &table, const JsonTableConfig &config,
                              const QString &filePath = QString(), QWidget *parent = nullptr);
+
+  /// 刷新内嵌面板主题，不重建当前编辑内容。
+  void reloadStyle() { applyStyle(); }
 
   /// 取回编辑结果（未编辑字段沿用构造入参，extra 未知键保真）
   JsonTableTable collectTable() const;
@@ -203,6 +208,8 @@ private:
   QString i18nCreateDdl() const;
   /// 从数据库反向导入表结构（合并模式：保留 .jsontable 已有列的前端角色）
   void importFromDatabase();
+  /// 将后台快照展示为差异预览，仅在配置版本未变化时调用。
+  void applyDatabaseSnapshot(const DatabaseTableSnapshot &snapshot);
   /// 生成 DDL 显示在预览区（校验失败弹警告）
   void previewDdl();
   /// 确认后连接数据库执行 CREATE TABLE
@@ -252,16 +259,19 @@ private:
   QCompleter *m_i18nFieldsCompleter = nullptr;    ///< 多语言字段补全（候选=翻译表列名）
   QStyledItemDelegate *m_enumColDelegate = nullptr;   ///< 枚举列下拉委托（预设=字段列名）
   QStyledItemDelegate *m_joinMainColDelegate = nullptr;  ///< 联表 on[0] 主表列下拉（候选=字段列名）
-  QStyledItemDelegate *m_joinTableDelegate = nullptr;  ///< 联表被联表下拉（候选=项目表名）
-  QStringList m_viewRefOptions;                        ///< 字段引用候选（字段列+联表 ref）
-  QStringList m_viewBaselineOrder;                     ///< 回填时的字段呈现行序（判断用户是否移动过行）
-  QStringList m_sortColOptions;                        ///< 排序列候选（字段列+联表 ref）
-  QLabel *m_validateLabel = nullptr;          ///< 交叉校验状态行（随编辑被动刷新）
-  QVector<JsonTableEnum> m_enums;             ///< 表内枚举编辑态（主从表联动的数据侧）
-  int m_enumCurRow = -1;                      ///< 当前编辑的枚举行（-1=无）
-  bool m_enumSyncing = false;                 ///< 主从表联动中（防 currentCellChange 递归）
-  bool m_loading = false;                     ///< load/refill 回填中（抑制 configChanged）
-  JsonTableTable m_table;                       ///< 构造入参（extra/未编辑字段保真基底）
-  JsonTableConfig m_config;                     ///< 项目配置（proj meta.db 连接信息 + 跨文件表清单）
-  QString m_filePath;                           ///< 当前 .jsontable 文件路径（数据源搜索根）
+  QStyledItemDelegate *m_joinTableDelegate = nullptr;    ///< 联表被联表下拉（候选=项目表名）
+  QStringList m_viewRefOptions;                          ///< 字段引用候选（字段列+联表 ref）
+  QStringList m_viewBaselineOrder;    ///< 回填时的字段呈现行序（判断用户是否移动过行）
+  QStringList m_sortColOptions;       ///< 排序列候选（字段列+联表 ref）
+  QLabel *m_validateLabel = nullptr;  ///< 交叉校验状态行（随编辑被动刷新）
+  QVector<JsonTableEnum> m_enums;     ///< 表内枚举编辑态（主从表联动的数据侧）
+  int m_enumCurRow = -1;              ///< 当前编辑的枚举行（-1=无）
+  bool m_enumSyncing = false;         ///< 主从表联动中（防 currentCellChange 递归）
+  bool m_dbBusy = false;              ///< 单个面板同一时刻只运行一个数据库任务
+  quint64 m_revision = 0;             ///< 过期快照不得覆盖后续用户修改
+  QPushButton *m_executeBtn = nullptr;
+  bool m_loading = false;    ///< load/refill 回填中（抑制 configChanged）
+  JsonTableTable m_table;    ///< 构造入参（extra/未编辑字段保真基底）
+  JsonTableConfig m_config;  ///< 项目配置（proj meta.db 连接信息 + 跨文件表清单）
+  QString m_filePath;        ///< 当前 .jsontable 文件路径（数据源搜索根）
 };

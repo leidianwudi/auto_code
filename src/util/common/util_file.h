@@ -25,6 +25,11 @@ public:
    * @return 文件内容字符串；打开失败返回空串
    */
   static QString readUtf8(const QString &path);
+
+  /// 原子替换 UTF-8 文件；写入或提交失败时保留原文件并返回错误。
+  /// createParents 用于代码生成，编辑器保存不应隐式创建已被删除的目录。
+  static bool writeUtf8(const QString &path, const QString &content, QString *error = nullptr,
+                        bool createParents = false);
 };
 
 #endif  // UTIL_FILE_H

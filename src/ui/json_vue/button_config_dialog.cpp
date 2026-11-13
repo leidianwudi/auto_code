@@ -18,12 +18,12 @@
 #include <QVBoxLayout>
 
 #include "combobox_config_dialog.h"
-#include "config_dialog_common.h"
 #include "icon_loader.h"
 #include "icon_picker_dialog.h"
 #include "src/util/common/code_constants.h"
 #include "src/util/ui/component/aui_cell_edit_combo.h"
 #include "src/util/ui/component/aui_combo_box.h"
+#include "src/util/ui/component/aui_config_dialog.h"
 #include "src/util/ui/component/aui_style.h"
 
 namespace {

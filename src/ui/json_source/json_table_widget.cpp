@@ -21,21 +21,29 @@ JsonTableWidget::JsonTableWidget(QWidget *parent) : CodeVisualSyncWidget(parent)
 
   setCurrentIndex(0);
 
-  // 可视化编辑器配置变化时，写回代码编辑器并广播（基类统一入口）。
-  // 先比较内容指纹：单击/聚焦单元格等无值变化的操作不应把文件标成「已修改」
-  connect(m_visual, &JsonTableEditor::configChanged, this, [this]() {
-    const QByteArray hash = UtilJson::fingerprint(m_visual->collectMergedObject());
-    if (hash == m_lastVisualHash) return;
-    m_lastVisualHash = hash;
-    onVisualContentChanged();
-  });
+  // 内容去重与回写防抖由基类统一处理。
+  connect(m_visual, &JsonTableEditor::configChanged, this,
+          &CodeVisualSyncWidget::onVisualContentChanged);
 }
 
 // ════════════════════════════════════════════════════════════
 //  数据同步（基类骨架回调）
 // ════════════════════════════════════════════════════════════
 
+QByteArray JsonTableWidget::visualFingerprint() const {
+  return UtilJson::fingerprint(m_visual->collectMergedObject());
+}
+
 QWidget *JsonTableWidget::visualView() const { return m_visual; }
+
+bool JsonTableWidget::validateVisualSource(QString *error) const {
+  if (!CodeVisualSyncWidget::validateVisualSource(error)) return false;
+  if (m_editor->toPlainText().trimmed().isEmpty()) return true;
+  QString parseError;
+  jsonTableFromString(m_editor->toPlainText(), &parseError);
+  if (error) *error = parseError;
+  return parseError.isEmpty();
+}
 
 void JsonTableWidget::syncCodeToVisualImpl() {
   QString jsonStr = m_editor->toPlainText();
@@ -46,7 +54,7 @@ void JsonTableWidget::syncCodeToVisualImpl() {
   //（可能为空——路径由主窗口在打开/拆分重建时经 objectName 注入）
   m_visual->setFilePath(m_editor->objectName());
   // 从编辑器文本解析单表（与旧链 fromJsonString 同源，不依赖文件已保存/路径已知）；
-  // 解析失败（旧多表格式/空文件）时给可视化页空表，由面板显示"未解析出表配置"
+  // 非空文件的格式检查已在回填前完成；空文件保留新建表入口。
   QString err;
   JsonTableTable table = jsonTableFromString(jsonStr, &err);
   // 内容与可视化页一致时跳过整表重建：反复切换/来回点击时不卡顿（同 jsonvue）
@@ -78,3 +86,5 @@ void JsonTableWidget::syncVisualToCodeImpl() {
 void JsonTableWidget::setPreservedSource(const QString &src) { m_visual->setPreservedSource(src); }
 
 void JsonTableWidget::reloadProjectContext() { m_visual->reloadProjectContext(); }
+
+void JsonTableWidget::reloadStyle() { m_visual->reloadStyle(); }

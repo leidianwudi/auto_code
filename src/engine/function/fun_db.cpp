@@ -20,6 +20,20 @@
 QHash<QString, MYSQL *> FunDb::s_connections;
 QHash<QString, AcDB::DbConfig> FunDb::s_configs;
 QMutex FunDb::s_connMutex;
+thread_local FunDb::ConnectionScope *FunDb::s_scope = nullptr;
+
+FunDb::ConnectionScope::ConnectionScope() : m_previous(s_scope) { s_scope = this; }
+
+FunDb::ConnectionScope::~ConnectionScope() {
+  s_scope = m_previous;
+  for (const QString &connectionId : m_connections) closeConnection(connectionId);
+}
+
+void FunDb::closeConnection(const QString &connectionId) {
+  QMutexLocker lock(&s_connMutex);
+  if (MYSQL *connection = s_connections.take(connectionId)) mysql_close(connection);
+  s_configs.remove(connectionId);
+}
 
 // escapeSqlLiteral — 把字符串转义为可安全嵌入 SQL 单引号字面量的形式
 // 使用连接的字符集做转义（含引号/反斜杠），防止表名/库名中的特殊字符
@@ -99,6 +113,10 @@ accore::AcJsonValue FunDb::constructor(const accore::AcJsonValue &args) {
 
   unsigned int timeout = 5;
   mysql_options(conn, MYSQL_OPT_CONNECT_TIMEOUT, &timeout);
+  // 后台任务也需要有界等待，数据库失联时避免退出永久等待。
+  unsigned int ioTimeout = 15;
+  mysql_options(conn, MYSQL_OPT_READ_TIMEOUT, &ioTimeout);
+  mysql_options(conn, MYSQL_OPT_WRITE_TIMEOUT, &ioTimeout);
 
   if (!mysql_real_connect(conn, cfg.host.toUtf8().constData(), cfg.user.toUtf8().constData(),
                           cfg.password.toUtf8().constData(), cfg.database.toUtf8().constData(),
@@ -119,6 +137,7 @@ accore::AcJsonValue FunDb::constructor(const accore::AcJsonValue &args) {
   }
 
   accore::AcJsonValue result = accore::AcJsonValue::makeObject();
+  if (s_scope) s_scope->m_connections.append(connId);
   result.set(QString::fromLatin1(AcDB::kConnId), accore::AcJsonValue(connId));
   result.set(QString::fromLatin1(AcDB::kConnected), accore::AcJsonValue(true));
   return result;
@@ -130,15 +149,7 @@ accore::AcJsonValue FunDb::destructor(const accore::AcJsonValue &thisObj,
   if (!thisObj.isObject()) return accore::AcJsonValue(false);
   const QString connId = thisObj.value(QString::fromLatin1(AcDB::kConnId)).toString();
   if (connId.isEmpty()) return accore::AcJsonValue(false);
-  {
-    QMutexLocker lock(&s_connMutex);
-    if (s_connections.contains(connId)) {
-      MYSQL *conn = s_connections[connId];
-      if (conn) mysql_close(conn);
-      s_connections.remove(connId);
-      s_configs.remove(connId);
-    }
-  }
+  closeConnection(connId);
   return accore::AcJsonValue(true);
 }
 
@@ -156,15 +167,7 @@ accore::AcJsonValue FunDb::disconnect(const accore::AcJsonValue &thisObj,
     return accore::AcJsonValue();
   }
 
-  {
-    QMutexLocker lock(&s_connMutex);
-    if (s_connections.contains(connId)) {
-      MYSQL *conn = s_connections[connId];
-      if (conn) mysql_close(conn);
-      s_connections.remove(connId);
-      s_configs.remove(connId);
-    }
-  }
+  closeConnection(connId);
   return accore::AcJsonValue(true);
 }
 

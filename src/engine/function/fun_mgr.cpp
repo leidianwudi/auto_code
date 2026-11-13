@@ -5,6 +5,7 @@
 
 #include "fun_mgr.h"
 
+#include <mutex>
 #include <shared_mutex>
 
 #include "fun_builtin.h"
@@ -30,11 +31,14 @@ FunMgr::~FunMgr() = default;
 // ============================================================================
 
 void FunMgr::init() {
-  FunStr::init();
-  FunDb::init();
-  FunFile::init();
-  FunJson::init();
-  FunBuiltin::init();
+  static std::once_flag initialized;
+  std::call_once(initialized, []() {
+    FunStr::init();
+    FunDb::init();
+    FunFile::init();
+    FunJson::init();
+    FunBuiltin::init();
+  });
 }
 
 // ============================================================================

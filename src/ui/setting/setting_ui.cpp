@@ -25,11 +25,11 @@
 #include <QVBoxLayout>
 
 #include "setting_model.h"
-#include "src/ui/json_vue/config_dialog_common.h"
 #include "src/util/common/code_constants.h"
 #include "src/util/ui/aui_window.h"
 #include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_combo_box.h"
+#include "src/util/ui/component/aui_config_dialog.h"
 #include "src/util/ui/component/aui_style.h"
 
 // ════════════════════════════════════════════════════════════

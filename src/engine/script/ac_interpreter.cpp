@@ -14,6 +14,7 @@
 
 #include "../ac_language.h"
 #include "../function/fun_builtin.h"
+#include "../function/fun_db.h"
 #include "../function/fun_mgr.h"
 #include "../tpl/tpl_engine.h"
 #include "ac_builtin_eval.h"
@@ -291,7 +292,8 @@ accore::AcJsonValue AcInterpreter::execute(const Block &program, QString &error)
   AcBuiltinLoader::registerNativeClasses(m_classes);
 
   FunMgr::init();
-  FunBuiltin::setContext({m_scriptDir, m_rootDir, m_logCallback, &m_generatedFiles, 0});
+  FunDb::ConnectionScope connections;
+  FunBuiltin::ContextScope context({m_scriptDir, m_rootDir, m_logCallback, &m_generatedFiles, 0});
   m_objectsAtLastGc = 0;  // 环回收节流基线随每次执行重置
 
   for (const auto &stmt : program.stmts) {

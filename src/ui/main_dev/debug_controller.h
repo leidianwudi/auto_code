@@ -23,6 +23,7 @@
 #include <functional>
 
 #include "src/engine/script/ac_debugger.h"
+#include "src/engine/script/ac_engine.h"
 
 class CodeEditor;
 class MainDevUi;
@@ -45,6 +46,11 @@ public:
   void init();
 
   // ── 脚本执行 ──
+
+  /// 设置本控制器会话的日志接收方（在启动脚本前注入）。
+  void setLogCallback(AcEngine::LogCallback callback) {
+    m_engine.setLogCallback(std::move(callback));
+  }
 
   /// 脚本是否正在执行（含调试会话）
   bool isScriptRunning() const { return m_scriptRunning; }
@@ -129,12 +135,13 @@ private:
   /// 启动一次调试会话（收集断点、运行脚本）
   void startDebugSession();
 
-  MainDevUi *m_ui = nullptr;             ///< 主窗口视图（调试面板/按钮/输出）
-  AcDebugger *m_debugger = nullptr;      ///< 调试器（接入引擎的工作线程解释器）
-  bool m_debugging = false;              ///< 是否处于调试会话中
-  bool m_scriptRunning = false;          ///< 脚本（含调试）是否正在执行
-  QFuture<void> m_scriptFuture;          ///< 脚本执行任务（工作线程）
-  CodeEditor *m_debugEditor = nullptr;   ///< 当前调试会话的行高亮目标编辑器
+  MainDevUi *m_ui = nullptr;                               ///< 主窗口视图（调试面板/按钮/输出）
+  AcDebugger *m_debugger = nullptr;                        ///< 调试器（接入引擎的工作线程解释器）
+  bool m_debugging = false;                                ///< 是否处于调试会话中
+  bool m_scriptRunning = false;                            ///< 脚本（含调试）是否正在执行
+  AcEngine m_engine;                                       ///< 当前控制器独占的执行会话
+  QFuture<void> m_scriptFuture;                            ///< 脚本执行任务（工作线程）
+  CodeEditor *m_debugEditor = nullptr;                     ///< 当前调试会话的行高亮目标编辑器
   QHash<QString, QMap<int, bool>> m_persistedBreakpoints;  ///< 文件路径 → 行号 → 是否生效
 
   std::function<CodeEditor *()> m_currentEditor;             ///< 当前活跃编辑器提供者

@@ -17,9 +17,9 @@
 #include <QVBoxLayout>
 
 #include "json_global_enum_dialog.h"
-#include "src/ui/json_vue/config_dialog_common.h"
 #include "src/util/common/code_constants.h"
 #include "src/util/common/util_json.h"
+#include "src/util/ui/component/aui_config_dialog.h"
 #include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/component/aui_style.h"
 

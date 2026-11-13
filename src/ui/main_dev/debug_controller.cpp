@@ -35,7 +35,7 @@ DebugController::~DebugController() { shutdownAndWait(); }
 void DebugController::init() {
   // ── 创建调试器并接入引擎（工作线程中的解释器通过它执行断点/单步） ──
   m_debugger = new AcDebugger(this);
-  AcEngine::ins().setDebugger(m_debugger);
+  m_engine.setDebugger(m_debugger);
   connect(m_debugger, &AcDebugger::paused, this, &DebugController::onDebuggerPaused);
   connect(m_debugger, &AcDebugger::resumed, this, &DebugController::onDebuggerResumed);
   connect(m_debugger, &AcDebugger::finished, this, &DebugController::onDebuggerFinished);
@@ -73,6 +73,7 @@ void DebugController::init() {
 // ════════════════════════════════════════════════════════════
 
 void DebugController::runScript(const QString &scriptPath, const QString &rootDir, bool debug) {
+  if (m_scriptRunning) return;
   m_scriptRunning = true;
   m_debugging = debug;
   if (debug) {
@@ -95,8 +96,8 @@ void DebugController::runScript(const QString &scriptPath, const QString &rootDi
   m_scriptFuture = QtConcurrent::run([this, scriptPath, rootDir, debug]() {
     QElapsedTimer runTimer;
     runTimer.start();
-    AcEngine::ins().setRootDir(rootDir);
-    QString err = AcEngine::ins().execute(scriptPath);
+    m_engine.setRootDir(rootDir);
+    QString err = m_engine.execute(scriptPath);
     const qint64 runMs = runTimer.elapsed();
     // 结果投递回 GUI 线程处理
     QMetaObject::invokeMethod(
@@ -117,7 +118,7 @@ void DebugController::runScript(const QString &scriptPath, const QString &rootDi
             m_debugEditor->clearDebugVariables();
             m_debugEditor = nullptr;
           }
-          if (AcEngine::ins().isCancelRequested()) {
+          if (m_engine.isCancelRequested()) {
             m_ui->appendOutput(debug ? QStringLiteral("调试已取消") : QStringLiteral("执行已取消"),
                                true);
           } else if (!err.isEmpty()) {
@@ -126,7 +127,7 @@ void DebugController::runScript(const QString &scriptPath, const QString &rootDi
             m_ui->appendOutput(debug ? QStringLiteral("调试完成")
                                      : QStringLiteral("执行完成（脚本耗时 %1 ms）").arg(runMs),
                                false);
-            const QStringList files = AcEngine::ins().generatedFiles();
+            const QStringList files = m_engine.generatedFiles();
 
             // 不生成输出
             // for (const QString &f : files)
@@ -143,7 +144,7 @@ void DebugController::stopScript() {
   if (m_debugging && m_debugger) {
     m_debugger->stop();
   }
-  AcEngine::ins().requestCancel();
+  m_engine.requestCancel();
   m_ui->appendOutput(QStringLiteral("正在请求取消..."), false);
 }
 
@@ -152,7 +153,7 @@ void DebugController::shutdownAndWait() {
     // 调试中：解释器可能阻塞在调试器的等待条件上（断点暂停），
     // 需先唤醒它（stop 会设置停止标志并 wakeAll），否则线程无法响应取消导致无法退出
     if (m_debugger) m_debugger->stop();
-    AcEngine::ins().requestCancel();
+    m_engine.requestCancel();
     m_scriptFuture.waitForFinished();
   }
 }

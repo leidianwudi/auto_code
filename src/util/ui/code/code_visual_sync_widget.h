@@ -20,7 +20,7 @@
  * 误报「已修改」防护（重要）：
  *  - 可视化侧的交互信号不等于内容变化：单击/聚焦/双击单元格、下拉弹层同步、
  *    程序性 setCurrentIndex/setEditText 都可能触发编辑器的变化信号。
- *    子类应在广播前比较内容指纹：内容未变则不调用 onVisualContentChanged()。
+ *    基类比较回填完成后的内容指纹，内容未变则忽略通知，也不重新序列化原文。
  *  - 打开文件后的指纹基线必须用「回填完成后的完整序列化」（与
  *    syncVisualToCodeImpl 写回时同一口径）。若用解析值做基线，规范化产物
  *    （键补齐/默认值回写等）会与之不等，用户第一次单击/失焦就会被误标已修改。
@@ -30,6 +30,7 @@
 
 #pragma once
 
+#include <QByteArray>
 #include <QStackedWidget>
 #include <QString>
 
@@ -64,18 +65,28 @@ public:
   void toggleMode();
 
   /// 从代码编辑器内容加载到可视化编辑器（m_syncing 防循环标志由基类管理）
-  void syncCodeToVisual();
+  bool syncCodeToVisual();
 
   /// 从可视化编辑器内容写回代码编辑器。
   /// 仅可视化模式下生效：代码模式下用户可能直接改过代码，此时代码是权威
   /// 来源，覆盖会导致修改丢失（保存前 flush 时误调也无副作用）。
-  void syncVisualToCode();
+  /// 返回是否实际改动代码文本；内容未编辑时保留原文、注释和修改状态。
+  bool syncVisualToCode();
 
   /// 可视化编辑器内容变化的统一入口（子类把可视化编辑器的变化信号连接到这里）：
   /// 写回代码编辑器并广播 contentChanged；m_syncing 期间忽略，避免信号回环
   void onVisualContentChanged();
 
+  /// 可视化加载失败原因；失败时停留代码页，不允许空配置回写。
+  QString syncError() const { return m_syncError; }
+
+  /// 刷新可视化页的主题样式，代码页由宿主统一刷新。
+  virtual void reloadStyle() {}
+
 signals:
+  /// 解析或格式检查失败，供宿主输出定位信息。
+  void synchronizationFailed(const QString &error);
+
   /// 模式切换时发射
   void modeChanged(bool visualMode);
 
@@ -83,6 +94,12 @@ signals:
   void contentChanged();
 
 protected:
+  /// 进入可视化前检查根对象；特殊格式可扩展检查，失败时不得改动可视化状态。
+  virtual bool validateVisualSource(QString *error) const;
+
+  /// 当前可视化内容的指纹，回填与编辑须使用相同收集口径。
+  virtual QByteArray visualFingerprint() const = 0;
+
   /// 可视化视图控件（focusActiveView 聚焦用）
   virtual QWidget *visualView() const = 0;
 
@@ -98,6 +115,9 @@ protected:
   CodeEditor *m_editor = nullptr;  ///< 代码编辑器（index 0，基类构造时创建）
 
 private:
+  QByteArray m_visualBaseline;  ///< 最近成功回填/回写后的内容，不包含原文排版差异
+  bool m_visualReady = false;  ///< 只有成功加载的可视化数据允许写回
+  QString m_syncError;
   bool m_syncing = false;  ///< 同步中标志，避免信号回环
   /// 可视化 → 代码写回的防抖定时器：可视化侧连续输入（每字符触发）时，
   /// 全量序列化 + setPlainText 全文重建 + 全文重高亮的开销是每键 O(文档)，

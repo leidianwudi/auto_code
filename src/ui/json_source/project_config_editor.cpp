@@ -8,20 +8,21 @@
 #include <QDir>
 #include <QFileDialog>
 #include <QFormLayout>
+#include <QFutureWatcher>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QVBoxLayout>
+#include <QtConcurrent/QtConcurrent>
 
 #include "json_table_model.h"
 #include "src/engine/ac_language.h"
-#include "src/engine/function/fun_db.h"
-#include "src/engine/function/fun_mgr.h"
-#include "src/ui/json_vue/config_dialog_common.h"
+#include "src/util/ui/component/aui_config_dialog.h"
 #include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/component/aui_style.h"
+#include "table_database_service.h"
 
 namespace {
 
@@ -104,6 +105,7 @@ void ProjectConfigEditor::setupUI() {
   auto *hint = new QLabel(
       QStringLiteral("project.acproj 同时作为项目根标记；根 / meta / db 三层的未知键会原样保留。"),
       this);
+  hint->setObjectName(QStringLiteral("projectHint"));
   hint->setWordWrap(true);
   hint->setStyleSheet(
       QStringLiteral("color: %1; font-size: 12px;").arg(AuiStyle::mutedTextColor().name()));
@@ -114,19 +116,7 @@ void ProjectConfigEditor::setupUI() {
   btnRow->addWidget(testBtn);
   btnRow->addStretch();
   rootLayout->addLayout(btnRow);
-  connect(testBtn, &QPushButton::clicked, this, [this]() {
-    if (!testConnection()) {
-      const QString error = FunMgr::takeError();
-      AuiMessageBox::show(
-          this, QStringLiteral("连接失败"),
-          error.isEmpty()
-              ? QStringLiteral("数据库连接失败，请检查 host/port/user/password/database。")
-              : error);
-    } else {
-      AuiMessageBox::show(this, QStringLiteral("连接成功"),
-                          QStringLiteral("数据库连接成功。"));
-    }
-  });
+  connect(testBtn, &QPushButton::clicked, this, &ProjectConfigEditor::testConnection);
 
   // 任一字段变化 → 通知包装器写回代码页（loadFromObject 期间由 m_loading 抑制）
   for (QLineEdit *edit : {m_nameEdit, m_hostEdit, m_userEdit, m_passwordEdit, m_databaseEdit,
@@ -218,21 +208,31 @@ QJsonObject ProjectConfigEditor::collectObject() const {
   return root;
 }
 
-bool ProjectConfigEditor::testConnection() {
-  accore::AcJsonValue cfg = accore::AcJsonValue::makeObject();
-  cfg.set(jsonKey(AcDB::kHost), accore::AcJsonValue(m_hostEdit->text().trimmed()));
-  cfg.set(jsonKey(AcDB::kPort), accore::AcJsonValue(m_portSpin->value()));
-  cfg.set(jsonKey(AcDB::kUser), accore::AcJsonValue(m_userEdit->text().trimmed()));
-  cfg.set(jsonKey(AcDB::kPassword), accore::AcJsonValue(m_passwordEdit->text()));
-  cfg.set(jsonKey(AcDB::kDatabase), accore::AcJsonValue(m_databaseEdit->text().trimmed()));
+void ProjectConfigEditor::testConnection() {
+  if (m_testingConnection) return;
+  m_testingConnection = true;
+  JsonTableConfig config;
+  config.dbHost = m_hostEdit->text().trimmed();
+  config.dbPort = m_portSpin->value();
+  config.dbUser = m_userEdit->text().trimmed();
+  config.dbPassword = m_passwordEdit->text();
+  config.dbDatabase = m_databaseEdit->text().trimmed();
+  auto *watcher = new QFutureWatcher<QString>(this);
+  connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher]() {
+    const QString error = watcher->result();
+    watcher->deleteLater();
+    m_testingConnection = false;
+    AuiMessageBox::show(this,
+                        error.isEmpty() ? QStringLiteral("连接成功") : QStringLiteral("连接失败"),
+                        error.isEmpty() ? QStringLiteral("数据库连接成功。") : error);
+  });
+  watcher->setFuture(
+      QtConcurrent::run([config]() { return TableDatabaseService::testConnection(config); }));
+}
 
-  accore::AcJsonValue args = accore::AcJsonValue::makeArray();
-  args.append(cfg);
-  const accore::AcJsonValue instance = FunDb::constructor(args);
-  const bool connected =
-      instance.isObject() && instance.value(jsonKey(AcDB::kConnected)).toBool(false);
-  if (instance.isObject()) {
-    FunDb::destructor(instance, accore::AcJsonValue::makeArray());
+void ProjectConfigEditor::reloadStyle() {
+  if (auto *hint = findChild<QLabel *>(QStringLiteral("projectHint"))) {
+    hint->setStyleSheet(
+        QStringLiteral("color: %1; font-size: 12px;").arg(AuiStyle::mutedTextColor().name()));
   }
-  return connected;
 }

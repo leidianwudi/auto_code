@@ -2,7 +2,7 @@
  * @file ac_engine.h
  * @brief .ac 脚本引擎头文件 — 解析并执行 .ac 脚本文件
  *
- * AcEngine 是 auto_code 的脚本执行引擎，以单例模式对外提供服务。
+ * AcEngine 是 auto_code 的脚本执行引擎，由调用方持有独立实例。
  * 核心流程：
  *   1. 设置项目根目录（setRootDir）
  *   2. 注册日志回调（setLogCallback）
@@ -20,7 +20,6 @@
 #include <functional>
 
 #include "ac_executor.h"
-#include "src/util/design/singleton.h"
 
 class AcDebugger;
 
@@ -28,13 +27,13 @@ class AcDebugger;
  * @class AcEngine
  * @brief .ac 脚本引擎 — 解析并执行 .ac 脚本文件
  *
- * 单例类（继承 Singleton<AcEngine>），负责整个脚本生命周期的管理：
+ * 每个实例管理独立脚本会话的路径、取消状态和生成结果：
  * - 读取 .ac 源文件
  * - 调用 AcExecutor 解析并执行脚本
  * - 收集执行过程中生成的文件列表
  * - 通过回调机制将 print() 输出传递给 UI
  */
-class AcEngine : public Singleton<AcEngine> {
+class AcEngine {
 public:
   AcEngine() = default;
 

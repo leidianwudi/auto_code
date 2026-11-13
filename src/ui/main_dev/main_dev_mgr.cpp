@@ -126,7 +126,7 @@ QWidget *MainDevMgr::onCreateWindow() {
 
   // ── 设置日志回调：脚本中 printLog() 输出到 UI 面板 ──
   // 脚本在工作线程执行，日志回调可能从工作线程触发，需投递到 GUI 线程
-  AcEngine::ins().setLogCallback([this](const QString &text, bool isError) {
+  m_debug->setLogCallback([this](const QString &text, bool isError) {
     QMetaObject::invokeMethod(
         m_ui, [this, text, isError]() { m_ui->appendOutput(text, isError); }, Qt::QueuedConnection);
   });
@@ -265,7 +265,8 @@ void MainDevMgr::connectSaveActions() {
 }
 
 /// 保存所有已打开且被修改的编辑器（含拆分副本；jsonvue 需先可视化→代码同步）
-void MainDevMgr::saveAllEditors() {
+bool MainDevMgr::saveAllEditors() {
+  bool saved = true;
   for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
     auto *tabs = m_ui->editorPanelAt(pi);
     if (!tabs) continue;
@@ -282,28 +283,26 @@ void MainDevMgr::saveAllEditors() {
         editor = qobject_cast<CodeEditor *>(w);
       }
       if (editor && (wasModified || editor->document()->isModified())) {
-        saveAndSync(editor);
+        if (!saveAndSync(editor)) saved = false;
       }
     }
   }
+  return saved;
 }
 
 /// 把未打开文件的缓冲修改写盘并清除树目录黄色标记
-void MainDevMgr::flushPendingChanges() {
-  if (m_pendingChanges.isEmpty()) return;
-  const QHash<QString, QString> snapshot = m_pendingChanges.snapshot();  // 迭代中会清空，先拷贝
-  for (auto it = snapshot.cbegin(); it != snapshot.cend(); ++it) {
-    QFile f(it.key());
-    if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
-      f.write(it.value().toUtf8());
-      f.close();
-    }
-  }
-  m_pendingChanges.clearAll();
-  for (auto it = snapshot.cbegin(); it != snapshot.cend(); ++it) {
-    if (m_ui->fileTree()) m_ui->fileTree()->setFileModified(it.key(), false);
+bool MainDevMgr::flushPendingChanges() {
+  const QStringList paths = m_pendingChanges.filePaths();
+  const QStringList errors = m_pendingChanges.flush();
+  for (const QString &path : paths) {
+    if (!m_pendingChanges.contains(path) && m_ui->fileTree())
+      m_ui->fileTree()->setFileModified(path, false);
   }
   updateSaveButtonState();
+  if (!errors.isEmpty()) {
+    AuiMessageBox::show(m_ui, QStringLiteral("保存失败"), errors.join(QLatin1Char('\n')));
+  }
+  return errors.isEmpty();
 }
 
 /// 清除某文件的缓冲修改（保存或打开后，缓冲已由编辑器 document 接管）
@@ -325,6 +324,15 @@ QHash<QString, QString> MainDevMgr::collectLiveContents() const {
 
 /// 退出确认：无未保存修改直接放行；有则弹窗三选（保存 / 不保存 / 取消）
 bool MainDevMgr::confirmExit() {
+  // 先提交可视化防抖内容到文档，再判断是否需要保存，避免最后一次输入丢失。
+  for (int pi = 0; pi < m_ui->editorPanelCount(); ++pi) {
+    auto *tabs = m_ui->editorPanelAt(pi);
+    if (!tabs) continue;
+    for (int ti = 0; ti < tabs->count(); ++ti) {
+      if (auto *visual = qobject_cast<CodeVisualSyncWidget *>(tabs->widget(ti)))
+        visual->syncVisualToCode();
+    }
+  }
   QStringList dirty;
   forEachEditor(m_ui, [&dirty](CodeEditor *editor) {
     if (editor->document()->isModified() && !editor->objectName().isEmpty())
@@ -345,10 +353,11 @@ bool MainDevMgr::confirmExit() {
                                    .arg(dirty.join(QStringLiteral("、"))),
                                QStringLiteral("保存"), QStringLiteral("不保存"));
   switch (ch) {
-    case AuiMessageBox::Choice::kFirst:
-      saveAllEditors();
-      flushPendingChanges();
-      return true;
+    case AuiMessageBox::Choice::kFirst: {
+      const bool editorsSaved = saveAllEditors();
+      const bool pendingSaved = flushPendingChanges();
+      return editorsSaved && pendingSaved;
+    }
     case AuiMessageBox::Choice::kSecond: {
       // 丢弃：清除未打开文件的缓冲修改与树目录黄色标记（已打开编辑器的改动随进程退出丢弃）
       const QHash<QString, QString> snapshot = m_pendingChanges.snapshot();

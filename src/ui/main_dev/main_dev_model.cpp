@@ -5,22 +5,12 @@
 
 #include "main_dev_model.h"
 
-#include <QFile>
-#include <QTextStream>
-
+#include "src/util/common/util_file.h"
 #include "src/util/ui/code/code_editor.h"
 
 // ──────────────────────────────────────────────────────────────
 //  查询方法
 // ──────────────────────────────────────────────────────────────
-
-bool MainDevModel::isFileOpen(const QString &filePath) const {
-  return openFiles.contains(filePath);
-}
-
-QString MainDevModel::fileContent(const QString &filePath) const {
-  return fileContents.value(filePath);
-}
 
 bool MainDevModel::isRegisteredElsewhere(const QString &filePath, CodeEditor *excludeEditor) const {
   auto it = openFiles.find(filePath);
@@ -28,35 +18,25 @@ bool MainDevModel::isRegisteredElsewhere(const QString &filePath, CodeEditor *ex
   return it.value() != excludeEditor;
 }
 
-bool MainDevModel::hasAnyModified() const {
-  for (auto it = openFiles.cbegin(); it != openFiles.cend(); ++it) {
-    if (it.value() && it.value()->document()->isModified()) return true;
-  }
-  return false;
-}
-
 // ──────────────────────────────────────────────────────────────
 //  文件操作
 // ──────────────────────────────────────────────────────────────
 
-bool MainDevModel::saveEditor(CodeEditor *editor) {
+bool MainDevModel::saveEditor(CodeEditor *editor, QString *error) {
+  if (error) error->clear();
   if (!editor) return false;
 
   QString filePath = editor->objectName();
-  if (filePath.isEmpty()) return false;
-
-  QFile file(filePath);
-  if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-    qWarning("保存失败: %s", qPrintable(filePath));
+  if (filePath.isEmpty()) {
+    if (error) *error = QStringLiteral("文件路径不能为空");
     return false;
   }
 
-  file.write(editor->toPlainText().toUtf8());
-  file.close();
+  if (!UtilFile::writeUtf8(filePath, editor->toPlainText(), error)) {
+    return false;
+  }
   editor->document()->setModified(false);
 
-  // 同步更新缓存内容
-  fileContents[filePath] = editor->toPlainText();
   return true;
 }
 
@@ -64,13 +44,8 @@ bool MainDevModel::saveEditor(CodeEditor *editor) {
 //  状态管理
 // ──────────────────────────────────────────────────────────────
 
-void MainDevModel::registerFile(const QString &filePath, const QString &content,
-                                CodeEditor *editor) {
-  fileContents[filePath] = content;
+void MainDevModel::registerFile(const QString &filePath, CodeEditor *editor) {
   openFiles[filePath] = editor;
 }
 
-void MainDevModel::unregisterFile(const QString &filePath) {
-  fileContents.remove(filePath);
-  openFiles.remove(filePath);
-}
+void MainDevModel::unregisterFile(const QString &filePath) { openFiles.remove(filePath); }

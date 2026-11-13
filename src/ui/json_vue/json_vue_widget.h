@@ -46,7 +46,11 @@ public:
   /// 从 jsonvue 文件向上查找最近的 api_auth_data.ac（透传给可视化编辑器）
   static QString findNearestApiAuthDataAc(const QString &jsonvueFilePath);
 
+  /// 刷新可视化编辑页主题。
+  void reloadStyle() override;
+
 protected:
+  QByteArray visualFingerprint() const override;
   QWidget *visualView() const override;
   void syncCodeToVisualImpl() override;
   void syncVisualToCodeImpl() override;

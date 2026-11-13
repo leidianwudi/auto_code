@@ -3,7 +3,7 @@
  * @brief MainDev 数据模型层
  *
  * 存储编辑器的运行时状态数据，提供文件操作和状态管理。
- * 由 MainDevMgr 控制器创建和读写，不依赖 UI 层。
+ * 由 MainDevMgr 控制器创建和读写，保存界面会话状态。
  */
 
 #pragma once
@@ -20,7 +20,7 @@ class CodeEditor;
  * @brief 编辑器数据模型
  *
  * MVC 中的数据层，管理：
- * - 已打开文件的路径和内容映射
+ * - 已打开文件的路径映射
  * - 编辑器实例映射
  * - 最后活跃的编辑器面板组
  * - 当前光标追踪的编辑器
@@ -37,17 +37,8 @@ public:
   //  查询方法
   // ──────────────────────────────────────────────────────────
 
-  /// 判断文件是否已打开
-  bool isFileOpen(const QString &filePath) const;
-
-  /// 获取已打开文件的内容
-  QString fileContent(const QString &filePath) const;
-
   /// 判断文件是否在其它编辑器实例中打开（排除 excludeEditor）
   bool isRegisteredElsewhere(const QString &filePath, CodeEditor *excludeEditor) const;
-
-  /// 判断是否有任何编辑器存在修改
-  bool hasAnyModified() const;
 
   /// 获取所有已打开的文件路径列表
   QStringList openFilePaths() const { return openFiles.keys(); }
@@ -57,14 +48,14 @@ public:
   // ──────────────────────────────────────────────────────────
 
   /// 保存编辑器内容到文件，成功返回 true
-  bool saveEditor(CodeEditor *editor);
+  bool saveEditor(CodeEditor *editor, QString *error = nullptr);
 
   // ──────────────────────────────────────────────────────────
   //  状态管理
   // ──────────────────────────────────────────────────────────
 
   /// 记录文件打开状态
-  void registerFile(const QString &filePath, const QString &content, CodeEditor *editor);
+  void registerFile(const QString &filePath, CodeEditor *editor);
 
   /// 移除文件记录（标签页关闭时调用）
   void unregisterFile(const QString &filePath);
@@ -72,9 +63,6 @@ public:
   // ──────────────────────────────────────────────────────────
   //  数据字段
   // ──────────────────────────────────────────────────────────
-
-  /// filePath → 文件内容映射（标签页关闭时同步清理）
-  QHash<QString, QString> fileContents;
 
   /// filePath → editor 映射（跨所有面板组，用于快速查找已打开文件）
   QHash<QString, CodeEditor *> openFiles;

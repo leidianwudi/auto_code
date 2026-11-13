@@ -18,6 +18,7 @@
 ```
 cmake --preset vs2022
 cmake --build build --target auto_code --config RelWithDebInfo      # 主程序
-cmake --build build --target auto_code_tests --config RelWithDebInfo  # 测试
-build\RelWithDebInfo\auto_code_tests.exe                            # 返回 0 = 全部通过
+cmake --build build --target auto_code_tests auto_code_ui_tests --config RelWithDebInfo  # 测试
+build\RelWithDebInfo\auto_code_tests.exe                            # 引擎与服务回归
+build\RelWithDebInfo\auto_code_ui_tests.exe                         # 编辑器回归（offscreen）
 ```

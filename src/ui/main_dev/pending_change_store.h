@@ -15,6 +15,8 @@
 #include <QStringList>
 #include <utility>
 
+#include "src/util/common/util_file.h"
+
 /// 未打开文件缓冲修改的存储与路径维护
 class PendingChangeStore {
 public:
@@ -29,6 +31,21 @@ public:
   void clear(const QString &filePath) {
     if (!filePath.isEmpty()) m_pending.remove(filePath);
   }
+  /// 原子保存缓冲；只删除提交成功的项，失败项保留供重试，返回逐文件错误。
+  QStringList flush() {
+    QStringList errors;
+    for (auto it = m_pending.begin(); it != m_pending.end();) {
+      QString error;
+      if (UtilFile::writeUtf8(it.key(), it.value(), &error)) {
+        it = m_pending.erase(it);
+      } else {
+        errors.append(QStringLiteral("%1: %2").arg(it.key(), error));
+        ++it;
+      }
+    }
+    return errors;
+  }
+
   /// 全部清空
   void clearAll() { m_pending.clear(); }
   /// 当前所有 (路径, 内容) 快照（如需在迭代中清空，先拷贝一份）

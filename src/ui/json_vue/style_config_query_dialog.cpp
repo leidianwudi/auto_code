@@ -10,9 +10,9 @@
 #include <QFormLayout>
 #include <QLineEdit>
 
-#include "config_dialog_common.h"
 #include "src/util/common/code_constants.h"
 #include "src/util/ui/component/aui_combo_box.h"
+#include "src/util/ui/component/aui_config_dialog.h"
 #include "style_config_dialog.h"
 
 // ════════════════════════════════════════════════════════════

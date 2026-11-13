@@ -15,9 +15,9 @@
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
 
-#include "src/ui/json_vue/config_dialog_common.h"
 #include "src/util/ui/component/aui_cell_edit_combo.h"
 #include "src/util/ui/component/aui_combo_box.h"
+#include "src/util/ui/component/aui_config_dialog.h"
 #include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/component/aui_required_label.h"
 

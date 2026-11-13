@@ -155,13 +155,7 @@ JsonUploadConfig JsonUploadConfig::fromJson(const QJsonObject &obj) {
 }
 
 JsonUploadConfig JsonUploadConfig::fromJsonString(const QString &jsonStr, QString *error) {
-  Q_UNUSED(error)  // 与 JsonSourceConfig 保持一致；解析失败时返回空配置
-  QJsonParseError perr;
-  // JSON5 兼容解析（UtilJson）：手写/既有 .jsonupload 可能含无引号键、单引号、注释、
-  // 尾逗号，严格 QJsonDocument 会解析失败导致有数据的文件可视化显示为空
-  QJsonDocument doc = UtilJson::fromJson(jsonStr, &perr);
-  if (perr.error != QJsonParseError::NoError || !doc.isObject()) {
-    return JsonUploadConfig();
-  }
-  return fromJson(doc.object());
+  QJsonObject root;
+  if (!UtilJson::parseObject(jsonStr, &root, error, true)) return {};
+  return fromJson(root);
 }

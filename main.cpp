@@ -9,6 +9,7 @@
  */
 
 #include <QApplication>
+#include <QThreadPool>
 
 #include "src/engine/script/ac_headless_runner.h"
 #include "src/ui/main_dev/main_dev_mgr.h"
@@ -65,7 +66,8 @@ int main(int argc, char *argv[]) {
 
   int ret = QApplication::exec();
 
-  // 释放全局资源
+  // 界面关闭后等待后台数据库任务释放各自连接，再清理进程资源。
+  QThreadPool::globalInstance()->waitForDone();
   FunMgr::cleanup();
 
   return ret;

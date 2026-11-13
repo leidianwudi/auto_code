@@ -781,15 +781,9 @@ JsonTableConfig JsonTableConfig::fromJson(const QJsonObject &obj) {
 }
 
 JsonTableConfig JsonTableConfig::fromJsonString(const QString &jsonStr, QString *error) {
-  Q_UNUSED(error)  // 与 JsonUploadConfig 保持一致；解析失败时返回空配置
-  QJsonParseError perr;
-  // JSON5 兼容解析（UtilJson）：手写/既有 .jsontable 可能含无引号键、单引号、注释、
-  // 尾逗号，严格 QJsonDocument 会解析失败导致有数据的文件可视化显示为空
-  QJsonDocument doc = UtilJson::fromJson(jsonStr, &perr);
-  if (perr.error != QJsonParseError::NoError || !doc.isObject()) {
-    return JsonTableConfig();
-  }
-  return fromJson(doc.object());
+  QJsonObject root;
+  if (!UtilJson::parseObject(jsonStr, &root, error, true)) return {};
+  return fromJson(root);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -812,8 +806,8 @@ JsonTableTable jsonTableFromString(const QString &text, QString *error) {
                               "file/tools/split_jsontable.ac 拆分");
     return JsonTableTable();
   }
-  if (!root.contains(QString::fromLatin1(JsonTableKey::kTable))) {
-    if (error) *error = QStringLiteral("缺少顶层 table 键");
+  if (!root.value(QString::fromLatin1(JsonTableKey::kTable)).isObject()) {
+    if (error) *error = QStringLiteral("顶层 table 必须是对象");
     return JsonTableTable();
   }
   return JsonTableTable::fromJsonObject(

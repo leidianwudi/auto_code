@@ -12,12 +12,13 @@
 
 #include <QDir>
 #include <QFileInfo>
-#include <cstdio>
 #include <cmath>
+#include <cstdio>
 
 #include "../ac_language.h"
 #include "../ac_value_str.h"
 #include "../function/fun_builtin.h"
+#include "../function/fun_db.h"
 #include "../function/fun_mgr.h"
 #include "ac_builtin_loader.h"
 #include "ac_interpreter.h"
@@ -53,7 +54,8 @@ accore::AcJsonValue AcVm::run(AcModule &module, QString &error) {
   m_classes = module.classes;
   AcBuiltinLoader::registerNativeClasses(m_classes);
   FunMgr::init();
-  FunBuiltin::setContext({m_scriptDir, m_rootDir, m_logCallback, &m_generatedFiles, 0});
+  FunDb::ConnectionScope connections;
+  FunBuiltin::ContextScope context({m_scriptDir, m_rootDir, m_logCallback, &m_generatedFiles, 0});
 
   pushScope();  // 全局作用域（顶层语句深度 0 = 该层）
 
@@ -66,7 +68,6 @@ accore::AcJsonValue AcVm::run(AcModule &module, QString &error) {
   // 收尾清理（与解释器 execute 相同：脚本执行完毕后弹空所有作用域）
   while (!m_scopeStack.isEmpty()) popScope();
 
-  FunMgr::cleanup();
   if (!m_error.isEmpty()) {
     error = m_error;
     m_objMgr.cleanup();
@@ -1271,8 +1272,9 @@ void AcVm::callArrayMethod(accore::AcJsonValue &arr, const QString &method, int 
     auto invoke = [&](const accore::AcJsonValue &elem, const accore::AcJsonValue &acc,
                       int idx, bool withAcc) -> accore::AcJsonValue {
       // 参数协议与解释器一致（ac_builtin_eval 的 map/forEach 回调）：非 reduce → (elem, idx)；
-      // reduce → (acc, elem, idx)。callUnit 按自然顺序取参：第一参数先压（栈底），最后参数后压（栈顶）。
-      // 回调声明的参数更少时多余实参被 callUnit 丢弃。
+      // reduce → (acc, elem, idx)。callUnit
+      // 按自然顺序取参：第一参数先压（栈底），最后参数后压（栈顶）。 回调声明的参数更少时多余实参被
+      // callUnit 丢弃。
       if (isReduce && withAcc) m_vstack.append(acc);
       m_vstack.append(elem);
       m_vstack.append(accore::AcJsonValue(double(idx)));

@@ -28,7 +28,7 @@
 #include <QVBoxLayout>
 
 #include "combobox_config_dialog.h"
-#include "config_dialog_common.h"
+#include "src/ui/common/domain_source_service.h"
 #include "src/ui/json_global_enum/json_global_enum_model.h"
 #include "src/ui/json_source/json_source_finder.h"
 #include "src/ui/json_source/json_source_model.h"
@@ -36,6 +36,7 @@
 #include "src/util/common/code_constants.h"
 #include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_combo_box.h"
+#include "src/util/ui/component/aui_config_dialog.h"
 #include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/component/aui_style.h"
 #include "src/util/ui/component/aui_tree_combo.h"
@@ -531,7 +532,7 @@ void ColumnStyleDialog::adjustToContents() {
 
 void ColumnStyleDialog::buildDomainCandidates(bool enumOnly) {
   if (!m_domainSourceCombo) return;
-  // 候选构建统一在 config_dialog_common（与查询设置共享同一份实现）。
+  // 候选构建统一在 domain_source_service（与查询设置共享同一份实现）。
   // 数据源域涵盖全部数据源文件：静态源（N 项）、动态源（接口）、全局枚举
   buildDomainSourceCandidates(m_domainSourceCombo, m_searchRoot, enumOnly, &m_boolSourceTexts,
                               &m_domainOptionPreviews, &m_domainOptionCounts,

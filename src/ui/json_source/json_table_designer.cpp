@@ -5,6 +5,15 @@
 
 #include "json_table_designer.h"
 
+#include <QFutureWatcher>
+#include <QtConcurrent/QtConcurrent>
+
+#include "table_database_service.h"
+#include "table_import_dialog.h"
+#include "table_schema_service.h"
+
+using namespace TableSchema;
+
 #include <QAbstractItemView>
 #include <QAction>
 #include <QBrush>
@@ -30,23 +39,21 @@
 #include <QStringListModel>
 #include <QStyleOptionHeader>
 #include <QStyledItemDelegate>
-#include <QTimer>
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QTimer>
 #include <QToolTip>
 #include <QVBoxLayout>
 #include <QWidget>
 
 #include "src/engine/ac_language.h"
-#include "src/engine/function/fun_db.h"
-#include "src/engine/function/fun_mgr.h"
 #include "src/ui/json_vue/button_config_dialog.h"
-#include "src/ui/json_vue/config_dialog_common.h"
 #include "src/ui/json_vue/json_vue_model.h"
 #include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_cell_edit_combo.h"
 #include "src/util/ui/component/aui_combo_box.h"
+#include "src/util/ui/component/aui_config_dialog.h"
 #include "src/util/ui/component/aui_icon.h"
 #include "src/util/ui/component/aui_input_dialog.h"
 #include "src/util/ui/component/aui_message_box.h"
@@ -205,749 +212,11 @@ private:
 };
 
 /// 复选框列条目（无可编辑文本，点击勾选框直接切换）
-QTableWidgetItem *makeCheckItem(bool on) {
-  auto *it = new QTableWidgetItem;
-  it->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
-  it->setCheckState(on ? Qt::Checked : Qt::Unchecked);
-  it->setTextAlignment(Qt::AlignCenter);
-  return it;
-}
 
 /// 通用表格单元格文本（空表/缺条目返回空串；截断空白）
 QString cellOf(const QTableWidget *table, int row, int col) {
   const QTableWidgetItem *it = table ? table->item(row, col) : nullptr;
   return it ? it->text().trimmed() : QString();
-}
-
-/// 反引号包裹标识符（内嵌反引号双写转义）
-QString tick(QString ident) {
-  ident.replace(QLatin1Char('`'), QStringLiteral("``"));
-  return QStringLiteral("`%1`").arg(ident);
-}
-
-/// 单引号包裹 SQL 字面量（内嵌单引号双写转义）
-QString quote(QString literal) {
-  literal.replace(QLatin1Char('\''), QStringLiteral("''"));
-  return QStringLiteral("'%1'").arg(literal);
-}
-
-/// 是否"数据库侧默认值"（建表 DDL 中不加引号）：含成对括号或命中时间关键字。
-/// 与 file/crud_gin/template/core/param_go.ac 的 isDbDefault 保持一致，两处需同步维护。
-bool isDbDefaultExpr(const QString &value) {
-  const QString v = value.trimmed();
-  if (v.isEmpty() || v.contains(QLatin1Char(';'))) return false;
-  if (v.contains(QLatin1Char('(')) && v.contains(QLatin1Char(')'))) return true;
-  const QString lv = v.toLower();
-  return lv == QStringLiteral("current_timestamp") || lv == QStringLiteral("current_date") ||
-         lv == QStringLiteral("current_time") || lv == QStringLiteral("localtimestamp") ||
-         lv == QStringLiteral("now");
-}
-
-/// 弹窗显示 FunMgr 错误通道里的最近错误（空则用 fallback 文案）
-void showFunDbError(QWidget *parent, const QString &title, const QString &fallback) {
-  QString err = FunMgr::takeError();
-  if (err.isEmpty()) err = fallback;
-  AuiMessageBox::show(parent, title, err);
-}
-
-/// 用 meta.db 四件套 + port 建立连接（FunDb::constructor）；失败弹窗并返回 false
-bool connectDb(const JsonTableConfig &config, accore::AcJsonValue *instance, QWidget *parent) {
-  accore::AcJsonValue cfg = accore::AcJsonValue::makeObject();
-  cfg.set(QString::fromLatin1(AcDB::kHost), accore::AcJsonValue(config.dbHost));
-  cfg.set(QString::fromLatin1(AcDB::kPort), accore::AcJsonValue(config.dbPort));
-  cfg.set(QString::fromLatin1(AcDB::kUser), accore::AcJsonValue(config.dbUser));
-  cfg.set(QString::fromLatin1(AcDB::kPassword), accore::AcJsonValue(config.dbPassword));
-  cfg.set(QString::fromLatin1(AcDB::kDatabase), accore::AcJsonValue(config.dbDatabase));
-  accore::AcJsonValue args = accore::AcJsonValue::makeArray();
-  args.append(cfg);
-  *instance = FunDb::constructor(args);
-  if (!instance->isObject() ||
-      !instance->value(QString::fromLatin1(AcDB::kConnected)).toBool(false)) {
-    showFunDbError(parent, QStringLiteral("连接失败"), QStringLiteral("数据库连接失败"));
-    return false;
-  }
-  return true;
-}
-
-// ════════════════════════════════════════════════════════════
-//  从数据库刷新结构：差异计算 + 差异预览对话框
-// ════════════════════════════════════════════════════════════
-
-/// 单列差异类别
-enum class ImportDiffKind { Added, Modified, Removed, Unchanged };
-
-/// 差异预览的一行
-struct ImportDiffEntry {
-  QString name;  ///< 列名（保持数据库/配置中的原始大小写）
-  ImportDiffKind kind = ImportDiffKind::Unchanged;
-  JsonTableColumn current;  ///< 当前配置列（hasCurrent=false 时无效）
-  JsonTableColumn db;       ///< 数据库列（hasDb=false 时无效）
-  bool hasCurrent = false;
-  bool hasDb = false;
-  bool excluded = false;  ///< 是否在排除列列表中（刷新时忽略）
-};
-
-/// 差异预览结果（applyByKey 的 key 为列名小写）
-struct ImportDiffResult {
-  bool accepted = false;
-  QHash<QString, bool> applyByKey;       ///< 列名小写 → 是否应用（已排除的列恒为 false）
-  QHash<QString, bool> indexApplyByKey;  ///< 索引名小写 → 是否应用
-  QStringList excludedColumns;           ///< 应用后的排除列列表
-  bool applyTableComment = false;        ///< 是否同步表注释
-};
-
-QString importColumnType(const JsonTableColumn &c) {
-  return c.isUnsigned ? c.mysqlType + QStringLiteral(" unsigned") : c.mysqlType;
-}
-
-QString importValueText(const QString &v) { return v.isEmpty() ? QStringLiteral("（空）") : v; }
-
-QString importColumnSummary(const JsonTableColumn &c) {
-  QStringList parts;
-  parts << importColumnType(c);
-  parts << (c.nullable ? QStringLiteral("可空") : QStringLiteral("非空"));
-  if (c.isPrimary) parts << QStringLiteral("主键");
-  if (c.isAutoInc) parts << QStringLiteral("自增");
-  if (!c.defaultValue.isEmpty()) parts << QStringLiteral("默认 %1").arg(c.defaultValue);
-  if (!c.comment.isEmpty()) parts << c.comment;
-  return parts.join(QStringLiteral(" · "));
-}
-
-QStringList importColumnChanges(const JsonTableColumn &a, const JsonTableColumn &b) {
-  QStringList out;
-  if (importColumnType(a).compare(importColumnType(b), Qt::CaseInsensitive) != 0) {
-    out << QStringLiteral("类型 %1 → %2").arg(importColumnType(a), importColumnType(b));
-  }
-  if (a.nullable != b.nullable) {
-    out << QStringLiteral("可空 %1 → %2")
-               .arg(a.nullable ? QStringLiteral("是") : QStringLiteral("否"),
-                    b.nullable ? QStringLiteral("是") : QStringLiteral("否"));
-  }
-  if (a.isPrimary != b.isPrimary) {
-    out << QStringLiteral("主键 %1 → %2")
-               .arg(a.isPrimary ? QStringLiteral("是") : QStringLiteral("否"),
-                    b.isPrimary ? QStringLiteral("是") : QStringLiteral("否"));
-  }
-  if (a.isAutoInc != b.isAutoInc) {
-    out << QStringLiteral("自增 %1 → %2")
-               .arg(a.isAutoInc ? QStringLiteral("是") : QStringLiteral("否"),
-                    b.isAutoInc ? QStringLiteral("是") : QStringLiteral("否"));
-  }
-  if (a.defaultValue != b.defaultValue) {
-    out << QStringLiteral("默认值 %1 → %2")
-               .arg(importValueText(a.defaultValue), importValueText(b.defaultValue));
-  }
-  if (a.comment != b.comment) {
-    out << QStringLiteral("注释 %1 → %2")
-               .arg(importValueText(a.comment), importValueText(b.comment));
-  }
-  return out;
-}
-
-QString importKindText(ImportDiffKind kind) {
-  switch (kind) {
-    case ImportDiffKind::Added:
-      return QStringLiteral("新增");
-    case ImportDiffKind::Modified:
-      return QStringLiteral("修改");
-    case ImportDiffKind::Removed:
-      return QStringLiteral("删除");
-    default:
-      return QStringLiteral("未变");
-  }
-}
-
-QColor importKindColor(ImportDiffKind kind) {
-  switch (kind) {
-    case ImportDiffKind::Added:
-      return AuiStyle::successTextColor();
-    case ImportDiffKind::Modified:
-      return AuiStyle::modifiedTextColor();
-    case ImportDiffKind::Removed:
-      return AuiStyle::errorTextColor();
-    default:
-      return AuiStyle::mutedTextColor();
-  }
-}
-
-QString importEntryTooltip(const ImportDiffEntry &e) {
-  if (e.excluded) return QStringLiteral("在「排除列」中，刷新时忽略该列");
-  switch (e.kind) {
-    case ImportDiffKind::Added:
-      return QStringLiteral("数据库中新增的列，勾选后加入配置");
-    case ImportDiffKind::Modified:
-      return importColumnChanges(e.current, e.db).join(QStringLiteral("\n"));
-    case ImportDiffKind::Removed:
-      return QStringLiteral("数据库已无该列，勾选后从配置删除");
-    default:
-      return QString();
-  }
-}
-
-/// 计算当前配置列与数据库列的差异（跳过无变化的列；排除列即使无变化也保留展示）
-QVector<ImportDiffEntry> buildImportDiffEntries(const QVector<JsonTableColumn> &current,
-                                                const QVector<JsonTableColumn> &db,
-                                                const QStringList &excluded) {
-  QHash<QString, int> currentIndexByKey;
-  for (int i = 0; i < current.size(); ++i) {
-    currentIndexByKey.insert(current[i].name.toLower(), i);
-  }
-  QSet<QString> excludedKeys;
-  for (const auto &name : excluded) {
-    const QString key = name.trimmed().toLower();
-    if (!key.isEmpty()) excludedKeys.insert(key);
-  }
-
-  QVector<ImportDiffEntry> entries;
-  QSet<QString> dbKeys;
-  for (const auto &d : db) {
-    const QString key = d.name.toLower();
-    dbKeys.insert(key);
-    ImportDiffEntry e;
-    e.name = d.name;
-    e.db = d;
-    e.hasDb = true;
-    const auto it = currentIndexByKey.constFind(key);
-    if (it != currentIndexByKey.constEnd()) {
-      e.current = current[*it];
-      e.hasCurrent = true;
-      e.kind = importColumnChanges(e.current, d).isEmpty() ? ImportDiffKind::Unchanged
-                                                           : ImportDiffKind::Modified;
-    } else {
-      e.kind = ImportDiffKind::Added;
-    }
-    e.excluded = excludedKeys.contains(key);
-    if (e.kind == ImportDiffKind::Unchanged && !e.excluded) continue;
-    entries.append(e);
-  }
-  // 配置中存在、数据库已删除的列（按配置顺序追加）
-  for (const auto &c : current) {
-    if (dbKeys.contains(c.name.toLower())) continue;
-    ImportDiffEntry e;
-    e.name = c.name;
-    e.current = c;
-    e.hasCurrent = true;
-    e.kind = ImportDiffKind::Removed;
-    entries.append(e);
-  }
-  return entries;
-}
-
-/// 排除列写入 table.extra（空列表时移除键；生成期不消费该键）
-void setExcludedColumns(JsonTableTable *table, const QStringList &columns) {
-  if (!table) return;
-  const QString key = QString::fromLatin1(JsonTableKey::kExcludeColumns);
-  QStringList unique;
-  for (const auto &name : columns) {
-    const QString trimmed = name.trimmed();
-    if (!trimmed.isEmpty() && !unique.contains(trimmed, Qt::CaseInsensitive)) {
-      unique << trimmed;
-    }
-  }
-  if (unique.isEmpty()) {
-    table->extra.remove(key);
-    return;
-  }
-  QJsonArray array;
-  for (const auto &name : unique) array.append(name);
-  table->extra.insert(key, array);
-}
-
-/// 删除列后前端引用清理统计
-struct RefCleanupStats {
-  int selCols = 0;
-  int queryCols = 0;
-  int sortCols = 0;
-  int editCols = 0;
-  int joins = 0;
-  int enums = 0;
-  int globalEnumCols = 0;
-  int i18nFields = 0;
-  int buttonFields = 0;
-  QStringList details;
-
-  int total() const {
-    return selCols + queryCols + sortCols + editCols + joins + enums + globalEnumCols + i18nFields +
-           buttonFields;
-  }
-
-  QString summary() const {
-    QStringList parts;
-    if (selCols > 0) parts << QStringLiteral("列表 %1").arg(selCols);
-    if (queryCols > 0) parts << QStringLiteral("查询 %1").arg(queryCols);
-    if (sortCols > 0) parts << QStringLiteral("排序 %1").arg(sortCols);
-    if (editCols > 0) parts << QStringLiteral("编辑 %1").arg(editCols);
-    if (joins > 0) parts << QStringLiteral("联表 %1").arg(joins);
-    if (enums > 0) parts << QStringLiteral("枚举 %1").arg(enums);
-    if (globalEnumCols > 0) parts << QStringLiteral("全局枚举 %1").arg(globalEnumCols);
-    if (i18nFields > 0) parts << QStringLiteral("多语言字段 %1").arg(i18nFields);
-    if (buttonFields > 0) parts << QStringLiteral("按钮字段 %1").arg(buttonFields);
-    return parts.join(QStringLiteral("、"));
-  }
-};
-
-/// 清理被删除列（及其联表别名）在视图/查询/排序/编辑/枚举/多语言/按钮中的引用。
-/// 只修改传入的表模型，不触碰界面；调用方决定确认后再 load 回填。
-RefCleanupStats cleanRemovedColumnRefs(JsonTableTable *table, const QStringList &removedColumns) {
-  RefCleanupStats stats;
-  if (!table || removedColumns.isEmpty()) return stats;
-
-  QSet<QString> removedKeys;
-  for (const auto &name : removedColumns) {
-    const QString key = name.trimmed().toLower();
-    if (!key.isEmpty()) removedKeys.insert(key);
-  }
-  if (removedKeys.isEmpty()) return stats;
-
-  // 联表外键列被删除 → 移除整条联表声明，其视图引用一并清理
-  QVector<JsonTableJoin> joins;
-  QSet<QString> droppedAliases;
-  for (const auto &join : table->joinTable) {
-    if (removedKeys.contains(join.joinFk.toLower())) {
-      ++stats.joins;
-      stats.details
-          << QStringLiteral("联表「%1」（外键 %2）").arg(join.joinEnClassPro, join.joinFk);
-      if (!join.joinEnClassPro.isEmpty()) droppedAliases.insert(join.joinEnClassPro.toLower());
-      continue;
-    }
-    joins << join;
-  }
-  table->joinTable = joins;
-
-  auto isDroppedRef = [&](const QString &ref) {
-    const QString r = ref.trimmed();
-    if (removedKeys.contains(r.toLower())) return true;
-    const int dot = r.indexOf(QLatin1Char('.'));
-    return dot > 0 && droppedAliases.contains(r.left(dot).toLower());
-  };
-
-  auto cleanRefVector = [&](auto &vector, int &counter, const QString &label) {
-    const auto copy = vector;
-    vector.clear();
-    for (const auto &col : copy) {
-      if (isDroppedRef(col.ref)) {
-        ++counter;
-        stats.details << QStringLiteral("%1 %2").arg(label, col.ref);
-      } else {
-        vector << col;
-      }
-    }
-  };
-  cleanRefVector(table->selCols, stats.selCols, QStringLiteral("列表列"));
-  cleanRefVector(table->selColsEq, stats.queryCols, QStringLiteral("查询列"));
-  cleanRefVector(table->selColsGap, stats.queryCols, QStringLiteral("范围查询列"));
-  cleanRefVector(table->selColsLike, stats.queryCols, QStringLiteral("模糊查询列"));
-  cleanRefVector(table->editCols, stats.editCols, QStringLiteral("编辑列"));
-
-  QVector<QPair<QString, QString>> sorts;
-  for (const auto &sort : table->selColsSort) {
-    if (isDroppedRef(sort.first)) {
-      ++stats.sortCols;
-      stats.details << QStringLiteral("排序 %1").arg(sort.first);
-    } else {
-      sorts << sort;
-    }
-  }
-  table->selColsSort = sorts;
-
-  QVector<JsonTableEnum> enums;
-  for (const auto &item : table->enums) {
-    if (removedKeys.contains(item.column.toLower())) {
-      ++stats.enums;
-      stats.details << QStringLiteral("枚举列 %1").arg(item.column);
-    } else {
-      enums << item;
-    }
-  }
-  table->enums = enums;
-
-  QStringList globalEnums;
-  for (const auto &name : table->globalEnumCols) {
-    if (removedKeys.contains(name.toLower())) {
-      ++stats.globalEnumCols;
-      stats.details << QStringLiteral("全局枚举列 %1").arg(name);
-    } else {
-      globalEnums << name;
-    }
-  }
-  table->globalEnumCols = globalEnums;
-
-  QStringList i18nFields;
-  for (const auto &name : table->i18n.fields) {
-    if (removedKeys.contains(name.toLower())) {
-      ++stats.i18nFields;
-      stats.details << QStringLiteral("多语言字段 %1").arg(name);
-    } else {
-      i18nFields << name;
-    }
-  }
-  table->i18n.fields = i18nFields;
-
-  // 按钮对话框字段（fieldName 通常与表单项/字段同名）
-  for (auto &button : table->buttons) {
-    QVector<DialogFieldConfig> fields;
-    for (const auto &field : button.dialogFields) {
-      if (removedKeys.contains(field.fieldName.toLower())) {
-        ++stats.buttonFields;
-        stats.details << QStringLiteral("按钮「%1」字段 %2").arg(button.label, field.fieldName);
-      } else {
-        fields << field;
-      }
-    }
-    button.dialogFields = fields;
-  }
-
-  return stats;
-}
-
-// ════════════════════════════════════════════════════════════
-//  索引差异
-// ════════════════════════════════════════════════════════════
-
-struct IndexDiffEntry {
-  QString name;
-  ImportDiffKind kind = ImportDiffKind::Unchanged;
-  JsonTableIndex current;
-  JsonTableIndex db;
-  bool hasCurrent = false;
-  bool hasDb = false;
-};
-
-bool sameIndexShape(const JsonTableIndex &a, const JsonTableIndex &b) {
-  return a.unique == b.unique && a.cols == b.cols;
-}
-
-QString indexSummary(const JsonTableIndex &index) {
-  return QStringLiteral("%1 · %2").arg(
-      index.unique ? QStringLiteral("unique") : QStringLiteral("普通"),
-      index.cols.join(QStringLiteral(", ")));
-}
-
-QStringList indexChanges(const JsonTableIndex &a, const JsonTableIndex &b) {
-  QStringList out;
-  if (a.cols != b.cols) {
-    out << QStringLiteral("列 %1 → %2")
-               .arg(a.cols.join(QStringLiteral(", ")), b.cols.join(QStringLiteral(", ")));
-  }
-  if (a.unique != b.unique) {
-    out << QStringLiteral("unique %1 → %2")
-               .arg(a.unique ? QStringLiteral("是") : QStringLiteral("否"),
-                    b.unique ? QStringLiteral("是") : QStringLiteral("否"));
-  }
-  return out;
-}
-
-QVector<IndexDiffEntry> buildIndexDiffEntries(const QVector<JsonTableIndex> &current,
-                                              const QVector<JsonTableIndex> &db) {
-  QHash<QString, int> currentIndexByKey;
-  for (int i = 0; i < current.size(); ++i) {
-    currentIndexByKey.insert(current[i].name.toLower(), i);
-  }
-  QVector<IndexDiffEntry> entries;
-  QSet<QString> dbKeys;
-  for (const auto &d : db) {
-    const QString key = d.name.toLower();
-    dbKeys.insert(key);
-    IndexDiffEntry e;
-    e.name = d.name;
-    e.db = d;
-    e.hasDb = true;
-    const auto it = currentIndexByKey.constFind(key);
-    if (it != currentIndexByKey.constEnd()) {
-      e.current = current[*it];
-      e.hasCurrent = true;
-      e.kind = sameIndexShape(e.current, d) ? ImportDiffKind::Unchanged : ImportDiffKind::Modified;
-    } else {
-      e.kind = ImportDiffKind::Added;
-    }
-    if (e.kind == ImportDiffKind::Unchanged) continue;
-    entries.append(e);
-  }
-  for (const auto &c : current) {
-    if (dbKeys.contains(c.name.toLower())) continue;
-    IndexDiffEntry e;
-    e.name = c.name;
-    e.current = c;
-    e.hasCurrent = true;
-    e.kind = ImportDiffKind::Removed;
-    entries.append(e);
-  }
-  return entries;
-}
-
-/// 差异预览对话框：逐列勾选应用/排除，返回用户选择（取消时 accepted=false）
-ImportDiffResult runImportDiffDialog(QWidget *parent, const QString &tableName,
-                                     const QVector<ImportDiffEntry> &entries,
-                                     const QVector<IndexDiffEntry> &indexEntries,
-                                     const QString &currentComment, const QString &dbComment,
-                                     const QStringList &initialExcluded) {
-  ImportDiffResult result;
-  QDialog dlg(parent);
-  dlg.setMinimumWidth(760);
-  ConfigDialogFrame frame = beginConfigDialog(
-      &dlg, QStringLiteral("从数据库刷新结构：%1").arg(tableName), QMargins(12, 10, 12, 10), 6);
-
-  int added = 0;
-  int modified = 0;
-  int removed = 0;
-  int excluded = 0;
-  for (const auto &e : entries) {
-    if (e.excluded) ++excluded;
-    switch (e.kind) {
-      case ImportDiffKind::Added:
-        ++added;
-        break;
-      case ImportDiffKind::Modified:
-        ++modified;
-        break;
-      case ImportDiffKind::Removed:
-        ++removed;
-        break;
-      default:
-        break;
-    }
-  }
-  int indexAdded = 0;
-  int indexModified = 0;
-  int indexRemoved = 0;
-  for (const auto &e : indexEntries) {
-    switch (e.kind) {
-      case ImportDiffKind::Added:
-        ++indexAdded;
-        break;
-      case ImportDiffKind::Modified:
-        ++indexModified;
-        break;
-      case ImportDiffKind::Removed:
-        ++indexRemoved;
-        break;
-      default:
-        break;
-    }
-  }
-  QString summaryText =
-      QStringLiteral(
-          "共 %1 项列差异：新增 %2 / 修改 %3 / 删除 %4 / 已排除 %5。\n"
-          "勾选要应用的变更；删除列默认不勾选，排除列不会被新增或修改。\n"
-          "勾选删除列时，会同时清理列表/查询/排序/编辑/联表/枚举/按钮中的相关引用。")
-          .arg(entries.size())
-          .arg(added)
-          .arg(modified)
-          .arg(removed)
-          .arg(excluded);
-  if (!indexEntries.isEmpty()) {
-    summaryText +=
-        QStringLiteral("\n索引差异：新增 %1 / 修改 %2 / 删除 %3（默认全部应用，不涉及数据行）。")
-            .arg(indexAdded)
-            .arg(indexModified)
-            .arg(indexRemoved);
-  }
-  auto *summary = new QLabel(summaryText, &dlg);
-  summary->setWordWrap(true);
-  summary->setStyleSheet(QStringLiteral("color: %1;").arg(AuiStyle::mutedTextColor().name()));
-  frame.contentLayout->addWidget(summary);
-
-  QCheckBox *commentCheck = nullptr;
-  if (!dbComment.isEmpty() && dbComment != currentComment) {
-    commentCheck = new QCheckBox(
-        QStringLiteral("同步表注释：%1 → %2")
-            .arg(currentComment.isEmpty() ? QStringLiteral("（空）") : currentComment, dbComment),
-        &dlg);
-    commentCheck->setChecked(true);
-    frame.contentLayout->addWidget(commentCheck);
-  }
-
-  auto *btnRow = new QHBoxLayout;
-  auto *selectAllBtn = makeCompactButton(QStringLiteral("全选变更"), &dlg);
-  auto *selectNoneBtn = makeCompactButton(QStringLiteral("全不选"), &dlg);
-  btnRow->addWidget(selectAllBtn);
-  btnRow->addWidget(selectNoneBtn);
-  btnRow->addStretch();
-  frame.contentLayout->addLayout(btnRow);
-
-  enum DiffCol { DiffApply = 0, DiffName, DiffStatus, DiffCurrent, DiffDb, DiffExclude };
-  auto *table = makeConfigTable({{QStringLiteral("应用"), QHeaderView::Fixed, 60},
-                                 {QStringLiteral("列名"), QHeaderView::Interactive, 140},
-                                 {QStringLiteral("变更"), QHeaderView::Fixed, 80},
-                                 {QStringLiteral("当前配置"), QHeaderView::Stretch, 0},
-                                 {QStringLiteral("数据库"), QHeaderView::Stretch, 0},
-                                 {QStringLiteral("排除"), QHeaderView::Fixed, 60}},
-                                &dlg, 260, 0, QAbstractItemView::SelectRows);
-  table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-  table->verticalHeader()->setDefaultSectionSize(28);
-  frame.contentLayout->addWidget(table, 1);
-
-  for (const auto &e : entries) {
-    const int row = table->rowCount();
-    table->insertRow(row);
-
-    const bool defaultApply =
-        !e.excluded && (e.kind == ImportDiffKind::Added || e.kind == ImportDiffKind::Modified);
-    QTableWidgetItem *apply = makeCheckItem(defaultApply);
-    if (e.excluded) apply->setFlags(apply->flags() & ~Qt::ItemIsUserCheckable);
-    table->setItem(row, DiffApply, apply);
-
-    auto *name = new QTableWidgetItem(e.name);
-    name->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
-    table->setItem(row, DiffName, name);
-
-    auto *status =
-        new QTableWidgetItem(e.excluded ? QStringLiteral("已排除") : importKindText(e.kind));
-    status->setForeground(
-        QBrush(e.excluded ? AuiStyle::mutedTextColor() : importKindColor(e.kind)));
-    status->setToolTip(importEntryTooltip(e));
-    table->setItem(row, DiffStatus, status);
-
-    auto *cur =
-        new QTableWidgetItem(e.hasCurrent ? importColumnSummary(e.current) : QStringLiteral("-"));
-    cur->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
-    cur->setToolTip(cur->text());
-    table->setItem(row, DiffCurrent, cur);
-
-    auto *db = new QTableWidgetItem(e.hasDb ? importColumnSummary(e.db) : QStringLiteral("-"));
-    db->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
-    db->setToolTip(db->text());
-    table->setItem(row, DiffDb, db);
-
-    QTableWidgetItem *exclude = nullptr;
-    if (e.hasDb) {
-      exclude = makeCheckItem(e.excluded);
-      exclude->setToolTip(QStringLiteral("勾选后，后续从数据库刷新将忽略该列"));
-    } else {
-      exclude = new QTableWidgetItem;
-      exclude->setFlags(Qt::ItemIsEnabled);
-      exclude->setTextAlignment(Qt::AlignCenter);
-    }
-    table->setItem(row, DiffExclude, exclude);
-  }
-
-  // ── 索引差异（若存在）──
-  enum IndexDiffCol { IdxApply = 0, IdxName, IdxStatus, IdxCurrent, IdxDb };
-  QTableWidget *indexTable = nullptr;
-  if (!indexEntries.isEmpty()) {
-    auto *idxLabel = new QLabel(QStringLiteral("索引差异:"), &dlg);
-    idxLabel->setStyleSheet(QStringLiteral("color: %1;").arg(AuiStyle::mutedTextColor().name()));
-    frame.contentLayout->addWidget(idxLabel);
-    indexTable = makeConfigTable({{QStringLiteral("应用"), QHeaderView::Fixed, 60},
-                                  {QStringLiteral("索引名"), QHeaderView::Interactive, 140},
-                                  {QStringLiteral("变更"), QHeaderView::Fixed, 80},
-                                  {QStringLiteral("当前配置"), QHeaderView::Stretch, 0},
-                                  {QStringLiteral("数据库"), QHeaderView::Stretch, 0}},
-                                 &dlg, 140, 0, QAbstractItemView::SelectRows);
-    indexTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    indexTable->verticalHeader()->setDefaultSectionSize(28);
-    indexTable->setMaximumHeight(200);
-    frame.contentLayout->addWidget(indexTable);
-    for (const auto &e : indexEntries) {
-      const int row = indexTable->rowCount();
-      indexTable->insertRow(row);
-      indexTable->setItem(row, IdxApply, makeCheckItem(true));
-      auto *name = new QTableWidgetItem(e.name);
-      name->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
-      indexTable->setItem(row, IdxName, name);
-      auto *status = new QTableWidgetItem(importKindText(e.kind));
-      status->setForeground(QBrush(importKindColor(e.kind)));
-      if (e.kind == ImportDiffKind::Modified) {
-        status->setToolTip(indexChanges(e.current, e.db).join(QStringLiteral("\n")));
-      }
-      indexTable->setItem(row, IdxStatus, status);
-      auto *cur =
-          new QTableWidgetItem(e.hasCurrent ? indexSummary(e.current) : QStringLiteral("-"));
-      cur->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
-      cur->setToolTip(cur->text());
-      indexTable->setItem(row, IdxCurrent, cur);
-      auto *db = new QTableWidgetItem(e.hasDb ? indexSummary(e.db) : QStringLiteral("-"));
-      db->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
-      db->setToolTip(db->text());
-      indexTable->setItem(row, IdxDb, db);
-    }
-  }
-
-  // 排除勾选联动：勾上 → 取消应用且禁用；取消 → 恢复默认应用勾选
-  bool syncing = false;
-  QObject::connect(table, &QTableWidget::itemChanged, &dlg, [&](QTableWidgetItem *item) {
-    if (syncing || item->column() != DiffExclude) return;
-    if (!(item->flags() & Qt::ItemIsUserCheckable)) return;
-    syncing = true;
-    const int row = item->row();
-    const auto &e = entries[row];
-    const bool isExcluded = item->checkState() == Qt::Checked;
-    QTableWidgetItem *apply = table->item(row, DiffApply);
-    if (isExcluded) {
-      apply->setCheckState(Qt::Unchecked);
-      apply->setFlags(apply->flags() & ~Qt::ItemIsUserCheckable);
-    } else {
-      apply->setFlags(apply->flags() | Qt::ItemIsUserCheckable);
-      apply->setCheckState((e.kind == ImportDiffKind::Added || e.kind == ImportDiffKind::Modified)
-                               ? Qt::Checked
-                               : Qt::Unchecked);
-    }
-    QTableWidgetItem *status = table->item(row, DiffStatus);
-    status->setText(isExcluded ? QStringLiteral("已排除") : importKindText(e.kind));
-    status->setForeground(
-        QBrush(isExcluded ? AuiStyle::mutedTextColor() : importKindColor(e.kind)));
-    syncing = false;
-  });
-
-  QObject::connect(selectAllBtn, &QPushButton::clicked, &dlg, [&]() {
-    for (int r = 0; r < table->rowCount(); ++r) {
-      QTableWidgetItem *apply = table->item(r, DiffApply);
-      if (apply && (apply->flags() & Qt::ItemIsUserCheckable)) {
-        apply->setCheckState(Qt::Checked);
-      }
-    }
-    if (indexTable) {
-      for (int r = 0; r < indexTable->rowCount(); ++r) {
-        indexTable->item(r, IdxApply)->setCheckState(Qt::Checked);
-      }
-    }
-  });
-  QObject::connect(selectNoneBtn, &QPushButton::clicked, &dlg, [&]() {
-    for (int r = 0; r < table->rowCount(); ++r) {
-      QTableWidgetItem *apply = table->item(r, DiffApply);
-      if (apply && (apply->flags() & Qt::ItemIsUserCheckable)) {
-        apply->setCheckState(Qt::Unchecked);
-      }
-    }
-    if (indexTable) {
-      for (int r = 0; r < indexTable->rowCount(); ++r) {
-        indexTable->item(r, IdxApply)->setCheckState(Qt::Unchecked);
-      }
-    }
-  });
-
-  finishConfigDialog(&dlg, frame);
-  if (dlg.exec() != QDialog::Accepted) return result;
-
-  result.accepted = true;
-  QSet<QString> dbKeysInDiff;
-  for (int r = 0; r < entries.size(); ++r) {
-    const auto &e = entries[r];
-    const bool excludeChecked = e.hasDb && table->item(r, DiffExclude)->checkState() == Qt::Checked;
-    const bool applyChecked =
-        table->item(r, DiffApply)->checkState() == Qt::Checked && !excludeChecked;
-    result.applyByKey.insert(e.name.toLower(), applyChecked);
-    // 只要该列出现在差异表（数据库中存在），就由本次勾选决定其排除状态；
-    // 未勾选排除时不再回填到排除列表（否则取消排除会被旧值覆盖）。
-    if (e.hasDb) dbKeysInDiff.insert(e.name.toLower());
-    if (excludeChecked) {
-      result.excludedColumns << e.name;
-    }
-  }
-  // 保留初始排除列表中不在本次差异里的条目（拼写/未来列），避免被误删
-  for (const auto &name : initialExcluded) {
-    if (dbKeysInDiff.contains(name.toLower())) continue;
-    if (result.excludedColumns.contains(name, Qt::CaseInsensitive)) continue;
-    result.excludedColumns << name;
-  }
-  if (indexTable) {
-    for (int r = 0; r < indexEntries.size(); ++r) {
-      result.indexApplyByKey.insert(indexEntries[r].name.toLower(),
-                                    indexTable->item(r, IdxApply)->checkState() == Qt::Checked);
-    }
-  }
-  result.applyTableComment = commentCheck && commentCheck->isChecked();
-  return result;
 }
 
 }  // namespace
@@ -963,6 +232,7 @@ JsonTableDesigner::JsonTableDesigner(const JsonTableTable &table, const JsonTabl
   setupUI();
   refill();
   connectChangeSignals();
+  connect(this, &JsonTableDesigner::configChanged, this, [this]() { ++m_revision; });
 }
 
 void JsonTableDesigner::setupUI() {
@@ -1540,6 +810,7 @@ void JsonTableDesigner::setupUI() {
   });
   connect(m_importBtn, &QPushButton::clicked, this, &JsonTableDesigner::importFromDatabase);
   connect(previewBtn, &QPushButton::clicked, this, &JsonTableDesigner::previewDdl);
+  m_executeBtn = execBtn;
   connect(execBtn, &QPushButton::clicked, this, &JsonTableDesigner::executeCreateTable);
   connect(addSortBtn, &QPushButton::clicked, this,
           [this]() { appendSortRow(QString(), QStringLiteral("DESC")); });
@@ -1737,15 +1008,17 @@ void JsonTableDesigner::updateDbButtonStates() {
   const QString readyTip = QStringLiteral("按当前表名拉取数据库结构，先展示差异再按勾选应用");
   const QString missingTip =
       QStringLiteral("meta.db 未配置完整（host/user/database），无法从数据库刷新结构");
+  if (m_executeBtn) m_executeBtn->setEnabled(ready && !m_dbBusy);
   for (QPushButton *button : {m_importBtn, m_refreshFieldsBtn}) {
     if (!button) continue;
-    button->setEnabled(ready);
+    button->setEnabled(ready && !m_dbBusy);
     button->setToolTip(ready ? readyTip : missingTip);
   }
 }
 
 void JsonTableDesigner::load(const JsonTableTable &table, const JsonTableConfig &config,
                              const QString &filePath) {
+  ++m_revision;
   m_table = table;
   m_config = config;
   m_filePath = filePath;
@@ -1880,10 +1153,10 @@ void JsonTableDesigner::appendColumnRow(const JsonTableColumn &c) {
   // 类型列文本由常驻下拉显示，条目只占位（避免条目文字与下拉文字叠成重影）
   m_colsTable->setItem(row, ColColType, new QTableWidgetItem);
   bindColTypeCombo(row, c.mysqlType);
-  m_colsTable->setItem(row, ColColUnsigned, makeCheckItem(c.isUnsigned));
-  m_colsTable->setItem(row, ColColNullable, makeCheckItem(c.nullable));
-  m_colsTable->setItem(row, ColColPrimary, makeCheckItem(c.isPrimary));
-  m_colsTable->setItem(row, ColColAutoInc, makeCheckItem(c.isAutoInc));
+  m_colsTable->setItem(row, ColColUnsigned, makeConfigCheckItem(c.isUnsigned));
+  m_colsTable->setItem(row, ColColNullable, makeConfigCheckItem(c.nullable));
+  m_colsTable->setItem(row, ColColPrimary, makeConfigCheckItem(c.isPrimary));
+  m_colsTable->setItem(row, ColColAutoInc, makeConfigCheckItem(c.isAutoInc));
   m_colsTable->setItem(row, ColColDefault, new QTableWidgetItem(c.defaultValue));
   m_colsTable->setItem(row, ColColComment, new QTableWidgetItem(c.comment));
 }
@@ -2148,7 +1421,7 @@ void JsonTableDesigner::fillIndexes(const QVector<JsonTableIndex> &indexes) {
     m_indexTable->setItem(row, IndexColName, new QTableWidgetItem(ix.name));
     m_indexTable->setItem(row, IndexColCols,
                           new QTableWidgetItem(ix.cols.join(QStringLiteral(","))));
-    m_indexTable->setItem(row, IndexColUnique, makeCheckItem(ix.unique));
+    m_indexTable->setItem(row, IndexColUnique, makeConfigCheckItem(ix.unique));
   }
 }
 
@@ -2157,7 +1430,7 @@ void JsonTableDesigner::appendIndexRow() {
   m_indexTable->insertRow(row);
   m_indexTable->setItem(row, IndexColName, new QTableWidgetItem(QString()));
   m_indexTable->setItem(row, IndexColCols, new QTableWidgetItem(QString()));
-  m_indexTable->setItem(row, IndexColUnique, makeCheckItem(false));
+  m_indexTable->setItem(row, IndexColUnique, makeConfigCheckItem(false));
   m_indexTable->setCurrentCell(row, IndexColName);
 }
 
@@ -3325,223 +2598,8 @@ bool JsonTableDesigner::validateForDdl(QString *err) const {
 // ════════════════════════════════════════════════════════════
 
 bool JsonTableDesigner::validateCrossRefs(QString *err) const {
-  auto fail = [err](const QString &msg) {
-    if (err) *err = msg;
-    return false;
-  };
-
-  // ── 基础项（与 validateForDdl 同源）──
-  const QString tableName = m_nameEdit->text().trimmed();
-  if (tableName.isEmpty()) return fail(QStringLiteral("表名不能为空"));
-  const QVector<JsonTableColumn> cols = collectColumns();
-  if (cols.isEmpty()) return fail(QStringLiteral("请先添加字段列"));
-
-  // 列名集合（重复列名会让 DDL/生成产生歧义）
-  QSet<QString> colNames;
-  for (const auto &c : cols) {
-    if (colNames.contains(c.name)) return fail(QStringLiteral("列名 '%1' 重复").arg(c.name));
-    colNames.insert(c.name);
-  }
-
-  // 表名与同文件其它表重复（生成期同名表会被跳过并报错）
-  for (const auto &t : m_config.tables) {
-    if (t.tableName == tableName && t.tableName != m_table.tableName)
-      return fail(QStringLiteral("表名 '%1' 与文件中其它表重复").arg(tableName));
-  }
-
-  // ── 表内枚举：枚举列须在字段列表中且互不重复 ──
-  const QVector<JsonTableEnum> enums = collectEnums();
-  QSet<QString> enumCols;
-  for (int i = 0; i < enums.size(); ++i) {
-    const JsonTableEnum &e = enums[i];
-    if (e.column.isEmpty()) return fail(QStringLiteral("第 %1 个表内枚举未填枚举列").arg(i + 1));
-    if (!colNames.contains(e.column))
-      return fail(QStringLiteral("表内枚举列 '%1' 不在字段列表中").arg(e.column));
-    if (enumCols.contains(e.column))
-      return fail(QStringLiteral("列 '%1' 重复配置表内枚举").arg(e.column));
-    enumCols.insert(e.column);
-  }
-
-  // ── 全局枚举列：列名=枚举名，须在字段列表中；与表内枚举二选一 ──
-  // （.jsonglobalenum 文件中枚举是否存在由生成期校验，设计器无文件上下文）
-  for (const QString &ge : splitCsv(m_globalEnumEdit->text())) {
-    if (!colNames.contains(ge))
-      return fail(QStringLiteral("全局枚举列 '%1' 不在字段列表中（列名须与 .jsonglobalenum "
-                                 "枚举名一致）")
-                      .arg(ge));
-    if (enumCols.contains(ge))
-      return fail(QStringLiteral("列 '%1' 同时配置了表内枚举与全局枚举（二选一）").arg(ge));
-  }
-
-  // ── 联表查询声明（joinTables 新格式）：表/类型/ON 两列/输出列可解析 ──
-  const QVector<JsonTableJoinSpec> joinSpecs = collectJoins();
-  QSet<QString> joinAliases;  // 输出别名（表名_列名）去重 + 主表列冲突校验
-  const QString joinSearchDir = m_filePath.isEmpty() ? QStringLiteral(PROJECT_SOURCE_DIR)
-                                                     : QFileInfo(m_filePath).absolutePath();
-  const QVector<JsonTableTable> joinProjectTables = listProjectTables(joinSearchDir);
-  auto targetColumnsOf = [&](const QString &tbl) -> QStringList {
-    for (const auto &t : joinProjectTables) {
-      if (t.tableName == tbl) {
-        QStringList cols;
-        for (const auto &c : t.columns) cols.append(c.name);
-        return cols;
-      }
-    }
-    return {};
-  };
-  for (int i = 0; i < joinSpecs.size(); ++i) {
-    const JsonTableJoinSpec &j = joinSpecs[i];
-    if (j.table.isEmpty()) return fail(QStringLiteral("第 %1 条联表未填被联表名").arg(i + 1));
-    const QStringList tcols = targetColumnsOf(j.table);
-    if (tcols.isEmpty())
-      return fail(QStringLiteral("联表 '%1' 的目标表不在项目 .jsontable 中").arg(j.table));
-    if (j.type != QStringLiteral("LEFT") && j.type != QStringLiteral("INNER"))
-      return fail(QStringLiteral("联表 '%1' 的 type 仅支持 LEFT/INNER").arg(j.table));
-    if (j.on.size() != 2 || j.on.at(0).isEmpty() || j.on.at(1).isEmpty())
-      return fail(QStringLiteral("联表 '%1' 的 on 须为 [主表列, 联表列]").arg(j.table));
-    if (!colNames.contains(j.on.at(0)))
-      return fail(
-          QStringLiteral("联表 '%1' 的主表列 '%2' 不在字段列表中").arg(j.table, j.on.at(0)));
-    if (!tcols.contains(j.on.at(1)))
-      return fail(
-          QStringLiteral("联表 '%1' 的联表列 '%2' 不在目标表列中").arg(j.table, j.on.at(1)));
-    for (const auto &c : j.cols) {
-      if (!tcols.contains(c.col))
-        return fail(QStringLiteral("联表 '%1' 的输出列 '%2' 不在目标表列中").arg(j.table, c.col));
-      if (!c.filter.isEmpty() && c.filter != QStringLiteral("like") &&
-          c.filter != QStringLiteral("eq"))
-        return fail(
-            QStringLiteral("联表 '%1' 输出列 '%2' 的 filter 仅支持 like/eq").arg(j.table, c.col));
-      const QString alias = j.table + QLatin1Char('_') + c.col;
-      if (joinAliases.contains(alias))
-        return fail(QStringLiteral("联表输出别名 '%1' 重复").arg(alias));
-      if (colNames.contains(alias))
-        return fail(QStringLiteral("联表输出别名 '%1' 与主表列名冲突").arg(alias));
-      joinAliases.insert(alias);
-    }
-  }
-
-  // ── 读模型 ref 可解析（本表列名 / 新格式输出别名 / 旧格式 引用名.目标列）──
-  QHash<QString, const JsonTableTable *> joinsByPro;  // 旧格式：引用名 → 目标表
-  for (const auto &j : m_table.joinTable) {
-    if (!j.isJoinRelations || j.joinType != QStringLiteral("ManyToOne")) continue;
-    for (const auto &t : m_config.tables) {
-      if (t.modelName == j.joinEnClass) {
-        joinsByPro.insert(j.joinEnClassPro, &t);
-        break;
-      }
-    }
-  }
-  auto refOk = [&](const QString &ref, QString *aliasOut) -> bool {
-    const int dot = ref.indexOf(QLatin1Char('.'));
-    if (dot <= 0)
-      return colNames.contains(ref) || joinAliases.contains(ref);  // 本表列/联表输出别名
-    const QString pro = ref.left(dot).trimmed();
-    const QString col = ref.mid(dot + 1).trimmed();
-    if (col.isEmpty() || !joinsByPro.contains(pro)) return false;
-    bool has = false;
-    for (const auto &c : joinsByPro.value(pro)->columns) {
-      if (c.name == col) {
-        has = true;
-        break;
-      }
-    }
-    if (has && aliasOut) *aliasOut = pro + QLatin1Char('_') + col;
-    return has;
-  };
-  auto checkRef = [&](const QString &kind, const QString &ref) -> bool {
-    QString alias;
-    if (!refOk(ref, &alias))
-      return fail(QStringLiteral("%1 '%2' 无法解析（须为本表列名或已启用 ManyToOne 联表的"
-                                 "「引用名.目标列」）")
-                      .arg(kind, ref));
-    if (!alias.isEmpty() && colNames.contains(alias))
-      return fail(QStringLiteral("联表别名 '%1' 与主表列名冲突（ref %2）").arg(alias, ref));
-    return true;
-  };
-  // ── 字段呈现统一表格 → 三视图（交叉校验基于收集产物）──
-  JsonTableTable view;
-  collectViewTable(&view);
-  for (const auto &c : view.selCols)
-    if (!checkRef(QStringLiteral("列表列"), c.ref)) return false;
-  for (const auto &c : view.selColsEq)
-    if (!checkRef(QStringLiteral("精确查询列"), c.ref)) return false;
-  for (const auto &c : view.selColsGap)
-    if (!checkRef(QStringLiteral("范围查询列"), c.ref)) return false;
-  for (const auto &c : view.selColsLike)
-    if (!checkRef(QStringLiteral("模糊查询列"), c.ref)) return false;
-
-  // ── 编辑视图（editCols）：ref 为物理列或联表输出别名（只读展示）、去重、
-  //    required 与 invisible 互斥 ──
-  const QVector<JsonTableEditCol> editRows = view.editCols;
-  QSet<QString> editRefs;
-  for (int i = 0; i < editRows.size(); ++i) {
-    const JsonTableEditCol &ec = editRows[i];
-    const bool isAliasRef = joinAliases.contains(ec.ref);
-    if (!colNames.contains(ec.ref) && !isAliasRef)
-      return fail(QStringLiteral("编辑列 '%1' 不在字段列表中").arg(ec.ref));
-    if (!isAliasRef && ec.editEditable == false && ec.required)
-      return fail(QStringLiteral("编辑列 '%1' 只读展示与必填互斥").arg(ec.ref));
-    if (editRefs.contains(ec.ref)) return fail(QStringLiteral("编辑列 '%1' 重复配置").arg(ec.ref));
-    editRefs.insert(ec.ref);
-    if (ec.required && !ec.visible)
-      return fail(QStringLiteral("编辑列 '%1' 必填但前端显示关闭（矛盾配置）").arg(ec.ref));
-  }
-  for (const auto &p : collectSort())
-    if (!checkRef(QStringLiteral("默认排序列"), p.first)) return false;
-
-  // ── 索引列存在性 ──
-  for (const auto &ix : collectIndexes())
-    for (const QString &c : ix.cols)
-      if (!colNames.contains(c))
-        return fail(QStringLiteral("索引 '%1' 的列 '%2' 不在字段列表中").arg(ix.name, c));
-
-  // ── i18n 引用完整性（对齐生成期 main_api 校验）──
-  if (m_i18nCheck->isChecked()) {
-    const QString i18nTable = m_i18nTableEdit->text().trimmed();
-    if (i18nTable.isEmpty()) return fail(QStringLiteral("启用多语言后翻译表不能为空"));
-    // 翻译表列集解析顺序：显式配置（本文件 tables[] / 同目录其它 .jsontable）
-    // 优先；都没有时按惯例派生（deriveI18nTable 保证 extKey/langKey/fields
-    // 列齐备）。单表新格式下本文件没有 tables[]，旧"必须在 tables[] 中"
-    // 的检查已不适用
-    JsonTableTable trans;
-    bool transFound = false;
-    for (const auto &t : m_config.tables) {
-      if (t.tableName == i18nTable) {
-        trans = t;
-        transFound = true;
-        break;
-      }
-    }
-    if (!transFound) {
-      const QString searchDir = m_filePath.isEmpty() ? QStringLiteral(PROJECT_SOURCE_DIR)
-                                                     : QFileInfo(m_filePath).absolutePath();
-      for (const auto &t : listProjectTables(searchDir)) {
-        if (t.tableName == i18nTable) {
-          trans = t;
-          transFound = true;
-          break;
-        }
-      }
-    }
-    if (!transFound) trans = deriveI18nTable(collectTable());
-    QSet<QString> transCols;
-    for (const auto &c : trans.columns) transCols.insert(c.name);
-    const QString extKey = m_i18nExtEdit->text().trimmed();
-    const QString langKey = m_i18nLangKeyEdit->text().trimmed();
-    if (extKey.isEmpty() || !transCols.contains(extKey))
-      return fail(QStringLiteral("i18n 外键列 '%1' 不在翻译表 '%2' 的列中")
-                      .arg(extKey.isEmpty() ? QStringLiteral("(空)") : extKey, i18nTable));
-    if (langKey.isEmpty() || !transCols.contains(langKey))
-      return fail(QStringLiteral("i18n 语言列 '%1' 不在翻译表 '%2' 的列中")
-                      .arg(langKey.isEmpty() ? QStringLiteral("(空)") : langKey, i18nTable));
-    for (const QString &f : splitCsv(m_i18nFieldsEdit->text())) {
-      if (!transCols.contains(f))
-        return fail(QStringLiteral("多语言字段 '%1' 不在翻译表 '%2' 的列中").arg(f, i18nTable));
-      if (colNames.contains(f)) return fail(QStringLiteral("多语言字段 '%1' 与主表列重名").arg(f));
-    }
-  }
-  return true;
+  return TableSchema::validateCrossRefs(collectTable(), m_config, m_config.tables,
+                                        m_table.tableName, err);
 }
 
 void JsonTableDesigner::refreshColumnCandidates() {
@@ -3595,47 +2653,6 @@ void JsonTableDesigner::refreshI18nFieldCandidates() {
     static_cast<CsvCompleter *>(m_i18nFieldsCompleter)->setCandidates(names);
 }
 
-/// CREATE TABLE DDL 通用构造（列 + 主键 + 索引，InnoDB/utf8mb4）；
-/// toCreateDdl（主表）与 i18nCreateDdl（派生翻译表）共用
-static QString createDdlText(const QString &tableName, const QString &tableComment,
-                             const QVector<JsonTableColumn> &cols,
-                             const QVector<JsonTableIndex> &indexes) {
-  QStringList defs;
-  QStringList pkCols;
-  for (const auto &c : cols) {
-    if (c.isPrimary) pkCols.append(tick(c.name));
-    QStringList parts;
-    parts << tick(c.name) << c.mysqlType.trimmed();
-    if (c.isUnsigned) parts << QStringLiteral("unsigned");
-    parts << (c.nullable ? QStringLiteral("NULL") : QStringLiteral("NOT NULL"));
-    if (!c.defaultValue.isEmpty()) {
-      // 表达式默认值（now()/CURRENT_TIMESTAMP）不加引号，否则 datetime 列 DDL 非法
-      parts << QStringLiteral("DEFAULT %1").arg(isDbDefaultExpr(c.defaultValue)
-                                                    ? c.defaultValue.trimmed()
-                                                    : quote(c.defaultValue));
-    }
-    if (c.isAutoInc) parts << QStringLiteral("AUTO_INCREMENT");
-    if (!c.comment.isEmpty()) parts << QStringLiteral("COMMENT %1").arg(quote(c.comment));
-    defs << QStringLiteral("  ") + parts.join(QLatin1Char(' '));
-  }
-  if (!pkCols.isEmpty())
-    defs << QStringLiteral("  PRIMARY KEY (%1)").arg(pkCols.join(QStringLiteral(", ")));
-  for (const auto &ix : indexes) {
-    if (ix.cols.isEmpty()) continue;  // 无列的索引不落 DDL
-    QStringList colTicks;
-    for (const QString &c : ix.cols) colTicks.append(tick(c));
-    defs << QStringLiteral("  %1 %2 (%3)")
-                .arg(ix.unique ? QStringLiteral("UNIQUE KEY") : QStringLiteral("KEY"),
-                     tick(ix.name), colTicks.join(QStringLiteral(", ")));
-  }
-
-  QString sql = QStringLiteral("CREATE TABLE %1 (\n%2\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4")
-                    .arg(tick(tableName), defs.join(QStringLiteral(",\n")));
-  if (!tableComment.isEmpty()) sql += QStringLiteral(" COMMENT=%1").arg(quote(tableComment));
-  sql += QLatin1Char(';');
-  return sql;
-}
-
 QString JsonTableDesigner::toCreateDdl() const {
   return createDdlText(m_nameEdit->text().trimmed(), m_commentEdit->text().trimmed(),
                        collectColumns(), collectIndexes());
@@ -3673,100 +2690,39 @@ void JsonTableDesigner::importFromDatabase() {
     return;
   }
 
-  accore::AcJsonValue inst;
-  if (!connectDb(m_config, &inst, this)) return;
-
-  // tableSchema / tableInfo 共用 {table} 参数
-  accore::AcJsonValue args = accore::AcJsonValue::makeArray();
-  accore::AcJsonValue params = accore::AcJsonValue::makeObject();
-  params.set(QString::fromLatin1(AcDB::kTable), accore::AcJsonValue(table));
-  args.append(params);
-
-  const accore::AcJsonValue schema = FunDb::tableSchema(inst, args);
-  if (!schema.isArray()) {
-    FunDb::destructor(inst, accore::AcJsonValue::makeArray());
-    showFunDbError(this, QStringLiteral("刷新失败"),
-                   QStringLiteral("读取表结构失败（表可能不存在）"));
-    return;
-  }
-
-  // 数据库列 → JsonTableColumn（纯物理属性）
-  QVector<JsonTableColumn> dbColumns;
-  for (const auto &v : schema.items()) {
-    JsonTableColumn col;
-    col.name = v.value(QString::fromLatin1(AcDB::kColName)).toString();
-    // COLUMN_TYPE 形如 "bigint unsigned"：拆出 unsigned 标记后存纯类型
-    QString type = v.value(QString::fromLatin1(AcDB::kColType)).toString().trimmed();
-    if (type.endsWith(QStringLiteral("unsigned"), Qt::CaseInsensitive)) {
-      col.isUnsigned = true;
-      type.chop(QStringLiteral("unsigned").size());
-      type = type.trimmed();
-    }
-    col.mysqlType = type;
-    col.nullable = v.value(QString::fromLatin1(AcDB::kColNullable)).toBool(false);
-    col.isPrimary = v.value(QString::fromLatin1(AcDB::kColKey)).toString() == QStringLiteral("PRI");
-    col.isAutoInc = v.value(QString::fromLatin1(AcDB::kColExtra))
-                        .toString()
-                        .contains(QStringLiteral("auto_increment"));
-    // default 兼容数字字面量（Qt6 的 toString 不转换数值，需显式处理）
-    const accore::AcJsonValue dv = v.value(QString::fromLatin1(AcDB::kColDefault));
-    if (dv.isString()) {
-      col.defaultValue = dv.toString();
-    } else if (dv.isDouble()) {
-      col.defaultValue = QString::number(dv.toDouble());
-    }
-    col.comment = v.value(QString::fromLatin1(AcDB::kColComment)).toString();
-    dbColumns.append(col);
-  }
-
-  // 表注释
-  QString dbComment;
-  const accore::AcJsonValue info = FunDb::tableInfo(inst, args);
-  if (info.isObject()) {
-    dbComment = info.value(QString::fromLatin1(AcDB::kTblComment)).toString();
-  }
-
-  // 索引（INFORMATION_SCHEMA.STATISTICS；PRIMARY 由主键列维护，跳过）
-  QVector<JsonTableIndex> dbIndexes;
-  bool indexQueryOk = false;
-  {
-    accore::AcJsonValue idxArgs = accore::AcJsonValue::makeArray();
-    accore::AcJsonValue idxParams = accore::AcJsonValue::makeObject();
-    idxParams.set(QString::fromLatin1(AcDB::kSql),
-                  accore::AcJsonValue(
-                      QStringLiteral("SELECT INDEX_NAME, NON_UNIQUE, SEQ_IN_INDEX, COLUMN_NAME "
-                                     "FROM INFORMATION_SCHEMA.STATISTICS "
-                                     "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %1 "
-                                     "ORDER BY INDEX_NAME, SEQ_IN_INDEX")
-                          .arg(quote(table))));
-    idxArgs.append(idxParams);
-    const accore::AcJsonValue idxRows = FunDb::query(inst, idxArgs);
-    indexQueryOk = idxRows.isArray();
-    if (indexQueryOk) {
-      QHash<QString, int> indexPositions;
-      for (const auto &row : idxRows.items()) {
-        const QString name = row.value(QStringLiteral("INDEX_NAME")).toString();
-        if (name.isEmpty() || name.compare(QStringLiteral("PRIMARY"), Qt::CaseInsensitive) == 0) {
-          continue;
+  if (m_dbBusy) return;
+  m_dbBusy = true;
+  updateDbButtonStates();
+  const auto revision = m_revision;
+  const JsonTableConfig config = m_config;
+  auto *watcher = new QFutureWatcher<DatabaseTableSnapshot>(this);
+  connect(
+      watcher, &QFutureWatcher<DatabaseTableSnapshot>::finished, this, [this, watcher, revision]() {
+        const DatabaseTableSnapshot snapshot = watcher->result();
+        watcher->deleteLater();
+        m_dbBusy = false;
+        updateDbButtonStates();
+        if (!snapshot.error.isEmpty()) {
+          AuiMessageBox::show(this, QStringLiteral("刷新失败"), snapshot.error);
+          return;
         }
-        const QString column = row.value(QStringLiteral("COLUMN_NAME")).toString();
-        if (column.isEmpty()) continue;  // 函数索引等无列名条目
-        const QString key = name.toLower();
-        int position = indexPositions.value(key, -1);
-        if (position < 0) {
-          position = dbIndexes.size();
-          indexPositions.insert(key, position);
-          JsonTableIndex index;
-          index.name = name;
-          index.unique = row.value(QStringLiteral("NON_UNIQUE")).toString() == QStringLiteral("0");
-          dbIndexes.append(index);
+        if (revision != m_revision) {
+          AuiMessageBox::show(this, QStringLiteral("配置已变化"),
+                              QStringLiteral("读取期间配置已被修改，本次结果未应用，请重新刷新。"));
+          return;
         }
-        dbIndexes[position].cols << column;
-      }
-    }
-  }
-  FunDb::destructor(inst, accore::AcJsonValue::makeArray());
+        applyDatabaseSnapshot(snapshot);
+      });
+  watcher->setFuture(QtConcurrent::run(
+      [config, table]() { return TableDatabaseService::readTable(config, table); }));
+}
 
+void JsonTableDesigner::applyDatabaseSnapshot(const DatabaseTableSnapshot &snapshot) {
+  const QString table = m_nameEdit->text().trimmed();
+  const auto &dbColumns = snapshot.columns;
+  const auto &dbIndexes = snapshot.indexes;
+  const QString &dbComment = snapshot.comment;
+  const bool indexQueryOk = snapshot.indexQueryOk;
   // 差异计算：当前配置 vs 数据库（排除列跳过，但会在预览中标记）
   const QVector<JsonTableColumn> currentColumns = collectColumns();
   const QVector<JsonTableIndex> currentIndexes = collectIndexes();
@@ -3911,10 +2867,10 @@ void JsonTableDesigner::importFromDatabase() {
     }
   }
 
-  // 模型回填：以打开时的表配置为基底，只替换数据库来源的信息（列物理属性 /
+  // 模型回填：以当前编辑内容为基底，只替换数据库来源的信息（列物理属性 /
   // 索引 / 表注释 / 排除列）；字段呈现、联表、按钮、多语言等设计器配置不重建，
   // 避免从数据库刷新时改写非数据库信息
-  JsonTableTable updated = m_table;
+  JsonTableTable updated = collectTable();
   updated.columns = nextColumns;
   if (indexQueryOk) updated.indexes = nextIndexes;
   if (result.applyTableComment && !dbComment.isEmpty()) updated.tableComment = dbComment;
@@ -3950,6 +2906,7 @@ void JsonTableDesigner::importFromDatabase() {
 }
 
 void JsonTableDesigner::executeCreateTable() {
+  if (m_dbBusy) return;
   QString err;
   if (!validateForDdl(&err)) {
     AuiMessageBox::show(this, QStringLiteral("无法执行建表"), err);
@@ -3969,32 +2926,27 @@ void JsonTableDesigner::executeCreateTable() {
                                   .arg(sqls.size())))
     return;
 
-  accore::AcJsonValue inst;
-  if (!connectDb(m_config, &inst, this)) return;
-
-  QString doneTables;
-  for (const QString &sql : sqls) {
-    accore::AcJsonValue args = accore::AcJsonValue::makeArray();
-    accore::AcJsonValue params = accore::AcJsonValue::makeObject();
-    params.set(QString::fromLatin1(AcDB::kSql), accore::AcJsonValue(sql));
-    args.append(params);
-    const accore::AcJsonValue r = FunDb::exec(inst, args);
-    if (!r.isDouble()) {
-      FunDb::destructor(inst, accore::AcJsonValue::makeArray());
-      showFunDbError(this, QStringLiteral("建表失败"),
-                     QStringLiteral("执行 DDL 失败：\n%1").arg(sql));
-      return;
+  m_dbBusy = true;
+  updateDbButtonStates();
+  const JsonTableConfig config = m_config;
+  auto *watcher = new QFutureWatcher<DatabaseWriteResult>(this);
+  connect(watcher, &QFutureWatcher<DatabaseWriteResult>::finished, this, [this, watcher]() {
+    const DatabaseWriteResult result = watcher->result();
+    watcher->deleteLater();
+    m_dbBusy = false;
+    updateDbButtonStates();
+    if (!result.error.isEmpty()) {
+      AuiMessageBox::show(this, QStringLiteral("建表失败"),
+                          QStringLiteral("已完成 %1 条 DDL，后续执行失败：\n%2")
+                              .arg(result.completedCount)
+                              .arg(result.error));
+    } else {
+      AuiMessageBox::show(this, QStringLiteral("建表成功"),
+                          QStringLiteral("已完成 %1 条 DDL。").arg(result.completedCount));
     }
-    // 从 DDL 提取表名拼成功消息（CREATE TABLE `xxx`）
-    const int bt = sql.indexOf(QLatin1Char('`'));
-    const int et = sql.indexOf(QLatin1Char('`'), bt + 1);
-    if (bt >= 0 && et > bt)
-      doneTables +=
-          (doneTables.isEmpty() ? QString() : QStringLiteral("、")) + sql.mid(bt + 1, et - bt - 1);
-  }
-  FunDb::destructor(inst, accore::AcJsonValue::makeArray());
-  AuiMessageBox::show(this, QStringLiteral("建表成功"),
-                      QStringLiteral("表 %1 创建成功").arg(doneTables));
+  });
+  watcher->setFuture(QtConcurrent::run(
+      [config, sqls]() { return TableDatabaseService::executeDdl(config, sqls); }));
 }
 
 // ════════════════════════════════════════════════════════════

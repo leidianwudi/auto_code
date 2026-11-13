@@ -251,3 +251,13 @@ Qt 6 中为 `Qt::SkipEmptyParts`，非 `QString::SkipEmptyParts`。
 
 自定义 delegate 的 `paint()` 中不要传 `QModelIndex()` 给基类 `paint()`，会触发 `index.isValid()` 断言。使用 `QStyle::drawControl` 直接绘制。
 
+
+
+## 8. 公共组件与业务服务边界
+
+- 通用配置窗口、按钮和表格工具放在 `src/util/ui/component/aui_config_dialog.h/.cpp`，不依赖任何具体业务编辑器。
+- 数据源作用域、函数命名和枚举候选放在 `src/ui/common/domain_source_service.h/.cpp`。
+- 编辑器页类型在 `EditorFactory` 注册；包装器实现 `reloadStyle()`，主题刷新通过公共接口调用，禁止按具体包装器类型逐项判断。
+- 数据库操作由 `TableDatabaseService` 执行，界面只传配置快照，不向工作线程传 QWidget 或可变控件数据。
+- 可视化同步失败时不得清空当前代码或以默认对象覆盖；新增包装器必须复用基类校验与回写守卫。
+- 界面回归入口：`auto_code_ui_tests`，覆盖所有包装器的非法文本、根类型、修复后切换与未知键保留，不需要交互窗口或数据库。

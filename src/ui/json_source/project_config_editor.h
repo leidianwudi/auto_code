@@ -35,8 +35,10 @@ public:
   /// 收集表单内容为根 JSON 对象（未知键合回；db 三件套缺一不入 meta.db）
   QJsonObject collectObject() const;
 
-  /// 用当前表单的数据库配置测试连接
-  bool testConnection();
+  /// 在后台测试当前连接快照，完成后显示结果。
+  void testConnection();
+  /// 刷新项目表单中的主题提示。
+  void reloadStyle();
 
 signals:
   /// 任一字段变化时发射（驱动代码页写回）
@@ -49,6 +51,7 @@ private:
   QJsonObject m_rootExtra;
   QJsonObject m_metaExtra;
   QJsonObject m_dbExtra;
+  bool m_testingConnection = false;
   bool m_loading = false;  ///< loadFromObject 期间抑制 contentChanged
 
   QLineEdit *m_nameEdit = nullptr;

@@ -25,11 +25,22 @@
 // 上下文
 // ============================================================================
 
-BuiltinContext FunBuiltin::s_ctx;
+thread_local BuiltinContext *FunBuiltin::s_context = nullptr;
 
-void FunBuiltin::setContext(const BuiltinContext &ctx) { s_ctx = ctx; }
+FunBuiltin::ContextScope::ContextScope(BuiltinContext context)
+    : m_context(std::move(context)), m_previous(s_context) {
+  s_context = &m_context;
+}
 
-void FunBuiltin::setCurrentLine(int line) { s_ctx.currentLine = line; }
+FunBuiltin::ContextScope::~ContextScope() { s_context = m_previous; }
+
+BuiltinContext &FunBuiltin::context() {
+  // 无执行会话时，纯函数与独立模板预览使用空上下文，不持有已结束脚本的指针。
+  static thread_local BuiltinContext fallback;
+  return s_context ? *s_context : fallback;
+}
+
+void FunBuiltin::setCurrentLine(int line) { context().currentLine = line; }
 
 // ============================================================================
 // init — 注册所有内置函数到 FunMgr 的 "builtin" 伪类
@@ -69,7 +80,7 @@ accore::AcJsonValue FunBuiltin::renderTpl(const accore::AcJsonValue &args) {
 
   QString tplPath = args.at(0).toString();
   QFileInfo tplInfo(tplPath);
-  if (tplInfo.isRelative()) tplPath = s_ctx.scriptDir + QStringLiteral("/") + tplPath;
+  if (tplInfo.isRelative()) tplPath = context().scriptDir + QStringLiteral("/") + tplPath;
 
   QFile f(tplPath);
   if (!f.open(QIODevice::ReadOnly)) {
@@ -79,7 +90,7 @@ accore::AcJsonValue FunBuiltin::renderTpl(const accore::AcJsonValue &args) {
   QString tplContent = QString::fromUtf8(f.readAll());
 
   TplEngine engine;
-  if (s_ctx.logCallback) engine.setLogCallback(s_ctx.logCallback);
+  if (context().logCallback) engine.setLogCallback(context().logCallback);
 
   if (!args.at(1).isObject()) {
     FunMgr::setError(QStringLiteral("renderTpl() second argument must be a data object"));
@@ -127,8 +138,8 @@ accore::AcJsonValue FunBuiltin::writeFile(const accore::AcJsonValue &args) {
     return accore::AcJsonValue();
   accore::AcJsonValue r = FunMgr::ins().call(QString::fromLatin1(AcFile::kClassName),
                                              QString::fromLatin1(AcFile::kWrite), args);
-  if (r.toBool(false) && s_ctx.generatedFiles && args.size() > 0)
-    s_ctx.generatedFiles->append(QDir::toNativeSeparators(args.at(0).toString()));
+  if (r.toBool(false) && context().generatedFiles && args.size() > 0)
+    context().generatedFiles->append(QDir::toNativeSeparators(args.at(0).toString()));
   return r;
 }
 
@@ -148,14 +159,15 @@ accore::AcJsonValue FunBuiltin::printLog(const accore::AcJsonValue &args) {
     }
   }
 #ifdef AC_DEBUG
-  qDebug() << "[FunBuiltin::printLog] text:" << text << "hasCallback:" << (bool)s_ctx.logCallback
-           << "currentLine:" << s_ctx.currentLine;
+  qDebug() << "[FunBuiltin::printLog] text:" << text
+           << "hasCallback:" << (bool)context().logCallback
+           << "currentLine:" << context().currentLine;
 #endif
-  if (s_ctx.logCallback) {
-    if (s_ctx.currentLine > 0) {
-      text = QStringLiteral("[%1] %2").arg(s_ctx.currentLine).arg(text);
+  if (context().logCallback) {
+    if (context().currentLine > 0) {
+      text = QStringLiteral("[%1] %2").arg(context().currentLine).arg(text);
     }
-    s_ctx.logCallback(text, false);
+    context().logCallback(text, false);
   }
 #ifdef AC_DEBUG
   else {
@@ -177,11 +189,11 @@ accore::AcJsonValue FunBuiltin::printError(const accore::AcJsonValue &args) {
       text += AcValueStr::toString(v);
     }
   }
-  if (s_ctx.logCallback) {
-    if (s_ctx.currentLine > 0) {
-      text = QStringLiteral("[%1] %2").arg(s_ctx.currentLine).arg(text);
+  if (context().logCallback) {
+    if (context().currentLine > 0) {
+      text = QStringLiteral("[%1] %2").arg(context().currentLine).arg(text);
     }
-    s_ctx.logCallback(text, true);
+    context().logCallback(text, true);
   }
 
   return accore::AcJsonValue(true);
@@ -193,9 +205,9 @@ accore::AcJsonValue FunBuiltin::printError(const accore::AcJsonValue &args) {
 
 accore::AcJsonValue FunBuiltin::getCheckedFiles(const accore::AcJsonValue &args) {
   QString treePath =
-      s_ctx.rootDir.isEmpty()
-          ? s_ctx.scriptDir + QString::fromUtf8(CodeConstants::Paths::kTreeConfigFile)
-          : s_ctx.rootDir + QString::fromUtf8(CodeConstants::Paths::kTreeConfigFile);
+      context().rootDir.isEmpty()
+          ? context().scriptDir + QString::fromUtf8(CodeConstants::Paths::kTreeConfigFile)
+          : context().rootDir + QString::fromUtf8(CodeConstants::Paths::kTreeConfigFile);
   // 可选参数：基准路径，传入后只返回该路径下的文件
   QString basePath;
   if (args.size() > 0 && args.at(0).isString()) {
@@ -208,9 +220,9 @@ accore::AcJsonValue FunBuiltin::getCheckedFiles(const accore::AcJsonValue &args)
     QJsonArray checked = doc.object().value(QStringLiteral("checked")).toArray();
     for (const QJsonValue &v : checked) {
       if (!v.isString()) continue;
-      QString absPath = QDir::cleanPath(s_ctx.rootDir.isEmpty()
-                                            ? s_ctx.scriptDir
-                                            : s_ctx.rootDir + QStringLiteral("/") + v.toString());
+      QString absPath = QDir::cleanPath(
+          context().rootDir.isEmpty() ? context().scriptDir
+                                      : context().rootDir + QStringLiteral("/") + v.toString());
       // 指定基准路径时，只保留该路径下的文件（避免处理其它项目的勾选文件）。
       // 统一用 '/' 规范化分隔符后比较，避免 Windows 下 cleanPath 返回 '\' 与
       // 字符串拼接的 '/' 不一致导致过滤失效。
@@ -238,7 +250,7 @@ accore::AcJsonValue FunBuiltin::getCheckedFiles(const accore::AcJsonValue &args)
 // ============================================================================
 
 accore::AcJsonValue FunBuiltin::scriptDir(const accore::AcJsonValue & /*args*/) {
-  return accore::AcJsonValue(s_ctx.scriptDir);
+  return accore::AcJsonValue(context().scriptDir);
 }
 
 // ============================================================================
@@ -484,8 +496,9 @@ accore::AcJsonValue FunBuiltin::assertFn(const accore::AcJsonValue &args) {
 
   if (!condition) {
     QString message = args.size() >= 2 ? args.at(1).toString() : QStringLiteral("assertion failed");
-    QString lineInfo =
-        s_ctx.currentLine > 0 ? QStringLiteral(" at line %1").arg(s_ctx.currentLine) : QString();
+    QString lineInfo = context().currentLine > 0
+                           ? QStringLiteral(" at line %1").arg(context().currentLine)
+                           : QString();
     FunMgr::setError(QStringLiteral("Assertion failed: %1%2").arg(message, lineInfo));
   }
 

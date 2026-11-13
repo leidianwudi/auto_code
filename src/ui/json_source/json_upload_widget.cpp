@@ -6,6 +6,7 @@
 #include "json_upload_widget.h"
 
 #include "json_upload_editor.h"
+#include "src/util/common/util_json.h"
 #include "src/util/ui/code/code_editor.h"
 #include "src/util/ui/code/format_code.h"
 
@@ -28,6 +29,10 @@ JsonUploadWidget::JsonUploadWidget(QWidget *parent) : CodeVisualSyncWidget(paren
 // ════════════════════════════════════════════════════════════
 //  数据同步（基类骨架回调）
 // ════════════════════════════════════════════════════════════
+
+QByteArray JsonUploadWidget::visualFingerprint() const {
+  return UtilJson::fingerprint(m_visual->collectMergedObject());
+}
 
 QWidget *JsonUploadWidget::visualView() const { return m_visual; }
 
@@ -52,3 +57,5 @@ void JsonUploadWidget::syncVisualToCodeImpl() {
 // ════════════════════════════════════════════════════════════
 
 void JsonUploadWidget::setPreservedSource(const QString &src) { m_visual->setPreservedSource(src); }
+
+void JsonUploadWidget::reloadStyle() { m_visual->reloadStyle(); }

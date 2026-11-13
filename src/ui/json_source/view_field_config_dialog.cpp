@@ -19,11 +19,12 @@
 
 #include "json_source_finder.h"
 #include "json_upload_model.h"
+#include "src/ui/common/domain_source_service.h"
 #include "src/ui/json_vue/combobox_config_dialog.h"
-#include "src/ui/json_vue/config_dialog_common.h"
 #include "src/ui/json_vue/json_vue_model.h"
 #include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_combo_box.h"
+#include "src/util/ui/component/aui_config_dialog.h"
 #include "src/util/ui/component/aui_style.h"
 #include "src/util/ui/component/aui_tree_combo.h"
 

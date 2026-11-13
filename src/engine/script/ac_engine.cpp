@@ -18,6 +18,7 @@ QString AcEngine::readFileUtf8(const QString &path) {
 
 QString AcEngine::execute(const QString &acFilePath) {
   resetCancel();
+  m_generatedFiles.clear();
   QString source = readFileUtf8(acFilePath);
   if (source.isEmpty()) return QStringLiteral("failed to read file: %1").arg(acFilePath);
 

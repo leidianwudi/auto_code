@@ -42,9 +42,10 @@ public:
   void setSourceFilePath(const QString &path) { m_filePath = path; }
 
   /// 主题变化后重建边框样式（边框色随主题更新）
-  void reloadStyle();
+  void reloadStyle() override;
 
 protected:
+  QByteArray visualFingerprint() const override;
   QWidget *visualView() const override;
   void syncCodeToVisualImpl() override;
   void syncVisualToCodeImpl() override;

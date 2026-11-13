@@ -198,6 +198,7 @@ bool AcExecutor::parse(const QString &source) {
 #else
   Q_UNUSED(m_declaredVars);
 #endif
+#ifdef AC_DEBUG
   for (int i = 0; i < m_program.stmts.size(); ++i) {
     const auto &s = m_program.stmts[i];
     QString desc;
@@ -213,13 +214,9 @@ bool AcExecutor::parse(const QString &source) {
       desc = "import";
     else
       desc = "kind:" + QString::number((int)s.kind);
-#ifdef AC_DEBUG
     qDebug() << "  [" << i << "]" << desc;
-#else
-    Q_UNUSED(desc);
-    Q_UNUSED(i);
-#endif
   }
+#endif
 
   return true;
 }

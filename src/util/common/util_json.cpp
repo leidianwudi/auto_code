@@ -816,3 +816,25 @@ QByteArray UtilJson::fingerprint(const QJsonObject &obj) {
   return QCryptographicHash::hash(QJsonDocument(obj).toJson(QJsonDocument::Compact),
                                   QCryptographicHash::Md5);
 }
+
+bool UtilJson::parseObject(const QString &text, QJsonObject *out, QString *error, bool allowEmpty) {
+  if (error) error->clear();
+  if (allowEmpty && text.trimmed().isEmpty()) {
+    if (out) *out = QJsonObject();
+    return true;
+  }
+  QJsonParseError parseError;
+  const QJsonDocument doc = fromJson(text, &parseError);
+  if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+    if (error) {
+      *error = parseError.error != QJsonParseError::NoError
+                   ? QStringLiteral("JSON 解析失败（位置 %1）：%2")
+                         .arg(parseError.offset)
+                         .arg(parseError.errorString())
+                   : QStringLiteral("配置根节点必须是 JSON 对象");
+    }
+    return false;
+  }
+  if (out) *out = doc.object();
+  return true;
+}

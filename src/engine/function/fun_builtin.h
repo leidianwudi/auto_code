@@ -30,7 +30,7 @@
 /**
  * @brief 解释器上下文 — 内置函数需要的运行时状态
  *
- * 由 AcInterpreter::execute() 在每次执行前调用 FunBuiltin::setContext() 注入。
+ * 由单次执行的 ContextScope 绑定，离开执行作用域后恢复外层上下文。
  * 每个字段对应 AcInterpreter 的一个成员变量。
  */
 struct BuiltinContext {
@@ -53,14 +53,25 @@ public:
   /// 注册所有内置函数到 FunMgr（"builtin" 伪类）
   static void init();
 
-  /// 注入解释器上下文（每次脚本执行前由 AcInterpreter 调用）
-  static void setContext(const BuiltinContext &ctx);
+  /// 单次执行的上下文绑定；线程间隔离，嵌套执行结束后恢复外层路径、日志与产物。
+  class ContextScope {
+  public:
+    explicit ContextScope(BuiltinContext context);
+    ~ContextScope();
+    ContextScope(const ContextScope &) = delete;
+    ContextScope &operator=(const ContextScope &) = delete;
+
+  private:
+    BuiltinContext m_context;
+    BuiltinContext *m_previous = nullptr;
+  };
 
   /// 设置当前执行的行号（printLog/printError 输出时带上行号）
   static void setCurrentLine(int line);
 
 private:
-  static BuiltinContext s_ctx;
+  static thread_local BuiltinContext *s_context;
+  static BuiltinContext &context();
 
   /// 渲染模板文件，返回渲染后的字符串
   /// @param args [0] 模板路径, [1] 数据对象

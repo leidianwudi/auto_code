@@ -21,12 +21,13 @@
 #include <QTableWidget>
 #include <QVBoxLayout>
 
-#include "config_dialog_common.h"
 #include "select_source_panel.h"
+#include "src/ui/common/domain_source_service.h"
 #include "src/ui/json_global_enum/json_global_enum_model.h"
 #include "src/ui/json_source/json_source_finder.h"
 #include "src/ui/json_source/json_source_model.h"
 #include "src/util/ui/component/aui_button.h"
+#include "src/util/ui/component/aui_config_dialog.h"
 #include "src/util/ui/component/aui_message_box.h"
 #include "src/util/ui/component/aui_style.h"
 #include "src/util/ui/component/aui_tree_combo.h"

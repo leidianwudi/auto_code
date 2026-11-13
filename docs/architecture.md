@@ -67,7 +67,7 @@ src/
 .ac 源文件
     │
     ▼
-AcEngine（单例入口）
+AcEngine（调用方独占的会话实例）
     │
     ▼
 AcExecutor（编排层）
@@ -92,7 +92,7 @@ AcExecutor（编排层）
 
 | 文件 | 职责 |
 |------|------|
-| [ac_engine.h](file:///d:/work/github/auto_code/src/engine/script/ac_engine.h) | 单例入口，读取文件 → 委托 AcExecutor |
+| [ac_engine.h](file:///d:/work/github/auto_code/src/engine/script/ac_engine.h) | 会话入口，读取文件 → 委托 AcExecutor |
 | [ac_executor.h](file:///d:/work/github/auto_code/src/engine/script/ac_executor.h) | 编排层：Lexer → Parser → 链接 → 类型检查 → 解释执行 |
 | [ac_lexer.h](file:///d:/work/github/auto_code/src/engine/script/ac_lexer.h) | 词法分析，源码 → Token 流 |
 | [ac_parser.h](file:///d:/work/github/auto_code/src/engine/script/ac_parser.h) | 语法分析，Token 流 → AST |
@@ -623,3 +623,14 @@ Token 与所有 AST 节点统一携带 `AcLoc{line, col, offset}`（列/偏移�
 构建：`cmake --build <build-dir> --target auto_code_tests --config RelWithDebInfo`，
 运行 `build/RelWithDebInfo/auto_code_tests.exe`（返回 0 = 全部通过）。
 **提交前必跑**；golden 段需 auto_code.exe 与测试 exe 同目录。
+
+
+## 15. 编辑与执行状态边界
+
+- `ac_ui` 静态库承载界面代码，主程序和 `auto_code_ui_tests` 复用同一份对象；引擎测试仍只链接 QtCore 层。
+- `EditorFactory` 统一打开文件、恢复会话和拆分副本的类型选择、路径、高亮与 HTTP 上下文。
+- `CodeVisualSyncWidget` 在加载前校验根对象，`.jsontable` 额外校验单表格式；失败停留代码页且禁止回写，错误交给宿主展示。空文档仍允许进入新建配置流程。
+- `UtilFile::writeUtf8` 使用 `QSaveFile`，完整写入并提交后才报告成功；编辑器和生成函数共享该入口。
+- `table_schema_service` 处理结构差异、引用清理、交叉校验和 DDL；`table_import_dialog` 仅收集用户选择；`table_database_service` 在工作线程内独占连接并返回值快照。
+- 结构刷新结果带配置版本检查，后台读取期间有新编辑则丢弃旧快照。MySQL DDL 仍可能部分完成，失败结果包含成功条数。
+- `AcEngine` 由控制器或 headless 调用方持有；`FunBuiltin::ContextScope` 绑定单次执行上下文，线程间隔离，嵌套返回自动恢复。单次 VM 执行不能清理其他会话的数据库连接。

@@ -253,169 +253,26 @@ void MainDevMgr::onSplitRight() {
   // 统一连接信号（关闭/切换/右键/拖拽拆分），保证新面板与其它面板行为一致
   connectEditorPanel(newPanel);
 
-  {
-    // 复用 createEditorForFile 创建高亮器 + 验证模式一致的编辑器
-    QString filePath = current->objectName();
-    bool isJsonVue = filePath.endsWith(AcFileSuffix::kJsonvue, Qt::CaseInsensitive);
-    bool isJsonSource = filePath.endsWith(AcFileSuffix::kJsonsource, Qt::CaseInsensitive);
-    bool isJsonUpload = filePath.endsWith(AcFileSuffix::kJsonupload, Qt::CaseInsensitive);
-    bool isJsonTable = filePath.endsWith(AcFileSuffix::kJsontable, Qt::CaseInsensitive);
-    bool isJsonGlobalEnum = filePath.endsWith(AcFileSuffix::kJsonglobalenum, Qt::CaseInsensitive);
-    bool isAcProj = filePath.endsWith(AcFileSuffix::kAcProj, Qt::CaseInsensitive);
-    QFileInfo fi(filePath);
-    QString tabLabel = filePath.isEmpty() ? QStringLiteral("拆分副本") : fi.fileName();
-    int tabIdx = -1;
-
-    if (isJsonVue) {
-      // .jsonvue 文件拆分时创建 JsonVueWidget，保持可视化能力
-      auto *jvw = new JsonVueWidget;
-      auto *editor = jvw->codeEditor();
-      editor->setPlainText(current->toPlainText());
-      jvw->setSourceFilePath(filePath);
-
-      // 优先从 .jsonvue 文件向上查找最近的 api_auth_data.ac 加载 HTTP 配置；
-      // 找不到时回落到启动项 AC 脚本
-      QString acPath = JsonVueWidget::findNearestApiAuthDataAc(filePath);
-      if (acPath.isEmpty()) {
-        acPath = m_ui->startupCombo()->currentData().toString();
-      }
-      if (!acPath.isEmpty()) jvw->loadHttpConfigFromAcFile(acPath);
-      if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) jvw->switchToVisual();
-
-      tabIdx = newPanel->addTab(jvw, tabLabel);
-      newPanel->setTabToolTip(tabIdx, filePath);
-      newPanel->setCurrentIndex(tabIdx);
-      if (!filePath.isEmpty()) editor->setObjectName(filePath);
-      // 注：拆分编辑器不调用 registerFile，避免覆盖 openFiles 中原编辑器的记录。
-
-      // 连接 contentChanged 信号（与打开文件路径同一实现）
-      connect(jvw, &JsonVueWidget::contentChanged, this, [this, editor]() {
-        editor->document()->setModified(true);
-        updateSaveButtonState();
-      });
-    } else if (isJsonSource) {
-      // .jsonsource 文件拆分时创建 JsonSourceWidget，保持可视化能力
-      auto *jdw = new JsonSourceWidget;
-      auto *editor = jdw->codeEditor();
-      editor->setPlainText(current->toPlainText());
-
-      QString acPath = JsonVueWidget::findNearestApiAuthDataAc(filePath);
-      if (acPath.isEmpty()) {
-        acPath = m_ui->startupCombo()->currentData().toString();
-      }
-      if (!acPath.isEmpty()) {
-        QString baseUrl, authHeader, postData;
-        JsonVueEditor::loadHttpConfigFromAcFile(acPath, &baseUrl, &authHeader, &postData);
-        jdw->setHttpConfig(baseUrl, authHeader, postData);
-      }
-      if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) jdw->switchToVisual();
-
-      tabIdx = newPanel->addTab(jdw, tabLabel);
-      newPanel->setTabToolTip(tabIdx, filePath);
-      newPanel->setCurrentIndex(tabIdx);
-      if (!filePath.isEmpty()) editor->setObjectName(filePath);
-
-      connect(jdw, &JsonSourceWidget::contentChanged, this, [this, editor]() {
-        editor->document()->setModified(true);
-        updateSaveButtonState();
-      });
-    } else if (isJsonUpload) {
-      // .jsonupload 文件拆分时创建 JsonUploadWidget，保持可视化能力
-      auto *juw = new JsonUploadWidget;
-      auto *editor = juw->codeEditor();
-      editor->setPlainText(current->toPlainText());
-      juw->setPreservedSource(current->toPlainText());
-      // 注：上传预设无"测试请求"按钮，不需要 HTTP 配置
-      if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) juw->switchToVisual();
-
-      tabIdx = newPanel->addTab(juw, tabLabel);
-      newPanel->setTabToolTip(tabIdx, filePath);
-      newPanel->setCurrentIndex(tabIdx);
-      if (!filePath.isEmpty()) editor->setObjectName(filePath);
-
-      connect(juw, &JsonUploadWidget::contentChanged, this, [this, editor]() {
-        editor->document()->setModified(true);
-        updateSaveButtonState();
-      });
-    } else if (isJsonTable) {
-      // .jsontable 文件拆分时创建 JsonTableWidget，保持可视化能力
-      auto *jtw = new JsonTableWidget;
-      auto *editor = jtw->codeEditor();
-      editor->setPlainText(current->toPlainText());
-      jtw->setPreservedSource(current->toPlainText());
-      // 注：表结构配置无"测试请求"按钮，不需要 HTTP 配置
-      if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) jtw->switchToVisual();
-
-      tabIdx = newPanel->addTab(jtw, tabLabel);
-      newPanel->setTabToolTip(tabIdx, filePath);
-      newPanel->setCurrentIndex(tabIdx);
-      if (!filePath.isEmpty()) editor->setObjectName(filePath);
-
-      connect(jtw, &JsonTableWidget::contentChanged, this, [this, editor]() {
-        editor->document()->setModified(true);
-        updateSaveButtonState();
-      });
-    } else if (isJsonGlobalEnum) {
-      // .jsonglobalenum 文件拆分时创建 JsonGlobalEnumWidget，保持可视化能力
-      auto *gew = new JsonGlobalEnumWidget;
-      auto *editor = gew->codeEditor();
-      editor->setPlainText(current->toPlainText());
-      gew->setPreservedSource(current->toPlainText());
-      // 注：全局枚举为纯静态选项，不需要 HTTP 配置
-      if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) gew->switchToVisual();
-
-      tabIdx = newPanel->addTab(gew, tabLabel);
-      newPanel->setTabToolTip(tabIdx, filePath);
-      newPanel->setCurrentIndex(tabIdx);
-      if (!filePath.isEmpty()) editor->setObjectName(filePath);
-
-      connect(gew, &JsonGlobalEnumWidget::contentChanged, this, [this, editor]() {
-        editor->document()->setModified(true);
-        updateSaveButtonState();
-      });
-    } else if (isAcProj) {
-      // .acproj 项目配置拆分时创建 ProjectAcprojWidget，保持可视化能力
-      auto *pcw = new ProjectAcprojWidget;
-      auto *editor = pcw->codeEditor();
-      editor->setPlainText(current->toPlainText());
-      // 注：项目设置无"测试请求"按钮，不需要 HTTP 配置
-      if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) pcw->switchToVisual();
-
-      tabIdx = newPanel->addTab(pcw, tabLabel);
-      newPanel->setTabToolTip(tabIdx, filePath);
-      newPanel->setCurrentIndex(tabIdx);
-      if (!filePath.isEmpty()) editor->setObjectName(filePath);
-
-      connect(pcw, &ProjectAcprojWidget::contentChanged, this, [this, editor]() {
-        editor->document()->setModified(true);
-        updateSaveButtonState();
-      });
-    } else {
-      auto *editor = createEditorForFile(filePath);
-      editor->setPlainText(current->toPlainText());
-      tabIdx = newPanel->addTab(editor, tabLabel);
-      newPanel->setTabToolTip(tabIdx, filePath);
-      newPanel->setCurrentIndex(tabIdx);
-      if (!filePath.isEmpty()) editor->setObjectName(filePath);
-      // 注：拆分编辑器不调用 registerFile，避免覆盖 openFiles 中原编辑器的记录。
-    }
-
-    // 连接修改标记信号（拆分副本也需要红点提示；与打开文件路径同一实现）
-    {
-      CodeEditor *editor = editorFromWidget(newPanel->widget(newPanel->currentIndex()));
-      if (editor && !filePath.isEmpty()) {
-        // 拆分副本与主编辑器同一套信号连接（一次性，不随焦点重复连接）
-        connectEditorSignals(editor);
-        connectModifiedTracking(newPanel, editor, filePath);
-        // 恢复当前编辑器的修改状态（拆分副本可能已有修改）
-        if (editor->document()->isModified()) {
-          auto *bar = qobject_cast<DraggableTabBar *>(newPanel->tabBar());
-          if (bar) bar->setTabModified(tabIdx, true);
-          m_ui->fileTree()->setFileModified(filePath, true);
-          updateSaveButtonState();
-        }
-      }
-    }
+  // 拆分与打开文件共用工厂；副本不覆盖主编辑器的文件注册关系。
+  const QString filePath = current->objectName();
+  CodeEditor *editor = nullptr;
+  QWidget *tab = createEditorTab(filePath, current->toPlainText(), &editor);
+  const QString label =
+      filePath.isEmpty() ? QStringLiteral("拆分副本") : QFileInfo(filePath).fileName();
+  const int tabIdx = newPanel->addTab(tab, label);
+  newPanel->setTabToolTip(tabIdx, filePath);
+  newPanel->setCurrentIndex(tabIdx);
+  connectEditorSignals(editor);
+  connectModifiedTracking(newPanel, editor, filePath);
+  connect(editor, &CodeEditor::validationIssues, this, &MainDevMgr::onValidationIssues);
+  editor->setBreakpoints(current->breakpoints());
+  editor->document()->setModified(current->document()->isModified());
+  editor->validate();
+  if (editor->document()->isModified()) {
+    auto *bar = qobject_cast<DraggableTabBar *>(newPanel->tabBar());
+    if (bar) bar->setTabModified(tabIdx, true);
+    m_ui->fileTree()->setFileModified(filePath, true);
+    updateSaveButtonState();
   }
 
   // ── 计算当前面板在分割器中的大小，用于平分 ──

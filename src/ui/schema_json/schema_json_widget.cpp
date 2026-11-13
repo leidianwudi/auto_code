@@ -242,6 +242,10 @@ void SchemaJsonWidget::reloadStyle() {
 //  数据同步（基类骨架回调）
 // ════════════════════════════════════════════════════════════
 
+QByteArray SchemaJsonWidget::visualFingerprint() const {
+  return UtilJson::fingerprint(m_visual->mergedObject());
+}
+
 QWidget *SchemaJsonWidget::visualView() const { return m_visual; }
 
 void SchemaJsonWidget::syncCodeToVisualImpl() {

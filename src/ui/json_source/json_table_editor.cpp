@@ -106,3 +106,5 @@ QJsonObject JsonTableEditor::collectMergedObject() const {
   }
   return root;
 }
+
+void JsonTableEditor::reloadStyle() { m_designer->reloadStyle(); }

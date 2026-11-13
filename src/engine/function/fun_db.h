@@ -19,6 +19,7 @@
 #include <QHash>
 #include <QMutex>
 #include <QString>
+#include <QStringList>
 
 #include "../ac_language.h"
 #include "src/core/json/ac_json_value.h"
@@ -30,6 +31,19 @@ struct MYSQL;
 /// 通过 new DB({...}) 创建实例，每个实例独立持有一个 MySQL 连接。
 class FunDb {
 public:
+  /// 单次脚本执行的连接所有权；提前失败也仅关闭本会话创建的连接。
+  class ConnectionScope {
+  public:
+    ConnectionScope();
+    ~ConnectionScope();
+    ConnectionScope(const ConnectionScope &) = delete;
+    ConnectionScope &operator=(const ConnectionScope &) = delete;
+  private:
+    friend class FunDb;
+    QStringList m_connections;
+    ConnectionScope *m_previous = nullptr;
+  };
+
   /**
    * @brief 注册所有数据库函数到 FunMgr
    *
@@ -113,6 +127,9 @@ public:
                                   const accore::AcJsonValue &args);
 
 private:
+  static thread_local ConnectionScope *s_scope;
+  /// 统一关闭单个连接；已主动断开的连接可重复清理。
+  static void closeConnection(const QString &connectionId);
   /// 获取实例的连接（根据 this.obj 中的 connId）
   static MYSQL *getConnection(const accore::AcJsonValue &instance);
   /// 全局连接池：connId -> MYSQL*（受 s_connMutex 保护）

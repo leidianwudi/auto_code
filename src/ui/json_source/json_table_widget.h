@@ -35,7 +35,12 @@ public:
   /// 项目配置（project.acproj）变更后重载设计器的项目上下文
   void reloadProjectContext();
 
+  /// 刷新可视化编辑页主题。
+  void reloadStyle() override;
+
 protected:
+  bool validateVisualSource(QString *error) const override;
+  QByteArray visualFingerprint() const override;
   QWidget *visualView() const override;
   void syncCodeToVisualImpl() override;
   void syncVisualToCodeImpl() override;

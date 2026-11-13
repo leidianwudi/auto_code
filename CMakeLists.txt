@@ -152,10 +152,7 @@ target_link_libraries(ac_engine
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mysql-connector-c/lib/libmysql.lib
 )
 
-qt_add_executable(auto_code
-    WIN32 MACOSX_BUNDLE
-    main.cpp
-    res/app_icon.rc
+add_library(ac_ui STATIC
     # ── UI 工具层（src/util/ui + util/design）──
     src/util/ui/code/tree_dir.h
     src/util/ui/code/tree_dir.cpp
@@ -254,6 +251,8 @@ qt_add_executable(auto_code
     src/ui/main_dev/debug_controller.h
     src/ui/main_dev/debug_controller.cpp
     src/ui/main_dev/editor_lookup.h
+    src/ui/main_dev/editor_factory.h
+    src/ui/main_dev/editor_factory.cpp
     src/ui/main_dev/main_dev_mgr.h
     src/ui/main_dev/main_dev_mgr.cpp
     src/ui/main_dev/main_dev_mgr_file.cpp
@@ -270,7 +269,6 @@ qt_add_executable(auto_code
     src/ui/demo/demo_mgr.h
     src/ui/demo/demo_mgr.cpp
     src/ui/demo/demo_model.h
-    src/ui/demo/demo_model.cpp
     src/ui/help/help_doc_data.h
     src/ui/help/help_doc_model.h
     src/ui/help/help_doc_ui.h
@@ -297,8 +295,10 @@ qt_add_executable(auto_code
     src/ui/json_vue/json_vue_editor_helpers.h
     src/ui/json_vue/combobox_config_dialog.h
     src/ui/json_vue/combobox_config_dialog.cpp
-    src/ui/json_vue/config_dialog_common.h
-    src/ui/json_vue/config_dialog_common.cpp
+    src/util/ui/component/aui_config_dialog.h
+    src/util/ui/component/aui_config_dialog.cpp
+    src/ui/common/domain_source_service.h
+    src/ui/common/domain_source_service.cpp
     src/ui/json_vue/style_config_dialog.h
     src/ui/json_vue/style_config_dialog.cpp
     src/ui/json_vue/style_config_query_dialog.cpp
@@ -332,6 +332,12 @@ qt_add_executable(auto_code
     src/ui/json_source/json_upload_widget.cpp
     src/ui/json_source/json_table_model.h
     src/ui/json_source/json_table_model.cpp
+    src/ui/json_source/table_database_service.h
+    src/ui/json_source/table_database_service.cpp
+    src/ui/json_source/table_schema_service.h
+    src/ui/json_source/table_schema_service.cpp
+    src/ui/json_source/table_import_dialog.h
+    src/ui/json_source/table_import_dialog.cpp
     src/ui/json_source/json_table_designer.h
     src/ui/json_source/json_table_designer.cpp
     src/ui/json_source/json_table_editor.h
@@ -364,12 +370,12 @@ qt_add_executable(auto_code
     src/ui/setting/setting_mgr.cpp
 )
 
-target_include_directories(auto_code PRIVATE
+target_include_directories(ac_ui PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-target_link_libraries(auto_code
-    PRIVATE
+target_link_libraries(ac_ui
+    PUBLIC
         ac_core
         ac_engine
         Qt::Widgets
@@ -377,6 +383,21 @@ target_link_libraries(auto_code
         Qt::Svg
         Qt::Concurrent
         dwmapi.lib
+)
+
+# 界面对象只编译一次，主程序与界面回归测试共享相同实现。
+qt_add_executable(auto_code WIN32 MACOSX_BUNDLE main.cpp res/app_icon.rc)
+target_link_libraries(auto_code PRIVATE ac_ui)
+
+add_executable(auto_code_ui_tests EXCLUDE_FROM_ALL tests/test_editor_ui.cpp)
+target_link_libraries(auto_code_ui_tests PRIVATE ac_ui)
+add_dependencies(auto_code_ui_tests auto_code)
+# windeployqt 默认仅部署 Windows 平台插件；无窗口回归测试需要 offscreen 插件。
+add_custom_command(TARGET auto_code_ui_tests POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:auto_code_ui_tests>/platforms"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${Qt6_DIR}/../../../plugins/platforms/qoffscreen.dll"
+        "$<TARGET_FILE_DIR:auto_code_ui_tests>/platforms"
 )
 
 # ── MySQL 运行时依赖自动部署（libmysql.dll + OpenSSL） ──
@@ -461,6 +482,7 @@ add_executable(auto_code_tests EXCLUDE_FROM_ALL
     tests/test_tpl.cpp
     # 内置函数系统测试（注册/调用/参数校验/错误通道）
     tests/test_function.cpp
+    tests/test_refactor_services.cpp
     # 语义引用收集测试（跨文件 import 别名 / 遮蔽 / 跳转定义）
     tests/test_rename.cpp
     # 端到端 golden 脚本测试（QProcess 调主程序 --run，无引擎链接依赖）
@@ -469,6 +491,8 @@ add_executable(auto_code_tests EXCLUDE_FROM_ALL
     src/ui/json_source/json_upload_model.cpp
     # JSON 表结构模型测试所需（UI 层纯模型文件，测试直接编译）
     src/ui/json_source/json_table_model.cpp
+    src/ui/json_source/json_source_model.cpp
+    src/ui/json_source/table_schema_service.cpp
     # 按钮共享类型序列化（json_table_model 的 buttons 字段依赖）
     src/ui/common/button_types.cpp
     # JSON/JSON5 格式化测试所需（UI 层纯 QtCore 工具，测试直接编译）

@@ -48,7 +48,7 @@ public:
   void reloadProjectContext();
 
   /// 主题/颜色变化后重新应用样式表（设计器自带样式，此处无需额外处理）
-  void reloadStyle() {}
+  void reloadStyle();
 
 signals:
   /// 配置发生变化时发射

@@ -34,7 +34,11 @@ public:
   /// 设置 HTTP 请求参数（动态数据源"测试"按钮使用）
   void setHttpConfig(const QString &baseUrl, const QString &authHeader, const QString &postData);
 
+  /// 刷新可视化编辑页主题。
+  void reloadStyle() override;
+
 protected:
+  QByteArray visualFingerprint() const override;
   QWidget *visualView() const override;
   void syncCodeToVisualImpl() override;
   void syncVisualToCodeImpl() override;

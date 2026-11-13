@@ -8,8 +8,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
-#include "project_config_editor.h"
 #include "json_table_model.h"
+#include "project_config_editor.h"
 #include "src/util/common/util_json.h"
 #include "src/util/ui/code/code_editor.h"
 #include "src/util/ui/code/format_code.h"
@@ -33,6 +33,10 @@ ProjectAcprojWidget::ProjectAcprojWidget(QWidget *parent) : CodeVisualSyncWidget
 // ════════════════════════════════════════════════════════════
 //  数据同步（基类骨架回调）
 // ════════════════════════════════════════════════════════════
+
+QByteArray ProjectAcprojWidget::visualFingerprint() const {
+  return UtilJson::fingerprint(m_visual->collectObject());
+}
 
 QWidget *ProjectAcprojWidget::visualView() const { return m_visual; }
 
@@ -62,3 +66,5 @@ void ProjectAcprojWidget::syncVisualToCodeImpl() {
   setPlainTextIfChanged(jsonStr);
   m_lastVisualHash = UtilJson::fingerprint(root);
 }
+
+void ProjectAcprojWidget::reloadStyle() { m_visual->reloadStyle(); }
