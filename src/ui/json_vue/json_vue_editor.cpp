@@ -371,6 +371,9 @@ void JsonVueEditor::applyStyle() {
                     "QLabel { font-size: %1px; color: %2; background: transparent; }"
                     // ── QCheckBox 复选框 ──
                     "QCheckBox { font-size: %1px; color: %2; }"
+                    // 禁用态降为弱色：控件级样式表优先于全局样式表，
+                    // 全局的 QCheckBox:disabled 在此被覆盖，必须本地补
+                    "QCheckBox:disabled { color: %7; }"
                     // ── QLineEdit 输入框 ──
                     "QLineEdit { padding: 1px 2px; font-size: %1px;"
                     "  background: %4; color: %2; border: 1px solid %3; }"
@@ -390,7 +393,8 @@ void JsonVueEditor::applyStyle() {
                     "  border-right: 1px solid %3; border-bottom: 1px solid %3; }"
                     // ── 滚动条 ──
                     "QScrollBar:vertical, QScrollBar:horizontal { background: %4; }")
-                    .arg(fontPx, text, border, bg, alt, headerBg);
+                    .arg(fontPx, text, border, bg, alt, headerBg,
+                         AuiStyle::mutedTextColor().name());
   setStyleSheet(qss);
 }
 

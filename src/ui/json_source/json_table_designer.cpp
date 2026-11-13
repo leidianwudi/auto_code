@@ -1230,6 +1230,10 @@ void JsonTableDesigner::setupUI() {
   m_genDetailCheck = new QCheckBox(QStringLiteral("详情"), this);
   m_genDetailCheck->setToolTip(QStringLiteral("行操作列「详情」图标（只读弹窗查看）"));
   genRow->addWidget(m_genDetailCheck);
+  // 「生成前端页面」开关联动按钮组可用状态：未勾选（纯 API 模块）时按钮配置
+  // 不生效，置灰提示；仅改 enabled 不改勾选值，重新勾上后原配置原样恢复
+  connect(m_frontendCheck, &QCheckBox::toggled, this,
+          [this](bool) { updateGenButtonsEnabled(); });
   addVSep();
   // C 端模块（modules/app）：三态（不生成/只读查询/空接口），鉴权默认需登录
   genRow->addWidget(new QLabel(QStringLiteral("C端模块:"), this));
@@ -1666,6 +1670,8 @@ void JsonTableDesigner::refill() {
   m_genEditCheck->setChecked(m_table.genEdit);
   m_genDeleteCheck->setChecked(m_table.genDelete);
   m_genDetailCheck->setChecked(m_table.genDetail);
+  // 回填后同步按钮组可用状态（仅置灰联动，勾选值保持 m_table 原样）
+  updateGenButtonsEnabled();
   m_genCacheCheck->setChecked(m_table.genCache);
   {
     // C 端形态：bool + mode → 下拉（"none"/"query"/"empty"）
@@ -1770,6 +1776,16 @@ void JsonTableDesigner::applyI18nEnabled(bool on) {
   m_i18nFieldsEdit->setEnabled(on);
 }
 
+void JsonTableDesigner::updateGenButtonsEnabled() {
+  // 仅联动可用状态（置灰），不改勾选值：collect 仍按原勾选保存，
+  // 「生成前端页面」重新勾上后按钮配置原样恢复
+  const bool on = m_frontendCheck->isChecked();
+  m_genAddCheck->setEnabled(on);
+  m_genEditCheck->setEnabled(on);
+  m_genDeleteCheck->setEnabled(on);
+  m_genDetailCheck->setEnabled(on);
+}
+
 void JsonTableDesigner::connectChangeSignals() {
   // 表格：模型级变更（条目编辑/行增删/搬运）全部覆盖；行内下拉在创建点单独接线
   auto onChange = [this]() {
@@ -1818,6 +1834,9 @@ void JsonTableDesigner::applyStyle() {
                     "QLabel { font-size: %1px; color: %2; background: transparent; }"
                     "QPushButton { padding: 2px 8px; font-size: %1px; color: %2; }"
                     "QCheckBox { font-size: %1px; color: %2; }"
+                    // 禁用态降为弱色：控件级样式表优先于全局样式表，
+                    // 全局的 QCheckBox:disabled 在此被覆盖，必须本地补
+                    "QCheckBox:disabled { color: %7; }"
                     "QTabWidget::pane { border: 1px solid %3; border-radius: 4px;"
                     "  background: %4; top: -1px; }"
                     "QTabBar::tab { font-size: %1px; color: %2; padding: 4px 10px;"
@@ -1840,7 +1859,8 @@ void JsonTableDesigner::applyStyle() {
                     // 分隔条由 AuiSplitterHandle 自绘（1px 细线 + 三点抓手），
                     // 不走 QSS，避免样式表与自绘重叠
                     "QScrollBar:vertical, QScrollBar:horizontal { background: %4; }")
-                    .arg(fontPx, text, border, bg, alt, headerBg);
+                    .arg(fontPx, text, border, bg, alt, headerBg,
+                         AuiStyle::mutedTextColor().name());
   setStyleSheet(qss);
 }
 

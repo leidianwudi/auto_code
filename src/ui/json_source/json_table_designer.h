@@ -189,6 +189,9 @@ private:
   void refreshColumnCandidates();
   /// 刷新「C端出参」按钮文案/提示/可用状态（空=完整实体，非空显示列数）
   void updateAppOutBtn();
+  /// 按「生成前端页面」开关联动 4 个按钮勾选框的可用状态（仅置灰，不改勾选值：
+  /// 纯 API 模块不生成页面，按钮配置不生效但保留原勾选，重新勾上即恢复）
+  void updateGenButtonsEnabled();
   /// 打开 C 端出参白名单选择对话框（勾选主表字段，顺序=字段表顺序）
   void editAppOutCols();
   /// 刷新多语言字段补全候选（候选=翻译表列名，按翻译表名实时切换）

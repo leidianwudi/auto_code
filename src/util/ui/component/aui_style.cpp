@@ -160,9 +160,12 @@ QString AuiStyle::mainStyleSheet() {
              "QSpinBox, QDoubleSpinBox, QDateTimeEdit { color: %2; }"
              "QLineEdit { color: %2; }"
              // 输入控件禁用态：文字降为弱色（QComboBox 箭头由 AuiComboBoxWidget
-             // 绘制，其禁用色在 paintEvent 内同步处理），视觉上明确"当前不可用"
+             // 绘制，其禁用色在 paintEvent 内同步处理），视觉上明确"当前不可用"；
+             // QCheckBox/QRadioButton 同样收进来——勾选框的置灰联动（如表设计器
+             // 「生成前端页面」关掉按钮组）依赖此规则才有视觉反馈
              "QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, "
-             "QDateTimeEdit:disabled, QLineEdit:disabled { color: %8; }"
+             "QDateTimeEdit:disabled, QLineEdit:disabled, QCheckBox:disabled, "
+             "QRadioButton:disabled { color: %8; }"
              "QTableWidget, QTreeWidget, QListWidget, QListView, QTreeView, QTableView { color: "
              "%2; }"
              "QHeaderView::section { color: %2; }"
@@ -208,12 +211,15 @@ QString AuiStyle::dialogStyleSheet() {
              "QLabel { color: %2; font-size: %3; }"
              "QRadioButton { color: %2; font-size: %3; }"
              "QCheckBox { color: %2; font-size: %3; }"
+             // 勾选框禁用态降为弱色（与主样式表一致，否则 setEnabled(false) 无视觉反馈）
+             "QCheckBox:disabled, QRadioButton:disabled { color: %5; }"
              "QGroupBox { color: %2; font-size: %3; }"
              "QLineEdit {"
              "  border: 1px solid %4; border-radius: 3px;"
              "  padding: 4px 6px; font-size: %3;"
              "}")
-      .arg(background().name(), textColor().name(), fs, borderColor().name());
+      .arg(background().name(), textColor().name(), fs, borderColor().name(),
+           mutedTextColor().name());
 }
 
 QString AuiStyle::inputBoxStyleSheet(const QString &selector) {
@@ -550,6 +556,13 @@ private:
   /// 部分勾选（三态 PartialiallyChecked 对应 State_NoChange 标志）
   static bool isPartial(const QStyleOption *o) { return o->state & QStyle::State_NoChange; }
 
+  /// 禁用态：指示框整体降为弱色，与文字的 QSS :disabled 弱色规则配套，
+  /// 形成完整的置灰反馈（如「生成前端页面」关掉按钮组的联动）。
+  /// Qt 样式状态无 State_Disabled 标志，禁用 = State_Enabled 缺失
+  static bool isDisabled(const QStyleOption *o) {
+    return !(o->state & QStyle::State_Enabled);
+  }
+
   static QRectF innerRect(const QStyleOption *o) {
     return QRectF(o->rect).adjusted(1.0, 1.0, -1.0, -1.0);
   }
@@ -557,6 +570,16 @@ private:
   static QColor accent() { return QColor(0x0e, 0x7a, 0xfe); }
   static QColor boxFill() { return AuiStyle::panelBackground(); }
   static QColor boxBorder() { return AuiStyle::textColor(); }
+
+  /// 按状态取填充色：禁用 → mutedTextColor（弱色），正常 → accent 蓝
+  static QColor stateAccent(const QStyleOption *o) {
+    return isDisabled(o) ? AuiStyle::mutedTextColor() : accent();
+  }
+
+  /// 按状态取边框色：禁用 → mutedTextColor（弱色），正常 → 主题文字色
+  static QColor stateBorder(const QStyleOption *o) {
+    return isDisabled(o) ? AuiStyle::mutedTextColor() : boxBorder();
+  }
 
   /// 绘制白色打勾（勾在填充色上方，用于复选框 / 树复选框选中态）
   static void drawCheckMark(QPainter *p, const QRectF &r, qreal w) {
@@ -587,16 +610,16 @@ private:
     const QRectF r = innerRect(o);
     if (isChecked(o)) {
       p->setPen(Qt::NoPen);
-      p->setBrush(accent());
+      p->setBrush(stateAccent(o));
       p->drawRoundedRect(r, 2.0, 2.0);
       drawCheckMark(p, r, 2.0);
     } else if (isPartial(o)) {
       p->setPen(Qt::NoPen);
-      p->setBrush(accent());
+      p->setBrush(stateAccent(o));
       p->drawRoundedRect(r, 2.0, 2.0);
       drawPartialMark(p, r);
     } else {
-      p->setPen(QPen(boxBorder(), 1.0));
+      p->setPen(QPen(stateBorder(o), 1.0));
       p->setBrush(boxFill());
       p->drawRoundedRect(r, 2.0, 2.0);
     }
@@ -610,15 +633,15 @@ private:
     const QPointF c = r.center();
     const qreal radius = qMin(r.width(), r.height()) / 2.0;
     if (isChecked(o)) {
-      // 蓝色外环 + 中心实心圆点（经典单选样式）
-      p->setPen(QPen(accent(), 2.0));
+      // 蓝色外环 + 中心实心圆点（经典单选样式）；禁用态取弱色
+      p->setPen(QPen(stateAccent(o), 2.0));
       p->setBrush(boxFill());
       p->drawEllipse(c, radius - 1.0, radius - 1.0);
       p->setPen(Qt::NoPen);
-      p->setBrush(accent());
+      p->setBrush(stateAccent(o));
       p->drawEllipse(c, radius * 0.42, radius * 0.42);
     } else {
-      p->setPen(QPen(boxBorder(), 1.0));
+      p->setPen(QPen(stateBorder(o), 1.0));
       p->setBrush(boxFill());
       p->drawEllipse(c, radius, radius);
     }
@@ -631,17 +654,17 @@ private:
     const QRectF r = innerRect(o);
     if (isChecked(o)) {
       p->setPen(Qt::NoPen);
-      p->setBrush(accent());
+      p->setBrush(stateAccent(o));
       p->drawRect(r);
       drawCheckMark(p, r, 1.6);
     } else if (isPartial(o)) {
       // 部分勾选：填充色方块 + 中心白色小方块（树形目录文件夹三态）
       p->setPen(Qt::NoPen);
-      p->setBrush(accent());
+      p->setBrush(stateAccent(o));
       p->drawRect(r);
       drawPartialMark(p, r);
     } else {
-      p->setPen(QPen(boxBorder(), 1.0));
+      p->setPen(QPen(stateBorder(o), 1.0));
       p->setBrush(boxFill());
       p->drawRect(r);
     }
