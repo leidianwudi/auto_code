@@ -1,6 +1,7 @@
 {
   table: {
     columns: [
+      { name: 'personnel_type', comment: '人员类型：1军职，2非军职', mysqlType: 'int', nullable: false, default: '1', isPrimary: false, isAutoInc: false, unsigned: false },
       {
         comment: '主键',
         isAutoInc: true,
@@ -170,6 +171,7 @@
       },
     ],
     editCols: [
+      { ref: 'personnel_type', label: '人员类型', visible: false },
       {
         "ref": "id",
         "visible": false
@@ -296,6 +298,7 @@
       }
     ],
     selColsEq: [
+      { ref: 'personnel_type', label: '人员类型', visible: false },
       {
         ref: 'status',
       },
@@ -316,6 +319,7 @@
     // 保存时由登录上下文填写申请人，服务层已提供 SaveForAdmin。
     adminSaveWithAdmin: true,
     indexes: [
+      { name: 'idx_salary_apply_personnel_type', cols: ['personnel_type'], unique: false },
       {
         cols: [
           'title',

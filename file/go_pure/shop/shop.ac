@@ -97,6 +97,8 @@ main {
     projPath: projPath,
     jsonTablePaths: files,
     apiPrefix: "/api",
+    // 标准列表使用项目内 ReListTable，重新生成后保留列设置和拖动列宽功能。
+    useListTable: true,
     // 表级枚举字典（跨页面共享）：全部 tag 列汇总输出 src/api/source/table_enum.ts
     tableEnumTpl: tplDir + "/table_enum.tpl",
     templates: [

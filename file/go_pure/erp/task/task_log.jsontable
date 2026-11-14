@@ -1,6 +1,7 @@
 {
   table: {
     columns: [
+      { name: 'personnel_type', comment: '任务人员范围：0全部或公共，1军职，2非军职', mysqlType: 'int', nullable: false, default: '0', isPrimary: false, isAutoInc: false, unsigned: false },
       {
         comment: '主键id',
         isAutoInc: true,
@@ -66,6 +67,7 @@
       },
     ],
     editCols: [
+      { ref: "personnel_type", visible: false },
       {
         "ref": "id",
         "visible": false

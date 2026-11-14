@@ -124,6 +124,9 @@
           {
             col: 'title',
           },
+          {
+            col: 'personnel_type',
+          },
         ],
         on: [
           'salary_apply_id',
@@ -173,6 +176,7 @@
       }
     ],
     selColsEq: [
+      { ref: 'salary_apply_personnel_type', visible: false },
       {
         ref: 'salary_apply_id',
       },

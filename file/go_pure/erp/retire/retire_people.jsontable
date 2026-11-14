@@ -1,6 +1,12 @@
 {
   table: {
+    indexes: [
+      { name: 'idx_retire_people_personnel_type', cols: ['personnel_type'], unique: false },
+      { name: 'card_id', cols: ['card_id'], unique: true },
+    ],
     columns: [
+      { name: 'personnel_type', comment: '人员类型：1军职，2非军职', mysqlType: 'int', nullable: false, default: '1', isPrimary: false, isAutoInc: false, unsigned: false },
+      { name: 'work_years', comment: '工龄（仅档案展示）', mysqlType: 'int', nullable: false, default: '0', isPrimary: false, isAutoInc: false, unsigned: false },
       {
         comment: 'id',
         isAutoInc: true,
@@ -244,6 +250,8 @@
       },
     ],
     editCols: [
+      { ref: 'personnel_type', label: '人员类型', visible: false },
+      { ref: 'work_years', label: '工龄', visible: false },
       // 保留已迁移业务使用的后端更新字段，避免生成 InUpd 时删除原有字段。
       {
         "ref": "id",
@@ -529,6 +537,7 @@
       }
     ],
     selColsEq: [
+      { ref: 'personnel_type', label: '人员类型', visible: false },
       {
         ref: 'status',
       },

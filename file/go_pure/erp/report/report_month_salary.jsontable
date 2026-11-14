@@ -1,6 +1,8 @@
 {
   table: {
+    indexes: [{ name: 'idx_report_month_salary_personnel_type', cols: ['personnel_type', 'month'], unique: false },],
     columns: [
+      { name: 'personnel_type', comment: '人员类型：1军职，2非军职', mysqlType: 'int', nullable: false, default: '1', isPrimary: false, isAutoInc: false, unsigned: false },
       {
         comment: '主键',
         isAutoInc: true,
@@ -125,6 +127,7 @@
       },
     ],
     editCols: [
+      { ref: 'personnel_type', label: '人员类型', visible: false },
       // 保留已迁移业务使用的后端更新字段，避免生成 InUpd 时删除原有字段。
       {
         "ref": "id",
@@ -251,6 +254,7 @@
       }
     ],
     selColsEq: [
+      { ref: 'personnel_type', label: '人员类型', visible: false },
       {
         ref: 'salary_apply_id',
       },

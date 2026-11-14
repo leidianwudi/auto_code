@@ -1,6 +1,7 @@
 {
   table: {
     columns: [
+      { name: 'personnel_type', comment: '人员类型：1军职，2非军职', mysqlType: 'int', nullable: false, default: '1', isPrimary: false, isAutoInc: false, unsigned: false },
       {
         comment: '主键',
         isAutoInc: true,
@@ -176,6 +177,7 @@
       },
     ],
     editCols: [
+      { ref: 'personnel_type', label: '人员类型', visible: false },
       {
         "label": "主键",
         "ref": "id"
@@ -340,6 +342,7 @@
       }
     ],
     selColsEq: [
+      { ref: 'personnel_type', label: '人员类型', visible: false },
       {
         ref: 'status',
       },
@@ -375,6 +378,7 @@
     // 页面及 API 已包含迁移后的手写业务，重新生成时保留。
     frontend: false,
     indexes: [
+      { name: 'idx_retire_people_apply_personnel_type', cols: ['personnel_type'], unique: false },
       {
         cols: [
           'apply_time',
