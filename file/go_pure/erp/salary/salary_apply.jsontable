@@ -323,10 +323,11 @@
       {
         cols: [
           'title',
+          'personnel_type',
         ],
-        name: 'title',
-        // 已审核名称可复用；未办结唯一约束由 ERP 迁移的 active_title 生成列维护。
-        unique: false,
+        name: 'title personnel_type',
+        // 同一人员类型内申请名称唯一，两类人员可使用同名申请；所有状态均受约束。
+        unique: true,
       },
     ],
     manualUpdateTime: false,

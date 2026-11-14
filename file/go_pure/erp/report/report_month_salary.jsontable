@@ -1,7 +1,12 @@
 {
   table: {
-    indexes: [{ name: 'idx_report_month_salary_personnel_type', cols: ['personnel_type', 'month'], unique: false },],
+    indexes: [
+      { name: 'idx_report_month_salary_personnel_type', cols: ['personnel_type', 'month'], unique: false },
+      { name: 'idx_report_month_salary_death_order', cols: ['month', 'is_dead', 'id'], unique: false },
+    ],
     columns: [
+      { name: 'is_dead', comment: '本期是否病故：0否，1是（生成时快照）', mysqlType: 'int', nullable: false, default: '0', isPrimary: false, isAutoInc: false, unsigned: false },
+      { name: 'dead_date', comment: '本期病故日期快照', mysqlType: 'date', nullable: true, isPrimary: false, isAutoInc: false, unsigned: false },
       { name: 'personnel_type', comment: '人员类型：1军职，2非军职', mysqlType: 'int', nullable: false, default: '1', isPrimary: false, isAutoInc: false, unsigned: false },
       {
         comment: '主键',
@@ -277,6 +282,7 @@
         'month',
         'DESC',
       ],
+      ['is_dead', 'ASC'],
       [
         'id',
         'DESC',
