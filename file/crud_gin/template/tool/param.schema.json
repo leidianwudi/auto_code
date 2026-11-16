@@ -210,7 +210,7 @@
           type: 'string',
         },
         required: {
-          description: '必填（→ InsertParams 生成 binding: "required"；与 visible=false 互斥）',
+          description: '必填（→ InsertParams 生成 binding: "required"；可与只读展示/隐藏组合——弹窗选值程序化赋值的字段用这种形态）',
           type: 'bool',
         },
       },

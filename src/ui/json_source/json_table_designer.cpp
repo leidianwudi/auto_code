@@ -920,7 +920,11 @@ void JsonTableDesigner::setupUI() {
   layout->addWidget(tabs, 1);
 
   // ── 交叉校验状态行（被动：随编辑自动刷新，替代原弹窗确定拦截与校验按钮）──
+  // 文字可选中复制（错误详情常需贴给他人排查）：QLabel 默认不可选，
+  // 开启鼠标/键盘选择后右键自动带「复制」菜单，光标同步换 IBeam 提示可复制
   m_validateLabel = new QLabel(this);
+  m_validateLabel->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
+  m_validateLabel->setCursor(Qt::IBeamCursor);
   m_validateLabel->setContentsMargins(4, 0, 4, 0);
   layout->addWidget(m_validateLabel);
   applyStyle();

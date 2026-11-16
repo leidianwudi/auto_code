@@ -537,8 +537,10 @@ bool validateCrossRefs(const JsonTableTable &table, const JsonTableConfig &confi
   for (const auto &c : view.selColsLike)
     if (!checkRef(QStringLiteral("模糊查询列"), c.ref)) return false;
 
-  // ── 编辑视图（editCols）：ref 为物理列或联表输出别名（只读展示）、去重、
-  //    required 与 invisible 互斥 ──
+  // ── 编辑视图（editCols）：ref 为物理列或联表输出别名（只读展示）、去重 ──
+  // 注：不做「只读/隐藏与必填互斥」拦截——生成链支持该组合（只读/隐藏字段 +
+  // required 前端规则 + 后端 binding），"弹窗选值程序化赋值、表单只读展示"
+  // 是合法模式（erp 的 card_id/salary_apply_id 等），设计器不得比生成期更严
   const QVector<JsonTableEditCol> editRows = view.editCols;
   QSet<QString> editRefs;
   for (int i = 0; i < editRows.size(); ++i) {
@@ -546,12 +548,8 @@ bool validateCrossRefs(const JsonTableTable &table, const JsonTableConfig &confi
     const bool isAliasRef = joinAliases.contains(ec.ref);
     if (!colNames.contains(ec.ref) && !isAliasRef)
       return fail(QStringLiteral("编辑列 '%1' 不在字段列表中").arg(ec.ref));
-    if (!isAliasRef && ec.editEditable == false && ec.required)
-      return fail(QStringLiteral("编辑列 '%1' 只读展示与必填互斥").arg(ec.ref));
     if (editRefs.contains(ec.ref)) return fail(QStringLiteral("编辑列 '%1' 重复配置").arg(ec.ref));
     editRefs.insert(ec.ref);
-    if (ec.required && !ec.visible)
-      return fail(QStringLiteral("编辑列 '%1' 必填但前端显示关闭（矛盾配置）").arg(ec.ref));
   }
   for (const auto &p : table.selColsSort)
     if (!checkRef(QStringLiteral("默认排序列"), p.first)) return false;

@@ -44,8 +44,13 @@ void JsonTableEditor::ensureProjectContext() {
   const QString proj = findJsontableProjPath(dir);
   if (!proj.isEmpty()) {
     m_ctx = jsontableProjFromFile(proj);  // 读取失败返回空配置（表编辑不受影响）
+    // 跨文件表清单以项目根为扫描范围（与生成期一致：联表目标可跨模块，
+    // 如 salary/ 联 retire/ 的 retire_people）；以文件目录为根时只会扫到
+    // 本模块子树，跨模块联表会被误报「目标表不在项目 .jsontable 中」
+    m_ctx.tables = listProjectTables(QFileInfo(proj).absolutePath());
+  } else {
+    m_ctx.tables = listProjectTables(dir);  // 无项目配置：回退文件目录
   }
-  m_ctx.tables = listProjectTables(dir);  // 联表下拉/交叉校验的跨文件目标
 }
 
 // ════════════════════════════════════════════════════════════
