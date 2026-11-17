@@ -770,6 +770,41 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
     });
   }
 
+  // i18n 平铺字段：被 selCols 引用 → 虚拟列（列序跟随 selCols，可插任意位置；
+  // 数据来自后端 fillI18n 平铺（EnXxx 响应体含同名字段），前端纯展示。
+  // 标题单一来源 = i18n.fields[].label（多语言页「显示标题」，生成端已做完整
+  // 回退链），不读 selCols.label——与设计器字段呈现的标题口径一致；
+  // 列宽取 selMeta.width。未被引用的字段不在此生成 → 收敛后垫尾段兜底）
+  if (i18nMeta != null) {
+    let i18nSelFields: Object[] = i18nMeta["fields"];
+    for (iffs in i18nSelFields) {
+      let m0: Object = selMeta[iffs["name"]];
+      if (m0 == null) { continue; }
+      let label0: String = iffs["label"];
+      if (label0 == null || label0 == "") { label0 = iffs["name"]; }
+      cols.push({
+        dataName: iffs["name"],
+        queryName: label0,
+        editName: label0,
+        queryVisible: true,
+        editVisible: false,
+        editEditable: false,
+        switchEditable: false,
+        required: false,
+        formSpan: 12,
+        columnWidth: (m0["width"] != null && m0["width"] > 0 ? m0["width"] : 0),
+        maxlength: 0,
+        placeholder: "",
+        textareaRows: 4,
+        boolTrueText: "启用",
+        boolFalseText: "禁用",
+        tagItems: [],
+        dateFormat: "",
+        editStyle: "text"
+      });
+    }
+  }
+
   // ── 列顺序收敛：配了 selCols 时，列表列按「字段呈现」勾选顺序输出 ──────
   //  物理列原按 columns[]（字段页）顺序生成、联表别名固定垫尾，此处统一重排；
   //  未勾选列表的列追加在后（仅编辑/查询用，不影响列表列序）
@@ -808,11 +843,21 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
   //  模糊 selColsLike → 文本。控件自动推导：
   //    - globalEnumCols 命中列 / 联表 ref / 本表外键列 → select（域继承或远程）
   //    - visible=false 的条件只生成后端，前端不渲染（此处 continue）
+  // i18n 平铺字段查询拦截（第一版不支持翻译文本跨表查询，误配置时提示跳过）
+  let i18nQBlock: Object = {};
+  if (i18nMeta != null) {
+    let i18nQFields: Object[] = i18nMeta["fields"];
+    for (ifq in i18nQFields) { i18nQBlock[ifq["name"]] = true; }
+  }
   // 精确查询（selColsEq）
   for (qc0 in eqRefs) {
     let r2: String = qc0["ref"];
     if (r2 == null || r2 == "" || handled[r2] == true) { continue; }
     handled[r2] = true;
+    if (i18nQBlock[r2] == true) {
+      printLog("提示：查询条件 '" + r2 + "' 为 i18n 平铺字段，跨表查询第一版不支持，已跳过");
+      continue;
+    }
     if (qc0["visible"] == false) { continue; }  // 仅后端生成条件，前端不渲染
     queryFields.push(makeQueryField(r2, "eq", selLabelOf, joinContext, rawCols, geSet,
                                     fkMap, qfIsDate(r2, rawCols), qfDateFmt(r2, rawCols), aliasMeta));
@@ -822,6 +867,10 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
     let r3: String = qc1["ref"];
     if (r3 == null || r3 == "" || handled[r3] == true) { continue; }
     handled[r3] = true;
+    if (i18nQBlock[r3] == true) {
+      printLog("提示：查询条件 '" + r3 + "' 为 i18n 平铺字段，跨表查询第一版不支持，已跳过");
+      continue;
+    }
     if (qc1["visible"] == false) { continue; }
     queryFields.push(makeQueryField(r3, "range", selLabelOf, joinContext, rawCols, geSet,
                                     fkMap, qfIsDate(r3, rawCols), qfDateFmt(r3, rawCols), aliasMeta));
@@ -831,6 +880,10 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
     let r4: String = qc2["ref"];
     if (r4 == null || r4 == "" || handled[r4] == true) { continue; }
     handled[r4] = true;
+    if (i18nQBlock[r4] == true) {
+      printLog("提示：查询条件 '" + r4 + "' 为 i18n 平铺字段，跨表查询第一版不支持，已跳过");
+      continue;
+    }
     if (qc2["visible"] == false) { continue; }
     queryFields.push(makeQueryField(r4, "eq", selLabelOf, joinContext, rawCols, geSet,
                                     fkMap, false, "", aliasMeta));
@@ -874,10 +927,13 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
     }
   }
 
-  // i18n 平铺字段：列表虚拟列（编辑表单由 write.vue 的多语言 Tab 承接）
+  // i18n 平铺字段：列表虚拟列兜底（编辑表单由 write.vue 的多语言 Tab 承接）。
+  // 被 selCols 引用的字段已在顺序收敛前生成（列序跟随 selCols），
+  // 此处仅垫尾未被引用的字段（保持旧行为：恒进列表尾部）
   if (i18nMeta != null) {
     let i18nFieldList: Object[] = i18nMeta["fields"];
     for (iff in i18nFieldList) {
+      if (selMeta[iff["name"]] != null) { continue; }
       let rcI: Object = { name: iff["name"], mysqlType: iff["mysqlType"], comment: iff["comment"] };
       let colI: Object = buildJsonvueColumn(rcI, null, null);
       colI["queryName"] = iff["label"];
@@ -1583,10 +1639,17 @@ export function generateAdminMain(params: Object): Void {
         if (dl == null || dl == "") { dl = "zh"; }
         i18nMeta = { defaultLang: dl, table: i18nNode2["table"], fields: [] };
         let metaFields: Object[] = [];
-        let fnames: String[] = i18nNode2["fields"];
+        let fnames: Object[] = i18nNode2["fields"];
         let labels: Object = i18nNode2["labels"];
         if (fnames != null) {
-          for (fn in fnames) {
+          for (f in fnames) {
+            // fields 兼容两种形态：字符串（旧）/ {name,label} 对象（新，label 空 = 回退链）
+            let fn: String = f["name"];
+            let flabel: String = f["label"];
+            if (fn == null || fn == "") {
+              fn = "" + f;  // 字符串形态（旧）："" + f 静态推导 String，运行时按原值拼接
+              flabel = null;
+            }
             let tc: Object = null;
             if (tgt != null) {
               let tcols: Object[] = tgt["columns"];
@@ -1594,13 +1657,17 @@ export function generateAdminMain(params: Object): Void {
                 if (c["name"] == fn) { tc = c; break; }
               }
             }
+            // 标题链：显式 label > i18n.labels 映射 > 翻译表列 comment > 字段名
             let label: String = fn;
             let mt: String = "varchar(255)";
-            if (labels != null && labels[fn] != null && labels[fn] != "") { label = labels[fn]; }
-            if (tc != null) {
-              if (label == fn && tc["comment"] != null && tc["comment"] != "") { label = tc["comment"]; }
-              if (tc["mysqlType"] != null) { mt = tc["mysqlType"]; }
+            if (flabel != null && flabel != "") {
+              label = flabel;
+            } else if (labels != null && labels[fn] != null && labels[fn] != "") {
+              label = labels[fn];
+            } else if (tc != null && tc["comment"] != null && tc["comment"] != "") {
+              label = tc["comment"];
             }
+            if (tc != null && tc["mysqlType"] != null) { mt = tc["mysqlType"]; }
             let mtLow: String = mt.toLowerCase();
             let isLong: Bool = (mtLow.indexOf("text") >= 0 || mtLow.indexOf("intro") >= 0 ||
                                 fn.indexOf("intro") >= 0 || fn.indexOf("desc") >= 0 ||

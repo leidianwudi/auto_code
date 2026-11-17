@@ -108,14 +108,11 @@ private:
   void fillSortTable(const QVector<QPair<QString, QString>> &sort);
   /// 追加一行排序（列名 + 方向，缺省 DESC）
   void appendSortRow(const QString &col, const QString &dir);
+  void appendI18nFieldRow(const QString &name, const QString &label);
   /// 从表格收集全部排序定义（跳过排序列为空的行）
   QVector<QPair<QString, QString>> collectSort() const;
   /// 刷新全部排序行的候选列表（字段表格列名变化时调用，保留已填值）
   void setSortOptions(const QStringList &opts);
-  /// 刷新全部字段呈现行的「字段引用」候选（同上，保留已填值）
-  void setViewRefOptions(const QStringList &opts);
-  /// 为字段呈现表某行绑定常驻可编辑下拉（字段引用列，单击即展开候选）
-  void bindViewRefCombo(int row, const QString &ref);
   /// 读取字段呈现表某行的字段引用（优先下拉当前文本）
   QString viewRefText(int row) const;
   // ── 表级进阶键：联表查询声明（joinTables 新格式）──
@@ -253,14 +250,15 @@ private:
   QLineEdit *m_i18nLangKeyEdit = nullptr;     ///< 语言码列
   QLineEdit *m_i18nDefaultLangEdit = nullptr; ///< 默认语言
   QComboBox *m_i18nLangFromCombo = nullptr;   ///< 语言码来源（body/header）
-  QLineEdit *m_i18nFieldsEdit = nullptr;      ///< 多语言字段（逗号分隔）
+  QTableWidget *m_i18nFieldTable = nullptr;   ///< 多语言字段表（列1=字段名常驻下拉，候选=翻译表列；列2=自定义标题，空=回退链）
+  QPushButton *m_i18nFieldAddBtn = nullptr;   ///< + 加字段
+  QPushButton *m_i18nFieldDelBtn = nullptr;   ///< - 删字段
   // ── 列名候选联动（补全器/委托实例在 cpp 内具体类型，成员存基类指针）──
   QCompleter *m_globalEnumCompleter = nullptr;    ///< 全局枚举列补全（候选=字段列名）
-  QCompleter *m_i18nFieldsCompleter = nullptr;    ///< 多语言字段补全（候选=翻译表列名）
+  QStringList m_i18nFieldOptions;                 ///< 多语言字段候选（翻译表列名，随翻译表名切换）
   QStyledItemDelegate *m_enumColDelegate = nullptr;   ///< 枚举列下拉委托（预设=字段列名）
   QStyledItemDelegate *m_joinMainColDelegate = nullptr;  ///< 联表 on[0] 主表列下拉（候选=字段列名）
   QStyledItemDelegate *m_joinTableDelegate = nullptr;    ///< 联表被联表下拉（候选=项目表名）
-  QStringList m_viewRefOptions;                          ///< 字段引用候选（字段列+联表 ref）
   QStringList m_viewBaselineOrder;    ///< 回填时的字段呈现行序（判断用户是否移动过行）
   QStringList m_sortColOptions;       ///< 排序列候选（字段列+联表 ref）
   QLabel *m_validateLabel = nullptr;  ///< 交叉校验状态行（随编辑被动刷新）

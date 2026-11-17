@@ -517,7 +517,8 @@ ${/if}
     </div>
 
     <!-- 编辑弹窗（write.vue：新增/编辑/详情共用，交互与 admin_vue 同构） -->
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="760px" destroy-on-close>
+    <!-- gen-dialog：内容区滚动封顶（全局规则见 src/style/index.scss），footer 按钮始终可见 -->
+    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="760px" destroy-on-close class="gen-dialog">
       <Write ref="writeRef" :current-row="currentRow" :action-type="actionType" />
       <template #footer>
         <el-button v-if="actionType !== 'detail'" type="primary" :loading="saveLoading" @click="save">保存</el-button>
@@ -526,7 +527,7 @@ ${/if}
     </el-dialog>
 ${if hasDialogButtons}${each btn in dialogButtons}
     <!-- ${btn.dialogTitle} 对话框 -->
-    <el-dialog v-model="${btn.key}Visible" title="${btn.dialogTitle}" width="560px" @open="on${btn.key}DialogOpen">
+    <el-dialog v-model="${btn.key}Visible" title="${btn.dialogTitle}" width="560px" @open="on${btn.key}DialogOpen" class="gen-dialog">
       <el-form :model="${btn.key}Form" label-width="110px">
 ${each f in btn.dialogFields}
         <el-form-item label="${f.label}" prop="${f.fieldName}"${if f.required} required${/if}>
@@ -550,16 +551,3 @@ ${/each}${/if}
   </div>
 </template>
 
-<style>
-/* 图片缩略图单元格：压缩含图片单元格的上下内边距（8px → 2px），无图片的行和
-   其它列不受影响。列内容由模板插槽渲染，插槽 VNode 不携带 SFC scope 属性，
-   因此用全局样式；各生成页面的这份规则完全相同，重复加载无副作用 */
-.el-table .el-table__cell:has(.el-image) {
-  padding-top: 2px;
-  padding-bottom: 2px;
-}
-/* el-image 默认 inline-block 按文本基线对齐，改块级后上下间隔对称 */
-.el-table .el-table__cell .el-image {
-  display: block;
-}
-</style>

@@ -167,8 +167,8 @@
     ],
     frontend: false,
     manualUpdateTime: false,
-    modelName: 'sys_menu',
-    moduleDir: 'sys/sys_menu',
+    modelName: 'system_menu',
+    moduleDir: 'system/system_menu',
     selColsEq: [
       {
         ref: 'pid',
@@ -200,7 +200,7 @@
       ],
     ],
     tableComment: '系统菜单',
-    tableName: 'sys_menu',
+    tableName: 'system_menu',
     viewOrder: [
       'id',
       'pid',

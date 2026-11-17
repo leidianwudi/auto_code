@@ -579,11 +579,18 @@ export function generateApiMain(params: Object): Number {
 
           // 平铺字段收集：fields 中每列必须在翻译表中存在，且不与主表列重名
           //   与主表重名时平铺会覆盖主表数据 → 报错跳过 i18n
-          let fieldCfg: String[] = i18nCfg["fields"];
+          let fieldCfg: Object[] = i18nCfg["fields"];
           let fieldCfgLen = fieldCfg.length;
           let i18nInvalid = false;
           for (let fi = 0; fi < fieldCfgLen; fi = fi + 1) {
-            let fname: String = fieldCfg[fi];
+            // fields 兼容两种形态：字符串（旧）/ {name,label} 对象（新，label 空 = 回退链）
+            let fitem = fieldCfg[fi];
+            let fname: String = fitem["name"];
+            let flabel: String = fitem["label"];
+            if (fname == null || fname == "") {
+              fname = "" + fitem;  // 字符串形态（旧）："" + fitem 静态推导 String
+              flabel = null;
+            }
             let found: FieldDef = null;
             for (f in iParam.fields) {
               if (f.name == fname) { found = f; break; }
@@ -604,7 +611,13 @@ export function generateApiMain(params: Object): Number {
             if (i18nInvalid) { break; }
             let ff = new FieldDef();
             ff.name = found.name;
+            // 标题链：显式 label > 翻译表列 comment > 字段名
             ff.comment = found.comment;
+            if (flabel != null && flabel != "") {
+              ff.comment = flabel;
+            } else if (ff.comment == null || ff.comment == "") {
+              ff.comment = found.name;
+            }
             ff.tsType = found.tsType;
             i18nFlatFields.append(ff);
           }

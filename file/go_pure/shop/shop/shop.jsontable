@@ -258,13 +258,13 @@
             key: 'Editing',
             label: '编辑中',
             value: '0',
-            valueType: 'string',
+            valueType: 'number',
           },
           {
             key: 'Failed',
             label: '审核失败',
             value: '3',
-            valueType: 'string',
+            valueType: 'number',
           },
         ],
       },
@@ -274,8 +274,14 @@
       defaultLang: 'zh',
       extKey: 'ext_id',
       fields: [
-        'name',
-        'intro',
+        {
+          label: '店铺名称',
+          name: 'name',
+        },
+        {
+          label: '店铺简介1',
+          name: 'intro',
+        },
       ],
       langFrom: 'header',
       langKey: 'lang',
@@ -284,6 +290,9 @@
     manualUpdateTime: false,
     modelName: 'shop',
     selCols: [
+      {
+        ref: 'name',
+      },
       {
         label: '店铺logo',
         ref: 'logo_img',
@@ -325,6 +334,9 @@
       {
         label: '是否启用',
         ref: 'enable',
+      },
+      {
+        ref: 'intro',
       },
     ],
     selColsEq: [
@@ -381,6 +393,7 @@
     tableComment: '商店',
     tableName: 'shop',
     viewOrder: [
+      'name',
       'logo_img',
       'user_id',
       'level',
@@ -395,6 +408,7 @@
       'dis_like',
       'follow',
       'desc',
+      'intro',
     ],
   },
 }

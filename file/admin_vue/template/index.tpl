@@ -565,21 +565,3 @@ ${each btn in dialogButtons}
 ${/each}
 </template>
 
-<style>
-/* 图片缩略图单元格：单元格默认上下内边距 8px，叠加 contain 的留白后图片离上下行线很远。
-   用 :has 只压缩「含图片的单元格」的上下内边距（8px → 2px），
-   无图片的行和其它列的内边距/行高不受影响。
-   列插槽由 JSX 渲染（VNode 不携带 SFC scope 属性），因此用全局样式 */
-.el-table .el-table__cell:has(.el-image) {
-  padding-top: 2px;
-  padding-bottom: 2px;
-}
-/* 注意：行高由整行最高的单元格决定。默认图片高 40px 低于其它列撑起的典型行高
-   （如操作按钮列 ≈48px），单元格垂直居中会让图片上下略有空隙（预期取舍）；
-   单张图片想贴住行线可把该预设尺寸高配到 ≥ 行高 */
-/* ElImage 默认 inline-block 按文本基线对齐，图片底边以下会多出基线间隙，
-   造成下边距大于上边距；改块级后上下间隔对称 */
-.el-table .el-table__cell .el-image {
-  display: block;
-}
-</style>

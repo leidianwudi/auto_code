@@ -555,29 +555,43 @@ export function deriveI18nTable(mainTable: Object): Object {
                    comment: "扩展ID，关联" + mainTable["tableName"] + "." + pkName });
   newCols.append({ name: langKey, mysqlType: "varchar(8)", unsigned: false, nullable: false,
                    isPrimary: false, isAutoInc: false, comment: "语言编码：zh、en、ja" });
-  let fields: String[] = cfg["fields"];
+  let fields: Object[] = cfg["fields"];
   if (fields != null) {
     for (f in fields) {
+      // fields 兼容两种形态：字符串（旧）/ {name,label} 对象（新，label 空 = 回退链）
+      let fn: String = f["name"];
+      let flabel: String = f["label"];
+      if (fn == null || fn == "") {
+        fn = "" + f;  // 字符串形态（旧）："" + f 静态推导 String，运行时按原值拼接
+        flabel = null;
+      }
       let src: Object = null;
       if (cols != null) {
         for (c in cols) {
-          if (c["name"] == f) {
+          if (c["name"] == fn) {
             src = c;
             break;
           }
         }
       }
       if (src != null) {
+        // 翻译列注释链：显式 label > 主表同名列 comment > 字段名
         let fc: String = src["comment"];
-        if (fc == null) {
-          fc = f;
+        if (flabel != null && flabel != "") {
+          fc = flabel;
+        } else if (fc == null) {
+          fc = fn;
         }
-        newCols.append({ name: f, mysqlType: src["mysqlType"], unsigned: src["unsigned"] == true,
+        newCols.append({ name: fn, mysqlType: src["mysqlType"], unsigned: src["unsigned"] == true,
                          nullable: src["nullable"] == true, isPrimary: false, isAutoInc: false,
                          comment: fc });
       } else {
-        newCols.append({ name: f, mysqlType: "varchar(255)", unsigned: false, nullable: false,
-                         isPrimary: false, isAutoInc: false, comment: f });
+        let fc2: String = flabel;
+        if (fc2 == null || fc2 == "") {
+          fc2 = fn;
+        }
+        newCols.append({ name: fn, mysqlType: "varchar(255)", unsigned: false, nullable: false,
+                         isPrimary: false, isAutoInc: false, comment: fc2 });
       }
     }
   }
@@ -1451,12 +1465,19 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
                    "') 在翻译表 " + i18nTable + " 中不存在，i18n 已跳过");
         i18nValid = false;
       }
-      let i18nFields: String[] = i18nCfg["fields"];
+      let i18nFields: Object[] = i18nCfg["fields"];
       if (i18nFields == null || i18nFields.length == 0) {
         printError("错误：i18n.fields 为空（主表 " + tableName + " 的 i18n 已跳过）");
         i18nValid = false;
       } else if (i18nValid) {
-        for (fn in i18nFields) {
+        for (f in i18nFields) {
+          // fields 兼容两种形态：字符串（旧）/ {name,label} 对象（新，label 空 = 回退链）
+          let fn: String = f["name"];
+          let flabel: String = f["label"];
+          if (fn == null || fn == "") {
+            fn = "" + f;  // 字符串形态（旧）："" + f 静态推导 String，运行时按原值拼接
+            flabel = null;
+          }
           let tc: Object = null;
           for (c in i18nTCols) {
             if (c["name"] == fn) { tc = c; break; }
@@ -1477,10 +1498,16 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
           if (!i18nValid) { break; }
           let iff: Object = {};
           iff["name"] = fn;
+          iff["label"] = (flabel == null || flabel == "") ? "" : flabel;
           iff["goName"] = snakeToPascal(fn);
           iff["goType"] = mapTypeToGo(tc["mysqlType"], tc["unsigned"] == true);
+          // 标题链：显式 label > 翻译表列 comment > 字段名
           let fcomment: String = tc["comment"];
-          if (fcomment == null || fcomment == "") { fcomment = fn; }
+          if (flabel != null && flabel != "") {
+            fcomment = flabel;
+          } else if (fcomment == null || fcomment == "") {
+            fcomment = fn;
+          }
           iff["comment"] = fcomment;
           i18nFlatFields.append(iff);
         }

@@ -394,6 +394,16 @@ struct JsonTableEnum {
   bool operator==(const JsonTableEnum &other) const;
 };
 
+/// 多语言翻译字段：列名 + 可自定义显示标题（label 空 = 回退链取标题）
+struct JsonTableI18nField {
+  QString name;   ///< 翻译表列名（如 name、intro）
+  QString label;  ///< 自定义显示标题（列表列头 / 语言 Tab 表单 label；空 = 回退）
+
+  bool operator==(const JsonTableI18nField &other) const {
+    return name == other.name && label == other.label;
+  }
+};
+
 /**
  * @struct JsonTableI18n
  * @brief 多语言翻译表配置（主表 + 翻译表联合查询/upsert/级联删除）
@@ -402,11 +412,17 @@ struct JsonTableI18n {
   QString table;                ///< 翻译表表名（空 = 未启用）
   QString extKey;               ///< 翻译表中关联主表主键的外键列（如 ext_id）
   QString langKey;              ///< 语言码列（如 lang）
-  QStringList fields;           ///< 参与多语言的翻译表文本列（如 ["name","intro"]）
+  QList<JsonTableI18nField> fields;  ///< 参与多语言的翻译表文本列（可带自定义标题）
   QString defaultLang = QStringLiteral("zh");  ///< 默认语言（回退目标）
   QString langFrom = QStringLiteral("body");   ///< 语言码来源：body / header
 
   bool isEnabled() const { return !table.isEmpty(); }
+  /// 仅取字段名列表（校验/统计等不关心标题的场景）
+  QStringList fieldNames() const {
+    QStringList names;
+    for (const auto &f : fields) names << f.name;
+    return names;
+  }
   QJsonObject toJsonObject() const;
   static JsonTableI18n fromJsonObject(const QJsonObject &obj);
   bool operator==(const JsonTableI18n &other) const;

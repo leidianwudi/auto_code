@@ -100,8 +100,8 @@
     ],
     frontend: false,
     manualUpdateTime: false,
-    modelName: 'sys_role',
-    moduleDir: 'sys/sys_role',
+    modelName: 'system_role',
+    moduleDir: 'system/system_role',
     selColsEq: [
       {
         ref: 'status',
@@ -127,7 +127,7 @@
       ],
     ],
     tableComment: '系统角色',
-    tableName: 'sys_role',
+    tableName: 'system_role',
     viewOrder: [
       'id',
       'name',

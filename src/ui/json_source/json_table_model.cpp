@@ -393,8 +393,14 @@ QJsonObject JsonTableI18n::toJsonObject() const {
   obj[QString::fromLatin1(JsonTableKey::kI18nTable)] = table;
   obj[QString::fromLatin1(JsonTableKey::kExtKey)] = extKey;
   obj[QString::fromLatin1(JsonTableKey::kLangKey)] = langKey;
+  // 统一落对象形态 [{name,label}]（label 空 = 回退链取标题；旧字符串形态读取时兼容）
   QJsonArray fieldArr;
-  for (const QString &f : fields) fieldArr.append(f);
+  for (const auto &f : fields) {
+    QJsonObject fo;
+    fo[QString::fromLatin1(JsonTableKey::kName)] = f.name;
+    fo[QString::fromLatin1(JsonTableKey::kLabel)] = f.label;
+    fieldArr.append(fo);
+  }
   obj[QString::fromLatin1(JsonTableKey::kFields)] = fieldArr;
   obj[QString::fromLatin1(JsonTableKey::kDefaultLang)] = defaultLang;
   obj[QString::fromLatin1(JsonTableKey::kLangFrom)] = langFrom;
@@ -408,7 +414,15 @@ JsonTableI18n JsonTableI18n::fromJsonObject(const QJsonObject &obj) {
   i.langKey = obj.value(QString::fromLatin1(JsonTableKey::kLangKey)).toString();
   const QJsonArray fieldArr = obj.value(QString::fromLatin1(JsonTableKey::kFields)).toArray();
   for (const auto &v : fieldArr) {
-    if (v.isString()) i.fields.append(v.toString());
+    // 兼容两种形态：旧字符串 "name"（label 走回退链）/ 新对象 {name, label}
+    if (v.isString()) {
+      i.fields.append({v.toString(), QString()});
+    } else if (v.isObject()) {
+      const QJsonObject fo = v.toObject();
+      const QString name = fo.value(QString::fromLatin1(JsonTableKey::kName)).toString().trimmed();
+      if (!name.isEmpty())
+        i.fields.append({name, fo.value(QString::fromLatin1(JsonTableKey::kLabel)).toString().trimmed()});
+    }
   }
   i.defaultLang =
       obj.value(QString::fromLatin1(JsonTableKey::kDefaultLang)).toString(QStringLiteral("zh"));
@@ -933,14 +947,15 @@ JsonTableTable deriveI18nTable(const JsonTableTable &main) {
   lang.comment = QStringLiteral("语言编码：zh、en、ja");
   t.columns.append(lang);
 
-  // 翻译字段：继承主表同名列；主表无此列时回退 varchar(255) 文本
-  for (const QString &f : cfg.fields) {
-    if (f.isEmpty()) continue;
+  // 翻译字段：继承主表同名列；主表无此列时回退 varchar(255) 文本。
+  // comment 取值链：显式 label → 主表同名列 comment → 字段名
+  for (const auto &f : cfg.fields) {
+    if (f.name.isEmpty()) continue;
     JsonTableColumn col;
-    col.name = f;
+    col.name = f.name;
     bool found = false;
     for (const auto &mc : main.columns) {
-      if (mc.name == f) {
+      if (mc.name == f.name) {
         col.mysqlType = mc.mysqlType;
         col.isUnsigned = mc.isUnsigned;
         col.nullable = mc.nullable;
@@ -950,6 +965,11 @@ JsonTableTable deriveI18nTable(const JsonTableTable &main) {
       }
     }
     if (!found) col.mysqlType = QStringLiteral("varchar(255)");
+    if (!f.label.isEmpty()) {
+      col.comment = f.label;
+    } else if (col.comment.isEmpty()) {
+      col.comment = f.name;
+    }
     t.columns.append(col);
   }
 

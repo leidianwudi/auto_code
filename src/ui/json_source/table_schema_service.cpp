@@ -257,13 +257,13 @@ RefCleanupStats cleanRemovedColumnRefs(JsonTableTable *table, const QStringList 
   }
   table->globalEnumCols = globalEnums;
 
-  QStringList i18nFields;
-  for (const auto &name : table->i18n.fields) {
-    if (removedKeys.contains(name.toLower())) {
+  QList<JsonTableI18nField> i18nFields;
+  for (const auto &f : table->i18n.fields) {
+    if (removedKeys.contains(f.name.toLower())) {
       ++stats.i18nFields;
-      stats.details << QStringLiteral("多语言字段 %1").arg(name);
+      stats.details << QStringLiteral("多语言字段 %1").arg(f.name);
     } else {
-      i18nFields << name;
+      i18nFields << f;
     }
   }
   table->i18n.fields = i18nFields;
@@ -527,9 +527,17 @@ bool validateCrossRefs(const JsonTableTable &table, const JsonTableConfig &confi
     return true;
   };
   // ── 字段呈现统一表格 → 三视图（交叉校验基于收集产物）──
+  // i18n 平铺字段集（仅列表列可引用：后端 fillI18n 平铺后响应含同名字段；
+  // 查询/排序仍拒绝——翻译文本跨表查询第一版不支持）
+  QSet<QString> i18nFieldSet;
+  if (table.i18n.isEnabled()) {
+    for (const QString &f : table.i18n.fieldNames()) i18nFieldSet.insert(f);
+  }
   const JsonTableTable &view = table;
-  for (const auto &c : view.selCols)
+  for (const auto &c : view.selCols) {
+    if (i18nFieldSet.contains(c.ref)) continue;  // i18n 平铺列（列表展示合法）
     if (!checkRef(QStringLiteral("列表列"), c.ref)) return false;
+  }
   for (const auto &c : view.selColsEq)
     if (!checkRef(QStringLiteral("精确查询列"), c.ref)) return false;
   for (const auto &c : view.selColsGap)
@@ -597,7 +605,7 @@ bool validateCrossRefs(const JsonTableTable &table, const JsonTableConfig &confi
     if (langKey.isEmpty() || !transCols.contains(langKey))
       return fail(QStringLiteral("i18n 语言列 '%1' 不在翻译表 '%2' 的列中")
                       .arg(langKey.isEmpty() ? QStringLiteral("(空)") : langKey, i18nTable));
-    for (const QString &f : table.i18n.fields) {
+    for (const QString &f : table.i18n.fieldNames()) {
       if (!transCols.contains(f))
         return fail(QStringLiteral("多语言字段 '%1' 不在翻译表 '%2' 的列中").arg(f, i18nTable));
       if (colNames.contains(f)) return fail(QStringLiteral("多语言字段 '%1' 与主表列重名").arg(f));

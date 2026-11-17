@@ -11,7 +11,7 @@
         unsigned: true,
       },
       {
-        comment: '角色ID，关联sys_role.id',
+        comment: '角色ID，关联system_role.id',
         isAutoInc: false,
         isPrimary: false,
         mysqlType: 'int',
@@ -20,7 +20,7 @@
         unsigned: true,
       },
       {
-        comment: '菜单ID，关联sys_menu.id',
+        comment: '菜单ID，关联system_menu.id',
         isAutoInc: false,
         isPrimary: false,
         mysqlType: 'int',
@@ -45,11 +45,11 @@
         ref: 'id',
       },
       {
-        label: '角色ID，关联sys_role.id',
+        label: '角色ID，关联system_role.id',
         ref: 'role_id',
       },
       {
-        label: '菜单ID，关联sys_menu.id',
+        label: '菜单ID，关联system_menu.id',
         ref: 'menu_id',
       },
       {
@@ -69,8 +69,8 @@
       },
     ],
     manualUpdateTime: false,
-    modelName: 'sys_role_menu',
-    moduleDir: 'sys/sys_role_menu',
+    modelName: 'system_role_menu',
+    moduleDir: 'system/system_role_menu',
     selColsEq: [
       {
         ref: 'role_id',
@@ -86,6 +86,6 @@
       ],
     ],
     tableComment: '角色菜单关联',
-    tableName: 'sys_role_menu',
+    tableName: 'system_role_menu',
   },
 }
