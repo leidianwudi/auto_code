@@ -48,6 +48,8 @@ SchemaFormEditor::SchemaFormEditor(QWidget *parent) : QWidget(parent) {
   auto *rootLayout = new QVBoxLayout(this);
   rootLayout->setContentsMargins(0, 0, 0, 0);
   rootLayout->addWidget(scroll);
+  // 显式最小宽度：IDE 左右拆分时允许拖窄（内容区为 QScrollArea，可横向滚动）
+  setMinimumWidth(300);
   scroll->setWidget(m_content);
   // 顶部留一小段空隙，视觉上不与编辑区贴死
   static_cast<QVBoxLayout *>(m_content->layout())->setContentsMargins(12, 12, 12, 12);

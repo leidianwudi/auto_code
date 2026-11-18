@@ -62,6 +62,10 @@ void JsonVueEditor::setupUI() {
   mainLayout->setContentsMargins(2, 2, 2, 2);
   mainLayout->setSpacing(2);
 
+  // 显式最小宽度（覆盖布局 minimumSizeHint 聚合）：IDE 左右拆分时可视化面板
+  // 允许拖到较窄；行内输入框已设水平 Ignored，窄时内容横向滚动
+  setMinimumWidth(300);
+
   // 页签（对齐成熟低代码平台）。接口与列合并为一个页签：
   // 接口是页面数据的来源，列从接口响应推导，两者是同一条工作流
   // （填 URL → 探测生成列 → 配置列），拆开反而要来回切换
@@ -173,6 +177,7 @@ QWidget *JsonVueEditor::buildMetaSection() {
   row->addWidget(new QLabel(QStringLiteral("说明:")));
   m_descEdit = new QLineEdit(this);
   m_descEdit->setPlaceholderText(QStringLiteral("请输入界面说明"));
+  m_descEdit->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);  // 窄面板可压缩
   row->addWidget(m_descEdit, 1);
 
   row->addWidget(new QLabel(QStringLiteral("来源:")));
@@ -185,6 +190,7 @@ QWidget *JsonVueEditor::buildMetaSection() {
   row->addWidget(m_methodCombo);
   m_dataUrlEdit = new QLineEdit(this);
   m_dataUrlEdit->setPlaceholderText(QStringLiteral("例如 config/selectByIn"));
+  m_dataUrlEdit->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);  // 窄面板可压缩
   row->addWidget(m_dataUrlEdit, 1);
   // 让方法下拉框与 URL 输入框高度一致，避免并排时错位
   m_methodCombo->setFixedHeight(m_dataUrlEdit->sizeHint().height());

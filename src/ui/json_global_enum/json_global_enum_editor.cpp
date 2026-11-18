@@ -36,6 +36,8 @@ void JsonGlobalEnumEditor::setupUI() {
   auto *mainLayout = new QVBoxLayout(this);
   mainLayout->setContentsMargins(2, 2, 2, 2);
   mainLayout->setSpacing(2);
+  // 显式最小宽度：IDE 左右拆分时允许拖窄（与其他可视化编辑器统一口径）
+  setMinimumWidth(300);
 
   auto *group = new QGroupBox(QStringLiteral("全局枚举列表"), this);
   auto *layout = new QVBoxLayout(group);

@@ -80,6 +80,18 @@ public:
   /// 可视化加载失败原因；失败时停留代码页，不允许空配置回写。
   QString syncError() const { return m_syncError; }
 
+  /// 快照撤销：是否有可撤销/可恢复的步（撤销栈/恢复栈非空）。
+  /// 覆盖两类变化：可视化修改写回、代码模式打字（停顿聚合为一步）
+  bool canUndo() const { return !m_undoStack.isEmpty(); }
+  bool canRedo() const { return !m_redoStack.isEmpty(); }
+
+  /// 撤销一步：当前文本入恢复栈，弹出撤销栈恢复；可视化模式下自动回填可视化页。
+  /// 撤销到栈底（打开时原文）时文档 modified 被清 → 保存按钮自动置灰
+  Q_INVOKABLE bool undoStep();
+
+  /// 恢复一步：与撤销对称；新编辑（写回/打字）会使恢复栈失效
+  Q_INVOKABLE bool redoStep();
+
   /// 刷新可视化页的主题样式，代码页由宿主统一刷新。
   virtual void reloadStyle() {}
 
@@ -92,6 +104,9 @@ signals:
 
   /// 内容发生变化时发射（用于触发修改标记）
   void contentChanged();
+
+  /// 撤销/恢复栈变化（宿主刷新撤销/恢复按钮可用状态）
+  void undoStackChanged();
 
 protected:
   /// 进入可视化前检查根对象；特殊格式可扩展检查，失败时不得改动可视化状态。
@@ -114,14 +129,29 @@ protected:
 
   CodeEditor *m_editor = nullptr;  ///< 代码编辑器（index 0，基类构造时创建）
 
+private slots:
+  /// 代码打字停顿聚合：停顿后把该步打字前的状态压入撤销栈
+  void snapshotTyping();
+
 private:
+  /// 恢复快照到代码视图（undo/redo 共用）：可视化模式回填可视化页、
+  /// modified 按栈深度重算、m_lastSnapshotText 对齐；全程 m_restoring 防回环
+  void restoreSnapshot(const QString &snap);
+
   QByteArray m_visualBaseline;  ///< 最近成功回填/回写后的内容，不包含原文排版差异
   bool m_visualReady = false;  ///< 只有成功加载的可视化数据允许写回
   QString m_syncError;
   bool m_syncing = false;  ///< 同步中标志，避免信号回环
+  QStringList m_undoStack;   ///< 撤销快照（index 0 = 最早；上限 kUndoStackLimit）
+  QStringList m_redoStack;   ///< 恢复快照（新编辑时清空；undo/redo 互相对称搬运）
+  /// 下一个打字步开始时应入栈的文本：各状态定格点（聚合超时/写回完成/撤销恢复/
+  /// 代码回填）刷新为当前文本，打字步压栈时取它而非当前文本（此时已含新键入）
+  QString m_lastSnapshotText;
+  bool m_restoring = false;  ///< undo/redo 恢复中（contentsChange/清栈防回环）
   /// 可视化 → 代码写回的防抖定时器：可视化侧连续输入（每字符触发）时，
   /// 全量序列化 + setPlainText 全文重建 + 全文重高亮的开销是每键 O(文档)，
   /// 大文件明显卡顿；停顿 300ms 后合并为一次写回（切模式/保存路径直接调
   /// syncVisualToCode() 即时 flush，不受防抖影响）
   QTimer *m_syncDebounceTimer = nullptr;
+  QTimer *m_typeSnapshotTimer = nullptr;  ///< 打字停顿聚合定时器（单次，~800ms）
 };

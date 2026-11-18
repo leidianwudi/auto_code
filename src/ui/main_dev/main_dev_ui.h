@@ -143,6 +143,8 @@ public:
   AuiComboDelete *startupCombo() const { return m_startupCombo; }
   QPushButton *saveBtn() const { return m_saveBtn; }
   QPushButton *saveAllBtn() const { return m_saveAllBtn; }
+  QPushButton *undoBtn() const { return m_undoBtn; }
+  QPushButton *redoBtn() const { return m_redoBtn; }
   QPushButton *visualToggleBtn() const { return m_visualToggleBtn; }
 
   /// 刷新启动项下拉框
@@ -215,6 +217,8 @@ private:
   AuiComboDelete *m_startupCombo = nullptr;
   QPushButton *m_saveBtn = nullptr;
   QPushButton *m_saveAllBtn = nullptr;
+  QPushButton *m_undoBtn = nullptr;  ///< 撤销一步（可视化包装器=快照栈；普通文件=document 内建）
+  QPushButton *m_redoBtn = nullptr;  ///< 恢复一步（与撤销对称）
 
   /// 关闭前确认回调（有未保存修改时由 MainDevMgr 弹窗；返回 false 取消关闭）
   std::function<bool()> m_closeConfirmer;

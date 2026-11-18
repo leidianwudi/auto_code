@@ -83,6 +83,9 @@ QWidget *MainDevMgr::createEditorTab(const QString &filePath, const QString &con
       editor->document()->setModified(true);
       updateSaveButtonState();
     });
+    // 撤销/恢复栈变化（可视化写回压栈、打字聚合、undo/redo）→ 刷新工具栏按钮
+    connect(visual, &CodeVisualSyncWidget::undoStackChanged, this,
+            &MainDevMgr::updateSaveButtonState);
     if (m_ui->visualToggleBtn() && m_ui->visualToggleBtn()->isChecked()) visual->switchToVisual();
   }
 

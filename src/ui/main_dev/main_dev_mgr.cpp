@@ -262,6 +262,41 @@ void MainDevMgr::connectSaveActions() {
     // 未打开文件的缓冲修改（重命名等操作产生）一并写盘
     flushPendingChanges();
   });
+
+  // ── 撤销/恢复按钮：可视化包装器走快照栈（undoStep/redoStep），普通文件走
+  // document 内建 undo/redo；均作用于当前激活页
+  connect(m_ui->undoBtn(), &QPushButton::clicked, this, [this]() { triggerUndoRedo(true); });
+  connect(m_ui->redoBtn(), &QPushButton::clicked, this, [this]() { triggerUndoRedo(false); });
+
+  // ── 撤销/恢复快捷键（sc.undo / sc.redo，默认 Ctrl+Z / Ctrl+Y，设置弹窗可改）──
+  // 焦点在代码编辑器/输入框内时内建文本撤销优先（ShortcutOverride），其余区域
+  // 触发快照栈——分层语义：打字步局部细粒度撤销，结构步统一快照撤销
+  auto *undoShortcut = new QShortcut(SettingStore::ins().shortcut(QStringLiteral("sc.undo")), m_ui);
+  connect(undoShortcut, &QShortcut::activated, this, [this]() { triggerUndoRedo(true); });
+  connect(&SettingStore::ins(), &SettingStore::shortcutsChanged, undoShortcut, [undoShortcut]() {
+    undoShortcut->setKey(SettingStore::ins().shortcut(QStringLiteral("sc.undo")));
+  });
+  auto *redoShortcut = new QShortcut(SettingStore::ins().shortcut(QStringLiteral("sc.redo")), m_ui);
+  connect(redoShortcut, &QShortcut::activated, this, [this]() { triggerUndoRedo(false); });
+  connect(&SettingStore::ins(), &SettingStore::shortcutsChanged, redoShortcut, [redoShortcut]() {
+    redoShortcut->setKey(SettingStore::ins().shortcut(QStringLiteral("sc.redo")));
+  });
+
+  // 工具栏按钮 tooltip 显示当前快捷键（设置里改键后同步刷新）
+  const auto refreshUndoTooltips = [this]() {
+    const QString undoKey =
+        SettingStore::ins().shortcut(QStringLiteral("sc.undo")).toString(QKeySequence::NativeText);
+    const QString redoKey =
+        SettingStore::ins().shortcut(QStringLiteral("sc.redo")).toString(QKeySequence::NativeText);
+    m_ui->undoBtn()->setToolTip(undoKey.isEmpty()
+                                    ? QStringLiteral("撤销可视化修改")
+                                    : QStringLiteral("撤销可视化修改 (%1)").arg(undoKey));
+    m_ui->redoBtn()->setToolTip(redoKey.isEmpty()
+                                    ? QStringLiteral("恢复可视化修改")
+                                    : QStringLiteral("恢复可视化修改 (%1)").arg(redoKey));
+  };
+  refreshUndoTooltips();
+  connect(&SettingStore::ins(), &SettingStore::shortcutsChanged, this, refreshUndoTooltips);
 }
 
 /// 保存所有已打开且被修改的编辑器（含拆分副本；jsonvue 需先可视化→代码同步）
@@ -662,6 +697,35 @@ void MainDevMgr::updateSaveButtonState() {
     return true;
   });
   m_ui->saveAllBtn()->setEnabled(anyModified);
+  // 撤销/恢复按钮：可视化包装器按快照栈、普通文件按 document 内建可用性，
+  // 均作用于当前激活页（触发链：modificationChanged / 焦点与页切换 /
+  // undoStackChanged 均汇入本函数）
+  QWidget *cw = currentTabWidget() ? currentTabWidget()->currentWidget() : nullptr;
+  if (auto *cv = qobject_cast<CodeVisualSyncWidget *>(cw)) {
+    m_ui->undoBtn()->setEnabled(cv->canUndo());
+    m_ui->redoBtn()->setEnabled(cv->canRedo());
+  } else if (auto *ed = qobject_cast<CodeEditor *>(cw)) {
+    m_ui->undoBtn()->setEnabled(ed->document()->isUndoAvailable());
+    m_ui->redoBtn()->setEnabled(ed->document()->isRedoAvailable());
+  } else {
+    m_ui->undoBtn()->setEnabled(false);
+    m_ui->redoBtn()->setEnabled(false);
+  }
+}
+
+/// 撤销/恢复当前激活页一步（快捷键与工具栏按钮共用）
+void MainDevMgr::triggerUndoRedo(bool undo) {
+  QWidget *cw = currentTabWidget() ? currentTabWidget()->currentWidget() : nullptr;
+  if (auto *cv = qobject_cast<CodeVisualSyncWidget *>(cw)) {
+    const bool ok = undo ? cv->undoStep() : cv->redoStep();
+    if (ok) updateSaveButtonState();
+  } else if (auto *ed = qobject_cast<CodeEditor *>(cw)) {
+    if (undo)
+      ed->undo();
+    else
+      ed->redo();
+    updateSaveButtonState();
+  }
 }
 
 void MainDevMgr::syncJsonVueBeforeSave() {

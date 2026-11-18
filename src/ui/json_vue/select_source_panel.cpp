@@ -63,6 +63,10 @@ void SelectSourcePanel::setupUI() {
   layout->setContentsMargins(0, 0, 0, 0);
   layout->setSpacing(6);
 
+  // 显式最小宽度：嵌入 .jsonvue 可视化编辑器的页签内，随宿主一起允许窄面板
+  //（父级 JsonVueEditor 已设 300，此处对齐，防止本面板的行控件撑大聚合值）
+  setMinimumWidth(300);
+
   // ── URL 输入行（含请求方式）──
   auto *urlRow = new QHBoxLayout;
   urlRow->addWidget(new QLabel(QStringLiteral("请求URL:")));
@@ -76,6 +80,7 @@ void SelectSourcePanel::setupUI() {
   urlRow->addSpacing(10);
   m_urlEdit = new QLineEdit(this);
   m_urlEdit->setPlaceholderText(QStringLiteral("/api/xxx/list"));
+  m_urlEdit->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);  // 窄面板可压缩
   urlRow->addWidget(m_urlEdit, 1);
   m_testBtn = new QPushButton(QStringLiteral("测试"), this);
   urlRow->addWidget(m_testBtn);
@@ -88,7 +93,7 @@ void SelectSourcePanel::setupUI() {
   m_typeCombo = AuiComboBox::create(this);
   m_typeCombo->addItem(QStringLiteral("普通加载(一次性)"), false);
   m_typeCombo->addItem(QStringLiteral("查询分页加载"), true);
-  m_typeCombo->setMinimumWidth(180);
+  m_typeCombo->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);  // 窄面板可压缩（下拉列表仍完整显示）
   typeRow->addWidget(m_typeCombo);
   typeRow->addSpacing(20);
   // 配置显示样式：勾选后返回数据示例表格加一列 tag，逐行选择 vue3 常用 tag 样式

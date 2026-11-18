@@ -77,6 +77,12 @@ public:
   /// 创建「保存全部」按钮（QPushButton，软盘图标 + 全部标记）
   static QPushButton *createSaveAllButton(int size = 20);
 
+  /// 创建「撤销」按钮（QPushButton，逆时针弯箭头图标）
+  static QPushButton *createUndoButton(int size = 18);
+
+  /// 创建「恢复」按钮（QPushButton，顺时针弯箭头图标，与撤销对称）
+  static QPushButton *createRedoButton(int size = 18);
+
   /// 创建「帮助」小按钮（问号图标；鼠标悬停显示帮助提示，点击弹出帮助对话框）
   /// @param title  帮助对话框标题
   /// @param text   帮助内容（悬停 tooltip 与点击对话框共用，支持 \n 换行）

@@ -183,6 +183,9 @@ private:
   void closeTab(QTabWidget *tabs, int index);
   /// 检查所有编辑器的修改状态，更新保存按钮可用性
   void updateSaveButtonState();
+  /// 撤销/恢复当前激活页一步（可视化包装器=快照栈 undoStep/redoStep；普通文件=
+  /// document 内建 undo/redo）。快捷键与工具栏按钮共用
+  void triggerUndoRedo(bool undo);
   /// 保存编辑器并同步其他打开同一文件的编辑器实例内容
   /// （拆分副本场景：一个编辑器保存后，其他副本自动更新为最新内容）
   bool saveAndSync(CodeEditor *editor);

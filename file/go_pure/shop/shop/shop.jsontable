@@ -279,7 +279,7 @@
           name: 'name',
         },
         {
-          label: '店铺简介1',
+          label: '店铺简介',
           name: 'intro',
         },
       ],

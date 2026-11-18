@@ -12,6 +12,11 @@
 #include "src/util/common/util_json.h"
 #include "src/util/ui/highlighter/light_json.h"
 
+// 撤销/恢复快照栈上限（超出丢弃最早快照；配置类 JSON 文本几 KB，50 份内存无压力）
+constexpr int kUndoStackLimit = 50;
+// 代码打字的快照聚合窗口：停顿超过该时长视为一步结束（毫秒）
+constexpr int kTypeSnapshotInterval = 800;
+
 // ════════════════════════════════════════════════════════════
 //  构造
 // ════════════════════════════════════════════════════════════
@@ -23,6 +28,29 @@ CodeVisualSyncWidget::CodeVisualSyncWidget(QWidget *parent) : QStackedWidget(par
   m_editor->setSyntaxHighlighter(hl);
   m_editor->setValidationMode(CodeEditor::JsonValidation);
   addWidget(m_editor);
+  m_lastSnapshotText = m_editor->toPlainText();
+
+  // ── 撤销/恢复：代码模式打字的快照聚合 ──
+  // 可视化写回的快照在 syncVisualToCode 内压栈；此处只管用户打字：
+  // contentsChange 启动/重启聚合定时器，停顿 kTypeSnapshotInterval 后把
+  // 「该步打字前的状态」（m_lastSnapshotText）压栈——连续输入合并为一步
+  connect(m_editor->document(), &QTextDocument::contentsChange, this,
+          [this](int, int, int) {
+            if (m_syncing || m_restoring) return;
+            // 新编辑使恢复栈失效（标准 undo/redo 行为）
+            if (!m_redoStack.isEmpty()) {
+              m_redoStack.clear();
+              emit undoStackChanged();
+            }
+            if (!m_typeSnapshotTimer) {
+              m_typeSnapshotTimer = new QTimer(this);
+              m_typeSnapshotTimer->setSingleShot(true);
+              m_typeSnapshotTimer->setInterval(kTypeSnapshotInterval);
+              connect(m_typeSnapshotTimer, &QTimer::timeout, this,
+                      &CodeVisualSyncWidget::snapshotTyping);
+            }
+            m_typeSnapshotTimer->start();
+          });
 }
 
 // ════════════════════════════════════════════════════════════
@@ -71,6 +99,7 @@ bool CodeVisualSyncWidget::validateVisualSource(QString *error) const {
 
 bool CodeVisualSyncWidget::syncCodeToVisual() {
   if (m_syncDebounceTimer) m_syncDebounceTimer->stop();
+  if (m_typeSnapshotTimer) m_typeSnapshotTimer->stop();
   m_visualReady = false;
   if (!validateVisualSource(&m_syncError)) {
     emit synchronizationFailed(m_syncError);
@@ -81,6 +110,14 @@ bool CodeVisualSyncWidget::syncCodeToVisual() {
   // 用回填后的收集结果作基线，避免控件补默认值或格式化导致首次交互误标修改。
   m_visualBaseline = visualFingerprint();
   m_visualReady = true;
+  // 代码是权威来源：代码侧内容变化（打开文件/切模式回填）使旧快照全部失效。
+  // 撤销自身的回填不走本入口（restoreSnapshot 手动回填），m_restoring 双保险
+  if (!m_restoring) {
+    m_undoStack.clear();
+    m_redoStack.clear();
+    emit undoStackChanged();
+  }
+  m_lastSnapshotText = m_editor->toPlainText();
   return true;
 }
 
@@ -91,8 +128,17 @@ bool CodeVisualSyncWidget::syncVisualToCode() {
   if (visualFingerprint() == m_visualBaseline) return false;
   const QString previousText = m_editor->toPlainText();
   QScopedValueRollback<bool> syncing(m_syncing, true);
+  // 撤销压栈：可视化修改即将覆盖代码文本，写回前的文本入栈（撤销=恢复此快照）。
+  // m_lastSnapshotText 同步为当前（写回后）文本，供下一个打字步取用
+  if (m_undoStack.isEmpty() || m_undoStack.last() != previousText) {
+    m_undoStack.append(previousText);
+    while (m_undoStack.size() > kUndoStackLimit) m_undoStack.removeFirst();
+  }
+  m_redoStack.clear();  // 新编辑使恢复栈失效
   syncVisualToCodeImpl();
   m_visualBaseline = visualFingerprint();
+  m_lastSnapshotText = m_editor->toPlainText();
+  emit undoStackChanged();
   return m_editor->toPlainText() != previousText;
 }
 
@@ -130,4 +176,63 @@ void CodeVisualSyncWidget::setPlainTextIfChanged(const QString &text) {
     // 规范化结果永远无法持久化，文件形态在单行/多行间反复摇摆
     m_editor->document()->setModified(true);
   }
+}
+
+// ════════════════════════════════════════════════════════════
+//  快照撤销 / 恢复
+// ════════════════════════════════════════════════════════════
+
+void CodeVisualSyncWidget::snapshotTyping() {
+  if (m_restoring || m_syncing) return;
+  // 该步打字前的状态 = m_lastSnapshotText（上次定格点文本）；与当前一致说明
+  // 无净变化（如输入又删除）→ 不产生空快照
+  const QString current = m_editor->toPlainText();
+  if (current == m_lastSnapshotText) return;
+  if (m_undoStack.isEmpty() || m_undoStack.last() != m_lastSnapshotText) {
+    m_undoStack.append(m_lastSnapshotText);
+    while (m_undoStack.size() > kUndoStackLimit) m_undoStack.removeFirst();
+  }
+  m_lastSnapshotText = current;
+  emit undoStackChanged();
+}
+
+void CodeVisualSyncWidget::restoreSnapshot(const QString &snap) {
+  QScopedValueRollback<bool> guard(m_restoring, true);
+  const bool wasVisual = isVisualMode();
+  m_editor->setPlainText(snap);
+  if (wasVisual) {
+    // 手动回填可视化页（不走 syncCodeToVisual 公共入口——它会清空撤销栈；
+    // 步骤与基类 syncCodeToVisual 一致）
+    QString err;
+    if (validateVisualSource(&err)) {
+      QScopedValueRollback<bool> syncing(m_syncing, true);
+      syncCodeToVisualImpl();
+      m_visualBaseline = visualFingerprint();
+      m_visualReady = true;
+    } else {
+      emit synchronizationFailed(err);
+    }
+  }
+  // modified：栈空 = 回到打开时原文 → 未修改（保存按钮自动置灰）；非空 = 仍处于
+  // 中间态 → 保持修改标记。setPlainText 已把 modified 重置为 false，这里按需置位
+  m_editor->document()->setModified(!m_undoStack.isEmpty());
+  m_lastSnapshotText = snap;
+  emit undoStackChanged();
+}
+
+bool CodeVisualSyncWidget::undoStep() {
+  if (m_undoStack.isEmpty()) return false;
+  if (m_typeSnapshotTimer) m_typeSnapshotTimer->stop();
+  const QString snap = m_undoStack.takeLast();
+  m_redoStack.append(m_editor->toPlainText());  // 当前状态入恢复栈
+  restoreSnapshot(snap);
+  return true;
+}
+
+bool CodeVisualSyncWidget::redoStep() {
+  if (m_redoStack.isEmpty()) return false;
+  const QString snap = m_redoStack.takeLast();
+  m_undoStack.append(m_editor->toPlainText());  // 当前状态回撤销栈（对称搬运）
+  restoreSnapshot(snap);
+  return true;
 }

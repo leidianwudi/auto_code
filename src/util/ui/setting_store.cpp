@@ -81,6 +81,8 @@ inline const char *kSC_Close = "sc.closeTab";
 inline const char *kSC_Save = "sc.save";
 inline const char *kSC_SaveAll = "sc.saveAll";
 inline const char *kSC_Find = "sc.find";
+inline const char *kSC_Undo = "sc.undo";
+inline const char *kSC_Redo = "sc.redo";
 inline const char *kSC_DebugStart = "sc.debugStart";
 inline const char *kSC_Run = "sc.run";
 inline const char *kSC_DebugStepOver = "sc.debugStepOver";
@@ -259,6 +261,10 @@ SettingStore::SettingStore() : QObject(nullptr) {
                    QStringLiteral("视图"), QStringLiteral("Ctrl+W"));
   registerShortcut(QString::fromLatin1(kSC_Find), QStringLiteral("查找/替换"),
                    QStringLiteral("编辑"), QStringLiteral("Ctrl+F"));
+  registerShortcut(QString::fromLatin1(kSC_Undo), QStringLiteral("撤销"),
+                   QStringLiteral("编辑"), QStringLiteral("Ctrl+Z"));
+  registerShortcut(QString::fromLatin1(kSC_Redo), QStringLiteral("恢复"),
+                   QStringLiteral("编辑"), QStringLiteral("Ctrl+Y"));
   registerShortcut(QString::fromLatin1(kSC_DebugStart), QStringLiteral("启动/继续调试"),
                    QStringLiteral("调试"), QStringLiteral("F5"));
   registerShortcut(QString::fromLatin1(kSC_Run), QStringLiteral("执行脚本"), QStringLiteral("调试"),

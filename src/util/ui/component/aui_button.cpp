@@ -9,6 +9,7 @@
 #include <QPainterPath>
 #include <QPixmap>
 #include <QPolygonF>
+#include <cmath>
 #include <functional>
 
 #include "aui_icon.h"
@@ -486,6 +487,86 @@ QPushButton *AuiButton::createSaveAllButton(int size) {
   btn->setCursor(Qt::PointingHandCursor);
   btn->setFocusPolicy(Qt::NoFocus);
   btn->setToolTip(QStringLiteral("保存全部"));
+  applyIconButtonStyle(btn);
+  return btn;
+}
+
+QPushButton *AuiButton::createUndoButton(int size) {
+  auto *btn = new QPushButton;
+  // 撤销弯箭头：顺时针 270° 弧 + 起点处 V 形箭头翼（箭头尖在左上、指向左，随主题重绘）
+  bindThemeAwareIcon(btn, [size]() {
+    auto build = [size](const QColor &fg) {
+      QPixmap px(size, size);
+      px.fill(Qt::transparent);
+      QPainter p(&px);
+      p.setRenderHint(QPainter::Antialiasing);
+      const int m = 3;
+      const qreal w = size - 2.0 * m - 1;
+      const qreal h = size - 2.0 * m - 3;
+      const QRectF arcRect(m + 0.5, m + 2.5, w, h);
+      p.setPen(QPen(fg, 1.4, Qt::SolidLine, Qt::RoundCap));
+      // 顺时针弧：Qt 角度逆时针为正 → 负跨度（150° 起点顺时针绕 270°）
+      p.drawArc(arcRect, 150 * 16, -270 * 16);
+      // 150° 起点即弧上端点（左上）：箭头尖在端点左侧，两翼自尖向右张开——
+      // 尖在最左 → 箭头指向左（撤销语义；翼外端恰与弧端衔接）
+      const qreal a = 150.0 * M_PI / 180.0;
+      const QPointF e(arcRect.center().x() + arcRect.width() / 2.0 * std::cos(a),
+                      arcRect.center().y() - arcRect.height() / 2.0 * std::sin(a));
+      const QPointF tip(e.x() - 4, e.y());
+      p.drawLine(tip, tip + QPointF(5, -3));
+      p.drawLine(tip, tip + QPointF(5, 3));
+      p.end();
+      return px;
+    };
+    QIcon icon;
+    icon.addPixmap(build(AuiStyle::textColor()), QIcon::Normal, QIcon::Off);
+    icon.addPixmap(build(AuiStyle::inactiveTabColor()), QIcon::Disabled, QIcon::Off);
+    return icon;
+  });
+  btn->setIconSize(QSize(size, size));
+  btn->setCursor(Qt::PointingHandCursor);
+  btn->setFocusPolicy(Qt::NoFocus);
+  btn->setToolTip(QStringLiteral("撤销可视化修改"));
+  applyIconButtonStyle(btn);
+  return btn;
+}
+
+QPushButton *AuiButton::createRedoButton(int size) {
+  auto *btn = new QPushButton;
+  // 恢复弯箭头：逆时针 270° 弧 + 起点处 V 形箭头翼（箭头尖在右上、指向右，与撤销镜像）
+  bindThemeAwareIcon(btn, [size]() {
+    auto build = [size](const QColor &fg) {
+      QPixmap px(size, size);
+      px.fill(Qt::transparent);
+      QPainter p(&px);
+      p.setRenderHint(QPainter::Antialiasing);
+      const int m = 3;
+      const qreal w = size - 2.0 * m - 1;
+      const qreal h = size - 2.0 * m - 3;
+      const QRectF arcRect(m + 0.5, m + 2.5, w, h);
+      p.setPen(QPen(fg, 1.4, Qt::SolidLine, Qt::RoundCap));
+      // 逆时针弧：Qt 角度逆时针为正（30° 起点逆时针绕 270°）
+      p.drawArc(arcRect, 30 * 16, 270 * 16);
+      // 30° 起点即弧上端点（右上）：箭头尖在端点右侧，两翼自尖向左张开——
+      // 尖在最右 → 箭头指向右（恢复语义；翼外端恰与弧端衔接）
+      const qreal a = 30.0 * M_PI / 180.0;
+      const QPointF e(arcRect.center().x() + arcRect.width() / 2.0 * std::cos(a),
+                      arcRect.center().y() - arcRect.height() / 2.0 * std::sin(a));
+      const QPointF tip(e.x() + 4, e.y());
+      p.drawLine(tip, tip + QPointF(-5, -3));
+      p.drawLine(tip, tip + QPointF(-5, 3));
+      p.end();
+      return px;
+    };
+    QIcon icon;
+    icon.addPixmap(build(AuiStyle::textColor()), QIcon::Normal, QIcon::Off);
+    icon.addPixmap(build(AuiStyle::inactiveTabColor()), QIcon::Disabled, QIcon::Off);
+    return icon;
+  });
+  btn->setIconSize(QSize(size, size));
+  btn->setCursor(Qt::PointingHandCursor);
+  btn->setFocusPolicy(Qt::NoFocus);
+  btn->setToolTip(QStringLiteral("恢复可视化修改"));
   applyIconButtonStyle(btn);
   return btn;
 }

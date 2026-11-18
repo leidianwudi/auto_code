@@ -187,6 +187,19 @@ void MainDevUi::setupTitleBar() {
   m_saveAllBtn = AuiButton::createSaveAllButton();
   m_saveAllBtn->setEnabled(false);
   titleLayout->insertWidget(tb.contentInsertIndex, m_saveAllBtn);
+  tb.contentInsertIndex++;
+
+  // ── 撤销按钮（全部保存之后；作用于当前激活页，见 MainDevMgr）──
+  m_undoBtn = AuiButton::createUndoButton();
+  m_undoBtn->setEnabled(false);
+  titleLayout->insertWidget(tb.contentInsertIndex, m_undoBtn);
+  tb.contentInsertIndex++;
+
+  // ── 恢复按钮（撤销的对称操作）──
+  m_redoBtn = AuiButton::createRedoButton();
+  m_redoBtn->setEnabled(false);
+  titleLayout->insertWidget(tb.contentInsertIndex, m_redoBtn);
+  tb.contentInsertIndex++;
 
   // ── 可视化/代码切换按钮（在拆分按钮之前插入，位于拆分按钮左侧） ──
   m_visualToggleBtn = AuiButton::createVisualToggleButton();

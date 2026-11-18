@@ -57,6 +57,8 @@ void ProjectConfigEditor::setupUI() {
   auto *rootLayout = new QVBoxLayout(this);
   rootLayout->setContentsMargins(12, 10, 12, 10);
   rootLayout->setSpacing(6);
+  // 显式最小宽度：IDE 左右拆分时允许拖窄（表单字段行可被 QFormLayout 压缩）
+  setMinimumWidth(300);
 
   auto *form = new QFormLayout;
   form->setSpacing(6);

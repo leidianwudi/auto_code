@@ -242,6 +242,11 @@ void JsonTableDesigner::setupUI() {
   rootLayout->setSpacing(2);
   auto *layout = rootLayout;
 
+  // 显式最小宽度（覆盖布局的 minimumSizeHint 聚合）：IDE 左右拆分时可视化
+  // 面板允许拖到较窄——行内输入框已设水平 Ignored（可被压窄、内容横向滚动），
+  // 窄于此值时按钮/标签等不可压缩项会被截断显示
+  setMinimumWidth(300);
+
   // ── 页签容器（对齐 jsonvue「一行=一字段」心智）：
   //    字段(物理) / 字段呈现(生成设置+三视图合一+排序) / 联表与索引 / 枚举 / 多语言 / DDL ──
   auto *tabs = new QTabWidget(this);
@@ -276,6 +281,10 @@ void JsonTableDesigner::setupUI() {
     topRow->addWidget(new QLabel(label, topRow->parentWidget()));
     auto *e = new QLineEdit(topRow->parentWidget());
     e->setPlaceholderText(placeholder);
+    // 水平 Ignored：布局计算忽略 minimumSizeHint——窄面板（IDE 左右拆分）下
+    // 输入框可被压到很窄（内容横向滚动），行最小宽度不再被 3 组输入框撑大；
+    // 宽面板下空间仍按 stretch 均分，视觉与默认一致
+    e->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
     topRow->addWidget(e, 1);
     *edit = e;
   };
@@ -705,6 +714,7 @@ void JsonTableDesigner::setupUI() {
   m_globalEnumEdit = new QLineEdit(this);
   m_globalEnumEdit->setPlaceholderText(
       QStringLiteral("逗号分隔，如 is_enable（列名 = .jsonglobalenum 中的枚举名）"));
+  m_globalEnumEdit->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);  // 窄面板可压缩
   m_globalEnumEdit->setToolTip(QStringLiteral(
       "命中列在 Go 侧生成对应 const 块，前端标准页合成全局枚举取值域；与表内枚举二选一"));
   geRow->addWidget(m_globalEnumEdit, 1);
@@ -724,14 +734,18 @@ void JsonTableDesigner::setupUI() {
   i18nRow1->addWidget(new QLabel(QStringLiteral("翻译表:"), this));
   m_i18nTableEdit = new QLineEdit(this);
   m_i18nTableEdit->setPlaceholderText(QStringLiteral("如 shop0"));
+  // 水平 Ignored：窄面板下可压缩（同顶部行，见 addField 注释）
+  m_i18nTableEdit->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
   i18nRow1->addWidget(m_i18nTableEdit, 1);
   i18nRow1->addWidget(new QLabel(QStringLiteral("外键列:"), this));
   m_i18nExtEdit = new QLineEdit(this);
   m_i18nExtEdit->setPlaceholderText(QStringLiteral("如 ext_id"));
+  m_i18nExtEdit->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
   i18nRow1->addWidget(m_i18nExtEdit, 1);
   i18nRow1->addWidget(new QLabel(QStringLiteral("语言列:"), this));
   m_i18nLangKeyEdit = new QLineEdit(this);
   m_i18nLangKeyEdit->setPlaceholderText(QStringLiteral("如 lang"));
+  m_i18nLangKeyEdit->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
   i18nRow1->addWidget(m_i18nLangKeyEdit, 1);
   i18nTab->addLayout(i18nRow1);
   auto *i18nRow2 = new QHBoxLayout;
@@ -745,6 +759,7 @@ void JsonTableDesigner::setupUI() {
   m_i18nLangFromCombo = AuiComboBox::create(this);
   m_i18nLangFromCombo->addItem(QStringLiteral("body（请求体 lang 字段）"), QStringLiteral("body"));
   m_i18nLangFromCombo->addItem(QStringLiteral("header（请求头，预留）"), QStringLiteral("header"));
+  m_i18nLangFromCombo->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
   i18nRow2->addWidget(m_i18nLangFromCombo);
   i18nTab->addLayout(i18nRow2);
   // ── 多语言字段表格（列 = 字段名 + 显示标题；标题空 = 回退链）──
@@ -779,6 +794,7 @@ void JsonTableDesigner::setupUI() {
   m_excludeEdit = new QLineEdit(this);
   m_excludeEdit->setPlaceholderText(
       QStringLiteral("逗号分隔，如 token,locked（从数据库刷新时忽略这些列）"));
+  m_excludeEdit->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);  // 窄面板可压缩
   m_excludeEdit->setToolTip(
       QStringLiteral("从数据库刷新结构时忽略的列：既不新增、也不修改；\n"
                      "适合 token/locked 等不想进入生成配置的认证列"));
