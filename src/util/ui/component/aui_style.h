@@ -438,6 +438,12 @@ public:
   /// 背景=编辑器背景、文字=正文色、边框=通用边框、聚焦边框=选中背景
   static QString inputBoxStyleSheet(const QString &selector);
 
+  /// 表格只读文本单元格（AuiCellReadBox）共用样式表
+  /// @param selector 样式作用选择器，如 "QLineEdit"
+  /// 无边框透明贴合（行背景/选中高亮透出，与下拉框列「整格蓝」一致），聚焦时
+  /// 背景变选中强调色——只读文本的选中反馈与可编辑输入框一致
+  static QString readBoxStyleSheet(const QString &selector);
+
   /// @brief 标题栏菜单按钮（QToolButton）专用样式表，直接设到按钮上
   static QString menuButtonStyleSheet();
 

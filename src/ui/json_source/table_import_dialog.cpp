@@ -33,6 +33,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include "src/util/ui/component/aui_cell_read_box.h"
 #include "src/util/ui/component/aui_config_dialog.h"
 #include "src/util/ui/component/aui_style.h"
 using namespace TableSchema;
@@ -168,6 +169,8 @@ ImportDiffResult runImportDiffDialog(QWidget *parent, const QString &tableName,
     auto *name = new QTableWidgetItem(e.name);
     name->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
     table->setItem(row, DiffName, name);
+    // 只读文本列挂只读控件（单击整格选中变色、双击可拖选复制）
+    table->setCellWidget(row, DiffName, new AuiCellReadBox(table, row, DiffName, e.name));
 
     auto *status =
         new QTableWidgetItem(e.excluded ? QStringLiteral("已排除") : importKindText(e.kind));
@@ -181,11 +184,17 @@ ImportDiffResult runImportDiffDialog(QWidget *parent, const QString &tableName,
     cur->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
     cur->setToolTip(cur->text());
     table->setItem(row, DiffCurrent, cur);
+    auto *curBox = new AuiCellReadBox(table, row, DiffCurrent, cur->text());
+    curBox->setTip(cur->text());
+    table->setCellWidget(row, DiffCurrent, curBox);
 
     auto *db = new QTableWidgetItem(e.hasDb ? importColumnSummary(e.db) : QStringLiteral("-"));
     db->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
     db->setToolTip(db->text());
     table->setItem(row, DiffDb, db);
+    auto *dbBox = new AuiCellReadBox(table, row, DiffDb, db->text());
+    dbBox->setTip(db->text());
+    table->setCellWidget(row, DiffDb, dbBox);
 
     QTableWidgetItem *exclude = nullptr;
     if (e.hasDb) {

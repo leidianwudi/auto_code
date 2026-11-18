@@ -371,6 +371,7 @@
         cols: [
           {
             col: 'account',
+            label: '账户',
           },
         ],
         on: [
@@ -385,7 +386,6 @@
     modelName: 'user',
     selCols: [
       {
-        label: '账户',
         ref: 'user_ext_account',
       },
       {

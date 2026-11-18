@@ -1868,10 +1868,14 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
     appAuth = "user";
   }
   let appIsPublic: Bool = (appAuth == "public");
-  // C 端出参白名单（appOutCols）：空=直接回实体；非空生成 out_<表>_.go
+  // C 端出参白名单（appOutCols）：空=直接回实体；非空生成 out_<表>_.go。
+  // 白名单候选三类：主表实体列（「输出」未勾的列即使列出也不输出）、联表输出
+  // 别名（表名_列名；输出由联表页配置，命中即输出）、i18n 平铺字段（显式列入
+  // 才输出；旧配置不含任何 i18n 字段名 = 自动全量追加，保持升级前行为）
   let appOutCols: Object[] = json["appOutCols"];
   let appHasOut: Bool = appQuery && appOutCols != null && appOutCols.length > 0;
   let appOutFields: Object[] = [];
+  let i18nInList: Bool = false;
   if (appHasOut) {
     // 按 appOutCols 的配置顺序输出，出参 JSON 字段顺序与配置一致
     for (oc in appOutCols) {
@@ -1881,24 +1885,56 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
           appOutFields.append(f);
         }
       }
+      // 联表输出别名（类型取联表目标列映射的 Go 类型；仅 View 源转换函数赋值）
+      if (jd["hasJoin"] == true) {
+        let jes: Object[] = jd["joinEntries"];
+        for (je in jes) {
+          for (ce in joinColsOf(je)) {
+            if (oc == ce["alias"]) {
+              appOutFields.append({
+                name: ce["alias"], goName: ce["aliasGo"],
+                enDeclType: ce["goType"], goType: ce["goType"],
+                comment: ce["comment"], isJoinOut: true
+              });
+            }
+          }
+        }
+      }
+      // i18n 平铺字段（实体已按 lang 填充；嵌入提升字段，两转换函数同源赋值）
+      if (hasI18n) {
+        for (vf in i18nOutFields) {
+          if (oc == vf.name) {
+            appOutFields.append(vf);
+            i18nInList = true;
+          }
+        }
+      }
     }
     // 白名单命中的列全部被标记「不输出」→ 回退完整实体（隐藏列仍由 json:"-" 挡住）
     if (appOutFields.length == 0) {
       appHasOut = false;
     }
-  }
-  // i18n：出参在白名单列之后平铺当前语言文本（实体已按 lang 填充）
-  if (appHasOut && hasI18n) {
-    for (vf in i18nOutFields) {
-      appOutFields.append(vf);
+    // i18n 旧配置兼容：白名单不含任何 i18n 平铺字段名 = 旧配置（自动全量追加）
+    if (appHasOut && hasI18n && !i18nInList) {
+      for (vf in i18nOutFields) {
+        appOutFields.append(vf);
+      }
     }
   }
   let appOutClass: String = appHasOut ? ("Out" + param.tableClass) : (dataAlias + "." + param.enClass);
+  // Out 转换函数（out.tpl）：To<Out> 实体源恒生成（详情接口 SelectById 用，
+  // 联表列零值）；有联表时另生成 To<Out>View 查询视图源（列表接口 SelectByIn
+  // 用，含联表列——EnXxxView 匿名嵌入主表实体，主表/i18n 字段经嵌入提升可达）
+  let appOutToViewFn: String = hasJoin ? ("To" + appOutClass + "View") : ("To" + appOutClass);
+  let appOutRecvView: String = hasJoin ? (dataAlias + "." + param.enClass + "View")
+                                       : (dataAlias + "." + param.enClass);
   // 出参字段行预对齐（gofmt 格式）
   // C 方案：实体普通列已是值类型，出参直接赋值，无需解引用兜底；
   // 仅数据库可空列仍是 *T，出参声明类型同步取 enDeclType（JSON 输出 null）
   let appOutFieldLines: String[] = [];
-  let appOutAssignLines: String[] = [];
+  let appOutAssignLines: String[] = [];      // 全部赋值行（View 源转换函数用）
+  let appOutEntityAssignLines: String[] = [];  // 非联表行（实体源转换函数用；联表列
+                                             // 在实体上不存在，详情接口取零值）
   let appOutNeedTime: Bool = false;
   let appOutNeedCoin: Bool = false;
   let appOutNeedJson: Bool = false;
@@ -1913,8 +1949,12 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
       let tag: String = "`json:\"" + f.name + "\"`";
       appOutFieldLines.append(tabChar() + padTo(f.goName, outMaxName) + " "
         + padTo(f.enDeclType, outMaxType) + " " + tag);
-      appOutAssignLines.append(tabChar() + tabChar() + padTo(f.goName + ":", outMaxName + 1)
-        + " e." + f.goName + ",");
+      let assign: String = tabChar() + tabChar() + padTo(f.goName + ":", outMaxName + 1)
+        + " e." + f.goName + ",";
+      appOutAssignLines.append(assign);
+      if (f.isJoinOut != true) {
+        appOutEntityAssignLines.append(assign);
+      }
       if (f.goType == "time.Time") { appOutNeedTime = true; }
       if (f.goType == "coin.Coin") { appOutNeedCoin = true; }
       if (f.goType == "datatypes.JSON") { appOutNeedJson = true; }
@@ -2073,6 +2113,9 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   tplData["appOutFields"] = appOutFields;
   tplData["appOutFieldLines"] = appOutFieldLines;
   tplData["appOutAssignLines"] = appOutAssignLines;
+  tplData["appOutEntityAssignLines"] = appOutEntityAssignLines;
+  tplData["appOutToViewFn"] = appOutToViewFn;
+  tplData["appOutRecvView"] = appOutRecvView;
   tplData["appOutImports"] = appOutImports;
   tplData["appEmpty"] = appEmpty;
   // app 空接口：handler 生成件只剩 struct + New（同包类型），无 gin/common/实体

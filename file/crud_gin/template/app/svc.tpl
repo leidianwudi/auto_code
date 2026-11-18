@@ -31,7 +31,7 @@ func (s *${serviceClass}) SelectByIn(sel *${dataAlias}.${selClass}) ([]${appOutC
 	}
 	out := make([]${appOutClass}, len(list))
 	for i := range list {
-		out[i] = *To${appOutClass}(${if hasJoin}&list[i].${enClass}${else}&list[i]${/if})
+		out[i] = *${appOutToViewFn}(&list[i])
 	}
 	return out, total, nil
 }

@@ -29,10 +29,13 @@ using namespace TableSchema;
 #include <QHash>
 #include <QHeaderView>
 #include <QHelpEvent>
+#include <QIcon>
 #include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPainter>
 #include <QPlainTextEdit>
+#include <QPixmap>
 #include <QPushButton>
 #include <QSet>
 #include <QSplitter>
@@ -52,6 +55,7 @@ using namespace TableSchema;
 #include "src/ui/json_vue/json_vue_model.h"
 #include "src/util/ui/component/aui_button.h"
 #include "src/util/ui/component/aui_cell_edit_combo.h"
+#include "src/util/ui/component/aui_cell_read_box.h"
 #include "src/util/ui/component/aui_combo_box.h"
 #include "src/util/ui/component/aui_config_dialog.h"
 #include "src/util/ui/component/aui_icon.h"
@@ -112,14 +116,21 @@ QString queryModeDisplay(const QString &data) {
   return QStringLiteral("不查询");
 }
 
-/// 联表声明表格列索引（joinTable）
+/// 联表声明表格列索引（joinTable；输出列已迁至「输出字段」主从表格）
 enum JoinCols {
   JoinColTable = 0,  ///< 被联表名（joinTables[].table，可编辑下拉=项目表名）
   JoinColType,       ///< JOIN 类型（LEFT/INNER 下拉）
   JoinColOnMain,     ///< on[0] 主表列（可编辑下拉=本表列名）
   JoinColOnJoin,     ///< on[1] 被联表列（目标表列名）
-  JoinColOutCols,    ///< 输出列（逗号分隔列名；col:filter 旧写法仍兼容解析）
   JoinColCount
+};
+
+/// 联表输出字段表格列索引（m_joinColTable：选中声明行的输出列；筛选能力统一
+/// 由字段呈现页的查询模式驱动（selColsEq/Like 别名通道），此处不再单列）
+enum JoinColCols {
+  JColCol = 0,   ///< 输出列名（∈ 被联表列；输出别名 = 表名_列名）
+  JColLabel,     ///< 显示标题（空 = 回退目标列注释/列名）
+  JColCount
 };
 
 /// 字段呈现统一表格列索引（一行 = 一个字段：列表/查询/编辑三视图合一）
@@ -141,43 +152,6 @@ enum IndexCols {
   IndexColCols,      ///< 列（逗号分隔文本）
   IndexColUnique,    ///< unique 复选框
   IndexColCount
-};
-
-/// 可编辑下拉框委托：预设项下拉 + 自由输入，提交编辑框文本
-class EditableComboDelegate : public QStyledItemDelegate {
-public:
-  EditableComboDelegate(QStringList options, QObject *parent = nullptr)
-      : QStyledItemDelegate(parent), m_options(std::move(options)) {}
-
-  /// 动态更新下拉预设（如枚举列候选跟随字段表格列名变化）
-  void setOptions(const QStringList &options) { m_options = options; }
-
-  QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &,
-                        const QModelIndex &) const override {
-    QComboBox *combo = AuiComboBox::create(parent);
-    combo->setEditable(true);
-    for (const QString &opt : m_options) combo->addItem(opt);
-    // 选中预设项后立即提交并关闭编辑器（自由输入走失焦提交）
-    QObject::connect(combo, &QComboBox::activated, combo, [this, combo]() {
-      emit const_cast<EditableComboDelegate *>(this)->commitData(combo);
-      emit const_cast<EditableComboDelegate *>(this)->closeEditor(combo);
-    });
-    return combo;
-  }
-
-  void setEditorData(QWidget *editor, const QModelIndex &index) const override {
-    if (auto *combo = qobject_cast<QComboBox *>(editor))
-      combo->setEditText(index.data(Qt::EditRole).toString());
-  }
-
-  void setModelData(QWidget *editor, QAbstractItemModel *model,
-                    const QModelIndex &index) const override {
-    if (auto *combo = qobject_cast<QComboBox *>(editor))
-      model->setData(index, combo->currentText().trimmed(), Qt::EditRole);
-  }
-
-private:
-  QStringList m_options;  ///< 下拉预设项（仍可自由输入）
 };
 
 /// 逗号分隔多值补全器：按最后一个逗号后的片段匹配，选中后拼回前缀
@@ -213,10 +187,49 @@ private:
 
 /// 复选框列条目（无可编辑文本，点击勾选框直接切换）
 
+/// 单元格常驻控件文本（AuiCellEditCombo 等；无控件返回空）
+QString cellWidgetText(const QTableWidget *table, int row, int col) {
+  if (!table) return QString();
+  if (const auto *c = dynamic_cast<const AuiCellEditCombo *>(table->cellWidget(row, col)))
+    return c->text().trimmed();
+  return QString();
+}
+
 /// 通用表格单元格文本（空表/缺条目返回空串；截断空白）
 QString cellOf(const QTableWidget *table, int row, int col) {
   const QTableWidgetItem *it = table ? table->item(row, col) : nullptr;
   return it ? it->text().trimmed() : QString();
+}
+
+/// 类型徽标小图标：联表 = 链条、多语言 = 地球，两者同一蓝色（自绘而非 emoji：
+/// emoji 颜色由字体决定——🔗 灰棕、🌐 蓝，无法保证一致；自绘图标颜色固定）
+QIcon viewBadgeIcon(bool join) {
+  constexpr int kSize = 12;      ///< 逻辑尺寸（px）
+  constexpr qreal kScale = 2.0;  ///< 2x 采样，缩小显示时清晰
+  QPixmap pm(static_cast<int>(kSize * kScale), static_cast<int>(kSize * kScale));
+  pm.setDevicePixelRatio(kScale);
+  pm.fill(Qt::transparent);
+  QPainter p(&pm);
+  p.setRenderHint(QPainter::Antialiasing, true);
+  QPen pen(QColor(0x4A, 0x90, 0xE2));
+  pen.setWidthF(1.2);
+  pen.setCapStyle(Qt::RoundCap);
+  p.setPen(pen);
+  p.setBrush(Qt::NoBrush);
+  if (join) {
+    // 联表：两个相交的圆环（链条）
+    constexpr qreal d = 6.5;
+    p.drawEllipse(QRectF(1.2, (kSize - d) / 2.0, d, d));
+    p.drawEllipse(QRectF(kSize - 1.2 - d, (kSize - d) / 2.0, d, d));
+  } else {
+    // 多语言：地球（外圆 + 赤道 + 经线椭圆）
+    const QRectF r(1.2, 1.2, kSize - 2.4, kSize - 2.4);
+    p.drawEllipse(r);
+    p.drawLine(QPointF(r.left(), kSize / 2.0), QPointF(r.right(), kSize / 2.0));
+    p.drawEllipse(QRectF(kSize / 2.0 - r.width() / 4.5, r.top(), r.width() / 2.25, r.height()));
+  }
+  p.end();
+  return QIcon(pm);
 }
 
 }  // namespace
@@ -248,7 +261,9 @@ void JsonTableDesigner::setupUI() {
   setMinimumWidth(300);
 
   // ── 页签容器（对齐 jsonvue「一行=一字段」心智）：
-  //    字段(物理) / 字段呈现(生成设置+三视图合一+排序) / 联表与索引 / 枚举 / 多语言 / DDL ──
+  //    字段(物理) / 字段呈现(生成设置+三视图合一+排序) / 联表 / 枚举 / 多语言 /
+  //    索引 / DDL。索引是物理结构（决定 DDL 预览与执行建表内容），独立成页放
+  //    DDL 前：配索引 → 预览 DDL → 执行建表一条线；联表是查询声明，与索引领域分离
   auto *tabs = new QTabWidget(this);
   auto makeTab = [tabs](const QString &title) {
     auto *w = new QWidget(tabs);
@@ -269,9 +284,10 @@ void JsonTableDesigner::setupUI() {
   };
   auto *fieldTab = makeTab(QStringLiteral("字段"));
   auto *presentTab = makeTab(QStringLiteral("字段呈现"));
-  auto *joinTab = makeTab(QStringLiteral("联表与索引"));
+  auto *joinTab = makeTab(QStringLiteral("联表"));
   auto *enumTab = makeTab(QStringLiteral("枚举"));
   auto *i18nTab = makeTab(QStringLiteral("多语言"));
+  auto *indexTab = makeTab(QStringLiteral("索引"));
   auto *ddlTab = makeTab(QStringLiteral("DDL"));
 
   // ── 顶部：表名 / 模型名 / 表注释 / manualUpdateTime（字段页）──
@@ -334,15 +350,13 @@ void JsonTableDesigner::setupUI() {
   // 委托编辑器的弹层会因失焦被 closeEditor 连带销毁，且透明化后会透出单元格文字
 
   // ── 字段呈现统一表格（一行 = 一个字段：列表/查询/编辑三视图合一）──
+  // 行集完全派生（物理列跟随字段表格 / 联表行跟随联表页输出字段 / i18n 行跟随
+  // 多语言页），无手动增删按钮，仅提供行序调整
   auto *viewHeader = new QHBoxLayout;
   viewHeader->addWidget(new QLabel(QStringLiteral("字段呈现:"), this));
   viewHeader->addStretch();
-  auto *addViewJoinBtn = makeCompactButton(QStringLiteral("+ 联表列"), this);
-  auto *delViewBtn = makeCompactButton(QStringLiteral("- 删联表行"), this);
   auto *upViewBtn = makeCompactButton(QStringLiteral("↑ 上移"), this);
   auto *downViewBtn = makeCompactButton(QStringLiteral("↓ 下移"), this);
-  viewHeader->addWidget(addViewJoinBtn);
-  viewHeader->addWidget(delViewBtn);
   viewHeader->addWidget(upViewBtn);
   viewHeader->addWidget(downViewBtn);
   // 三段式垂直分隔：字段呈现 / 默认排序 / 操作按钮 各占一段，
@@ -551,8 +565,8 @@ void JsonTableDesigner::setupUI() {
   m_appOutBtn = makeCompactButton(QStringLiteral("C端出参: 全部"), this);
   m_appOutBtn->setToolTip(QStringLiteral(
       "C 端出参白名单：勾选后生成 out_<表>_.go，只输出所选列\n"
-      "留空 = 直接返回完整实体（「输出」未勾选的列始终不出现）\n"
-      "只对主表字段生效，联表输出列暂不支持"));
+      "支持主表列、联表输出列（表名_列名）、多语言字段\n"
+      "留空 = 直接返回完整实体（「输出」未勾选的列始终不出现）"));
   genRow->addWidget(m_appOutBtn);
   addVSep();
   // 表缓存骨架（data 层手写件）：仅首次生成，之后重新生成不覆盖
@@ -591,20 +605,14 @@ void JsonTableDesigner::setupUI() {
   connect(upJoinBtn, &QPushButton::clicked, this, [this]() { moveJoinRow(-1); });
   connect(downJoinBtn, &QPushButton::clicked, this, [this]() { moveJoinRow(1); });
 
-  // 上下两段可拖动：联表声明 / 索引
-  auto *joinSplit = new AuiSplitter(Qt::Vertical, this);
-  joinSplit->setObjectName(QStringLiteral("joinSplit"));
-  joinSplit->setChildrenCollapsible(false);
-  auto *joinLay = makeSection(joinSplit);
-  joinLay->addLayout(joinHeader);
-  joinSplit->addWidget(joinLay->parentWidget());
+  // 联表声明独占「联表」页上半（索引已拆到独立页签；下半为输出字段主从表格）
+  joinTab->addLayout(joinHeader);
 
   m_joinTable = makeConfigTable({{QStringLiteral("联表表"), QHeaderView::Interactive, 110},
                                  {QStringLiteral("类型"), QHeaderView::Interactive, 76},
                                  {QStringLiteral("主表列"), QHeaderView::Interactive, 100},
-                                 {QStringLiteral("联表列"), QHeaderView::Interactive, 100},
-                                 {QStringLiteral("输出列(逗号分隔)"), QHeaderView::Stretch, 0}},
-                                this, 120, 0, QAbstractItemView::SelectItems);
+                                 {QStringLiteral("联表列"), QHeaderView::Interactive, 100}},
+                                this, 110, 0, QAbstractItemView::SelectRows);
   m_joinTable->setToolTip(
       QStringLiteral("联表表=被联表名（项目内 .jsontable）；类型=LEFT/INNER（缺省 LEFT）；\n"
                      "主表列/联表列=ON 两列（on:[主表列,联表列]，表名由规格自带）；\n"
@@ -612,15 +620,54 @@ void JsonTableDesigner::setupUI() {
                      "输出别名固定为 表名_列名（前端统一字段名），查询能力在「字段呈现」页的\n"
                      "查询视图（精确/模糊）里按输出别名配置，与主表列同源。"
                      "生成端产出 EnXxxView 视图 + querySpec 联表流水线"));
-  joinLay->addWidget(m_joinTable, 1);
-  // 被联表下拉候选 = 项目内全部表名（跨文件，fillJoins 时按当前文件目录刷新）；
-  // 主表列候选 = 本表字段列名（动态刷新）
-  m_joinTableDelegate = new EditableComboDelegate(QStringList(), m_joinTable);
-  m_joinTable->setItemDelegateForColumn(JoinColTable, m_joinTableDelegate);
-  m_joinMainColDelegate = new EditableComboDelegate(QStringList(), m_joinTable);
-  m_joinTable->setItemDelegateForColumn(JoinColOnMain, m_joinMainColDelegate);
+  joinTab->addWidget(m_joinTable);
 
-  // ── 索引表格工具行 ──
+  // ── 联表输出字段（主从联动，对齐表内枚举/多语言：选中上方声明行，下方编辑
+  //    该声明的输出字段 + 显示标题；标题空 = 回退目标列注释/列名）──
+  auto *joinColHeader = new QHBoxLayout;
+  joinColHeader->setSpacing(6);
+  joinColHeader->addWidget(new QLabel(QStringLiteral("输出字段（选中上方联表后编辑）:"), this));
+  joinColHeader->addStretch();
+  m_joinColAddBtn = makeCompactButton(QStringLiteral("+ 加字段"), this);
+  m_joinColDelBtn = makeCompactButton(QStringLiteral("- 删字段"), this);
+  joinColHeader->addWidget(m_joinColAddBtn);
+  joinColHeader->addWidget(m_joinColDelBtn);
+
+  m_joinColTable = makeConfigTable({{QStringLiteral("字段"), QHeaderView::Interactive, 140},
+                                    {QStringLiteral("显示标题"), QHeaderView::Stretch, 0}},
+                                   this, 110, 0, QAbstractItemView::SelectItems);
+  m_joinColTable->setToolTip(
+      QStringLiteral("字段=被联表输出列名（输出别名固定 表名_列名，字段呈现自动出现）；\n"
+                     "显示标题=列表页列标题（空 = 回退目标列注释/列名）；\n"
+                     "联表列的查询能力在「字段呈现」页的查询模式下拉配置（精确/模糊）"));
+  joinTab->addLayout(joinColHeader);
+  joinTab->addWidget(m_joinColTable, 1);
+  connect(m_joinColAddBtn, &QPushButton::clicked, this, [this]() {
+    syncJoinColsToDraft(m_joinTable->currentRow());
+    appendJoinColRow(QString(), QString());
+    // 新行绑定字段名候选 = 被联表列名（appendJoinColRow 用空候选，此处按目标表补）
+    const int r = m_joinTable->currentRow();
+    if (r >= 0 && r < m_joinDrafts.size()) {
+      const QStringList cands = joinTargetCandidates(m_joinDrafts.at(r).table);
+      if (auto *combo = dynamic_cast<AuiCellEditCombo *>(m_joinColTable->cellWidget(r, JColCol)))
+        combo->setPresets(cands);
+    }
+    syncJoinColsToDraft(m_joinTable->currentRow());  // 新行入 draft
+  });
+  connect(m_joinColDelBtn, &QPushButton::clicked, this, [this]() {
+    const int row = m_joinColTable->currentRow();
+    if (row >= 0) m_joinColTable->removeRow(row);
+    syncJoinColsToDraft(m_joinTable->currentRow());
+  });
+  // 主从联动：声明行切换 → 旧行字段表格内容入 draft、新行重建字段表格
+  connect(m_joinTable, &QTableWidget::currentCellChanged, this,
+          [this](int curRow, int, int prevRow, int) {
+            if (m_loading) return;
+            if (prevRow >= 0 && prevRow < m_joinDrafts.size()) syncJoinColsToDraft(prevRow);
+            if (curRow >= 0 && curRow < m_joinDrafts.size()) fillJoinCols(curRow);
+            m_joinCurRow = curRow;
+          });
+  // ── 索引页（独立页签，DDL 前：索引直接决定 DDL 预览与执行建表内容）──
   auto *idxHeader = new QHBoxLayout;
   idxHeader->addWidget(new QLabel(QStringLiteral("索引:"), this));
   idxHeader->addStretch();
@@ -628,20 +675,14 @@ void JsonTableDesigner::setupUI() {
   auto *delIdxBtn = makeCompactButton(QStringLiteral("- 删索引"), this);
   idxHeader->addWidget(addIdxBtn);
   idxHeader->addWidget(delIdxBtn);
-  auto *idxLay = makeSection(joinSplit);
-  idxLay->addLayout(idxHeader);
-  joinSplit->addWidget(idxLay->parentWidget());
 
   m_indexTable = makeConfigTable({{QStringLiteral("索引名"), QHeaderView::Stretch, 0},
                                   {QStringLiteral("列(逗号分隔)"), QHeaderView::Stretch, 0},
                                   {QStringLiteral("unique"), QHeaderView::Interactive, 70}},
-                                 this, 150, 0, QAbstractItemView::SelectItems);
+                                 this, 200, 0, QAbstractItemView::SelectItems);
   m_indexTable->setToolTip(QStringLiteral("unique 索引自动生成 Insert/Update 唯一性预检（后端）"));
-  idxLay->addWidget(m_indexTable, 1);
-  joinSplit->setStretchFactor(0, 1);
-  joinSplit->setStretchFactor(1, 1);
-  joinSplit->setSizes({240, 240});
-  joinTab->addWidget(joinSplit, 1);
+  indexTab->addLayout(idxHeader);
+  indexTab->addWidget(m_indexTable, 1);
 
   // ── 表内枚举区（主从表：主表选枚举行，从表编辑选项）──
   auto *enumHeader = new QHBoxLayout;
@@ -669,9 +710,8 @@ void JsonTableDesigner::setupUI() {
                                 this, 72, 0, QAbstractItemView::SelectRows);
   m_enumTable->setToolTip(QStringLiteral("枚举列需与字段表格中的列名一致（如 status）"));
   enumLay->addWidget(m_enumTable, 1);
-  // 枚举列下拉候选：预设 = 字段表格列名（refreshColumnCandidates 动态更新）
-  m_enumColDelegate = new EditableComboDelegate(QStringList(), m_enumTable);
-  m_enumTable->setItemDelegateForColumn(0, m_enumColDelegate);
+  // 枚举列候选（预设 = 字段表格列名）由 refreshColumnCandidates 遍历行刷新
+  m_enumTable->verticalHeader()->setDefaultSectionSize(30);
 
   auto *optHeader = new QHBoxLayout;
   optHeader->addWidget(new QLabel(QStringLiteral("枚举选项（选中上方枚举后编辑）:"), this));
@@ -850,52 +890,22 @@ void JsonTableDesigner::setupUI() {
     const int row = m_i18nFieldTable->currentRow();
     if (row >= 0) m_i18nFieldTable->removeRow(row);
   });
-  connect(addJoinBtn, &QPushButton::clicked, this, [this]() { appendJoinRow(); });
+  connect(addJoinBtn, &QPushButton::clicked, this, [this]() {
+    m_joinDrafts.append(JsonTableJoinSpec());
+    appendJoinRow();
+    // 新行候选（联表表=项目表名；主表列=本表列名；联表列=目标表列名）
+    refreshJoinCandidates();
+  });
   connect(delJoinBtn, &QPushButton::clicked, this, [this]() {
     const int row = m_joinTable->currentRow();
-    if (row >= 0) m_joinTable->removeRow(row);
+    if (row >= 0) {
+      m_joinTable->removeRow(row);
+      if (row < m_joinDrafts.size()) m_joinDrafts.removeAt(row);
+      m_joinCurRow = -1;
+      m_joinColTable->setRowCount(0);
+    }
   });
-  // 加联表列：候选 = 联表输出别名（joinTables 新格式：表名_列名）
-  connect(addViewJoinBtn, &QPushButton::clicked, this, [this]() {
-    QStringList cands;
-    for (const auto &j : collectJoins()) {
-      for (const auto &c : j.cols) {
-        if (!c.col.isEmpty()) cands.append(j.table + QLatin1Char('_') + c.col);
-      }
-    }
-    if (cands.isEmpty()) {
-      AuiMessageBox::show(this, QStringLiteral("无法添加"),
-                          QStringLiteral("请先在「联表与索引」页声明联表及输出列"));
-      return;
-    }
-    bool ok = false;
-    const QString ref = AuiInputDialog::getItem(this, QStringLiteral("添加联表列"),
-                                                QStringLiteral("选择联表列："), cands, 0, &ok);
-    if (ok && !ref.isEmpty()) appendViewJoinRow(ref);
-  });
-  connect(delViewBtn, &QPushButton::clicked, this, [this]() {
-    const int row = m_viewTable->currentRow();
-    if (row < 0) return;
-    // 仅联表行可删（物理列行跟随字段表格）
-    const QString ref = viewRefText(row);
-    bool isAliasRow = false;
-    for (const auto &js : m_table.joinTables) {
-      for (const auto &c : js.cols) {
-        if (ref == js.table + QLatin1Char('_') + c.col) {
-          isAliasRow = true;
-          break;
-        }
-      }
-      if (isAliasRow) break;
-    }
-    if (!ref.contains(QLatin1Char('.')) && !isAliasRow) {
-      AuiMessageBox::show(this, QStringLiteral("无法删除"),
-                          QStringLiteral("物理列行跟随「字段」页的字段表格，不可在此删除；"
-                                         "联表行才可删除"));
-      return;
-    }
-    m_viewTable->removeRow(row);
-  });
+  // 联表行自动跟随「联表」页的输出字段（不再手动添加）；物理列行跟随字段表格
   connect(upViewBtn, &QPushButton::clicked, this, [this]() { moveViewRow(-1); });
   connect(downViewBtn, &QPushButton::clicked, this, [this]() { moveViewRow(1); });
   connect(addEnumBtn, &QPushButton::clicked, this, [this]() {
@@ -906,7 +916,9 @@ void JsonTableDesigner::setupUI() {
     const int newRow = m_enumTable->rowCount() - 1;
     m_enumTable->selectRow(newRow);
     m_enumTable->setCurrentCell(newRow, 0);
-    m_enumTable->editItem(m_enumTable->item(newRow, 0));  // 直接进入枚举列编辑
+    // 枚举列为常驻可编辑下拉（cellWidget），直接聚焦输入框进入编辑
+    if (auto *c = dynamic_cast<AuiCellEditCombo *>(m_enumTable->cellWidget(newRow, 0)))
+      c->lineEdit()->setFocus(Qt::OtherFocusReason);
   });
   connect(delEnumBtn, &QPushButton::clicked, this, [this]() {
     const int row = m_enumTable->currentRow();
@@ -1106,6 +1118,11 @@ void JsonTableDesigner::connectChangeSignals() {
     // dataChanged/rowsInserted 是程序性刷新而非用户编辑，不能误报「已修改」
     //（典型路径：点表内枚举任意一行 → 联动重建选项表 → 若不挡会立即亮保存）
     if (m_enumSyncing) return;
+    // 联表输出字段表格程序性重建（fillJoinCols）同理：接线在 model 层
+    //（dataChanged/rowsRemoved/rowsInserted），表格自身 blockSignals 挡不住；
+    // 不挡的话重建中 setRowCount(0) 会同步跑 updateValidateStatus → collectJoins
+    // → syncJoinColsToDraft，把此刻的空表格内容写进 drafts 造成输出字段丢失
+    if (m_joinColRebuilding) return;
     emit configChanged();
     updateValidateStatus();
   };
@@ -1147,6 +1164,40 @@ void JsonTableDesigner::connectChangeSignals() {
       // i18n 行标题条目无 ItemIsEditable（appendRow 置只读）；物理列行不动
       if (titleIt && titleIt->flags().testFlag(Qt::ItemIsEditable)) break;
       if (titleIt) titleIt->setText(title);
+      // 只读标题行挂有 AuiCellReadBox，同步其显示文本（item 是数据源）
+      if (auto *rb = dynamic_cast<AuiCellReadBox *>(m_viewTable->cellWidget(r, UColTitle)))
+        rb->setText(title);
+      break;
+    }
+  });
+  // 联表页「显示标题」编辑 → 实时同步字段呈现联表行标题（对齐多语言页两处联动；
+  // 数据落盘仍走 collectTable，此处仅刷新界面）。标题链与 fillViewTable 一致：
+  // 编辑态 label > 目标列注释（m_aliasComments 回填缓存）> 别名
+  connect(m_joinColTable, &QTableWidget::itemChanged, this, [this](QTableWidgetItem *it) {
+    if (!it || m_loading || m_joinColRebuilding) return;
+    if (it->column() != JColLabel || it->row() < 0) return;
+    // alias = 被联表名_输出列名（表名取主从联动的当前声明行编辑态）
+    const int jr = m_joinTable->currentRow();
+    if (jr < 0 || jr >= m_joinDrafts.size()) return;
+    auto *colCombo = dynamic_cast<AuiCellEditCombo *>(m_joinColTable->cellWidget(it->row(), JColCol));
+    const QString col = colCombo ? colCombo->text().trimmed() : QString();
+    const QString table = m_joinDrafts.at(jr).table.trimmed();
+    if (col.isEmpty() || table.isEmpty()) return;
+    const QString alias = table + QLatin1Char('_') + col;
+    const QString label = it->text().trimmed();
+    QString fallback = alias;
+    if (m_aliasComments.contains(alias) && !m_aliasComments.value(alias).isEmpty())
+      fallback = m_aliasComments.value(alias);
+    const QString title = label.isEmpty() ? fallback : label;
+    for (int r = 0; r < m_viewTable->rowCount(); ++r) {
+      if (viewRefText(r) != alias) continue;
+      auto *titleIt = m_viewTable->item(r, UColTitle);
+      // 联表行标题条目无 ItemIsEditable（appendRow 置只读）；物理列行不动
+      if (titleIt && titleIt->flags().testFlag(Qt::ItemIsEditable)) break;
+      if (titleIt) titleIt->setText(title);
+      // 只读标题行挂有 AuiCellReadBox，同步其显示文本（item 是数据源）
+      if (auto *rb = dynamic_cast<AuiCellReadBox *>(m_viewTable->cellWidget(r, UColTitle)))
+        rb->setText(title);
       break;
     }
   });
@@ -1363,6 +1414,31 @@ void JsonTableDesigner::moveViewRow(int delta) {
                             : QString();
     mc->setText(queryModeDisplay(m26.isEmpty() ? QStringLiteral("none") : m26));
   }
+  // 字段引用列只读文本框同样固定在行位置（cellWidget 不随条目走），条目已随
+  // takeItem 交换 → 按条目文本重置两行显示
+  for (int r : {row, target}) {
+    auto *e = dynamic_cast<AuiCellReadBox *>(m_viewTable->cellWidget(r, UColRef));
+    if (!e) continue;
+    const auto *it = m_viewTable->item(r, UColRef);
+    if (it) e->setText(it->text());
+  }
+  // 标题列只读行（i18n / 联表）同样挂只读控件：交换后按每行的只读性校正
+  //（只读 item 无 ItemIsEditable；cellWidget 固定行位，须移除/重建/同步文本）
+  for (int r : {row, target}) {
+    auto *titleIt = m_viewTable->item(r, UColTitle);
+    const bool ro = titleIt && !titleIt->flags().testFlag(Qt::ItemIsEditable);
+    auto *rb = dynamic_cast<AuiCellReadBox *>(m_viewTable->cellWidget(r, UColTitle));
+    if (ro && !rb) {
+      if (m_viewTable->cellWidget(r, UColTitle)) m_viewTable->removeCellWidget(r, UColTitle);
+      auto *fresh = new AuiCellReadBox(m_viewTable, r, UColTitle, titleIt->text());
+      fresh->setTip(titleIt->toolTip());
+      m_viewTable->setCellWidget(r, UColTitle, fresh);
+    } else if (!ro && rb) {
+      m_viewTable->removeCellWidget(r, UColTitle);
+    } else if (ro && rb) {
+      rb->setText(titleIt->text());
+    }
+  }
   m_viewTable->setCurrentCell(target, UColRef);
   if (!m_loading) emit configChanged();
 }
@@ -1413,6 +1489,20 @@ void JsonTableDesigner::moveJoinRow(int delta) {
   const int target = row + delta;
   if (row < 0 || target < 0 || target >= m_joinTable->rowCount()) return;
   if (swapConfigRows(m_joinTable, row, target)) {
+    // 联表行含 cellWidget（类型/输出字段下拉）：条目交换不动 cellWidget，
+    // 交换后按 m_joinDrafts 重建两行 + drafts 同步交换
+    syncJoinColsToDraft(row);
+    syncJoinColsToDraft(target);
+    m_joinDrafts.swapItemsAt(row, target);
+    // 类型下拉文本互换（cellWidget 固定在行位置）
+    for (int r : {row, target}) {
+      auto *tc = dynamic_cast<AuiCellEditCombo *>(m_joinTable->cellWidget(r, JoinColType));
+      if (tc) tc->setText(m_joinDrafts.at(r).type == QStringLiteral("INNER")
+                              ? QStringLiteral("INNER")
+                              : QStringLiteral("LEFT"));
+      // 联表表/ON 两列文本已随 swapConfigRows 互换；联表列候选随目标表刷新
+      refreshJoinRowCandidates(r);
+    }
     m_joinTable->setCurrentCell(target, JoinColTable);
     if (!m_loading) emit configChanged();
   }
@@ -1503,43 +1593,71 @@ QVector<JsonTableIndex> JsonTableDesigner::collectIndexes() const {
 // ════════════════════════════════════════════════════════════
 
 void JsonTableDesigner::fillJoins(const QVector<JsonTableJoinSpec> &joins) {
-  // 被联表下拉候选 = 项目内全部表名（跨文件；m_filePath 所在目录为搜索根）
-  if (m_joinTableDelegate) {
-    const QString searchDir = m_filePath.isEmpty() ? QStringLiteral(PROJECT_SOURCE_DIR)
-                                                   : QFileInfo(m_filePath).absolutePath();
-    QStringList tableNames;
-    for (const auto &t : listProjectTables(searchDir)) {
-      if (!t.tableName.isEmpty()) tableNames.append(t.tableName);
-    }
-    static_cast<EditableComboDelegate *>(m_joinTableDelegate)->setOptions(tableNames);
-  }
+  // 编辑态整体重建（主从联动数据侧）
+  m_joinDrafts = joins;
   m_joinTable->setRowCount(0);
   for (const auto &j : joins) appendJoinRow();
-  // 逐行回填（appendJoinRow 建的是空行）
+  // 逐行回填（appendJoinRow 建的是空行；三列均为 AuiCellEditCombo 常驻控件）
   for (int r = 0; r < joins.size() && r < m_joinTable->rowCount(); ++r) {
     const JsonTableJoinSpec &j = joins[r];
-    m_joinTable->setItem(r, JoinColTable, new QTableWidgetItem(j.table));
+    if (auto *c = dynamic_cast<AuiCellEditCombo *>(m_joinTable->cellWidget(r, JoinColTable)))
+      c->setText(j.table);
     auto *typeCombo = dynamic_cast<AuiCellEditCombo *>(m_joinTable->cellWidget(r, JoinColType));
     if (typeCombo)
       typeCombo->setText(j.type == QStringLiteral("INNER") ? QStringLiteral("INNER")
                                                            : QStringLiteral("LEFT"));
     if (j.on.size() == 2) {
-      m_joinTable->setItem(r, JoinColOnMain, new QTableWidgetItem(j.on.at(0)));
-      m_joinTable->setItem(r, JoinColOnJoin, new QTableWidgetItem(j.on.at(1)));
+      if (auto *c = dynamic_cast<AuiCellEditCombo *>(m_joinTable->cellWidget(r, JoinColOnMain)))
+        c->setText(j.on.at(0));
+      if (auto *c = dynamic_cast<AuiCellEditCombo *>(m_joinTable->cellWidget(r, JoinColOnJoin)))
+        c->setText(j.on.at(1));
     }
-    QStringList colParts;
-    for (const auto &c : j.cols) {
-      colParts.append(c.filter.isEmpty() ? c.col : c.col + QLatin1Char(':') + c.filter);
-    }
-    m_joinTable->setItem(r, JoinColOutCols,
-                         new QTableWidgetItem(colParts.join(QStringLiteral(","))));
+  }
+  // 候选刷新（联表表=项目表名；主表列=本表列名；联表列=各行目标表列名）
+  refreshJoinCandidates();
+  // 选中首行并回填其输出字段（无声明时字段表格清空）
+  if (m_joinTable->rowCount() > 0) {
+    m_joinTable->selectRow(0);
+    m_joinCurRow = 0;
+    fillJoinCols(0);
+  } else {
+    m_joinCurRow = -1;
+    m_joinColTable->setRowCount(0);
   }
 }
 
 void JsonTableDesigner::appendJoinRow() {
+  // 仅建表格行（m_joinDrafts 由调用方管理：addJoinBtn 先 append，fillJoins 整体重建）
   const int row = m_joinTable->rowCount();
   m_joinTable->insertRow(row);
-  m_joinTable->setItem(row, JoinColTable, new QTableWidgetItem(QString()));
+  // 联表表 / 主表列 / 联表列：可编辑常驻下拉（候选由 refreshJoinCandidates 刷新；
+  // 与类型列同一控件族——单击整格选中变色、双击进编辑态可输入/拖选复制、
+  // 点箭头展开候选；旧 item+委托在双击编辑器下会重影且无法选中复制）
+  auto makeEditableCombo = [this, row](int col) {
+    auto *c = new AuiCellEditCombo(m_joinTable, col, QStringList(), this);
+    c->valueCommitted = [this] {
+      if (!m_loading) emit configChanged();
+    };
+    connect(c->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &) {
+      if (!m_loading) emit configChanged();
+    });
+    m_joinTable->setCellWidget(row, col, c);
+    return c;
+  };
+  auto *tableCombo = makeEditableCombo(JoinColTable);
+  // 联表表变化 → 同步该行「联表列」候选（目标表列名随表切换）
+  auto refreshTarget = [this, row] {
+    if (!m_loading) refreshJoinRowCandidates(row);
+  };
+  tableCombo->valueCommitted = [this, refreshTarget] {
+    refreshTarget();
+    if (!m_loading) emit configChanged();
+  };
+  connect(tableCombo->lineEdit(), &QLineEdit::textEdited, this,
+          [this, refreshTarget](const QString &) {
+            refreshTarget();
+            if (!m_loading) emit configChanged();
+          });
   // JOIN 类型：常驻只读下拉（文字可拖选/双击全选/Ctrl+C 复制，点箭头展开候选）
   auto *typeCombo = new AuiCellEditCombo(m_joinTable, JoinColType,
                                          {QStringLiteral("LEFT"), QStringLiteral("INNER")}, this,
@@ -1549,43 +1667,146 @@ void JsonTableDesigner::appendJoinRow() {
     if (!m_loading) emit configChanged();
   };
   m_joinTable->setCellWidget(row, JoinColType, typeCombo);
-  m_joinTable->setItem(row, JoinColOnMain, new QTableWidgetItem(QString()));
-  m_joinTable->setItem(row, JoinColOnJoin, new QTableWidgetItem(QString()));
-  m_joinTable->setItem(row, JoinColOutCols, new QTableWidgetItem(QString()));
+  makeEditableCombo(JoinColOnMain);
+  makeEditableCombo(JoinColOnJoin);
   m_joinTable->setCurrentCell(row, JoinColTable);
 }
 
-QVector<JsonTableJoinSpec> JsonTableDesigner::collectJoins() const {
-  QVector<JsonTableJoinSpec> out;
+void JsonTableDesigner::refreshJoinCandidates() {
+  // 候选来源：联表表=项目内表名（跨文件，按当前文件目录搜索）；主表列=本表列名；
+  // 联表列=该行目标表列名
+  const QString searchDir = m_filePath.isEmpty() ? QStringLiteral(PROJECT_SOURCE_DIR)
+                                                 : QFileInfo(m_filePath).absolutePath();
+  QStringList tableNames;
+  for (const auto &t : listProjectTables(searchDir)) {
+    if (!t.tableName.isEmpty()) tableNames.append(t.tableName);
+  }
+  QStringList mainCols;
+  // 主表列候选取字段表格实时列名（含新增未保存的列）
+  for (int r = 0; r < m_colsTable->rowCount(); ++r) {
+    const QString n = cellText(r, ColColName);
+    if (!n.isEmpty()) mainCols.append(n);
+  }
+  if (mainCols.isEmpty()) {
+    for (const auto &c : m_table.columns) {
+      if (!c.name.isEmpty()) mainCols.append(c.name);
+    }
+  }
   for (int r = 0; r < m_joinTable->rowCount(); ++r) {
-    JsonTableJoinSpec j;
-    j.table = cellOf(m_joinTable, r, JoinColTable).trimmed();
+    if (auto *c = dynamic_cast<AuiCellEditCombo *>(m_joinTable->cellWidget(r, JoinColTable)))
+      c->setPresets(tableNames);
+    if (auto *c = dynamic_cast<AuiCellEditCombo *>(m_joinTable->cellWidget(r, JoinColOnMain)))
+      c->setPresets(mainCols);
+    refreshJoinRowCandidates(r);
+  }
+}
+
+void JsonTableDesigner::refreshJoinRowCandidates(int row) {
+  if (row < 0 || row >= m_joinTable->rowCount()) return;
+  auto *joinCol = dynamic_cast<AuiCellEditCombo *>(m_joinTable->cellWidget(row, JoinColOnJoin));
+  if (!joinCol) return;
+  QString target = cellWidgetText(m_joinTable, row, JoinColTable);
+  if (target.isEmpty()) target = cellOf(m_joinTable, row, JoinColTable);
+  joinCol->setPresets(joinTargetCandidates(target));
+}
+
+QVector<JsonTableJoinSpec> JsonTableDesigner::collectJoins() const {
+  // 当前选中行的输出字段表格内容先入 draft（未切行前用户可能刚编辑）
+  if (m_joinTable->currentRow() >= 0 && m_joinTable->currentRow() < m_joinDrafts.size())
+    syncJoinColsToDraft(m_joinTable->currentRow());
+  QVector<JsonTableJoinSpec> out;
+  for (int r = 0; r < m_joinTable->rowCount() && r < m_joinDrafts.size(); ++r) {
+    JsonTableJoinSpec j = m_joinDrafts.at(r);  // cols（含 label）来自编辑态
+    // 表名/ON 两列均为常驻可编辑下拉控件，从控件读值
+    j.table = cellWidgetText(m_joinTable, r, JoinColTable);
     auto *typeCombo = dynamic_cast<AuiCellEditCombo *>(m_joinTable->cellWidget(r, JoinColType));
     j.type = typeCombo ? typeCombo->text().trimmed() : QStringLiteral("LEFT");
     if (j.type.isEmpty()) j.type = QStringLiteral("LEFT");
-    j.on.append(cellOf(m_joinTable, r, JoinColOnMain).trimmed());
-    j.on.append(cellOf(m_joinTable, r, JoinColOnJoin).trimmed());
-    const QString colsText = cellOf(m_joinTable, r, JoinColOutCols).trimmed();
-    const QStringList parts = colsText.split(QLatin1Char(','), Qt::SkipEmptyParts);
-    for (const QString &part : parts) {
-      const QString p = part.trimmed();
-      if (p.isEmpty()) continue;
-      JsonTableJoinCol c;
-      const int colon = p.indexOf(QLatin1Char(':'));
-      if (colon > 0) {
-        c.col = p.left(colon).trimmed();
-        c.filter = p.mid(colon + 1).trimmed();
-      } else {
-        c.col = p;
-      }
-      if (!c.col.isEmpty()) j.cols.append(c);
-    }
+    j.on = {cellWidgetText(m_joinTable, r, JoinColOnMain),
+            cellWidgetText(m_joinTable, r, JoinColOnJoin)};
     // 全空行（表/ON/输出列均未填）跳过
     if (j.table.isEmpty() && j.on.value(0).isEmpty() && j.on.value(1).isEmpty() &&
         j.cols.isEmpty()) {
       continue;
     }
     out.append(j);
+  }
+  return out;
+}
+
+void JsonTableDesigner::syncJoinColsToDraft(int row) const {
+  if (row < 0 || row >= m_joinDrafts.size()) return;
+  m_joinDrafts[row].cols = collectJoinCols();
+}
+
+void JsonTableDesigner::fillJoinCols(int row) {
+  if (row < 0 || row >= m_joinDrafts.size()) return;
+  // 字段名下拉候选 = 被联表列名（目标表名从联表表控件读，缺省回退 draft）
+  QString target = cellWidgetText(m_joinTable, row, JoinColTable);
+  if (target.isEmpty()) target = m_joinDrafts.at(row).table;
+  const QStringList candidates = joinTargetCandidates(target);
+  // 重建全程置重建标记：connectChangeSignals 的接线挂在 model 层
+  //（dataChanged/rowsRemoved/rowsInserted），表格自身 blockSignals 挡不住；
+  // 不挡的话 setRowCount(0) 会同步触发 onChange → updateValidateStatus →
+  // collectTable → collectJoins → syncJoinColsToDraft，把此刻的空表格内容写进
+  // m_joinDrafts[row].cols，随后重建循环读到空列表 → 输出字段内容丢失
+  m_joinColRebuilding = true;
+  m_joinColTable->setRowCount(0);
+  for (const auto &c : m_joinDrafts.at(row).cols) {
+    appendJoinColRow(c.col, c.label);
+  }
+  // 逐行绑定下拉候选（appendJoinColRow 用的是空候选，此处按目标表补）
+  for (int r = 0; r < m_joinColTable->rowCount(); ++r) {
+    if (auto *combo = dynamic_cast<AuiCellEditCombo *>(m_joinColTable->cellWidget(r, JColCol)))
+      combo->setPresets(candidates);
+  }
+  m_joinColRebuilding = false;
+}
+
+QStringList JsonTableDesigner::joinTargetCandidates(const QString &table) const {
+  QStringList candidates;
+  if (table.isEmpty()) return candidates;
+  for (const auto &t : m_config.tables) {
+    if (t.tableName == table) {
+      for (const auto &c : t.columns) {
+        if (!c.name.isEmpty()) candidates.append(c.name);
+      }
+      break;
+    }
+  }
+  return candidates;
+}
+
+void JsonTableDesigner::appendJoinColRow(const QString &col, const QString &label) {
+  const int row = m_joinColTable->rowCount();
+  m_joinColTable->insertRow(row);
+  // 字段：常驻可编辑下拉（候选由 fillJoinCols 按被联表补齐；可自由输入）
+  m_joinColTable->setItem(row, JColCol, new QTableWidgetItem);
+  auto *colCombo = new AuiCellEditCombo(m_joinColTable, JColCol, QStringList(), this);
+  colCombo->setText(col);
+  colCombo->valueCommitted = [this] {
+    if (!m_loading) emit configChanged();
+  };
+  connect(colCombo->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &) {
+    if (!m_loading) emit configChanged();
+  });
+  m_joinColTable->setCellWidget(row, JColCol, colCombo);
+  // 显示标题：普通文本条目（空 = 回退目标列注释/列名）
+  m_joinColTable->setItem(row, JColLabel, new QTableWidgetItem(label));
+}
+
+QVector<JsonTableJoinCol> JsonTableDesigner::collectJoinCols() const {
+  QVector<JsonTableJoinCol> out;
+  for (int r = 0; r < m_joinColTable->rowCount(); ++r) {
+    auto *colCombo = dynamic_cast<AuiCellEditCombo *>(m_joinColTable->cellWidget(r, JColCol));
+    const QString col = colCombo ? colCombo->text().trimmed() : QString();
+    if (col.isEmpty()) continue;  // 跳过字段名为空的行
+    JsonTableJoinCol c;
+    c.col = col;
+    c.label = cellOf(m_joinColTable, r, JColLabel);
+    // filter 恒空（只输出）：联表列的查询能力统一由字段呈现页的查询模式
+    //（selColsEq/Like 别名通道）驱动，避免双通道重复生成查询条件
+    out.append(c);
   }
   return out;
 }
@@ -1649,9 +1870,12 @@ void JsonTableDesigner::fillViewTable() {
       break;
     }
   }
-  // 新格式联表输出别名：ref（表名_列名）→ 目标列注释（标题回退）
+  // 新格式联表输出别名：ref（表名_列名）→ 显示标题（联表页配置，单一来源；
+  // 空 = 回退目标列注释）。字段呈现的联表行自动跟随此处声明
   QSet<QString> aliasRefs;
-  QHash<QString, QString> aliasComments;
+  QHash<QString, QString> aliasTitles;   // 别名 → 联表页标题（label；空 = 未配置）
+  m_aliasComments.clear();               // 别名 → 目标列注释（标题回退；成员缓存，
+                                         // 供联表页显示标题编辑时的实时联动回退查询）
   if (!m_table.joinTables.isEmpty()) {
     const QString joinDir = m_filePath.isEmpty() ? QStringLiteral(PROJECT_SOURCE_DIR)
                                                  : QFileInfo(m_filePath).absolutePath();
@@ -1666,8 +1890,9 @@ void JsonTableDesigner::fillViewTable() {
       for (const auto &c : js.cols) {
         const QString alias = js.table + QLatin1Char('_') + c.col;
         aliasRefs.insert(alias);
+        aliasTitles.insert(alias, c.label);
         if (tc != targetComments.constEnd() && tc.value().contains(c.col)) {
-          aliasComments.insert(alias, tc.value().value(c.col));
+          m_aliasComments.insert(alias, tc.value().value(c.col));
         }
       }
     }
@@ -1705,14 +1930,25 @@ void JsonTableDesigner::fillViewTable() {
     const int row = m_viewTable->rowCount();
     m_viewTable->insertRow(row);
     // 标题（生效值）：i18n 行 = i18n.fields[].label（单一来源：多语言页「显示标题」，
-    // 不查 selCols.label——历史固化值已废弃）；其余行 = selCols.label > 列定义 title
+    // 不查 selCols.label——历史固化值已废弃）；新格式联表行 = 联表页标题（单一来源，
+    // aliasTitles）> 目标列注释 > 别名；其余行 = selCols.label > 列定义 title
     // > 列注释(本表/联表目标列) > ref
     QString title;
     const auto selIt = selOf.constFind(ref);
+    const bool isAliasRow = aliasRefs.contains(ref);
     if (isI18nRow) {
       title = (i18nLabels.contains(ref) && !i18nLabels.value(ref).isEmpty())
                   ? i18nLabels.value(ref)
                   : ref;
+    } else if (isAliasRow) {
+      // 联表页标题优先（不查 selCols.label——字段呈现的联表行标题不固化）
+      title = (aliasTitles.contains(ref) && !aliasTitles.value(ref).isEmpty())
+                  ? aliasTitles.value(ref)
+                  : QString();
+      if (title.isEmpty() && m_aliasComments.contains(ref)) {
+        title = m_aliasComments.value(ref);
+      }
+      if (title.isEmpty()) title = ref;
     } else if (selIt != selOf.constEnd() && !selIt.value().label.isEmpty()) {
       title = selIt.value().label;
     } else if (colTitles.contains(ref) && !colTitles.value(ref).isEmpty()) {
@@ -1726,10 +1962,6 @@ void JsonTableDesigner::fillViewTable() {
         if (jc != joins.constEnd() && jc.value().comments.contains(cn)) {
           title = jc.value().comments.value(cn);
         }
-      }
-      // 新格式联表输出别名：标题回退 = 目标列注释
-      if (title.isEmpty() && aliasComments.contains(ref)) {
-        title = aliasComments.value(ref);
       }
       if (title.isEmpty()) title = ref;
     } else if (colComments.contains(ref) && !colComments.value(ref).isEmpty()) {
@@ -1785,13 +2017,29 @@ void JsonTableDesigner::fillViewTable() {
     // 引用列 = 行身份标识（行集由字段表格/联表声明/多语言 fields 派生），
     // 纯文本不可编辑（可选中复制）：改 ref 会让行元数据错位、配置丢失
     refItem->setText(ref);
-    // i18n 行标题只读（单一来源 = 多语言页「显示标题」；此处改动不会落盘）
+    // 引用列常驻只读文本框（通用只读单元格控件 AuiCellReadBox）：item 仍是
+    // 数据源（元数据/查询模式 +26 等全在条目上），widget 纯显示——无边框透
+    // 明贴合、单击聚焦背景变色、拖选/双击选词/Ctrl+C 与可编辑输入框一致
+    m_viewTable->setCellWidget(row, UColRef, new AuiCellReadBox(m_viewTable, row, UColRef, ref));
+    // i18n 行标题只读（单一来源 = 多语言页「显示标题」）；新格式联表行标题只读
+    //（单一来源 = 联表页「显示标题」）——此处改动均不会落盘
     auto *titleItem = new QTableWidgetItem(title);
+    const bool titleReadOnly = isI18nRow || isAliasRow;
     if (isI18nRow) {
       titleItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
       titleItem->setToolTip(QStringLiteral("多语言字段标题在「多语言」页的显示标题列配置"));
+    } else if (isAliasRow) {
+      titleItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+      titleItem->setToolTip(QStringLiteral("联表列标题在「联表」页的显示标题列配置"));
     }
     m_viewTable->setItem(row, UColTitle, titleItem);
+    // 只读标题行（i18n / 联表）：与引用列同一通用只读控件——单击整格选中变色、
+    // 双击进入可拖选复制的编辑态（只读 item 在 QSS 下无选中高亮，须挂控件）
+    if (titleReadOnly) {
+      auto *rb = new AuiCellReadBox(m_viewTable, row, UColTitle, title);
+      rb->setTip(titleItem->toolTip());
+      m_viewTable->setCellWidget(row, UColTitle, rb);
+    }
     // 列表勾选
     auto *listItem = new QTableWidgetItem;
     listItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
@@ -1856,6 +2104,17 @@ void JsonTableDesigner::fillViewTable() {
       wItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
       wItem->setToolTip(QStringLiteral("多语言字段不进编辑表单（由 write 页语言 Tab 承接）"));
       m_viewTable->setItem(row, UColWritable, wItem);
+    } else if (isJoinRow) {
+      // 联表行写入列灰显「—」不可点（与输出列「—」视觉一致）：写入是主表列
+      // 能力，联表输出列只读展示、输出内容由「联表」页配置 → 勾选无意义；
+      // 原未勾选复选框可点，误点会把联表别名收进 editCols.writable
+      m_viewTable->setItem(row, UColVisible, makeCheck(showField));
+      auto *wItem = new QTableWidgetItem(QStringLiteral("—"));
+      wItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+      wItem->setTextAlignment(Qt::AlignCenter);
+      wItem->setToolTip(
+          QStringLiteral("联表输出列不进写入参数 InUpd（输出内容由「联表」页配置）"));
+      m_viewTable->setItem(row, UColWritable, wItem);
     } else {
       m_viewTable->setItem(row, UColVisible, makeCheck(showField));
       m_viewTable->setItem(row, UColWritable, makeCheck(writeField));
@@ -1865,21 +2124,27 @@ void JsonTableDesigner::fillViewTable() {
     const bool noOutput = (isJoinRow || isI18nRow) ? false : colHidden.value(ref, false);
     if (isJoinRow || isI18nRow) {
       auto *outItem = new QTableWidgetItem(QStringLiteral("—"));
-      outItem->setFlags(Qt::ItemIsEnabled);
+      outItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
       outItem->setTextAlignment(Qt::AlignCenter);
       outItem->setToolTip(isI18nRow ? QStringLiteral("多语言平铺字段：响应内容由翻译表 i18n 配置控制")
-                                    : QStringLiteral("联表输出列由「联表与索引」的输出列控制"));
+                                    : QStringLiteral("联表输出列由「联表」页的输出字段控制"));
       m_viewTable->setItem(row, UColOutput, outItem);
     } else {
       m_viewTable->setItem(row, UColOutput, makeCheck(!noOutput));
     }
     // 配置列（⚙ 与摘要合成一列，对齐 jsonvue；双击单元格打开设置面板）；
-    // i18n 行无 ⚙ 面板（不进编辑表单），摘要固定为类型徽标；联表行加「🔗」徽标
+    // i18n 行无 ⚙ 面板（不进编辑表单），摘要固定为多语言徽标；联表行加联表
+    // 徽标（自绘同色小图标，见 viewBadgeIcon）
     auto *cfgItem = new QTableWidgetItem(
-        isI18nRow ? QStringLiteral("⚙ 🌐 多语言")
+        isI18nRow ? QStringLiteral("⚙ 多语言")
                   : QStringLiteral("⚙ ") +
-                        (isJoinRow ? QStringLiteral("🔗 联表 · ") : QString()) +
+                        (isJoinRow ? QStringLiteral("联表 · ") : QString()) +
                         viewCfgSummary(selMeta, editMeta, dType, showField, noOutput));
+    if (isI18nRow) {
+      cfgItem->setIcon(viewBadgeIcon(false));
+    } else if (isJoinRow) {
+      cfgItem->setIcon(viewBadgeIcon(true));
+    }
     cfgItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
     m_viewTable->setItem(row, UColCfg, cfgItem);
     // 编辑可编辑/必填槽位（+24/+25；必填在 ⚙ 字段设置面板编辑，联表/i18n 行
@@ -1907,6 +2172,8 @@ void JsonTableDesigner::fillViewTable() {
   for (const auto &sc : m_table.selCols) pushRef(sc.ref);
   for (const auto &c : m_table.columns) pushRef(c.name);
   for (const auto &f : m_table.i18n.fields) pushRef(f.name);
+  // 新格式联表输出别名自动入列（跟随「联表」页的输出字段，不再手动添加）
+  for (const QString &alias : aliasRefs) pushRef(alias);
   for (auto it = selOf.constBegin(); it != selOf.constEnd(); ++it) pushRef(it.key());
   for (auto it = queryOf.constBegin(); it != queryOf.constEnd(); ++it) pushRef(it.key());
   for (const QString &ref : orderedRefs) {
@@ -1914,86 +2181,6 @@ void JsonTableDesigner::fillViewTable() {
     const bool isI18n = i18nLabels.contains(ref);
     appendRow(ref, isJoin, isI18n);
   }
-}
-
-void JsonTableDesigner::appendViewJoinRow(const QString &ref) {
-  // 联表行：列表/查询默认开；编辑列可勾选（= 编辑表单内只读展示，editEditable=false）
-  const int row = m_viewTable->rowCount();
-  m_viewTable->insertRow(row);
-  // 条目存文本（行身份，只读）+ 元数据槽位（与 appendRow 同口径）
-  auto *refItem = new QTableWidgetItem;
-  refItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);  // 行身份标识，只读
-  refItem->setData(Qt::UserRole + 1, 0);          // 列宽
-  refItem->setData(Qt::UserRole + 2, QString());  // 控件类型
-  refItem->setData(Qt::UserRole + 4, QString());  // 展示类型
-  refItem->setData(Qt::UserRole + 5, 0);
-  refItem->setData(Qt::UserRole + 6, 0);
-  refItem->setData(Qt::UserRole + 7, QString());
-  refItem->setData(Qt::UserRole + 8, QString());
-  refItem->setData(Qt::UserRole + 9, 0);
-  refItem->setData(Qt::UserRole + 10, 0);
-  refItem->setData(Qt::UserRole + 11, QString());
-  refItem->setData(Qt::UserRole + 12, QString());
-  refItem->setData(Qt::UserRole + 13, QString());
-  refItem->setData(Qt::UserRole + 14, QString());
-  refItem->setData(Qt::UserRole + 15, QString());
-  refItem->setData(Qt::UserRole + 16, 0);
-  refItem->setData(Qt::UserRole + 17, 0);
-  refItem->setData(Qt::UserRole + 18, 0);
-  refItem->setData(Qt::UserRole + 19, 0);
-  refItem->setData(Qt::UserRole + 20, 0);
-  refItem->setData(Qt::UserRole + 21, QString());
-  refItem->setData(Qt::UserRole + 22, 0);
-  refItem->setData(Qt::UserRole + 23, QString());
-  refItem->setData(Qt::UserRole + 24, 0);  // 联表列只读
-  m_viewTable->setItem(row, UColRef, refItem);
-  // 引用列 = 行身份标识，纯文本不可编辑（与 appendRow 同口径）
-  refItem->setText(ref);
-  m_viewTable->setItem(row, UColTitle, new QTableWidgetItem(ref));
-  auto *listItem = new QTableWidgetItem;
-  listItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
-  listItem->setCheckState(Qt::Checked);
-  listItem->setTextAlignment(Qt::AlignCenter);
-  m_viewTable->setItem(row, UColList, listItem);
-  auto *modeCombo = new AuiCellEditCombo(m_viewTable, UColQuery, queryModePresets(), this, true);
-  modeCombo->setText(queryModeDisplay(QStringLiteral("eq")));  // 缺省精确
-  refItem->setData(Qt::UserRole + 26, QStringLiteral("eq"));
-  modeCombo->valueCommitted = [this, modeCombo] {
-    // 按 widget 实例反查所在行（行交换后行号会变），同步模式值到引用条目 +26
-    for (int i = 0; i < m_viewTable->rowCount(); ++i) {
-      if (m_viewTable->cellWidget(i, UColQuery) == modeCombo) {
-        if (auto *refIt = m_viewTable->item(i, UColRef))
-          refIt->setData(Qt::UserRole + 26, queryModeData(modeCombo->text().trimmed()));
-        break;
-      }
-    }
-    if (!m_loading) emit configChanged();
-  };
-  m_viewTable->setCellWidget(row, UColQuery, modeCombo);
-  auto addViewCheck = [this, row](int col, bool on) {
-    auto *it = new QTableWidgetItem;
-    it->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
-    it->setCheckState(on ? Qt::Checked : Qt::Unchecked);
-    it->setTextAlignment(Qt::AlignCenter);
-    m_viewTable->setItem(row, col, it);
-  };
-  addViewCheck(UColVisible, true);
-  addViewCheck(UColWritable, !ref.contains(QLatin1Char('.')));
-  // 输出列不适用联表行（由「联表与索引」的输出列控制）
-  auto *outItem = new QTableWidgetItem(QStringLiteral("—"));
-  outItem->setFlags(Qt::ItemIsEnabled);
-  outItem->setTextAlignment(Qt::AlignCenter);
-  outItem->setToolTip(QStringLiteral("联表输出列由「联表与索引」的输出列控制"));
-  m_viewTable->setItem(row, UColOutput, outItem);
-  // 配置列（⚙ 与摘要合成一列；联表行为只读展示，摘要显式标注「表单只读」）
-  JsonTableSelCol joinSc;
-  JsonTableEditCol joinEc;
-  joinEc.editEditable = false;
-  auto *cfgItem = new QTableWidgetItem(
-      QStringLiteral("⚙ ") + viewCfgSummary(joinSc, joinEc, QString(), true));
-  cfgItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
-  m_viewTable->setItem(row, UColCfg, cfgItem);
-  m_viewTable->setCurrentCell(row, UColRef);
 }
 
 void JsonTableDesigner::collectViewTable(JsonTableTable *out) const {
@@ -2004,6 +2191,13 @@ void JsonTableDesigner::collectViewTable(JsonTableTable *out) const {
   out->editCols.clear();
   // i18n 平铺字段行：仅进 selCols（列表展示），不进 editCols / 物理列回写
   const bool hasI18n = !m_table.i18n.fields.isEmpty();
+  // 新格式联表输出别名集（联表行标题不固化进 selCols.label，单一来源=联表页）
+  QSet<QString> aliasRefs;
+  for (const auto &js : m_table.joinTables) {
+    for (const auto &c : js.cols) {
+      if (!c.col.isEmpty()) aliasRefs.insert(js.table + QLatin1Char('_') + c.col);
+    }
+  }
   for (int r = 0; r < m_viewTable->rowCount(); ++r) {
     const QString ref = viewRefText(r);
     if (ref.isEmpty()) continue;
@@ -2065,9 +2259,10 @@ void JsonTableDesigner::collectViewTable(JsonTableTable *out) const {
     if (listIt && listIt->checkState() == Qt::Checked) {
       JsonTableSelCol c;
       c.ref = ref;
-      // i18n 行标题不固化进 selCols.label（单一来源 = 多语言页「显示标题」；
-      // 固化会让 selCols.label 恒覆盖 i18n.fields[].label，多语言页改标题失效）
-      if (!isI18nRef && !title.isEmpty() && title != ref) c.label = title;
+      // i18n/联表行标题不固化进 selCols.label（单一来源分别在多语言页/联表页；
+      // 固化会让 selCols.label 恒覆盖页面配置，标题改不动）
+      if (!isI18nRef && !aliasRefs.contains(ref) && !title.isEmpty() && title != ref)
+        c.label = title;
       c.width = widthStr.toInt();
       c.displayType = displayType;
       c.listThumbWidth = listThumbW;
@@ -2268,11 +2463,12 @@ void JsonTableDesigner::refreshViewCfgSummary(int row) {
   auto *cfgIt = m_viewTable->item(row, UColCfg);
   auto *refIt = m_viewTable->item(row, UColRef);
   if (!cfgIt || !refIt) return;
-  // i18n 行摘要恒为类型徽标（无 ⚙ 面板）；任何刷新路径不得覆盖成普通摘要
+  // i18n 行摘要恒为多语言徽标（无 ⚙ 面板）；任何刷新路径不得覆盖成普通摘要
   const QString ref = viewRefText(row);
   for (const auto &f : m_table.i18n.fields) {
     if (f.name == ref) {
-      cfgIt->setText(QStringLiteral("⚙ 🌐 多语言"));
+      cfgIt->setText(QStringLiteral("⚙ 多语言"));
+      cfgIt->setIcon(viewBadgeIcon(false));
       return;
     }
   }
@@ -2289,15 +2485,16 @@ void JsonTableDesigner::refreshViewCfgSummary(int row) {
   const QTableWidgetItem *outIt = m_viewTable->item(row, UColOutput);
   const bool noOutput = outIt && outIt->flags().testFlag(Qt::ItemIsUserCheckable) &&
                         outIt->checkState() != Qt::Checked;
-  // 联表行摘要加「🔗 联表」徽标（与 appendRow 首次填充保持一致；i18n 行
-  // 摘要固定「⚙ 🌐 多语言」且 ⚙ 面板不可开，不会走到本函数）。联表行判定 =
+  // 联表行摘要加「联表」徽标（与 appendRow 首次填充保持一致；i18n 行
+  // 摘要固定「⚙ 多语言」且 ⚙ 面板不可开，不会走到本函数）。联表行判定 =
   // 输出格灰显「—」（无 UserCheckable），覆盖旧格式 pro.col 与新格式别名两类
   QString prefix;
   if (outIt && !outIt->flags().testFlag(Qt::ItemIsUserCheckable)) {
-    prefix = QStringLiteral("🔗 联表 · ");
+    prefix = QStringLiteral("联表 · ");
   }
   cfgIt->setText(QStringLiteral("⚙ ") + prefix +
                  viewCfgSummary(sc, ec, domainType, inForm, noOutput));
+  cfgIt->setIcon(prefix.isEmpty() ? QIcon() : viewBadgeIcon(true));
 }
 // ════════════════════════════════════════════════════════════
 //  表级进阶键：查询配置 / 排序 / 表内枚举 / i18n
@@ -2333,8 +2530,8 @@ void JsonTableDesigner::updateAppOutBtn() {
                               : m_appOutCols.join(QStringLiteral(", "));
   m_appOutBtn->setToolTip(QStringLiteral(
       "C 端出参白名单：勾选后生成 out_<表>_.go，只输出所选列\n"
+      "支持主表列、联表输出列（表名_列名）、多语言字段\n"
       "留空 = 直接返回完整实体（「输出」未勾选的列始终不出现）\n"
-      "只对主表字段生效，联表输出列暂不支持\n"
       "当前：%1").arg(current));
 }
 
@@ -2345,8 +2542,9 @@ void JsonTableDesigner::editAppOutCols() {
       &dlg, QStringLiteral("C端出参白名单 - %1").arg(m_nameEdit->text().trimmed()));
 
   auto *tip = new QLabel(
-      QStringLiteral("勾选 C 端接口（App / 小程序等客户端）允许输出的列（只支持主表字段）；"
-                     "留空 = 返回完整实体。标记「不输出」的列不在此列出（生成时也不会输出）。"),
+      QStringLiteral("勾选 C 端接口（App / 小程序等客户端）允许输出的列：主表列、"
+                     "联表输出列（表名_列名）、多语言字段均可勾选；"
+                     "留空 = 返回完整实体。标记「不输出」的主表列不在此列出。"),
       &dlg);
   tip->setWordWrap(true);
   frame.contentLayout->addWidget(tip);
@@ -2367,34 +2565,97 @@ void JsonTableDesigner::editAppOutCols() {
        {QStringLiteral("列名"), QHeaderView::ResizeToContents, 0},
        {QStringLiteral("注释"), QHeaderView::Stretch, 0}},
       &dlg, 200);
-  table->setSelectionMode(QAbstractItemView::NoSelection);
+  // 允许选中（只读列挂 AuiCellReadBox：单击整格选中变色、双击可拖选复制）；
+  // 表格本身禁止编辑，勾选列点击切换不受影响
+  table->setSelectionMode(QAbstractItemView::SingleSelection);
   table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-  QSet<QString> hiddenCols;  // 「输出」未勾选的列：白名单不列出（生成侧也会过滤）
-  for (int r = 0; r < m_viewTable->rowCount(); ++r) {
-    const QString ref = viewRefText(r);
-    if (ref.isEmpty() || ref.contains(QLatin1Char('.'))) continue;
-    const QTableWidgetItem *outIt = m_viewTable->item(r, UColOutput);
-    if (outIt && outIt->flags().testFlag(Qt::ItemIsUserCheckable) &&
-        outIt->checkState() != Qt::Checked) {
-      hiddenCols.insert(ref);
-    }
-  }
-  for (int r = 0; r < m_colsTable->rowCount(); ++r) {
-    const QString name = cellText(r, ColColName);
-    if (name.isEmpty() || hiddenCols.contains(name)) continue;
+
+  // 勾选行（列名 + 灰显注释；legacyChecked = 旧配置迁移预勾；badge = 注释列
+  // 类型图标，联表链条 / 多语言地球同色）。联表/多语言行在注释列行内标记类型
+  // （不对齐分组标题行，保持单一列表心智）
+  auto appendCheckRow = [this, table](const QString &name, const QString &comment,
+                                      bool legacyChecked, const QIcon &badge) {
     const int row = table->rowCount();
     table->insertRow(row);
     auto *check = new QTableWidgetItem;
     check->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
-    check->setCheckState(m_appOutCols.contains(name) ? Qt::Checked : Qt::Unchecked);
+    check->setCheckState(m_appOutCols.contains(name) || legacyChecked ? Qt::Checked
+                                                                      : Qt::Unchecked);
     table->setItem(row, 0, check);
     auto *nameItem = new QTableWidgetItem(name);
-    nameItem->setFlags(Qt::ItemIsEnabled);
+    nameItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
     table->setItem(row, 1, nameItem);
-    auto *commentItem = new QTableWidgetItem(cellText(r, ColColComment));
-    commentItem->setFlags(Qt::ItemIsEnabled);
+    // 列名为只读文本：挂只读控件（单击整格选中变色、双击可拖选复制）
+    table->setCellWidget(row, 1, new AuiCellReadBox(table, row, 1, name));
+    auto *commentItem = new QTableWidgetItem(comment);
+    commentItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
     commentItem->setForeground(QBrush(QColor(0x80, 0x80, 0x80)));
+    commentItem->setIcon(badge);  // 空图标 = 主表列（无类型徽标）
     table->setItem(row, 2, commentItem);
+  };
+
+  // 按字段呈现行序构建白名单列表（用户在字段呈现页调整的行序 = 保存后的
+  // appOutCols 顺序 = 生成端出参 JSON 字段顺序，三者一致）；行类型按 ref
+  // 命中集合判定：主表列 / 联表输出别名 / i18n 平铺字段
+  QSet<QString> hiddenCols;  // 主表行「输出」未勾：白名单不列出（生成侧也会过滤）
+  for (int r = 0; r < m_viewTable->rowCount(); ++r) {
+    const QTableWidgetItem *outIt = m_viewTable->item(r, UColOutput);
+    if (outIt && outIt->flags().testFlag(Qt::ItemIsUserCheckable) &&
+        outIt->checkState() != Qt::Checked) {
+      hiddenCols.insert(viewRefText(r));
+    }
+  }
+  QSet<QString> colNames;  // 主表列名（字段页）
+  for (int r = 0; r < m_colsTable->rowCount(); ++r) {
+    const QString n = cellText(r, ColColName);
+    if (!n.isEmpty()) colNames.insert(n);
+  }
+  QHash<QString, QString> aliasCmt;  // 联表别名 → 标记注释（标题链：联表页标题 >
+                                     // 目标列注释缓存 > 别名）
+  for (const auto &js : m_joinDrafts) {
+    for (const auto &jc : js.cols) {
+      if (jc.col.isEmpty() || js.table.isEmpty()) continue;
+      const QString alias = js.table + QLatin1Char('_') + jc.col;
+      QString cmt = jc.label;
+      if (cmt.isEmpty()) cmt = m_aliasComments.value(alias);
+      if (cmt.isEmpty()) cmt = alias;
+      aliasCmt.insert(alias, QStringLiteral("联表 · %1 · %2").arg(js.table, cmt));
+    }
+  }
+  // i18n 字段名在多语言页第 0 列的下拉控件里（item 文本为空），不能直接读
+  // item；取控件文本，回退 item 文本
+  auto i18nFieldName = [this](int row) -> QString {
+    if (auto *combo = dynamic_cast<AuiCellEditCombo *>(m_i18nFieldTable->cellWidget(row, 0))) {
+      return combo->text().trimmed();
+    }
+    return cellOf(m_i18nFieldTable, row, 0);
+  };
+  QHash<QString, QString> i18nCmt;  // i18n 字段名 → 标记注释
+  for (int r = 0; r < m_i18nFieldTable->rowCount(); ++r) {
+    const QString n = i18nFieldName(r);
+    if (n.isEmpty()) continue;
+    i18nCmt.insert(n, QStringLiteral("多语言 · %1").arg(cellOf(m_i18nFieldTable, r, 1)));
+  }
+  // i18n 旧配置迁移：白名单非空但不含任何 i18n 字段名 = 旧配置（生成端自动
+  // 全量追加）→ 打开时预勾，确定后落盘完成迁移
+  bool i18nLegacyAll = !m_appOutCols.isEmpty();
+  for (int r = 0; r < m_i18nFieldTable->rowCount() && i18nLegacyAll; ++r) {
+    const QString n = i18nFieldName(r);
+    if (!n.isEmpty() && m_appOutCols.contains(n)) i18nLegacyAll = false;
+  }
+  for (int r = 0; r < m_viewTable->rowCount(); ++r) {
+    const QString ref = viewRefText(r);
+    if (ref.isEmpty()) continue;
+    if (colNames.contains(ref)) {
+      if (hiddenCols.contains(ref)) continue;
+      // 注释列显示字段呈现页的标题（注意不能用 cellText——它固定读字段
+      // 表格，会取到 MySQL 类型列的 int/varchar 之类）
+      appendCheckRow(ref, cellOf(m_viewTable, r, UColTitle), false, QIcon());
+    } else if (aliasCmt.contains(ref)) {
+      appendCheckRow(ref, aliasCmt.value(ref), false, viewBadgeIcon(true));
+    } else if (i18nCmt.contains(ref)) {
+      appendCheckRow(ref, i18nCmt.value(ref), i18nLegacyAll, viewBadgeIcon(false));
+    }
   }
   frame.contentLayout->addWidget(table, 1);
 
@@ -2617,11 +2878,10 @@ void JsonTableDesigner::onRemoveButton() {
 }
 
 void JsonTableDesigner::syncEnumDrafts() {
-  // 主表编辑内容 → m_enums（列名/说明直接读表格条目）
+  // 主表编辑内容 → m_enums（枚举列从常驻下拉控件读，说明读表格条目）
   for (int r = 0; r < m_enumTable->rowCount() && r < m_enums.size(); ++r) {
-    const QTableWidgetItem *colIt = m_enumTable->item(r, 0);
+    m_enums[r].column = cellWidgetText(m_enumTable, r, 0);
     const QTableWidgetItem *cmtIt = m_enumTable->item(r, 1);
-    if (colIt) m_enums[r].column = colIt->text().trimmed();
     if (cmtIt) m_enums[r].comment = cmtIt->text().trimmed();
   }
   // 选项表格 → 当前行
@@ -2636,10 +2896,31 @@ void JsonTableDesigner::rebuildEnumMaster() {
   for (const auto &e : m_enums) {
     const int row = m_enumTable->rowCount();
     m_enumTable->insertRow(row);
-    m_enumTable->setItem(row, 0, new QTableWidgetItem(e.column));
+    // 枚举列：常驻可编辑下拉（候选=字段列名，与联表页同一控件族——单击整格
+    // 选中变色、双击进编辑态可输入/拖选复制、点箭头展开候选；旧 item+委托
+    // 在双击编辑器下会重影且无法选中复制）
+    auto *colCombo = new AuiCellEditCombo(m_enumTable, 0, QStringList(), this);
+    colCombo->setText(e.column);
+    colCombo->valueCommitted = [this] {
+      if (!m_loading) emit configChanged();
+    };
+    connect(colCombo->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &) {
+      if (!m_loading) emit configChanged();
+    });
+    m_enumTable->setCellWidget(row, 0, colCombo);
     m_enumTable->setItem(row, 1, new QTableWidgetItem(e.comment));
   }
   m_enumSyncing = false;
+  // 候选 = 字段表格列名
+  QStringList names;
+  for (int r = 0; r < m_colsTable->rowCount(); ++r) {
+    const QString n = cellText(r, ColColName);
+    if (!n.isEmpty()) names.append(n);
+  }
+  for (int r = 0; r < m_enumTable->rowCount(); ++r) {
+    if (auto *c = dynamic_cast<AuiCellEditCombo *>(m_enumTable->cellWidget(r, 0)))
+      c->setPresets(names);
+  }
 }
 
 void JsonTableDesigner::fillEnumOptions(int row) {
@@ -2707,9 +2988,8 @@ QVector<JsonTableEnum> JsonTableDesigner::collectEnums() const {
   QVector<JsonTableEnum> out = m_enums;
   // 主表编辑内容 → out；当前行选项表格内容 → out（const 下按值修正副本）
   for (int r = 0; r < m_enumTable->rowCount() && r < out.size(); ++r) {
-    const QTableWidgetItem *colIt = m_enumTable->item(r, 0);
+    out[r].column = cellWidgetText(m_enumTable, r, 0);
     const QTableWidgetItem *cmtIt = m_enumTable->item(r, 1);
-    if (colIt) out[r].column = colIt->text().trimmed();
     if (cmtIt) out[r].comment = cmtIt->text().trimmed();
   }
   if (m_enumCurRow >= 0 && m_enumCurRow < out.size()) {
@@ -2777,9 +3057,12 @@ void JsonTableDesigner::refreshColumnCandidates() {
       break;
     }
   }
-  if (m_enumColDelegate) static_cast<EditableComboDelegate *>(m_enumColDelegate)->setOptions(names);
-  if (m_joinMainColDelegate)
-    static_cast<EditableComboDelegate *>(m_joinMainColDelegate)->setOptions(names);
+  // 枚举列 / 联表 ON 候选走常驻下拉控件（遍历行设置预设）
+  for (int r = 0; r < m_enumTable->rowCount(); ++r) {
+    if (auto *c = dynamic_cast<AuiCellEditCombo *>(m_enumTable->cellWidget(r, 0)))
+      c->setPresets(names);
+  }
+  refreshJoinCandidates();
   // 字段呈现「字段引用」列 = 行身份标识（纯文本只读，见 appendRow），无候选；
   // 排序候选也不含 i18n 字段——翻译文本跨表排序第一版不支持
   setSortOptions(refCands);

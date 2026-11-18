@@ -717,11 +717,14 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
   // 优先，否则自动继承目标表内枚举（方案 3，零配置））
   for (ar in selAliasRefs) {
     let am: Object = aliasMeta != null ? aliasMeta[ar] : null;
+    // 标题链：联表页显示标题（am.title，单一来源）> selCols.label（手写配置）
+    // > 目标列注释 > 别名
     let label2: String = selLabelOf[ar];
+    if (am != null && am["title"] != null && am["title"] != "") {
+      label2 = am["title"];
+    }
     if (label2 == null || label2 == "") {
-      if (am != null && am["title"] != null && am["title"] != "") {
-        label2 = am["title"];
-      } else if (am != null && am["comment"] != null && am["comment"] != "") {
+      if (am != null && am["comment"] != null && am["comment"] != "") {
         label2 = am["comment"];
       } else {
         label2 = ar;
@@ -1361,13 +1364,14 @@ export function generateAdminMain(params: Object): Void {
         if (cn == null || cn == "") { continue; }
         let cm: String = "";
         let mt: String = "";
-        let tt: String = "";
+        // 联表页显示标题（单一来源；空 = 回退目标列注释/列名）
+        let tt: String = cs["label"];
         let tCols2: Object[] = target2["columns"];
         for (tcol2 in tCols2) {
           if (tcol2["name"] == cn) {
             cm = tcol2["comment"];
             mt = tcol2["mysqlType"];
-            tt = tcol2["title"];
+            if (tt == null || tt == "") { tt = tcol2["title"]; }
             break;
           }
         }

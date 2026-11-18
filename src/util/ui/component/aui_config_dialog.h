@@ -89,6 +89,8 @@ struct ConfigTableColumn {
  *   - 默认隐藏行号、按列规格设置列头 / resize 模式 / 固定宽度
  *   - 统一最小/最大高度与行选择行为（默认 SelectItems，保持 Qt 原生语义）
  *   - 纯复选框单元格（无文本有勾选态）的勾选框自动居中（绘制与点击命中）
+ *   - 统一 Ctrl+C 复制：选中单元格按行列组织为 TSV 进剪贴板（只读条目
+ *     保留 ItemIsSelectable 即可选中变色后复制，与可编辑单元格操作一致）
  * 特殊行为（事件过滤器、NoEditTriggers 等）由调用方在返回后自行设置。
  */
 QTableWidget *makeConfigTable(

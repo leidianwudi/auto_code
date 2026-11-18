@@ -116,17 +116,29 @@ private:
   /// 读取字段呈现表某行的字段引用（优先下拉当前文本）
   QString viewRefText(int row) const;
   // ── 表级进阶键：联表查询声明（joinTables 新格式）──
-  /// 用联表查询定义全量重建关联表格
+  /// 用联表查询定义全量重建关联表格（声明表格 + 选中行的输出字段表格）
   void fillJoins(const QVector<JsonTableJoinSpec> &joins);
-  /// 追加一行空联表声明
+  /// 追加一行空联表声明（同步 m_joinDrafts）
   void appendJoinRow();
-  /// 从表格收集全部联表声明（跳过全空行）
+  /// 从表格收集全部联表声明（跳过全空行；输出列来自 m_joinDrafts）
   QVector<JsonTableJoinSpec> collectJoins() const;
+  /// 把字段呈现表格当前内容写回 m_joinDrafts[声明行].cols（行切换/收集前调用）
+  void syncJoinColsToDraft(int row) const;
+  /// 用 m_joinDrafts[声明行].cols 重建输出字段表格（主从联动，对齐表内枚举模式）
+  void fillJoinCols(int row);
+  /// 追加一行输出字段（字段名常驻下拉 + 显示标题文本）
+  void appendJoinColRow(const QString &col, const QString &label);
+  /// 从输出字段表格收集当前声明行的输出列（跳过字段名为空的行）
+  QVector<JsonTableJoinCol> collectJoinCols() const;
+  /// 被联表输出列候选（目标表列名；跨文件项目表，空表名/未知表返回空）
+  QStringList joinTargetCandidates(const QString &table) const;
+  /// 刷新联表声明表格候选（联表表=项目表名；主表列=本表列名；联表列=目标表列名）
+  void refreshJoinCandidates();
+  /// 刷新单行「联表列」候选（联表表变化/行交换后，目标表列名）
+  void refreshJoinRowCandidates(int row);
   // ── 字段呈现（统一表格：一行 = 一个字段，列表/查询/编辑三视图合一）──
-  /// 用三视图配置全量重建统一字段表格（物理列 + 联表 ref 行）
+  /// 用三视图配置全量重建统一字段表格（物理列 + 联表 ref 行 + i18n 平铺字段行）
   void fillViewTable();
-  /// 追加一行联表列（ref 形如 引用名.目标列）
-  void appendViewJoinRow(const QString &ref);
   /// 收集统一表格 → 三视图结构（写回 out 的 selCols/eq/like/gap/editCols）
   void collectViewTable(JsonTableTable *out) const;
   /// 按行槽位与「表单展示」勾选重建配置摘要（⚙ 列）
@@ -238,6 +250,13 @@ private:
   // ── 表级进阶键 ──
   QTableWidget *m_sortTable = nullptr;        ///< 默认排序表格（列名 + 方向）
   QTableWidget *m_joinTable = nullptr;        ///< 联表声明表格（joinTable）
+  QTableWidget *m_joinColTable = nullptr;     ///< 选中联表声明的输出字段表（字段 + 标题 + 筛选）
+  QPushButton *m_joinColAddBtn = nullptr;     ///< + 加字段（联表输出字段表）
+  QPushButton *m_joinColDelBtn = nullptr;     ///< - 删字段（联表输出字段表）
+  /// 联表声明编辑态（主从联动数据侧，对齐 m_enums）；mutable——collect 链为 const，
+  /// 收集前需同步字段表格内容到 draft
+  mutable QVector<JsonTableJoinSpec> m_joinDrafts;
+  int m_joinCurRow = -1;                      ///< 当前编辑的联表声明行（-1=无）
   QTableWidget *m_viewTable = nullptr;        ///< 字段呈现统一表格（一行=一字段，三视图合一）
   QHeaderView *m_viewHeader = nullptr;        ///< 字段呈现表水平表头
   QHash<int, QString> m_headerTips;           ///< 功能列表头问号提示（列索引 → 文案，问号并入标题）
@@ -253,18 +272,20 @@ private:
   QTableWidget *m_i18nFieldTable = nullptr;   ///< 多语言字段表（列1=字段名常驻下拉，候选=翻译表列；列2=自定义标题，空=回退链）
   QPushButton *m_i18nFieldAddBtn = nullptr;   ///< + 加字段
   QPushButton *m_i18nFieldDelBtn = nullptr;   ///< - 删字段
-  // ── 列名候选联动（补全器/委托实例在 cpp 内具体类型，成员存基类指针）──
+  // ── 列名候选联动（补全器实例在 cpp 内具体类型，成员存基类指针）──
   QCompleter *m_globalEnumCompleter = nullptr;    ///< 全局枚举列补全（候选=字段列名）
   QStringList m_i18nFieldOptions;                 ///< 多语言字段候选（翻译表列名，随翻译表名切换）
-  QStyledItemDelegate *m_enumColDelegate = nullptr;   ///< 枚举列下拉委托（预设=字段列名）
-  QStyledItemDelegate *m_joinMainColDelegate = nullptr;  ///< 联表 on[0] 主表列下拉（候选=字段列名）
-  QStyledItemDelegate *m_joinTableDelegate = nullptr;    ///< 联表被联表下拉（候选=项目表名）
   QStringList m_viewBaselineOrder;    ///< 回填时的字段呈现行序（判断用户是否移动过行）
+  QHash<QString, QString> m_aliasComments;  ///< 联表输出别名 → 目标列注释（fillViewTable
+                                            ///< 回填缓存；联表页标题编辑联动回退用）
   QStringList m_sortColOptions;       ///< 排序列候选（字段列+联表 ref）
   QLabel *m_validateLabel = nullptr;  ///< 交叉校验状态行（随编辑被动刷新）
   QVector<JsonTableEnum> m_enums;     ///< 表内枚举编辑态（主从表联动的数据侧）
   int m_enumCurRow = -1;              ///< 当前编辑的枚举行（-1=无）
   bool m_enumSyncing = false;         ///< 主从表联动中（防 currentCellChange 递归）
+  bool m_joinColRebuilding = false;   ///< 联表输出字段表格程序性重建中（fillJoinCols）：
+                                      ///< onChange 接线挂在 model 层，表格 blockSignals
+                                      ///< 挡不住，须由此标记抑制重建窗口内的 collect 回写
   bool m_dbBusy = false;              ///< 单个面板同一时刻只运行一个数据库任务
   quint64 m_revision = 0;             ///< 过期快照不得覆盖后续用户修改
   QPushButton *m_executeBtn = nullptr;

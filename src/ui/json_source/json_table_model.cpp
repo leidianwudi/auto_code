@@ -156,6 +156,8 @@ QJsonObject JsonTableJoinCol::toJsonObject() const {
   obj[QString::fromLatin1(JsonTableKey::kJoinSpecCol)] = col;
   // filter 空（只输出）不落键
   if (!filter.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kJoinSpecFilter)] = filter;
+  // label 空（回退目标列注释/列名）不落键
+  if (!label.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kLabel)] = label;
   return obj;
 }
 
@@ -163,11 +165,12 @@ JsonTableJoinCol JsonTableJoinCol::fromJsonObject(const QJsonObject &obj) {
   JsonTableJoinCol c;
   c.col = obj.value(QString::fromLatin1(JsonTableKey::kJoinSpecCol)).toString();
   c.filter = obj.value(QString::fromLatin1(JsonTableKey::kJoinSpecFilter)).toString();
+  c.label = obj.value(QString::fromLatin1(JsonTableKey::kLabel)).toString();
   return c;
 }
 
 bool JsonTableJoinCol::operator==(const JsonTableJoinCol &other) const {
-  return col == other.col && filter == other.filter;
+  return col == other.col && filter == other.filter && label == other.label;
 }
 
 QJsonObject JsonTableJoinSpec::toJsonObject() const {

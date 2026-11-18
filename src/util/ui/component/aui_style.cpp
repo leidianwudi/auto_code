@@ -168,6 +168,13 @@ QString AuiStyle::mainStyleSheet() {
              "QRadioButton:disabled { color: %8; }"
              "QTableWidget, QTreeWidget, QListWidget, QListView, QTreeView, QTableView { color: "
              "%2; }"
+             // 全局 QSS 生效后 item:selected 的原生高亮绘制不可靠（典型表现：
+             // 单击只读单元格能选中但不显示高亮，复制前无视觉反馈）——显式声明
+             // 选中背景/前景，用列表选中强调色（与输入框聚焦色同源，主题自适应）
+             "QTableWidget::item:selected, QTableView::item:selected, "
+             "QTreeView::item:selected, QTreeWidget::item:selected, "
+             "QListView::item:selected, QListWidget::item:selected "
+             "{ background: %9; color: %2; }"
              "QHeaderView::section { color: %2; }"
              "QMenuBar { color: %2; }"
              "QMenuBar::item { color: %2; }"
@@ -201,7 +208,8 @@ QString AuiStyle::mainStyleSheet() {
              "}")
       .arg(background().name(), textColor().name(), hoverBackground().name(),
            borderDarkColor().name(), borderColor().name(), panelBackground().name(),
-           titleBarBackground().name(), mutedTextColor().name());
+           titleBarBackground().name(), mutedTextColor().name(),
+           listSelectionBackground().name());
 }
 
 QString AuiStyle::dialogStyleSheet() {
@@ -236,6 +244,20 @@ QString AuiStyle::inputBoxStyleSheet(const QString &selector) {
                         "%1:focus { border-color: %5; }")
       .arg(selector, editorBackground().name(), textColor().name(), borderColor().name(),
            listSelectionBackground().name());
+}
+
+QString AuiStyle::readBoxStyleSheet(const QString &selector) {
+  // 表格只读文本单元格（AuiCellReadBox）共用：无边框透明贴合（item 文字与
+  // 表格行背景/选中高亮透出，与下拉框列「整格蓝」一致）。不设 font-size
+  // （继承表格字体，与 item 文字一致）；编辑态白底由控件自绘（paintEvent），
+  // 不依赖 QSS :focus 伪状态（项目多次验证 background-color 不绘制）
+  return QStringLiteral("%1 {"
+                        "  background: transparent;"
+                        "  color: %2;"
+                        "  border: none;"
+                        "  padding: 0px 2px;"
+                        "}")
+      .arg(selector, textColor().name());
 }
 
 QString AuiStyle::menuButtonStyleSheet() {

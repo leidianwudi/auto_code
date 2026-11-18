@@ -248,6 +248,7 @@ struct JsonTableJoin {
 struct JsonTableJoinCol {
   QString col;     ///< 联表输出列名（∈ 被联表列）
   QString filter;  ///< 筛选：like=模糊 / eq=精确 / ""=只输出不筛
+  QString label;   ///< 显示标题（空 = 生成侧回退目标列注释/列名；单一来源=联表页）
 
   QJsonObject toJsonObject() const;
   static JsonTableJoinCol fromJsonObject(const QJsonObject &obj);

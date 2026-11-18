@@ -219,6 +219,8 @@ add_library(ac_ui STATIC
     src/util/ui/component/aui_combo_box.cpp
     src/util/ui/component/aui_cell_edit_combo.h
     src/util/ui/component/aui_cell_edit_combo.cpp
+    src/util/ui/component/aui_cell_read_box.h
+    src/util/ui/component/aui_cell_read_box.cpp
     src/util/ui/component/aui_required_label.h
     src/util/ui/component/aui_splitter.h
     src/util/ui/component/aui_splitter.cpp
