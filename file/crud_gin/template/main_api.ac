@@ -357,7 +357,7 @@ export function generateApiMain(params: Object): Number {
 
   // 公共转换由框架维护；生成器只输出表相关元数据，不覆盖公共业务架构文件。
   if (!fileExists(goBasePath + "/common/db/unique_error.go")) {
-    printError("错误：缺少公共唯一索引错误处理 common/db/unique_error.go，请先接入框架公共层（见 docs/go_unique_errors.md）");
+    printError("错误：缺少公共唯一索引错误处理 common/db/unique_error.go，请从现有 Go 框架接入该文件，并在 WrapErr/FailErr 中接入唯一索引错误转换");
     return 0;
   }
 
