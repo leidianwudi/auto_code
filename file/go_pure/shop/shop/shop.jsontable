@@ -208,6 +208,7 @@
       {
         label: '是否启用',
         ref: 'enable',
+        widget: 'boolean',
       },
       {
         label: '主键',

@@ -2157,6 +2157,11 @@ void JsonTableDesigner::fillViewTable() {
                      (isJoinRow || isI18nRow)
                          ? 0
                          : (editOf.contains(ref) ? (editOf.value(ref).required ? 1 : 0) : 0));
+    // 列表开关（+26；与编辑控件解耦，联表/i18n 行只读）
+    refItem->setData(Qt::UserRole + 26,
+                     (isJoinRow || isI18nRow)
+                         ? 0
+                         : (editOf.contains(ref) ? (editOf.value(ref).switchEditable ? 1 : 0) : 0));
   };
 
   // 行序 = 上次保存的字段呈现行序 > selCols 顺序 > columns 顺序 > i18n 字段；
@@ -2304,6 +2309,11 @@ void JsonTableDesigner::collectViewTable(JsonTableTable *out) const {
     bool requiredField = false;
     if (const QTableWidgetItem *refIt = m_viewTable->item(r, UColRef))
       requiredField = refIt->data(Qt::UserRole + 25).toInt() != 0;
+    // 列表开关槽位（+26）：列表渲染 0/1 开关，与编辑控件解耦
+    bool switchField = false;
+    if (const QTableWidgetItem *refIt = m_viewTable->item(r, UColRef))
+      switchField = refIt->data(Qt::UserRole + 26).toInt() != 0;
+    if (isJoinRef) switchField = false;
     // 方案 B：editCols 覆盖所有字段（默认 visible/writable/editEditable=true），
     // 由「展示/写入」勾选与 ⚙ 配置显式表达每个字段状态；不再用“是否列出”做白名单。
     // i18n 平铺字段行不进 editCols（不进编辑表单，语言 Tab 承接；否则触发
@@ -2333,6 +2343,7 @@ void JsonTableDesigner::collectViewTable(JsonTableTable *out) const {
       ec.formSpan = formSpan;
       ec.formDefaultValue = formDefaultValue;
       ec.required = requiredField;
+      ec.switchEditable = switchField;
       out->editCols.append(ec);
     }
     // 列级取值域暂存 → 回写物理列定义（联表/i18n 行无域；域随列存储）
@@ -2399,6 +2410,7 @@ void JsonTableDesigner::openViewFieldConfig(int row) {
   ec.widget = refIt->data(Qt::UserRole + 2).toString();
   ec.editEditable = refIt->data(Qt::UserRole + 24).toInt() != 0;
   ec.required = refIt->data(Qt::UserRole + 25).toInt() != 0;
+  ec.switchEditable = refIt->data(Qt::UserRole + 26).toInt() != 0;
   ec.uploadSourceFile = refIt->data(Qt::UserRole + 7).toString();
   ec.uploadSourceId = refIt->data(Qt::UserRole + 8).toString();
   ec.editThumbWidth = refIt->data(Qt::UserRole + 9).toInt();
@@ -2449,6 +2461,7 @@ void JsonTableDesigner::openViewFieldConfig(int row) {
   refIt->setData(Qt::UserRole + 23, ec.formDefaultValue);
   refIt->setData(Qt::UserRole + 24, ec.editEditable ? 1 : 0);
   refIt->setData(Qt::UserRole + 25, ec.required ? 1 : 0);
+  refIt->setData(Qt::UserRole + 26, ec.switchEditable ? 1 : 0);
   refIt->setData(Qt::UserRole + 11, dlg.domainType());
   refIt->setData(Qt::UserRole + 12, dlg.domainSourceFile());
   refIt->setData(Qt::UserRole + 13, dlg.domainSourceId());

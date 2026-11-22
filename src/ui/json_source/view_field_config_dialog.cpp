@@ -171,6 +171,13 @@ void ViewFieldConfigDialog::setupUI() {
   connect(m_displayTypeCombo, &QComboBox::activated, this,
           [this](int) { updateListRows(); });
 
+  // 列表开关：与编辑控件解耦（如 int 列编辑用数字、列表用 0/1 开关）
+  m_listSwitchCheck = new QCheckBox(QStringLiteral("列表页可直接切换（0/1 开关）"), this);
+  m_listSwitchCheck->setToolTip(
+      QStringLiteral("勾选后列表该列渲染为可点击开关，编辑表单控件不受影响；联表列只读不可配置"));
+  m_listSwitchCheck->setEnabled(!m_isJoinRow);
+  form->addRow(QStringLiteral("列表开关:"), m_listSwitchCheck);
+
   m_widthCombo = createNumericCombo(this, {60, 80, 100, 120, 150, 180, 220}, 0);
   m_widthCombo->setEditable(true);
   m_widthCombo->lineEdit()->setPlaceholderText(QStringLiteral("空 = 自适应"));
@@ -367,6 +374,7 @@ void ViewFieldConfigDialog::setCurrent(const JsonTableSelCol &sc, const JsonTabl
   m_editEditableCheck->setChecked(ec.editEditable);
   m_requiredCheck->setChecked(ec.required);
   comboSelectData(m_displayTypeCombo, sc.displayType);
+  if (m_listSwitchCheck) m_listSwitchCheck->setChecked(ec.switchEditable);
   m_listThumbW->setValue(sc.listThumbWidth);
   m_listThumbH->setValue(sc.listThumbHeight);
   if (m_uploadSourceCombo) {
@@ -565,6 +573,7 @@ void ViewFieldConfigDialog::fillEditResult(JsonTableEditCol *ec) const {
   if (m_widgetCombo) ec->widget = m_widgetCombo->currentData().toString();
   ec->editEditable = m_editEditableCheck ? m_editEditableCheck->isChecked() : true;
   ec->required = m_requiredCheck ? m_requiredCheck->isChecked() : false;
+  ec->switchEditable = m_listSwitchCheck ? m_listSwitchCheck->isChecked() : false;
   if (m_placeholderEdit) ec->placeholder = m_placeholderEdit->text().trimmed();
   ec->maxlength = m_maxlengthSpin ? m_maxlengthSpin->value() : 0;
   ec->textareaRows = m_textareaRowsSpin ? m_textareaRowsSpin->value() : 0;

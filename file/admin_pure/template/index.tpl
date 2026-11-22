@@ -25,8 +25,8 @@ import { reactive, ref, unref } from "vue";
 ${if useListTable}
 import ReListTable from "@/components/ReListTable";
 ${/if}
-${if useErpEnableSwitch}
-import EnableSwitch from "@/components/erp/enable_switch.vue";
+${if useEnableSwitch}
+import EnableSwitch from "@/components/ac/enable_switch.vue";
 ${/if}
 import { message } from "@/utils/message";
 import { hasPerms } from "@/utils/auth";
@@ -397,7 +397,7 @@ ${/if}
 ${each col in columns}${if col.queryVisible}${if col.isBooleanSwitch}
         <el-table-column label="${col.label}"${if col.hasColumnWidth} width="${col.columnWidth}"${/if}${if col.hasColumnFixed} fixed="${col.columnFixed}"${/if}>
           <template #default="{ row }">
-${if useErpEnableSwitch}            <EnableSwitch
+${if useEnableSwitch}            <EnableSwitch
               table="${pageName}"
               field="${col.dataName}"
               :row="row"

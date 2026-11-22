@@ -41,7 +41,7 @@ import { QueryData, SelFieldDef } from "./core/query_data.ac";
 import { uniqueIndexBlock } from "./core/unique_errors.ac";
 import { snakeToPascal, snakeToCamel, isNumericStr } from "../../tool/tool_str.ac";
 import { findGlobalEnumFiles, mergeGlobalEnumFiles } from "../../tool/tool_global_enum.ac";
-import { dirnameOf, findProjPath, relDirUnder } from "../../tool/tool_jsontable.ac";
+import { dirnameOf, findProjPath, relDirUnder, collectTablePaths } from "../../tool/tool_jsontable.ac";
 
 /// @brief 模板配置（一个模板对应一个生成的代码文件）
 class TemplateConfig {
@@ -82,7 +82,8 @@ export function generateApiMain(params: Object): Number {
   // ── 1. .jsontable 配置文件收集 ─────────────────────────────────────
   //      优先级：params.jsonTablePaths（文件数组，与前端链对称）
   //            > params.jsonTablePath（单文件）
-  //            > 收集 tree.config 勾选文件中的 .jsontable（限定本项目目录）
+  //            > collectTablePaths 扫项目根勾选文件（含多语言基础表惯例）
+  //      收集实现唯一在 tool_jsontable.ac：入口脚本不再重复这段样板
   let jsonFiles: String[] = [];
   let jtpArr: String[] = params["jsonTablePaths"];
   if (jtpArr != null) {
@@ -97,14 +98,7 @@ export function generateApiMain(params: Object): Number {
       jsonFiles.append(jsonTablePath);
     }
   }
-  if (jsonFiles.length == 0) {
-    let checked: String[] = getCheckedFiles(scriptDir());
-    for (f in checked) {
-      if (f.endsWith(".jsontable")) {
-        jsonFiles.append(f);
-      }
-    }
-  }
+  jsonFiles = collectTablePaths(jsonFiles);
   if (jsonFiles.length == 0) {
     printError("错误：未找到 .jsontable 配置（请配置 params.jsonTablePaths / jsonTablePath，或在项目目录勾选 .jsontable 文件）");
     return 0;

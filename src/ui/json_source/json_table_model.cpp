@@ -272,6 +272,8 @@ QJsonObject JsonTableEditCol::toJsonObject() const {
   if (!writable) obj[QString::fromLatin1(JsonTableKey::kWritable)] = false;
   if (!widget.isEmpty()) obj[QString::fromLatin1(JsonTableKey::kWidget)] = widget;
   if (required) obj[QString::fromLatin1(JsonTableKey::kRequired)] = true;
+  // switchEditable 缺省 false 不落键（true=列表渲染开关）
+  if (switchEditable) obj[QString::fromLatin1(JsonTableKey::kSwitchEditable)] = true;
   // 上传绑定与编辑缩略图（空/0=未配置不落键）
   if (!uploadSourceFile.isEmpty())
     obj[QString::fromLatin1(JsonTableKey::kUploadSourceFile)] = uploadSourceFile;
@@ -303,6 +305,7 @@ JsonTableEditCol JsonTableEditCol::fromJsonObject(const QJsonObject &obj) {
   c.writable = obj.value(QString::fromLatin1(JsonTableKey::kWritable)).toBool(true);
   c.widget = obj.value(QString::fromLatin1(JsonTableKey::kWidget)).toString();
   c.required = obj.value(QString::fromLatin1(JsonTableKey::kRequired)).toBool(false);
+  c.switchEditable = obj.value(QString::fromLatin1(JsonTableKey::kSwitchEditable)).toBool(false);
   c.uploadSourceFile = obj.value(QString::fromLatin1(JsonTableKey::kUploadSourceFile)).toString();
   c.uploadSourceId = obj.value(QString::fromLatin1(JsonTableKey::kUploadSourceId)).toString();
   c.editThumbWidth = obj.value(QString::fromLatin1(JsonTableKey::kEditThumbWidth)).toInt(0);
@@ -323,6 +326,7 @@ bool JsonTableEditCol::operator==(const JsonTableEditCol &other) const {
   return ref == other.ref && label == other.label && visible == other.visible &&
          editEditable == other.editEditable && writable == other.writable &&
          widget == other.widget && required == other.required &&
+         switchEditable == other.switchEditable &&
          uploadSourceFile == other.uploadSourceFile && uploadSourceId == other.uploadSourceId &&
          editThumbWidth == other.editThumbWidth && editThumbHeight == other.editThumbHeight &&
          placeholder == other.placeholder && maxlength == other.maxlength &&

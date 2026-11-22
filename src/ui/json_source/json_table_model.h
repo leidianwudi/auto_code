@@ -130,6 +130,8 @@ inline constexpr const char *kRequired = "required";  ///< 编辑视图必填（
 // 视图列新键（键名与 .jsonvue 保持一致，便于两套配置心智统一）
 inline constexpr const char *kDisplayType =
     "displayType";  ///< 列表展示类型（空=按类型自动 / "image"=图片缩略图）
+inline constexpr const char *kSwitchEditable =
+    "switchEditable";  ///< 列表页可直接切换（true=列表渲染 0/1 开关，与编辑控件解耦）
 inline constexpr const char *kUploadSourceFile =
     "uploadSourceFile";  ///< image/upload 编辑控件引用的 .jsonupload 文件
 inline constexpr const char *kUploadSourceId = "uploadSourceId";  ///< 引用的上传预设 id
@@ -326,6 +328,7 @@ struct JsonTableEditCol {
   bool writable = true;      ///< 是否进写参数（InUpd/ToEntity/ToUpdates）；false=展示但不写入
   QString widget;       ///< 控件类型：input/textarea/select/date/number/image/upload/boolean
   bool required = false;  ///< 必填（→ InsertParams binding:"required"）
+  bool switchEditable = false;  ///< 列表页可直接切换（与编辑控件解耦；true=列表渲染开关）
 
   // ── 上传绑定与编辑缩略图（键名与 .jsonvue 一致；image/upload 控件生效）──
   QString uploadSourceFile;  ///< 引用的 .jsonupload 文件（空=未绑定）

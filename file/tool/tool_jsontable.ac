@@ -50,3 +50,52 @@ export function relDirUnder(file: String, baseDir: String): String {
   if (rel == "" || rel.indexOf("..") >= 0) { return ""; }
   return rel;
 }
+
+/// 收集参与生成的 .jsontable 清单（Go / Admin 两条链的唯一实现）。
+/// @param explicit 显式清单（params.jsonTablePaths / jsonTablePath 归并后的数组）：
+///                 非空时原样返回——定向再生成只处理指定表，不自动追加基础表
+/// @param baseDir  扫描根：缺省 = 入口脚本目录（project.acproj 与入口脚本同目录，
+///                 即项目根）。只收集该目录下 tree.config 勾选的 .jsontable
+/// 多语言惯例（逐项目识别，无需开关变量）：
+///   - 项目根存在 base/base_lang.jsontable → 基础语言表固定参与生成（不依赖勾选），
+///     勾选到的同名重复项被排除；判定只看该文件，base/ 目录里放其它表配置不算
+///   - 无该文件但表内配了 i18n → 明确报错（多半漏拷 base/，避免基础表静默缺失）
+export function collectTablePaths(explicit: String[], baseDir?: String): String[] {
+  let files: String[] = [];
+  let eLen = explicit.length;
+  for (let i = 0; i < eLen; i = i + 1) {
+    files.append(explicit[i].replace("\\", "/"));
+  }
+  if (files.length > 0) { return files; }
+
+  let root: String = (baseDir != null && baseDir != "") ? baseDir : scriptDir();
+  root = root.replace("\\", "/");
+  let checked: String[] = getCheckedFiles(root);
+  let baseLangFile: String = root + "/base/base_lang.jsontable";
+  let i18nEnabled: Bool = fileExists(baseLangFile);
+  let baseLangName: String = basename(baseLangFile);
+  for (f in checked) {
+    if (!fileExists(f)) { continue; }
+    // 只收表配置；勾选的 .jsonupload/.jsonsource/.jsonvue 由各链按后缀自行收集
+    if (!f.endsWith(".jsontable")) { continue; }
+    if (i18nEnabled && basename(f) == baseLangName) { continue; }
+    files.append(f.replace("\\", "/"));
+  }
+  if (i18nEnabled) {
+    // 基础语言表：后台语言清单 / C端 lang 校验的数据源，基础设施固定参与生成
+    files.append(baseLangFile);
+    return files;
+  }
+  // 安全网：表里配了 i18n 却无可用的基础语言表 → 报错终止，避免"只生成了半套"
+  for (f in checked) {
+    if (!f.endsWith(".jsontable")) { continue; }
+    let j: Object = readJson(f);
+    if (j == null) { continue; }
+    let t: Object = j["table"];
+    if (t == null) { continue; }
+    assert(t["i18n"] == null,
+           "检测到表内 i18n 配置但缺少基础语言表：" + baseLangFile +
+           "（应放置该文件，或移除表内 i18n 配置）");
+  }
+  return files;
+}

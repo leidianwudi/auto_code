@@ -1,92 +1,44 @@
 // ============================================================================
 // erp.ac — erp 项目双端代码生成入口脚本（Go + vue-pure-admin 新框架）
 // ----------------------------------------------------------------------------
-// 本脚本只包含 "erp 项目" 相关的参数配置，具体生成逻辑在：
+// 本脚本只放 "erp 项目" 的参数，不含任何生成逻辑 / 表清单收集代码：
 //   ../../crud_gin/template/main_api.ac     → Go 后端（gin+gorm）
 //   ../../admin_pure/template/main_admin.ac → pure-admin 前端
 //
-// 配置事实源：各模块目录中的 .jsontable；生成期不连数据库。
+// 表清单与多语言识别统一由生成链处理（tool_jsontable.ac 的 collectTablePaths）：
+//   勾选哪些 .jsontable 就重新生成哪些表，新增表只需勾选、无需改本脚本；
+//   项目根存在 base/base_lang.jsontable（基础语言表）即视为多语言项目。
+//
 // ERP 已迁移的前端页面含手写业务，配置 frontend=false 保留现有页面及 API 文件；
 // 后端实体、查询和更新参数继续按配置生成。新标准页需显式启用 frontend。
 //
-// ★ 项目模板：新建同形态项目时复制本目录（project.acproj + *.jsontable +
-//   本脚本）再改名；多语言由文件存在性识别，无需改脚本（§0）：
-//   - 无 base/base_lang.jsontable（本项目默认）：清单只收勾选的 .jsontable；
-//   - 有 base/base_lang.jsontable（多语言项目）：基础表固定参与生成，主表
-//     jsontable 配 i18n 节点后，翻译表被勾选时自动识别，只生成 data 包
-//     实体（同 shop 形态）；判定只看该文件，base/ 目录里放其它表配置不影响。
-//
-// 流程：
-//   1. 配置 .jsontable 路径与双端项目根目录
-//   2. generateApiMain()   生成 Go 后端代码
-//   3. generateAdminMain() 同步数据源；仅 frontend=true 的表生成前端页面
+// ★ 新建同形态项目：复制本目录（project.acproj + *.jsontable + 本脚本）再改名，
+//   只需改 project.acproj 的双端目标路径与本脚本的 enumRegPath；
+//   前端通用控件（如 enable_switch.vue）随项目 src/components 手工复制，
+//   auto_code 不生成项目控件代码。
 // ============================================================================
 import { generateApiMain } from "../../crud_gin/template/main_api.ac";
 import { generateAdminMain } from "../../admin_pure/template/main_admin.ac";
 
 main {
 
-  // ── 0. 多语言识别（无需开关）─────────────────────────────────────
-  //      项目目录存在 base/base_lang.jsontable（基础语言表）即为多语言
-  //      项目；只认这个文件，base/ 目录里放其它表配置不算。
-  //      基础表固定参与生成（不依赖勾选），勾选到的重复项被排除；
-  //      主表 i18n 翻译表照常放行（main_api 自动识别，只生成 data 包实体）。
-  //      本项目默认无该文件，即非多语言项目。
-  let baseLangFile: String = scriptDir() + "/base/base_lang.jsontable";
-  let i18nEnabled: Bool = fileExists(baseLangFile);
-  let baseLangName: String = basename(baseLangFile);
-  if (!i18nEnabled) {
-    // 安全网：表里配了 i18n 却缺基础语言表（多半漏拷 base/），明确报错
-    for (f in getCheckedFiles(scriptDir())) {
-      if (!f.endsWith(".jsontable")) { continue; }
-      let j: Object = readJson(f);
-      if (j == null) { continue; }
-      let t: Object = j["table"];
-      if (t == null) { continue; }
-      assert(t["i18n"] == null,
-             "检测到表内 i18n 配置但缺少基础语言表：" + baseLangFile +
-             "（应放置该文件，或移除表内 i18n 配置）");
-    }
-  }
-
-  // ── 1. 表清单：由项目树勾选的 .jsontable 决定 ────────────────────
-  //      勾选哪些 .jsontable 就重新生成哪些表；新增表只需勾选，无需改本脚本。
+  // 项目配置（meta.goBasePath / meta.webBasePath 的读取入口）：
+  // 入口脚本与 project.acproj 同目录，生成链缺省回退 meta 中的目标路径。
   let projPath: String = scriptDir() + "/project.acproj";
-  let files: String[] = [];
-  for (f in getCheckedFiles(scriptDir())) {
-    if (!fileExists(f)) { continue; }
-    // 只收表配置；勾选的 .jsonupload/.jsonsource/.jsonvue 由 main_admin/mmain_api
-    // 各自按后缀收集，混进 jsonTablePaths 会被当成 .jsontable 解析而报错
-    if (!f.endsWith(".jsontable")) { continue; }
-    // 多语言项目：base_lang 由下方固定追加，勾选到的重复项在这里排除
-    if (i18nEnabled && basename(f) == baseLangName) { continue; }
-    files.append(f);
-  }
-  if (i18nEnabled) {
-    // base_lang：项目语言配置表（后台语言清单 / C端 lang 校验数据源），
-    // 基础设施表固定参与生成（不依赖勾选状态）
-    files.append(baseLangFile);
-  }
-  printLog("参与生成: " + files.length + " 份 .jsontable");
 
-  // ── 2. 目标项目根目录来自 project.acproj 的 meta.goBasePath /
-  //      meta.webBasePath（换机器只改 proj，不改脚本）──
-  //      params 里显式传 goBasePath/webBasePath 时优先，缺省回退 meta。
-
-  // ── 3. Go 后端生成 ────────────────────────────────────────────────
+  // ── 1. Go 后端生成 ────────────────────────────────────────────────
   //     genGlobalEnum: false 可跳过全局枚举生成（缺省生成）；
   //     enumRegPath: 枚举字典注册包（枚举生成件 init() 注册，C 端
   //     /api/app/enum/dict 汇总输出）；不配则生成件不含注册代码；
   //     frontend=false 的表（纯 API 模块）后端链照常生成
   let apiParams: Object = {
     projPath: projPath,
-    jsonTablePaths: files,
     genGlobalEnum: true,
-    enumRegPath: "shop_api/common/enumreg"
+    enumRegPath: "erp_api/common/enumreg"
   };
   generateApiMain(apiParams);
 
-  // ── 4. pure-admin 前端生成 ────────────────────────────────────────
+  // ── 2. pure-admin 前端生成 ────────────────────────────────────────
   //     双轨制：目标页面目录存在同名 .jsonvue 则按高级页生成，
   //     否则从 .jsontable 的列角色合成标准页；
   //     frontend=false 的表（纯 API 模块）跳过页面生成
@@ -94,13 +46,12 @@ main {
   let tplDir: String = "../../admin_pure/template";
   let adminParams: Object = {
     projPath: projPath,
-    jsonTablePaths: files,
     apiPrefix: "/api",
     // 仅新启用生成的标准页使用 ReListTable；已有定制页由 frontend=false 保护。
     useListTable: true,
-    // 布尔开关列使用通用 EnableSwitch（字段化 + 行内 loading + 权限 + 成功后刷新），
+    // 布尔开关列使用通用 EnableSwitch（项目 src/components/ac 下手工维护），
     // 避免同一页面多个开关时各自手写状态导致不同步。
-    useErpEnableSwitch: true,
+    useEnableSwitch: true,
     // 表级枚举字典（跨页面共享）：全部 tag 列汇总输出 src/api/source/table_enum.ts
     tableEnumTpl: tplDir + "/table_enum.tpl",
     templates: [

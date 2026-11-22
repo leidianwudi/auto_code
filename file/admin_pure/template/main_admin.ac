@@ -43,6 +43,8 @@
 ///     其下全部 *.jsonglobalenum 作为项目级枚举参与合并（就近覆盖）
 ///   - genGlobalEnum  可选，false 跳过全局枚举数据源同步（缺省/true 同步）
 ///   - useListTable   可选，true 使用项目内 ReListTable（需已安装该组件）
+///   - useEnableSwitch 可选，true 布尔开关列使用项目内 EnableSwitch
+///     （src/components/ac/enable_switch.vue，随项目手工维护，auto_code 不生成）
 ///   - templates / sourceTemplates / uploadTemplates 可选，模板配置数组
 ///     （tpl 路径相对入口脚本目录，省略时使用本文件默认模板）
 /// ----------------------------------------------------------------------------
@@ -50,7 +52,7 @@
 import { buildAdminTplData, buildSourceTplData, buildUploadTplData } from "../../admin_vue/template/core/admin_data.ac";
 import { findGlobalEnumFiles, mergeGlobalEnumFiles, buildGlobalEnumJsonSource } from "../../tool/tool_global_enum.ac";
 import { snakeToPascal, snakeToCamel, escapeJsStr } from "../../tool/tool_str.ac";
-import { dirnameOf, findProjPath, relDirUnder } from "../../tool/tool_jsontable.ac";
+import { dirnameOf, findProjPath, relDirUnder, collectTablePaths } from "../../tool/tool_jsontable.ac";
 
 /// @brief 模板配置（一个模板对应一个生成的代码文件）
 class TemplateConfig {
@@ -205,13 +207,22 @@ export function buildJsonvueColumn(rawCol: Object, enumDef: Object, editCol: Obj
     }
   }
 
+  // 列表开关独立配置：显式 switchEditable=true 时列表渲染开关，与编辑控件解耦
+  if (editCol != null && editCol["switchEditable"] == true) {
+    col["displayType"] = "boolean";
+    col["switchEditable"] = true;
+  }
+
   // 表内枚举命中（enums[].column == 列名）：列表标签显示 + 编辑下拉。
   // tagItems 通道无需数据源文件（加工器 isTagEdit/isTagSwitch 分支直接消费），
-  // 覆盖 widget 的编辑样式映射——枚举值域封闭，下拉比 number/input 更合理
+  // 覆盖 widget 的编辑样式映射——枚举值域封闭，下拉比 number/input 更合理；
+  // 但显式列表开关优先，列表仍按开关渲染，编辑下拉沿用枚举。
   if (enumDef != null) {
     col["editStyle"] = "tag";
-    col["displayType"] = "tag";
-    col["switchEditable"] = false;
+    if (col["switchEditable"] != true) {
+      col["displayType"] = "tag";
+      col["switchEditable"] = false;
+    }
     let items: Object[] = [];
     let opts: Object[] = enumDef["items"];
     if (opts != null) {
@@ -1132,7 +1143,8 @@ export function generateAdminMain(params: Object): Void {
 
   // ── 1.1 .jsontable 配置文件收集（多文件支持）──────────────────────
   //    优先级：params.jsonTablePaths（文件数组）> params.jsonTablePath（单文件）
-  //          > 收集勾选文件中的 .jsontable（与 Go 链对称）
+  //          > collectTablePaths 扫项目根勾选文件（含多语言基础表惯例）
+  //    收集实现唯一在 tool_jsontable.ac：入口脚本不再重复这段样板
   let jsontableFiles: String[] = [];
   let jtpArr: String[] = params["jsonTablePaths"];
   if (jtpArr != null) {
@@ -1145,16 +1157,7 @@ export function generateAdminMain(params: Object): Void {
   if (jsontableFiles.length == 0 && jtpSingle != null && jtpSingle != "") {
     jsontableFiles.append(jtpSingle.replace("\\", "/"));
   }
-  if (jsontableFiles.length == 0) {
-    let checkedAll: String[] = getCheckedFiles(scriptDir());
-    let caLen = checkedAll.length;
-    for (let ca = 0; ca < caLen; ca = ca + 1) {
-      let cf: String = checkedAll[ca].replace("\\", "/");
-      if (cf.endsWith(".jsontable")) {
-        jsontableFiles.append(cf);
-      }
-    }
-  }
+  jsontableFiles = collectTablePaths(jsontableFiles);
   if (jsontableFiles.length == 0) {
     printError("错误：未找到 .jsontable 配置（请配置 params.jsonTablePaths / jsonTablePath，或在项目目录勾选 .jsontable 文件）");
     return;
@@ -1762,6 +1765,9 @@ export function generateAdminMain(params: Object): Void {
     tplData = enrichPureTplData(tplData);
     // 已接入通用列表的项目显式启用；其它项目继续使用原有表格，避免缺少组件。
     tplData["useListTable"] = (params["useListTable"] == true);
+    // 布尔开关列改用通用 EnableSwitch（项目 src/components/ac 下手工维护）；
+    // 仅显式启用的项目生成其 import/模板，未接入的项目保持原 el-switch 渲染。
+    tplData["useEnableSwitch"] = (params["useEnableSwitch"] == true);
     // i18n 元数据（write.tpl 语言 Tab 消费；null = 本表未启用多语言）
     let i18nInfo: Object = pages[pg]["json"]["i18n"];
     tplData["hasI18n"] = (i18nInfo != null);

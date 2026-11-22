@@ -115,6 +115,7 @@ private:
 
   // ── 列表页展示 ──
   QComboBox *m_displayTypeCombo = nullptr;
+  QCheckBox *m_listSwitchCheck = nullptr;  ///< 列表页可直接切换（与编辑控件解耦）
   QComboBox *m_widthCombo = nullptr;
   QWidget *m_listThumbRow = nullptr;  ///< 列表缩略图行容器（整行显隐随 displayType=image）
   QSpinBox *m_listThumbW = nullptr;
