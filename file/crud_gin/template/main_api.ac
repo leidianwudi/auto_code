@@ -31,8 +31,8 @@
 ///   （app 端另含 out_<表>_.go），手写扩展件首次生成骨架、重新生成不覆盖。
 ///   路由集中注册：生成器独占 {goBasePath}/router/routes_.go，每次生成按
 ///   modules/{admin,app} 树扫描 *_router_.go 整体重写（幂等，见
-///   regenRouteRegistration）；手写模块与 RegisterCustomRoutes 钩子仍在
-///   router/router.go 手动注册。
+///   regenRouteRegistration）；非表手写功能通过端入口聚合，表扩展
+///   RegisterExtRoutes 由各模块的生成路由自动调用。
 /// ----------------------------------------------------------------------------
 
 import { Param, FieldDef, buildGoImports, escapeGoStr, sanitizeGoComment, tabChar,
@@ -421,8 +421,8 @@ export function generateApiMain(params: Object): Number {
 ///   - admin 侧注册到 api 组（<pkg>.RegisterRoutes(api)），包名 = 目录末段；
 ///   - app 侧注册到 appGroup 组，别名 = "app" + 包名帕斯卡（与 admin 侧包名
 ///     天然不撞，admin/app 同名包在同一 import 块靠别名区分，如 appShop）；
-///   - 手写模块（auth/usermgr/upload/app 等）与 RegisterCustomRoutes 钩子
-///     不在本文件，仍由 router/router.go 手动注册。
+///   - 非表手写模块通过端入口聚合；表扩展 RegisterExtRoutes 由对应模块
+///     的生成路由自动调用，不在集中注册件重复挂载。
 /// 每次生成按目录树整体重算：新增模块自动进入、删除模块重生成后自动移除，
 /// 无需人工维护；import 行按扫描顺序（listFilesDeep 已按路径排序）天然有序。
 export function regenRouteRegistration(goBasePath: String): Number {
@@ -488,7 +488,7 @@ export function regenRouteRegistration(goBasePath: String): Number {
   let content: String = "// 此代码为AutoCode编译器生成，请勿手动修改" + nl + nl;
   content = content + "// Package router 生成模块集中注册件（AutoCode 独占：每次生成按 modules 树整体重写）" + nl;
   content = content + "// - modules/{admin,app}/**/*_router_.go（生成覆盖件）在此自动注册 RegisterRoutes；" + nl;
-  content = content + "// - 手写模块与 RegisterCustomRoutes 钩子仍在 router.go 手动注册。" + nl;
+  content = content + "// - 非表手写功能通过端入口聚合；表扩展 RegisterExtRoutes 由对应模块自动调用。" + nl;
   content = content + "package router" + nl + nl;
   content = content + "import (" + nl;
   // gin 单独一组（对齐 router.go 既有风格：三方库与项目模块之间空行分组）

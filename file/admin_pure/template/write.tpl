@@ -41,7 +41,7 @@ const props = defineProps({
 // 详情模式：表单整体只读（el-form disabled 会联动禁用全部控件）
 const isDetail = computed(() => props.actionType === 'detail');
 
-// 表单数据模型（id 隐藏携带：save 接口靠它区分新增/更新；数值/日期初始化 null，其余空串）
+// 表单数据模型（id 隐藏携带：/update 接口靠它区分新增/更新；数值/日期初始化 null，其余空串）
 const formRef = ref<FormInstance>();
 const form = reactive<Record<string, any>>({
   id: null,
