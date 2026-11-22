@@ -558,7 +558,9 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
         visible: (ec["visible"] != false),
         // 表单内可编辑（false=只读展示）：必须显式传入，否则合成列会按缺省 true
         editEditable: (ec["editEditable"] != false),
-        required: (ec["required"] == true)
+        required: (ec["required"] == true),
+        // 列表开关独立于表单控件，保留设计器配置供下游生成开关。
+        switchEditable: (ec["switchEditable"] == true)
       };
     } else if (!hasEditCols) {
       // 零配置缺省：非主键/非自增/非自动维护时间列全部进表单（等价旧 form 行为）
@@ -1796,7 +1798,13 @@ export function generateAdminMain(params: Object): Void {
         let cLenFc = colsAllForm.length;
         for (let fiC = 0; fiC < cLenFc; fiC = fiC + 1) {
           if (colsAllForm[fiC]["dataName"] == rForm2 && colsAllForm[fiC]["editVisible"] == true) {
-            formColsArr.append(colsAllForm[fiC]);
+            let formCol: Object = colsAllForm[fiC];
+            // 显式列表开关不接管编辑控件；仅调整表单副本，列表列保留开关标记。
+            if (ecForm2["switchEditable"] == true && formCol["isBooleanEdit"] != true) {
+              formCol["isBooleanSwitch"] = false;
+              formCol["isTagSwitch"] = false;
+            }
+            formColsArr.append(formCol);
             break;
           }
         }
