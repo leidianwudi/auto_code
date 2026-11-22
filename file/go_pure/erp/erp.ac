@@ -98,6 +98,9 @@ main {
     apiPrefix: "/api",
     // 仅新启用生成的标准页使用 ReListTable；已有定制页由 frontend=false 保护。
     useListTable: true,
+    // 布尔开关列使用通用 EnableSwitch（字段化 + 行内 loading + 权限 + 成功后刷新），
+    // 避免同一页面多个开关时各自手写状态导致不同步。
+    useErpEnableSwitch: true,
     // 表级枚举字典（跨页面共享）：全部 tag 列汇总输出 src/api/source/table_enum.ts
     tableEnumTpl: tplDir + "/table_enum.tpl",
     templates: [

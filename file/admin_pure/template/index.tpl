@@ -25,6 +25,9 @@ import { reactive, ref, unref } from "vue";
 ${if useListTable}
 import ReListTable from "@/components/ReListTable";
 ${/if}
+${if useErpEnableSwitch}
+import EnableSwitch from "@/components/erp/enable_switch.vue";
+${/if}
 import { message } from "@/utils/message";
 import { hasPerms } from "@/utils/auth";
 ${if !noDetail}
@@ -394,7 +397,18 @@ ${/if}
 ${each col in columns}${if col.queryVisible}${if col.isBooleanSwitch}
         <el-table-column label="${col.label}"${if col.hasColumnWidth} width="${col.columnWidth}"${/if}${if col.hasColumnFixed} fixed="${col.columnFixed}"${/if}>
           <template #default="{ row }">
-            <el-switch
+${if useErpEnableSwitch}            <EnableSwitch
+              table="${pageName}"
+              field="${col.dataName}"
+              :row="row"
+              :disabled="${col.switchDisabledStr}"
+${if col.switchTextIsExpr}              :active-text="${col.switchActiveTextExpr}"
+              :inactive-text="${col.switchInactiveTextExpr}"
+${else}              active-text="${col.switchActiveText}"
+              inactive-text="${col.switchInactiveText}"
+${/if}              @refresh="loadData"
+            />
+${else}            <el-switch
               :model-value="row.${col.dataName} == 1"
               :disabled="${col.switchDisabledStr}"
               inline-prompt
@@ -404,7 +418,7 @@ ${else}              active-text="${col.switchActiveText}"
               inactive-text="${col.switchInactiveText}"
 ${/if}              @change="onSwitchChange(row, '${col.dataName}', row.${col.dataName} == 1 ? 0 : 1)"
             />
-          </template>
+${/if}          </template>
         </el-table-column>
 ${else if col.isTagSwitch}
         <el-table-column label="${col.label}"${if col.hasColumnWidth} width="${col.columnWidth}"${/if}${if col.hasColumnFixed} fixed="${col.columnFixed}"${/if}>
