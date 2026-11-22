@@ -39,7 +39,7 @@
         unsigned: false,
       },
       {
-        comment: '角色id，role.id',
+        comment: '角色ID，关联system_role.id',
         default: '0',
         isAutoInc: false,
         isPrimary: false,
