@@ -1,0 +1,260 @@
+{
+  "table": {
+    "tableName": "goods_rating",
+    "modelName": "goods_rating",
+    "tableComment": "订单购买评价",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "订单购买评价记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "order_id",
+        "mysqlType": "bigint",
+        "comment": "关联trade_order.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "user_id",
+        "mysqlType": "bigint",
+        "comment": "关联user.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "goods_id",
+        "mysqlType": "bigint",
+        "comment": "关联goods.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "shop_id",
+        "mysqlType": "bigint",
+        "comment": "关联shop.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "score",
+        "mysqlType": "bigint",
+        "comment": "评分1至5",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "content",
+        "mysqlType": "varchar(2000)",
+        "comment": "购买评价原文",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "visible",
+        "mysqlType": "bigint",
+        "comment": "公开标志",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "1"
+      },
+      {
+        "name": "merchant_reply",
+        "mysqlType": "varchar(2000)",
+        "comment": "商户公开回复",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_order_id",
+        "cols": [
+          "order_id"
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_goods_id_id",
+        "cols": [
+          "goods_id",
+          "id"
+        ],
+        "unique": false
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "order_id"
+      },
+      {
+        "ref": "user_id"
+      },
+      {
+        "ref": "goods_id"
+      },
+      {
+        "ref": "shop_id"
+      },
+      {
+        "ref": "score"
+      },
+      {
+        "ref": "content"
+      },
+      {
+        "ref": "visible"
+      },
+      {
+        "ref": "merchant_reply"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "order_id"
+      },
+      {
+        "ref": "user_id"
+      },
+      {
+        "ref": "goods_id"
+      },
+      {
+        "ref": "shop_id"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "订单购买评价记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "order_id",
+        "label": "关联trade_order.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "user_id",
+        "label": "关联user.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "goods_id",
+        "label": "关联goods.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "shop_id",
+        "label": "关联shop.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "score",
+        "label": "评分1至5",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "content",
+        "label": "购买评价原文",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "visible",
+        "label": "公开标志",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "merchant_reply",
+        "label": "商户公开回复",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

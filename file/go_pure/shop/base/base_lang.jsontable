@@ -26,7 +26,7 @@
         comment: '语言码，如 zh / en',
         isAutoInc: false,
         isPrimary: false,
-        mysqlType: 'varchar(16)',
+        mysqlType: 'varchar(64)',
         name: 'lang',
         nullable: false,
         title: '语言码',

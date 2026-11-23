@@ -950,8 +950,8 @@ JsonTableTable deriveI18nTable(const JsonTableTable &main) {
   // langKey：语言码
   JsonTableColumn lang;
   lang.name = cfg.langKey.isEmpty() ? QStringLiteral("lang") : cfg.langKey;
-  lang.mysqlType = QStringLiteral("varchar(8)");
-  lang.comment = QStringLiteral("语言编码：zh、en、ja");
+  lang.mysqlType = QStringLiteral("varchar(64)");
+  lang.comment = QStringLiteral("语言编码，对应base_lang.lang");
   t.columns.append(lang);
 
   // 翻译字段：继承主表同名列；主表无此列时回退 varchar(255) 文本。

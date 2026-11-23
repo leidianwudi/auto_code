@@ -42,6 +42,7 @@ import { uniqueIndexBlock } from "./core/unique_errors.ac";
 import { snakeToPascal, snakeToCamel, isNumericStr } from "../../tool/tool_str.ac";
 import { findGlobalEnumFiles, mergeGlobalEnumFiles } from "../../tool/tool_global_enum.ac";
 import { dirnameOf, findProjPath, relDirUnder, collectTablePaths } from "../../tool/tool_jsontable.ac";
+import { validateTableSchema } from "../../tool/tool_schema.ac";
 
 /// @brief 模板配置（一个模板对应一个生成的代码文件）
 class TemplateConfig {
@@ -205,6 +206,11 @@ export function generateApiMain(params: Object): Number {
     printLog("tables count（含派生）: " + tables.length);
   }
 
+  // 任何表不合规都在首次写文件前终止，自动派生翻译表也必须有合法命名与注释。
+  for (t in tables) {
+    assert(validateTableSchema(t), "表结构校验失败：" + t["tableName"]);
+  }
+
   // ── 3. goBasePath 与模块名 ─────────────────────────────────────────
   //      goBasePath：params 优先（兼容 basePath 键名），缺省回退 meta.goBasePath
   let goBasePath: String = params["goBasePath"];
@@ -306,7 +312,7 @@ export function generateApiMain(params: Object): Number {
     //    moduleDir 缺省 = .jsontable 相对扫描根的目录段 + 表名
     //    （目录结构 = 模块结构：user/user_ext.jsontable → user/user_ext）；
     //    与扫描根同目录时回退 <tableName>/<tableName>；
-    //    系统表可显式配 moduleDir（如 sys/menu）与手写架子目录对齐。
+    //    系统表可显式配 moduleDir（如 system/system_menu）与手写架子目录对齐。
     //    仅允许相对子路径（禁 ..，去首尾斜杠）
     let md: String = t["moduleDir"];
     if (md == null || md.length == 0) {
@@ -511,7 +517,7 @@ export function regenRouteRegistration(goBasePath: String): Number {
 /// @return 翻译表配置（tableName/modelName/columns/indexes，frontend=false）
 /// @note   派生规则与 C++ deriveI18nTable（json_table_model.cpp）互为镜像，修改需同步：
 ///         id（自增主键，类型随主表主键）+ extKey（类型随主表主键）+
-///         langKey（varchar(8)）+ fields（继承主表同名列的类型/注释，
+///         langKey（varchar(64)，对齐base_lang）+ fields（继承主表同名列的类型/注释，
 ///         主表无此列时回退 varchar(255)）+ created_at/updated_at（datetime 可空）；
 ///         唯一索引 uk_{extKey}_{langKey}
 export function deriveI18nTable(mainTable: Object): Object {
@@ -547,8 +553,8 @@ export function deriveI18nTable(mainTable: Object): Object {
   newCols.append({ name: extKey, mysqlType: pkType, unsigned: pkUnsigned, nullable: false,
                    isPrimary: false, isAutoInc: false,
                    comment: "扩展ID，关联" + mainTable["tableName"] + "." + pkName });
-  newCols.append({ name: langKey, mysqlType: "varchar(8)", unsigned: false, nullable: false,
-                   isPrimary: false, isAutoInc: false, comment: "语言编码：zh、en、ja" });
+  newCols.append({ name: langKey, mysqlType: "varchar(64)", unsigned: false, nullable: false,
+                   isPrimary: false, isAutoInc: false, comment: "语言编码，对应base_lang.lang" });
   let fields: Object[] = cfg["fields"];
   if (fields != null) {
     for (f in fields) {
@@ -2102,6 +2108,13 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
   tplData["svcCreateTimeLines"] = svcCreateTimeLines;
   tplData["routerImports"] = routerImports;
   tplData["appQuery"] = appQuery;
+  // 敏感业务表只保留受鉴权的扩展挂载点，避免通用CRUD绕过审核和资金状态机。
+  let adminQueryMode: String = json["adminQueryMode"];
+  if (adminQueryMode == null || adminQueryMode == "") { adminQueryMode = "crud"; }
+  assert(adminQueryMode == "crud" || adminQueryMode == "read" || adminQueryMode == "empty",
+         "adminQueryMode只能为crud/read/empty：" + tableName);
+  tplData["adminRead"] = adminQueryMode != "empty";
+  tplData["adminWrite"] = adminQueryMode == "crud";
   tplData["appHasOut"] = appHasOut;
   tplData["appOutClass"] = appOutClass;
   tplData["appOutFields"] = appOutFields;

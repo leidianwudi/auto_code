@@ -1,0 +1,344 @@
+{
+  "table": {
+    "tableName": "wallet_recharge_apply",
+    "modelName": "wallet_recharge_apply",
+    "tableComment": "用户充值申请",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "用户充值申请记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "user_id",
+        "mysqlType": "bigint",
+        "comment": "关联user.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "method_id",
+        "mysqlType": "bigint",
+        "comment": "关联wallet_receipt_method.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "apply_no",
+        "mysqlType": "varchar(64)",
+        "comment": "唯一申请号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "request_key",
+        "mysqlType": "varchar(64)",
+        "comment": "充值提交幂等号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "amount",
+        "mysqlType": "decimal(20,2)",
+        "comment": "申请和应付额，不加随机尾数",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "method_snapshot",
+        "mysqlType": "json",
+        "comment": "平台收款渠道及版本快照",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "evidence_ids",
+        "mysqlType": "json",
+        "comment": "私有充值凭证ID列表",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "reference",
+        "mysqlType": "varchar(256)",
+        "comment": "转账流水或备注",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "status",
+        "mysqlType": "varchar(32)",
+        "comment": "业务状态：draft待凭证/pending待审/needs_proof补证/approved入账/rejected拒绝/cancelled撤销",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "pending"
+      },
+      {
+        "name": "admin_id",
+        "mysqlType": "bigint",
+        "comment": "关联admin.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "review_note",
+        "mysqlType": "varchar(1000)",
+        "comment": "审核或补证理由",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "reviewed_at",
+        "mysqlType": "datetime",
+        "comment": "审核时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "expires_at",
+        "mysqlType": "datetime",
+        "comment": "申请到期时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_apply_no",
+        "cols": [
+          "apply_no"
+        ],
+        "unique": true
+      },
+      {
+        "name": "uk_user_id_request_key",
+        "cols": [
+          "user_id",
+          "request_key"
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_status_id",
+        "cols": [
+          "status",
+          "id"
+        ],
+        "unique": false
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "user_id"
+      },
+      {
+        "ref": "method_id"
+      },
+      {
+        "ref": "apply_no"
+      },
+      {
+        "ref": "request_key"
+      },
+      {
+        "ref": "amount"
+      },
+      {
+        "ref": "reference"
+      },
+      {
+        "ref": "status"
+      },
+      {
+        "ref": "admin_id"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "user_id"
+      },
+      {
+        "ref": "method_id"
+      },
+      {
+        "ref": "status"
+      },
+      {
+        "ref": "admin_id"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "用户充值申请记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "user_id",
+        "label": "关联user.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "method_id",
+        "label": "关联wallet_receipt_method.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "apply_no",
+        "label": "唯一申请号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "request_key",
+        "label": "充值提交幂等号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "amount",
+        "label": "申请和应付额，不加随机尾数",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "method_snapshot",
+        "label": "平台收款渠道及版本快照",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "evidence_ids",
+        "label": "私有充值凭证ID列表",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "reference",
+        "label": "转账流水或备注",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "status",
+        "label": "业务状态：draft待凭证/pending待审/needs_proof补证/approved入账/rejected拒绝/cancelled撤销",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "admin_id",
+        "label": "关联admin.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "review_note",
+        "label": "审核或补证理由",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "reviewed_at",
+        "label": "审核时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "expires_at",
+        "label": "申请到期时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

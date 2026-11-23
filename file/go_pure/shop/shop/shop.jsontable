@@ -1,415 +1,438 @@
 {
-  table: {
-    adminPkgComment: '商店管理端模块（CRUD）',
-    appAuth: 'public',
-    appOutCols: [
-      'id',
-      'logo_img',
-      'level',
-      'sell_count',
-      'like',
-      'follow',
-      'is_open',
-      'status',
+  "table": {
+    "adminPkgComment": "商店管理端模块（CRUD）",
+    "appAuth": "public",
+    "appOutCols": [
+      "id",
+      "logo_img",
+      "level",
+      "sell_count",
+      "like",
+      "follow",
+      "is_open",
+      "status"
     ],
-    appQuery: true,
-    columns: [
+    "appQuery": true,
+    "columns": [
       {
-        comment: '主键',
-        isAutoInc: true,
-        isPrimary: true,
-        mysqlType: 'int',
-        name: 'id',
-        nullable: false,
-        unsigned: false,
+        "comment": "主键",
+        "isAutoInc": true,
+        "isPrimary": true,
+        "mysqlType": "int",
+        "name": "id",
+        "nullable": false,
+        "unsigned": false
       },
       {
-        comment: '店铺logo',
-        isAutoInc: false,
-        isPrimary: false,
-        mysqlType: 'varchar(512)',
-        name: 'logo_img',
-        nullable: false,
-        unsigned: false,
+        "comment": "店铺logo",
+        "isAutoInc": false,
+        "isPrimary": false,
+        "mysqlType": "varchar(512)",
+        "name": "logo_img",
+        "nullable": false,
+        "unsigned": false
       },
       {
-        comment: '商店所有人,user.id',
-        isAutoInc: false,
-        isPrimary: false,
-        mysqlType: 'int',
-        name: 'user_id',
-        nullable: false,
-        title: '掌柜id',
-        unsigned: false,
+        "comment": "商店所有人,user.id",
+        "isAutoInc": false,
+        "isPrimary": false,
+        "mysqlType": "int",
+        "name": "user_id",
+        "nullable": false,
+        "title": "掌柜id",
+        "unsigned": false
       },
       {
-        comment: '星级。一共10星',
-        isAutoInc: false,
-        isPrimary: false,
-        mysqlType: 'int',
-        name: 'level',
-        nullable: false,
-        title: '星级',
-        unsigned: false,
+        "comment": "星级。一共10星",
+        "isAutoInc": false,
+        "isPrimary": false,
+        "mysqlType": "int",
+        "name": "level",
+        "nullable": false,
+        "title": "星级",
+        "unsigned": false
       },
       {
-        comment: '创建时间',
-        default: 'now()',
-        isAutoInc: false,
-        isPrimary: false,
-        mysqlType: 'datetime',
-        name: 'create_time',
-        nullable: false,
-        unsigned: false,
+        "comment": "创建时间",
+        "default": "now()",
+        "isAutoInc": false,
+        "isPrimary": false,
+        "mysqlType": "datetime",
+        "name": "create_time",
+        "nullable": false,
+        "unsigned": false
       },
       {
-        comment: '全店总售件数',
-        default: '0',
-        isAutoInc: false,
-        isPrimary: false,
-        mysqlType: 'int',
-        name: 'sell_count',
-        nullable: false,
-        title: '总售件数',
-        unsigned: false,
+        "comment": "全店总售件数",
+        "default": "0",
+        "isAutoInc": false,
+        "isPrimary": false,
+        "mysqlType": "int",
+        "name": "sell_count",
+        "nullable": false,
+        "title": "总售件数",
+        "unsigned": false
       },
       {
-        comment: '总营业额',
-        default: '0.00',
-        isAutoInc: false,
-        isPrimary: false,
-        mysqlType: 'decimal(20,2)',
-        name: 'sell_money',
-        nullable: false,
-        unsigned: false,
+        "comment": "总营业额",
+        "default": "0.00",
+        "isAutoInc": false,
+        "isPrimary": false,
+        "mysqlType": "decimal(20,2)",
+        "name": "sell_money",
+        "nullable": false,
+        "unsigned": false
       },
       {
-        comment: '差评',
-        default: '0',
-        isAutoInc: false,
-        isPrimary: false,
-        mysqlType: 'int',
-        name: 'dis_like',
-        nullable: false,
-        unsigned: false,
+        "comment": "差评",
+        "default": "0",
+        "isAutoInc": false,
+        "isPrimary": false,
+        "mysqlType": "int",
+        "name": "dis_like",
+        "nullable": false,
+        "unsigned": false
       },
       {
-        comment: '好评',
-        default: '0',
-        isAutoInc: false,
-        isPrimary: false,
-        mysqlType: 'int',
-        name: 'like',
-        nullable: false,
-        unsigned: false,
+        "comment": "好评",
+        "default": "0",
+        "isAutoInc": false,
+        "isPrimary": false,
+        "mysqlType": "int",
+        "name": "like",
+        "nullable": false,
+        "unsigned": false
       },
       {
-        comment: '关注数量',
-        default: '0',
-        isAutoInc: false,
-        isPrimary: false,
-        mysqlType: 'int',
-        name: 'follow',
-        nullable: false,
-        unsigned: false,
+        "comment": "关注数量",
+        "default": "0",
+        "isAutoInc": false,
+        "isPrimary": false,
+        "mysqlType": "int",
+        "name": "follow",
+        "nullable": false,
+        "unsigned": false
       },
       {
-        comment: '是否开店，掌柜操作',
-        default: '0',
-        isAutoInc: false,
-        isPrimary: false,
-        mysqlType: 'int',
-        name: 'is_open',
-        nullable: false,
-        title: '是否开店',
-        unsigned: false,
+        "comment": "是否开店，掌柜操作",
+        "default": "0",
+        "isAutoInc": false,
+        "isPrimary": false,
+        "mysqlType": "int",
+        "name": "is_open",
+        "nullable": false,
+        "title": "是否开店",
+        "unsigned": false
       },
       {
-        comment: '状态; 0:编辑中;1:审核中;2:正常;3:审核不通过;4:关闭',
-        default: '0',
-        isAutoInc: false,
-        isPrimary: false,
-        mysqlType: 'int',
-        name: 'status',
-        nullable: false,
-        title: '状态',
-        unsigned: false,
+        "comment": "状态; 0:编辑中;1:审核中;2:正常;3:审核不通过;4:关闭",
+        "default": "0",
+        "isAutoInc": false,
+        "isPrimary": false,
+        "mysqlType": "int",
+        "name": "status",
+        "nullable": false,
+        "title": "状态",
+        "unsigned": false
       },
       {
-        comment: '是否启用，管理员操作',
-        default: '1',
-        isAutoInc: false,
-        isPrimary: false,
-        mysqlType: 'int',
-        name: 'enable',
-        nullable: false,
-        title: '是否启用',
-        unsigned: false,
+        "comment": "是否启用，管理员操作",
+        "default": "1",
+        "isAutoInc": false,
+        "isPrimary": false,
+        "mysqlType": "int",
+        "name": "enable",
+        "nullable": false,
+        "title": "是否启用",
+        "unsigned": false
       },
       {
-        comment: '管理员备注',
-        isAutoInc: false,
-        isPrimary: false,
-        mysqlType: 'varchar(512)',
-        name: 'desc',
-        nullable: false,
-        unsigned: false,
+        "comment": "管理员备注",
+        "isAutoInc": false,
+        "isPrimary": false,
+        "mysqlType": "varchar(512)",
+        "name": "desc",
+        "nullable": false,
+        "unsigned": false
       },
+      {
+        "name": "settlement_days",
+        "mysqlType": "int",
+        "comment": "商户专属结算天数，0使用平台默认",
+        "default": "0",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      }
     ],
-    dataPkgComment: '商店表共享数据层（admin 端与 app 端复用）',
-    editCols: [
+    "dataPkgComment": "商店表共享数据层（admin 端与 app 端复用）",
+    "editCols": [
       {
-        label: '店铺logo',
-        ref: 'logo_img',
+        "label": "店铺logo",
+        "ref": "logo_img"
       },
       {
-        editEditable: false,
-        label: '掌柜id',
-        ref: 'user_id',
-        writable: false,
+        "editEditable": false,
+        "label": "掌柜id",
+        "ref": "user_id",
+        "writable": false
       },
       {
-        label: '星级',
-        ref: 'level',
-        widget: 'number',
+        "label": "星级",
+        "ref": "level",
+        "widget": "number"
       },
       {
-        editEditable: false,
-        label: '创建时间',
-        ref: 'create_time',
-        writable: false,
+        "editEditable": false,
+        "label": "创建时间",
+        "ref": "create_time",
+        "writable": false
       },
       {
-        editEditable: false,
-        label: '总售件数',
-        ref: 'sell_count',
-        writable: false,
+        "editEditable": false,
+        "label": "总售件数",
+        "ref": "sell_count",
+        "writable": false
       },
       {
-        editEditable: false,
-        label: '总营业额',
-        ref: 'sell_money',
-        writable: false,
+        "editEditable": false,
+        "label": "总营业额",
+        "ref": "sell_money",
+        "writable": false
       },
       {
-        editEditable: false,
-        label: '好评',
-        ref: 'like',
-        writable: false,
+        "editEditable": false,
+        "label": "好评",
+        "ref": "like",
+        "writable": false
       },
       {
-        label: '是否开店',
-        ref: 'is_open',
+        "label": "是否开店",
+        "ref": "is_open"
       },
       {
-        label: '状态',
-        ref: 'status',
+        "label": "状态",
+        "ref": "status"
       },
       {
-        label: '是否启用',
-        ref: 'enable',
-        widget: 'boolean',
+        "label": "是否启用",
+        "ref": "enable",
+        "widget": "boolean"
       },
       {
-        label: '主键',
-        ref: 'id',
+        "label": "主键",
+        "ref": "id"
       },
       {
-        editEditable: false,
-        label: '差评',
-        ref: 'dis_like',
-        writable: false,
+        "editEditable": false,
+        "label": "差评",
+        "ref": "dis_like",
+        "writable": false
       },
       {
-        editEditable: false,
-        label: '关注数量',
-        ref: 'follow',
-        writable: false,
+        "editEditable": false,
+        "label": "关注数量",
+        "ref": "follow",
+        "writable": false
       },
       {
-        label: '管理员备注',
-        ref: 'desc',
-        widget: 'textarea',
-      },
+        "label": "管理员备注",
+        "ref": "desc",
+        "widget": "textarea"
+      }
     ],
-    enums: [
+    "enums": [
       {
-        column: 'status',
-        comment: '状态; 0:审核中;1:正常;2:关闭',
-        items: [
+        "column": "status",
+        "comment": "状态; 0:审核中;1:正常;2:关闭",
+        "items": [
           {
-            key: 'Auditing',
-            label: '审核中',
-            value: '1',
-            valueType: 'number',
+            "key": "Auditing",
+            "label": "审核中",
+            "value": "1",
+            "valueType": "number"
           },
           {
-            key: 'Normal',
-            label: '正常',
-            value: '2',
-            valueType: 'number',
+            "key": "Normal",
+            "label": "正常",
+            "value": "2",
+            "valueType": "number"
           },
           {
-            key: 'Closed',
-            label: '关闭',
-            value: '4',
-            valueType: 'number',
+            "key": "Closed",
+            "label": "关闭",
+            "value": "4",
+            "valueType": "number"
           },
           {
-            key: 'Editing',
-            label: '编辑中',
-            value: '0',
-            valueType: 'number',
+            "key": "Editing",
+            "label": "编辑中",
+            "value": "0",
+            "valueType": "number"
           },
           {
-            key: 'Failed',
-            label: '审核失败',
-            value: '3',
-            valueType: 'number',
-          },
-        ],
-      },
+            "key": "Failed",
+            "label": "审核失败",
+            "value": "3",
+            "valueType": "number"
+          }
+        ]
+      }
     ],
-    genCache: true,
-    i18n: {
-      defaultLang: 'zh',
-      extKey: 'ext_id',
-      fields: [
+    "genCache": true,
+    "i18n": {
+      "defaultLang": "zh",
+      "extKey": "ext_id",
+      "fields": [
         {
-          label: '店铺名称',
-          name: 'name',
+          "label": "店铺名称",
+          "name": "name"
         },
         {
-          label: '店铺简介',
-          name: 'intro',
-        },
+          "label": "店铺简介",
+          "name": "intro"
+        }
       ],
-      langFrom: 'header',
-      langKey: 'lang',
-      table: 'shop0',
+      "langFrom": "header",
+      "langKey": "lang",
+      "table": "shop0"
     },
-    manualUpdateTime: false,
-    modelName: 'shop',
-    selCols: [
+    "manualUpdateTime": false,
+    "modelName": "shop",
+    "selCols": [
       {
-        ref: 'name',
+        "ref": "name"
       },
       {
-        label: '店铺logo',
-        ref: 'logo_img',
-        width: 180,
+        "label": "店铺logo",
+        "ref": "logo_img",
+        "width": 180
       },
       {
-        label: '掌柜id',
-        ref: 'user_id',
+        "label": "掌柜id",
+        "ref": "user_id"
       },
       {
-        label: '星级',
-        ref: 'level',
+        "label": "星级",
+        "ref": "level"
       },
       {
-        label: '创建时间',
-        ref: 'create_time',
-        width: 60,
+        "label": "创建时间",
+        "ref": "create_time",
+        "width": 60
       },
       {
-        label: '总售件数',
-        ref: 'sell_count',
+        "label": "总售件数",
+        "ref": "sell_count"
       },
       {
-        label: '总营业额',
-        ref: 'sell_money',
+        "label": "总营业额",
+        "ref": "sell_money"
       },
       {
-        label: '好评',
-        ref: 'like',
+        "label": "好评",
+        "ref": "like"
       },
       {
-        label: '是否开店',
-        ref: 'is_open',
+        "label": "是否开店",
+        "ref": "is_open"
       },
       {
-        label: '状态',
-        ref: 'status',
+        "label": "状态",
+        "ref": "status"
       },
       {
-        label: '是否启用',
-        ref: 'enable',
+        "label": "是否启用",
+        "ref": "enable"
       },
       {
-        ref: 'intro',
-      },
+        "ref": "intro"
+      }
     ],
-    selColsEq: [
+    "selColsEq": [
       {
-        ref: 'user_id',
+        "ref": "user_id"
       },
       {
-        ref: 'is_open',
+        "ref": "is_open"
       },
       {
-        ref: 'enable',
-      },
+        "ref": "enable"
+      }
     ],
-    selColsGap: [
+    "selColsGap": [
       {
-        ref: 'create_time',
-      },
+        "ref": "create_time"
+      }
     ],
-    selColsLike: [
+    "selColsLike": [
       {
-        ref: 'desc',
-      },
+        "ref": "desc"
+      }
     ],
-    selColsSort: [
+    "selColsSort": [
       [
-        'id',
-        'DESC',
+        "id",
+        "DESC"
       ],
       [
-        'create_time',
-        'DESC',
+        "create_time",
+        "DESC"
       ],
       [
-        'level',
-        'DESC',
+        "level",
+        "DESC"
       ],
       [
-        'sell_count',
-        'DESC',
+        "sell_count",
+        "DESC"
       ],
       [
-        'sell_money',
-        'DESC',
+        "sell_money",
+        "DESC"
       ],
       [
-        'follow',
-        'DESC',
+        "follow",
+        "DESC"
       ],
       [
-        'like',
-        'DESC',
-      ],
+        "like",
+        "DESC"
+      ]
     ],
-    tableComment: '商店',
-    tableName: 'shop',
-    viewOrder: [
-      'name',
-      'logo_img',
-      'user_id',
-      'level',
-      'create_time',
-      'sell_count',
-      'sell_money',
-      'like',
-      'is_open',
-      'status',
-      'enable',
-      'id',
-      'dis_like',
-      'follow',
-      'desc',
-      'intro',
+    "tableComment": "商店",
+    "tableName": "shop",
+    "viewOrder": [
+      "name",
+      "logo_img",
+      "user_id",
+      "level",
+      "create_time",
+      "sell_count",
+      "sell_money",
+      "like",
+      "is_open",
+      "status",
+      "enable",
+      "id",
+      "dis_like",
+      "follow",
+      "desc",
+      "intro"
     ],
-  },
+    "indexes": [
+      {
+        "name": "uk_user_id",
+        "cols": [
+          "user_id"
+        ],
+        "unique": true
+      }
+    ],
+    "adminQueryMode": "read",
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false
+  }
 }

@@ -1,0 +1,296 @@
+{
+  "table": {
+    "tableName": "risk_case_action",
+    "modelName": "risk_case_action",
+    "tableComment": "举报处置执行",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "举报处置执行记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "case_id",
+        "mysqlType": "bigint",
+        "comment": "关联risk_case.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "request_key",
+        "mysqlType": "varchar(96)",
+        "comment": "处置幂等号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "target_type",
+        "mysqlType": "varchar(32)",
+        "comment": "goods/shop/user/order目标",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "target_id",
+        "mysqlType": "bigint",
+        "comment": "目标ID",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "action",
+        "mysqlType": "varchar(32)",
+        "comment": "ban/hold/release动作",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "reverses_id",
+        "mysqlType": "bigint",
+        "comment": "关联risk_case_action.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "admin_id",
+        "mysqlType": "bigint",
+        "comment": "关联admin.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "status",
+        "mysqlType": "varchar(32)",
+        "comment": "业务状态：pending待执行/done完成/failed失败/released解除",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "pending"
+      },
+      {
+        "name": "reason",
+        "mysqlType": "varchar(2000)",
+        "comment": "处置依据",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "error",
+        "mysqlType": "varchar(1000)",
+        "comment": "失败摘要，不含凭据",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_request_key",
+        "cols": [
+          "request_key"
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_target_type_target_id_status",
+        "cols": [
+          "target_type",
+          "target_id",
+          "status"
+        ],
+        "unique": false
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "case_id"
+      },
+      {
+        "ref": "request_key"
+      },
+      {
+        "ref": "target_type"
+      },
+      {
+        "ref": "target_id"
+      },
+      {
+        "ref": "action"
+      },
+      {
+        "ref": "reverses_id"
+      },
+      {
+        "ref": "admin_id"
+      },
+      {
+        "ref": "status"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "case_id"
+      },
+      {
+        "ref": "target_id"
+      },
+      {
+        "ref": "reverses_id"
+      },
+      {
+        "ref": "admin_id"
+      },
+      {
+        "ref": "status"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "举报处置执行记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "case_id",
+        "label": "关联risk_case.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "request_key",
+        "label": "处置幂等号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "target_type",
+        "label": "goods/shop/user/order目标",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "target_id",
+        "label": "目标ID",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "action",
+        "label": "ban/hold/release动作",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "reverses_id",
+        "label": "关联risk_case_action.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "admin_id",
+        "label": "关联admin.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "status",
+        "label": "业务状态：pending待执行/done完成/failed失败/released解除",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "reason",
+        "label": "处置依据",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "error",
+        "label": "失败摘要，不含凭据",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

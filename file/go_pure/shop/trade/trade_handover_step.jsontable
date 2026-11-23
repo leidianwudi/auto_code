@@ -1,0 +1,244 @@
+{
+  "table": {
+    "tableName": "trade_handover_step",
+    "modelName": "trade_handover_step",
+    "tableComment": "账号交接步骤",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "账号交接步骤记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "order_id",
+        "mysqlType": "bigint",
+        "comment": "关联trade_order.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "code",
+        "mysqlType": "varchar(64)",
+        "comment": "步骤编码",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "template_version",
+        "mysqlType": "bigint",
+        "comment": "模板版本",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "definition",
+        "mysqlType": "json",
+        "comment": "必需步骤与验收快照",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "seller_confirmed",
+        "mysqlType": "bigint",
+        "comment": "卖家确认标志",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "buyer_confirmed",
+        "mysqlType": "bigint",
+        "comment": "买家核验标志",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "evidence_ids",
+        "mysqlType": "json",
+        "comment": "私有证据ID列表",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "completed_at",
+        "mysqlType": "datetime",
+        "comment": "完成时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_order_id_code",
+        "cols": [
+          "order_id",
+          "code"
+        ],
+        "unique": true
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "order_id"
+      },
+      {
+        "ref": "code"
+      },
+      {
+        "ref": "template_version"
+      },
+      {
+        "ref": "seller_confirmed"
+      },
+      {
+        "ref": "buyer_confirmed"
+      },
+      {
+        "ref": "completed_at"
+      },
+      {
+        "ref": "created_at"
+      },
+      {
+        "ref": "updated_at"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "order_id"
+      },
+      {
+        "ref": "code"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "账号交接步骤记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "order_id",
+        "label": "关联trade_order.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "code",
+        "label": "步骤编码",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "template_version",
+        "label": "模板版本",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "definition",
+        "label": "必需步骤与验收快照",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "seller_confirmed",
+        "label": "卖家确认标志",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "buyer_confirmed",
+        "label": "买家核验标志",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "evidence_ids",
+        "label": "私有证据ID列表",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "completed_at",
+        "label": "完成时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

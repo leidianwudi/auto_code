@@ -1,0 +1,392 @@
+{
+  "table": {
+    "tableName": "trade_refund",
+    "modelName": "trade_refund",
+    "tableComment": "订单售后退款",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "订单售后退款记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "order_id",
+        "mysqlType": "bigint",
+        "comment": "关联trade_order.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "buyer_id",
+        "mysqlType": "bigint",
+        "comment": "关联user.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "refund_no",
+        "mysqlType": "varchar(64)",
+        "comment": "唯一售后号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "request_key",
+        "mysqlType": "varchar(64)",
+        "comment": "提交售后幂等号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "amount",
+        "mysqlType": "decimal(20,2)",
+        "comment": "申请退款额",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "approved_amount",
+        "mysqlType": "decimal(20,2)",
+        "comment": "核准退款额",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "reason",
+        "mysqlType": "varchar(64)",
+        "comment": "原因编码",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "description",
+        "mysqlType": "varchar(2000)",
+        "comment": "买家说明",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "evidence_ids",
+        "mysqlType": "json",
+        "comment": "私有证据ID列表",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "status",
+        "mysqlType": "varchar(32)",
+        "comment": "业务状态：pending待卖家/seller_rejected卖家拒绝/platform平台/approved核准/refunded已退/rejected驳回/cancelled撤销/awaiting_funds待补款",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "pending"
+      },
+      {
+        "name": "seller_note",
+        "mysqlType": "varchar(2000)",
+        "comment": "卖家答复",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "admin_id",
+        "mysqlType": "bigint",
+        "comment": "关联admin.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "decision_note",
+        "mysqlType": "varchar(2000)",
+        "comment": "裁定依据",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "reply_deadline",
+        "mysqlType": "datetime",
+        "comment": "答复截止时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "decided_at",
+        "mysqlType": "datetime",
+        "comment": "裁定时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "refunded_at",
+        "mysqlType": "datetime",
+        "comment": "退款时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_refund_no",
+        "cols": [
+          "refund_no"
+        ],
+        "unique": true
+      },
+      {
+        "name": "uk_buyer_id_request_key",
+        "cols": [
+          "buyer_id",
+          "request_key"
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_order_id_status",
+        "cols": [
+          "order_id",
+          "status"
+        ],
+        "unique": false
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "order_id"
+      },
+      {
+        "ref": "buyer_id"
+      },
+      {
+        "ref": "refund_no"
+      },
+      {
+        "ref": "request_key"
+      },
+      {
+        "ref": "amount"
+      },
+      {
+        "ref": "approved_amount"
+      },
+      {
+        "ref": "reason"
+      },
+      {
+        "ref": "description"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "order_id"
+      },
+      {
+        "ref": "buyer_id"
+      },
+      {
+        "ref": "status"
+      },
+      {
+        "ref": "admin_id"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "订单售后退款记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "order_id",
+        "label": "关联trade_order.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "buyer_id",
+        "label": "关联user.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "refund_no",
+        "label": "唯一售后号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "request_key",
+        "label": "提交售后幂等号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "amount",
+        "label": "申请退款额",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "approved_amount",
+        "label": "核准退款额",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "reason",
+        "label": "原因编码",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "description",
+        "label": "买家说明",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "evidence_ids",
+        "label": "私有证据ID列表",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "status",
+        "label": "业务状态：pending待卖家/seller_rejected卖家拒绝/platform平台/approved核准/refunded已退/rejected驳回/cancelled撤销/awaiting_funds待补款",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "seller_note",
+        "label": "卖家答复",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "admin_id",
+        "label": "关联admin.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "decision_note",
+        "label": "裁定依据",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "reply_deadline",
+        "label": "答复截止时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "decided_at",
+        "label": "裁定时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "refunded_at",
+        "label": "退款时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

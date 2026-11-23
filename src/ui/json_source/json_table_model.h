@@ -549,7 +549,7 @@ QVector<JsonTableTable> listProjectTables(const QString &baseDir);
 /// deriveI18nTable 保持一致（两处实现互为镜像，修改需同步）：
 ///   表名/模型名 = i18n.table；表注释 = 主表注释 + "多语言表"；frontend=false；
 ///   列 = id（自增主键，类型随主表主键）+ extKey（类型随主表主键）+
-///        langKey（varchar(8)）+ fields（继承主表同名列的类型/符号/可空/注释，
+///        langKey（varchar(64)，对齐base_lang）+ fields（继承主表同名列的类型/符号/可空/注释，
 ///        主表无此列时回退 varchar(255) 文本）+ created_at/updated_at（datetime 可空）；
 ///   索引 = uk_{extKey}_{langKey}（extKey+langKey 唯一）。
 /// 前提：main.i18n.isEnabled()（调用方保证）；不检查显式翻译表文件是否存在

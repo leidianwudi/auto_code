@@ -912,7 +912,7 @@ static void testDeriveI18nTable() {
   main.i18n.table = QStringLiteral("shop0");
   main.i18n.extKey = QStringLiteral("ext_id");
   main.i18n.langKey = QStringLiteral("lang");
-  main.i18n.fields = QStringList{QStringLiteral("name"), QStringLiteral("intro")};
+  main.i18n.fields = {{QStringLiteral("name"), {}}, {QStringLiteral("intro"), {}}};
 
   const JsonTableTable d = deriveI18nTable(main);
   CHECK(d.tableName == QStringLiteral("shop0"));
@@ -929,7 +929,7 @@ static void testDeriveI18nTable() {
   CHECK(d.columns[1].mysqlType == QStringLiteral("int"));  // extKey 类型随主表主键
   CHECK(d.columns[1].comment.contains(QStringLiteral("shop")));
   CHECK(d.columns[2].name == QStringLiteral("lang"));
-  CHECK(d.columns[2].mysqlType == QStringLiteral("varchar(8)"));
+  CHECK(d.columns[2].mysqlType == QStringLiteral("varchar(64)"));
   CHECK(d.columns[3].name == QStringLiteral("name"));
   CHECK(d.columns[3].mysqlType == QStringLiteral("varchar(255)"));  // 继承主表同名列
   CHECK(d.columns[3].comment == QStringLiteral("商店名称"));

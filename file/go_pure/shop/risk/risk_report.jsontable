@@ -1,0 +1,349 @@
+{
+  "table": {
+    "tableName": "risk_report",
+    "modelName": "risk_report",
+    "tableComment": "独立用户举报",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "独立用户举报记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "user_id",
+        "mysqlType": "bigint",
+        "comment": "关联user.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "report_no",
+        "mysqlType": "varchar(64)",
+        "comment": "唯一举报号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "request_key",
+        "mysqlType": "varchar(64)",
+        "comment": "提交幂等号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "target_type",
+        "mysqlType": "varchar(32)",
+        "comment": "goods/shop/user/account/external目标",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "target_id",
+        "mysqlType": "bigint",
+        "comment": "内部目标ID，外部线索为0",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "target_snapshot",
+        "mysqlType": "json",
+        "comment": "目标公开内容或外部线索快照",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "order_id",
+        "mysqlType": "bigint",
+        "comment": "关联trade_order.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "reason",
+        "mysqlType": "varchar(64)",
+        "comment": "原因编码",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "description",
+        "mysqlType": "varchar(4000)",
+        "comment": "事实说明",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "evidence_ids",
+        "mysqlType": "json",
+        "comment": "私有证据ID列表",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "case_id",
+        "mysqlType": "bigint",
+        "comment": "关联risk_case.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "status",
+        "mysqlType": "varchar(32)",
+        "comment": "业务状态：pending待核查/processing核查/closed反馈",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "pending"
+      },
+      {
+        "name": "feedback",
+        "mysqlType": "varchar(2000)",
+        "comment": "可披露给举报人的反馈",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_report_no",
+        "cols": [
+          "report_no"
+        ],
+        "unique": true
+      },
+      {
+        "name": "uk_user_id_request_key",
+        "cols": [
+          "user_id",
+          "request_key"
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_status_id",
+        "cols": [
+          "status",
+          "id"
+        ],
+        "unique": false
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "user_id"
+      },
+      {
+        "ref": "report_no"
+      },
+      {
+        "ref": "request_key"
+      },
+      {
+        "ref": "target_type"
+      },
+      {
+        "ref": "target_id"
+      },
+      {
+        "ref": "order_id"
+      },
+      {
+        "ref": "reason"
+      },
+      {
+        "ref": "description"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "user_id"
+      },
+      {
+        "ref": "target_id"
+      },
+      {
+        "ref": "order_id"
+      },
+      {
+        "ref": "case_id"
+      },
+      {
+        "ref": "status"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "独立用户举报记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "user_id",
+        "label": "关联user.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "report_no",
+        "label": "唯一举报号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "request_key",
+        "label": "提交幂等号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "target_type",
+        "label": "goods/shop/user/account/external目标",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "target_id",
+        "label": "内部目标ID，外部线索为0",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "target_snapshot",
+        "label": "目标公开内容或外部线索快照",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "order_id",
+        "label": "关联trade_order.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "reason",
+        "label": "原因编码",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "description",
+        "label": "事实说明",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "evidence_ids",
+        "label": "私有证据ID列表",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "case_id",
+        "label": "关联risk_case.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "status",
+        "label": "业务状态：pending待核查/processing核查/closed反馈",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "feedback",
+        "label": "可披露给举报人的反馈",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

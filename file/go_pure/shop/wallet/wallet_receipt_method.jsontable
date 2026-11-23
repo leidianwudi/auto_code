@@ -1,0 +1,307 @@
+{
+  "table": {
+    "tableName": "wallet_receipt_method",
+    "modelName": "wallet_receipt_method",
+    "tableComment": "平台收款渠道",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "平台收款渠道记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "code",
+        "mysqlType": "varchar(64)",
+        "comment": "渠道唯一编码",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "kind",
+        "mysqlType": "varchar(32)",
+        "comment": "wechat/alipay/bank方式",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "name",
+        "mysqlType": "varchar(128)",
+        "comment": "展示名称",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "payee",
+        "mysqlType": "varchar(128)",
+        "comment": "平台收款人",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "account_ciphertext",
+        "mysqlType": "text",
+        "comment": "加密银行或收款账号",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "hidden": true
+      },
+      {
+        "name": "qr_asset_id",
+        "mysqlType": "bigint",
+        "comment": "关联file_asset.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "currency",
+        "mysqlType": "varchar(8)",
+        "comment": "首期币种CNY",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "min_amount",
+        "mysqlType": "decimal(20,2)",
+        "comment": "最低充值额",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "max_amount",
+        "mysqlType": "decimal(20,2)",
+        "comment": "最高充值额，0不限制",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "version",
+        "mysqlType": "bigint",
+        "comment": "收款账号版本",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "1"
+      },
+      {
+        "name": "sort",
+        "mysqlType": "bigint",
+        "comment": "排序",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "enable",
+        "mysqlType": "tinyint",
+        "comment": "启停：0停用/1启用",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "1"
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_code",
+        "cols": [
+          "code"
+        ],
+        "unique": true
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "code"
+      },
+      {
+        "ref": "kind"
+      },
+      {
+        "ref": "name"
+      },
+      {
+        "ref": "payee"
+      },
+      {
+        "ref": "qr_asset_id"
+      },
+      {
+        "ref": "currency"
+      },
+      {
+        "ref": "min_amount"
+      },
+      {
+        "ref": "max_amount"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "code"
+      },
+      {
+        "ref": "qr_asset_id"
+      },
+      {
+        "ref": "enable"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "平台收款渠道记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "code",
+        "label": "渠道唯一编码",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "kind",
+        "label": "wechat/alipay/bank方式",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "name",
+        "label": "展示名称",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "payee",
+        "label": "平台收款人",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "qr_asset_id",
+        "label": "关联file_asset.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "currency",
+        "label": "首期币种CNY",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "min_amount",
+        "label": "最低充值额",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "max_amount",
+        "label": "最高充值额，0不限制",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "version",
+        "label": "收款账号版本",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "sort",
+        "label": "排序",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "enable",
+        "label": "启停：0停用/1启用",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

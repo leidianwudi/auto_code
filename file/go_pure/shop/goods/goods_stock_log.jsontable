@@ -1,0 +1,273 @@
+{
+  "table": {
+    "tableName": "goods_stock_log",
+    "modelName": "goods_stock_log",
+    "tableComment": "商品库存日志",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "商品库存日志记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "sku_id",
+        "mysqlType": "bigint",
+        "comment": "关联goods_sku.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "order_id",
+        "mysqlType": "bigint",
+        "comment": "关联trade_order.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "request_key",
+        "mysqlType": "varchar(96)",
+        "comment": "库存动作幂等号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "action",
+        "mysqlType": "varchar(32)",
+        "comment": "reserve/release/deliver/adjust动作",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "quantity",
+        "mysqlType": "bigint",
+        "comment": "变动数量",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "stock_before",
+        "mysqlType": "bigint",
+        "comment": "原可售库存",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "stock_after",
+        "mysqlType": "bigint",
+        "comment": "新可售库存",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "actor_type",
+        "mysqlType": "varchar(16)",
+        "comment": "user/admin/system操作主体",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "actor_id",
+        "mysqlType": "bigint",
+        "comment": "操作主体ID",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_request_key",
+        "cols": [
+          "request_key"
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_sku_id_id",
+        "cols": [
+          "sku_id",
+          "id"
+        ],
+        "unique": false
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "sku_id"
+      },
+      {
+        "ref": "order_id"
+      },
+      {
+        "ref": "request_key"
+      },
+      {
+        "ref": "action"
+      },
+      {
+        "ref": "quantity"
+      },
+      {
+        "ref": "stock_before"
+      },
+      {
+        "ref": "stock_after"
+      },
+      {
+        "ref": "actor_type"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "sku_id"
+      },
+      {
+        "ref": "order_id"
+      },
+      {
+        "ref": "actor_id"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "商品库存日志记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "sku_id",
+        "label": "关联goods_sku.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "order_id",
+        "label": "关联trade_order.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "request_key",
+        "label": "库存动作幂等号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "action",
+        "label": "reserve/release/deliver/adjust动作",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "quantity",
+        "label": "变动数量",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "stock_before",
+        "label": "原可售库存",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "stock_after",
+        "label": "新可售库存",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "actor_type",
+        "label": "user/admin/system操作主体",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "actor_id",
+        "label": "操作主体ID",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

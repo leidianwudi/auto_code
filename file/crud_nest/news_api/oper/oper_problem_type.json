@@ -1,0 +1,12 @@
+{
+    "$schema": "/crud_nest/template/tool/param.schema.json",
+    "tables": [
+        {
+            "modelName": "oper/oper_problem_type",
+            "selCols": [
+                "enable"
+            ],
+            "tableName": "oper_problem_type"
+        }
+    ]
+}

@@ -1,0 +1,283 @@
+{
+  "table": {
+    "tableName": "goods_account_asset",
+    "modelName": "goods_account_asset",
+    "tableComment": "游戏账号资产",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "游戏账号资产记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "goods_id",
+        "mysqlType": "bigint",
+        "comment": "关联goods.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "sku_id",
+        "mysqlType": "bigint",
+        "comment": "关联goods_sku.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "fingerprint",
+        "mysqlType": "varchar(128)",
+        "comment": "实际账号指纹，不含凭证",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "game_id",
+        "mysqlType": "bigint",
+        "comment": "关联game.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "release_id",
+        "mysqlType": "bigint",
+        "comment": "关联game_release.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "bindings",
+        "mysqlType": "json",
+        "comment": "换绑和整套交接范围",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "status",
+        "mysqlType": "varchar(32)",
+        "comment": "业务状态：available可售/reserved预占/handover交接/completed售出/quarantined隔离",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "available"
+      },
+      {
+        "name": "order_id",
+        "mysqlType": "bigint",
+        "comment": "关联trade_order.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "verification",
+        "mysqlType": "varchar(1000)",
+        "comment": "来源核验说明",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_game_id_release_id_fingerprint",
+        "cols": [
+          "game_id",
+          "release_id",
+          "fingerprint"
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_sku_id_status",
+        "cols": [
+          "sku_id",
+          "status"
+        ],
+        "unique": false
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "goods_id"
+      },
+      {
+        "ref": "sku_id"
+      },
+      {
+        "ref": "fingerprint"
+      },
+      {
+        "ref": "game_id"
+      },
+      {
+        "ref": "release_id"
+      },
+      {
+        "ref": "status"
+      },
+      {
+        "ref": "order_id"
+      },
+      {
+        "ref": "verification"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "goods_id"
+      },
+      {
+        "ref": "sku_id"
+      },
+      {
+        "ref": "game_id"
+      },
+      {
+        "ref": "release_id"
+      },
+      {
+        "ref": "status"
+      },
+      {
+        "ref": "order_id"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "游戏账号资产记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "goods_id",
+        "label": "关联goods.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "sku_id",
+        "label": "关联goods_sku.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "fingerprint",
+        "label": "实际账号指纹，不含凭证",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "game_id",
+        "label": "关联game.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "release_id",
+        "label": "关联game_release.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "bindings",
+        "label": "换绑和整套交接范围",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "status",
+        "label": "业务状态：available可售/reserved预占/handover交接/completed售出/quarantined隔离",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "order_id",
+        "label": "关联trade_order.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "verification",
+        "label": "来源核验说明",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

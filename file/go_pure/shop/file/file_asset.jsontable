@@ -1,0 +1,294 @@
+{
+  "table": {
+    "tableName": "file_asset",
+    "modelName": "file_asset",
+    "tableComment": "私有附件元数据",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "私有附件元数据记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "uploader_type",
+        "mysqlType": "varchar(16)",
+        "comment": "user/admin上传主体",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "uploader_id",
+        "mysqlType": "bigint",
+        "comment": "上传主体ID",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "purpose",
+        "mysqlType": "varchar(64)",
+        "comment": "充值、举报、交付、聊天、提现用途",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "storage_key",
+        "mysqlType": "varchar(256)",
+        "comment": "私有根目录内服务端存储键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "original_name",
+        "mysqlType": "varchar(256)",
+        "comment": "原始文件名，展示时转义",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "mime",
+        "mysqlType": "varchar(128)",
+        "comment": "验证后真实MIME",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "size",
+        "mysqlType": "bigint",
+        "comment": "实际字节数",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "digest",
+        "mysqlType": "varchar(64)",
+        "comment": "SHA256摘要",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "status",
+        "mysqlType": "varchar(32)",
+        "comment": "业务状态：draft未绑定/bound绑定/revoked撤权/deleted清理",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "draft"
+      },
+      {
+        "name": "expires_at",
+        "mysqlType": "datetime",
+        "comment": "草稿到期时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_storage_key",
+        "cols": [
+          "storage_key"
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_uploader_type_uploader_id_id",
+        "cols": [
+          "uploader_type",
+          "uploader_id",
+          "id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "idx_status_expires_at",
+        "cols": [
+          "status",
+          "expires_at"
+        ],
+        "unique": false
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "uploader_type"
+      },
+      {
+        "ref": "uploader_id"
+      },
+      {
+        "ref": "purpose"
+      },
+      {
+        "ref": "storage_key"
+      },
+      {
+        "ref": "original_name"
+      },
+      {
+        "ref": "mime"
+      },
+      {
+        "ref": "size"
+      },
+      {
+        "ref": "digest"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "uploader_id"
+      },
+      {
+        "ref": "status"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "私有附件元数据记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "uploader_type",
+        "label": "user/admin上传主体",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "uploader_id",
+        "label": "上传主体ID",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "purpose",
+        "label": "充值、举报、交付、聊天、提现用途",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "storage_key",
+        "label": "私有根目录内服务端存储键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "original_name",
+        "label": "原始文件名，展示时转义",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "mime",
+        "label": "验证后真实MIME",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "size",
+        "label": "实际字节数",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "digest",
+        "label": "SHA256摘要",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "status",
+        "label": "业务状态：draft未绑定/bound绑定/revoked撤权/deleted清理",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "expires_at",
+        "label": "草稿到期时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

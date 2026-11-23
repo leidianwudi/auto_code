@@ -1,0 +1,253 @@
+{
+  "table": {
+    "tableName": "risk_case_log",
+    "modelName": "risk_case_log",
+    "tableComment": "举报案件过程记录",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "举报案件过程记录记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "case_id",
+        "mysqlType": "bigint",
+        "comment": "关联risk_case.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "request_key",
+        "mysqlType": "varchar(96)",
+        "comment": "过程动作幂等号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "action",
+        "mysqlType": "varchar(64)",
+        "comment": "分派、补证、答辩、裁定、复核动作",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "actor_type",
+        "mysqlType": "varchar(16)",
+        "comment": "user/admin/system主体",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "actor_id",
+        "mysqlType": "bigint",
+        "comment": "操作者ID",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "visibility",
+        "mysqlType": "varchar(32)",
+        "comment": "platform/complainant/respondent/participants可见范围",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "content",
+        "mysqlType": "varchar(4000)",
+        "comment": "过程说明和裁定依据",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "evidence_ids",
+        "mysqlType": "json",
+        "comment": "本步骤私有证据ID列表",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_request_key",
+        "cols": [
+          "request_key"
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_case_id_id",
+        "cols": [
+          "case_id",
+          "id"
+        ],
+        "unique": false
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "case_id"
+      },
+      {
+        "ref": "request_key"
+      },
+      {
+        "ref": "action"
+      },
+      {
+        "ref": "actor_type"
+      },
+      {
+        "ref": "actor_id"
+      },
+      {
+        "ref": "visibility"
+      },
+      {
+        "ref": "content"
+      },
+      {
+        "ref": "created_at"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "case_id"
+      },
+      {
+        "ref": "actor_id"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "举报案件过程记录记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "case_id",
+        "label": "关联risk_case.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "request_key",
+        "label": "过程动作幂等号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "action",
+        "label": "分派、补证、答辩、裁定、复核动作",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "actor_type",
+        "label": "user/admin/system主体",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "actor_id",
+        "label": "操作者ID",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "visibility",
+        "label": "platform/complainant/respondent/participants可见范围",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "content",
+        "label": "过程说明和裁定依据",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "evidence_ids",
+        "label": "本步骤私有证据ID列表",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

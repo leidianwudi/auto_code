@@ -1,0 +1,23 @@
+/// @file schema_guard_main.ac — 物理表/列命名与真实注释的脚本回归。
+import { validPhysicalName, validateTableSchema } from "../tool/tool_schema.ac";
+import { deriveI18nTable } from "../crud_gin/template/main_api.ac";
+
+main {
+  assert(validPhysicalName("game0", true), "翻译表名0后缀必须可用");
+  assert(!validPhysicalName("Game0", true), "禁止大写表名");
+  assert(validPhysicalName("parent_account", false), "小写下划线列名应通过");
+  assert(!validPhysicalName("up1", false), "列名禁止数字");
+  assert(!validPhysicalName("userId", false), "列名禁止大写");
+  let table: Object = { tableName: "game", tableComment: "游戏目录", columns: [
+    {name: "id", mysqlType: "bigint", comment: "游戏主键", isPrimary: true},
+    {name: "name", mysqlType: "varchar(128)", comment: "默认语言游戏名"}
+  ], i18n: {table: "game0", extKey: "ext_id", langKey: "lang", fields: [{name: "name", label: "游戏名称"}]} };
+  assert(validateTableSchema(table), "完整表定义应通过");
+  let derived: Object = deriveI18nTable(table);
+  assert(validateTableSchema(derived), "派生翻译表应通过相同校验");
+  let invalid: Object = {tableName: "goods",tableComment: "商品",columns: [{name:"id",mysqlType:"bigint",comment:"商品主键"}],i18n:{table:"goods0",extKey:"extId",fields:[{name:"name",label:"名称"}]}};
+  assert(!validateTableSchema(invalid), "后台独立生成也必须拒绝大写翻译关联列");
+  let columns: Object[] = derived["columns"];
+  assert(columns[2]["mysqlType"] == "varchar(64)", "派生语言长度必须对齐base_lang");
+  printLog("schema guard: PASS");
+}

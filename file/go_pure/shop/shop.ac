@@ -6,7 +6,7 @@
 //   ../../admin_pure/template/main_admin.ac → pure-admin 前端
 //
 // 表清单与多语言识别统一由生成链处理（tool_jsontable.ac 的 collectTablePaths）：
-//   勾选哪些 .jsontable 就重新生成哪些表，新增表只需勾选、无需改本脚本；
+//   本项目入口全量扫描 .jsontable，保证命令行和开发机生成同一套模块；
 //   项目根存在 base/base_lang.jsontable（基础语言表）即视为多语言项目，
 //   基础表固定参与生成，不需要任何开关变量。
 //
@@ -23,6 +23,10 @@ main {
   // 项目配置（meta.goBasePath / meta.webBasePath 的读取入口）：
   // 入口脚本与 project.acproj 同目录，生成链缺省回退 meta 中的目标路径。
   let projPath: String = scriptDir() + "/project.acproj";
+  let tablePaths: String[] = [];
+  let relativePaths: String[] = listFilesDeep(scriptDir(), ".jsontable");
+  for (path in relativePaths) { tablePaths.append(scriptDir() + "/" + path); }
+  assert(tablePaths.length > 0, "shop目录没有表配置，停止生成");
 
   // ── 1. Go 后端生成 ────────────────────────────────────────────────
   //     genGlobalEnum: false 可跳过全局枚举生成（缺省生成）；
@@ -31,10 +35,12 @@ main {
   //     frontend=false 的表（纯 API 模块）后端链照常生成
   let apiParams: Object = {
     projPath: projPath,
+    jsonTablePaths: tablePaths,
     genGlobalEnum: true,
     enumRegPath: "shop_api/common/enumreg"
   };
-  generateApiMain(apiParams);
+  let generated: Number = generateApiMain(apiParams);
+  assert(generated > 0, "Go生成未成功，停止管理端生成");
 
   // ── 2. pure-admin 前端生成 ────────────────────────────────────────
   //     双轨制：目标页面目录存在同名 .jsonvue 则按高级页生成，
@@ -44,6 +50,7 @@ main {
   let tplDir: String = "../../admin_pure/template";
   let adminParams: Object = {
     projPath: projPath,
+    jsonTablePaths: tablePaths,
     apiPrefix: "/api",
     // 标准列表使用项目内 ReListTable，重新生成后保留列设置和拖动列宽功能。
     useListTable: true,

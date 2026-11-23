@@ -1,0 +1,257 @@
+{
+  "table": {
+    "tableName": "msg_notice",
+    "modelName": "msg_notice",
+    "tableComment": "站内业务通知",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "站内业务通知记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "subject_type",
+        "mysqlType": "varchar(16)",
+        "comment": "user/admin接收主体",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "subject_id",
+        "mysqlType": "bigint",
+        "comment": "接收主体ID",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "request_key",
+        "mysqlType": "varchar(128)",
+        "comment": "通知事件唯一号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "template",
+        "mysqlType": "varchar(64)",
+        "comment": "本地化通知模板编码",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "params",
+        "mysqlType": "json",
+        "comment": "结构化模板参数，不含秘密",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "business_type",
+        "mysqlType": "varchar(32)",
+        "comment": "关联业务类型",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "business_id",
+        "mysqlType": "bigint",
+        "comment": "业务ID",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "is_read",
+        "mysqlType": "bigint",
+        "comment": "已读标志",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_subject_type_subject_id_request_key",
+        "cols": [
+          "subject_type",
+          "subject_id",
+          "request_key"
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_subject_type_subject_id_is_read_id",
+        "cols": [
+          "subject_type",
+          "subject_id",
+          "is_read",
+          "id"
+        ],
+        "unique": false
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "subject_type"
+      },
+      {
+        "ref": "subject_id"
+      },
+      {
+        "ref": "request_key"
+      },
+      {
+        "ref": "template"
+      },
+      {
+        "ref": "business_type"
+      },
+      {
+        "ref": "business_id"
+      },
+      {
+        "ref": "is_read"
+      },
+      {
+        "ref": "created_at"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "subject_id"
+      },
+      {
+        "ref": "business_id"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "站内业务通知记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "subject_type",
+        "label": "user/admin接收主体",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "subject_id",
+        "label": "接收主体ID",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "request_key",
+        "label": "通知事件唯一号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "template",
+        "label": "本地化通知模板编码",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "params",
+        "label": "结构化模板参数，不含秘密",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "business_type",
+        "label": "关联业务类型",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "business_id",
+        "label": "业务ID",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "is_read",
+        "label": "已读标志",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

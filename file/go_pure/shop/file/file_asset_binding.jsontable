@@ -1,0 +1,206 @@
+{
+  "table": {
+    "tableName": "file_asset_binding",
+    "modelName": "file_asset_binding",
+    "tableComment": "私有附件业务绑定",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "私有附件业务绑定记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "asset_id",
+        "mysqlType": "bigint",
+        "comment": "关联file_asset.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "business_type",
+        "mysqlType": "varchar(32)",
+        "comment": "recharge/order/report/chat/payout业务",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "business_id",
+        "mysqlType": "bigint",
+        "comment": "业务对象ID",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "purpose",
+        "mysqlType": "varchar(64)",
+        "comment": "本次绑定用途",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "active",
+        "mysqlType": "bigint",
+        "comment": "绑定有效标志",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "1"
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_asset_id_business_type_business_id_purpose",
+        "cols": [
+          "asset_id",
+          "business_type",
+          "business_id",
+          "purpose"
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_business_type_business_id",
+        "cols": [
+          "business_type",
+          "business_id"
+        ],
+        "unique": false
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "asset_id"
+      },
+      {
+        "ref": "business_type"
+      },
+      {
+        "ref": "business_id"
+      },
+      {
+        "ref": "purpose"
+      },
+      {
+        "ref": "active"
+      },
+      {
+        "ref": "created_at"
+      },
+      {
+        "ref": "updated_at"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "asset_id"
+      },
+      {
+        "ref": "business_id"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "私有附件业务绑定记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "asset_id",
+        "label": "关联file_asset.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "business_type",
+        "label": "recharge/order/report/chat/payout业务",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "business_id",
+        "label": "业务对象ID",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "purpose",
+        "label": "本次绑定用途",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "active",
+        "label": "绑定有效标志",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

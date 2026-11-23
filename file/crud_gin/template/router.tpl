@@ -28,11 +28,15 @@ func mount${tableClass}(rg *gin.RouterGroup) (*gin.RouterGroup, *${handlerClass}
 // （首次骨架，重新生成不覆盖），由下方 RegisterExtRoutes 自动挂载。
 func RegisterRoutes(rg *gin.RouterGroup) {
 	g, h := mount${tableClass}(rg)
+${if adminRead}
 	{
 		g.POST("/selectByIn", middleware.RequirePerm("${permPrefix}:list"), h.SelectByIn)
 		g.POST("/selectById", middleware.RequirePerm("${permPrefix}:list"), h.SelectById)
+${if adminWrite}
 		g.POST("/update", middleware.RequirePerm("${permPrefix}:edit"), h.Update)
 		g.POST("/delete", middleware.RequirePerm("${permPrefix}:delete"), h.Delete)
+${/if}
 	}
+${/if}
 	RegisterExtRoutes(g, h)
 }

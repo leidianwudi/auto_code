@@ -81,9 +81,13 @@ void setExcludedColumns(JsonTableTable *table, const QStringList &columns);
 bool validateCrossRefs(const JsonTableTable &table, const JsonTableConfig &config,
                        const QVector<JsonTableTable> &projectTables,
                        const QString &originalTableName, QString *err);
-/// 生成带标识符/字面量转义的建表语句。
+/// 校验物理命名、字段类型及数据库注释，DDL和设计器共用同一规则。
+bool validatePhysicalSchema(const QString &tableName, const QString &tableComment,
+                            const QVector<JsonTableColumn> &cols, QString *err = nullptr);
+/// 生成带标识符/字面量转义的建表语句；不合规返回空串并提供原因。
 QString createDdlText(const QString &tableName, const QString &tableComment,
-                      const QVector<JsonTableColumn> &cols, const QVector<JsonTableIndex> &indexes);
+                      const QVector<JsonTableColumn> &cols, const QVector<JsonTableIndex> &indexes,
+                      QString *err = nullptr);
 /// 数据库结构差异的展示文案，供预览页复用。
 QString importColumnSummary(const JsonTableColumn &column);
 QString importEntryTooltip(const ImportDiffEntry &entry);

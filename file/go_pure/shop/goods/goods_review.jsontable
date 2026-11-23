@@ -1,0 +1,232 @@
+{
+  "table": {
+    "tableName": "goods_review",
+    "modelName": "goods_review",
+    "tableComment": "商品审核记录",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "商品审核记录记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "goods_id",
+        "mysqlType": "bigint",
+        "comment": "关联goods.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "revision",
+        "mysqlType": "bigint",
+        "comment": "审核商品版本",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "snapshot",
+        "mysqlType": "json",
+        "comment": "商品、SKU及全部翻译快照",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "status",
+        "mysqlType": "varchar(32)",
+        "comment": "业务状态：draft草稿/pending审核/approved通过/rejected拒绝",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "pending"
+      },
+      {
+        "name": "admin_id",
+        "mysqlType": "bigint",
+        "comment": "关联admin.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "note",
+        "mysqlType": "varchar(1000)",
+        "comment": "审核理由",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "reviewed_at",
+        "mysqlType": "datetime",
+        "comment": "审核完成时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_goods_id_revision",
+        "cols": [
+          "goods_id",
+          "revision"
+        ],
+        "unique": true
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "goods_id"
+      },
+      {
+        "ref": "revision"
+      },
+      {
+        "ref": "status"
+      },
+      {
+        "ref": "admin_id"
+      },
+      {
+        "ref": "note"
+      },
+      {
+        "ref": "reviewed_at"
+      },
+      {
+        "ref": "created_at"
+      },
+      {
+        "ref": "updated_at"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "goods_id"
+      },
+      {
+        "ref": "status"
+      },
+      {
+        "ref": "admin_id"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "商品审核记录记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "goods_id",
+        "label": "关联goods.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "revision",
+        "label": "审核商品版本",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "snapshot",
+        "label": "商品、SKU及全部翻译快照",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "status",
+        "label": "业务状态：draft草稿/pending审核/approved通过/rejected拒绝",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "admin_id",
+        "label": "关联admin.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "note",
+        "label": "审核理由",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "reviewed_at",
+        "label": "审核完成时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

@@ -228,6 +228,7 @@ const save = async () => {
 
 // 开关列状态切换（POST ${updateUrl} 局部更新，完成后重载列表回显）
 const onSwitchChange = async (row: any, field: string, value: any) => {
+${if hasSwitchUpdate}
   try {
     await ${updateApi}({ id: row.id, [field]: value });
     message('修改成功', { type: 'success' });
@@ -236,6 +237,7 @@ const onSwitchChange = async (row: any, field: string, value: any) => {
   } finally {
     loadData();
   }
+${/if}
 };
 
 ${if !noDelete}

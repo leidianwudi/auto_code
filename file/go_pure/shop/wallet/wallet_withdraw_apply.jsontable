@@ -1,0 +1,378 @@
+{
+  "table": {
+    "tableName": "wallet_withdraw_apply",
+    "modelName": "wallet_withdraw_apply",
+    "tableComment": "商户提现申请",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "商户提现申请记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "user_id",
+        "mysqlType": "bigint",
+        "comment": "关联user.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "shop_id",
+        "mysqlType": "bigint",
+        "comment": "关联shop.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "account_id",
+        "mysqlType": "bigint",
+        "comment": "关联wallet_payout_account.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "withdraw_no",
+        "mysqlType": "varchar(64)",
+        "comment": "唯一提现号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "request_key",
+        "mysqlType": "varchar(64)",
+        "comment": "申请幂等号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "amount",
+        "mysqlType": "decimal(20,2)",
+        "comment": "申请冻结额",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "account_snapshot_ciphertext",
+        "mysqlType": "text",
+        "comment": "加密不可变收款快照",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "hidden": true
+      },
+      {
+        "name": "masked_account",
+        "mysqlType": "varchar(128)",
+        "comment": "脱敏收款快照",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "kind",
+        "mysqlType": "varchar(32)",
+        "comment": "收款方式快照",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "status",
+        "mysqlType": "varchar(32)",
+        "comment": "业务状态：pending审核/approved待付/processing付款/unknown待核实/paid已付/rejected拒绝/cancelled撤销/failed确认未付",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "pending"
+      },
+      {
+        "name": "admin_id",
+        "mysqlType": "bigint",
+        "comment": "关联admin.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "payment_admin_id",
+        "mysqlType": "bigint",
+        "comment": "关联admin.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "review_note",
+        "mysqlType": "varchar(1000)",
+        "comment": "审核撤回依据",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "reviewed_at",
+        "mysqlType": "datetime",
+        "comment": "审核时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "paid_at",
+        "mysqlType": "datetime",
+        "comment": "付款确认时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_withdraw_no",
+        "cols": [
+          "withdraw_no"
+        ],
+        "unique": true
+      },
+      {
+        "name": "uk_user_id_request_key",
+        "cols": [
+          "user_id",
+          "request_key"
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_status_id",
+        "cols": [
+          "status",
+          "id"
+        ],
+        "unique": false
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "user_id"
+      },
+      {
+        "ref": "shop_id"
+      },
+      {
+        "ref": "account_id"
+      },
+      {
+        "ref": "withdraw_no"
+      },
+      {
+        "ref": "request_key"
+      },
+      {
+        "ref": "amount"
+      },
+      {
+        "ref": "masked_account"
+      },
+      {
+        "ref": "kind"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "user_id"
+      },
+      {
+        "ref": "shop_id"
+      },
+      {
+        "ref": "account_id"
+      },
+      {
+        "ref": "status"
+      },
+      {
+        "ref": "admin_id"
+      },
+      {
+        "ref": "payment_admin_id"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "商户提现申请记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "user_id",
+        "label": "关联user.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "shop_id",
+        "label": "关联shop.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "account_id",
+        "label": "关联wallet_payout_account.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "withdraw_no",
+        "label": "唯一提现号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "request_key",
+        "label": "申请幂等号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "amount",
+        "label": "申请冻结额",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "masked_account",
+        "label": "脱敏收款快照",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "kind",
+        "label": "收款方式快照",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "status",
+        "label": "业务状态：pending审核/approved待付/processing付款/unknown待核实/paid已付/rejected拒绝/cancelled撤销/failed确认未付",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "admin_id",
+        "label": "关联admin.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "payment_admin_id",
+        "label": "关联admin.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "review_note",
+        "label": "审核撤回依据",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "reviewed_at",
+        "label": "审核时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "paid_at",
+        "label": "付款确认时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

@@ -1,0 +1,308 @@
+{
+  "table": {
+    "tableName": "chat_session",
+    "modelName": "chat_session",
+    "tableComment": "会话成员及已读视图",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "会话成员及已读视图记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "conversation_id",
+        "mysqlType": "bigint",
+        "comment": "关联chat_conversation.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "subject_type",
+        "mysqlType": "varchar(16)",
+        "comment": "user用户/admin平台人员",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "subject_id",
+        "mysqlType": "bigint",
+        "comment": "所属主体ID",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "last_read_seq",
+        "mysqlType": "bigint",
+        "comment": "最后已读消息序号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "unread_count",
+        "mysqlType": "bigint",
+        "comment": "未读消息数",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "last_message_id",
+        "mysqlType": "bigint",
+        "comment": "最后消息ID",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "last_seq",
+        "mysqlType": "bigint",
+        "comment": "最后可见消息序号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "preview",
+        "mysqlType": "varchar(512)",
+        "comment": "脱敏会话预览",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "pinned",
+        "mysqlType": "bigint",
+        "comment": "置顶标志",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "muted",
+        "mysqlType": "bigint",
+        "comment": "免打扰标志",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "active",
+        "mysqlType": "bigint",
+        "comment": "当前会话读取权标志",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "1"
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_conversation_id_subject_type_subject_id",
+        "cols": [
+          "conversation_id",
+          "subject_type",
+          "subject_id"
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_subject_type_subject_id_id",
+        "cols": [
+          "subject_type",
+          "subject_id",
+          "id"
+        ],
+        "unique": false
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "conversation_id"
+      },
+      {
+        "ref": "subject_type"
+      },
+      {
+        "ref": "subject_id"
+      },
+      {
+        "ref": "last_read_seq"
+      },
+      {
+        "ref": "unread_count"
+      },
+      {
+        "ref": "last_message_id"
+      },
+      {
+        "ref": "last_seq"
+      },
+      {
+        "ref": "preview"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "conversation_id"
+      },
+      {
+        "ref": "subject_id"
+      },
+      {
+        "ref": "last_message_id"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "会话成员及已读视图记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "conversation_id",
+        "label": "关联chat_conversation.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "subject_type",
+        "label": "user用户/admin平台人员",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "subject_id",
+        "label": "所属主体ID",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "last_read_seq",
+        "label": "最后已读消息序号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "unread_count",
+        "label": "未读消息数",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "last_message_id",
+        "label": "最后消息ID",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "last_seq",
+        "label": "最后可见消息序号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "preview",
+        "label": "脱敏会话预览",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "pinned",
+        "label": "置顶标志",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "muted",
+        "label": "免打扰标志",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "active",
+        "label": "当前会话读取权标志",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

@@ -1,0 +1,20 @@
+{
+ "table":{
+  "tableName":"wallet_recharge_log","modelName":"wallet_recharge_log","tableComment":"充值凭证补交及审核不可变过程记录",
+  "columns":[
+   {"name":"id","mysqlType":"bigint","comment":"过程记录主键","nullable":false,"isPrimary":true,"isAutoInc":true},
+   {"name":"apply_id","mysqlType":"bigint","comment":"关联wallet_recharge_apply.id","nullable":false,"default":"0"},
+   {"name":"actor_type","mysqlType":"varchar(16)","comment":"操作主体user或admin","nullable":false,"default":""},
+   {"name":"actor_id","mysqlType":"bigint","comment":"对应用户或管理员ID","nullable":false,"default":"0"},
+   {"name":"action","mysqlType":"varchar(32)","comment":"proof补证或审核动作","nullable":false,"default":""},
+   {"name":"snapshot","mysqlType":"json","comment":"本次凭证ID、备注及审核状态，不含收款密文","nullable":false},
+   {"name":"created_at","mysqlType":"datetime","comment":"过程记录创建时间","nullable":false,"default":"CURRENT_TIMESTAMP"},
+   {"name":"updated_at","mysqlType":"datetime","comment":"记录创建时间，追加后不修改","nullable":false,"default":"CURRENT_TIMESTAMP"}
+  ],
+  "indexes":[{"name":"idx_apply_id_id","cols":["apply_id","id"],"unique":false}],
+  "frontend":false,"adminQueryMode":"empty","appQuery":false,"manualUpdateTime":false,
+  "selCols":[{"ref":"id"},{"ref":"apply_id"},{"ref":"action"},{"ref":"snapshot"},{"ref":"created_at"}],
+  "selColsEq":[{"ref":"apply_id"}],"selColsSort":[["id","ASC"]],"editCols":[],
+  "genAdd":false,"genEdit":false,"genDelete":false,"genDetail":false
+ }
+}

@@ -1,0 +1,256 @@
+{
+  "table": {
+    "tableName": "wallet_receipt",
+    "modelName": "wallet_receipt",
+    "tableComment": "平台实际到账认领",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "平台实际到账认领记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "method_id",
+        "mysqlType": "bigint",
+        "comment": "关联wallet_receipt_method.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "apply_id",
+        "mysqlType": "bigint",
+        "comment": "关联wallet_recharge_apply.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "external_ref",
+        "mysqlType": "varchar(128)",
+        "comment": "正式渠道流水或账单唯一标识",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "amount",
+        "mysqlType": "decimal(20,2)",
+        "comment": "核实实收金额",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "received_at",
+        "mysqlType": "datetime",
+        "comment": "实际收款时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "admin_id",
+        "mysqlType": "bigint",
+        "comment": "关联admin.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "note",
+        "mysqlType": "varchar(1000)",
+        "comment": "核查说明",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "reversed",
+        "mysqlType": "bigint",
+        "comment": "已冲正标志",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_method_id_external_ref",
+        "cols": [
+          "method_id",
+          "external_ref"
+        ],
+        "unique": true
+      },
+      {
+        "name": "uk_apply_id",
+        "cols": [
+          "apply_id"
+        ],
+        "unique": true
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "method_id"
+      },
+      {
+        "ref": "apply_id"
+      },
+      {
+        "ref": "external_ref"
+      },
+      {
+        "ref": "amount"
+      },
+      {
+        "ref": "received_at"
+      },
+      {
+        "ref": "admin_id"
+      },
+      {
+        "ref": "note"
+      },
+      {
+        "ref": "reversed"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "method_id"
+      },
+      {
+        "ref": "apply_id"
+      },
+      {
+        "ref": "admin_id"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "平台实际到账认领记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "method_id",
+        "label": "关联wallet_receipt_method.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "apply_id",
+        "label": "关联wallet_recharge_apply.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "external_ref",
+        "label": "正式渠道流水或账单唯一标识",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "amount",
+        "label": "核实实收金额",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "received_at",
+        "label": "实际收款时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "admin_id",
+        "label": "关联admin.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "note",
+        "label": "核查说明",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "reversed",
+        "label": "已冲正标志",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

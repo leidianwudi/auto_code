@@ -3016,19 +3016,13 @@ QVector<JsonTableEnum> JsonTableDesigner::collectEnums() const {
 // ════════════════════════════════════════════════════════════
 
 bool JsonTableDesigner::validateForDdl(QString *err) const {
-  if (m_nameEdit->text().trimmed().isEmpty()) {
-    if (err) *err = QStringLiteral("表名不能为空");
-    return false;
-  }
-  if (m_colsTable->rowCount() == 0) {
-    if (err) *err = QStringLiteral("请先添加字段列");
-    return false;
-  }
-  for (int r = 0; r < m_colsTable->rowCount(); ++r) {
-    if (cellText(r, ColColName).isEmpty()) {
-      if (err) *err = QStringLiteral("第 %1 行列名不能为空").arg(r + 1);
-      return false;
-    }
+  const JsonTableTable main = collectTable();
+  if (!validatePhysicalSchema(main.tableName, main.tableComment, main.columns, err)) return false;
+  // 派生翻译表同样检查，错误的extKey/langKey不能绕过主表校验。
+  if (main.i18n.isEnabled()) {
+    const JsonTableTable translated = deriveI18nTable(main);
+    if (!validatePhysicalSchema(translated.tableName, translated.tableComment,
+                                translated.columns, err)) return false;
   }
   return true;
 }

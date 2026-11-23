@@ -1,0 +1,263 @@
+{
+  "table": {
+    "tableName": "goods_sku",
+    "modelName": "goods_sku",
+    "tableComment": "商品规格库存",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "商品规格库存记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "goods_id",
+        "mysqlType": "bigint",
+        "comment": "关联goods.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "code",
+        "mysqlType": "varchar(64)",
+        "comment": "商品内规格编码",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "price",
+        "mysqlType": "decimal(20,2)",
+        "comment": "人民币成交单价",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "stock",
+        "mysqlType": "bigint",
+        "comment": "可售库存",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "reserved",
+        "mysqlType": "bigint",
+        "comment": "待付款预占库存",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "sold",
+        "mysqlType": "bigint",
+        "comment": "已交付数量",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "revision",
+        "mysqlType": "bigint",
+        "comment": "价格库存版本",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "1"
+      },
+      {
+        "name": "enable",
+        "mysqlType": "tinyint",
+        "comment": "启停：0停用/1启用",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "1"
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_goods_id_code",
+        "cols": [
+          "goods_id",
+          "code"
+        ],
+        "unique": true
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "goods_id"
+      },
+      {
+        "ref": "code"
+      },
+      {
+        "ref": "price"
+      },
+      {
+        "ref": "stock"
+      },
+      {
+        "ref": "reserved"
+      },
+      {
+        "ref": "sold"
+      },
+      {
+        "ref": "revision"
+      },
+      {
+        "ref": "enable"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "goods_id"
+      },
+      {
+        "ref": "code"
+      },
+      {
+        "ref": "enable"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "商品规格库存记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "goods_id",
+        "label": "关联goods.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "code",
+        "label": "商品内规格编码",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "price",
+        "label": "人民币成交单价",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "stock",
+        "label": "可售库存",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "reserved",
+        "label": "待付款预占库存",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "sold",
+        "label": "已交付数量",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "revision",
+        "label": "价格库存版本",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "enable",
+        "label": "启停：0停用/1启用",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false,
+    "i18n": {
+      "table": "goods_sku0",
+      "extKey": "ext_id",
+      "langKey": "lang",
+      "defaultLang": "zh",
+      "langFrom": "body",
+      "fields": [
+        {
+          "name": "name",
+          "label": "规格名称"
+        }
+      ]
+    }
+  }
+}

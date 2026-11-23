@@ -1,0 +1,248 @@
+{
+  "table": {
+    "tableName": "biz_outbox",
+    "modelName": "biz_outbox",
+    "tableComment": "事务提交后业务任务",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "事务提交后业务任务记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "event_key",
+        "mysqlType": "varchar(128)",
+        "comment": "事件唯一幂等键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "kind",
+        "mysqlType": "varchar(64)",
+        "comment": "消息推送或业务通知类型",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "payload",
+        "mysqlType": "json",
+        "comment": "业务引用数据，不存秘密明文",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "status",
+        "mysqlType": "varchar(32)",
+        "comment": "业务状态：pending待执行/processing执行/done完成/failed失败",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "pending"
+      },
+      {
+        "name": "attempts",
+        "mysqlType": "bigint",
+        "comment": "执行次数",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "available_at",
+        "mysqlType": "datetime",
+        "comment": "下次执行时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "locked_until",
+        "mysqlType": "datetime",
+        "comment": "认领租约到期时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "error",
+        "mysqlType": "varchar(1000)",
+        "comment": "失败摘要，不含凭据",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_event_key",
+        "cols": [
+          "event_key"
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_status_available_at",
+        "cols": [
+          "status",
+          "available_at"
+        ],
+        "unique": false
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "event_key"
+      },
+      {
+        "ref": "kind"
+      },
+      {
+        "ref": "status"
+      },
+      {
+        "ref": "attempts"
+      },
+      {
+        "ref": "available_at"
+      },
+      {
+        "ref": "locked_until"
+      },
+      {
+        "ref": "error"
+      },
+      {
+        "ref": "created_at"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "status"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "事务提交后业务任务记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "event_key",
+        "label": "事件唯一幂等键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "kind",
+        "label": "消息推送或业务通知类型",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "payload",
+        "label": "业务引用数据，不存秘密明文",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "status",
+        "label": "业务状态：pending待执行/processing执行/done完成/failed失败",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "attempts",
+        "label": "执行次数",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "available_at",
+        "label": "下次执行时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "locked_until",
+        "label": "认领租约到期时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "error",
+        "label": "失败摘要，不含凭据",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

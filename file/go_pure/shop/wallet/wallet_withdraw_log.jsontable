@@ -1,0 +1,254 @@
+{
+  "table": {
+    "tableName": "wallet_withdraw_log",
+    "modelName": "wallet_withdraw_log",
+    "tableComment": "提现状态操作日志",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "提现状态操作日志记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "apply_id",
+        "mysqlType": "bigint",
+        "comment": "关联wallet_withdraw_apply.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "request_key",
+        "mysqlType": "varchar(96)",
+        "comment": "动作幂等号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "action",
+        "mysqlType": "varchar(32)",
+        "comment": "approve/reject/start/paid/unknown/cancel动作",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "old_status",
+        "mysqlType": "varchar(32)",
+        "comment": "原状态",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "new_status",
+        "mysqlType": "varchar(32)",
+        "comment": "新状态",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "actor_type",
+        "mysqlType": "varchar(16)",
+        "comment": "user/admin/system主体",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "actor_id",
+        "mysqlType": "bigint",
+        "comment": "操作者ID",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "note",
+        "mysqlType": "varchar(1000)",
+        "comment": "操作依据",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_request_key",
+        "cols": [
+          "request_key"
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_apply_id_id",
+        "cols": [
+          "apply_id",
+          "id"
+        ],
+        "unique": false
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "apply_id"
+      },
+      {
+        "ref": "request_key"
+      },
+      {
+        "ref": "action"
+      },
+      {
+        "ref": "old_status"
+      },
+      {
+        "ref": "new_status"
+      },
+      {
+        "ref": "actor_type"
+      },
+      {
+        "ref": "actor_id"
+      },
+      {
+        "ref": "note"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "apply_id"
+      },
+      {
+        "ref": "actor_id"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "提现状态操作日志记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "apply_id",
+        "label": "关联wallet_withdraw_apply.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "request_key",
+        "label": "动作幂等号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "action",
+        "label": "approve/reject/start/paid/unknown/cancel动作",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "old_status",
+        "label": "原状态",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "new_status",
+        "label": "新状态",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "actor_type",
+        "label": "user/admin/system主体",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "actor_id",
+        "label": "操作者ID",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "note",
+        "label": "操作依据",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

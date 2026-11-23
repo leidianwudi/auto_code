@@ -92,23 +92,27 @@ void testConfigErrors() {
 /// 结构比较、删除引用与 DDL 都可脱离控件验证，避免重构改变业务结果。
 void testSchemaOperations() {
   JsonTableTable table;
-  table.tableName = QStringLiteral("人`员");
+  table.tableName = QStringLiteral("member0");
   table.tableComment = QStringLiteral("退休'人员");
   JsonTableColumn id;
   id.name = QStringLiteral("id");
   id.mysqlType = QStringLiteral("bigint");
   id.isPrimary = true;
   id.isAutoInc = true;
+  id.comment = QStringLiteral("人员记录主键");
   JsonTableColumn name;
   name.name = QStringLiteral("name");
   name.mysqlType = QStringLiteral("varchar(100)");
   name.defaultValue = QStringLiteral("O'Neil");
+  name.comment = QStringLiteral("人员显示名称");
   table.columns = {id, name};
   QString error;
   CHECK(TableSchema::validateCrossRefs(table, {}, {}, table.tableName, &error));
   const QString ddl =
       TableSchema::createDdlText(table.tableName, table.tableComment, table.columns, {});
-  CHECK(ddl.contains(QStringLiteral("`人``员`")));
+  CHECK(ddl.contains(QStringLiteral("`member0`")));
+  CHECK(ddl.contains(QStringLiteral("COMMENT '人员记录主键'")));
+  CHECK(ddl.contains(QStringLiteral("COMMENT '人员显示名称'")));
   CHECK(ddl.contains(QStringLiteral("'退休''人员'")));
   CHECK(ddl.contains(QStringLiteral("DEFAULT 'O''Neil'")));
   const auto diff = TableSchema::buildImportDiffEntries(table.columns, {id}, {});
@@ -123,6 +127,25 @@ void testSchemaOperations() {
   table.columns.append(id);
   CHECK(!TableSchema::validateCrossRefs(table, {}, {}, table.tableName, &error));
   CHECK(error.contains(QStringLiteral("重复")));
+
+  // 物理命名、空白注释和翻译表都在生成DDL前拒绝。
+  CHECK(TableSchema::createDdlText(QStringLiteral("Member"), table.tableComment,
+                                  {id, name}, {}, &error).isEmpty());
+  CHECK(error.contains(QStringLiteral("表 'Member'")));
+  name.name = QStringLiteral("up1");
+  name.comment = QStringLiteral("  ");
+  CHECK(!TableSchema::validatePhysicalSchema(QStringLiteral("member0"), QStringLiteral(" "),
+                                            {id, name}, &error));
+  CHECK(error.contains(QStringLiteral("member0.up1")));
+  CHECK(error.contains(QStringLiteral("表注释")));
+  CHECK(error.contains(QStringLiteral("列注释")));
+  table.columns = {id};
+  table.i18n.table = QStringLiteral("member0");
+  table.i18n.langKey = QStringLiteral("lang1");
+  const auto derived = deriveI18nTable(table);
+  CHECK(!TableSchema::validatePhysicalSchema(derived.tableName, derived.tableComment,
+                                            derived.columns, &error));
+  CHECK(error.contains(QStringLiteral("member0.lang1")));
 }
 
 QString scriptDir() {

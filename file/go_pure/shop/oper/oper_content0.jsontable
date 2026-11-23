@@ -1,0 +1,22 @@
+{
+  "table": {
+    "tableName": "oper_content0",
+    "modelName": "oper_content0",
+    "tableComment": "公告帮助协议多语言翻译",
+    "columns": [
+      {"name":"id","mysqlType":"bigint","comment":"翻译记录主键","isPrimary":true,"isAutoInc":true,"nullable":false},
+      {"name":"ext_id","mysqlType":"bigint","comment":"关联oper_content.id","nullable":false,"default":"0"},
+      {"name":"lang","mysqlType":"varchar(64)","comment":"语言编码，对应base_lang.lang","nullable":false,"default":""},
+      {"name":"title","mysqlType":"varchar(255)","comment":"公告帮助协议标题","nullable":false,"default":""},
+      {"name":"content","mysqlType":"text","comment":"公告帮助协议正文，按纯文本显示","nullable":false},
+      {"name":"created_at","mysqlType":"datetime","comment":"记录创建时间","nullable":false,"default":"CURRENT_TIMESTAMP"},
+      {"name":"updated_at","mysqlType":"datetime","comment":"记录最后更新时间","nullable":false,"default":"CURRENT_TIMESTAMP"}
+    ],
+    "indexes":[{"name":"uk_ext_id_lang","cols":["ext_id","lang"],"unique":true}],
+    "frontend":false,
+    "adminQueryMode":"empty",
+    "appQuery":false,
+    "selCols":[{"ref":"id"},{"ref":"ext_id"},{"ref":"lang"},{"ref":"title"},{"ref":"content"}],
+    "editCols":[]
+  }
+}

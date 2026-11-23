@@ -1,0 +1,24 @@
+{
+  "table": {
+    "tableName": "user_browse_setting",
+    "modelName": "user_browse_setting",
+    "tableComment": "用户足迹记录偏好及清空隔离版本",
+    "columns": [
+      {"name":"id","mysqlType":"bigint","comment":"记录主键","nullable":false,"isPrimary":true,"isAutoInc":true},
+      {"name":"user_id","mysqlType":"bigint","comment":"关联user.id，每个用户唯一","nullable":false,"default":"0"},
+      {"name":"enabled","mysqlType":"int","comment":"是否记录浏览足迹，1开启0关闭","nullable":false,"default":"1"},
+      {"name":"version","mysqlType":"bigint","comment":"清空或切换记录开关时递增，拒绝在途旧请求","nullable":false,"default":"1"},
+      {"name":"created_at","mysqlType":"datetime","comment":"记录创建时间","nullable":false,"default":"CURRENT_TIMESTAMP"},
+      {"name":"updated_at","mysqlType":"datetime","comment":"记录最后更新时间","nullable":false,"default":"CURRENT_TIMESTAMP"}
+    ],
+    "indexes": [{"name":"uk_user_id","cols":["user_id"],"unique":true}],
+    "frontend":false,
+    "adminQueryMode":"empty",
+    "appQuery":false,
+    "manualUpdateTime":false,
+    "selCols":[{"ref":"id"},{"ref":"user_id"},{"ref":"enabled"},{"ref":"version"}],
+    "selColsEq":[{"ref":"user_id"}],
+    "selColsSort":[["id","DESC"]],
+    "editCols":[]
+  }
+}

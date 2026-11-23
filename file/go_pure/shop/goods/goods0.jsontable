@@ -1,0 +1,20 @@
+{
+  "table": {
+    "tableName": "goods0",
+    "modelName": "goods0",
+    "tableComment": "游戏商品多语言表",
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "columns": [
+      {"name":"id","mysqlType":"bigint","comment":"商品翻译记录主键","nullable":false,"isPrimary":true,"isAutoInc":true},
+      {"name":"ext_id","mysqlType":"bigint","comment":"关联goods.id","nullable":false,"default":"0"},
+      {"name":"lang","mysqlType":"varchar(64)","comment":"语言编码，对应base_lang.lang","nullable":false,"default":""},
+      {"name":"name","mysqlType":"varchar(255)","comment":"商品名称","nullable":false,"default":""},
+      {"name":"intro","mysqlType":"text","comment":"商品介绍，不包含游戏登录秘密","nullable":false},
+      {"name":"created_at","mysqlType":"datetime","comment":"创建时间","nullable":true},
+      {"name":"updated_at","mysqlType":"datetime","comment":"最后更新时间","nullable":true}
+    ],
+    "indexes": [{"name":"uk_ext_id_lang","cols":["ext_id","lang"],"unique":true}]
+  }
+}

@@ -1,0 +1,544 @@
+{
+  "table": {
+    "tableName": "trade_order",
+    "modelName": "trade_order",
+    "tableComment": "交易主订单",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "交易主订单记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "order_no",
+        "mysqlType": "varchar(64)",
+        "comment": "唯一订单号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "buyer_id",
+        "mysqlType": "bigint",
+        "comment": "关联user.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "shop_id",
+        "mysqlType": "bigint",
+        "comment": "关联shop.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "seller_id",
+        "mysqlType": "bigint",
+        "comment": "关联user.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "request_key",
+        "mysqlType": "varchar(64)",
+        "comment": "创建订单幂等号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "sku_id",
+        "mysqlType": "bigint",
+        "comment": "关联goods_sku.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "quantity",
+        "mysqlType": "bigint",
+        "comment": "购买数量",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "1"
+      },
+      {
+        "name": "amount",
+        "mysqlType": "decimal(20,2)",
+        "comment": "实付金额",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "lang",
+        "mysqlType": "varchar(64)",
+        "comment": "下单语言码",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "status",
+        "mysqlType": "varchar(32)",
+        "comment": "业务状态：unpaid待付/paid待交付/delivering交付中/receiving待收货/completed完成/closed关闭",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "unpaid"
+      },
+      {
+        "name": "snapshot",
+        "mysqlType": "json",
+        "comment": "发行体系、商品及规则翻译快照",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "settlement_days",
+        "mysqlType": "bigint",
+        "comment": "付款时锁定的结算天数",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "7"
+      },
+      {
+        "name": "auto_receive_hours",
+        "mysqlType": "bigint",
+        "comment": "自动收货小时数，0关闭",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "delivery_hours",
+        "mysqlType": "bigint",
+        "comment": "交付承诺小时数",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "24"
+      },
+      {
+        "name": "pay_deadline",
+        "mysqlType": "datetime",
+        "comment": "未付款关闭时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "paid_at",
+        "mysqlType": "datetime",
+        "comment": "付款时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "delivered_at",
+        "mysqlType": "datetime",
+        "comment": "证据提交时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "receive_deadline",
+        "mysqlType": "datetime",
+        "comment": "自动收货时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "completed_at",
+        "mysqlType": "datetime",
+        "comment": "交易完成时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "settle_at",
+        "mysqlType": "datetime",
+        "comment": "预计结算时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "settled",
+        "mysqlType": "bigint",
+        "comment": "已结算标志0否1是",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "hold_count",
+        "mysqlType": "bigint",
+        "comment": "有效售后或冻结阻断数量",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "delivery_info",
+        "mysqlType": "json",
+        "comment": "普通收货字段，不含密码",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "close_reason",
+        "mysqlType": "varchar(512)",
+        "comment": "关闭原因",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_order_no",
+        "cols": [
+          "order_no"
+        ],
+        "unique": true
+      },
+      {
+        "name": "uk_buyer_id_request_key",
+        "cols": [
+          "buyer_id",
+          "request_key"
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_buyer_id_id",
+        "cols": [
+          "buyer_id",
+          "id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "idx_shop_id_status_id",
+        "cols": [
+          "shop_id",
+          "status",
+          "id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "idx_status_pay_deadline",
+        "cols": [
+          "status",
+          "pay_deadline"
+        ],
+        "unique": false
+      },
+      {
+        "name": "idx_settled_settle_at",
+        "cols": [
+          "settled",
+          "settle_at"
+        ],
+        "unique": false
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "order_no"
+      },
+      {
+        "ref": "buyer_id"
+      },
+      {
+        "ref": "shop_id"
+      },
+      {
+        "ref": "seller_id"
+      },
+      {
+        "ref": "request_key"
+      },
+      {
+        "ref": "sku_id"
+      },
+      {
+        "ref": "quantity"
+      },
+      {
+        "ref": "amount"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "buyer_id"
+      },
+      {
+        "ref": "shop_id"
+      },
+      {
+        "ref": "seller_id"
+      },
+      {
+        "ref": "sku_id"
+      },
+      {
+        "ref": "status"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "交易主订单记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "order_no",
+        "label": "唯一订单号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "buyer_id",
+        "label": "关联user.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "shop_id",
+        "label": "关联shop.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "seller_id",
+        "label": "关联user.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "request_key",
+        "label": "创建订单幂等号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "sku_id",
+        "label": "关联goods_sku.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "quantity",
+        "label": "购买数量",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "amount",
+        "label": "实付金额",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "lang",
+        "label": "下单语言码",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "status",
+        "label": "业务状态：unpaid待付/paid待交付/delivering交付中/receiving待收货/completed完成/closed关闭",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "snapshot",
+        "label": "发行体系、商品及规则翻译快照",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "settlement_days",
+        "label": "付款时锁定的结算天数",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "auto_receive_hours",
+        "label": "自动收货小时数，0关闭",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "delivery_hours",
+        "label": "交付承诺小时数",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "pay_deadline",
+        "label": "未付款关闭时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "paid_at",
+        "label": "付款时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "delivered_at",
+        "label": "证据提交时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "receive_deadline",
+        "label": "自动收货时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "completed_at",
+        "label": "交易完成时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "settle_at",
+        "label": "预计结算时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "settled",
+        "label": "已结算标志0否1是",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "hold_count",
+        "label": "有效售后或冻结阻断数量",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "delivery_info",
+        "label": "普通收货字段，不含密码",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "close_reason",
+        "label": "关闭原因",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

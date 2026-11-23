@@ -1,0 +1,232 @@
+{
+  "table": {
+    "tableName": "trade_order_item",
+    "modelName": "trade_order_item",
+    "tableComment": "订单明细快照",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "订单明细快照记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "order_id",
+        "mysqlType": "bigint",
+        "comment": "关联trade_order.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "goods_id",
+        "mysqlType": "bigint",
+        "comment": "关联goods.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "sku_id",
+        "mysqlType": "bigint",
+        "comment": "关联goods_sku.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "quantity",
+        "mysqlType": "bigint",
+        "comment": "成交数量",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "unit_price",
+        "mysqlType": "decimal(20,2)",
+        "comment": "成交单价",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "amount",
+        "mysqlType": "decimal(20,2)",
+        "comment": "明细成交额",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "snapshot",
+        "mysqlType": "json",
+        "comment": "商品规格不可变翻译快照",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_order_id",
+        "cols": [
+          "order_id"
+        ],
+        "unique": true
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "order_id"
+      },
+      {
+        "ref": "goods_id"
+      },
+      {
+        "ref": "sku_id"
+      },
+      {
+        "ref": "quantity"
+      },
+      {
+        "ref": "unit_price"
+      },
+      {
+        "ref": "amount"
+      },
+      {
+        "ref": "created_at"
+      },
+      {
+        "ref": "updated_at"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "order_id"
+      },
+      {
+        "ref": "goods_id"
+      },
+      {
+        "ref": "sku_id"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "订单明细快照记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "order_id",
+        "label": "关联trade_order.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "goods_id",
+        "label": "关联goods.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "sku_id",
+        "label": "关联goods_sku.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "quantity",
+        "label": "成交数量",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "unit_price",
+        "label": "成交单价",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "amount",
+        "label": "明细成交额",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "snapshot",
+        "label": "商品规格不可变翻译快照",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

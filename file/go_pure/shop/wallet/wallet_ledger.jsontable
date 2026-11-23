@@ -1,0 +1,393 @@
+{
+  "table": {
+    "tableName": "wallet_ledger",
+    "modelName": "wallet_ledger",
+    "tableComment": "不可变钱包资金流水",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "不可变钱包资金流水记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "user_id",
+        "mysqlType": "bigint",
+        "comment": "关联user.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "business_type",
+        "mysqlType": "varchar(32)",
+        "comment": "recharge/pay/refund/settle/withdraw/reverse业务",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "business_id",
+        "mysqlType": "bigint",
+        "comment": "业务单ID",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "request_key",
+        "mysqlType": "varchar(96)",
+        "comment": "资金动作全局幂等号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "amount",
+        "mysqlType": "decimal(20,2)",
+        "comment": "余额变动，正入负出",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "before_balance",
+        "mysqlType": "decimal(20,2)",
+        "comment": "原购买余额",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "after_balance",
+        "mysqlType": "decimal(20,2)",
+        "comment": "新购买余额",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "before_recharge",
+        "mysqlType": "decimal(20,2)",
+        "comment": "原不可提现资金",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "after_recharge",
+        "mysqlType": "decimal(20,2)",
+        "comment": "新不可提现资金",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "before_income",
+        "mysqlType": "decimal(20,2)",
+        "comment": "原可提现收入",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "after_income",
+        "mysqlType": "decimal(20,2)",
+        "comment": "新可提现收入",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "before_frozen",
+        "mysqlType": "decimal(20,2)",
+        "comment": "原提现冻结",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "after_frozen",
+        "mysqlType": "decimal(20,2)",
+        "comment": "新提现冻结",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "actor_type",
+        "mysqlType": "varchar(16)",
+        "comment": "user/admin/system主体",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "actor_id",
+        "mysqlType": "bigint",
+        "comment": "操作者ID",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "note",
+        "mysqlType": "varchar(1000)",
+        "comment": "资金业务说明",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_request_key",
+        "cols": [
+          "request_key"
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_user_id_id",
+        "cols": [
+          "user_id",
+          "id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "idx_business_type_business_id",
+        "cols": [
+          "business_type",
+          "business_id"
+        ],
+        "unique": false
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "user_id"
+      },
+      {
+        "ref": "business_type"
+      },
+      {
+        "ref": "business_id"
+      },
+      {
+        "ref": "request_key"
+      },
+      {
+        "ref": "amount"
+      },
+      {
+        "ref": "before_balance"
+      },
+      {
+        "ref": "after_balance"
+      },
+      {
+        "ref": "before_recharge"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "user_id"
+      },
+      {
+        "ref": "business_id"
+      },
+      {
+        "ref": "actor_id"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "不可变钱包资金流水记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "user_id",
+        "label": "关联user.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "business_type",
+        "label": "recharge/pay/refund/settle/withdraw/reverse业务",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "business_id",
+        "label": "业务单ID",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "request_key",
+        "label": "资金动作全局幂等号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "amount",
+        "label": "余额变动，正入负出",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "before_balance",
+        "label": "原购买余额",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "after_balance",
+        "label": "新购买余额",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "before_recharge",
+        "label": "原不可提现资金",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "after_recharge",
+        "label": "新不可提现资金",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "before_income",
+        "label": "原可提现收入",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "after_income",
+        "label": "新可提现收入",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "before_frozen",
+        "label": "原提现冻结",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "after_frozen",
+        "label": "新提现冻结",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "actor_type",
+        "label": "user/admin/system主体",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "actor_id",
+        "label": "操作者ID",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "note",
+        "label": "资金业务说明",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

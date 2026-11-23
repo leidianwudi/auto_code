@@ -1,0 +1,260 @@
+{
+  "table": {
+    "tableName": "audit_sensitive_log",
+    "modelName": "audit_sensitive_log",
+    "tableComment": "敏感资料访问审计",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "敏感资料访问审计记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "subject_type",
+        "mysqlType": "varchar(16)",
+        "comment": "user/admin访问主体",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "subject_id",
+        "mysqlType": "bigint",
+        "comment": "访问主体ID",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "business_type",
+        "mysqlType": "varchar(32)",
+        "comment": "附件、秘密、收款账户业务类型",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "business_id",
+        "mysqlType": "bigint",
+        "comment": "访问对象ID",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "action",
+        "mysqlType": "varchar(32)",
+        "comment": "read/download/submit/revoke动作",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "request_id",
+        "mysqlType": "varchar(96)",
+        "comment": "请求追踪号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "allowed",
+        "mysqlType": "bigint",
+        "comment": "授权结果0拒绝1允许",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "reason",
+        "mysqlType": "varchar(512)",
+        "comment": "授权理由摘要",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "idx_business_type_business_id_id",
+        "cols": [
+          "business_type",
+          "business_id",
+          "id"
+        ],
+        "unique": false
+      },
+      {
+        "name": "idx_subject_type_subject_id_id",
+        "cols": [
+          "subject_type",
+          "subject_id",
+          "id"
+        ],
+        "unique": false
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "subject_type"
+      },
+      {
+        "ref": "subject_id"
+      },
+      {
+        "ref": "business_type"
+      },
+      {
+        "ref": "business_id"
+      },
+      {
+        "ref": "action"
+      },
+      {
+        "ref": "request_id"
+      },
+      {
+        "ref": "allowed"
+      },
+      {
+        "ref": "reason"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "subject_id"
+      },
+      {
+        "ref": "business_id"
+      },
+      {
+        "ref": "request_id"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "敏感资料访问审计记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "subject_type",
+        "label": "user/admin访问主体",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "subject_id",
+        "label": "访问主体ID",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "business_type",
+        "label": "附件、秘密、收款账户业务类型",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "business_id",
+        "label": "访问对象ID",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "action",
+        "label": "read/download/submit/revoke动作",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "request_id",
+        "label": "请求追踪号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "allowed",
+        "label": "授权结果0拒绝1允许",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "reason",
+        "label": "授权理由摘要",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

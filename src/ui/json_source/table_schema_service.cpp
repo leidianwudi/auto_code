@@ -1,6 +1,7 @@
 #include "table_schema_service.h"
 
 #include <QJsonArray>
+#include <QRegularExpression>
 #include <QSet>
 namespace TableSchema {
 /// 反引号包裹标识符（内嵌反引号双写转义）
@@ -11,6 +12,7 @@ QString tick(QString ident) {
 
 /// 单引号包裹 SQL 字面量（内嵌单引号双写转义）
 QString quote(QString literal) {
+  literal.replace(QLatin1Char('\\'), QStringLiteral("\\\\"));
   literal.replace(QLatin1Char('\''), QStringLiteral("''"));
   return QStringLiteral("'%1'").arg(literal);
 }
@@ -351,9 +353,35 @@ QVector<IndexDiffEntry> buildIndexDiffEntries(const QVector<JsonTableIndex> &cur
   return entries;
 }
 
+bool validatePhysicalSchema(const QString &tableName, const QString &tableComment,
+                            const QVector<JsonTableColumn> &cols, QString *err) {
+  // 表名保留多语言0后缀，列名遵循更严格的无数字规则；一次返回全部缺项。
+  static const QRegularExpression tablePattern(QStringLiteral("^[a-z0-9_]+$"));
+  static const QRegularExpression columnPattern(QStringLiteral("^[a-z_]+$"));
+  QStringList errors;
+  if (!tablePattern.match(tableName).hasMatch())
+    errors << QStringLiteral("表 '%1' 名称只允许小写字母、数字和下划线").arg(tableName);
+  if (tableComment.trimmed().isEmpty())
+    errors << QStringLiteral("表 '%1' 缺少数据库表注释").arg(tableName);
+  if (cols.isEmpty()) errors << QStringLiteral("表 '%1' 至少需要一个字段").arg(tableName);
+  QSet<QString> names;
+  for (const auto &col : cols) {
+    const QString path = tableName + QLatin1Char('.') + col.name;
+    if (!columnPattern.match(col.name).hasMatch())
+      errors << QStringLiteral("列 '%1' 名称只允许小写字母和下划线").arg(path);
+    if (names.contains(col.name)) errors << QStringLiteral("列 '%1' 重复").arg(path);
+    names.insert(col.name);
+    if (col.mysqlType.trimmed().isEmpty()) errors << QStringLiteral("列 '%1' 缺少数据库类型").arg(path);
+    if (col.comment.trimmed().isEmpty()) errors << QStringLiteral("列 '%1' 缺少数据库列注释").arg(path);
+  }
+  if (err) *err = errors.join(QLatin1Char('\n'));
+  return errors.isEmpty();
+}
+
 QString createDdlText(const QString &tableName, const QString &tableComment,
                       const QVector<JsonTableColumn> &cols,
-                      const QVector<JsonTableIndex> &indexes) {
+                      const QVector<JsonTableIndex> &indexes, QString *err) {
+  if (!validatePhysicalSchema(tableName, tableComment, cols, err)) return {};
   QStringList defs;
   QStringList pkCols;
   for (const auto &c : cols) {
@@ -399,7 +427,9 @@ bool validateCrossRefs(const JsonTableTable &table, const JsonTableConfig &confi
     return false;
   };
 
-  // ── 基础项（与 validateForDdl 同源）──
+  // 设计器保存及DDL共享命名和注释校验，避免无效配置先保存后生成半套代码。
+  if (!validatePhysicalSchema(table.tableName, table.tableComment, table.columns, err)) return false;
+  // ── 关联引用 ──
   const QString tableName = table.tableName.trimmed();
   if (tableName.isEmpty()) return fail(QStringLiteral("表名不能为空"));
   const QVector<JsonTableColumn> cols = table.columns;

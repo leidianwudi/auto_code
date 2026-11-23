@@ -1,0 +1,279 @@
+{
+  "table": {
+    "tableName": "wallet_payout_account",
+    "modelName": "wallet_payout_account",
+    "tableComment": "商户提现收款账户",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "商户提现收款账户记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "user_id",
+        "mysqlType": "bigint",
+        "comment": "关联user.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "shop_id",
+        "mysqlType": "bigint",
+        "comment": "关联shop.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "kind",
+        "mysqlType": "varchar(32)",
+        "comment": "wechat/alipay/bank方式",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "payee",
+        "mysqlType": "varchar(128)",
+        "comment": "收款人",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "account_ciphertext",
+        "mysqlType": "text",
+        "comment": "AES-GCM加密账号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "hidden": true
+      },
+      {
+        "name": "masked_account",
+        "mysqlType": "varchar(128)",
+        "comment": "脱敏账号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "qr_asset_id",
+        "mysqlType": "bigint",
+        "comment": "关联file_asset.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "version",
+        "mysqlType": "bigint",
+        "comment": "资料版本",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "1"
+      },
+      {
+        "name": "is_default",
+        "mysqlType": "bigint",
+        "comment": "默认收款方式标志",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "enable",
+        "mysqlType": "tinyint",
+        "comment": "启停：0停用/1启用",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "1"
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "idx_user_id_enable",
+        "cols": [
+          "user_id",
+          "enable"
+        ],
+        "unique": false
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "user_id"
+      },
+      {
+        "ref": "shop_id"
+      },
+      {
+        "ref": "kind"
+      },
+      {
+        "ref": "payee"
+      },
+      {
+        "ref": "masked_account"
+      },
+      {
+        "ref": "qr_asset_id"
+      },
+      {
+        "ref": "version"
+      },
+      {
+        "ref": "is_default"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "user_id"
+      },
+      {
+        "ref": "shop_id"
+      },
+      {
+        "ref": "qr_asset_id"
+      },
+      {
+        "ref": "enable"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "商户提现收款账户记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "user_id",
+        "label": "关联user.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "shop_id",
+        "label": "关联shop.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "kind",
+        "label": "wechat/alipay/bank方式",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "payee",
+        "label": "收款人",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "masked_account",
+        "label": "脱敏账号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "qr_asset_id",
+        "label": "关联file_asset.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "version",
+        "label": "资料版本",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "is_default",
+        "label": "默认收款方式标志",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "enable",
+        "label": "启停：0停用/1启用",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

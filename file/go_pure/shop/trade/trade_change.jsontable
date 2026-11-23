@@ -1,0 +1,248 @@
+{
+  "table": {
+    "tableName": "trade_change",
+    "modelName": "trade_change",
+    "tableComment": "收货资料变更申请",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "收货资料变更申请记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "order_id",
+        "mysqlType": "bigint",
+        "comment": "关联trade_order.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "request_key",
+        "mysqlType": "varchar(64)",
+        "comment": "变更申请幂等号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "before_info",
+        "mysqlType": "json",
+        "comment": "原普通字段，不含密码",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "after_info",
+        "mysqlType": "json",
+        "comment": "新普通字段，不含密码",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "secret_id",
+        "mysqlType": "bigint",
+        "comment": "关联trade_secret.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "status",
+        "mysqlType": "varchar(32)",
+        "comment": "业务状态：pending待确认/approved通过/rejected拒绝/cancelled撤销",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "pending"
+      },
+      {
+        "name": "buyer_confirmed",
+        "mysqlType": "bigint",
+        "comment": "买家确认标志",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "seller_confirmed",
+        "mysqlType": "bigint",
+        "comment": "卖家确认标志",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_order_id_request_key",
+        "cols": [
+          "order_id",
+          "request_key"
+        ],
+        "unique": true
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "order_id"
+      },
+      {
+        "ref": "request_key"
+      },
+      {
+        "ref": "secret_id"
+      },
+      {
+        "ref": "status"
+      },
+      {
+        "ref": "buyer_confirmed"
+      },
+      {
+        "ref": "seller_confirmed"
+      },
+      {
+        "ref": "created_at"
+      },
+      {
+        "ref": "updated_at"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "order_id"
+      },
+      {
+        "ref": "secret_id"
+      },
+      {
+        "ref": "status"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "收货资料变更申请记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "order_id",
+        "label": "关联trade_order.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "request_key",
+        "label": "变更申请幂等号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "before_info",
+        "label": "原普通字段，不含密码",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "after_info",
+        "label": "新普通字段，不含密码",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "secret_id",
+        "label": "关联trade_secret.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "status",
+        "label": "业务状态：pending待确认/approved通过/rejected拒绝/cancelled撤销",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "buyer_confirmed",
+        "label": "买家确认标志",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "seller_confirmed",
+        "label": "卖家确认标志",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

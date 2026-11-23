@@ -1,0 +1,231 @@
+{
+  "table": {
+    "tableName": "oper_content",
+    "modelName": "oper_content",
+    "tableComment": "公告帮助协议",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "公告帮助协议记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "code",
+        "mysqlType": "varchar(64)",
+        "comment": "内容稳定编码",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "kind",
+        "mysqlType": "varchar(32)",
+        "comment": "notice/help/agreement类型",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "version",
+        "mysqlType": "bigint",
+        "comment": "发布版本",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "1"
+      },
+      {
+        "name": "sort",
+        "mysqlType": "bigint",
+        "comment": "排序",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "enable",
+        "mysqlType": "tinyint",
+        "comment": "启停：0停用/1启用",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "1"
+      },
+      {
+        "name": "published_at",
+        "mysqlType": "datetime",
+        "comment": "生效时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_code_version",
+        "cols": [
+          "code",
+          "version"
+        ],
+        "unique": true
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "code"
+      },
+      {
+        "ref": "kind"
+      },
+      {
+        "ref": "version"
+      },
+      {
+        "ref": "sort"
+      },
+      {
+        "ref": "enable"
+      },
+      {
+        "ref": "published_at"
+      },
+      {
+        "ref": "created_at"
+      },
+      {
+        "ref": "updated_at"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "code"
+      },
+      {
+        "ref": "enable"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "公告帮助协议记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "code",
+        "label": "内容稳定编码",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "kind",
+        "label": "notice/help/agreement类型",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "version",
+        "label": "发布版本",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "sort",
+        "label": "排序",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "enable",
+        "label": "启停：0停用/1启用",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "published_at",
+        "label": "生效时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false,
+    "i18n": {
+      "table": "oper_content0",
+      "extKey": "ext_id",
+      "langKey": "lang",
+      "defaultLang": "zh",
+      "langFrom": "body",
+      "fields": [
+        {
+          "name": "title",
+          "label": "内容标题"
+        },
+        {
+          "name": "content",
+          "label": "正文"
+        }
+      ]
+    }
+  }
+}

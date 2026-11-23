@@ -53,6 +53,7 @@ import { buildAdminTplData, buildSourceTplData, buildUploadTplData } from "../..
 import { findGlobalEnumFiles, mergeGlobalEnumFiles, buildGlobalEnumJsonSource } from "../../tool/tool_global_enum.ac";
 import { snakeToPascal, snakeToCamel, escapeJsStr } from "../../tool/tool_str.ac";
 import { dirnameOf, findProjPath, relDirUnder, collectTablePaths } from "../../tool/tool_jsontable.ac";
+import { validateTableSchema } from "../../tool/tool_schema.ac";
 
 /// @brief 模板配置（一个模板对应一个生成的代码文件）
 class TemplateConfig {
@@ -1272,6 +1273,11 @@ export function generateAdminMain(params: Object): Void {
   }
   printLog("jsontable tables count: " + tables.length);
 
+  // 管理端单独执行时也阻断坏配置，不依赖先运行Go生成器。
+  for (table in tables) {
+    assert(validateTableSchema(table), "表结构校验失败：" + table["tableName"]);
+  }
+
   // 同名表检查：两个 modelName 相同会生成到同一目录互相覆盖
   let seenModels: Object = {};
   let tblLen = tables.length;
@@ -1705,6 +1711,21 @@ export function generateAdminMain(params: Object): Void {
       printError("错误：页面配置读取失败，跳过：" + filePath);
       continue;
     }
+    // 后端只读策略优先于高级页和列配置，避免列表开关绕过业务审核。
+    if (table["adminQueryMode"] == "read" || table["adminQueryMode"] == "empty") {
+      let readMeta: Object = pageJson["meta"];
+      readMeta["noAdd"] = true;
+      readMeta["noEdit"] = true;
+      readMeta["noDelete"] = true;
+      pageJson["meta"] = readMeta;
+      let readCols: Object[] = pageJson["columns"];
+      for (let ri = 0; ri < readCols.length; ri = ri + 1) {
+        let readCol: Object = readCols[ri];
+        readCol["editEditable"] = false;
+        readCols[ri] = readCol;
+      }
+      pageJson["columns"] = readCols;
+    }
     pages.push({
       filePath: filePath,
       json: pageJson,
@@ -1765,6 +1786,19 @@ export function generateAdminMain(params: Object): Void {
     // pure-admin 专用派生键补全（isDatetimeFormat/needMessageBox 等）
     // 注意：ac 的 Object 是 COW 语义，必须接收返回值，否则补全全部丢失
     tplData = enrichPureTplData(tplData);
+    // 独立列表开关可以用于无编辑弹窗的页面，接口导入按实际可写开关补齐。
+    let switchCols: Object[] = tplData["columns"];
+    let hasSwitchUpdate: Bool = false;
+    for (let si = 0; si < switchCols.length; si = si + 1) {
+      let sc: Object = switchCols[si];
+      if ((sc["isBooleanSwitch"] == true || sc["isTagSwitch"] == true) && sc["switchDisabledStr"] != "true") {
+        hasSwitchUpdate = true;
+      }
+    }
+    tplData["hasSwitchUpdate"] = hasSwitchUpdate;
+    if (hasSwitchUpdate && tplData["noEdit"] == true) {
+      tplData["apiImports"] = tplData["apiImports"] + ", " + tplData["updateApi"];
+    }
     // 已接入通用列表的项目显式启用；其它项目继续使用原有表格，避免缺少组件。
     tplData["useListTable"] = (params["useListTable"] == true);
     // 布尔开关列改用通用 EnableSwitch（项目 src/components/ac 下手工维护）；

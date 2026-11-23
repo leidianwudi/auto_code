@@ -1,0 +1,242 @@
+{
+  "table": {
+    "tableName": "trade_delivery",
+    "modelName": "trade_delivery",
+    "tableComment": "订单交付记录",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "订单交付记录记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "order_id",
+        "mysqlType": "bigint",
+        "comment": "关联trade_order.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "request_key",
+        "mysqlType": "varchar(64)",
+        "comment": "交付提交幂等号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "version",
+        "mysqlType": "bigint",
+        "comment": "交付凭证版本",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "1"
+      },
+      {
+        "name": "method",
+        "mysqlType": "varchar(32)",
+        "comment": "topup/mail/face/account交付方式",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "role_name",
+        "mysqlType": "varchar(128)",
+        "comment": "接收角色",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "result",
+        "mysqlType": "varchar(2000)",
+        "comment": "实际交付和到账结果",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "evidence_ids",
+        "mysqlType": "json",
+        "comment": "私有交付证据ID列表",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "delivered_at",
+        "mysqlType": "datetime",
+        "comment": "实际交付时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_order_id_request_key",
+        "cols": [
+          "order_id",
+          "request_key"
+        ],
+        "unique": true
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "order_id"
+      },
+      {
+        "ref": "request_key"
+      },
+      {
+        "ref": "version"
+      },
+      {
+        "ref": "method"
+      },
+      {
+        "ref": "role_name"
+      },
+      {
+        "ref": "result"
+      },
+      {
+        "ref": "delivered_at"
+      },
+      {
+        "ref": "created_at"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "order_id"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "订单交付记录记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "order_id",
+        "label": "关联trade_order.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "request_key",
+        "label": "交付提交幂等号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "version",
+        "label": "交付凭证版本",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "method",
+        "label": "topup/mail/face/account交付方式",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "role_name",
+        "label": "接收角色",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "result",
+        "label": "实际交付和到账结果",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "evidence_ids",
+        "label": "私有交付证据ID列表",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "delivered_at",
+        "label": "实际交付时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

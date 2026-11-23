@@ -1,0 +1,30 @@
+{
+    "$schema": "/crud_nest/template/tool/param.schema.json",
+    "tables": [
+        {
+            "joinTable": [
+                {
+                    "joinColumn": {
+                        "name": "oper_problem_type_id",
+                        "referencedColumnName": "id"
+                    },
+                    "joinEnClass": "EnOperProblemType",
+                    "joinEnClassPro": "operProblemTypeId",
+                    "joinEnClass_Url": "src/oper/oper_problem_type/entities/en_oper_problem_type",
+                    "joinType": "OneToOne"
+                }
+            ],
+            "modelName": "oper/oper_problem",
+            "selCols": [
+                "user_id",
+                "type",
+                "oper_problem_type_id",
+                "status"
+            ],
+            "selColsGap": [
+                "create_time"
+            ],
+            "tableName": "oper_problem"
+        }
+    ]
+}

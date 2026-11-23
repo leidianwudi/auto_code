@@ -1,0 +1,14 @@
+{
+    "$schema": "/crud_nest/template/tool/param.schema.json",
+    "tables": [
+        {
+            "modelName": "setting/setting",
+            "selCols": [
+                "type",
+                "code",
+                "enable"
+            ],
+            "tableName": "setting"
+        }
+    ]
+}

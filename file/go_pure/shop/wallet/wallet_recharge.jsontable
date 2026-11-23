@@ -1,0 +1,246 @@
+{
+  "table": {
+    "tableName": "wallet_recharge",
+    "modelName": "wallet_recharge",
+    "tableComment": "已入账充值",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "已入账充值记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "apply_id",
+        "mysqlType": "bigint",
+        "comment": "关联wallet_recharge_apply.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "receipt_id",
+        "mysqlType": "bigint",
+        "comment": "关联wallet_receipt.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "user_id",
+        "mysqlType": "bigint",
+        "comment": "关联user.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "amount",
+        "mysqlType": "decimal(20,2)",
+        "comment": "实收实入额",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "ledger_id",
+        "mysqlType": "bigint",
+        "comment": "关联wallet_ledger.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "reversed",
+        "mysqlType": "bigint",
+        "comment": "已冲正标志",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "reverse_ledger_id",
+        "mysqlType": "bigint",
+        "comment": "关联wallet_ledger.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_apply_id",
+        "cols": [
+          "apply_id"
+        ],
+        "unique": true
+      },
+      {
+        "name": "uk_receipt_id",
+        "cols": [
+          "receipt_id"
+        ],
+        "unique": true
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "apply_id"
+      },
+      {
+        "ref": "receipt_id"
+      },
+      {
+        "ref": "user_id"
+      },
+      {
+        "ref": "amount"
+      },
+      {
+        "ref": "ledger_id"
+      },
+      {
+        "ref": "reversed"
+      },
+      {
+        "ref": "reverse_ledger_id"
+      },
+      {
+        "ref": "created_at"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "apply_id"
+      },
+      {
+        "ref": "receipt_id"
+      },
+      {
+        "ref": "user_id"
+      },
+      {
+        "ref": "ledger_id"
+      },
+      {
+        "ref": "reverse_ledger_id"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "已入账充值记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "apply_id",
+        "label": "关联wallet_recharge_apply.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "receipt_id",
+        "label": "关联wallet_receipt.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "user_id",
+        "label": "关联user.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "amount",
+        "label": "实收实入额",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "ledger_id",
+        "label": "关联wallet_ledger.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "reversed",
+        "label": "已冲正标志",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "reverse_ledger_id",
+        "label": "关联wallet_ledger.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

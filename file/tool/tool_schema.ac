@@ -1,0 +1,138 @@
+/// @file tool_schema.ac — 数据库物理命名与COMMENT校验，两端生成和项目建表共用。
+
+/// 判断物理名称是否合法；翻译表可以0结尾，列名不允许数字。
+export function validPhysicalName(name: String, tableName: Bool): Bool {
+  if (name == null || name.length == 0) { return false; }
+  let allowed: String = "abcdefghijklmnopqrstuvwxyz_";
+  if (tableName) { allowed = allowed + "0123456789"; }
+  for (let i = 0; i < name.length; i = i + 1) {
+    if (allowed.indexOf(name[i]) < 0) { return false; }
+  }
+  return true;
+}
+
+/// 先校验整张表，再允许写代码或生成DDL；错误明确到具体表和列。
+export function validateTableSchema(table: Object): Bool {
+  let name: String = table["tableName"];
+  let comment: String = table["tableComment"];
+  let valid: Bool = true;
+  if (!validPhysicalName(name, true)) {
+    printError("表名只允许小写字母、数字和下划线：" + name);
+    valid = false;
+  }
+  if (comment == null || comment.trim() == "") {
+    printError("表缺少数据库注释：" + name);
+    valid = false;
+  }
+  let columns: Object[] = table["columns"];
+  if (columns == null || columns.length == 0) {
+    printError("表缺少字段：" + name);
+    return false;
+  }
+  let seen: Object = {};
+  for (column in columns) {
+    let col: String = column["name"];
+    let colComment: String = column["comment"];
+    let columnType: String = column["mysqlType"];
+    if (!validPhysicalName(col, false)) {
+      printError("列名只允许小写字母和下划线：" + name + "." + col);
+      valid = false;
+    }
+    if (seen[col] == true) {
+      printError("列名重复：" + name + "." + col);
+      valid = false;
+    }
+    seen[col] = true;
+    if (colComment == null || colComment.trim() == "") {
+      printError("列缺少数据库注释：" + name + "." + col);
+      valid = false;
+    }
+    if (columnType == null || columnType.trim() == "") {
+      printError("列缺少数据库类型：" + name + "." + col);
+      valid = false;
+    }
+  }
+  // 翻译表由主表内嵌声明，后台单独生成时也不能绕过物理名称校验。
+  let i18n: Object = table["i18n"];
+  if (i18n != null && i18n["table"] != null && i18n["table"] != "") {
+    let transName: String = i18n["table"];
+    let ext: String = i18n["extKey"];
+    let lang: String = i18n["langKey"];
+    if (ext == null || ext == "") { ext = "ext_id"; }
+    if (lang == null || lang == "") { lang = "lang"; }
+    if (!validPhysicalName(transName, true) || !validPhysicalName(ext, false) || !validPhysicalName(lang, false) || ext == lang || ext == "id" || lang == "id") {
+      printError("翻译表或关联列名称无效：" + name + " -> " + transName);
+      valid = false;
+    }
+    let translated: Object = {};
+    translated["id"] = true; translated[ext] = true; translated[lang] = true;
+    let fields: Object[] = i18n["fields"];
+    if (fields == null || fields.length == 0) { printError("翻译表缺少翻译字段：" + transName); valid = false; }
+    if (fields != null) {
+      for (field in fields) {
+        let fn: String = field["name"];
+        if (fn == null || fn == "") { fn = "" + field; }
+        if (!validPhysicalName(fn, false) || translated[fn] == true || fn == "created_at" || fn == "updated_at") {
+          printError("翻译字段名称无效或重复：" + transName + "." + fn); valid = false;
+        }
+        translated[fn] = true;
+      }
+    }
+  }
+  return valid;
+}
+
+/// MySQL字符串字面量转义；业务值仍通过参数化接口处理，此函数仅用于DDL元数据。
+export function schemaLiteral(value: String): String {
+  return "'" + value.replace("\\", "\\\\").replace("'", "''") + "'";
+}
+
+/// 将字段定义转换为完整DDL片段，注释始终写入数据库。
+export function schemaColumn(column: Object): String {
+  let name: String = column["name"];
+  assert(validPhysicalName(name, false), "不合法的列名：" + name);
+  let sql: String = "`" + name + "` " + column["mysqlType"];
+  if (column["unsigned"] == true) { sql = sql + " unsigned"; }
+  sql = sql + (column["nullable"] == true ? " NULL" : " NOT NULL");
+  let defaultValue: String = column["default"];
+  if (defaultValue != null) {
+    let expression: String = defaultValue.toUpperCase();
+    if (expression == "CURRENT_TIMESTAMP" || expression == "NOW()" || expression == "CURRENT_DATE" || expression == "CURRENT_TIME") {
+      sql = sql + " DEFAULT " + expression;
+    } else {
+      sql = sql + " DEFAULT " + schemaLiteral(defaultValue);
+    }
+  }
+  if (column["isAutoInc"] == true) { sql = sql + " AUTO_INCREMENT"; }
+  return sql + " COMMENT " + schemaLiteral(column["comment"]);
+}
+
+/// 创建索引定义；所有索引列必须属于合法物理列，禁止拼接任意SQL表达式。
+export function schemaIndex(index: Object): String {
+  let name: String = index["name"];
+  assert(validPhysicalName(name, true), "不合法的索引名：" + name);
+  let fields: String[] = index["cols"];
+  assert(fields != null && fields.length > 0, "索引缺少字段：" + name);
+  let parts: String[] = [];
+  for (field in fields) {
+    assert(validPhysicalName(field, false), "不合法的索引列：" + field);
+    parts.append("`" + field + "`");
+  }
+  return (index["unique"] == true ? "UNIQUE KEY " : "KEY ") + "`" + name + "` (" + parts.join(", ") + ")";
+}
+
+/// 按已验证的配置生成建表语句，不向仓库输出初始化或迁移SQL文件。
+export function schemaCreate(table: Object): String {
+  assert(validateTableSchema(table), "DDL结构校验失败：" + table["tableName"]);
+  let parts: String[] = [];
+  let primary: String[] = [];
+  let columns: Object[] = table["columns"];
+  for (column in columns) {
+    parts.append(schemaColumn(column));
+    if (column["isPrimary"] == true) { primary.append("`" + column["name"] + "`"); }
+  }
+  if (primary.length > 0) { parts.append("PRIMARY KEY (" + primary.join(", ") + ")"); }
+  let indexes: Object[] = table["indexes"];
+  if (indexes != null) { for (index in indexes) { parts.append(schemaIndex(index)); } }
+  return "CREATE TABLE `" + table["tableName"] + "` (" + parts.join(", ") + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT=" + schemaLiteral(table["tableComment"]);
+}

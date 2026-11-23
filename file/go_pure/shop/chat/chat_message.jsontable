@@ -1,0 +1,273 @@
+{
+  "table": {
+    "tableName": "chat_message",
+    "modelName": "chat_message",
+    "tableComment": "服务端持久化聊天消息",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "服务端持久化聊天消息记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "conversation_id",
+        "mysqlType": "bigint",
+        "comment": "关联chat_conversation.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "seq",
+        "mysqlType": "bigint",
+        "comment": "会话内递增序号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "sender_type",
+        "mysqlType": "varchar(16)",
+        "comment": "user/admin/system主体",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "sender_id",
+        "mysqlType": "bigint",
+        "comment": "发送主体ID",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "client_msg_id",
+        "mysqlType": "varchar(64)",
+        "comment": "客户端消息幂等号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "kind",
+        "mysqlType": "varchar(16)",
+        "comment": "text/image/file/card/system类型",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "content",
+        "mysqlType": "text",
+        "comment": "消息原文，不得存游戏密码",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "asset_ids",
+        "mysqlType": "json",
+        "comment": "私有附件稳定ID列表",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "card_snapshot",
+        "mysqlType": "json",
+        "comment": "业务卡片快照，系统卡片仅服务端构造",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_conversation_id_seq",
+        "cols": [
+          "conversation_id",
+          "seq"
+        ],
+        "unique": true
+      },
+      {
+        "name": "uk_conversation_id_sender_type_sender_id_client_msg_id",
+        "cols": [
+          "conversation_id",
+          "sender_type",
+          "sender_id",
+          "client_msg_id"
+        ],
+        "unique": true
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "conversation_id"
+      },
+      {
+        "ref": "seq"
+      },
+      {
+        "ref": "sender_type"
+      },
+      {
+        "ref": "sender_id"
+      },
+      {
+        "ref": "client_msg_id"
+      },
+      {
+        "ref": "kind"
+      },
+      {
+        "ref": "content"
+      },
+      {
+        "ref": "created_at"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "conversation_id"
+      },
+      {
+        "ref": "sender_id"
+      },
+      {
+        "ref": "client_msg_id"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "服务端持久化聊天消息记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "conversation_id",
+        "label": "关联chat_conversation.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "seq",
+        "label": "会话内递增序号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "sender_type",
+        "label": "user/admin/system主体",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "sender_id",
+        "label": "发送主体ID",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "client_msg_id",
+        "label": "客户端消息幂等号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "kind",
+        "label": "text/image/file/card/system类型",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "content",
+        "label": "消息原文，不得存游戏密码",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "asset_ids",
+        "label": "私有附件稳定ID列表",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "card_snapshot",
+        "label": "业务卡片快照，系统卡片仅服务端构造",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

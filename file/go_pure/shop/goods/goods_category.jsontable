@@ -1,0 +1,243 @@
+{
+  "table": {
+    "tableName": "goods_category",
+    "modelName": "goods_category",
+    "tableComment": "商品分类",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "商品分类记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "parent_id",
+        "mysqlType": "bigint",
+        "comment": "关联goods_category.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "kind",
+        "mysqlType": "varchar(32)",
+        "comment": "topup代充/item装备/account账号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "sort",
+        "mysqlType": "bigint",
+        "comment": "展示排序",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "hot",
+        "mysqlType": "bigint",
+        "comment": "热度",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "tip",
+        "mysqlType": "varchar(64)",
+        "comment": "后台分类标签",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "enable",
+        "mysqlType": "tinyint",
+        "comment": "启停：0停用/1启用",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "1"
+      },
+      {
+        "name": "desc",
+        "mysqlType": "varchar(512)",
+        "comment": "后台备注",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "idx_parent_id",
+        "cols": [
+          "parent_id"
+        ],
+        "unique": false
+      }
+    ],
+    "frontend": true,
+    "adminQueryMode": "crud",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "parent_id"
+      },
+      {
+        "ref": "kind"
+      },
+      {
+        "ref": "sort"
+      },
+      {
+        "ref": "hot"
+      },
+      {
+        "ref": "tip"
+      },
+      {
+        "ref": "enable"
+      },
+      {
+        "ref": "desc"
+      },
+      {
+        "ref": "created_at"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "parent_id"
+      },
+      {
+        "ref": "enable"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "商品分类记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "parent_id",
+        "label": "关联goods_category.id",
+        "writable": true,
+        "editEditable": true
+      },
+      {
+        "ref": "kind",
+        "label": "topup代充/item装备/account账号",
+        "writable": true,
+        "editEditable": true
+      },
+      {
+        "ref": "sort",
+        "label": "展示排序",
+        "writable": true,
+        "editEditable": true
+      },
+      {
+        "ref": "hot",
+        "label": "热度",
+        "writable": true,
+        "editEditable": true
+      },
+      {
+        "ref": "tip",
+        "label": "后台分类标签",
+        "writable": true,
+        "editEditable": true
+      },
+      {
+        "ref": "enable",
+        "label": "启停：0停用/1启用",
+        "writable": true,
+        "editEditable": true
+      },
+      {
+        "ref": "desc",
+        "label": "后台备注",
+        "writable": true,
+        "editEditable": true
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": true,
+    "genEdit": true,
+    "genDelete": false,
+    "genDetail": true,
+    "i18n": {
+      "table": "goods_category0",
+      "extKey": "ext_id",
+      "langKey": "lang",
+      "defaultLang": "zh",
+      "langFrom": "body",
+      "fields": [
+        {
+          "name": "name",
+          "label": "分类名称"
+        }
+      ]
+    }
+  }
+}

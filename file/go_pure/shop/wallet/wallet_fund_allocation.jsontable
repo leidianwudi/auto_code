@@ -1,0 +1,278 @@
+{
+  "table": {
+    "tableName": "wallet_fund_allocation",
+    "modelName": "wallet_fund_allocation",
+    "tableComment": "购买资金来源分摊",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "购买资金来源分摊记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "payment_id",
+        "mysqlType": "bigint",
+        "comment": "关联trade_payment.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "user_id",
+        "mysqlType": "bigint",
+        "comment": "关联user.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "amount",
+        "mysqlType": "decimal(20,2)",
+        "comment": "订单支付额",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "recharge_amount",
+        "mysqlType": "decimal(20,2)",
+        "comment": "消耗不可提现资金",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "income_amount",
+        "mysqlType": "decimal(20,2)",
+        "comment": "消耗收入",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "credit_amount",
+        "mysqlType": "decimal(20,2)",
+        "comment": "新增购买欠款",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "refunded_amount",
+        "mysqlType": "decimal(20,2)",
+        "comment": "累计退款额",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "recharge_refunded",
+        "mysqlType": "decimal(20,2)",
+        "comment": "已退充值来源",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "income_refunded",
+        "mysqlType": "decimal(20,2)",
+        "comment": "已退收入来源",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "credit_refunded",
+        "mysqlType": "decimal(20,2)",
+        "comment": "已退欠款来源",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_payment_id",
+        "cols": [
+          "payment_id"
+        ],
+        "unique": true
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "payment_id"
+      },
+      {
+        "ref": "user_id"
+      },
+      {
+        "ref": "amount"
+      },
+      {
+        "ref": "recharge_amount"
+      },
+      {
+        "ref": "income_amount"
+      },
+      {
+        "ref": "credit_amount"
+      },
+      {
+        "ref": "refunded_amount"
+      },
+      {
+        "ref": "recharge_refunded"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "payment_id"
+      },
+      {
+        "ref": "user_id"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "购买资金来源分摊记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "payment_id",
+        "label": "关联trade_payment.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "user_id",
+        "label": "关联user.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "amount",
+        "label": "订单支付额",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "recharge_amount",
+        "label": "消耗不可提现资金",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "income_amount",
+        "label": "消耗收入",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "credit_amount",
+        "label": "新增购买欠款",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "refunded_amount",
+        "label": "累计退款额",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "recharge_refunded",
+        "label": "已退充值来源",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "income_refunded",
+        "label": "已退收入来源",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "credit_refunded",
+        "label": "已退欠款来源",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}

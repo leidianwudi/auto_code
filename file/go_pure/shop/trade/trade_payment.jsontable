@@ -1,0 +1,313 @@
+{
+  "table": {
+    "tableName": "trade_payment",
+    "modelName": "trade_payment",
+    "tableComment": "余额支付记录",
+    "columns": [
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "余额支付记录记录主键",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": true,
+        "isAutoInc": true
+      },
+      {
+        "name": "order_id",
+        "mysqlType": "bigint",
+        "comment": "关联trade_order.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "payment_no",
+        "mysqlType": "varchar(64)",
+        "comment": "唯一支付号",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "buyer_id",
+        "mysqlType": "bigint",
+        "comment": "关联user.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "seller_id",
+        "mysqlType": "bigint",
+        "comment": "关联user.id",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "amount",
+        "mysqlType": "decimal(20,2)",
+        "comment": "余额扣款金额",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "pending_amount",
+        "mysqlType": "decimal(20,2)",
+        "comment": "未结算商户货款",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "refunded_amount",
+        "mysqlType": "decimal(20,2)",
+        "comment": "累计退款",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0.00"
+      },
+      {
+        "name": "settlement_days",
+        "mysqlType": "bigint",
+        "comment": "结算天数快照",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "settle_at",
+        "mysqlType": "datetime",
+        "comment": "到期结算时间",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "status",
+        "mysqlType": "varchar(32)",
+        "comment": "业务状态：paid已付/settled结算/refunded已退",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "paid"
+      },
+      {
+        "name": "rule_snapshot",
+        "mysqlType": "json",
+        "comment": "佣金、售后和结算来源版本",
+        "nullable": true,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "uk_order_id",
+        "cols": [
+          "order_id"
+        ],
+        "unique": true
+      },
+      {
+        "name": "uk_payment_no",
+        "cols": [
+          "payment_no"
+        ],
+        "unique": true
+      },
+      {
+        "name": "idx_status_settle_at",
+        "cols": [
+          "status",
+          "settle_at"
+        ],
+        "unique": false
+      }
+    ],
+    "frontend": false,
+    "adminQueryMode": "empty",
+    "appQuery": false,
+    "manualUpdateTime": false,
+    "selCols": [
+      {
+        "ref": "id"
+      },
+      {
+        "ref": "order_id"
+      },
+      {
+        "ref": "payment_no"
+      },
+      {
+        "ref": "buyer_id"
+      },
+      {
+        "ref": "seller_id"
+      },
+      {
+        "ref": "amount"
+      },
+      {
+        "ref": "pending_amount"
+      },
+      {
+        "ref": "refunded_amount"
+      },
+      {
+        "ref": "settlement_days"
+      }
+    ],
+    "selColsEq": [
+      {
+        "ref": "order_id"
+      },
+      {
+        "ref": "buyer_id"
+      },
+      {
+        "ref": "seller_id"
+      },
+      {
+        "ref": "status"
+      }
+    ],
+    "selColsSort": [
+      [
+        "id",
+        "DESC"
+      ]
+    ],
+    "editCols": [
+      {
+        "ref": "id",
+        "label": "余额支付记录记录主键",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "order_id",
+        "label": "关联trade_order.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "payment_no",
+        "label": "唯一支付号",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "buyer_id",
+        "label": "关联user.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "seller_id",
+        "label": "关联user.id",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "amount",
+        "label": "余额扣款金额",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "pending_amount",
+        "label": "未结算商户货款",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "refunded_amount",
+        "label": "累计退款",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "settlement_days",
+        "label": "结算天数快照",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "settle_at",
+        "label": "到期结算时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "status",
+        "label": "业务状态：paid已付/settled结算/refunded已退",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "rule_snapshot",
+        "label": "佣金、售后和结算来源版本",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "created_at",
+        "label": "记录创建时间",
+        "writable": false,
+        "editEditable": false
+      },
+      {
+        "ref": "updated_at",
+        "label": "记录最后更新时间",
+        "writable": false,
+        "editEditable": false
+      }
+    ],
+    "genAdd": false,
+    "genEdit": false,
+    "genDelete": false,
+    "genDetail": false
+  }
+}
