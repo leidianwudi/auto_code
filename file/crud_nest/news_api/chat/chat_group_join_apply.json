@@ -1,0 +1,12 @@
+{
+    "$schema": "/crud_nest/template/tool/param.schema.json",
+    "tables": [
+        {
+            "modelName": "chat\\chat_group_join_apply",
+            "selCols": [
+                "group_id"
+            ],
+            "tableName": "chat_group_join_apply"
+        }
+    ]
+}
