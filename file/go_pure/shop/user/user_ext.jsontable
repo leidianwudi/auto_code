@@ -448,7 +448,7 @@
       {
         "label": "用户id",
         "ref": "user_id",
-        "width": 60
+        "width": 80
       },
       {
         "label": "账户",
@@ -462,12 +462,12 @@
       {
         "label": "冻结截止时间",
         "ref": "freeze_end_time",
-        "width": 60
+        "width": 180
       },
       {
         "label": "冻结次数",
         "ref": "freeze_count",
-        "width": 60
+        "width": 96
       },
       {
         "label": "是否禁用",

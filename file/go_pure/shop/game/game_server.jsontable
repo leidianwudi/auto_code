@@ -15,6 +15,7 @@
       },
       {
         "name": "release_id",
+        "title": "发行版本ID",
         "mysqlType": "bigint",
         "comment": "关联game_release.id",
         "nullable": false,
@@ -25,6 +26,7 @@
       },
       {
         "name": "platform",
+        "title": "平台编码",
         "mysqlType": "varchar(32)",
         "comment": "适用平台编码",
         "nullable": false,
@@ -35,6 +37,7 @@
       },
       {
         "name": "channel",
+        "title": "渠道编码",
         "mysqlType": "varchar(64)",
         "comment": "登录渠道编码",
         "nullable": false,
@@ -45,6 +48,7 @@
       },
       {
         "name": "code",
+        "title": "区服编码",
         "mysqlType": "varchar(64)",
         "comment": "版本内区服编码",
         "nullable": false,
@@ -65,6 +69,7 @@
       },
       {
         "name": "enable",
+        "title": "启用状态",
         "mysqlType": "tinyint",
         "comment": "启停：0停用/1启用",
         "nullable": false,
@@ -75,6 +80,7 @@
       },
       {
         "name": "created_at",
+        "title": "创建时间",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
         "nullable": false,
@@ -85,6 +91,7 @@
       },
       {
         "name": "updated_at",
+        "title": "更新时间",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
         "nullable": false,
@@ -92,6 +99,16 @@
         "isPrimary": false,
         "isAutoInc": false,
         "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "enums": [
+      {
+        "column": "enable",
+        "comment": "启停：0停用/1启用",
+        "items": [
+          { "key": "Disabled", "label": "0 停用", "value": "0", "valueType": "number" },
+          { "key": "Enabled", "label": "1 启用", "value": "1", "valueType": "number" }
+        ]
       }
     ],
     "indexes": [
@@ -165,25 +182,25 @@
       },
       {
         "ref": "release_id",
-        "label": "关联game_release.id",
+        "label": "发行版本ID",
         "writable": true,
         "editEditable": true
       },
       {
         "ref": "platform",
-        "label": "适用平台编码",
+        "label": "平台编码",
         "writable": true,
         "editEditable": true
       },
       {
         "ref": "channel",
-        "label": "登录渠道编码",
+        "label": "渠道编码",
         "writable": true,
         "editEditable": true
       },
       {
         "ref": "code",
-        "label": "版本内区服编码",
+        "label": "区服编码",
         "writable": true,
         "editEditable": true
       },
@@ -195,19 +212,19 @@
       },
       {
         "ref": "enable",
-        "label": "启停：0停用/1启用",
+        "label": "启用状态",
         "writable": true,
         "editEditable": true
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

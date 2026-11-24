@@ -162,8 +162,9 @@ export function buildJsonvueColumn(rawCol: Object, enumDef: Object, editCol: Obj
     maxlength: 0,
     placeholder: "",
     textareaRows: 4,
-    boolTrueText: "启用",
-    boolFalseText: "禁用",
+    // 布尔操作文案可由字段配置覆盖，与筛选枚举的数字标签分别呈现。
+    boolTrueText: (rawCol["boolTrueText"] != null && rawCol["boolTrueText"] != "" ? rawCol["boolTrueText"] : "启用"),
+    boolFalseText: (rawCol["boolFalseText"] != null && rawCol["boolFalseText"] != "" ? rawCol["boolFalseText"] : "禁用"),
     tagItems: [],
     dateFormat: "",
     editStyle: "text"
@@ -995,6 +996,23 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
 // 二、pure-admin 派生标记补全（渲染前的最后一跳，模板便捷键）
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// @brief 查询未指定下拉源时，沿用字段的表内枚举，保留范围和显式下拉配置。
+export function inheritQueryEnumOptions(query: Object, columns: Object[]): Object {
+  query["hasInlineOptions"] = false;
+  if (query["isRange"] != true && query["isSelect"] != true) {
+    for (column in columns) {
+      if (column["dataName"] == query["dataName"] && column["hasTagItems"] == true) {
+        query["inlineOptions"] = column["tagItems"];
+        query["hasInlineOptions"] = true;
+        query["isSelect"] = true;
+        query["component"] = "Select";
+        break;
+      }
+    }
+  }
+  return query;
+}
+
 /// @brief 为 tplData 补充 pure-admin 模板专用派生键（不改动共用加工器）
 /// @param tplData buildAdminTplData 返回的完整模板数据（原地补全）
 ///   补充内容：
@@ -1045,7 +1063,10 @@ export function enrichPureTplData(tplData: Object): Object {
     qf["isDatetimeFormat"] = (qf["dateFormat"] == "datetime");
     // 远程下拉选项加载函数名需要合法标识（dataName 可能是 snake_case）
     qf["dataNameCamel"] = snakeToCamel(qf["dataName"]);
+    // 表内枚举的派生结果按写时复制规则写回，原有查询字段属性保持不变。
+    queryFields[j] = inheritQueryEnumOptions(queryFields[j], cols);
   }
+  tplData["queryFields"] = queryFields;
   tplData["hasQueryFields"] = (qfLen > 0);
 
   // ── 弹窗按钮字段级派生（自定义 Dialog 按钮的远程下拉支持）──

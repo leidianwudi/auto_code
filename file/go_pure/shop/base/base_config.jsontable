@@ -1,7 +1,7 @@
 {
   "table": {
-    "tableName": "config",
-    "modelName": "config",
+    "tableName": "base_config",
+    "modelName": "base_config",
     "tableComment": "平台业务配置",
     "columns": [
       {

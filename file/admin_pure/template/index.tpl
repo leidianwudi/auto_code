@@ -348,7 +348,13 @@ ${if q.isDate}        <el-date-picker v-model="searchForm.${q.dataName}_max" typ
 ${else}        <el-input v-model="searchForm.${q.dataName}_max"${if q.hasPlaceholder} placeholder="${q.placeholder}"${else} placeholder="请输入"${/if} clearable style="width: 160px" />
 ${/if}
       </el-form-item>
-${else if q.isSelect}${if q.hasStaticRef}
+${else if q.isSelect}${if q.hasInlineOptions}
+      <el-form-item label="${q.displayName}">
+        <el-select v-model="searchForm.${q.dataName}" clearable placeholder="全部" style="width: 180px">
+${each opt in q.inlineOptions}          <el-option label="${opt.textEsc}"${if opt.isNumberValue} :value="${opt.valueEsc}"${else} value="${opt.valueEsc}"${/if} />
+${/each}        </el-select>
+      </el-form-item>
+${else if q.hasStaticRef}
       <el-form-item label="${q.displayName}">
         <!-- 静态选项（沿用列取值域）：值域封闭，clearable 清空 = 不筛选 -->
         <el-select v-model="searchForm.${q.dataName}" clearable placeholder="请选择" style="width: 180px">

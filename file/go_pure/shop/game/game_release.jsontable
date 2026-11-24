@@ -15,6 +15,7 @@
       },
       {
         "name": "game_id",
+        "title": "游戏ID",
         "mysqlType": "bigint",
         "comment": "关联game.id",
         "nullable": false,
@@ -25,6 +26,7 @@
       },
       {
         "name": "region_id",
+        "title": "地区ID",
         "mysqlType": "bigint",
         "comment": "关联game_region.id",
         "nullable": false,
@@ -35,6 +37,7 @@
       },
       {
         "name": "code",
+        "title": "版本编码",
         "mysqlType": "varchar(64)",
         "comment": "游戏内版本编码",
         "nullable": false,
@@ -45,6 +48,7 @@
       },
       {
         "name": "operator",
+        "title": "发行运营方",
         "mysqlType": "varchar(128)",
         "comment": "发行商或运营方",
         "nullable": false,
@@ -65,6 +69,7 @@
       },
       {
         "name": "enable",
+        "title": "启用状态",
         "mysqlType": "tinyint",
         "comment": "启停：0停用/1启用",
         "nullable": false,
@@ -75,6 +80,7 @@
       },
       {
         "name": "created_at",
+        "title": "创建时间",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
         "nullable": false,
@@ -85,6 +91,7 @@
       },
       {
         "name": "updated_at",
+        "title": "更新时间",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
         "nullable": false,
@@ -92,6 +99,16 @@
         "isPrimary": false,
         "isAutoInc": false,
         "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "enums": [
+      {
+        "column": "enable",
+        "comment": "启停：0停用/1启用",
+        "items": [
+          { "key": "Disabled", "label": "0 停用", "value": "0", "valueType": "number" },
+          { "key": "Enabled", "label": "1 启用", "value": "1", "valueType": "number" }
+        ]
       }
     ],
     "indexes": [
@@ -174,25 +191,25 @@
       },
       {
         "ref": "game_id",
-        "label": "关联game.id",
+        "label": "游戏ID",
         "writable": true,
         "editEditable": true
       },
       {
         "ref": "region_id",
-        "label": "关联game_region.id",
+        "label": "地区ID",
         "writable": true,
         "editEditable": true
       },
       {
         "ref": "code",
-        "label": "游戏内版本编码",
+        "label": "版本编码",
         "writable": true,
         "editEditable": true
       },
       {
         "ref": "operator",
-        "label": "发行商或运营方",
+        "label": "发行运营方",
         "writable": true,
         "editEditable": true
       },
@@ -204,19 +221,19 @@
       },
       {
         "ref": "enable",
-        "label": "启停：0停用/1启用",
+        "label": "启用状态",
         "writable": true,
         "editEditable": true
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

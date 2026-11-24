@@ -244,6 +244,22 @@
     ],
     "enums": [
       {
+        "column": "is_open",
+        "comment": "是否开店：0否，1是",
+        "items": [
+          { "key": "No", "label": "否", "value": "0", "valueType": "number" },
+          { "key": "Yes", "label": "是", "value": "1", "valueType": "number" }
+        ]
+      },
+      {
+        "column": "enable",
+        "comment": "是否启用：0否，1是",
+        "items": [
+          { "key": "No", "label": "否", "value": "0", "valueType": "number" },
+          { "key": "Yes", "label": "是", "value": "1", "valueType": "number" }
+        ]
+      },
+      {
         "column": "status",
         "comment": "状态; 0:审核中;1:正常;2:关闭",
         "items": [

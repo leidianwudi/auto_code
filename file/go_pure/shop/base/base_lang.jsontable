@@ -50,7 +50,9 @@
         mysqlType: 'int',
         name: 'enable',
         nullable: false,
-        title: '启用',
+        title: '启用状态',
+        boolTrueText: '启用',
+        boolFalseText: '停用',
         unsigned: false,
       },
       {
@@ -93,7 +95,7 @@
         widget: 'input',
       },
       {
-        label: '启用',
+        label: '启用状态',
         ref: 'enable',
         widget: 'boolean',
       },
@@ -109,6 +111,16 @@
       {
         label: '主键',
         ref: 'id',
+      },
+    ],
+    enums: [
+      {
+        column: 'enable',
+        comment: '是否启用：1=启用；0=停用',
+        items: [
+          { key: 'Disabled', label: '0 停用', value: '0', valueType: 'number' },
+          { key: 'Enabled', label: '1 启用', value: '1', valueType: 'number' },
+        ],
       },
     ],
     indexes: [
@@ -136,7 +148,7 @@
         ref: 'name',
       },
       {
-        label: '启用',
+        label: '启用状态',
         ref: 'enable',
       },
       {

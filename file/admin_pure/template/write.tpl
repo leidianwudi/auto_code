@@ -272,7 +272,8 @@ ${/if}
 
 <template>
   <el-form ref="formRef" :model="form" :rules="formRules" :disabled="isDetail" label-width="110px">
-    <el-row>
+    <!-- 两列表单预留列间距，避免右列标题紧贴左列输入框。 -->
+    <el-row :gutter="20">
 ${each col in formColumns}${if col.editVisible}
       <el-col :span="${col.formSpan}">
         <el-form-item label="${col.editName}" prop="${col.dataName}">

@@ -15,6 +15,7 @@
       },
       {
         "name": "code",
+        "title": "游戏编码",
         "mysqlType": "varchar(64)",
         "comment": "游戏稳定编码",
         "nullable": false,
@@ -25,6 +26,7 @@
       },
       {
         "name": "icon",
+        "title": "游戏图标",
         "mysqlType": "varchar(512)",
         "comment": "公开游戏图标路径",
         "nullable": false,
@@ -45,6 +47,7 @@
       },
       {
         "name": "enable",
+        "title": "启用状态",
         "mysqlType": "tinyint",
         "comment": "启停：0停用/1启用",
         "nullable": false,
@@ -55,6 +58,7 @@
       },
       {
         "name": "created_at",
+        "title": "创建时间",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
         "nullable": false,
@@ -65,6 +69,7 @@
       },
       {
         "name": "updated_at",
+        "title": "更新时间",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
         "nullable": false,
@@ -72,6 +77,16 @@
         "isPrimary": false,
         "isAutoInc": false,
         "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "enums": [
+      {
+        "column": "enable",
+        "comment": "启停：0停用/1启用",
+        "items": [
+          { "key": "Disabled", "label": "0 停用", "value": "0", "valueType": "number" },
+          { "key": "Enabled", "label": "1 启用", "value": "1", "valueType": "number" }
+        ]
       }
     ],
     "indexes": [
@@ -133,13 +148,13 @@
       },
       {
         "ref": "code",
-        "label": "游戏稳定编码",
+        "label": "游戏编码",
         "writable": true,
         "editEditable": true
       },
       {
         "ref": "icon",
-        "label": "公开游戏图标路径",
+        "label": "游戏图标",
         "writable": true,
         "editEditable": true
       },
@@ -151,19 +166,19 @@
       },
       {
         "ref": "enable",
-        "label": "启停：0停用/1启用",
+        "label": "启用状态",
         "writable": true,
         "editEditable": true
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }
