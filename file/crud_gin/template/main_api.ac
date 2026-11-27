@@ -41,7 +41,7 @@ import { QueryData, SelFieldDef } from "./core/query_data.ac";
 import { uniqueIndexBlock } from "./core/unique_errors.ac";
 import { snakeToPascal, snakeToCamel, isNumericStr } from "../../tool/tool_str.ac";
 import { findGlobalEnumFiles, mergeGlobalEnumFiles } from "../../tool/tool_global_enum.ac";
-import { dirnameOf, findProjPath, relDirUnder, collectTablePaths } from "../../tool/tool_jsontable.ac";
+import { dirnameOf, findProjPath, relDirUnder, collectTablePaths, collectTableContextPaths } from "../../tool/tool_jsontable.ac";
 import { validateTableSchema } from "../../tool/tool_schema.ac";
 
 /// @brief 模板配置（一个模板对应一个生成的代码文件）
@@ -155,7 +155,10 @@ export function generateApiMain(params: Object): Number {
   } else {
     printLog("未找到 project.acproj（meta.goBasePath 回退 params.goBasePath）");
   }
-  for (file in jsonFiles) {
+  let selectedPaths: Object = {};
+  for (path in jsonFiles) { selectedPaths[path.replace("\\", "/")] = true; }
+  let contextFiles: String[] = collectTableContextPaths(jsonFiles, projPath);
+  for (file in contextFiles) {
     let fileJson: Object = readJson(file);
     if (fileJson == null) {
       printError("错误：.jsontable 读取失败: " + file);
@@ -174,9 +177,10 @@ export function generateApiMain(params: Object): Number {
     // 目录结构 = 模块结构：记录相对扫描根（入口脚本目录）的目录段，
     // 供 moduleDir 缺省推导（4 节预扫描）；不在扫描根下时为 ""（回退旧缺省）
     t["_relDir"] = relDirUnder(file, scriptDir());
+    t["_generate"] = (selectedPaths[file] == true);
     tables.append(t);
   }
-  printLog("tables count: " + tables.length);
+  printLog("tables metadata count（含只读关联上下文）: " + tables.length);
 
   // ── 2.5 i18n 翻译表派生：启用 i18n 且无显式翻译表配置时按惯例派生 ────
   //      派生规则见 deriveI18nTable（与 C++ json_table_model.cpp 镜像）；
@@ -196,7 +200,10 @@ export function generateApiMain(params: Object): Number {
       continue;
     }
     let d: Object = deriveI18nTable(t);
-    printLog("i18n 翻译表 '" + d["tableName"] + "' 无显式配置，已从主表 '" + t["tableName"] + "' 派生");
+    d["_generate"] = t["_generate"];
+    if (t["_generate"] == true) {
+      printLog("i18n 翻译表 '" + d["tableName"] + "' 无显式配置，已从主表 '" + t["tableName"] + "' 派生");
+    }
     derivedTables.append(d);
   }
   for (d in derivedTables) {
@@ -206,9 +213,11 @@ export function generateApiMain(params: Object): Number {
     printLog("tables count（含派生）: " + tables.length);
   }
 
-  // 任何表不合规都在首次写文件前终止，自动派生翻译表也必须有合法命名与注释。
+  // 本次生成目标在首次写文件前校验，自动派生翻译表也必须有合法命名与注释。
   for (t in tables) {
-    assert(validateTableSchema(t), "表结构校验失败：" + t["tableName"]);
+    if (t["_generate"] == true) {
+      assert(validateTableSchema(t), "表结构校验失败：" + t["tableName"]);
+    }
   }
 
   // ── 3. goBasePath 与模块名 ─────────────────────────────────────────
@@ -355,7 +364,7 @@ export function generateApiMain(params: Object): Number {
     // moduleDir/pkgName/i18n 标记已补全，回写查找表（对象按值复制，早写会漏掉后补字段）
     tablesByName[tn] = t;
     tablesByModel[mn] = t;
-    genTables.append(t);
+    if (t["_generate"] == true) { genTables.append(t); }
   }
 
   // 配置缺陷被跳过的表数量（结束时报错汇总）
@@ -1402,7 +1411,7 @@ export function filterJoinRefs(arr: Object, aliasMap: Object): Object[] {
   return out;
 }
 
-/// @brief 生成一张分层布局的表（data/ + modules/admin/）
+/// @brief 生成物理表代码；字段全部来自物理列、联表输出与多语言配置。
 /// @return 实际写入文件数
 export function generateLayeredTable(json: Object, goBasePath: String, moduleName: String,
     commonPath: String, middlewarePath: String, moduleDir: String, pkgName: String,
@@ -1487,17 +1496,23 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
             i18nValid = false;
             break;
           }
-          // 与主表列重名时平铺会覆盖主表数据 → 报错跳过
+          // 已有数据库可能保留基础语言列；同类型的非空字段复用实体属性，避免
+          // 为了翻译展示把真实列从元数据中删除。翻译写入仍只通过i18n map。
+          let physical: Bool = false;
           for (mf in param.fields) {
             if (mf.name == fn) {
-              printError("错误：i18n.fields 中的列 '" + fn + "' 与主表 " + tableName + " 的列重名，i18n 已跳过");
-              i18nValid = false;
+              physical = true;
+              if (mf.enDeclType != mapTypeToGo(tc["mysqlType"], tc["unsigned"] == true) || mf.hidden) {
+                printError("错误：i18n.fields 中的列 '" + fn + "' 与主表字段类型或输出配置冲突，i18n 已跳过");
+                i18nValid = false;
+              }
               break;
             }
           }
           if (!i18nValid) { break; }
           let iff: Object = {};
           iff["name"] = fn;
+          iff["physical"] = physical;
           iff["label"] = (flabel == null || flabel == "") ? "" : flabel;
           iff["goName"] = snakeToPascal(fn);
           iff["goType"] = mapTypeToGo(tc["mysqlType"], tc["unsigned"] == true);
@@ -1630,7 +1645,7 @@ export function generateLayeredTable(json: Object, goBasePath: String, moduleNam
       vf.gormTag = "gorm:\"-\"";
       vf.enJsonTag = "json:\"" + iff["name"] + "\"";
       vf.comment = iff["comment"] + "（当前语言）";
-      i18nEntityFields.append(vf);
+      if (iff["physical"] != true) { i18nEntityFields.append(vf); }
       i18nOutFields.append(vf);
     }
     let mapField: FieldDef = new FieldDef();

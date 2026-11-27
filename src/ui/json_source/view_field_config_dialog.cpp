@@ -369,7 +369,19 @@ void ViewFieldConfigDialog::setSearchRoot(const QString &dir) {
 // ════════════════════════════════════════════════════════════
 
 void ViewFieldConfigDialog::setCurrent(const JsonTableSelCol &sc, const JsonTableEditCol &ec) {
-  comboSelectData(m_widthCombo, sc.width > 0 ? QVariant(sc.width) : QVariant(QString()));
+  // 列宽是可编辑数值下拉：非预设值必须清掉选中项并写入编辑框，
+  // 否则 currentData 会停留在预设 60，保存时把任意宽度静默改成 60。
+  const int colWidth = sc.width > 0 ? sc.width : 0;
+  const int widthIdx = m_widthCombo->findData(colWidth);
+  if (colWidth > 0 && widthIdx >= 0) {
+    m_widthCombo->setCurrentIndex(widthIdx);
+  } else if (colWidth > 0) {
+    m_widthCombo->setCurrentIndex(-1);
+    m_widthCombo->setEditText(QString::number(colWidth));
+  } else {
+    m_widthCombo->setCurrentIndex(-1);
+    m_widthCombo->setEditText(QString());
+  }
   comboSelectData(m_widgetCombo, ec.widget);
   m_editEditableCheck->setChecked(ec.editEditable);
   m_requiredCheck->setChecked(ec.required);
@@ -557,7 +569,10 @@ void ViewFieldConfigDialog::deriveWidgetFromDomain() {
 // ════════════════════════════════════════════════════════════
 
 int ViewFieldConfigDialog::width() const {
-  return int(numericComboValue(m_widthCombo, 0));
+  if (!m_widthCombo) return 0;
+  // 直接读编辑框文本：预设项与非预设自定义值都按用户看到的数字落库；
+  // 空文本 = 自适应（0），不再被 currentData 的预设值覆盖。
+  return m_widthCombo->currentText().trimmed().toInt();
 }
 
 void ViewFieldConfigDialog::fillListResult(JsonTableSelCol *sc) const {

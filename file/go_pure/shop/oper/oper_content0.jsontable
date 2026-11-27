@@ -2,15 +2,78 @@
   "table": {
     "tableName": "oper_content0",
     "modelName": "oper_content0",
-    "tableComment": "公告帮助协议多语言翻译",
+    "tableComment": "公告帮助协议多语言表",
     "columns": [
-      {"name":"id","mysqlType":"bigint","comment":"翻译记录主键","isPrimary":true,"isAutoInc":true,"nullable":false},
-      {"name":"ext_id","mysqlType":"bigint","comment":"关联oper_content.id","nullable":false,"default":"0"},
-      {"name":"lang","mysqlType":"varchar(64)","comment":"语言编码，对应base_lang.lang","nullable":false,"default":""},
-      {"name":"title","mysqlType":"varchar(255)","comment":"公告帮助协议标题","nullable":false,"default":""},
-      {"name":"content","mysqlType":"text","comment":"公告帮助协议正文，按纯文本显示","nullable":false},
-      {"name":"created_at","mysqlType":"datetime","comment":"记录创建时间","nullable":false,"default":"CURRENT_TIMESTAMP"},
-      {"name":"updated_at","mysqlType":"datetime","comment":"记录最后更新时间","nullable":false,"default":"CURRENT_TIMESTAMP"}
+      {
+        "name": "id",
+        "mysqlType": "bigint",
+        "comment": "自增主键",
+        "isPrimary": true,
+        "isAutoInc": true,
+        "nullable": false,
+        "title": "翻译ID",
+        "unsigned": false
+      },
+      {
+        "name": "ext_id",
+        "mysqlType": "bigint",
+        "comment": "扩展ID，关联oper_content.id",
+        "nullable": false,
+        "title": "内容ID",
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "lang",
+        "mysqlType": "varchar(64)",
+        "comment": "语言编码，对应base_lang.lang",
+        "title": "语言编码",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "title",
+        "mysqlType": "varchar(255)",
+        "comment": "内容标题",
+        "nullable": false,
+        "title": "标题",
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "content",
+        "mysqlType": "text",
+        "comment": "公告帮助协议正文，按纯文本显示",
+        "title": "正文",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "创建时间",
+        "nullable": true,
+        "title": "创建时间",
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "更新时间",
+        "nullable": true,
+        "title": "更新时间",
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      }
     ],
     "indexes":[{"name":"uk_ext_id_lang","cols":["ext_id","lang"],"unique":true}],
     "frontend":false,

@@ -1,0 +1,86 @@
+/// 单表生成回归：未选表只提供关联元数据，不写文件，公共字典与路由保持完整。
+import { generateApiMain } from "../../crud_gin/template/main_api.ac";
+import { generateAdminMain } from "../../admin_pure/template/main_admin.ac";
+import { collectTableContextPaths } from "../../tool/tool_jsontable.ac";
+
+main {
+  let root: String = scriptDir() + "/_out";
+  let api: String = root + "/api";
+  let admin: String = root + "/admin";
+  let project: String = root + "/project.acproj";
+  let alpha: String = root + "/catalog/alpha.jsontable";
+  let beta: String = root + "/catalog/beta.jsontable";
+  let translated: String = root + "/catalog/alpha0.jsontable";
+  let id: Object = {name: "id", mysqlType: "int", comment: "主键", isPrimary: true, isAutoInc: true};
+  writeFile(project, JSON.stringify({meta: {goBasePath: api, webBasePath: admin}}));
+  writeFile(api + "/go.mod", "module fixture\n");
+  writeFile(api + "/common/db/unique_error.go", "package db\n");
+  writeFile(alpha, JSON.stringify({table: {
+    tableName: "alpha", tableComment: "已选表", moduleDir: "catalog/alpha", columns: [id,
+      {name: "beta_id", mysqlType: "int", comment: "关联编号"}],
+    joinTables: [{table: "beta", type: "LEFT", on: ["beta_id", "id"], cols: [{col: "state", label: "关联状态"}]}],
+    selCols: [{ref: "id"}, {ref: "beta_state"}],
+    i18n: {table: "alpha0", extKey: "ext_id", langKey: "lang", fields: [{name: "title", label: "名称"}]}
+  }}));
+  writeFile(beta, JSON.stringify({table: {
+    tableName: "beta", tableComment: "未选表", moduleDir: "catalog/beta", columns: [id,
+      {name: "state", mysqlType: "int", comment: "状态"}],
+    selCols: [{ref: "id"}, {ref: "state"}], enums: [{column: "state", items: [
+      {key: "Off", value: "0", valueType: "number", label: "停用"},
+      {key: "On", value: "1", valueType: "number", label: "启用"}]}]
+  }}));
+  // 显式翻译定义应在仅选主表时继续生效，不能被默认varchar(255)派生值覆盖。
+  writeFile(translated, JSON.stringify({table: {
+    tableName: "alpha0", tableComment: "显式翻译表", frontend: false, columns: [id,
+      {name: "ext_id", mysqlType: "int", comment: "主表编号"},
+      {name: "lang", mysqlType: "varchar(64)", comment: "语言"},
+      {name: "title", mysqlType: "varchar(80)", comment: "名称"}]
+  }}));
+  let context: String[] = collectTableContextPaths([alpha], project);
+  assert(context.length == 3 && context[0] == alpha, "元数据必须包含未选关联及翻译表");
+
+  let tpl: String = scriptDir() + "/../../admin_pure/template";
+  let apiParams: Object = {projPath: project, jsonTablePaths: [alpha, beta, translated], genGlobalEnum: false};
+  let adminParams: Object = {projPath: project, jsonTablePaths: [alpha, beta, translated], apiPrefix: "/api",
+    tableEnumTpl: tpl + "/table_enum.tpl",
+    sourceTemplates: [{tpl: tpl + "/source.tpl", out: "{basePath}/src/api/source/{sourceName}.ts"}],
+    uploadTemplates: [{tpl: tpl + "/upload.tpl", out: "{basePath}/src/api/upload/{uploadName}.ts"}],
+    templates: [
+      {tpl: tpl + "/index.tpl", out: "{basePath}/src/views/{pagePath}/index.vue"},
+      {tpl: tpl + "/api.tpl", out: "{basePath}/src/api/{apiModule}/{pageName}.ts"}
+    ]};
+  assert(generateApiMain(apiParams) > 0, "完整生成必须成功");
+  generateAdminMain(adminParams);
+
+  // 给未选模块加入标记，模拟它在两次生成间已发生变化；逐个检查生成件未被重写。
+  let preserved: Object = {};
+  let outputs: String[] = listFilesDeep(root, ".go");
+  let vueFiles: String[] = listFilesDeep(root, ".vue");
+  let tsFiles: String[] = listFilesDeep(root, ".ts");
+  for (path in vueFiles) { outputs.append(path); }
+  for (path in tsFiles) { outputs.append(path); }
+  let count: Number = 0;
+  for (path in outputs) {
+    if (path.indexOf("/beta/") < 0 && !path.endsWith("/beta.ts")) { continue; }
+    let absolute: String = root + "/" + path;
+    let content: String = readFile(absolute) + "\n// partial-generation-preserve\n";
+    writeFile(absolute, content);
+    preserved[absolute] = content;
+    count = count + 1;
+  }
+  assert(count > 5, "必须覆盖未选表的Go、Vue和请求文件");
+  apiParams["jsonTablePaths"] = [alpha];
+  adminParams["jsonTablePaths"] = [alpha];
+  assert(generateApiMain(apiParams) > 0, "单表生成必须成功");
+  generateAdminMain(adminParams);
+  for (path in preserved) {
+    assert(readFile(path) == preserved[path], "未选文件被覆盖：" + path);
+  }
+  let enums: String = readFile(admin + "/src/api/source/table_enum.ts");
+  assert(enums.indexOf("'beta.state'") >= 0 && enums.indexOf("'alpha.beta_state'") >= 0,
+    "单表生成必须保留其它页面枚举和关联枚举");
+  assert(readFile(api + "/router/routes_.go").indexOf("catalog/beta") >= 0, "不能移除未选模块的已有路由");
+  assert(readFile(api + "/data/catalog/alpha/en_alpha0_.go").indexOf("varchar(80)") >= 0,
+    "单表生成必须沿用显式翻译字段类型");
+  printLog("partial generation: PASS");
+}

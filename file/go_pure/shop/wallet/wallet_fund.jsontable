@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "钱包资金来源余额记录主键",
+        "title": "资金账户ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "user_id",
         "mysqlType": "bigint",
         "comment": "关联user.id",
+        "title": "用户ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "recharge_available",
         "mysqlType": "decimal(20,2)",
         "comment": "剩余不可提现资金",
+        "title": "不可提现余额",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "income_available",
         "mysqlType": "decimal(20,2)",
         "comment": "剩余可提现已结算收入",
+        "title": "可提现收入",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -47,6 +51,7 @@
         "name": "withdraw_frozen",
         "mysqlType": "decimal(20,2)",
         "comment": "提现冻结，已扣购买余额",
+        "title": "提现冻结金额",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -57,6 +62,7 @@
         "name": "version",
         "mysqlType": "bigint",
         "comment": "来源分账版本",
+        "title": "分账版本",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -67,6 +73,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -77,6 +84,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -137,49 +145,49 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "钱包资金来源余额记录主键",
+        "label": "资金账户ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "user_id",
-        "label": "关联user.id",
+        "label": "用户ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "recharge_available",
-        "label": "剩余不可提现资金",
+        "label": "不可提现余额",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "income_available",
-        "label": "剩余可提现已结算收入",
+        "label": "可提现收入",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "withdraw_frozen",
-        "label": "提现冻结，已扣购买余额",
+        "label": "提现冻结金额",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "version",
-        "label": "来源分账版本",
+        "label": "分账版本",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

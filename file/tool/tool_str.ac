@@ -4,9 +4,9 @@
 /// 公共工具函数集中存放在本目录（file/tool/），
 /// 命名采用 tool_<类别>.ac 的形式。各项目入口脚本通过 import 引用。
 
-/// @brief 转义 JS 字符串中的单引号和反斜杠（用于生成 JS 对象字面量）
+/// @brief 转义 JS 字符串中的单引号、反斜杠与换行（用于生成 JS 对象字面量）
 /// @param s 原始字符串
-/// @return 转义后的字符串（单引号 ' → \'，反斜杠 \ → \\）
+/// @return 转义后的字符串（单引号 ' → \'，反斜杠 \ → \\，换行/回车/制表符转义）
 export function escapeJsStr(s: String): String {
   if (s == null) {
     return "";
@@ -19,6 +19,12 @@ export function escapeJsStr(s: String): String {
       result = result + "\\'";
     } else if (c == "\\") {
       result = result + "\\\\";
+    } else if (c == "\n") {
+      result = result + "\\n";
+    } else if (c == "\r") {
+      result = result + "\\r";
+    } else if (c == "\t") {
+      result = result + "\\t";
     } else {
       result = result + c;
     }

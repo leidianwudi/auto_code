@@ -52,7 +52,7 @@
 import { buildAdminTplData, buildSourceTplData, buildUploadTplData } from "../../admin_vue/template/core/admin_data.ac";
 import { findGlobalEnumFiles, mergeGlobalEnumFiles, buildGlobalEnumJsonSource } from "../../tool/tool_global_enum.ac";
 import { snakeToPascal, snakeToCamel, escapeJsStr } from "../../tool/tool_str.ac";
-import { dirnameOf, findProjPath, relDirUnder, collectTablePaths } from "../../tool/tool_jsontable.ac";
+import { dirnameOf, findProjPath, relDirUnder, collectTablePaths, collectTableContextPaths } from "../../tool/tool_jsontable.ac";
 import { validateTableSchema } from "../../tool/tool_schema.ac";
 
 /// @brief 模板配置（一个模板对应一个生成的代码文件）
@@ -1250,7 +1250,7 @@ export function generateAdminMain(params: Object): Void {
     ];
   }
 
-  // ── 2.3 表级枚举字典配置：本次生成的全部表枚举汇总成一个共享文件 ──────
+  // ── 2.3 表级枚举字典配置：项目上下文的表枚举汇总成一个共享文件 ──────
   //    输出与 global_enum.ts 同目录（src/api/source/），页面 import 后按
   //    '表名.列名' 查文字/颜色；未配置时用相对入口脚本目录的缺省模板
   let tableEnumTpl: String = params["tableEnumTpl"];
@@ -1268,9 +1268,12 @@ export function generateAdminMain(params: Object): Void {
   //    单文件失败即中止（配置不完整时生成的双端代码会互相矛盾）；
   //    跨文件重复 modelName 由下方统一检查拦截
   let tables: Object[] = [];
-  let jtfLen = jsontableFiles.length;
+  let selectedPaths: Object = {};
+  for (path in jsontableFiles) { selectedPaths[path.replace("\\", "/")] = true; }
+  let contextFiles: String[] = collectTableContextPaths(jsontableFiles, projPath);
+  let jtfLen = contextFiles.length;
   for (let tj = 0; tj < jtfLen; tj = tj + 1) {
-    let jtf: String = jsontableFiles[tj];
+    let jtf: String = contextFiles[tj];
     let tableJson: Object = readJson(jtf);
     if (tableJson == null) {
       printError("错误：.jsontable 配置读取失败：" + jtf);
@@ -1289,14 +1292,17 @@ export function generateAdminMain(params: Object): Void {
     // 目录结构 = 模块结构：记录相对扫描根（入口脚本目录）的目录段，
     // 供标准页 pagePath/apiModule 推导；不在扫描根下时为 ""（回退旧行为）
     t["_relDir"] = relDirUnder(jtf, scriptDir());
+    t["_generate"] = (selectedPaths[jtf] == true);
     tables.append(t);
-    printLog("jsontable: " + jtf + "（" + t["tableName"] + "）");
+    if (t["_generate"] == true) { printLog("jsontable: " + jtf + "（" + t["tableName"] + "）"); }
   }
-  printLog("jsontable tables count: " + tables.length);
+  printLog("jsontable metadata count（含只读关联上下文）: " + tables.length);
 
   // 管理端单独执行时也阻断坏配置，不依赖先运行Go生成器。
   for (table in tables) {
-    assert(validateTableSchema(table), "表结构校验失败：" + table["tableName"]);
+    if (table["_generate"] == true) {
+      assert(validateTableSchema(table), "表结构校验失败：" + table["tableName"]);
+    }
   }
 
   // 同名表检查：两个 modelName 相同会生成到同一目录互相覆盖
@@ -1647,7 +1653,9 @@ export function generateAdminMain(params: Object): Void {
     }
     // 翻译表跳过页面生成（printLog 说明，与后端"只生成实体"对齐）
     if (i18nTables[table["tableName"]] == true) {
-      printLog("表 '" + table["tableName"] + "' 为 i18n 翻译表（被引用），跳过页面生成");
+      if (table["_generate"] == true) {
+        printLog("表 '" + table["tableName"] + "' 为 i18n 翻译表（被引用），跳过页面生成");
+      }
       continue;
     }
     // 纯 API 模块开关：frontend 仅显式 false 生效（键缺失=null ≠ false，缺省生成）；
@@ -1656,10 +1664,16 @@ export function generateAdminMain(params: Object): Void {
       // 同名 .jsonvue 即使单独勾选也受表级开关约束，不能从后续独立页分支绕过。
       disabledModels[modelName] = true;
       disabledModels[table["tableName"]] = true;
-      printLog("表 '" + table["tableName"] + "' frontend=false（纯 API 模块），跳过页面生成");
+      if (table["_generate"] == true) {
+        printLog("表 '" + table["tableName"] + "' frontend=false（纯 API 模块），跳过页面生成");
+      }
       continue;
     }
     let vuePath: String = resolveJsonvuePath(modelName, basePath, checkedVueFiles);
+    // 单独勾选高级页面仍应生成，即使对应表仅作为关联上下文读取。
+    for (checkedVue in checkedVueFiles) {
+      if (checkedVue == vuePath) { table["_generate"] = true; }
+    }
     let pageJson: Object = null;
     let filePath: String = "";
     // i18n 元数据：主表 i18n.table → 翻译表列定义（字段名/标题/类型）
@@ -1721,19 +1735,25 @@ export function generateAdminMain(params: Object): Void {
       pageJson = readJson(vuePath);
       filePath = vuePath;
       consumedVue[vuePath] = true;
-      printLog("高级页（.jsonvue 双轨）：" + vuePath);
+      if (table["_generate"] == true) { printLog("高级页（.jsonvue 双轨）：" + vuePath); }
     } else {
       // 双轨·标准页：从 .jsontable 读模型合成 jsonvue 形状（零额外配置）
       pageJson = buildJsonvueFromTable(table, globalEnumNames, joinContext, aliasMeta, i18nMeta);
       filePath = basePath + "/src/views/" + modelName + "/" + modelName + "/" + modelName + ".jsonvue";
-      printLog("标准页（.jsontable 合成）：" + modelName);
+      if (table["_generate"] == true) { printLog("标准页（.jsontable 合成）：" + modelName); }
     }
     if (pageJson == null) {
       printError("错误：页面配置读取失败，跳过：" + filePath);
       continue;
     }
     // 后端只读策略优先于高级页和列配置，避免列表开关绕过业务审核。
-    if (table["adminQueryMode"] == "read" || table["adminQueryMode"] == "empty") {
+    // 自定义保存页面的写入走独立业务接口，只读策略只裁剪后端写接口，
+    // 不再把前端编辑与开关一并锁死。
+    let adminPageCfg: Object = table["adminPage"];
+    let hasCustomSaveCfg: Bool =
+        (adminPageCfg != null && adminPageCfg["customSave"] == true);
+    if (!hasCustomSaveCfg &&
+        (table["adminQueryMode"] == "read" || table["adminQueryMode"] == "empty")) {
       let readMeta: Object = pageJson["meta"];
       readMeta["noAdd"] = true;
       readMeta["noEdit"] = true;
@@ -1748,9 +1768,11 @@ export function generateAdminMain(params: Object): Void {
       pageJson["columns"] = readCols;
     }
     pages.push({
+      generate: table["_generate"],
       filePath: filePath,
       json: pageJson,
       permPrefix: table["tableName"],
+      adminPage: table["adminPage"],
       // 相对扫描根目录段（目录结构 = 模块结构）：合成页 pagePath/apiModule 覆盖用；
       // 高级页（.jsonvue 命中）不带，保持按 .jsonvue 所在目录推导的既有行为
       relDir: table["_relDir"]
@@ -1807,6 +1829,86 @@ export function generateAdminMain(params: Object): Void {
     // pure-admin 专用派生键补全（isDatetimeFormat/needMessageBox 等）
     // 注意：ac 的 Object 是 COW 语义，必须接收返回值，否则补全全部丢失
     tplData = enrichPureTplData(tplData);
+    // 页面说明是通用页面属性，标准CRUD与自定义接口均从同一处读取。
+    let pageSettings: Object = pages[pg]["adminPage"];
+    if (pageSettings == null) { pageSettings = {}; }
+    let notice: String = pageSettings["notice"];
+    tplData["hasPageNotice"] = notice != null && notice != "";
+    if (tplData["hasPageNotice"] == true) {
+      let kind: String = pageSettings["noticeType"];
+      if (kind == null || kind == "") { kind = "info"; }
+      assert(kind == "info" || kind == "warning" || kind == "success" || kind == "error", "页面提示类型无效");
+      // AC 的 JSON.stringify 对 String 返回原文（不带引号），页面说明必须手工包单引号字面量
+      tplData["pageNoticeJson"] = "'" + escapeJsStr(notice).replace("<", "\\u003c").replace(">", "\\u003e") + "'";
+      tplData["pageNoticeType"] = kind;
+      tplData["pageNoticeClosable"] = pageSettings["noticeClosable"] == true ? "true" : "false";
+    }
+    // ── 自定义保存接口（customSave）：标准列表/详情/编辑复用，写入走业务接口 ──
+    // 标准通用 update 接口只接受数据库列全量写，无法承接服务端范围校验、审计、
+    // 停用回退等业务规则；customSave 用白名单把表单字段映射到业务接口。
+    let customSave: Bool = (pageSettings["customSave"] == true);
+    tplData["hasCustomSave"] = customSave;
+    tplData["customSaveUrl"] = "";
+    tplData["customKeyField"] = "id";
+    tplData["customEditFields"] = [];
+    tplData["customSwitchField"] = "";
+    tplData["customHasSwitchField"] = false;
+    tplData["customSaveFieldLines"] = "";
+    if (customSave) {
+      let saveUrl: String = pageSettings["saveUrl"];
+      assert(saveUrl != null && saveUrl.startsWith("/api/"),
+             "自定义保存接口 saveUrl 必须是以 /api/ 开头的路径");
+      assert(saveUrl.indexOf("?") < 0 && saveUrl.indexOf("#") < 0 &&
+             saveUrl.indexOf("..") < 0,
+             "自定义保存接口 saveUrl 不能包含查询串、锚点或 ..");
+      let keyField: String = pageSettings["keyField"];
+      if (keyField == null || keyField == "") { keyField = "id"; }
+      let editFields: String[] = pageSettings["editFields"];
+      assert(editFields != null && editFields.length > 0,
+             "自定义保存接口 editFields 不能为空");
+      let customCols: Object[] = tplData["columns"];
+      let keyFound: Bool = false;
+      let keyVisible: Bool = false;
+      for (let ck = 0; ck < customCols.length; ck = ck + 1) {
+        if (customCols[ck]["dataName"] == keyField) {
+          keyFound = true;
+          keyVisible = (customCols[ck]["editVisible"] == true);
+        }
+      }
+      assert(keyFound, "自定义保存接口 keyField 不在本页字段中：" + keyField);
+      assert(keyField == "id" || keyVisible,
+             "自定义保存接口 keyField 必须是主键 id 或编辑表单可见字段：" + keyField);
+      let fieldLines: String[] = [];
+      for (let ef = 0; ef < editFields.length; ef = ef + 1) {
+        let fieldName: String = editFields[ef];
+        let fieldFound: Bool = false;
+        for (let cf = 0; cf < customCols.length; cf = cf + 1) {
+          if (customCols[cf]["dataName"] == fieldName) { fieldFound = true; }
+        }
+        assert(fieldFound, "自定义保存接口 editFields 字段不在本页字段中：" + fieldName);
+        fieldLines.append("    payload[\"" + fieldName + "\"] = data[\"" + fieldName + "\"];");
+      }
+      let switchField: String = pageSettings["switchField"];
+      if (switchField == null) { switchField = ""; }
+      if (switchField != "") {
+        let switchFound: Bool = false;
+        for (let cs = 0; cs < customCols.length; cs = cs + 1) {
+          if (customCols[cs]["dataName"] == switchField) {
+            switchFound = true;
+            assert(customCols[cs]["isBooleanSwitch"] == true ||
+                   customCols[cs]["isTagSwitch"] == true,
+                   "自定义保存接口 switchField 必须是列表开关列：" + switchField);
+          }
+        }
+        assert(switchFound, "自定义保存接口 switchField 不在本页字段中：" + switchField);
+      }
+      tplData["customSaveUrl"] = saveUrl;
+      tplData["customKeyField"] = keyField;
+      tplData["customEditFields"] = editFields;
+      tplData["customSwitchField"] = switchField;
+      tplData["customHasSwitchField"] = (switchField != "");
+      tplData["customSaveFieldLines"] = fieldLines.join("\n");
+    }
     // 独立列表开关可以用于无编辑弹窗的页面，接口导入按实际可写开关补齐。
     let switchCols: Object[] = tplData["columns"];
     let hasSwitchUpdate: Bool = false;
@@ -1824,7 +1926,10 @@ export function generateAdminMain(params: Object): Void {
     tplData["useListTable"] = (params["useListTable"] == true);
     // 布尔开关列改用通用 EnableSwitch（项目 src/components/ac 下手工维护）；
     // 仅显式启用的项目生成其 import/模板，未接入的项目保持原 el-switch 渲染。
-    tplData["useEnableSwitch"] = (params["useEnableSwitch"] == true);
+    // 自定义保存页面的开关必须走本页 updateApi（EnableSwitch 固定 POST /update），
+    // 因此强制回退标准 el-switch。
+    tplData["useEnableSwitch"] =
+        (params["useEnableSwitch"] == true && tplData["hasCustomSave"] != true);
     // i18n 元数据（write.tpl 语言 Tab 消费；null = 本表未启用多语言）
     let i18nInfo: Object = pages[pg]["json"]["i18n"];
     tplData["hasI18n"] = (i18nInfo != null);
@@ -1887,7 +1992,7 @@ export function generateAdminMain(params: Object): Void {
       tplData["apiModule"] = relSegs[0];
     }
     let pagePath: String = tplData["pagePath"];
-    printLog("processing page: " + pagePath);
+    if (pages[pg]["generate"] != false) { printLog("processing page: " + pagePath); }
 
     // ── 收集本页 tag 列进共享枚举字典 ────────────────────────────────
     //    键 = 表名.列名（联表虚拟列已在构造时写入「目标表名.列名」）；
@@ -1913,6 +2018,9 @@ export function generateAdminMain(params: Object): Void {
     }
     // COW 语义：列数组在循环内被修改过，必须回写 tplData 后模板才能读到 enumKey
     tplData["columns"] = colsEnum;
+
+    // 未勾选页面只参与公共字典汇总，不改写它的Vue或请求文件。
+    if (pages[pg]["generate"] == false) { continue; }
 
     let tplLen = templates.length;
     for (let ct = 0; ct < tplLen; ct = ct + 1) {
@@ -1940,7 +2048,7 @@ export function generateAdminMain(params: Object): Void {
   }
 
   // ── 8.1 表级枚举字典（跨页面共享，src/api/source/table_enum.ts）──────
-  //     汇总本次生成的全部 tag 列映射，页面统一 import 查表；
+  //     汇总项目上下文的 tag 列映射，单表生成不能清掉其它页面的枚举；
   //     无枚举时不生成，避免空文件干扰
   let teKeys: String[] = [];
   for (teKey in tableEnums) { teKeys.append(teKey); }

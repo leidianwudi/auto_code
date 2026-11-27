@@ -1,0 +1,110 @@
+/// @file pure_query_options_main.ac — 表内枚举筛选生成回归，不连接数据库。
+import { buildJsonvueFromTable, enrichPureTplData } from "../admin_pure/template/main_admin.ac";
+import { buildAdminTplData } from "../admin_vue/template/core/admin_data.ac";
+
+main {
+  let path: String = scriptDir() + "/../go_pure/shop/shop/shop.jsontable";
+  let table: Object = JSON.parse(readFile(path))["table"];
+  let page: Object = buildJsonvueFromTable(table, {}, {}, {}, null);
+  let data: Object = buildAdminTplData(page, path, {prefix: "/api"}, [], [], {});
+  data = enrichPureTplData(data);
+  let matched: Number = 0;
+  let queryFields: Object[] = data["queryFields"];
+  for (query in queryFields) {
+    if (query["dataName"] == "is_open" || query["dataName"] == "enable") {
+      assert(query["isSelect"] == true && query["hasInlineOptions"] == true, "布尔枚举筛选必须生成下拉");
+      let options: Object[] = query["inlineOptions"];
+      assert(options.length == 2 && options[0]["valueEsc"] == "0" && options[0]["isNumberValue"] == true, "否必须提交数字0");
+      assert(options[1]["valueEsc"] == "1" && options[1]["isNumberValue"] == true, "是必须提交数字1");
+      matched = matched + 1;
+    }
+  }
+  assert(matched == 2, "两个店铺筛选项均需覆盖");
+  // 标准CRUD和业务接口页使用相同的说明位置，分页仍走原服务端接口。
+  data["hasPageNotice"] = true;
+  data["pageNoticeJson"] = "\"标准页面说明\"";
+  data["pageNoticeType"] = "info";
+  data["pageNoticeClosable"] = "false";
+  let index: String = renderTpl(scriptDir() + "/../admin_pure/template/index.tpl", data);
+  assert(index.indexOf(":title=\"pageNotice\"") > index.indexOf("<el-pagination"), "标准页面说明必须生成在分页下方");
+  assert(index.indexOf("@current-change=\"loadData\"") >= 0, "标准页面保留服务端分页");
+  data["hasPageNotice"] = false;
+  let withoutNotice: String = renderTpl(scriptDir() + "/../admin_pure/template/index.tpl", data);
+  assert(withoutNotice.indexOf(":title=\"pageNotice\"") < 0, "未配置说明时不生成说明组件");
+  let guarded: Object = enrichPureTplData({columns: data["columns"], queryFields: [
+    {dataName: "is_open", isRange: true, isSelect: false},
+    {dataName: "enable", isSelect: true, hasStaticRef: true}
+  ], dialogButtons: []});
+  let fields: Object[] = guarded["queryFields"];
+  assert(fields[0]["hasInlineOptions"] == false && fields[0]["isSelect"] == false, "范围查询不能转为下拉");
+  assert(fields[1]["hasInlineOptions"] == false && fields[1]["hasStaticRef"] == true, "显式数据源不能被覆盖");
+  // 语言配置保留列表操作开关，筛选沿用数值枚举，操作文字使用字段配置。
+  let langPath: String = scriptDir() + "/../go_pure/shop/base/base_lang.jsontable";
+  let langTable: Object = JSON.parse(readFile(langPath))["table"];
+  let langPage: Object = buildJsonvueFromTable(langTable, {}, {}, {}, null);
+  let langData: Object = enrichPureTplData(buildAdminTplData(langPage, langPath, {prefix: "/api"}, [], [], {}));
+  let langQueries: Object[] = langData["queryFields"];
+  let langMatched: Bool = false;
+  for (query in langQueries) {
+    if (query["dataName"] == "enable") {
+      assert(query["isSelect"] == true && query["hasInlineOptions"] == true, "语言启用筛选必须生成下拉");
+      let options: Object[] = query["inlineOptions"];
+      assert(options[0]["valueEsc"] == "0" && options[0]["textEsc"] == "停用" && options[0]["isNumberValue"] == true, "语言筛选文案与数字0提交值分别维护");
+      langMatched = true;
+    }
+  }
+  assert(langMatched, "必须覆盖语言启用筛选");
+  let langColumns: Object[] = langData["columns"];
+  for (column in langColumns) {
+    if (column["dataName"] == "enable") {
+      assert(column["isBooleanSwitch"] == true, "语言状态必须保留操作开关");
+      assert(column["switchActiveText"] == "启用" && column["switchInactiveText"] == "停用", "开关及编辑统一启用和停用文案");
+    }
+  }
+  // 发行地区复用独立列表开关，枚举的显示标签与数字值分别维护。
+  let regionPath: String = scriptDir() + "/../go_pure/shop/game/game_region.jsontable";
+  let regionTable: Object = readJson(regionPath)["table"];
+  let regionPage: Object = buildJsonvueFromTable(regionTable, {}, {}, {}, null);
+  let regionData: Object = enrichPureTplData(buildAdminTplData(regionPage, regionPath, {prefix: "/api"}, [], [], {}));
+  let regionQueries: Object[] = regionData["queryFields"];
+  let regionMatched: Bool = false;
+  for (query in regionQueries) {
+    if (query["dataName"] == "enable") {
+      let options: Object[] = query["inlineOptions"];
+      assert(query["isSelect"] == true && options[0]["textEsc"] == "停用" && options[1]["textEsc"] == "启用", "发行地区筛选标签不得带数据库数值");
+      assert(options[0]["valueEsc"] == "0" && options[1]["valueEsc"] == "1" && options[0]["isNumberValue"] == true, "去掉标签数字不改变提交值类型");
+      regionMatched = true;
+    }
+  }
+  assert(regionMatched, "必须覆盖发行地区启用状态");
+  let regionColumns: Object[] = regionData["columns"];
+  for (column in regionColumns) {
+    if (column["dataName"] == "enable") {
+      assert(column["isBooleanSwitch"] == true && column["isTagEdit"] == true, "列表开关与编辑下拉必须同时保留");
+      assert(column["switchActiveText"] == "启用" && column["switchInactiveText"] == "停用", "列表开关仅显示状态文案");
+    }
+  }
+  // 其余游戏资料页使用相同声明，不依赖修改生成Vue来补开关。
+  for (relative in ["game/game", "game/game_release", "game/game_server", "goods/goods_category"]) {
+    let schemaPath: String = scriptDir() + "/../go_pure/shop/" + relative + ".jsontable";
+    let schema: Object = readJson(schemaPath)["table"];
+    let page: Object = buildJsonvueFromTable(schema, {}, {}, {}, null);
+    let generated: Object = enrichPureTplData(buildAdminTplData(page, schemaPath, {prefix: "/api"}, [], [], {}));
+    let queries: Object[] = generated["queryFields"];
+    for (query in queries) {
+      if (query["dataName"] != "enable") { continue; }
+      let options: Object[] = query["inlineOptions"];
+      assert(query["isSelect"] == true && options[0]["textEsc"] == "停用" && options[1]["textEsc"] == "启用", "状态筛选不得显示数据库数值：" + relative);
+    }
+    let columns: Object[] = generated["columns"];
+    let found: Bool = false;
+    for (column in columns) {
+      if (column["dataName"] == "enable") {
+        found = true;
+        assert(column["isBooleanSwitch"] == true && column["isTagEdit"] == true && column["switchInactiveText"] == "停用", "列表开关、表单下拉及文案必须统一：" + relative);
+      }
+    }
+    assert(found, "生成页面必须包含状态列：" + relative);
+  }
+  printLog("pure query options: PASS");
+}

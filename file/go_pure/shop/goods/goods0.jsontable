@@ -2,18 +2,94 @@
   "table": {
     "tableName": "goods0",
     "modelName": "goods0",
-    "tableComment": "游戏商品多语言表",
+    "tableComment": "商品多语言翻译表",
     "frontend": false,
     "adminQueryMode": "empty",
     "appQuery": false,
     "columns": [
-      {"name":"id","mysqlType":"bigint","comment":"商品翻译记录主键","nullable":false,"isPrimary":true,"isAutoInc":true},
-      {"name":"ext_id","mysqlType":"bigint","comment":"关联goods.id","nullable":false,"default":"0"},
-      {"name":"lang","mysqlType":"varchar(64)","comment":"语言编码，对应base_lang.lang","nullable":false,"default":""},
-      {"name":"name","mysqlType":"varchar(255)","comment":"商品名称","nullable":false,"default":""},
-      {"name":"intro","mysqlType":"text","comment":"商品介绍，不包含游戏登录秘密","nullable":false},
-      {"name":"created_at","mysqlType":"datetime","comment":"创建时间","nullable":true},
-      {"name":"updated_at","mysqlType":"datetime","comment":"最后更新时间","nullable":true}
+      {
+        "name": "id",
+        "mysqlType": "int",
+        "comment": "自增主键",
+        "nullable": false,
+        "isPrimary": true,
+        "isAutoInc": true,
+        "title": "翻译ID",
+        "unsigned": false
+      },
+      {
+        "name": "ext_id",
+        "mysqlType": "bigint",
+        "comment": "关联goods.id",
+        "title": "商品ID",
+        "nullable": false,
+        "default": "0",
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "lang",
+        "mysqlType": "varchar(64)",
+        "comment": "语言编码，对应base_lang.lang",
+        "title": "语言编码",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "name",
+        "mysqlType": "varchar(255)",
+        "comment": "商品名称",
+        "nullable": false,
+        "default": "",
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "intro",
+        "mysqlType": "text",
+        "comment": "商品介绍，不包含游戏登录秘密",
+        "title": "商品介绍",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false
+      },
+      {
+        "name": "desc",
+        "mysqlType": "varchar(128)",
+        "unsigned": false,
+        "nullable": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "comment": "备注",
+        "default": ""
+      },
+      {
+        "name": "created_at",
+        "mysqlType": "datetime",
+        "comment": "记录创建时间",
+        "nullable": true,
+        "title": "创建时间",
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "mysqlType": "datetime",
+        "comment": "记录最后更新时间",
+        "nullable": true,
+        "title": "更新时间",
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
     ],
     "indexes": [{"name":"uk_ext_id_lang","cols":["ext_id","lang"],"unique":true}]
   }

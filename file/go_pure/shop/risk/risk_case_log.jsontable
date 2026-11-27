@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "举报案件过程记录记录主键",
+        "title": "案件日志ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "case_id",
         "mysqlType": "bigint",
         "comment": "关联risk_case.id",
+        "title": "案件ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "request_key",
         "mysqlType": "varchar(96)",
         "comment": "过程动作幂等号",
+        "title": "幂等编号",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "action",
         "mysqlType": "varchar(64)",
         "comment": "分派、补证、答辩、裁定、复核动作",
+        "title": "操作类型",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -47,6 +51,7 @@
         "name": "actor_type",
         "mysqlType": "varchar(16)",
         "comment": "user/admin/system主体",
+        "title": "操作者类型",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -67,6 +72,7 @@
         "name": "visibility",
         "mysqlType": "varchar(32)",
         "comment": "platform/complainant/respondent/participants可见范围",
+        "title": "可见范围",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -77,6 +83,7 @@
         "name": "content",
         "mysqlType": "varchar(4000)",
         "comment": "过程说明和裁定依据",
+        "title": "处理说明",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -87,6 +94,7 @@
         "name": "evidence_ids",
         "mysqlType": "json",
         "comment": "本步骤私有证据ID列表",
+        "title": "证据附件",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -96,6 +104,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -106,6 +115,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -180,31 +190,31 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "举报案件过程记录记录主键",
+        "label": "案件日志ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "case_id",
-        "label": "关联risk_case.id",
+        "label": "案件ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "request_key",
-        "label": "过程动作幂等号",
+        "label": "幂等编号",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "action",
-        "label": "分派、补证、答辩、裁定、复核动作",
+        "label": "操作类型",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "actor_type",
-        "label": "user/admin/system主体",
+        "label": "操作者类型",
         "writable": false,
         "editEditable": false
       },
@@ -216,31 +226,31 @@
       },
       {
         "ref": "visibility",
-        "label": "platform/complainant/respondent/participants可见范围",
+        "label": "可见范围",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "content",
-        "label": "过程说明和裁定依据",
+        "label": "处理说明",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "evidence_ids",
-        "label": "本步骤私有证据ID列表",
+        "label": "证据附件",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

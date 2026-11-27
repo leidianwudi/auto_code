@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "用户充值申请记录主键",
+        "title": "充值申请ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "user_id",
         "mysqlType": "bigint",
         "comment": "关联user.id",
+        "title": "用户ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "method_id",
         "mysqlType": "bigint",
         "comment": "关联wallet_receipt_method.id",
+        "title": "收款渠道ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "apply_no",
         "mysqlType": "varchar(64)",
         "comment": "唯一申请号",
+        "title": "申请编号",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -47,6 +51,7 @@
         "name": "request_key",
         "mysqlType": "varchar(64)",
         "comment": "充值提交幂等号",
+        "title": "幂等编号",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -57,6 +62,7 @@
         "name": "amount",
         "mysqlType": "decimal(20,2)",
         "comment": "申请和应付额，不加随机尾数",
+        "title": "充值金额",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -67,6 +73,7 @@
         "name": "method_snapshot",
         "mysqlType": "json",
         "comment": "平台收款渠道及版本快照",
+        "title": "收款渠道快照",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -76,6 +83,7 @@
         "name": "evidence_ids",
         "mysqlType": "json",
         "comment": "私有充值凭证ID列表",
+        "title": "证据附件",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -85,6 +93,7 @@
         "name": "reference",
         "mysqlType": "varchar(256)",
         "comment": "转账流水或备注",
+        "title": "转账备注",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -95,6 +104,7 @@
         "name": "status",
         "mysqlType": "varchar(32)",
         "comment": "业务状态：draft待凭证/pending待审/needs_proof补证/approved入账/rejected拒绝/cancelled撤销",
+        "title": "状态",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -105,6 +115,7 @@
         "name": "admin_id",
         "mysqlType": "bigint",
         "comment": "关联admin.id",
+        "title": "管理员ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -115,6 +126,7 @@
         "name": "review_note",
         "mysqlType": "varchar(1000)",
         "comment": "审核或补证理由",
+        "title": "审核意见",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -134,6 +146,7 @@
         "name": "expires_at",
         "mysqlType": "datetime",
         "comment": "申请到期时间",
+        "title": "到期时间",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -143,6 +156,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -153,6 +167,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -241,73 +256,73 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "用户充值申请记录主键",
+        "label": "充值申请ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "user_id",
-        "label": "关联user.id",
+        "label": "用户ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "method_id",
-        "label": "关联wallet_receipt_method.id",
+        "label": "收款渠道ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "apply_no",
-        "label": "唯一申请号",
+        "label": "申请编号",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "request_key",
-        "label": "充值提交幂等号",
+        "label": "幂等编号",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "amount",
-        "label": "申请和应付额，不加随机尾数",
+        "label": "充值金额",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "method_snapshot",
-        "label": "平台收款渠道及版本快照",
+        "label": "收款渠道快照",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "evidence_ids",
-        "label": "私有充值凭证ID列表",
+        "label": "证据附件",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "reference",
-        "label": "转账流水或备注",
+        "label": "转账备注",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "status",
-        "label": "业务状态：draft待凭证/pending待审/needs_proof补证/approved入账/rejected拒绝/cancelled撤销",
+        "label": "状态",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "admin_id",
-        "label": "关联admin.id",
+        "label": "管理员ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "review_note",
-        "label": "审核或补证理由",
+        "label": "审核意见",
         "writable": false,
         "editEditable": false
       },
@@ -319,19 +334,19 @@
       },
       {
         "ref": "expires_at",
-        "label": "申请到期时间",
+        "label": "到期时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

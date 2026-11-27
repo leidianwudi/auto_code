@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "订单操作日志记录主键",
+        "title": "订单日志ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "order_id",
         "mysqlType": "bigint",
         "comment": "关联trade_order.id",
+        "title": "订单ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "request_key",
         "mysqlType": "varchar(96)",
         "comment": "业务动作幂等号",
+        "title": "幂等编号",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "action",
         "mysqlType": "varchar(64)",
         "comment": "动作编码",
+        "title": "操作类型",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -67,6 +71,7 @@
         "name": "actor_type",
         "mysqlType": "varchar(16)",
         "comment": "user/admin/system主体",
+        "title": "操作者类型",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -97,6 +102,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -107,6 +113,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -181,25 +188,25 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "订单操作日志记录主键",
+        "label": "订单日志ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "order_id",
-        "label": "关联trade_order.id",
+        "label": "订单ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "request_key",
-        "label": "业务动作幂等号",
+        "label": "幂等编号",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "action",
-        "label": "动作编码",
+        "label": "操作类型",
         "writable": false,
         "editEditable": false
       },
@@ -217,7 +224,7 @@
       },
       {
         "ref": "actor_type",
-        "label": "user/admin/system主体",
+        "label": "操作者类型",
         "writable": false,
         "editEditable": false
       },
@@ -235,13 +242,13 @@
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

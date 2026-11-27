@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "订单交付记录记录主键",
+        "title": "交付ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "order_id",
         "mysqlType": "bigint",
         "comment": "关联trade_order.id",
+        "title": "订单ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "request_key",
         "mysqlType": "varchar(64)",
         "comment": "交付提交幂等号",
+        "title": "幂等编号",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "version",
         "mysqlType": "bigint",
         "comment": "交付凭证版本",
+        "title": "凭证版本",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -47,6 +51,7 @@
         "name": "method",
         "mysqlType": "varchar(32)",
         "comment": "topup/mail/face/account交付方式",
+        "title": "交付方式",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -67,6 +72,7 @@
         "name": "result",
         "mysqlType": "varchar(2000)",
         "comment": "实际交付和到账结果",
+        "title": "交付结果",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -77,6 +83,7 @@
         "name": "evidence_ids",
         "mysqlType": "json",
         "comment": "私有交付证据ID列表",
+        "title": "证据附件",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -86,6 +93,7 @@
         "name": "delivered_at",
         "mysqlType": "datetime",
         "comment": "实际交付时间",
+        "title": "交付时间",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -95,6 +103,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -105,6 +114,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -169,31 +179,31 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "订单交付记录记录主键",
+        "label": "交付ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "order_id",
-        "label": "关联trade_order.id",
+        "label": "订单ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "request_key",
-        "label": "交付提交幂等号",
+        "label": "幂等编号",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "version",
-        "label": "交付凭证版本",
+        "label": "凭证版本",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "method",
-        "label": "topup/mail/face/account交付方式",
+        "label": "交付方式",
         "writable": false,
         "editEditable": false
       },
@@ -205,31 +215,31 @@
       },
       {
         "ref": "result",
-        "label": "实际交付和到账结果",
+        "label": "交付结果",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "evidence_ids",
-        "label": "私有交付证据ID列表",
+        "label": "证据附件",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "delivered_at",
-        "label": "实际交付时间",
+        "label": "交付时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

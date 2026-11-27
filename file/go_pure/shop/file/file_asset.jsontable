@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "私有附件元数据记录主键",
+        "title": "附件ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "uploader_type",
         "mysqlType": "varchar(16)",
         "comment": "user/admin上传主体",
+        "title": "上传方类型",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "uploader_id",
         "mysqlType": "bigint",
         "comment": "上传主体ID",
+        "title": "上传方ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "purpose",
         "mysqlType": "varchar(64)",
         "comment": "充值、举报、交付、聊天、提现用途",
+        "title": "附件用途",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -47,6 +51,7 @@
         "name": "storage_key",
         "mysqlType": "varchar(256)",
         "comment": "私有根目录内服务端存储键",
+        "title": "存储标识",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -57,6 +62,7 @@
         "name": "original_name",
         "mysqlType": "varchar(256)",
         "comment": "原始文件名，展示时转义",
+        "title": "文件名",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -67,6 +73,7 @@
         "name": "mime",
         "mysqlType": "varchar(128)",
         "comment": "验证后真实MIME",
+        "title": "文件类型",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -77,6 +84,7 @@
         "name": "size",
         "mysqlType": "bigint",
         "comment": "实际字节数",
+        "title": "大小（字节）",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -87,6 +95,7 @@
         "name": "digest",
         "mysqlType": "varchar(64)",
         "comment": "SHA256摘要",
+        "title": "文件摘要",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -97,6 +106,7 @@
         "name": "status",
         "mysqlType": "varchar(32)",
         "comment": "业务状态：draft未绑定/bound绑定/revoked撤权/deleted清理",
+        "title": "状态",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -107,6 +117,7 @@
         "name": "expires_at",
         "mysqlType": "datetime",
         "comment": "草稿到期时间",
+        "title": "到期时间",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -116,6 +127,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -126,6 +138,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -209,79 +222,79 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "私有附件元数据记录主键",
+        "label": "附件ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "uploader_type",
-        "label": "user/admin上传主体",
+        "label": "上传方类型",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "uploader_id",
-        "label": "上传主体ID",
+        "label": "上传方ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "purpose",
-        "label": "充值、举报、交付、聊天、提现用途",
+        "label": "附件用途",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "storage_key",
-        "label": "私有根目录内服务端存储键",
+        "label": "存储标识",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "original_name",
-        "label": "原始文件名，展示时转义",
+        "label": "文件名",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "mime",
-        "label": "验证后真实MIME",
+        "label": "文件类型",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "size",
-        "label": "实际字节数",
+        "label": "大小（字节）",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "digest",
-        "label": "SHA256摘要",
+        "label": "文件摘要",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "status",
-        "label": "业务状态：draft未绑定/bound绑定/revoked撤权/deleted清理",
+        "label": "状态",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "expires_at",
-        "label": "草稿到期时间",
+        "label": "到期时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

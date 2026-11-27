@@ -342,6 +342,8 @@ add_library(ac_ui STATIC
     src/ui/json_source/table_import_dialog.cpp
     src/ui/json_source/json_table_designer.h
     src/ui/json_source/json_table_designer.cpp
+    src/ui/json_source/admin_page_widget.h
+    src/ui/json_source/admin_page_widget.cpp
     src/ui/json_source/json_table_editor.h
     src/ui/json_source/json_table_editor.cpp
     src/ui/json_source/json_table_widget.h

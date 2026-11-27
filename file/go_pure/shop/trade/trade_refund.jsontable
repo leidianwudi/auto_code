@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "订单售后退款记录主键",
+        "title": "售后ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "order_id",
         "mysqlType": "bigint",
         "comment": "关联trade_order.id",
+        "title": "订单ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "buyer_id",
         "mysqlType": "bigint",
         "comment": "关联user.id",
+        "title": "买家ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "refund_no",
         "mysqlType": "varchar(64)",
         "comment": "唯一售后号",
+        "title": "售后编号",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -47,6 +51,7 @@
         "name": "request_key",
         "mysqlType": "varchar(64)",
         "comment": "提交售后幂等号",
+        "title": "幂等编号",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -97,6 +102,7 @@
         "name": "evidence_ids",
         "mysqlType": "json",
         "comment": "私有证据ID列表",
+        "title": "证据附件",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -106,6 +112,7 @@
         "name": "status",
         "mysqlType": "varchar(32)",
         "comment": "业务状态：pending待卖家/seller_rejected卖家拒绝/platform平台/approved核准/refunded已退/rejected驳回/cancelled撤销/awaiting_funds待补款",
+        "title": "状态",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -126,6 +133,7 @@
         "name": "admin_id",
         "mysqlType": "bigint",
         "comment": "关联admin.id",
+        "title": "管理员ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -173,6 +181,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -183,6 +192,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -271,31 +281,31 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "订单售后退款记录主键",
+        "label": "售后ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "order_id",
-        "label": "关联trade_order.id",
+        "label": "订单ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "buyer_id",
-        "label": "关联user.id",
+        "label": "买家ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "refund_no",
-        "label": "唯一售后号",
+        "label": "售后编号",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "request_key",
-        "label": "提交售后幂等号",
+        "label": "幂等编号",
         "writable": false,
         "editEditable": false
       },
@@ -325,13 +335,13 @@
       },
       {
         "ref": "evidence_ids",
-        "label": "私有证据ID列表",
+        "label": "证据附件",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "status",
-        "label": "业务状态：pending待卖家/seller_rejected卖家拒绝/platform平台/approved核准/refunded已退/rejected驳回/cancelled撤销/awaiting_funds待补款",
+        "label": "状态",
         "writable": false,
         "editEditable": false
       },
@@ -343,7 +353,7 @@
       },
       {
         "ref": "admin_id",
-        "label": "关联admin.id",
+        "label": "管理员ID",
         "writable": false,
         "editEditable": false
       },
@@ -373,13 +383,13 @@
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

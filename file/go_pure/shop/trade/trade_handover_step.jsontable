@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "账号交接步骤记录主键",
+        "title": "步骤ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "order_id",
         "mysqlType": "bigint",
         "comment": "关联trade_order.id",
+        "title": "订单ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -47,6 +49,7 @@
         "name": "definition",
         "mysqlType": "json",
         "comment": "必需步骤与验收快照",
+        "title": "验收要求",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -56,6 +59,7 @@
         "name": "seller_confirmed",
         "mysqlType": "bigint",
         "comment": "卖家确认标志",
+        "title": "卖家已确认",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -66,6 +70,7 @@
         "name": "buyer_confirmed",
         "mysqlType": "bigint",
         "comment": "买家核验标志",
+        "title": "买家已确认",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -76,6 +81,7 @@
         "name": "evidence_ids",
         "mysqlType": "json",
         "comment": "私有证据ID列表",
+        "title": "证据附件",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -94,6 +100,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -104,6 +111,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -171,13 +179,13 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "账号交接步骤记录主键",
+        "label": "步骤ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "order_id",
-        "label": "关联trade_order.id",
+        "label": "订单ID",
         "writable": false,
         "editEditable": false
       },
@@ -195,25 +203,25 @@
       },
       {
         "ref": "definition",
-        "label": "必需步骤与验收快照",
+        "label": "验收要求",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "seller_confirmed",
-        "label": "卖家确认标志",
+        "label": "卖家已确认",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "buyer_confirmed",
-        "label": "买家核验标志",
+        "label": "买家已确认",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "evidence_ids",
-        "label": "私有证据ID列表",
+        "label": "证据附件",
         "writable": false,
         "editEditable": false
       },
@@ -225,13 +233,13 @@
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

@@ -4,6 +4,9 @@
  */
 
 #include "json_table_designer.h"
+#include "admin_page_widget.h"
+#include <algorithm>
+#include <QRegularExpression>
 
 #include <QFutureWatcher>
 #include <QtConcurrent/QtConcurrent>
@@ -135,7 +138,7 @@ enum JoinColCols {
 
 /// 字段呈现统一表格列索引（一行 = 一个字段：列表/查询/编辑三视图合一）
 enum UCols {
-  UColRef = 0,   ///< 字段引用（本表列名 或 引用名.目标列，可编辑下拉）
+  UColRef = 0,   ///< 字段引用（本表列名 或 引用名.目标列，可编辑下拉；来源见悬停提示）
   UColTitle,     ///< 标题（生效值 = selCols.label > 列注释 > ref；写回 selCols.label）
   UColWritable,  ///< 写入参数勾（Go InUpd 包含该字段）
   UColOutput,    ///< 输出勾（Go 实体 json:"-"：取消后 API 响应不含该列）
@@ -329,6 +332,9 @@ void JsonTableDesigner::setupUI() {
   colHeader->addSpacing(8);
   colHeader->addWidget(m_refreshFieldsBtn);
   fieldTab->addLayout(colHeader);
+  auto *schemaHint = new QLabel(QStringLiteral("此页保存数据库结构快照，类型、默认值和注释以数据库为准。数据库变更后请点击“从数据库刷新字段”；表注释用作页面与弹窗标题，下拉和开关请在“字段呈现”配置。"), this);
+  schemaHint->setWordWrap(true);
+  fieldTab->addWidget(schemaHint);
 
   // ── 字段表格（纯物理属性，独占字段页；页面呈现由三视图接管）──
   m_colsTable = makeConfigTable({{QStringLiteral("列名"), QHeaderView::Interactive, 110},
@@ -338,8 +344,9 @@ void JsonTableDesigner::setupUI() {
                                  {QStringLiteral("主键"), QHeaderView::Interactive, 50},
                                  {QStringLiteral("自增"), QHeaderView::Interactive, 50},
                                  {QStringLiteral("默认值"), QHeaderView::Interactive, 90},
-                                 {QStringLiteral("注释"), QHeaderView::Stretch, 0}},
+                                 {QStringLiteral("数据库注释"), QHeaderView::Stretch, 0}},
                                 this, 300, 0, QAbstractItemView::SelectItems);
+  m_colsTable->setObjectName("databaseFields");
   fieldTab->addWidget(m_colsTable, 1);
   // 「无符号」列头提示（MySQL UNSIGNED 语义）
   m_colsTable->horizontalHeaderItem(ColColUnsigned)
@@ -372,7 +379,9 @@ void JsonTableDesigner::setupUI() {
 
   // 列模式：文本列与勾选列全部 Interactive（可拖拽调宽），末列 ⚙ Stretch 吸收
   // 剩余宽度——前两列原为 Stretch 会被 Qt 禁用拖拽柄，导致列宽拖不动
-  m_viewTable = makeConfigTable({{QStringLiteral("字段引用"), QHeaderView::Interactive, 150},
+  // 来源（数据库/联表/多语言/接口返回/临时请求）不单独占列：联表/多语言
+  // 可从各自配置页看出，接口/临时字段的来源改为字段引用单元格的悬停提示。
+  m_viewTable = makeConfigTable({{QStringLiteral("字段引用"), QHeaderView::Interactive, 170},
                                  {QStringLiteral("标题"), QHeaderView::Interactive, 130},
                                  {QStringLiteral("写入"), QHeaderView::Interactive, 56},
                                  {QStringLiteral("输出"), QHeaderView::Interactive, 56},
@@ -381,6 +390,7 @@ void JsonTableDesigner::setupUI() {
                                  {QStringLiteral("展示"), QHeaderView::Interactive, 56},
                                  {QStringLiteral("配置"), QHeaderView::Stretch, 0}},
                                 this, 240, 0, QAbstractItemView::SelectItems);
+  m_viewTable->setObjectName("fieldPresentation");
   // 功能列表头：问号并入标题（「列表 ?」），悬停整格显示对应说明
   m_headerTips = {
       {UColList, QStringLiteral("勾选后该字段出现在列表页表格中\n（列标题 / 列宽在 ⚙ 列配置）")},
@@ -388,7 +398,8 @@ void JsonTableDesigner::setupUI() {
                                  "· 不查询：列表页无该字段的查询控件\n"
                                  "· 精确 / 模糊 / 范围：前端渲染输入控件，后端生成对应查询条件\n"
                                  "· 仅接口：后端生成查询条件，前端不渲染输入控件\n"
-                                 "枚举列 / 外键列的查询控件自动为下拉框")},
+                                 "枚举列 / 外键列的查询控件自动为下拉框；业务接口页仅支持表内枚举，\n"
+                                 "远程取值域请使用标准 CRUD 页面")},
       {UColVisible, QStringLiteral("☑ 编辑/新增/详情表单显示该字段\n"
                                   "☐ 上述表单不显示该字段（不影响「列表」页与「查询」条件）\n"
                                   "表单内是否可输入由 ⚙ 里的「表单可编辑」控制")},
@@ -961,6 +972,15 @@ void JsonTableDesigner::setupUI() {
   connect(m_i18nTableEdit, &QLineEdit::textChanged, this,
           [this]() { refreshI18nFieldCandidates(); });
 
+  m_adminPage = new AdminPageWidget(this);
+  tabs->addTab(m_adminPage, QStringLiteral("页面与接口"));
+  connect(m_adminPage, &AdminPageWidget::configChanged, this, [this]() {
+    if (!m_loading) {
+      updateGenButtonsEnabled();
+      emit configChanged();
+      updateValidateStatus();
+    }
+  });
   layout->addWidget(tabs, 1);
 
   // ── 交叉校验状态行（被动：随编辑自动刷新，替代原弹窗确定拦截与校验按钮）──
@@ -985,6 +1005,7 @@ void JsonTableDesigner::refill() {
   m_commentEdit->setText(m_table.tableComment);
   m_manualUpdateCheck->setChecked(m_table.manualUpdateTime);
   m_frontendCheck->setChecked(m_table.frontend);
+  m_adminPage->setConfig(m_table.extra.value("adminPage").toObject());
   m_genAddCheck->setChecked(m_table.genAdd);
   m_genEditCheck->setChecked(m_table.genEdit);
   m_genDeleteCheck->setChecked(m_table.genDelete);
@@ -1108,6 +1129,10 @@ void JsonTableDesigner::updateGenButtonsEnabled() {
   m_genEditCheck->setEnabled(on);
   m_genDeleteCheck->setEnabled(on);
   m_genDetailCheck->setEnabled(on);
+  m_genAddCheck->setToolTip(QStringLiteral("工具栏「新增」按钮（打开编辑弹窗新增）"));
+  m_genDeleteCheck->setToolTip(
+      QStringLiteral("行操作列「删除」图标 + 工具栏「删除」批量按钮（两者同一开关）"));
+  m_genDetailCheck->setToolTip(QStringLiteral("行操作列「详情」图标（只读弹窗查看）"));
 }
 
 void JsonTableDesigner::connectChangeSignals() {
@@ -1257,7 +1282,10 @@ void JsonTableDesigner::fillColumns(const QVector<JsonTableColumn> &cols) {
 void JsonTableDesigner::appendColumnRow(const JsonTableColumn &c) {
   const int row = m_colsTable->rowCount();
   m_colsTable->insertRow(row);
-  m_colsTable->setItem(row, ColColName, new QTableWidgetItem(c.name));
+  auto *nameItem = new QTableWidgetItem(c.name);
+  // 物理字段行携带完整元数据，改名和移动后仍保留非数据库显示配置。
+  nameItem->setData(Qt::UserRole, c.toJsonObject());
+  m_colsTable->setItem(row, ColColName, nameItem);
   // 类型列文本由常驻下拉显示，条目只占位（避免条目文字与下拉文字叠成重影）
   m_colsTable->setItem(row, ColColType, new QTableWidgetItem);
   bindColTypeCombo(row, c.mysqlType);
@@ -1301,6 +1329,8 @@ bool JsonTableDesigner::cellChecked(int row, int col) const {
 
 JsonTableColumn JsonTableDesigner::columnFromRow(int row) const {
   JsonTableColumn c;
+  if (const auto *nameItem = m_colsTable->item(row, ColColName))
+    c = JsonTableColumn::fromJsonObject(nameItem->data(Qt::UserRole).toJsonObject());
   c.name = cellText(row, ColColName);
   c.mysqlType = cellText(row, ColColType);
   if (c.mysqlType.isEmpty()) c.mysqlType = QStringLiteral("bigint");
@@ -1380,7 +1410,7 @@ void JsonTableDesigner::moveColumn(int delta) {
 }
 
 /// @brief 字段呈现表格行上移/下移（delta=-1 上移，1 下移）
-/// 查询模式值持久化在引用条目 +26，其余列（含只读的「字段引用」文本条目）
+/// 查询模式值持久化在引用条目 +27，其余列（含只读的「字段引用」文本条目）
 /// 整行 takeItem 搬运（复选框/⚙/行内元数据随条目保留），全程块信号
 void JsonTableDesigner::moveViewRow(int delta) {
   const int row = m_viewTable->currentRow();
@@ -1392,7 +1422,7 @@ void JsonTableDesigner::moveViewRow(int delta) {
   m_viewTable->blockSignals(true);
   for (int c = 0; c < UColCount; ++c) {
     if (c == UColQuery) {
-      // 查询模式列：cellWidget 固定在行位置，模式值持久化在引用条目 +26，
+      // 查询模式列：cellWidget 固定在行位置，模式值持久化在引用条目 +27，
       // 循环外按条目数据重置显示（见下方），此处跳过
       continue;
     }
@@ -1405,14 +1435,14 @@ void JsonTableDesigner::moveViewRow(int delta) {
   }
   m_viewTable->blockSignals(false);
   // 查询模式下拉固定在行位置（cellWidget 不随条目走），模式值已随引用条目
-  // （+26）交换 → 按条目数据重置两行显示（i18n 行 +26 恒 none = 不查询）
+  // （+27）交换 → 按条目数据重置两行显示（i18n 行 +27 恒 none = 不查询）
   for (int r : {row, target}) {
     auto *mc = dynamic_cast<AuiCellEditCombo *>(m_viewTable->cellWidget(r, UColQuery));
     if (!mc) continue;
-    const QString m26 = m_viewTable->item(r, UColRef)
-                            ? m_viewTable->item(r, UColRef)->data(Qt::UserRole + 26).toString()
+    const QString queryMode = m_viewTable->item(r, UColRef)
+                            ? m_viewTable->item(r, UColRef)->data(Qt::UserRole + 27).toString()
                             : QString();
-    mc->setText(queryModeDisplay(m26.isEmpty() ? QStringLiteral("none") : m26));
+    mc->setText(queryModeDisplay(queryMode.isEmpty() ? QStringLiteral("none") : queryMode));
   }
   // 字段引用列只读文本框同样固定在行位置（cellWidget 不随条目走），条目已随
   // takeItem 交换 → 按条目文本重置两行显示
@@ -1964,6 +1994,8 @@ void JsonTableDesigner::fillViewTable() {
         }
       }
       if (title.isEmpty()) title = ref;
+    } else if (editOf.contains(ref) && !editOf.value(ref).label.isEmpty()) {
+      title = editOf.value(ref).label;
     } else if (colComments.contains(ref) && !colComments.value(ref).isEmpty()) {
       title = colComments.value(ref);
     } else {
@@ -2014,13 +2046,18 @@ void JsonTableDesigner::fillViewTable() {
     refItem->setData(Qt::UserRole + 22, editMeta.formSpan > 0 ? editMeta.formSpan : 0);
     refItem->setData(Qt::UserRole + 23, editMeta.formDefaultValue);
     m_viewTable->setItem(row, UColRef, refItem);
+    const QString sourceLabel = isJoinRow ? QStringLiteral("联表") :
+        isI18nRow ? QStringLiteral("多语言") : QStringLiteral("数据库");
     // 引用列 = 行身份标识（行集由字段表格/联表声明/多语言 fields 派生），
     // 纯文本不可编辑（可选中复制）：改 ref 会让行元数据错位、配置丢失
     refItem->setText(ref);
     // 引用列常驻只读文本框（通用只读单元格控件 AuiCellReadBox）：item 仍是
-    // 数据源（元数据/查询模式 +26 等全在条目上），widget 纯显示——无边框透
-    // 明贴合、单击聚焦背景变色、拖选/双击选词/Ctrl+C 与可编辑输入框一致
-    m_viewTable->setCellWidget(row, UColRef, new AuiCellReadBox(m_viewTable, row, UColRef, ref));
+    // 数据源（元数据/查询模式 +27 等全在条目上），widget 纯显示——无边框透
+    // 明贴合、单击聚焦背景变色、拖选/双击选词/Ctrl+C 与可编辑输入框一致。
+    // 原「来源」列去掉后，来源信息挂到该单元格的悬停提示，避免丢失接口/临时字段区分。
+    auto *refBox = new AuiCellReadBox(m_viewTable, row, UColRef, ref);
+    refBox->setTip(QStringLiteral("来源：") + sourceLabel);
+    m_viewTable->setCellWidget(row, UColRef, refBox);
     // i18n 行标题只读（单一来源 = 多语言页「显示标题」）；新格式联表行标题只读
     //（单一来源 = 联表页「显示标题」）——此处改动均不会落盘
     auto *titleItem = new QTableWidgetItem(title);
@@ -2048,7 +2085,7 @@ void JsonTableDesigner::fillViewTable() {
     m_viewTable->setItem(row, UColList, listItem);
     // 查询模式下拉（不查询/精确/模糊/范围/仅接口；只读，文字可拖选复制）；
     // i18n 行无候选（跨表查询第一版不支持，配置区恒显「不查询」）。
-    // 模式值持久化在引用条目 +26（cellWidget 固定在行位置，随条目交换/搬运
+    // 模式值持久化在引用条目 +27（cellWidget 固定在行位置，随条目交换/搬运
     // 才不会在行交换时错位/丢失；下拉文本仅显示用，改值时同步回写）
     auto *modeCombo =
         new AuiCellEditCombo(m_viewTable, UColQuery,
@@ -2061,7 +2098,7 @@ void JsonTableDesigner::fillViewTable() {
     }
     if (!qVisible) mode = QStringLiteral("api");
     modeCombo->setText(queryModeDisplay(mode));
-    refItem->setData(Qt::UserRole + 26, mode);
+    refItem->setData(Qt::UserRole + 27, mode);
     if (isI18nRow) {
       modeCombo->setToolTip(QStringLiteral("多语言字段不支持查询（跨表查询第一版未支持）"));
     }
@@ -2070,7 +2107,7 @@ void JsonTableDesigner::fillViewTable() {
       for (int i = 0; i < m_viewTable->rowCount(); ++i) {
         if (m_viewTable->cellWidget(i, UColQuery) == modeCombo) {
           if (auto *refIt = m_viewTable->item(i, UColRef))
-            refIt->setData(Qt::UserRole + 26, queryModeData(modeCombo->text().trimmed()));
+            refIt->setData(Qt::UserRole + 27, queryModeData(modeCombo->text().trimmed()));
           break;
         }
       }
@@ -2274,11 +2311,11 @@ void JsonTableDesigner::collectViewTable(JsonTableTable *out) const {
       c.listThumbHeight = listThumbH;
       out->selCols.append(c);
     }
-    // 查询视图（模式下拉）：模式值持久化在引用条目 +26（cellWidget 固定在行
-    // 位置，行交换/搬运后会错位；条目数据才是权威）。+26 空 = 旧会话兼容回退下拉文本
+    // 查询视图（模式下拉）：模式值持久化在引用条目 +27（cellWidget 固定在行
+    // 位置，行交换/搬运后会错位；条目数据才是权威）。+27 空时回退下拉文本
     QString mode;
     if (const QTableWidgetItem *refIt = m_viewTable->item(r, UColRef))
-      mode = refIt->data(Qt::UserRole + 26).toString();
+      mode = refIt->data(Qt::UserRole + 27).toString();
     if (mode.isEmpty()) {
       auto *modeCombo = dynamic_cast<AuiCellEditCombo *>(m_viewTable->cellWidget(r, UColQuery));
       mode = modeCombo ? queryModeData(modeCombo->text().trimmed()) : QStringLiteral("none");
@@ -3032,6 +3069,7 @@ bool JsonTableDesigner::validateForDdl(QString *err) const {
 // ════════════════════════════════════════════════════════════
 
 bool JsonTableDesigner::validateCrossRefs(QString *err) const {
+  if (m_frontendCheck->isChecked() && !m_adminPage->validate(err)) return false;
   return TableSchema::validateCrossRefs(collectTable(), m_config, m_config.tables,
                                         m_table.tableName, err);
 }
@@ -3204,6 +3242,8 @@ void JsonTableDesigner::applyDatabaseSnapshot(const DatabaseTableSnapshot &snaps
       JsonTableColumn merged = dbByKey.value(key);
       if (origIt != origByKey.constEnd()) {
         merged.title = origIt->title;
+        merged.hidden = origIt->hidden;
+        merged.extra = origIt->extra;
         merged.domainType = origIt->domainType;
         merged.domainSourceFile = origIt->domainSourceFile;
         merged.domainSourceId = origIt->domainSourceId;
@@ -3402,6 +3442,9 @@ JsonTableTable JsonTableDesigner::collectTable() const {
   t.tableComment = m_commentEdit->text().trimmed();
   t.manualUpdateTime = m_manualUpdateCheck->isChecked();
   t.frontend = m_frontendCheck->isChecked();
+  const QJsonObject adminPage = m_adminPage->config();
+  if (adminPage.isEmpty()) t.extra.remove("adminPage");
+  else t.extra.insert("adminPage", adminPage);
   t.genAdd = m_genAddCheck->isChecked();
   t.genEdit = m_genEditCheck->isChecked();
   t.genDelete = m_genDeleteCheck->isChecked();

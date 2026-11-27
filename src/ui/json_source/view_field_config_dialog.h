@@ -44,6 +44,7 @@ public:
 
   // ── 当前行已有配置（列表侧来自 selCol，编辑侧来自 editCol；联表行仅列表生效）──
   void setCurrent(const JsonTableSelCol &sc, const JsonTableEditCol &ec);
+
   /// 列级取值域（物理列定义；联表行忽略）
   void setDomain(const JsonTableColumn &col);
 

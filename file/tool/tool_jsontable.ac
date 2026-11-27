@@ -99,3 +99,22 @@ export function collectTablePaths(explicit: String[], baseDir?: String): String[
   }
   return files;
 }
+
+/// 读取同项目的关联定义及公共枚举上下文；返回清单不能直接用作生成目标。
+/// 已选文件优先，其余配置只补充联表、翻译表和公共字典所需的元数据。
+export function collectTableContextPaths(selected: String[], projPath: String): String[] {
+  let files: String[] = [];
+  let seen: Object = {};
+  for (path in selected) {
+    let normalized: String = path.replace("\\", "/");
+    if (seen[normalized] != true) { files.append(normalized); seen[normalized] = true; }
+  }
+  if (projPath == null || projPath == "") { return files; }
+  let root: String = dirnameOf(projPath).replace("\\", "/");
+  let relatives: String[] = listFilesDeep(root, ".jsontable");
+  for (relative in relatives) {
+    let path: String = root + "/" + relative;
+    if (seen[path] != true) { files.append(path); seen[path] = true; }
+  }
+  return files;
+}

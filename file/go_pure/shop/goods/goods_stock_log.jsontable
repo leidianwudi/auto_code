@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "商品库存日志记录主键",
+        "title": "库存日志ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "sku_id",
         "mysqlType": "bigint",
         "comment": "关联goods_sku.id",
+        "title": "规格ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "order_id",
         "mysqlType": "bigint",
         "comment": "关联trade_order.id",
+        "title": "订单ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "request_key",
         "mysqlType": "varchar(96)",
         "comment": "库存动作幂等号",
+        "title": "幂等编号",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -47,6 +51,7 @@
         "name": "action",
         "mysqlType": "varchar(32)",
         "comment": "reserve/release/deliver/adjust动作",
+        "title": "操作类型",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -57,6 +62,7 @@
         "name": "quantity",
         "mysqlType": "bigint",
         "comment": "变动数量",
+        "title": "数量",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -67,6 +73,7 @@
         "name": "stock_before",
         "mysqlType": "bigint",
         "comment": "原可售库存",
+        "title": "变更前库存",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -77,6 +84,7 @@
         "name": "stock_after",
         "mysqlType": "bigint",
         "comment": "新可售库存",
+        "title": "变更后库存",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -87,6 +95,7 @@
         "name": "actor_type",
         "mysqlType": "varchar(16)",
         "comment": "user/admin/system操作主体",
+        "title": "操作者类型",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -97,6 +106,7 @@
         "name": "actor_id",
         "mysqlType": "bigint",
         "comment": "操作主体ID",
+        "title": "操作者ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -107,6 +117,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -117,6 +128,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -194,73 +206,73 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "商品库存日志记录主键",
+        "label": "库存日志ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "sku_id",
-        "label": "关联goods_sku.id",
+        "label": "规格ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "order_id",
-        "label": "关联trade_order.id",
+        "label": "订单ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "request_key",
-        "label": "库存动作幂等号",
+        "label": "幂等编号",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "action",
-        "label": "reserve/release/deliver/adjust动作",
+        "label": "操作类型",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "quantity",
-        "label": "变动数量",
+        "label": "数量",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "stock_before",
-        "label": "原可售库存",
+        "label": "变更前库存",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "stock_after",
-        "label": "新可售库存",
+        "label": "变更后库存",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "actor_type",
-        "label": "user/admin/system操作主体",
+        "label": "操作者类型",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "actor_id",
-        "label": "操作主体ID",
+        "label": "操作者ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

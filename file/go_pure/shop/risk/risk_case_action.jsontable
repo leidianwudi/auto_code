@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "举报处置执行记录主键",
+        "title": "处置ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "case_id",
         "mysqlType": "bigint",
         "comment": "关联risk_case.id",
+        "title": "案件ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "request_key",
         "mysqlType": "varchar(96)",
         "comment": "处置幂等号",
+        "title": "幂等编号",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "target_type",
         "mysqlType": "varchar(32)",
         "comment": "goods/shop/user/order目标",
+        "title": "对象类型",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -47,6 +51,7 @@
         "name": "target_id",
         "mysqlType": "bigint",
         "comment": "目标ID",
+        "title": "对象ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -57,6 +62,7 @@
         "name": "action",
         "mysqlType": "varchar(32)",
         "comment": "ban/hold/release动作",
+        "title": "操作类型",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -67,6 +73,7 @@
         "name": "reverses_id",
         "mysqlType": "bigint",
         "comment": "关联risk_case_action.id",
+        "title": "原处置ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -77,6 +84,7 @@
         "name": "admin_id",
         "mysqlType": "bigint",
         "comment": "关联admin.id",
+        "title": "管理员ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -87,6 +95,7 @@
         "name": "status",
         "mysqlType": "varchar(32)",
         "comment": "业务状态：pending待执行/done完成/failed失败/released解除",
+        "title": "状态",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -107,6 +116,7 @@
         "name": "error",
         "mysqlType": "varchar(1000)",
         "comment": "失败摘要，不含凭据",
+        "title": "失败原因",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -117,6 +127,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -127,6 +138,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -211,55 +223,55 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "举报处置执行记录主键",
+        "label": "处置ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "case_id",
-        "label": "关联risk_case.id",
+        "label": "案件ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "request_key",
-        "label": "处置幂等号",
+        "label": "幂等编号",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "target_type",
-        "label": "goods/shop/user/order目标",
+        "label": "对象类型",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "target_id",
-        "label": "目标ID",
+        "label": "对象ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "action",
-        "label": "ban/hold/release动作",
+        "label": "操作类型",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "reverses_id",
-        "label": "关联risk_case_action.id",
+        "label": "原处置ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "admin_id",
-        "label": "关联admin.id",
+        "label": "管理员ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "status",
-        "label": "业务状态：pending待执行/done完成/failed失败/released解除",
+        "label": "状态",
         "writable": false,
         "editEditable": false
       },
@@ -271,19 +283,19 @@
       },
       {
         "ref": "error",
-        "label": "失败摘要，不含凭据",
+        "label": "失败原因",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

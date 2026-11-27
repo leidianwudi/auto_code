@@ -121,9 +121,9 @@ ${if hasI18n}      form.i18n = row.i18n ? JSON.parse(JSON.stringify(row.i18n)) :
         }
       });
       loadI18nDetail(row.id);
-${/if}${each col in formColumns}${if col.editVisible}${if col.isInt}      form.${col.dataName} = row.${col.dataName} ?? null;
-${else if col.isFloat}      form.${col.dataName} = row.${col.dataName} ?? null;
-${else if col.isMoney}      form.${col.dataName} = row.${col.dataName} ?? null;
+${/if}${each col in formColumns}${if col.editVisible}${if col.isInt}      form.${col.dataName} = row.${col.dataName} == null || row.${col.dataName} === "" || Number.isNaN(Number(row.${col.dataName})) ? null : Number(row.${col.dataName});
+${else if col.isFloat}      form.${col.dataName} = row.${col.dataName} == null || row.${col.dataName} === "" || Number.isNaN(Number(row.${col.dataName})) ? null : Number(row.${col.dataName});
+${else if col.isMoney}      form.${col.dataName} = row.${col.dataName} == null || row.${col.dataName} === "" || Number.isNaN(Number(row.${col.dataName})) ? null : Number(row.${col.dataName});
 ${else if col.isDate}      form.${col.dataName} = row.${col.dataName} ?? null;
 ${else if col.isBooleanEdit}      form.${col.dataName} = row.${col.dataName} ?? null;
 ${else if col.isTagEdit}      form.${col.dataName} = row.${col.dataName} ?? null;

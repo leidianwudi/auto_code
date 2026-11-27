@@ -20,7 +20,7 @@
 // ════════════════════════════════════════════════════════════
 
 QJsonObject JsonTableColumn::toJsonObject() const {
-  QJsonObject obj;
+  QJsonObject obj = extra;
   obj[QString::fromLatin1(JsonTableKey::kName)] = name;
   obj[QString::fromLatin1(JsonTableKey::kMysqlType)] = mysqlType;
   obj[QString::fromLatin1(JsonTableKey::kUnsigned)] = isUnsigned;
@@ -73,6 +73,12 @@ JsonTableColumn JsonTableColumn::fromJsonObject(const QJsonObject &obj) {
   c.domainSourceFile = obj.value(QString::fromLatin1(JsonTableKey::kDomainSourceFile)).toString();
   c.domainSourceId = obj.value(QString::fromLatin1(JsonTableKey::kDomainSourceId)).toString();
   c.domainUrl = obj.value(QString::fromLatin1(JsonTableKey::kDomainUrl)).toString();
+  c.extra = obj;
+  for (const QString &key : {"name", "mysqlType", "unsigned", "nullable", "isPrimary", "isAutoInc",
+                             "default", "comment", "title", "hidden", "domainType", "domainSourceFile",
+                             "domainSourceId", "domainUrl"}) {
+    c.extra.remove(key);
+  }
   return c;
 }
 
@@ -83,7 +89,7 @@ bool JsonTableColumn::operator==(const JsonTableColumn &other) const {
          comment == other.comment && title == other.title && hidden == other.hidden &&
          domainType == other.domainType &&
          domainSourceFile == other.domainSourceFile && domainSourceId == other.domainSourceId &&
-         domainUrl == other.domainUrl;
+         domainUrl == other.domainUrl && extra == other.extra;
 }
 
 // ════════════════════════════════════════════════════════════

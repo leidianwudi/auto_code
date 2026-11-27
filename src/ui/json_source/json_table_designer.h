@@ -21,6 +21,7 @@
 #include "json_table_model.h"
 
 struct DatabaseTableSnapshot;
+class AdminPageWidget;
 
 class QCheckBox;
 class QComboBox;
@@ -229,6 +230,7 @@ private:
   QLineEdit *m_commentEdit = nullptr;         ///< 表注释
   QCheckBox *m_manualUpdateCheck = nullptr;   ///< 手动维护更新时间
   QCheckBox *m_frontendCheck = nullptr;       ///< 生成前端页面（false = 纯 API 模块）
+  AdminPageWidget *m_adminPage = nullptr;     ///< 页面说明与自定义保存接口，不参与数据库DDL
   QComboBox *m_appQueryCombo = nullptr;       ///< C 端模块形态：不生成 / 只读查询 / 空接口
   QComboBox *m_appAuthCombo = nullptr;        ///< C 端鉴权：public / user
   QPushButton *m_appOutBtn = nullptr;         ///< C 端出参白名单（弹字段勾选）

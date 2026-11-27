@@ -213,6 +213,7 @@ struct JsonTableColumn {
   QString domainSourceFile;  ///< enum/static 引用的数据源文件（全局枚举固定基名）
   QString domainSourceId;    ///< enum/static 引用的数据源 id
   QString domainUrl;         ///< remote 手动数据源 URL
+  QJsonObject extra;         ///< 保留开关文案等非数据库扩展属性，结构刷新不能丢失
 
   /// 序列化为 JSON 对象
   QJsonObject toJsonObject() const;

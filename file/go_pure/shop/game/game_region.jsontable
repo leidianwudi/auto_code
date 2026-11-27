@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "游戏发行地区记录主键",
+        "title": "地区ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -28,6 +29,7 @@
         "name": "sort",
         "mysqlType": "bigint",
         "comment": "展示排序",
+        "title": "排序",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +39,8 @@
       {
         "name": "enable",
         "title": "启用状态",
+        "boolTrueText": "启用",
+        "boolFalseText": "停用",
         "mysqlType": "tinyint",
         "comment": "启停：0停用/1启用",
         "nullable": false,
@@ -73,8 +77,8 @@
         "column": "enable",
         "comment": "启停：0停用/1启用",
         "items": [
-          { "key": "Disabled", "label": "0 停用", "value": "0", "valueType": "number" },
-          { "key": "Enabled", "label": "1 启用", "value": "1", "valueType": "number" }
+          { "key": "Disabled", "label": "停用", "value": "0", "valueType": "number" },
+          { "key": "Enabled", "label": "启用", "value": "1", "valueType": "number" }
         ]
       }
     ],
@@ -128,7 +132,7 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "游戏发行地区记录主键",
+        "label": "地区ID",
         "writable": false,
         "editEditable": false
       },
@@ -140,7 +144,7 @@
       },
       {
         "ref": "sort",
-        "label": "展示排序",
+        "label": "排序",
         "writable": true,
         "editEditable": true
       },
@@ -148,7 +152,9 @@
         "ref": "enable",
         "label": "启用状态",
         "writable": true,
-        "editEditable": true
+        "editEditable": true,
+        "widget": "select",
+        "switchEditable": true
       },
       {
         "ref": "created_at",

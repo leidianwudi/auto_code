@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "站内业务通知记录主键",
+        "title": "通知ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "subject_type",
         "mysqlType": "varchar(16)",
         "comment": "user/admin接收主体",
+        "title": "主体类型",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "subject_id",
         "mysqlType": "bigint",
         "comment": "接收主体ID",
+        "title": "主体ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "request_key",
         "mysqlType": "varchar(128)",
         "comment": "通知事件唯一号",
+        "title": "幂等编号",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -47,6 +51,7 @@
         "name": "template",
         "mysqlType": "varchar(64)",
         "comment": "本地化通知模板编码",
+        "title": "模板编码",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -57,6 +62,7 @@
         "name": "params",
         "mysqlType": "json",
         "comment": "结构化模板参数，不含秘密",
+        "title": "模板参数",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -66,6 +72,7 @@
         "name": "business_type",
         "mysqlType": "varchar(32)",
         "comment": "关联业务类型",
+        "title": "业务类型",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -86,6 +93,7 @@
         "name": "is_read",
         "mysqlType": "bigint",
         "comment": "已读标志",
+        "title": "是否已读",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -96,6 +104,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -106,6 +115,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -184,43 +194,43 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "站内业务通知记录主键",
+        "label": "通知ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "subject_type",
-        "label": "user/admin接收主体",
+        "label": "主体类型",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "subject_id",
-        "label": "接收主体ID",
+        "label": "主体ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "request_key",
-        "label": "通知事件唯一号",
+        "label": "幂等编号",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "template",
-        "label": "本地化通知模板编码",
+        "label": "模板编码",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "params",
-        "label": "结构化模板参数，不含秘密",
+        "label": "模板参数",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "business_type",
-        "label": "关联业务类型",
+        "label": "业务类型",
         "writable": false,
         "editEditable": false
       },
@@ -232,19 +242,19 @@
       },
       {
         "ref": "is_read",
-        "label": "已读标志",
+        "label": "是否已读",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

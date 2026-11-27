@@ -1,214 +1,297 @@
 {
-  "table": {
-    "tableName": "base_config",
-    "modelName": "base_config",
-    "tableComment": "平台业务配置",
-    "columns": [
+  table: {
+    adminPage: {
+      customSave: true,
+      editFields: [
+        'value',
+      ],
+      keyField: 'code',
+      notice: '资料期限按小时，结算等待按天。停用配置后使用系统默认值，原配置值保留。修改仅影响后续业务阶段，已有订单结算快照和资料到期时间保持原值。',
+      noticeClosable: false,
+      noticeType: 'info',
+      saveUrl: '/api/market/base-config',
+      switchField: 'enable',
+    },
+    adminQueryMode: 'read',
+    columns: [
       {
-        "name": "id",
-        "mysqlType": "bigint",
-        "comment": "平台业务配置记录主键",
-        "nullable": false,
-        "unsigned": false,
-        "isPrimary": true,
-        "isAutoInc": true
+        comment: '主键',
+        isAutoInc: true,
+        isPrimary: true,
+        mysqlType: 'int',
+        name: 'id',
+        nullable: false,
+        title: '配置ID',
+        unsigned: false,
       },
       {
-        "name": "sort",
-        "mysqlType": "bigint",
-        "comment": "展示排序",
-        "nullable": false,
-        "unsigned": false,
-        "isPrimary": false,
-        "isAutoInc": false,
-        "default": "0"
+        comment: '排序',
+        default: '0',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'sort',
+        nullable: false,
+        unsigned: false,
       },
       {
-        "name": "type",
-        "mysqlType": "varchar(64)",
-        "comment": "配置分组",
-        "nullable": false,
-        "unsigned": false,
-        "isPrimary": false,
-        "isAutoInc": false,
-        "default": ""
+        comment: '类型',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'type',
+        nullable: false,
+        title: '配置分组',
+        unsigned: false,
       },
       {
-        "name": "code",
-        "mysqlType": "varchar(64)",
-        "comment": "稳定唯一配置编码",
-        "nullable": false,
-        "unsigned": false,
-        "isPrimary": false,
-        "isAutoInc": false,
-        "default": ""
+        comment: '编码',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'code',
+        nullable: false,
+        title: '配置编码',
+        unsigned: false,
       },
       {
-        "name": "value",
-        "mysqlType": "varchar(256)",
-        "comment": "值，由业务接口校验类型",
-        "nullable": false,
-        "unsigned": false,
-        "isPrimary": false,
-        "isAutoInc": false,
-        "default": ""
+        comment: '显示名称',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'name',
+        nullable: false,
+        title: '配置名称',
+        unsigned: false,
       },
       {
-        "name": "desc",
-        "mysqlType": "varchar(256)",
-        "comment": "用途说明",
-        "nullable": false,
-        "unsigned": false,
-        "isPrimary": false,
-        "isAutoInc": false,
-        "default": ""
+        comment: '值',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(256)',
+        name: 'value',
+        nullable: false,
+        title: '配置值',
+        unsigned: false,
       },
       {
-        "name": "enable",
-        "mysqlType": "tinyint",
-        "comment": "启停：0停用/1启用",
-        "nullable": false,
-        "unsigned": false,
-        "isPrimary": false,
-        "isAutoInc": false,
-        "default": "1"
+        comment: '单位',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(16)',
+        name: 'unit',
+        nullable: false,
+        unsigned: false,
       },
       {
-        "name": "created_at",
-        "mysqlType": "datetime",
-        "comment": "记录创建时间",
-        "nullable": false,
-        "unsigned": false,
-        "isPrimary": false,
-        "isAutoInc": false,
-        "default": "CURRENT_TIMESTAMP"
+        comment: '说明',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(256)',
+        name: 'desc',
+        nullable: false,
+        title: '配置说明',
+        unsigned: false,
       },
       {
-        "name": "updated_at",
-        "mysqlType": "datetime",
-        "comment": "记录最后更新时间",
-        "nullable": false,
-        "unsigned": false,
-        "isPrimary": false,
-        "isAutoInc": false,
-        "default": "CURRENT_TIMESTAMP"
-      }
+        boolFalseText: '停用',
+        boolTrueText: '启用',
+        comment: '是否启用',
+        default: '0',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'enable',
+        nullable: false,
+        title: '启用状态',
+        unsigned: false,
+      },
+      {
+        comment: '记录创建时间',
+        default: 'CURRENT_TIMESTAMP',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'datetime',
+        name: 'created_at',
+        nullable: false,
+        title: '创建时间',
+        unsigned: false,
+      },
+      {
+        comment: '记录最后更新时间',
+        default: 'CURRENT_TIMESTAMP',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'datetime',
+        name: 'updated_at',
+        nullable: false,
+        title: '更新时间',
+        unsigned: false,
+      },
     ],
-    "indexes": [
+    editCols: [
       {
-        "name": "uk_code",
-        "cols": [
-          "code"
+        editEditable: false,
+        label: '配置名称',
+        ref: 'name',
+        widget: 'input',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '配置编码',
+        ref: 'code',
+        widget: 'input',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '配置分组',
+        ref: 'type',
+        writable: false,
+      },
+      {
+        label: '配置值',
+        ref: 'value',
+        required: true,
+        widget: 'number',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '单位',
+        ref: 'unit',
+        visible: false,
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '配置说明',
+        ref: 'desc',
+        widget: 'textarea',
+        writable: false,
+      },
+      {
+        label: '启用状态',
+        ref: 'enable',
+        switchEditable: true,
+        visible: false,
+        widget: 'boolean',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '配置ID',
+        ref: 'id',
+        visible: false,
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '排序',
+        ref: 'sort',
+        visible: false,
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '创建时间',
+        ref: 'created_at',
+        visible: false,
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '更新时间',
+        ref: 'updated_at',
+        visible: false,
+        writable: false,
+      },
+    ],
+    enums: [
+      {
+        column: 'type',
+        comment: '配置分组',
+        items: [
+          {
+            key: 'trade',
+            label: '交易设置',
+            value: 'trade',
+            valueType: 'string',
+          },
+          {
+            key: 'privacy',
+            label: '私有资料',
+            value: 'privacy',
+            valueType: 'string',
+          },
+          {
+            key: 'other',
+            label: '其他',
+            value: 'other',
+            valueType: 'string',
+          },
         ],
-        "unique": true
-      }
+      },
     ],
-    "frontend": false,
-    "adminQueryMode": "empty",
-    "appQuery": false,
-    "manualUpdateTime": false,
-    "selCols": [
+    genAdd: false,
+    genDelete: false,
+    indexes: [
       {
-        "ref": "id"
+        cols: [
+          'code',
+        ],
+        name: 'code',
+        unique: true,
       },
-      {
-        "ref": "sort"
-      },
-      {
-        "ref": "type"
-      },
-      {
-        "ref": "code"
-      },
-      {
-        "ref": "value"
-      },
-      {
-        "ref": "desc"
-      },
-      {
-        "ref": "enable"
-      },
-      {
-        "ref": "created_at"
-      },
-      {
-        "ref": "updated_at"
-      }
     ],
-    "selColsEq": [
+    manualUpdateTime: false,
+    modelName: 'base_config',
+    selCols: [
       {
-        "ref": "code"
+        label: '配置名称',
+        ref: 'name',
+        width: 210,
       },
       {
-        "ref": "enable"
-      }
+        label: '配置编码',
+        ref: 'code',
+        width: 240,
+      },
+      {
+        label: '配置分组',
+        ref: 'type',
+        width: 100,
+      },
+      {
+        label: '配置值',
+        ref: 'value',
+        width: 90,
+      },
+      {
+        label: '单位',
+        ref: 'unit',
+        width: 70,
+      },
+      {
+        label: '配置说明',
+        ref: 'desc',
+      },
+      {
+        label: '启用状态',
+        ref: 'enable',
+        width: 100,
+      },
     ],
-    "selColsSort": [
-      [
-        "id",
-        "DESC"
-      ]
+    selColsEq: [
+      {
+        ref: 'code',
+      },
+      {
+        ref: 'type',
+      },
     ],
-    "editCols": [
-      {
-        "ref": "id",
-        "label": "平台业务配置记录主键",
-        "writable": false,
-        "editEditable": false
-      },
-      {
-        "ref": "sort",
-        "label": "展示排序",
-        "writable": false,
-        "editEditable": false
-      },
-      {
-        "ref": "type",
-        "label": "配置分组",
-        "writable": false,
-        "editEditable": false
-      },
-      {
-        "ref": "code",
-        "label": "稳定唯一配置编码",
-        "writable": false,
-        "editEditable": false
-      },
-      {
-        "ref": "value",
-        "label": "值，由业务接口校验类型",
-        "writable": false,
-        "editEditable": false
-      },
-      {
-        "ref": "desc",
-        "label": "用途说明",
-        "writable": false,
-        "editEditable": false
-      },
-      {
-        "ref": "enable",
-        "label": "启停：0停用/1启用",
-        "writable": false,
-        "editEditable": false
-      },
-      {
-        "ref": "created_at",
-        "label": "记录创建时间",
-        "writable": false,
-        "editEditable": false
-      },
-      {
-        "ref": "updated_at",
-        "label": "记录最后更新时间",
-        "writable": false,
-        "editEditable": false
-      }
-    ],
-    "genAdd": false,
-    "genEdit": false,
-    "genDelete": false,
-    "genDetail": false
-  }
+    tableComment: '平台配置',
+    tableName: 'base_config',
+  },
 }

@@ -1,0 +1,78 @@
+/// @file schema.ac — shop元数据建表入口，只创建缺少的表、列和索引，不删除或重置数据。
+import { validateTableSchema, schemaCreate, schemaColumn, schemaIndex } from "../../tool/tool_schema.ac";
+import { deriveI18nTable } from "../../crud_gin/template/main_api.ac";
+
+main {
+  let project: Object = readJson(scriptDir() + "/project.acproj");
+  assert(project != null && project["name"] == "shop", "必须使用shop项目配置");
+  let meta: Object = project["meta"];
+  let dbConfig: Object = meta["db"];
+  assert(dbConfig["database"] == "shop", "此入口仅操作shop开发库");
+  let tables: Object[] = [];
+  let names: Object = {};
+  let paths: String[] = listFilesDeep(scriptDir(), ".jsontable");
+  for (path in paths) {
+    let file: Object = readJson(scriptDir() + "/" + path);
+    let table: Object = file["table"];
+    assert(table != null && validateTableSchema(table), "配置校验失败：" + path);
+    assert(names[table["tableName"]] != true, "表名重复：" + table["tableName"]);
+    tables.append(table);
+    names[table["tableName"]] = true;
+  }
+  let translations: Object[] = [];
+  for (table in tables) {
+    let cfg: Object = table["i18n"];
+    if (cfg != null && cfg["table"] != null && cfg["table"] != "" && names[cfg["table"]] != true) {
+      let translated: Object = deriveI18nTable(table);
+      assert(validateTableSchema(translated), "翻译表校验失败：" + cfg["table"]);
+      translations.append(translated);
+      names[cfg["table"]] = true;
+    }
+  }
+  for (translated in translations) { tables.append(translated); }
+
+  // 全部配置通过后才连接数据库，连接和凭据只从项目配置读取。
+  let db = new DB(dbConfig);
+  let changed: Number = 0;
+  for (table in tables) {
+    let name: String = table["tableName"];
+    let existing: Object[] = db.tableSchema({table: name});
+    if (existing.length == 0) {
+      db.exec({sql: schemaCreate(table)});
+      printLog("创建表：" + name);
+      changed = changed + 1;
+    } else {
+      let known: Object = {};
+      for (column in existing) { known[column["name"]] = true; }
+      let columns: Object[] = table["columns"];
+      for (column in columns) {
+        if (known[column["name"]] != true) {
+          assert(column["isPrimary"] != true, "已有表缺少配置主键，请先核对：" + name);
+          db.exec({sql: "ALTER TABLE `" + name + "` ADD COLUMN " + schemaColumn(column)});
+          printLog("添加列：" + name + "." + column["name"]);
+          changed = changed + 1;
+        }
+      }
+      // 按索引列与唯一性判断等价索引，已有其他名称的索引不重复添加。
+      let actual: Object[] = db.query({sql: "SELECT INDEX_NAME AS name, NON_UNIQUE AS non_unique, GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX SEPARATOR ',') AS fields FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='" + name + "' GROUP BY INDEX_NAME, NON_UNIQUE"});
+      let indexes: Object[] = table["indexes"];
+      if (indexes != null) {
+        for (index in indexes) {
+          let fields: String[] = index["cols"];
+          let found: Bool = false;
+          for (item in actual) {
+            let isUnique: Bool = ("" + item["non_unique"]) == "0";
+            if (item["fields"] == fields.join(",") && isUnique == (index["unique"] == true)) { found = true; }
+          }
+          if (!found) {
+            db.exec({sql: "ALTER TABLE `" + name + "` ADD " + schemaIndex(index)});
+            printLog("添加索引：" + name + "." + index["name"]);
+            changed = changed + 1;
+          }
+        }
+      }
+    }
+  }
+  db.disconnect();
+  printLog("shop结构同步完成，变更项：" + changed);
+}

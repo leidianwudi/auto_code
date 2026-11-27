@@ -57,6 +57,8 @@ ${if hasLinkButtons}
 // 链接跳转按钮（actionType=link）
 const { push } = useRouter();
 ${/if}
+${if hasPageNotice}const pageNotice = ${pageNoticeJson};
+${/if}
 // ── 列表状态（pure-admin 惯用骨架：el-table + el-pagination 自组装）─────────
 const loading = ref(false);
 const dataList = ref<any[]>([]);
@@ -230,8 +232,9 @@ const save = async () => {
 const onSwitchChange = async (row: any, field: string, value: any) => {
 ${if hasSwitchUpdate}
   try {
-    await ${updateApi}({ id: row.id, [field]: value });
-    message('修改成功', { type: 'success' });
+${if hasCustomSave}    await ${updateApi}({ ${customKeyField}: row.${customKeyField}${if customHasSwitchField}, ${customSwitchField}: value${else}, [field]: value${/if} }, "switch");
+${else}    await ${updateApi}({ id: row.id, [field]: value });
+${/if}    message('修改成功', { type: 'success' });
   } catch (e: any) {
     message(e?.message ?? '修改失败', { type: 'error' });
   } finally {
@@ -409,7 +412,7 @@ ${if useEnableSwitch}            <EnableSwitch
               table="${pageName}"
               field="${col.dataName}"
               :row="row"
-              :disabled="${col.switchDisabledStr}"
+              :disabled="${col.switchDisabledStr}${if hasCustomSave} || !hasPerms(['${permPrefix}:edit'])${/if}"
 ${if col.switchTextIsExpr}              :active-text="${col.switchActiveTextExpr}"
               :inactive-text="${col.switchInactiveTextExpr}"
 ${else}              active-text="${col.switchActiveText}"
@@ -418,7 +421,7 @@ ${/if}              @refresh="loadData"
             />
 ${else}            <el-switch
               :model-value="row.${col.dataName} == 1"
-              :disabled="${col.switchDisabledStr}"
+              :disabled="${col.switchDisabledStr}${if hasCustomSave} || !hasPerms(['${permPrefix}:edit'])${/if}"
               inline-prompt
 ${if col.switchTextIsExpr}              :active-text="${col.switchActiveTextExpr}"
               :inactive-text="${col.switchInactiveTextExpr}"
@@ -433,7 +436,7 @@ ${else if col.isTagSwitch}
           <template #default="{ row }">
             <el-switch
               :model-value="String(row.${col.dataName}) == '${col.switchActiveValue}'"
-              :disabled="${col.switchDisabledStr}"
+              :disabled="${col.switchDisabledStr}${if hasCustomSave} || !hasPerms(['${permPrefix}:edit'])${/if}"
               inline-prompt
               active-text="${col.switchActiveText}"
               inactive-text="${col.switchInactiveText}"
@@ -536,6 +539,8 @@ ${/if}
           @size-change="loadData"
         />
       </div>
+${if hasPageNotice}      <el-alert :title="pageNotice" type="${pageNoticeType}" :closable="${pageNoticeClosable}" class="mt-4" />
+${/if}
     </div>
 
     <!-- 编辑弹窗（write.vue：新增/编辑/详情共用，交互与 admin_vue 同构） -->

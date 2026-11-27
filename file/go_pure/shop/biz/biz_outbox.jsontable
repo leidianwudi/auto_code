@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "事务提交后业务任务记录主键",
+        "title": "任务ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "event_key",
         "mysqlType": "varchar(128)",
         "comment": "事件唯一幂等键",
+        "title": "事件编号",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "kind",
         "mysqlType": "varchar(64)",
         "comment": "消息推送或业务通知类型",
+        "title": "任务类型",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "payload",
         "mysqlType": "json",
         "comment": "业务引用数据，不存秘密明文",
+        "title": "事件数据",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -46,6 +50,7 @@
         "name": "status",
         "mysqlType": "varchar(32)",
         "comment": "业务状态：pending待执行/processing执行/done完成/failed失败",
+        "title": "状态",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -75,6 +80,7 @@
         "name": "locked_until",
         "mysqlType": "datetime",
         "comment": "认领租约到期时间",
+        "title": "锁定到期时间",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -84,6 +90,7 @@
         "name": "error",
         "mysqlType": "varchar(1000)",
         "comment": "失败摘要，不含凭据",
+        "title": "失败原因",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -94,6 +101,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -104,6 +112,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -175,31 +184,31 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "事务提交后业务任务记录主键",
+        "label": "任务ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "event_key",
-        "label": "事件唯一幂等键",
+        "label": "事件编号",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "kind",
-        "label": "消息推送或业务通知类型",
+        "label": "任务类型",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "payload",
-        "label": "业务引用数据，不存秘密明文",
+        "label": "事件数据",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "status",
-        "label": "业务状态：pending待执行/processing执行/done完成/failed失败",
+        "label": "状态",
         "writable": false,
         "editEditable": false
       },
@@ -217,25 +226,25 @@
       },
       {
         "ref": "locked_until",
-        "label": "认领租约到期时间",
+        "label": "锁定到期时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "error",
-        "label": "失败摘要，不含凭据",
+        "label": "失败原因",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

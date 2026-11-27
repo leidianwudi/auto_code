@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "提现人工付款记录记录主键",
+        "title": "付款ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "apply_id",
         "mysqlType": "bigint",
         "comment": "关联wallet_withdraw_apply.id",
+        "title": "提现申请ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "operation_no",
         "mysqlType": "varchar(96)",
         "comment": "外部付款操作号",
+        "title": "付款操作号",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "admin_id",
         "mysqlType": "bigint",
         "comment": "关联admin.id",
+        "title": "管理员ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -47,6 +51,7 @@
         "name": "amount",
         "mysqlType": "decimal(20,2)",
         "comment": "实际付款额",
+        "title": "付款金额",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -57,16 +62,17 @@
         "name": "external_ref",
         "mysqlType": "varchar(128)",
         "comment": "正式付款流水",
+        "title": "转账流水号",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
-        "isAutoInc": false,
-        "default": null
+        "isAutoInc": false
       },
       {
         "name": "evidence_ids",
         "mysqlType": "json",
         "comment": "私有付款凭证ID列表",
+        "title": "付款凭证",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -76,6 +82,7 @@
         "name": "status",
         "mysqlType": "varchar(32)",
         "comment": "业务状态：processing付款中/unknown未知/paid已付/not_paid确认未付",
+        "title": "状态",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -86,6 +93,7 @@
         "name": "paid_at",
         "mysqlType": "datetime",
         "comment": "实际付款时间",
+        "title": "付款时间",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -95,6 +103,7 @@
         "name": "note",
         "mysqlType": "varchar(1000)",
         "comment": "付款核查说明",
+        "title": "核查说明",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -105,6 +114,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -115,6 +125,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -197,73 +208,73 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "提现人工付款记录记录主键",
+        "label": "付款ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "apply_id",
-        "label": "关联wallet_withdraw_apply.id",
+        "label": "提现申请ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "operation_no",
-        "label": "外部付款操作号",
+        "label": "付款操作号",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "admin_id",
-        "label": "关联admin.id",
+        "label": "管理员ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "amount",
-        "label": "实际付款额",
+        "label": "付款金额",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "external_ref",
-        "label": "正式付款流水",
+        "label": "转账流水号",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "evidence_ids",
-        "label": "私有付款凭证ID列表",
+        "label": "付款凭证",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "status",
-        "label": "业务状态：processing付款中/unknown未知/paid已付/not_paid确认未付",
+        "label": "状态",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "paid_at",
-        "label": "实际付款时间",
+        "label": "付款时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "note",
-        "label": "付款核查说明",
+        "label": "核查说明",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

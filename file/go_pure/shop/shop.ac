@@ -6,7 +6,7 @@
 //   ../../admin_pure/template/main_admin.ac → pure-admin 前端
 //
 // 表清单与多语言识别统一由生成链处理（tool_jsontable.ac 的 collectTablePaths）：
-//   本项目入口全量扫描 .jsontable，保证命令行和开发机生成同一套模块；
+//   勾选哪些 .jsontable 就生成哪些表，不把整个项目目录作为生成目标；
 //   项目根存在 base/base_lang.jsontable（基础语言表）即视为多语言项目，
 //   基础表固定参与生成，不需要任何开关变量。
 //
@@ -17,16 +17,15 @@
 // ============================================================================
 import { generateApiMain } from "../../crud_gin/template/main_api.ac";
 import { generateAdminMain } from "../../admin_pure/template/main_admin.ac";
+import { collectTablePaths } from "../../tool/tool_jsontable.ac";
 
 main {
 
   // 项目配置（meta.goBasePath / meta.webBasePath 的读取入口）：
   // 入口脚本与 project.acproj 同目录，生成链缺省回退 meta 中的目标路径。
   let projPath: String = scriptDir() + "/project.acproj";
-  let tablePaths: String[] = [];
-  let relativePaths: String[] = listFilesDeep(scriptDir(), ".jsontable");
-  for (path in relativePaths) { tablePaths.append(scriptDir() + "/" + path); }
-  assert(tablePaths.length > 0, "shop目录没有表配置，停止生成");
+  let tablePaths: String[] = collectTablePaths([], scriptDir());
+  assert(tablePaths.length > 0, "请先勾选需要生成的jsontable");
 
   // ── 1. Go 后端生成 ────────────────────────────────────────────────
   //     genGlobalEnum: false 可跳过全局枚举生成（缺省生成）；
@@ -47,7 +46,7 @@ main {
   //     否则从 .jsontable 的列角色合成标准页；
   //     frontend=false 的表（纯 API 模块）跳过页面生成
   //     模板路径相对本脚本目录（入口在 go_pure/<项目>/，故用 ../../）──
-  let tplDir: String = "../../admin_pure/template";
+  let tplDir: String = scriptDir() + "/../../admin_pure/template";
   let adminParams: Object = {
     projPath: projPath,
     jsonTablePaths: tablePaths,

@@ -4,6 +4,9 @@
 #include <QApplication>
 #include <QEventLoop>
 #include <QLineEdit>
+#include <QCheckBox>
+#include <QJsonArray>
+#include <QTableWidget>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTimer>
@@ -13,6 +16,10 @@
 #include "src/ui/json_source/json_source_editor.h"
 #include "src/ui/json_source/json_source_widget.h"
 #include "src/ui/json_source/json_table_model.h"
+#include "src/ui/json_source/admin_page_widget.h"
+#include "src/ui/json_source/json_table_designer.h"
+#include "src/ui/json_source/view_field_config_dialog.h"
+#include "src/ui/json_source/table_schema_service.h"
 #include "src/ui/main_dev/editor_factory.h"
 #include "src/ui/main_dev/main_dev_model.h"
 #include "src/ui/schema_json/schema_form_editor.h"
@@ -80,6 +87,109 @@ void testUnchangedVisualContent() {
     CHECK(!editor->document()->isModified());
     CHECK(editor->toPlainText() == item.second);
   }
+}
+
+/// 数据库注释与前端标题分别保存，编辑物理列不能丢失开关等扩展配置。
+void testPhysicalColumnMetadata() {
+  const QString source = UtilFile::readUtf8(QString::fromUtf8(PROJECT_SOURCE_DIR) + "/file/go_pure/shop/game/game_region.jsontable");
+  auto table = JsonTableTable::fromJsonObject(UtilJson::fromJson(source).object().value("table").toObject());
+  for (auto &column : table.columns) {
+    if (column.name != "enable") continue;
+    column.comment = QStringLiteral("数据库原始注释");
+    column.title = QStringLiteral("启用状态");
+    CHECK(column.extra.value("boolTrueText").toString() == QStringLiteral("启用"));
+    CHECK(column.extra.value("boolFalseText").toString() == QStringLiteral("停用"));
+    CHECK(JsonTableColumn::fromJsonObject(column.toJsonObject()) == column);
+  }
+  JsonTableDesigner designer(table, {});
+  auto *presentation = designer.findChild<QTableWidget *>("fieldPresentation");
+  CHECK(presentation != nullptr);
+  if (presentation) {
+    // 来源列已并入字段引用单元格的悬停提示，不再单独占列。
+    CHECK(presentation->columnCount() == 8);
+    CHECK(presentation->horizontalHeaderItem(0)->text() == QStringLiteral("字段引用"));
+    CHECK(presentation->horizontalHeaderItem(1)->text() == QStringLiteral("标题"));
+  }
+  auto *fields = designer.findChild<QTableWidget *>("databaseFields");
+  CHECK(fields != nullptr);
+  if (!fields) return;
+  CHECK(fields->horizontalHeaderItem(7)->text() == QStringLiteral("数据库注释"));
+  int enableRow = -1;
+  for (int row = 0; row < fields->rowCount(); ++row)
+    if (fields->item(row, 0)->text() == "enable") enableRow = row;
+  CHECK(enableRow >= 0);
+  if (enableRow < 0) return;
+  CHECK(fields->item(enableRow, 7)->text() == QStringLiteral("数据库原始注释"));
+  fields->item(enableRow, 7)->setText(QStringLiteral("更新的数据库注释"));
+  for (const auto &column : designer.collectTable().columns) {
+    if (column.name != "enable") continue;
+    CHECK(column.comment == QStringLiteral("更新的数据库注释"));
+    CHECK(column.title == QStringLiteral("启用状态"));
+    CHECK(column.toJsonObject().value("boolTrueText").toString() == QStringLiteral("启用"));
+    CHECK(column.toJsonObject().value("boolFalseText").toString() == QStringLiteral("停用"));
+  }
+}
+
+/// 页面设置只保留自定义保存接口与页面说明；未知属性保真。
+void testAdminPageCustomSave() {
+  AdminPageWidget empty;
+  empty.setConfig({});
+  CHECK(empty.config().isEmpty());
+
+  AdminPageWidget widget;
+  int changes = 0;
+  QObject::connect(&widget, &AdminPageWidget::configChanged, [&changes]() { ++changes; });
+  widget.setConfig({
+      {"futureSetting", 7},
+      {"customSave", true},
+      {"saveUrl", QStringLiteral("/api/market/base-config")},
+      {"keyField", QStringLiteral("code")},
+      {"editFields", QJsonArray{QStringLiteral("value")}},
+      {"switchField", QStringLiteral("enable")}});
+  CHECK(changes == 0);
+  const QJsonObject loaded = widget.config();
+  CHECK(loaded.value("futureSetting").toInt() == 7);
+  QString error;
+  CHECK(widget.validate(&error));
+  auto *customSave = widget.findChild<QCheckBox *>("adminPage_customSave");
+  CHECK(customSave != nullptr && customSave->isChecked());
+  auto *saveUrl = widget.findChild<QLineEdit *>("adminPage_saveUrl");
+  CHECK(saveUrl != nullptr && saveUrl->text() == QStringLiteral("/api/market/base-config"));
+  auto *fields = widget.findChild<QLineEdit *>("adminPage_editFields");
+  CHECK(fields != nullptr && fields->text() == QStringLiteral("value"));
+  if (!fields) return;
+  fields->setText(QStringLiteral("value, other"));
+  const QJsonObject edited = widget.config();
+  CHECK(changes > 0);
+  CHECK(edited.value("futureSetting").toInt() == 7);
+  CHECK(edited.value("editFields").toArray().size() == 2);
+  CHECK(widget.findChildren<QTableWidget *>().isEmpty());
+
+  // 关闭自定义保存后，相关键全部移除，回到标准 CRUD 配置。
+  if (customSave) customSave->setChecked(false);
+  const QJsonObject standard = widget.config();
+  CHECK(!standard.contains("customSave"));
+  CHECK(!standard.contains("saveUrl"));
+  CHECK(!standard.contains("keyField"));
+  CHECK(!standard.contains("editFields"));
+  CHECK(!standard.contains("switchField"));
+}
+
+/// 字段设置列宽：非预设宽度（如 260）不能被下拉预设 60 覆盖，空值保持自适应。
+void testViewFieldWidthRoundTrip() {
+  ViewFieldConfigDialog dialog("desc", false);
+  JsonTableSelCol sc;
+  sc.width = 260;
+  sc.displayType.clear();
+  JsonTableEditCol ec;
+  ec.widget = QStringLiteral("textarea");
+  ec.editEditable = false;
+  dialog.setCurrent(sc, ec);
+  CHECK(dialog.width() == 260);
+
+  sc.width = 0;
+  dialog.setCurrent(sc, ec);
+  CHECK(dialog.width() == 0);
 }
 
 /// 真实字段修改仍需写回；同值信号及防抖内改回原值不能制造修改标记。
@@ -224,6 +334,9 @@ int main(int argc, char **argv) {
   app.setApplicationName(QStringLiteral("auto_code_ui_tests"));
   testUnchangedVisualContent();
   testSchemaFieldEditing();
+  testAdminPageCustomSave();
+  testViewFieldWidthRoundTrip();
+  testPhysicalColumnMetadata();
   for (const QString &suffix :
        {QStringLiteral(".jsonvue"), QStringLiteral(".jsonsource"), QStringLiteral(".jsonupload"),
         QStringLiteral(".jsonglobalenum"), QStringLiteral(".jsontable"), QStringLiteral(".acproj"),

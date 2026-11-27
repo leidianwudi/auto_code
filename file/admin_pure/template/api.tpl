@@ -36,10 +36,26 @@ export const ${queryApi} = (params: any) => {
   return http.request<ApiResponse>("post", "${selectUrl}", { data: { ...params } });
 };
 
-// 新增/更新（无 id 则新增,有 id 则更新）
+${if hasCustomSave}// 自定义保存接口（固定 POST）：表单只提交 keyField + editFields 白名单；
+// action="switch" 时只提交 keyField + switchField，避免只读字段进入业务接口。
+export const ${updateApi} = (data: any, action?: "switch") => {
+  const payload: Record<string, any> = {};
+  payload["${customKeyField}"] = data["${customKeyField}"];
+  if (action === "switch") {
+${if customHasSwitchField}    payload["${customSwitchField}"] = data["${customSwitchField}"];
+${else}    Object.keys(data).forEach((key: string) => {
+      if (key !== "${customKeyField}") payload[key] = data[key];
+    });
+${/if}  } else {
+${customSaveFieldLines}
+  }
+  return http.request<ApiResponse>("post", "${customSaveUrl}", { data: payload });
+};
+${else}// 新增/更新（无 id 则新增,有 id 则更新）
 export const ${updateApi} = (data: any) => {
   return http.request<ApiResponse>("post", "${updateUrl}", { data });
 };
+${/if}
 
 // 删除（支持批量）
 export const ${deleteApi} = (ids: string[] | number[]) => {

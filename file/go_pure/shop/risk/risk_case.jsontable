@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "举报核查案件记录主键",
+        "title": "案件ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "case_no",
         "mysqlType": "varchar(64)",
         "comment": "唯一案件号",
+        "title": "案件编号",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "admin_id",
         "mysqlType": "bigint",
         "comment": "关联admin.id",
+        "title": "管理员ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "target_type",
         "mysqlType": "varchar(32)",
         "comment": "核查对象类型",
+        "title": "对象类型",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -47,6 +51,7 @@
         "name": "target_id",
         "mysqlType": "bigint",
         "comment": "核查对象ID",
+        "title": "对象ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -57,6 +62,7 @@
         "name": "status",
         "mysqlType": "varchar(32)",
         "comment": "业务状态：pending待分派/processing核查/decided裁定/review复核/closed关闭",
+        "title": "状态",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -67,6 +73,7 @@
         "name": "decision",
         "mysqlType": "varchar(4000)",
         "comment": "结论及依据",
+        "title": "处理结论",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -77,6 +84,7 @@
         "name": "revision",
         "mysqlType": "bigint",
         "comment": "裁定版本",
+        "title": "版本",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -87,6 +95,7 @@
         "name": "reply_deadline",
         "mysqlType": "datetime",
         "comment": "补证答辩截止时间",
+        "title": "答复截止时间",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -96,6 +105,7 @@
         "name": "decided_at",
         "mysqlType": "datetime",
         "comment": "结论时间",
+        "title": "裁定时间",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -105,6 +115,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -115,6 +126,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -193,73 +205,73 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "举报核查案件记录主键",
+        "label": "案件ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "case_no",
-        "label": "唯一案件号",
+        "label": "案件编号",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "admin_id",
-        "label": "关联admin.id",
+        "label": "管理员ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "target_type",
-        "label": "核查对象类型",
+        "label": "对象类型",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "target_id",
-        "label": "核查对象ID",
+        "label": "对象ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "status",
-        "label": "业务状态：pending待分派/processing核查/decided裁定/review复核/closed关闭",
+        "label": "状态",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "decision",
-        "label": "结论及依据",
+        "label": "处理结论",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "revision",
-        "label": "裁定版本",
+        "label": "版本",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "reply_deadline",
-        "label": "补证答辩截止时间",
+        "label": "答复截止时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "decided_at",
-        "label": "结论时间",
+        "label": "裁定时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "游戏账号资产记录主键",
+        "title": "账号资产ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "goods_id",
         "mysqlType": "bigint",
         "comment": "关联goods.id",
+        "title": "商品ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "sku_id",
         "mysqlType": "bigint",
         "comment": "关联goods_sku.id",
+        "title": "规格ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "fingerprint",
         "mysqlType": "varchar(128)",
         "comment": "实际账号指纹，不含凭证",
+        "title": "账号指纹",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -47,6 +51,7 @@
         "name": "game_id",
         "mysqlType": "bigint",
         "comment": "关联game.id",
+        "title": "游戏ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -57,6 +62,7 @@
         "name": "release_id",
         "mysqlType": "bigint",
         "comment": "关联game_release.id",
+        "title": "版本ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -67,6 +73,7 @@
         "name": "bindings",
         "mysqlType": "json",
         "comment": "换绑和整套交接范围",
+        "title": "交接范围",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -76,6 +83,7 @@
         "name": "status",
         "mysqlType": "varchar(32)",
         "comment": "业务状态：available可售/reserved预占/handover交接/completed售出/quarantined隔离",
+        "title": "状态",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -86,6 +94,7 @@
         "name": "order_id",
         "mysqlType": "bigint",
         "comment": "关联trade_order.id",
+        "title": "订单ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -96,6 +105,7 @@
         "name": "verification",
         "mysqlType": "varchar(1000)",
         "comment": "来源核验说明",
+        "title": "来源核验",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -106,6 +116,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -116,6 +127,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -204,73 +216,73 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "游戏账号资产记录主键",
+        "label": "账号资产ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "goods_id",
-        "label": "关联goods.id",
+        "label": "商品ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "sku_id",
-        "label": "关联goods_sku.id",
+        "label": "规格ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "fingerprint",
-        "label": "实际账号指纹，不含凭证",
+        "label": "账号指纹",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "game_id",
-        "label": "关联game.id",
+        "label": "游戏ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "release_id",
-        "label": "关联game_release.id",
+        "label": "版本ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "bindings",
-        "label": "换绑和整套交接范围",
+        "label": "交接范围",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "status",
-        "label": "业务状态：available可售/reserved预占/handover交接/completed售出/quarantined隔离",
+        "label": "状态",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "order_id",
-        "label": "关联trade_order.id",
+        "label": "订单ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "verification",
-        "label": "来源核验说明",
+        "label": "来源核验",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "订单明细快照记录主键",
+        "title": "明细ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "order_id",
         "mysqlType": "bigint",
         "comment": "关联trade_order.id",
+        "title": "订单ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "goods_id",
         "mysqlType": "bigint",
         "comment": "关联goods.id",
+        "title": "商品ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "sku_id",
         "mysqlType": "bigint",
         "comment": "关联goods_sku.id",
+        "title": "规格ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -47,6 +51,7 @@
         "name": "quantity",
         "mysqlType": "bigint",
         "comment": "成交数量",
+        "title": "数量",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -57,6 +62,7 @@
         "name": "unit_price",
         "mysqlType": "decimal(20,2)",
         "comment": "成交单价",
+        "title": "单价（元）",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -67,6 +73,7 @@
         "name": "amount",
         "mysqlType": "decimal(20,2)",
         "comment": "明细成交额",
+        "title": "成交金额",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -77,6 +84,7 @@
         "name": "snapshot",
         "mysqlType": "json",
         "comment": "商品规格不可变翻译快照",
+        "title": "商品快照",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -86,6 +94,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -96,6 +105,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -165,61 +175,61 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "订单明细快照记录主键",
+        "label": "明细ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "order_id",
-        "label": "关联trade_order.id",
+        "label": "订单ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "goods_id",
-        "label": "关联goods.id",
+        "label": "商品ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "sku_id",
-        "label": "关联goods_sku.id",
+        "label": "规格ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "quantity",
-        "label": "成交数量",
+        "label": "数量",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "unit_price",
-        "label": "成交单价",
+        "label": "单价（元）",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "amount",
-        "label": "明细成交额",
+        "label": "成交金额",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "snapshot",
-        "label": "商品规格不可变翻译快照",
+        "label": "商品快照",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

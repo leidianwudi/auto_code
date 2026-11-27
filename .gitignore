@@ -63,3 +63,12 @@ compile_commands.json
 *.ilk
 /build_*.txt
 /test_*.txt
+
+# Qt Creator 工程缓存
+.qtcreator/
+
+# AutoCode 脚本编译缓存
+.ac_cache/
+
+# Trae 本地规格草稿（工作记录，不入库）
+.trae/specs/

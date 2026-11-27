@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "用户搜索历史记录主键",
+        "title": "搜索记录ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "user_id",
         "mysqlType": "bigint",
         "comment": "关联user.id",
+        "title": "用户ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "keyword",
         "mysqlType": "varchar(128)",
         "comment": "搜索关键词",
+        "title": "搜索词",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -47,6 +51,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -107,31 +112,31 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "用户搜索历史记录主键",
+        "label": "搜索记录ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "user_id",
-        "label": "关联user.id",
+        "label": "用户ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "keyword",
-        "label": "搜索关键词",
+        "label": "搜索词",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

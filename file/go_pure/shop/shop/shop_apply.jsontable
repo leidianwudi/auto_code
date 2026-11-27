@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "商户入驻申请记录主键",
+        "title": "入驻申请ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "user_id",
         "mysqlType": "bigint",
         "comment": "关联user.id",
+        "title": "用户ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "shop_id",
         "mysqlType": "bigint",
         "comment": "关联shop.id",
+        "title": "店铺ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "request_key",
         "mysqlType": "varchar(64)",
         "comment": "申请提交幂等号",
+        "title": "幂等编号",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -47,6 +51,7 @@
         "name": "revision",
         "mysqlType": "bigint",
         "comment": "申请版本",
+        "title": "版本",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -77,6 +82,7 @@
         "name": "evidence_ids",
         "mysqlType": "json",
         "comment": "私有资质附件ID列表",
+        "title": "资质附件",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -86,6 +92,7 @@
         "name": "status",
         "mysqlType": "varchar(32)",
         "comment": "业务状态：draft草稿/pending审核/approved通过/rejected拒绝",
+        "title": "审核状态",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -96,6 +103,7 @@
         "name": "admin_id",
         "mysqlType": "bigint",
         "comment": "关联admin.id",
+        "title": "管理员ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -106,6 +114,7 @@
         "name": "review_note",
         "mysqlType": "varchar(1000)",
         "comment": "审核理由",
+        "title": "审核意见",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -134,6 +143,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -144,6 +154,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -233,31 +244,31 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "商户入驻申请记录主键",
+        "label": "入驻申请ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "user_id",
-        "label": "关联user.id",
+        "label": "用户ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "shop_id",
-        "label": "关联shop.id",
+        "label": "店铺ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "request_key",
-        "label": "申请提交幂等号",
+        "label": "幂等编号",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "revision",
-        "label": "申请版本",
+        "label": "版本",
         "writable": false,
         "editEditable": false
       },
@@ -275,25 +286,25 @@
       },
       {
         "ref": "evidence_ids",
-        "label": "私有资质附件ID列表",
+        "label": "资质附件",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "status",
-        "label": "业务状态：draft草稿/pending审核/approved通过/rejected拒绝",
+        "label": "审核状态",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "admin_id",
-        "label": "关联admin.id",
+        "label": "管理员ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "review_note",
-        "label": "审核理由",
+        "label": "审核意见",
         "writable": false,
         "editEditable": false
       },
@@ -311,13 +322,13 @@
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

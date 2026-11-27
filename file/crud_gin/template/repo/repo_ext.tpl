@@ -16,8 +16,8 @@ ${if !fileExists(outputPath)}
 //      禁止与生成物同名方法（重复定义编译错误）
 //   3. 方法不接收 db：生成物内部统一用 r.db；需要事务时用 r.Tx(tx) 派生新对象，
 //      绝不写 r.db = tx（原对象会被并发请求复用，会串事务）
-//   4. 更新实体统一走快照 diff：SelectById 取实体 → e.TakeSnapshot() → 改字段 → Update(e)；
-//      不要直接拼 UPDATE SQL（diff 已覆盖除主键外全部列，含可空列写 NULL）
+//   4. 普通实体编辑走快照 diff：SelectById → TakeSnapshot → 改字段 → Update；
+//      库存、余额、版本和状态竞争使用事务行锁、原子表达式或带条件的 CAS，并检查影响行数
 //   5. 使用第三方包时自行补 import 块
 // ─────────────────────────────────────────────────────────────────────
 package ${pkgName}

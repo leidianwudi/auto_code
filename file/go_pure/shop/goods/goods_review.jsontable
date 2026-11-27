@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "商品审核记录记录主键",
+        "title": "审核ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "goods_id",
         "mysqlType": "bigint",
         "comment": "关联goods.id",
+        "title": "商品ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "revision",
         "mysqlType": "bigint",
         "comment": "审核商品版本",
+        "title": "版本",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "snapshot",
         "mysqlType": "json",
         "comment": "商品、SKU及全部翻译快照",
+        "title": "审核快照",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -46,6 +50,7 @@
         "name": "status",
         "mysqlType": "varchar(32)",
         "comment": "业务状态：draft草稿/pending审核/approved通过/rejected拒绝",
+        "title": "审核状态",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -56,6 +61,7 @@
         "name": "admin_id",
         "mysqlType": "bigint",
         "comment": "关联admin.id",
+        "title": "管理员ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -76,6 +82,7 @@
         "name": "reviewed_at",
         "mysqlType": "datetime",
         "comment": "审核完成时间",
+        "title": "审核时间",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -85,6 +92,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -95,6 +103,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -165,37 +174,37 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "商品审核记录记录主键",
+        "label": "审核ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "goods_id",
-        "label": "关联goods.id",
+        "label": "商品ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "revision",
-        "label": "审核商品版本",
+        "label": "版本",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "snapshot",
-        "label": "商品、SKU及全部翻译快照",
+        "label": "审核快照",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "status",
-        "label": "业务状态：draft草稿/pending审核/approved通过/rejected拒绝",
+        "label": "审核状态",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "admin_id",
-        "label": "关联admin.id",
+        "label": "管理员ID",
         "writable": false,
         "editEditable": false
       },
@@ -207,19 +216,19 @@
       },
       {
         "ref": "reviewed_at",
-        "label": "审核完成时间",
+        "label": "审核时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

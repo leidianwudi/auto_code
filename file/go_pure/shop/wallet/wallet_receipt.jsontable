@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "平台实际到账认领记录主键",
+        "title": "到账ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "method_id",
         "mysqlType": "bigint",
         "comment": "关联wallet_receipt_method.id",
+        "title": "收款渠道ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "apply_id",
         "mysqlType": "bigint",
         "comment": "关联wallet_recharge_apply.id",
+        "title": "充值申请ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "external_ref",
         "mysqlType": "varchar(128)",
         "comment": "正式渠道流水或账单唯一标识",
+        "title": "转账流水号",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -47,6 +51,7 @@
         "name": "amount",
         "mysqlType": "decimal(20,2)",
         "comment": "核实实收金额",
+        "title": "实收金额",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -57,6 +62,7 @@
         "name": "received_at",
         "mysqlType": "datetime",
         "comment": "实际收款时间",
+        "title": "收款时间",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -66,6 +72,7 @@
         "name": "admin_id",
         "mysqlType": "bigint",
         "comment": "关联admin.id",
+        "title": "管理员ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -86,6 +93,7 @@
         "name": "reversed",
         "mysqlType": "bigint",
         "comment": "已冲正标志",
+        "title": "是否冲正",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -96,6 +104,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -106,6 +115,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -183,43 +193,43 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "平台实际到账认领记录主键",
+        "label": "到账ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "method_id",
-        "label": "关联wallet_receipt_method.id",
+        "label": "收款渠道ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "apply_id",
-        "label": "关联wallet_recharge_apply.id",
+        "label": "充值申请ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "external_ref",
-        "label": "正式渠道流水或账单唯一标识",
+        "label": "转账流水号",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "amount",
-        "label": "核实实收金额",
+        "label": "实收金额",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "received_at",
-        "label": "实际收款时间",
+        "label": "收款时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "admin_id",
-        "label": "关联admin.id",
+        "label": "管理员ID",
         "writable": false,
         "editEditable": false
       },
@@ -231,19 +241,19 @@
       },
       {
         "ref": "reversed",
-        "label": "已冲正标志",
+        "label": "是否冲正",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

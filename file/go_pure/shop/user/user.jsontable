@@ -15,6 +15,7 @@
     "columns": [
       {
         "comment": "主键",
+        "title": "用户ID",
         "isAutoInc": true,
         "isPrimary": true,
         "mysqlType": "int",
@@ -24,6 +25,7 @@
       },
       {
         "comment": "用户vip等级",
+        "title": "VIP等级",
         "default": "0",
         "isAutoInc": false,
         "isPrimary": false,
@@ -39,7 +41,8 @@
         "mysqlType": "varchar(64)",
         "name": "nick",
         "nullable": false,
-        "unsigned": false
+        "unsigned": false,
+        "default": ""
       },
       {
         "comment": "头像url",
@@ -49,7 +52,8 @@
         "name": "head_img_url",
         "nullable": false,
         "title": "头像",
-        "unsigned": false
+        "unsigned": false,
+        "default": ""
       },
       {
         "comment": "是否实名;0:未实名;1:已实名",
@@ -64,6 +68,7 @@
       },
       {
         "comment": "粉丝数量",
+        "title": "粉丝数",
         "default": "0",
         "isAutoInc": false,
         "isPrimary": false,
@@ -74,6 +79,7 @@
       },
       {
         "comment": "获赞数量",
+        "title": "获赞数",
         "default": "0",
         "isAutoInc": false,
         "isPrimary": false,
@@ -84,6 +90,7 @@
       },
       {
         "comment": "获踩数量",
+        "title": "获踩数",
         "default": "0",
         "isAutoInc": false,
         "isPrimary": false,
@@ -94,6 +101,7 @@
       },
       {
         "comment": "自己关注数量",
+        "title": "关注数",
         "default": "0",
         "isAutoInc": false,
         "isPrimary": false,
@@ -109,16 +117,19 @@
         "mysqlType": "varchar(64)",
         "name": "parent_account",
         "nullable": false,
-        "unsigned": false
+        "unsigned": false,
+        "default": ""
       },
       {
         "comment": "上级的上级",
+        "title": "二级上级",
         "isAutoInc": false,
         "isPrimary": false,
         "mysqlType": "varchar(64)",
         "name": "grandparent_account",
         "nullable": false,
-        "unsigned": false
+        "unsigned": false,
+        "default": ""
       },
       {
         "comment": "金币余额",
@@ -152,6 +163,7 @@
       },
       {
         "comment": "活动获得金币",
+        "title": "活动金币",
         "default": "0.00",
         "isAutoInc": false,
         "isPrimary": false,
@@ -207,12 +219,14 @@
         "mysqlType": "varchar(256)",
         "name": "desc",
         "nullable": false,
-        "unsigned": false
+        "unsigned": false,
+        "default": ""
       },
       {
         "name": "credit_limit",
         "mysqlType": "decimal(20,2)",
         "comment": "购买授信额度，不增加余额",
+        "title": "授信额度",
         "default": "0.00",
         "nullable": false,
         "unsigned": false,
@@ -223,6 +237,7 @@
         "name": "credit_enabled",
         "mysqlType": "tinyint",
         "comment": "授信启用：0关闭/1启用",
+        "title": "授信状态",
         "default": "0",
         "nullable": false,
         "unsigned": false,
@@ -233,6 +248,7 @@
         "name": "wallet_version",
         "mysqlType": "bigint",
         "comment": "钱包资金变更版本",
+        "title": "钱包版本",
         "default": "0",
         "nullable": false,
         "unsigned": false,
@@ -243,7 +259,7 @@
     "editCols": [
       {
         "editEditable": false,
-        "label": "主键",
+        "label": "用户ID",
         "ref": "id",
         "visible": false
       },
@@ -259,14 +275,14 @@
         "required": true
       },
       {
-        "label": "用户vip等级",
+        "label": "VIP等级",
         "ref": "level",
         "required": true
       },
       {
         "label": "是否实名",
         "ref": "is_real_name",
-        "widget": "boolean"
+        "widget": "select"
       },
       {
         "editEditable": false,
@@ -288,7 +304,7 @@
       },
       {
         "editEditable": false,
-        "label": "活动获得金币",
+        "label": "活动金币",
         "ref": "activity_coin",
         "writable": false
       },
@@ -307,25 +323,25 @@
       },
       {
         "editEditable": false,
-        "label": "粉丝数量",
+        "label": "粉丝数",
         "ref": "fans_count",
         "writable": false
       },
       {
         "editEditable": false,
-        "label": "获赞数量",
+        "label": "获赞数",
         "ref": "like_count",
         "writable": false
       },
       {
         "editEditable": false,
-        "label": "获踩数量",
+        "label": "获踩数",
         "ref": "dislike_count",
         "writable": false
       },
       {
         "editEditable": false,
-        "label": "自己关注数量",
+        "label": "关注数",
         "ref": "following_count",
         "writable": false
       },
@@ -337,7 +353,7 @@
       },
       {
         "editEditable": false,
-        "label": "上级的上级",
+        "label": "二级上级",
         "ref": "grandparent_account",
         "writable": false
       },
@@ -402,6 +418,34 @@
           {
             "col": "account",
             "label": "账户"
+          },
+          {
+            "col": "is_freeze",
+            "label": "登录冻结"
+          },
+          {
+            "col": "freeze_end_time",
+            "label": "冻结截止时间"
+          },
+          {
+            "col": "is_disable",
+            "label": "账号禁用"
+          },
+          {
+            "col": "real_name",
+            "label": "真实姓名"
+          },
+          {
+            "col": "tel",
+            "label": "联系电话"
+          },
+          {
+            "col": "register_time",
+            "label": "注册时间"
+          },
+          {
+            "col": "last_time",
+            "label": "最后登录时间"
           }
         ],
         "on": [
@@ -416,48 +460,55 @@
     "modelName": "user",
     "selCols": [
       {
-        "ref": "user_ext_account"
+        "ref": "id",
+        "label": "用户ID"
       },
       {
-        "label": "昵称",
-        "ref": "nick"
+        "ref": "user_ext_account",
+        "label": "登录账号"
       },
       {
-        "label": "用户vip等级",
-        "ref": "level"
+        "ref": "nick",
+        "label": "昵称"
       },
       {
-        "label": "是否实名",
+        "ref": "coin",
+        "label": "钱包余额"
+      },
+      {
         "ref": "is_real_name",
-        "width": 60
+        "label": "是否实名"
       },
       {
-        "label": "金币余额",
-        "ref": "coin"
+        "ref": "user_ext_is_disable",
+        "label": "账号禁用"
       },
       {
-        "label": "充值金币",
-        "ref": "recharge_coin"
+        "ref": "user_ext_is_freeze",
+        "label": "登录冻结"
       },
       {
-        "label": "充值金额",
-        "ref": "recharge_money"
+        "ref": "user_ext_freeze_end_time",
+        "label": "冻结截止时间",
+        "width": 180
       },
       {
-        "label": "活动获得金币",
-        "ref": "activity_coin"
+        "ref": "user_ext_real_name",
+        "label": "真实姓名"
       },
       {
-        "label": "备注",
-        "ref": "desc"
+        "ref": "user_ext_tel",
+        "label": "联系电话"
       },
       {
-        "displayType": "image",
-        "label": "头像",
-        "listThumbHeight": 40,
-        "listThumbWidth": 40,
-        "ref": "head_img_url",
-        "width": 80
+        "ref": "user_ext_register_time",
+        "label": "注册时间",
+        "width": 180
+      },
+      {
+        "ref": "user_ext_last_time",
+        "label": "最后登录时间",
+        "width": 180
       }
     ],
     "selColsEq": [

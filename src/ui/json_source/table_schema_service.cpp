@@ -532,7 +532,7 @@ bool validateCrossRefs(const JsonTableTable &table, const JsonTableConfig &confi
   auto refOk = [&](const QString &ref, QString *aliasOut) -> bool {
     const int dot = ref.indexOf(QLatin1Char('.'));
     if (dot <= 0)
-      return colNames.contains(ref) || joinAliases.contains(ref);  // 本表列/联表输出别名
+      return colNames.contains(ref) || joinAliases.contains(ref);
     const QString pro = ref.left(dot).trimmed();
     const QString col = ref.mid(dot + 1).trimmed();
     if (col.isEmpty() || !joinsByPro.contains(pro)) return false;

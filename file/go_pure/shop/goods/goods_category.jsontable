@@ -6,12 +6,79 @@
     "columns": [
       {
         "name": "id",
-        "mysqlType": "bigint",
-        "comment": "商品分类记录主键",
+        "mysqlType": "int",
+        "comment": "主键",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
-        "isAutoInc": true
+        "isAutoInc": true,
+        "title": "分类ID"
+      },
+      {
+        "name": "sort",
+        "mysqlType": "int",
+        "comment": "排序",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0",
+        "title": "排序"
+      },
+      {
+        "name": "hot",
+        "mysqlType": "int",
+        "comment": "热度",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0"
+      },
+      {
+        "name": "tip",
+        "mysqlType": "varchar(64)",
+        "comment": "标签，后台查看使用",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "",
+        "title": "分类标签"
+      },
+      {
+        "name": "create_time",
+        "mysqlType": "datetime",
+        "unsigned": false,
+        "nullable": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "comment": "创建时间",
+        "default": "now()"
+      },
+      {
+        "name": "enable",
+        "title": "启用状态",
+        "mysqlType": "int",
+        "comment": "是否起效",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0",
+        "boolTrueText": "启用",
+        "boolFalseText": "停用"
+      },
+      {
+        "name": "desc",
+        "mysqlType": "varchar(512)",
+        "comment": "备注",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "",
+        "title": "备注"
       },
       {
         "name": "parent_id",
@@ -29,57 +96,6 @@
         "title": "商品类型",
         "mysqlType": "varchar(32)",
         "comment": "topup代充/item装备/account账号",
-        "nullable": false,
-        "unsigned": false,
-        "isPrimary": false,
-        "isAutoInc": false,
-        "default": ""
-      },
-      {
-        "name": "sort",
-        "mysqlType": "bigint",
-        "comment": "展示排序",
-        "nullable": false,
-        "unsigned": false,
-        "isPrimary": false,
-        "isAutoInc": false,
-        "default": "0"
-      },
-      {
-        "name": "hot",
-        "mysqlType": "bigint",
-        "comment": "热度",
-        "nullable": false,
-        "unsigned": false,
-        "isPrimary": false,
-        "isAutoInc": false,
-        "default": "0"
-      },
-      {
-        "name": "tip",
-        "mysqlType": "varchar(64)",
-        "comment": "后台分类标签",
-        "nullable": false,
-        "unsigned": false,
-        "isPrimary": false,
-        "isAutoInc": false,
-        "default": ""
-      },
-      {
-        "name": "enable",
-        "title": "启用状态",
-        "mysqlType": "tinyint",
-        "comment": "启停：0停用/1启用",
-        "nullable": false,
-        "unsigned": false,
-        "isPrimary": false,
-        "isAutoInc": false,
-        "default": "1"
-      },
-      {
-        "name": "desc",
-        "mysqlType": "varchar(512)",
-        "comment": "后台备注",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -114,8 +130,18 @@
         "column": "enable",
         "comment": "启停：0停用/1启用",
         "items": [
-          { "key": "Disabled", "label": "0 停用", "value": "0", "valueType": "number" },
-          { "key": "Enabled", "label": "1 启用", "value": "1", "valueType": "number" }
+          {
+            "key": "Disabled",
+            "label": "停用",
+            "value": "0",
+            "valueType": "number"
+          },
+          {
+            "key": "Enabled",
+            "label": "启用",
+            "value": "1",
+            "valueType": "number"
+          }
         ]
       }
     ],
@@ -178,7 +204,7 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "商品分类记录主键",
+        "label": "分类ID",
         "writable": false,
         "editEditable": false
       },
@@ -196,7 +222,7 @@
       },
       {
         "ref": "sort",
-        "label": "展示排序",
+        "label": "排序",
         "writable": true,
         "editEditable": true
       },
@@ -208,7 +234,7 @@
       },
       {
         "ref": "tip",
-        "label": "后台分类标签",
+        "label": "分类标签",
         "writable": true,
         "editEditable": true
       },
@@ -216,11 +242,13 @@
         "ref": "enable",
         "label": "启用状态",
         "writable": true,
-        "editEditable": true
+        "editEditable": true,
+        "widget": "select",
+        "switchEditable": true
       },
       {
         "ref": "desc",
-        "label": "后台备注",
+        "label": "备注",
         "writable": true,
         "editEditable": true
       },

@@ -2,32 +2,87 @@
   "table": {
     "tableName": "goods",
     "modelName": "goods",
-    "tableComment": "游戏商品",
+    "tableComment": "商店的商品",
     "columns": [
-      { "name": "request_key", "mysqlType": "varchar(64)", "comment": "商户创建商品幂等号", "nullable": false, "isPrimary": false, "isAutoInc": false, "default": "" },
       {
         "name": "id",
-        "mysqlType": "bigint",
-        "comment": "游戏商品记录主键",
+        "mysqlType": "int",
+        "comment": "主键",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
-        "isAutoInc": true
+        "isAutoInc": true,
+        "title": "商品ID"
       },
       {
         "name": "shop_id",
-        "mysqlType": "bigint",
-        "comment": "关联shop.id",
+        "mysqlType": "int",
+        "comment": "商店id。shop.id",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
         "isAutoInc": false,
-        "default": "0"
+        "default": "0",
+        "title": "店铺ID"
+      },
+      {
+        "name": "goods_img",
+        "mysqlType": "varchar(512)",
+        "comment": "公开商品封面路径",
+        "title": "商品封面",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": ""
+      },
+      {
+        "name": "name",
+        "mysqlType": "varchar(128)",
+        "unsigned": false,
+        "nullable": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "comment": "商品名称",
+        "default": ""
+      },
+      {
+        "name": "intro",
+        "mysqlType": "varchar(512)",
+        "unsigned": false,
+        "nullable": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "comment": "简介",
+        "default": ""
+      },
+      {
+        "name": "is_show",
+        "mysqlType": "int",
+        "comment": "是否展示",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0",
+        "title": "是否上架"
+      },
+      {
+        "name": "enable",
+        "mysqlType": "int",
+        "comment": "是否启用",
+        "nullable": false,
+        "unsigned": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "0",
+        "title": "启用状态"
       },
       {
         "name": "game_id",
         "mysqlType": "bigint",
         "comment": "关联game.id",
+        "title": "游戏ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -38,6 +93,7 @@
         "name": "release_id",
         "mysqlType": "bigint",
         "comment": "关联game_release.id",
+        "title": "版本ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -48,6 +104,7 @@
         "name": "server_id",
         "mysqlType": "bigint",
         "comment": "关联game_server.id",
+        "title": "区服ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -58,6 +115,7 @@
         "name": "category_id",
         "mysqlType": "bigint",
         "comment": "关联goods_category.id",
+        "title": "分类ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -68,6 +126,7 @@
         "name": "form_id",
         "mysqlType": "bigint",
         "comment": "关联goods_form.id",
+        "title": "资料模板ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -78,16 +137,7 @@
         "name": "kind",
         "mysqlType": "varchar(32)",
         "comment": "topup代充/item装备/account账号",
-        "nullable": false,
-        "unsigned": false,
-        "isPrimary": false,
-        "isAutoInc": false,
-        "default": ""
-      },
-      {
-        "name": "goods_img",
-        "mysqlType": "varchar(512)",
-        "comment": "公开商品封面路径",
+        "title": "商品类型",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -98,6 +148,7 @@
         "name": "images",
         "mysqlType": "json",
         "comment": "公开商品图片路径列表",
+        "title": "商品图片",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -107,6 +158,7 @@
         "name": "attributes",
         "mysqlType": "json",
         "comment": "非秘密商品属性和绑定说明",
+        "title": "商品属性",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -116,6 +168,7 @@
         "name": "delivery_rules",
         "mysqlType": "json",
         "comment": "交付方式、承诺及验收项",
+        "title": "交付规则",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -125,6 +178,7 @@
         "name": "status",
         "mysqlType": "varchar(32)",
         "comment": "业务状态：draft草稿/pending审核/approved通过/rejected拒绝",
+        "title": "审核状态",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -132,29 +186,10 @@
         "default": "draft"
       },
       {
-        "name": "is_show",
-        "mysqlType": "bigint",
-        "comment": "商户上架标志0否1是",
-        "nullable": false,
-        "unsigned": false,
-        "isPrimary": false,
-        "isAutoInc": false,
-        "default": "0"
-      },
-      {
-        "name": "enable",
-        "mysqlType": "tinyint",
-        "comment": "启停：0停用/1启用",
-        "nullable": false,
-        "unsigned": false,
-        "isPrimary": false,
-        "isAutoInc": false,
-        "default": "1"
-      },
-      {
         "name": "revision",
         "mysqlType": "bigint",
         "comment": "商品审核版本",
+        "title": "审核版本",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -165,6 +200,7 @@
         "name": "sales",
         "mysqlType": "bigint",
         "comment": "已完成销售数量",
+        "title": "销量",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -175,6 +211,7 @@
         "name": "delivery_hours",
         "mysqlType": "bigint",
         "comment": "交付承诺小时数",
+        "title": "交付时限（小时）",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -185,6 +222,7 @@
         "name": "auto_receive_hours",
         "mysqlType": "bigint",
         "comment": "自动收货小时数，0关闭",
+        "title": "自动收货（小时）",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -205,6 +243,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -215,15 +254,34 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
         "isAutoInc": false,
         "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "request_key",
+        "mysqlType": "varchar(64)",
+        "comment": "商户创建商品幂等号",
+        "title": "幂等编号",
+        "nullable": false,
+        "isPrimary": false,
+        "isAutoInc": false,
+        "default": "",
+        "unsigned": false
       }
     ],
     "indexes": [
-      { "name": "uk_shop_request", "cols": ["shop_id", "request_key"], "unique": true },
+      {
+        "name": "uk_shop_request",
+        "cols": [
+          "shop_id",
+          "request_key"
+        ],
+        "unique": true
+      },
       {
         "name": "idx_shop_id_status",
         "cols": [
@@ -242,13 +300,16 @@
         "unique": false
       }
     ],
-    "frontend": false,
-    "adminQueryMode": "empty",
+    "frontend": true,
+    "adminQueryMode": "read",
     "appQuery": false,
     "manualUpdateTime": false,
     "selCols": [
       {
         "ref": "id"
+      },
+      {
+        "ref": "name"
       },
       {
         "ref": "shop_id"
@@ -266,13 +327,22 @@
         "ref": "category_id"
       },
       {
-        "ref": "form_id"
-      },
-      {
         "ref": "kind"
       },
       {
-        "ref": "goods_img"
+        "ref": "status"
+      },
+      {
+        "ref": "enable"
+      },
+      {
+        "ref": "revision"
+      },
+      {
+        "ref": "review_note"
+      },
+      {
+        "ref": "created_at"
       }
     ],
     "selColsEq": [
@@ -310,115 +380,115 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "游戏商品记录主键",
+        "label": "商品ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "shop_id",
-        "label": "关联shop.id",
+        "label": "店铺ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "game_id",
-        "label": "关联game.id",
+        "label": "游戏ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "release_id",
-        "label": "关联game_release.id",
+        "label": "版本ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "server_id",
-        "label": "关联game_server.id",
+        "label": "区服ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "category_id",
-        "label": "关联goods_category.id",
+        "label": "分类ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "form_id",
-        "label": "关联goods_form.id",
+        "label": "资料模板ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "kind",
-        "label": "topup代充/item装备/account账号",
+        "label": "商品类型",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "goods_img",
-        "label": "公开商品封面路径",
+        "label": "商品封面",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "images",
-        "label": "公开商品图片路径列表",
+        "label": "商品图片",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "attributes",
-        "label": "非秘密商品属性和绑定说明",
+        "label": "商品属性",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "delivery_rules",
-        "label": "交付方式、承诺及验收项",
+        "label": "交付规则",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "status",
-        "label": "业务状态：draft草稿/pending审核/approved通过/rejected拒绝",
+        "label": "审核状态",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "is_show",
-        "label": "商户上架标志0否1是",
+        "label": "是否上架",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "enable",
-        "label": "启停：0停用/1启用",
+        "label": "启用状态",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "revision",
-        "label": "商品审核版本",
+        "label": "审核版本",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "sales",
-        "label": "已完成销售数量",
+        "label": "销量",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "delivery_hours",
-        "label": "交付承诺小时数",
+        "label": "交付时限（小时）",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "auto_receive_hours",
-        "label": "自动收货小时数，0关闭",
+        "label": "自动收货（小时）",
         "writable": false,
         "editEditable": false
       },
@@ -430,13 +500,13 @@
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }
@@ -444,7 +514,7 @@
     "genAdd": false,
     "genEdit": false,
     "genDelete": false,
-    "genDetail": false,
+    "genDetail": true,
     "i18n": {
       "table": "goods0",
       "extKey": "ext_id",
@@ -461,6 +531,54 @@
           "label": "商品介绍"
         }
       ]
-    }
+    },
+    "enums": [
+      {
+        "column": "status",
+        "items": [
+          {
+            "key": "draft",
+            "label": "草稿",
+            "value": "draft",
+            "valueType": "string"
+          },
+          {
+            "key": "pending",
+            "label": "待审核",
+            "value": "pending",
+            "valueType": "string"
+          },
+          {
+            "key": "approved",
+            "label": "审核通过",
+            "value": "approved",
+            "valueType": "string"
+          },
+          {
+            "key": "rejected",
+            "label": "审核拒绝",
+            "value": "rejected",
+            "valueType": "string"
+          }
+        ]
+      },
+      {
+        "column": "enable",
+        "items": [
+          {
+            "key": "disabled",
+            "label": "停用",
+            "value": "0",
+            "valueType": "number"
+          },
+          {
+            "key": "enabled",
+            "label": "启用",
+            "value": "1",
+            "valueType": "number"
+          }
+        ]
+      }
+    ]
   }
 }

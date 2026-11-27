@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "已入账充值记录主键",
+        "title": "充值ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "apply_id",
         "mysqlType": "bigint",
         "comment": "关联wallet_recharge_apply.id",
+        "title": "充值申请ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "receipt_id",
         "mysqlType": "bigint",
         "comment": "关联wallet_receipt.id",
+        "title": "到账记录ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "user_id",
         "mysqlType": "bigint",
         "comment": "关联user.id",
+        "title": "用户ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -47,6 +51,7 @@
         "name": "amount",
         "mysqlType": "decimal(20,2)",
         "comment": "实收实入额",
+        "title": "入账金额",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -57,6 +62,7 @@
         "name": "ledger_id",
         "mysqlType": "bigint",
         "comment": "关联wallet_ledger.id",
+        "title": "流水ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -67,6 +73,7 @@
         "name": "reversed",
         "mysqlType": "bigint",
         "comment": "已冲正标志",
+        "title": "是否冲正",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -77,6 +84,7 @@
         "name": "reverse_ledger_id",
         "mysqlType": "bigint",
         "comment": "关联wallet_ledger.id",
+        "title": "冲正流水ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -87,6 +95,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -97,6 +106,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -179,61 +189,61 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "已入账充值记录主键",
+        "label": "充值ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "apply_id",
-        "label": "关联wallet_recharge_apply.id",
+        "label": "充值申请ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "receipt_id",
-        "label": "关联wallet_receipt.id",
+        "label": "到账记录ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "user_id",
-        "label": "关联user.id",
+        "label": "用户ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "amount",
-        "label": "实收实入额",
+        "label": "入账金额",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "ledger_id",
-        "label": "关联wallet_ledger.id",
+        "label": "流水ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "reversed",
-        "label": "已冲正标志",
+        "label": "是否冲正",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "reverse_ledger_id",
-        "label": "关联wallet_ledger.id",
+        "label": "冲正流水ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "交易主订单记录主键",
+        "title": "订单ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "order_no",
         "mysqlType": "varchar(64)",
         "comment": "唯一订单号",
+        "title": "订单编号",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "buyer_id",
         "mysqlType": "bigint",
         "comment": "关联user.id",
+        "title": "买家ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "shop_id",
         "mysqlType": "bigint",
         "comment": "关联shop.id",
+        "title": "店铺ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -47,6 +51,7 @@
         "name": "seller_id",
         "mysqlType": "bigint",
         "comment": "关联user.id",
+        "title": "卖家ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -57,6 +62,7 @@
         "name": "request_key",
         "mysqlType": "varchar(64)",
         "comment": "创建订单幂等号",
+        "title": "幂等编号",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -67,6 +73,7 @@
         "name": "sku_id",
         "mysqlType": "bigint",
         "comment": "关联goods_sku.id",
+        "title": "规格ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -77,6 +84,7 @@
         "name": "quantity",
         "mysqlType": "bigint",
         "comment": "购买数量",
+        "title": "数量",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -97,6 +105,7 @@
         "name": "lang",
         "mysqlType": "varchar(64)",
         "comment": "下单语言码",
+        "title": "下单语言",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -107,6 +116,7 @@
         "name": "status",
         "mysqlType": "varchar(32)",
         "comment": "业务状态：unpaid待付/paid待交付/delivering交付中/receiving待收货/completed完成/closed关闭",
+        "title": "状态",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -117,6 +127,7 @@
         "name": "snapshot",
         "mysqlType": "json",
         "comment": "发行体系、商品及规则翻译快照",
+        "title": "订单快照",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -126,6 +137,7 @@
         "name": "settlement_days",
         "mysqlType": "bigint",
         "comment": "付款时锁定的结算天数",
+        "title": "结算等待（天）",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -136,6 +148,7 @@
         "name": "auto_receive_hours",
         "mysqlType": "bigint",
         "comment": "自动收货小时数，0关闭",
+        "title": "自动收货（小时）",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -146,6 +159,7 @@
         "name": "delivery_hours",
         "mysqlType": "bigint",
         "comment": "交付承诺小时数",
+        "title": "交付时限（小时）",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -156,6 +170,7 @@
         "name": "pay_deadline",
         "mysqlType": "datetime",
         "comment": "未付款关闭时间",
+        "title": "付款截止时间",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -174,6 +189,7 @@
         "name": "delivered_at",
         "mysqlType": "datetime",
         "comment": "证据提交时间",
+        "title": "交付时间",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -192,6 +208,7 @@
         "name": "completed_at",
         "mysqlType": "datetime",
         "comment": "交易完成时间",
+        "title": "完成时间",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -210,6 +227,7 @@
         "name": "settled",
         "mysqlType": "bigint",
         "comment": "已结算标志0否1是",
+        "title": "是否结算",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -220,6 +238,7 @@
         "name": "hold_count",
         "mysqlType": "bigint",
         "comment": "有效售后或冻结阻断数量",
+        "title": "结算阻断数",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -230,6 +249,7 @@
         "name": "delivery_info",
         "mysqlType": "json",
         "comment": "普通收货字段，不含密码",
+        "title": "收货资料",
         "nullable": true,
         "unsigned": false,
         "isPrimary": false,
@@ -249,6 +269,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -259,6 +280,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -375,49 +397,49 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "交易主订单记录主键",
+        "label": "订单ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "order_no",
-        "label": "唯一订单号",
+        "label": "订单编号",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "buyer_id",
-        "label": "关联user.id",
+        "label": "买家ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "shop_id",
-        "label": "关联shop.id",
+        "label": "店铺ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "seller_id",
-        "label": "关联user.id",
+        "label": "卖家ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "request_key",
-        "label": "创建订单幂等号",
+        "label": "幂等编号",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "sku_id",
-        "label": "关联goods_sku.id",
+        "label": "规格ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "quantity",
-        "label": "购买数量",
+        "label": "数量",
         "writable": false,
         "editEditable": false
       },
@@ -429,43 +451,43 @@
       },
       {
         "ref": "lang",
-        "label": "下单语言码",
+        "label": "下单语言",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "status",
-        "label": "业务状态：unpaid待付/paid待交付/delivering交付中/receiving待收货/completed完成/closed关闭",
+        "label": "状态",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "snapshot",
-        "label": "发行体系、商品及规则翻译快照",
+        "label": "订单快照",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "settlement_days",
-        "label": "付款时锁定的结算天数",
+        "label": "结算等待（天）",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "auto_receive_hours",
-        "label": "自动收货小时数，0关闭",
+        "label": "自动收货（小时）",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "delivery_hours",
-        "label": "交付承诺小时数",
+        "label": "交付时限（小时）",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "pay_deadline",
-        "label": "未付款关闭时间",
+        "label": "付款截止时间",
         "writable": false,
         "editEditable": false
       },
@@ -477,7 +499,7 @@
       },
       {
         "ref": "delivered_at",
-        "label": "证据提交时间",
+        "label": "交付时间",
         "writable": false,
         "editEditable": false
       },
@@ -489,7 +511,7 @@
       },
       {
         "ref": "completed_at",
-        "label": "交易完成时间",
+        "label": "完成时间",
         "writable": false,
         "editEditable": false
       },
@@ -501,19 +523,19 @@
       },
       {
         "ref": "settled",
-        "label": "已结算标志0否1是",
+        "label": "是否结算",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "hold_count",
-        "label": "有效售后或冻结阻断数量",
+        "label": "结算阻断数",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "delivery_info",
-        "label": "普通收货字段，不含密码",
+        "label": "收货资料",
         "writable": false,
         "editEditable": false
       },
@@ -525,13 +547,13 @@
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }

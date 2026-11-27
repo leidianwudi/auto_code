@@ -8,6 +8,7 @@
         "name": "id",
         "mysqlType": "bigint",
         "comment": "购买资金来源分摊记录主键",
+        "title": "分摊ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": true,
@@ -17,6 +18,7 @@
         "name": "payment_id",
         "mysqlType": "bigint",
         "comment": "关联trade_payment.id",
+        "title": "支付ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -27,6 +29,7 @@
         "name": "user_id",
         "mysqlType": "bigint",
         "comment": "关联user.id",
+        "title": "用户ID",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -37,6 +40,7 @@
         "name": "amount",
         "mysqlType": "decimal(20,2)",
         "comment": "订单支付额",
+        "title": "支付金额",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -47,6 +51,7 @@
         "name": "recharge_amount",
         "mysqlType": "decimal(20,2)",
         "comment": "消耗不可提现资金",
+        "title": "充值资金支出",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -57,6 +62,7 @@
         "name": "income_amount",
         "mysqlType": "decimal(20,2)",
         "comment": "消耗收入",
+        "title": "收入资金支出",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -67,6 +73,7 @@
         "name": "credit_amount",
         "mysqlType": "decimal(20,2)",
         "comment": "新增购买欠款",
+        "title": "授信资金支出",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -77,6 +84,7 @@
         "name": "refunded_amount",
         "mysqlType": "decimal(20,2)",
         "comment": "累计退款额",
+        "title": "已退款金额",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -87,6 +95,7 @@
         "name": "recharge_refunded",
         "mysqlType": "decimal(20,2)",
         "comment": "已退充值来源",
+        "title": "充值资金退回",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -97,6 +106,7 @@
         "name": "income_refunded",
         "mysqlType": "decimal(20,2)",
         "comment": "已退收入来源",
+        "title": "收入资金退回",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -107,6 +117,7 @@
         "name": "credit_refunded",
         "mysqlType": "decimal(20,2)",
         "comment": "已退欠款来源",
+        "title": "授信资金退回",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -117,6 +128,7 @@
         "name": "created_at",
         "mysqlType": "datetime",
         "comment": "记录创建时间",
+        "title": "创建时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -127,6 +139,7 @@
         "name": "updated_at",
         "mysqlType": "datetime",
         "comment": "记录最后更新时间",
+        "title": "更新时间",
         "nullable": false,
         "unsigned": false,
         "isPrimary": false,
@@ -193,79 +206,79 @@
     "editCols": [
       {
         "ref": "id",
-        "label": "购买资金来源分摊记录主键",
+        "label": "分摊ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "payment_id",
-        "label": "关联trade_payment.id",
+        "label": "支付ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "user_id",
-        "label": "关联user.id",
+        "label": "用户ID",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "amount",
-        "label": "订单支付额",
+        "label": "支付金额",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "recharge_amount",
-        "label": "消耗不可提现资金",
+        "label": "充值资金支出",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "income_amount",
-        "label": "消耗收入",
+        "label": "收入资金支出",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "credit_amount",
-        "label": "新增购买欠款",
+        "label": "授信资金支出",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "refunded_amount",
-        "label": "累计退款额",
+        "label": "已退款金额",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "recharge_refunded",
-        "label": "已退充值来源",
+        "label": "充值资金退回",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "income_refunded",
-        "label": "已退收入来源",
+        "label": "收入资金退回",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "credit_refunded",
-        "label": "已退欠款来源",
+        "label": "授信资金退回",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "created_at",
-        "label": "记录创建时间",
+        "label": "创建时间",
         "writable": false,
         "editEditable": false
       },
       {
         "ref": "updated_at",
-        "label": "记录最后更新时间",
+        "label": "更新时间",
         "writable": false,
         "editEditable": false
       }
