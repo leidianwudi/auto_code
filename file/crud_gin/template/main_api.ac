@@ -1108,7 +1108,9 @@ export function buildLayeredJoinData(json: Object, param: Param, tablesByName: O
           printLog("提示：联表输出列 '" + tbl + "." + colName + "' 非字符串，filter=like 已按 eq 生成");
           filter = "eq";
         }
-        let alias: String = tbl + "_" + colName;
+        // 输出别名：cols[].alias 显式优先，空 = 表名_列名（与前端/设计器一致）
+        let alias: String = cc["alias"];
+        if (alias == null || alias == "") { alias = tbl + "_" + colName; }
         let aliasGo: String = snakeToPascal(alias);
         let clash: Bool = false;
         for (f in param.fields) {
@@ -1117,7 +1119,8 @@ export function buildLayeredJoinData(json: Object, param: Param, tablesByName: O
         if (usedAliasGo[aliasGo] != null) { clash = true; }
         if (clash) {
           printError("错误：表 '" + param.tableName + "' 联表输出字段 '" + aliasGo +
-                     "' 与主表列名/已有联表字段冲突，已跳过该列");
+                     "' 与主表列名/已有联表字段冲突，已跳过该列；" +
+                     "请在联表 cols[].alias 指定其他输出别名");
           continue;
         }
         usedAliasGo[aliasGo] = true;

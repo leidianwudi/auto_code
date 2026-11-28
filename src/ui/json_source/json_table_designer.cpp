@@ -131,7 +131,8 @@ enum JoinCols {
 /// 联表输出字段表格列索引（m_joinColTable：选中声明行的输出列；筛选能力统一
 /// 由字段呈现页的查询模式驱动（selColsEq/Like 别名通道），此处不再单列）
 enum JoinColCols {
-  JColCol = 0,   ///< 输出列名（∈ 被联表列；输出别名 = 表名_列名）
+  JColCol = 0,   ///< 输出列名（∈ 被联表列）
+  JColAlias,     ///< 输出别名（空 = 表名_列名；冲突时可显式指定）
   JColLabel,     ///< 显示标题（空 = 回退目标列注释/列名）
   JColCount
 };
@@ -196,6 +197,11 @@ QString cellWidgetText(const QTableWidget *table, int row, int col) {
   if (const auto *c = dynamic_cast<const AuiCellEditCombo *>(table->cellWidget(row, col)))
     return c->text().trimmed();
   return QString();
+}
+
+/// 联表输出别名：显式 alias 优先，空 = 表名_列名（与生成端 aliasMeta 一致）
+QString joinOutputAlias(const QString &table, const JsonTableJoinCol &c) {
+  return c.alias.isEmpty() ? table + QLatin1Char('_') + c.col : c.alias;
 }
 
 /// 通用表格单元格文本（空表/缺条目返回空串；截断空白）
@@ -627,9 +633,8 @@ void JsonTableDesigner::setupUI() {
   m_joinTable->setToolTip(
       QStringLiteral("联表表=被联表名（项目内 .jsontable）；类型=LEFT/INNER（缺省 LEFT）；\n"
                      "主表列/联表列=ON 两列（on:[主表列,联表列]，表名由规格自带）；\n"
-                     "输出列=联表输出列名，逗号分隔（只管列表输出哪些列）；\n"
-                     "输出别名固定为 表名_列名（前端统一字段名），查询能力在「字段呈现」页的\n"
-                     "查询视图（精确/模糊）里按输出别名配置，与主表列同源。"
+                     "输出字段在下方表格配置（字段/输出别名/显示标题）；\n"
+                     "查询能力在「字段呈现」页的查询视图（精确/模糊）里按输出别名配置。\n"
                      "生成端产出 EnXxxView 视图 + querySpec 联表流水线"));
   joinTab->addWidget(m_joinTable);
 
@@ -645,17 +650,19 @@ void JsonTableDesigner::setupUI() {
   joinColHeader->addWidget(m_joinColDelBtn);
 
   m_joinColTable = makeConfigTable({{QStringLiteral("字段"), QHeaderView::Interactive, 140},
+                                    {QStringLiteral("输出别名"), QHeaderView::Interactive, 140},
                                     {QStringLiteral("显示标题"), QHeaderView::Stretch, 0}},
                                    this, 110, 0, QAbstractItemView::SelectItems);
   m_joinColTable->setToolTip(
-      QStringLiteral("字段=被联表输出列名（输出别名固定 表名_列名，字段呈现自动出现）；\n"
+      QStringLiteral("字段=被联表输出列名（字段呈现自动出现）；\n"
+                     "输出别名=空则按 表名_列名 生成，与主表列名冲突时在此指定唯一别名；\n"
                      "显示标题=列表页列标题（空 = 回退目标列注释/列名）；\n"
                      "联表列的查询能力在「字段呈现」页的查询模式下拉配置（精确/模糊）"));
   joinTab->addLayout(joinColHeader);
   joinTab->addWidget(m_joinColTable, 1);
   connect(m_joinColAddBtn, &QPushButton::clicked, this, [this]() {
     syncJoinColsToDraft(m_joinTable->currentRow());
-    appendJoinColRow(QString(), QString());
+    appendJoinColRow(QString(), QString(), QString());
     // 新行绑定字段名候选 = 被联表列名（appendJoinColRow 用空候选，此处按目标表补）
     const int r = m_joinTable->currentRow();
     if (r >= 0 && r < m_joinDrafts.size()) {
@@ -1200,6 +1207,65 @@ void JsonTableDesigner::connectChangeSignals() {
   // 编辑态 label > 目标列注释（m_aliasComments 回填缓存）> 别名
   connect(m_joinColTable, &QTableWidget::itemChanged, this, [this](QTableWidgetItem *it) {
     if (!it || m_loading || m_joinColRebuilding) return;
+    // 输出别名提交：别名是字段呈现的行身份，需同步迁移 ref/标题回退/排序引用。
+    // 只迁移带联表徽标的行，避免误改同名物理列（冲突配置本身会被校验拦截）。
+    if (it->column() == JColAlias && it->row() >= 0) {
+      const int jr = m_joinTable->currentRow();
+      if (jr < 0 || jr >= m_joinDrafts.size()) return;
+      auto *colCombo =
+          dynamic_cast<AuiCellEditCombo *>(m_joinColTable->cellWidget(it->row(), JColCol));
+      const QString col = colCombo ? colCombo->text().trimmed() : QString();
+      const QString table = m_joinDrafts.at(jr).table.trimmed();
+      if (col.isEmpty() || table.isEmpty()) return;
+      const QString newAlias =
+          it->text().trimmed().isEmpty() ? table + QLatin1Char('_') + col : it->text().trimmed();
+      QString oldAlias = it->data(Qt::UserRole).toString();
+      if (oldAlias.isEmpty()) oldAlias = table + QLatin1Char('_') + col;
+      if (oldAlias == newAlias) {
+        if (it->data(Qt::UserRole).toString() != newAlias) it->setData(Qt::UserRole, newAlias);
+        return;
+      }
+      it->setData(Qt::UserRole, newAlias);
+      // 别名 → 目标列注释缓存跟随迁移（标题回退链使用）
+      if (m_aliasComments.contains(oldAlias)) {
+        const QString comment = m_aliasComments.take(oldAlias);
+        m_aliasComments.insert(newAlias, comment);
+      }
+      m_viewTable->model()->blockSignals(true);
+      for (int r = 0; r < m_viewTable->rowCount(); ++r) {
+        auto *refIt = m_viewTable->item(r, UColRef);
+        if (!refIt || refIt->text() != oldAlias) continue;
+        auto *cfgIt = m_viewTable->item(r, UColCfg);
+        if (!cfgIt || cfgIt->icon().isNull()) continue;  // 仅联表行（带徽标）
+        refIt->setText(newAlias);
+        // 标题仍是旧别名（自动回退值）时同步为新别名回退
+        if (auto *titleIt = m_viewTable->item(r, UColTitle)) {
+          if (titleIt->text() == oldAlias) {
+            QString fallback = newAlias;
+            if (m_aliasComments.contains(newAlias) &&
+                !m_aliasComments.value(newAlias).isEmpty()) {
+              fallback = m_aliasComments.value(newAlias);
+            }
+            titleIt->setText(fallback);
+            if (auto *rb = dynamic_cast<AuiCellReadBox *>(
+                    m_viewTable->cellWidget(r, UColTitle))) {
+              rb->setText(fallback);
+            }
+          }
+        }
+      }
+      m_viewTable->model()->blockSignals(false);
+      m_sortTable->model()->blockSignals(true);
+      for (int r = 0; r < m_sortTable->rowCount(); ++r) {
+        auto *sortIt = m_sortTable->item(r, 0);
+        if (sortIt && sortIt->text() == oldAlias) sortIt->setText(newAlias);
+      }
+      m_sortTable->model()->blockSignals(false);
+      syncJoinColsToDraft(jr);
+      m_table.joinTables = collectJoins();
+      updateValidateStatus();
+      return;
+    }
     if (it->column() != JColLabel || it->row() < 0) return;
     // alias = 被联表名_输出列名（表名取主从联动的当前声明行编辑态）
     const int jr = m_joinTable->currentRow();
@@ -1208,7 +1274,8 @@ void JsonTableDesigner::connectChangeSignals() {
     const QString col = colCombo ? colCombo->text().trimmed() : QString();
     const QString table = m_joinDrafts.at(jr).table.trimmed();
     if (col.isEmpty() || table.isEmpty()) return;
-    const QString alias = table + QLatin1Char('_') + col;
+    QString alias = cellOf(m_joinColTable, it->row(), JColAlias).trimmed();
+    if (alias.isEmpty()) alias = table + QLatin1Char('_') + col;
     const QString label = it->text().trimmed();
     QString fallback = alias;
     if (m_aliasComments.contains(alias) && !m_aliasComments.value(alias).isEmpty())
@@ -1783,12 +1850,18 @@ void JsonTableDesigner::fillJoinCols(int row) {
   m_joinColRebuilding = true;
   m_joinColTable->setRowCount(0);
   for (const auto &c : m_joinDrafts.at(row).cols) {
-    appendJoinColRow(c.col, c.label);
+    appendJoinColRow(c.col, c.alias, c.label);
   }
   // 逐行绑定下拉候选（appendJoinColRow 用的是空候选，此处按目标表补）
   for (int r = 0; r < m_joinColTable->rowCount(); ++r) {
     if (auto *combo = dynamic_cast<AuiCellEditCombo *>(m_joinColTable->cellWidget(r, JColCol)))
       combo->setPresets(candidates);
+    // 记录当前生效别名（列名变化/显式别名编辑时据此迁移字段呈现 ref）
+    if (auto *aliasItem = m_joinColTable->item(r, JColAlias)) {
+      const auto &draftCols = m_joinDrafts.at(row).cols;
+      if (r < draftCols.size())
+        aliasItem->setData(Qt::UserRole, joinOutputAlias(target, draftCols.at(r)));
+    }
   }
   m_joinColRebuilding = false;
 }
@@ -1807,15 +1880,30 @@ QStringList JsonTableDesigner::joinTargetCandidates(const QString &table) const 
   return candidates;
 }
 
-void JsonTableDesigner::appendJoinColRow(const QString &col, const QString &label) {
+void JsonTableDesigner::appendJoinColRow(const QString &col, const QString &alias,
+                                         const QString &label) {
   const int row = m_joinColTable->rowCount();
   m_joinColTable->insertRow(row);
   // 字段：常驻可编辑下拉（候选由 fillJoinCols 按被联表补齐；可自由输入）
   m_joinColTable->setItem(row, JColCol, new QTableWidgetItem);
+  // 输出别名：普通文本条目（空 = 表名_列名；冲突时显式填写唯一别名）
+  auto *aliasItem = new QTableWidgetItem(alias);
+  aliasItem->setToolTip(QStringLiteral("空 = 表名_列名；与主表列名冲突时在此指定唯一别名"));
+  m_joinColTable->setItem(row, JColAlias, aliasItem);
   auto *colCombo = new AuiCellEditCombo(m_joinColTable, JColCol, QStringList(), this);
   colCombo->setText(col);
-  colCombo->valueCommitted = [this] {
-    if (!m_loading) emit configChanged();
+  colCombo->valueCommitted = [this, colCombo, aliasItem] {
+    if (!m_loading) {
+      // 别名为空 = 跟随默认别名：列名变化时同步旧别名记录，供后续迁移使用
+      if (aliasItem->text().trimmed().isEmpty()) {
+        const int jr = m_joinTable->currentRow();
+        const QString t = (jr >= 0 && jr < m_joinDrafts.size())
+                              ? m_joinDrafts.at(jr).table.trimmed()
+                              : QString();
+        aliasItem->setData(Qt::UserRole, t + QLatin1Char('_') + colCombo->text().trimmed());
+      }
+      emit configChanged();
+    }
   };
   connect(colCombo->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &) {
     if (!m_loading) emit configChanged();
@@ -1833,6 +1921,7 @@ QVector<JsonTableJoinCol> JsonTableDesigner::collectJoinCols() const {
     if (col.isEmpty()) continue;  // 跳过字段名为空的行
     JsonTableJoinCol c;
     c.col = col;
+    c.alias = cellOf(m_joinColTable, r, JColAlias).trimmed();
     c.label = cellOf(m_joinColTable, r, JColLabel);
     // filter 恒空（只输出）：联表列的查询能力统一由字段呈现页的查询模式
     //（selColsEq/Like 别名通道）驱动，避免双通道重复生成查询条件
@@ -1903,26 +1992,47 @@ void JsonTableDesigner::fillViewTable() {
   // 新格式联表输出别名：ref（表名_列名）→ 显示标题（联表页配置，单一来源；
   // 空 = 回退目标列注释）。字段呈现的联表行自动跟随此处声明
   QSet<QString> aliasRefs;
+  QSet<QString> aliasEnumRefs;           // 别名 → 目标表配置了表内枚举（⚙ 自动推导）
   QHash<QString, QString> aliasTitles;   // 别名 → 联表页标题（label；空 = 未配置）
+  QHash<QString, QString> aliasTypes;    // 别名 → 目标列 mysqlType（⚙ 自动推导提示）
   m_aliasComments.clear();               // 别名 → 目标列注释（标题回退；成员缓存，
                                          // 供联表页显示标题编辑时的实时联动回退查询）
   if (!m_table.joinTables.isEmpty()) {
     const QString joinDir = m_filePath.isEmpty() ? QStringLiteral(PROJECT_SOURCE_DIR)
                                                  : QFileInfo(m_filePath).absolutePath();
     QHash<QString, QHash<QString, QString>> targetComments;  // 表名 → 列注释
+    QHash<QString, QHash<QString, QString>> targetTypes;     // 表名 → 列类型
+    QHash<QString, QSet<QString>> targetEnumCols;            // 表名 → 表内枚举列
     for (const auto &t : listProjectTables(joinDir)) {
       QHash<QString, QString> cm;
-      for (const auto &c : t.columns) cm.insert(c.name, c.comment);
+      QHash<QString, QString> ct;
+      for (const auto &c : t.columns) {
+        cm.insert(c.name, c.comment);
+        ct.insert(c.name, c.mysqlType);
+      }
+      QSet<QString> es;
+      for (const auto &e : t.enums) es.insert(e.column);
       targetComments.insert(t.tableName, cm);
+      targetTypes.insert(t.tableName, ct);
+      targetEnumCols.insert(t.tableName, es);
     }
     for (const auto &js : m_table.joinTables) {
       const auto tc = targetComments.constFind(js.table);
+      const auto tt = targetTypes.constFind(js.table);
+      const auto te = targetEnumCols.constFind(js.table);
       for (const auto &c : js.cols) {
-        const QString alias = js.table + QLatin1Char('_') + c.col;
+        const QString alias = joinOutputAlias(js.table, c);
         aliasRefs.insert(alias);
         aliasTitles.insert(alias, c.label);
         if (tc != targetComments.constEnd() && tc.value().contains(c.col)) {
           m_aliasComments.insert(alias, tc.value().value(c.col));
+        }
+        if (tt != targetTypes.constEnd() && tt.value().contains(c.col)) {
+          aliasTypes.insert(alias, tt.value().value(c.col));
+        }
+        // 与生成端 aliasMeta 一致：目标表 enums[] 命中该列 → 别名自动继承枚举
+        if (te != targetEnumCols.constEnd() && te.value().contains(c.col)) {
+          aliasEnumRefs.insert(alias);
         }
       }
     }
@@ -1943,9 +2053,15 @@ void JsonTableDesigner::fillViewTable() {
   }
   // 物理列注释（标题回退用）
   QHash<QString, QString> colComments;
-  for (const auto &c : m_table.columns) colComments.insert(c.name, c.comment);
+  QHash<QString, QString> colTypes;
+  for (const auto &c : m_table.columns) {
+    colComments.insert(c.name, c.comment);
+    colTypes.insert(c.name, c.mysqlType);
+  }
   QHash<QString, QString> colTitles;
   for (const auto &c : m_table.columns) colTitles.insert(c.name, c.title);
+  QSet<QString> enumCols;  ///< 表内枚举列（自动推导为标签/下拉）
+  for (const auto &e : m_table.enums) enumCols.insert(e.column);
   QHash<QString, bool> colHidden;  ///< 列是否「不输出」（实体 json:"-"）
   for (const auto &c : m_table.columns) colHidden.insert(c.name, c.hidden);
 
@@ -2004,6 +2120,24 @@ void JsonTableDesigner::fillViewTable() {
     // 条目存文本（行身份，只读）+ 元数据槽位（⚙ 面板读写，collectViewTable 落三视图）
     auto *refItem = new QTableWidgetItem;
     refItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);  // 行身份标识，只读
+    // 物理列/联表目标列类型（+28）：⚙ 字段设置用于自动推导提示与控件过滤。
+    QString mysqlType;
+    if (isAliasRow) {
+      mysqlType = aliasTypes.value(ref);
+    } else if (!isI18nRow) {
+      mysqlType = colTypes.value(ref);
+      if (mysqlType.isEmpty() && isJoinRow) {
+        const int dot = ref.indexOf(QLatin1Char('.'));
+        if (dot > 0) {
+          const auto jc = joins.constFind(ref.left(dot));
+          if (jc != joins.constEnd()) mysqlType = jc.value().types.value(ref.mid(dot + 1));
+        }
+      }
+    }
+    refItem->setData(Qt::UserRole + 28, mysqlType);
+    // 联表输出别名行：目标表 enums[] 命中时与生成端一样自动推导（只读标记）
+    const bool rowHasEnum = isAliasRow ? aliasEnumRefs.contains(ref) : enumCols.contains(ref);
+    refItem->setData(Qt::UserRole + 29, (!isI18nRow && rowHasEnum) ? 1 : 0);
     const auto selMeta = selOf.value(ref);
     const auto editMeta = editOf.value(ref);
     refItem->setData(Qt::UserRole + 1, selMeta.width > 0 ? selMeta.width : 0);  // 列宽
@@ -2237,7 +2371,7 @@ void JsonTableDesigner::collectViewTable(JsonTableTable *out) const {
   QSet<QString> aliasRefs;
   for (const auto &js : m_table.joinTables) {
     for (const auto &c : js.cols) {
-      if (!c.col.isEmpty()) aliasRefs.insert(js.table + QLatin1Char('_') + c.col);
+      if (!c.col.isEmpty()) aliasRefs.insert(joinOutputAlias(js.table, c));
     }
   }
   for (int r = 0; r < m_viewTable->rowCount(); ++r) {
@@ -2425,7 +2559,7 @@ void JsonTableDesigner::openViewFieldConfig(int row) {
   if (!isJoinRow) {
     for (const auto &js : m_table.joinTables) {
       for (const auto &c : js.cols) {
-        if (ref == js.table + QLatin1Char('_') + c.col) {
+        if (ref == joinOutputAlias(js.table, c)) {
           isJoinRow = true;
           break;
         }
@@ -2464,6 +2598,8 @@ void JsonTableDesigner::openViewFieldConfig(int row) {
 
   ViewFieldConfigDialog dlg(ref, isJoinRow, this);
   dlg.setSearchRoot(m_filePath.isEmpty() ? QString() : QFileInfo(m_filePath).absolutePath());
+  dlg.setMysqlType(refIt->data(Qt::UserRole + 28).toString(),
+                   refIt->data(Qt::UserRole + 29).toInt() != 0);
   dlg.setCurrent(sc, ec);
   if (!isJoinRow) {
     // 列级取值域初值（+11..+14 暂存槽位）
@@ -2665,7 +2801,7 @@ void JsonTableDesigner::editAppOutCols() {
   for (const auto &js : m_joinDrafts) {
     for (const auto &jc : js.cols) {
       if (jc.col.isEmpty() || js.table.isEmpty()) continue;
-      const QString alias = js.table + QLatin1Char('_') + jc.col;
+      const QString alias = joinOutputAlias(js.table, jc);
       QString cmt = jc.label;
       if (cmt.isEmpty()) cmt = m_aliasComments.value(alias);
       if (cmt.isEmpty()) cmt = alias;
@@ -3086,7 +3222,7 @@ void JsonTableDesigner::refreshColumnCandidates() {
   QStringList refCands = names;
   for (const auto &j : collectJoins()) {
     for (const auto &c : j.cols) {
-      if (!c.col.isEmpty()) refCands.append(j.table + QLatin1Char('_') + c.col);
+      if (!c.col.isEmpty()) refCands.append(joinOutputAlias(j.table, c));
     }
   }
   for (const auto &j : m_table.joinTable) {

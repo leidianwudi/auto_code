@@ -354,8 +354,7 @@ QVector<IndexDiffEntry> buildIndexDiffEntries(const QVector<JsonTableIndex> &cur
 }
 
 bool validatePhysicalSchema(const QString &tableName, const QString &tableComment,
-                            const QVector<JsonTableColumn> &cols, QString *err) {
-  // 表名保留多语言0后缀，列名遵循更严格的无数字规则；一次返回全部缺项。
+                            const QVector<JsonTableColumn> &cols, QString *err) {  // 表名保留多语言0后缀，列名遵循更严格的无数字规则；一次返回全部缺项。
   static const QRegularExpression tablePattern(QStringLiteral("^[a-z0-9_]+$"));
   static const QRegularExpression columnPattern(QStringLiteral("^[a-z_]+$"));
   QStringList errors;
@@ -376,6 +375,12 @@ bool validatePhysicalSchema(const QString &tableName, const QString &tableCommen
   }
   if (err) *err = errors.join(QLatin1Char('\n'));
   return errors.isEmpty();
+}
+
+/// 联表输出别名：小写字母/数字/下划线，且不能以数字开头（前端按 row.alias 点访问）
+static bool validJoinAliasName(const QString &alias) {
+  static const QRegularExpression pattern(QStringLiteral("^[a-z_][a-z0-9_]*$"));
+  return pattern.match(alias).hasMatch();
 }
 
 QString createDdlText(const QString &tableName, const QString &tableComment,
@@ -440,6 +445,11 @@ bool validateCrossRefs(const JsonTableTable &table, const JsonTableConfig &confi
   for (const auto &c : cols) {
     if (colNames.contains(c.name)) return fail(QStringLiteral("列名 '%1' 重复").arg(c.name));
     colNames.insert(c.name);
+  }
+  // 多语言平铺字段集（联表别名不能与其重名：两者都会作为列表字段出现）
+  QSet<QString> i18nFieldSet;
+  if (table.i18n.isEnabled()) {
+    for (const QString &f : table.i18n.fieldNames()) i18nFieldSet.insert(f);
   }
 
   // 表名与同文件其它表重复（生成期同名表会被跳过并报错）
@@ -509,11 +519,19 @@ bool validateCrossRefs(const JsonTableTable &table, const JsonTableConfig &confi
           c.filter != QStringLiteral("eq"))
         return fail(
             QStringLiteral("联表 '%1' 输出列 '%2' 的 filter 仅支持 like/eq").arg(j.table, c.col));
-      const QString alias = j.table + QLatin1Char('_') + c.col;
+      QString alias = c.alias.trimmed();
+      if (alias.isEmpty()) alias = j.table + QLatin1Char('_') + c.col;
+      if (!validJoinAliasName(alias))
+        return fail(QStringLiteral("联表 '%1' 输出列 '%2' 的别名 '%3' 不合法（小写字母/数字/"
+                                   "下划线，且不以数字开头）")
+                        .arg(j.table, c.col, alias));
       if (joinAliases.contains(alias))
         return fail(QStringLiteral("联表输出别名 '%1' 重复").arg(alias));
       if (colNames.contains(alias))
-        return fail(QStringLiteral("联表输出别名 '%1' 与主表列名冲突").arg(alias));
+        return fail(QStringLiteral("联表输出别名 '%1' 与主表列名冲突，请在联表页指定其他输出别名")
+                        .arg(alias));
+      if (i18nFieldSet.contains(alias))
+        return fail(QStringLiteral("联表输出别名 '%1' 与多语言平铺字段冲突").arg(alias));
       joinAliases.insert(alias);
     }
   }
@@ -559,10 +577,6 @@ bool validateCrossRefs(const JsonTableTable &table, const JsonTableConfig &confi
   // ── 字段呈现统一表格 → 三视图（交叉校验基于收集产物）──
   // i18n 平铺字段集（仅列表列可引用：后端 fillI18n 平铺后响应含同名字段；
   // 查询/排序仍拒绝——翻译文本跨表查询第一版不支持）
-  QSet<QString> i18nFieldSet;
-  if (table.i18n.isEnabled()) {
-    for (const QString &f : table.i18n.fieldNames()) i18nFieldSet.insert(f);
-  }
   const JsonTableTable &view = table;
   for (const auto &c : view.selCols) {
     if (i18nFieldSet.contains(c.ref)) continue;  // i18n 平铺列（列表展示合法）

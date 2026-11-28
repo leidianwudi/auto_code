@@ -5,8 +5,12 @@
 #include <QEventLoop>
 #include <QLineEdit>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QJsonArray>
+#include <QLabel>
 #include <QTableWidget>
+#include <QTabWidget>
+#include <QToolButton>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTimer>
@@ -28,6 +32,7 @@
 #include "src/util/common/util_json.h"
 #include "src/util/ui/code/code_editor.h"
 #include "src/util/ui/code/code_visual_sync_widget.h"
+#include "src/util/ui/component/aui_code_tab_bar.h"
 #include "src/util/ui/setting_store.h"
 
 namespace {
@@ -175,6 +180,126 @@ void testAdminPageCustomSave() {
   CHECK(!standard.contains("switchField"));
 }
 
+/// 字段设置：Tabs 分组、自动推导提示、列表开关归并、按数据库类型过滤控件。
+void testViewFieldDialogRefactor() {
+  ViewFieldConfigDialog dialog(QStringLiteral("value"), false);
+  dialog.setMysqlType(QStringLiteral("int(11)"));
+  JsonTableSelCol sc;
+  JsonTableEditCol ec;
+  dialog.setCurrent(sc, ec);
+
+  auto *type = dialog.findChild<QLabel *>(QStringLiteral("field_mysqlType"));
+  CHECK(type != nullptr && type->text() == QStringLiteral("int(11)"));
+  auto *tabs = dialog.findChild<QTabWidget *>(QStringLiteral("field_tabs"));
+  CHECK(tabs != nullptr && tabs->count() == 3);
+  auto *tabBar = qobject_cast<AuiCodeTabBar *>(tabs ? tabs->tabBar() : nullptr);
+  CHECK(tabBar != nullptr && !tabBar->showCloseButton());
+  auto *editTab = dialog.findChild<QWidget *>(QStringLiteral("field_editTab"));
+  CHECK(editTab != nullptr && tabs && tabs->isTabVisible(tabs->indexOf(editTab)));
+  auto *summary = dialog.findChild<QLabel *>(QStringLiteral("field_summary"));
+  CHECK(summary != nullptr && summary->text().contains(QStringLiteral("编辑：数字输入")));
+  auto *listHint = dialog.findChild<QLabel *>(QStringLiteral("field_listHint"));
+  auto *widgetHint = dialog.findChild<QLabel *>(QStringLiteral("field_widgetHint"));
+  CHECK(listHint != nullptr && listHint->text() == QStringLiteral("自动 → 文本"));
+  CHECK(widgetHint != nullptr &&
+        widgetHint->text().startsWith(QStringLiteral("自动 → 数字输入")));
+  auto *widget = dialog.findChild<QComboBox *>(QStringLiteral("field_widget"));
+  CHECK(widget != nullptr && widget->findData(QStringLiteral("number")) >= 0);
+  CHECK(widget != nullptr && widget->findData(QStringLiteral("image")) < 0);
+  // 非图片列表：高级设置只有缩略图，入口整体隐藏；物理列取值域常显。
+  auto *listAdvanced = dialog.findChild<QToolButton *>(QStringLiteral("field_listAdvanced"));
+  CHECK(listAdvanced != nullptr && !listAdvanced->isVisibleTo(&dialog));
+  auto *domainTab = dialog.findChild<QWidget *>(QStringLiteral("field_domainTab"));
+  CHECK(domainTab != nullptr && tabs && tabs->isTabVisible(tabs->indexOf(domainTab)));
+
+  // 图片呈现方式：高级设置入口出现（缩略图可配）。
+  JsonTableSelCol imageCol;
+  imageCol.displayType = QStringLiteral("image");
+  JsonTableEditCol imageEdit;
+  dialog.setCurrent(imageCol, imageEdit);
+  CHECK(listAdvanced->isVisibleTo(&dialog));
+
+  // 下拉控件：取值域 Tab 出现，供配置数据源。
+  ViewFieldConfigDialog selectDlg(QStringLiteral("kind"), false);
+  selectDlg.setMysqlType(QStringLiteral("varchar(32)"));
+  JsonTableSelCol selectCol;
+  JsonTableEditCol selectEdit;
+  selectEdit.widget = QStringLiteral("select");
+  selectDlg.setCurrent(selectCol, selectEdit);
+  auto *selectTabs = selectDlg.findChild<QTabWidget *>(QStringLiteral("field_tabs"));
+  auto *selectDomainTab = selectDlg.findChild<QWidget *>(QStringLiteral("field_domainTab"));
+  CHECK(selectTabs != nullptr && selectDomainTab != nullptr &&
+        selectTabs->isTabVisible(selectTabs->indexOf(selectDomainTab)));
+
+  // 列表开关归并到「呈现方式」：displayType 留空，switchEditable 承接。
+  ViewFieldConfigDialog switchDlg(QStringLiteral("enable"), false);
+  switchDlg.setMysqlType(QStringLiteral("tinyint(1)"));
+  JsonTableSelCol switchCol;
+  JsonTableEditCol switchEdit;
+  switchEdit.switchEditable = true;
+  switchDlg.setCurrent(switchCol, switchEdit);
+  switchDlg.fillListResult(&switchCol);
+  switchDlg.fillEditResult(&switchEdit);
+  CHECK(switchCol.displayType.isEmpty());
+  CHECK(switchEdit.switchEditable);
+  auto *switchListHint = switchDlg.findChild<QLabel *>(QStringLiteral("field_listHint"));
+  CHECK(switchListHint != nullptr && switchListHint->text() == QStringLiteral("指定 → 开关"));
+
+  // 字符串列不能选数字控件，但保留文本/多行/图片/上传。
+  ViewFieldConfigDialog textDlg(QStringLiteral("name"), false);
+  textDlg.setMysqlType(QStringLiteral("varchar(64)"));
+  JsonTableSelCol textCol;
+  JsonTableEditCol textEdit;
+  textEdit.widget = QStringLiteral("input");
+  textDlg.setCurrent(textCol, textEdit);
+  auto *textWidget = textDlg.findChild<QComboBox *>(QStringLiteral("field_widget"));
+  CHECK(textWidget != nullptr && textWidget->findData(QStringLiteral("number")) < 0);
+  CHECK(textWidget != nullptr && textWidget->findData(QStringLiteral("textarea")) >= 0);
+  auto *textWidgetHint = textDlg.findChild<QLabel *>(QStringLiteral("field_widgetHint"));
+  CHECK(textWidgetHint != nullptr && textWidgetHint->text() == QStringLiteral("指定 → 单行文本"));
+
+  // 表内枚举列：自动推导为标签/下拉，不再提供会冲突的输入控件。
+  ViewFieldConfigDialog enumDlg(QStringLiteral("status"), false);
+  enumDlg.setMysqlType(QStringLiteral("tinyint(1)"), true);
+  JsonTableSelCol enumCol;
+  JsonTableEditCol enumEdit;
+  enumDlg.setCurrent(enumCol, enumEdit);
+  auto *enumWidget = enumDlg.findChild<QComboBox *>(QStringLiteral("field_widget"));
+  CHECK(enumWidget != nullptr && enumWidget->findData(QStringLiteral("input")) < 0);
+  auto *enumSummary = enumDlg.findChild<QLabel *>(QStringLiteral("field_summary"));
+  CHECK(enumSummary != nullptr && enumSummary->text().contains(QStringLiteral("列表：标签")));
+  auto *enumListHint = enumDlg.findChild<QLabel *>(QStringLiteral("field_listHint"));
+  CHECK(enumListHint != nullptr &&
+        enumListHint->text() == QStringLiteral("自动 → 标签（表内枚举）"));
+  auto *enumTabs = enumDlg.findChild<QTabWidget *>(QStringLiteral("field_tabs"));
+  auto *enumDomainTab = enumDlg.findChild<QWidget *>(QStringLiteral("field_domainTab"));
+  CHECK(enumTabs != nullptr && enumDomainTab != nullptr &&
+        !enumTabs->isTabVisible(enumTabs->indexOf(enumDomainTab)));
+
+  // 多语言平铺字段没有物理类型：只保留列表展示，编辑/取值域和 Tab 栏隐藏。
+  ViewFieldConfigDialog i18nDlg(QStringLiteral("title"), false);
+  i18nDlg.setMysqlType(QString());
+  JsonTableSelCol i18nCol;
+  JsonTableEditCol i18nEdit;
+  i18nDlg.setCurrent(i18nCol, i18nEdit);
+  auto *i18nTabs = i18nDlg.findChild<QTabWidget *>(QStringLiteral("field_tabs"));
+  auto *i18nEditTab = i18nDlg.findChild<QWidget *>(QStringLiteral("field_editTab"));
+  auto *i18nDomainTab = i18nDlg.findChild<QWidget *>(QStringLiteral("field_domainTab"));
+  CHECK(i18nTabs != nullptr && i18nEditTab != nullptr && i18nDomainTab != nullptr);
+  CHECK(i18nTabs && !i18nTabs->isTabVisible(i18nTabs->indexOf(i18nEditTab)));
+  CHECK(i18nTabs && !i18nTabs->isTabVisible(i18nTabs->indexOf(i18nDomainTab)));
+  CHECK(i18nTabs && !i18nTabs->tabBar()->isVisibleTo(&i18nDlg));
+
+  // 联表列只有列表展示 Tab。
+  ViewFieldConfigDialog joinDlg(QStringLiteral("shop_name"), true);
+  joinDlg.setMysqlType(QStringLiteral("varchar(64)"));
+  JsonTableSelCol joinCol;
+  JsonTableEditCol joinEdit;
+  joinDlg.setCurrent(joinCol, joinEdit);
+  auto *joinTabs = joinDlg.findChild<QTabWidget *>(QStringLiteral("field_tabs"));
+  CHECK(joinTabs != nullptr && joinTabs->count() == 1);
+}
+
 /// 字段设置列宽：非预设宽度（如 260）不能被下拉预设 60 覆盖，空值保持自适应。
 void testViewFieldWidthRoundTrip() {
   ViewFieldConfigDialog dialog("desc", false);
@@ -190,6 +315,89 @@ void testViewFieldWidthRoundTrip() {
   sc.width = 0;
   dialog.setCurrent(sc, ec);
   CHECK(dialog.width() == 0);
+}
+
+/// 联表输出别名自动继承目标表表内枚举：设计器 ⚙ 标记与生成端 aliasMeta 一致。
+void testJoinAliasEnumFlag() {
+  QTemporaryDir dir;
+  CHECK(dir.isValid());
+  // 目标表 A：列 a 配置表内枚举
+  CHECK(UtilFile::writeUtf8(
+      dir.filePath(QStringLiteral("A.jsontable")),
+      QStringLiteral("{table:{tableName:'A',columns:[{name:'a',mysqlType:'varchar(32)'}],"
+                     "enums:[{column:'a',items:[{key:'on',label:'启用',value:'1'}]}]}}")));
+  // B 表：joinTables 输出 A.a（别名 A_a），自身无枚举
+  const QString bText = QStringLiteral(
+      "{table:{tableName:'B',columns:[{name:'id',mysqlType:'bigint'}],"
+      "joinTables:[{table:'A',cols:[{col:'a'}]}]}}");
+  auto bTable = JsonTableTable::fromJsonObject(
+      UtilJson::fromJson(bText).object().value(QStringLiteral("table")).toObject());
+  JsonTableDesigner designer(bTable, {}, dir.filePath(QStringLiteral("B.jsontable")));
+  auto *presentation = designer.findChild<QTableWidget *>("fieldPresentation");
+  CHECK(presentation != nullptr);
+  if (!presentation) return;
+  int aliasRow = -1;
+  int idRow = -1;
+  for (int row = 0; row < presentation->rowCount(); ++row) {
+    const QString ref = presentation->item(row, 0)->text();
+    if (ref == QStringLiteral("A_a")) aliasRow = row;
+    if (ref == QStringLiteral("id")) idRow = row;
+  }
+  CHECK(aliasRow >= 0);
+  CHECK(idRow >= 0);
+  if (aliasRow < 0 || idRow < 0) return;
+  CHECK(presentation->item(aliasRow, 0)->data(Qt::UserRole + 29).toInt() == 1);
+  CHECK(presentation->item(idRow, 0)->data(Qt::UserRole + 29).toInt() == 0);
+
+  // 显式输出别名：字段呈现 ref = 自定义别名，枚举继承照常生效
+  const QString b2Text = QStringLiteral(
+      "{table:{tableName:'B2',columns:[{name:'id',mysqlType:'bigint'}],"
+      "joinTables:[{table:'A',cols:[{col:'a',alias:'a_custom'}]}]}}");
+  auto b2Table = JsonTableTable::fromJsonObject(
+      UtilJson::fromJson(b2Text).object().value(QStringLiteral("table")).toObject());
+  JsonTableDesigner designer2(b2Table, {}, dir.filePath(QStringLiteral("B2.jsontable")));
+  auto *presentation2 = designer2.findChild<QTableWidget *>("fieldPresentation");
+  CHECK(presentation2 != nullptr);
+  int customRow = -1;
+  if (presentation2) {
+    for (int row = 0; row < presentation2->rowCount(); ++row) {
+      if (presentation2->item(row, 0)->text() == QStringLiteral("a_custom")) customRow = row;
+    }
+  }
+  CHECK(customRow >= 0);
+  if (customRow >= 0)
+    CHECK(presentation2->item(customRow, 0)->data(Qt::UserRole + 29).toInt() == 1);
+}
+
+/// 联表输出别名：显式 alias 可避开主表列名冲突，冲突配置必须被校验拒绝。
+void testJoinAliasValidation() {
+  const QString aText = QStringLiteral(
+      "{table:{tableName:'ta',tableComment:'A表',columns:[{name:'a',mysqlType:'varchar(32)',"
+      "comment:'A列'}]}}");
+  const QString bText = QStringLiteral(
+      "{table:{tableName:'tb',tableComment:'B表',columns:[{name:'id',mysqlType:'bigint',"
+      "comment:'主键'},{name:'a',mysqlType:'varchar(32)',comment:'A列'}],"
+      "joinTables:[{table:'ta',on:['a','a'],cols:[{col:'a',alias:'a'}]}]}}");
+  auto aTable = JsonTableTable::fromJsonObject(
+      UtilJson::fromJson(aText).object().value(QStringLiteral("table")).toObject());
+  auto bTable = JsonTableTable::fromJsonObject(
+      UtilJson::fromJson(bText).object().value(QStringLiteral("table")).toObject());
+  CHECK(bTable.joinTables.size() == 1);
+  CHECK(bTable.joinTables.value(0).cols.value(0).alias == QStringLiteral("a"));
+  // 模型 round-trip 保真显式别名
+  const JsonTableJoinCol round =
+      JsonTableJoinCol::fromJsonObject(bTable.joinTables.value(0).cols.value(0).toJsonObject());
+  CHECK(round == bTable.joinTables.value(0).cols.value(0));
+
+  JsonTableConfig cfg;
+  cfg.tables = {aTable, bTable};
+  QString err;
+  CHECK(!TableSchema::validateCrossRefs(bTable, cfg, cfg.tables, bTable.tableName, &err));
+  CHECK(err.contains(QStringLiteral("冲突")));
+
+  // 指定唯一别名后校验通过
+  bTable.joinTables[0].cols[0].alias = QStringLiteral("a_joined");
+  CHECK(TableSchema::validateCrossRefs(bTable, cfg, cfg.tables, bTable.tableName, &err));
 }
 
 /// 真实字段修改仍需写回；同值信号及防抖内改回原值不能制造修改标记。
@@ -335,7 +543,10 @@ int main(int argc, char **argv) {
   testUnchangedVisualContent();
   testSchemaFieldEditing();
   testAdminPageCustomSave();
+  testViewFieldDialogRefactor();
   testViewFieldWidthRoundTrip();
+  testJoinAliasEnumFlag();
+  testJoinAliasValidation();
   testPhysicalColumnMetadata();
   for (const QString &suffix :
        {QStringLiteral(".jsonvue"), QStringLiteral(".jsonsource"), QStringLiteral(".jsonupload"),

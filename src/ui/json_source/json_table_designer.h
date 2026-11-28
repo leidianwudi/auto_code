@@ -128,7 +128,7 @@ private:
   /// 用 m_joinDrafts[声明行].cols 重建输出字段表格（主从联动，对齐表内枚举模式）
   void fillJoinCols(int row);
   /// 追加一行输出字段（字段名常驻下拉 + 显示标题文本）
-  void appendJoinColRow(const QString &col, const QString &label);
+  void appendJoinColRow(const QString &col, const QString &alias, const QString &label);
   /// 从输出字段表格收集当前声明行的输出列（跳过字段名为空的行）
   QVector<JsonTableJoinCol> collectJoinCols() const;
   /// 被联表输出列候选（目标表列名；跨文件项目表，空表名/未知表返回空）

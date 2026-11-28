@@ -11,6 +11,18 @@ export function validPhysicalName(name: String, tableName: Bool): Bool {
   return true;
 }
 
+/// 联表输出别名：小写字母/数字/下划线，且不能以数字开头（前端按 row.alias 点访问）。
+export function validJoinAlias(name: String): Bool {
+  if (name == null || name.length == 0) { return false; }
+  let first: String = name.substring(0, 1);
+  if ("abcdefghijklmnopqrstuvwxyz_".indexOf(first) < 0) { return false; }
+  let allowed: String = "abcdefghijklmnopqrstuvwxyz0123456789_";
+  for (let i = 0; i < name.length; i = i + 1) {
+    if (allowed.indexOf(name[i]) < 0) { return false; }
+  }
+  return true;
+}
+
 /// 先校验整张表，再允许写代码或生成DDL；错误明确到具体表和列。
 export function validateTableSchema(table: Object): Bool {
   let name: String = table["tableName"];
@@ -76,6 +88,53 @@ export function validateTableSchema(table: Object): Bool {
           printError("翻译字段名称无效或重复：" + transName + "." + fn); valid = false;
         }
         translated[fn] = true;
+      }
+    }
+  }
+  // 联表输出别名：格式/唯一，且不能与主表列或多语言平铺字段重名
+  //（两者都会成为列表/查询字段名）；目标表是否存在由生成端联表解析负责
+  let joinSpecs: Object[] = table["joinTables"];
+  if (joinSpecs != null) {
+    let i18nNames: Object = {};
+    let i18nCfg: Object = table["i18n"];
+    if (i18nCfg != null) {
+      let i18nFields: Object[] = i18nCfg["fields"];
+      if (i18nFields != null) {
+        for (ifld in i18nFields) {
+          let ifName: String = ifld["name"];
+          if (ifName != null && ifName != "") { i18nNames[ifName] = true; }
+        }
+      }
+    }
+    let aliasSeen: Object = {};
+    for (js in joinSpecs) {
+      let jtName: String = js["table"];
+      if (jtName == null) { jtName = ""; }
+      let jcos: Object[] = js["cols"];
+      if (jcos == null) { continue; }
+      for (jco in jcos) {
+        let jcol: String = jco["col"];
+        if (jcol == null || jcol == "") { continue; }
+        let jAlias: String = jco["alias"];
+        if (jAlias == null || jAlias == "") { jAlias = jtName + "_" + jcol; }
+        if (!validJoinAlias(jAlias)) {
+          printError("联表输出别名不合法（只允许小写字母/数字/下划线，且不以数字开头）：" +
+                     name + "." + jAlias);
+          valid = false;
+        }
+        if (seen[jAlias] == true) {
+          printError("联表输出别名与主表列名冲突：" + name + "." + jAlias);
+          valid = false;
+        }
+        if (i18nNames[jAlias] == true) {
+          printError("联表输出别名与多语言平铺字段冲突：" + name + "." + jAlias);
+          valid = false;
+        }
+        if (aliasSeen[jAlias] == true) {
+          printError("联表输出别名重复：" + name + "." + jAlias);
+          valid = false;
+        }
+        aliasSeen[jAlias] = true;
       }
     }
   }

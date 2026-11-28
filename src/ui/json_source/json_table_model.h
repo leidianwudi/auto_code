@@ -113,6 +113,7 @@ inline constexpr const char *kJoinSpecType = "type";    ///< JOIN 类型：LEFT/
 inline constexpr const char *kJoinSpecOn = "on";        ///< [主表列, 被联表列]（表名由规格自带）
 inline constexpr const char *kJoinSpecCol = "col";      ///< 输出列名（∈ 被联表列）
 inline constexpr const char *kJoinSpecFilter = "filter";  ///< 筛选：like/eq/""（空=只输出）
+inline constexpr const char *kJoinSpecAlias = "alias";  ///< 输出别名（空=表名_列名）
 // 编辑表单（jsonvue 一致键名；editCols[] 元素级）
 inline constexpr const char *kEditEditable = "editEditable";  ///< 表单内可编辑（false=只读展示）
 inline constexpr const char *kWritable = "writable";  ///< 进写参数 InUpd（false=只读展示但不写入）
@@ -251,6 +252,7 @@ struct JsonTableJoin {
 struct JsonTableJoinCol {
   QString col;     ///< 联表输出列名（∈ 被联表列）
   QString filter;  ///< 筛选：like=模糊 / eq=精确 / ""=只输出不筛
+  QString alias;   ///< 输出别名（空 = 表名_列名；显式指定可避开主表列名冲突）
   QString label;   ///< 显示标题（空 = 生成侧回退目标列注释/列名；单一来源=联表页）
 
   QJsonObject toJsonObject() const;
@@ -263,7 +265,8 @@ struct JsonTableJoinCol {
  * @brief 联表查询声明（joinTables[] 元素，新格式；生成端产出 QuerySpec 联表流水线）
  *
  * 声明式 JOIN：被联表名 + ON 两列（on[0]=主表列, on[1]=被联表列，表名由
- * QuerySpec/Join 自带不重复写）+ 输出列（别名固定 = 表名_列名，前端统一字段名）。
+ * QuerySpec/Join 自带不重复写）+ 输出列（别名默认 = 表名_列名，可用
+ * cols[].alias 覆盖，前端统一字段名）。
  * 关系基数（1:1 / 多:1）由 on 两列语义自然表达，不单独建模。
  */
 struct JsonTableJoinSpec {

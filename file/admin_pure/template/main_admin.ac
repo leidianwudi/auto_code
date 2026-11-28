@@ -468,11 +468,15 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
   let selMeta: Object = {};
   for (sc2 in selColCfgs) {
     if (sc2["ref"] == null || sc2["ref"] == "" || sc2["ref"].indexOf(".") > 0) { continue; }
+    // 旧版 selCols.tagItems 手工映射已废弃：列表标签/下拉统一取表内枚举 enums
+    if (sc2["tagItems"] != null && sc2["tagItems"].length > 0) {
+      printLog("提示：列表列 '" + sc2["ref"] +
+               "' 的 selCols.tagItems 已废弃，统一使用表内枚举 enums");
+    }
     selMeta[sc2["ref"]] = { label: sc2["label"], width: sc2["width"],
                             displayType: sc2["displayType"],
                             listThumbWidth: sc2["listThumbWidth"],
-                            listThumbHeight: sc2["listThumbHeight"],
-                            tagItems: (sc2["tagItems"] != null ? sc2["tagItems"] : []) };
+                            listThumbHeight: sc2["listThumbHeight"] };
   }
   // ── 编辑视图（editCols：显式列出=进表单）──
   let editColCfgs: Object[] = [];
@@ -672,12 +676,6 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
         if (meta["displayType"] != null && meta["displayType"] != "") {
           cn["displayType"] = meta["displayType"];
         }
-        // 方案 1：selCols 手工标签映射（优先级最高，覆盖表内枚举/取值域/
-        // displayType 推导；映射隐含 tag 展示）
-        if (meta["tagItems"] != null && meta["tagItems"].length > 0) {
-          cn["displayType"] = "tag";
-          cn["tagItems"] = meta["tagItems"];
-        }
         if (meta["listThumbWidth"] != null && meta["listThumbWidth"] > 0) {
           cn["listThumbWidth"] = meta["listThumbWidth"];
         }
@@ -726,10 +724,10 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
     });
   }
 
-  // 联表输出别名（joinTables 新格式）→ 虚拟列（dataName=表名_列名，与后端
-  // EnXxxView 返回键对齐；编辑列勾选时进编辑表单但固定只读展示（editEditable=false）；
-  // label>目标列标题(title)>目标列注释>别名；tag 样式 = selCols 手工映射（方案 1）
-  // 优先，否则自动继承目标表内枚举（方案 3，零配置））
+  // 联表输出别名（joinTables 新格式）→ 虚拟列（dataName=输出别名，空 = 表名_列名，
+  // 与后端 EnXxxView 返回键对齐；编辑列勾选时进编辑表单但固定只读展示
+  //（editEditable=false）；label>目标列标题(title)>目标列注释>别名；
+  // tag 样式 = 自动继承目标表内枚举（零配置））
   for (ar in selAliasRefs) {
     let am: Object = aliasMeta != null ? aliasMeta[ar] : null;
     // 标题链：联表页显示标题（am.title，单一来源）> selCols.label（手写配置）
@@ -748,12 +746,10 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
     // 编辑列勾选（editCols 命中别名）→ 编辑表单内只读展示
     let aec: Object = editColMap[ar];
     let aEditVisible: Bool = (aec != null && aec["visible"] != false);
-    // ── tag 样式推导（方案 1 手工映射优先，方案 3 自动继承兜底）──
+    // ── tag 样式推导：目标表内枚举自动继承 ──
     let vTagItems: Object[] = [];
     let vMeta: Object = selMeta[ar];
-    if (vMeta != null && vMeta["tagItems"] != null && vMeta["tagItems"].length > 0) {
-      vTagItems = vMeta["tagItems"];
-    } else if (am != null && am["enumItems"] != null && am["enumItems"].length > 0) {
+    if (am != null && am["enumItems"] != null && am["enumItems"].length > 0) {
       let eis: Object[] = am["enumItems"];
       let eisLen = eis.length;
       for (let eix = 0; eix < eisLen; eix = eix + 1) {
@@ -761,6 +757,22 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
                            color: tagColorOf(eix) });
       }
     }
+    // ── 列表配置（⚙ 字段设置对输出别名行同样生效；未指定呈现方式时按继承枚举）──
+    let vDisplay: String = "";
+    let vWidth: Int = 0;
+    let vThumbW: Int = 0;
+    let vThumbH: Int = 0;
+    if (vMeta != null) {
+      if (vMeta["displayType"] != null) { vDisplay = vMeta["displayType"]; }
+      if (vMeta["width"] != null && vMeta["width"] > 0) { vWidth = vMeta["width"]; }
+      if (vMeta["listThumbWidth"] != null && vMeta["listThumbWidth"] > 0) {
+        vThumbW = vMeta["listThumbWidth"];
+      }
+      if (vMeta["listThumbHeight"] != null && vMeta["listThumbHeight"] > 0) {
+        vThumbH = vMeta["listThumbHeight"];
+      }
+    }
+    if (vDisplay == "" && vTagItems.length > 0) { vDisplay = "tag"; }
     cols.push({
       dataName: ar,
       queryName: label2,
@@ -771,14 +783,16 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
       switchEditable: false,
       required: false,
       formSpan: 12,
-      columnWidth: 0,
+      columnWidth: vWidth,
       maxlength: 0,
       placeholder: "",
       textareaRows: 4,
       boolTrueText: "启用",
       boolFalseText: "禁用",
       tagItems: vTagItems,
-      displayType: (vTagItems.length > 0 ? "tag" : ""),
+      displayType: vDisplay,
+      listThumbWidth: vThumbW,
+      listThumbHeight: vThumbH,
       // 共享枚举字典的查表键：目标表名.列名（如 user.is_real_name），
       // 与后端 enumreg 注册名一致；无枚举映射时为空
       enumKey: (vTagItems.length > 0 && am != null
@@ -1366,9 +1380,10 @@ export function generateAdminMain(params: Object): Void {
     }
   }
 
-  // ── 联表输出别名上下文（joinTables 新格式）：别名 → {comment, mysqlType, ──
-  //    title, enumItems}。目标表按 tableName 定位；与旧 joinContext 并存。
-  //    title/enumItems 供方案 3 自动继承：目标列标题补显示名、目标表内枚举
+  // ── 联表输出别名上下文（joinTables 新格式）：输出别名 → {comment, mysqlType, ──
+  //    title, enumItems}。输出别名 = cols[].alias（空 = 表名_列名），与后端一致；
+  //    目标表按 tableName 定位；与旧 joinContext 并存。
+  //    title/enumItems 供自动继承：目标列标题补显示名、目标表内枚举
   //    推导列表 tag 样式（零配置），均取自目标表配置，无额外解析
   let aliasMeta: Object = {};
   for (let jz = 0; jz < tblLen; jz = jz + 1) {
@@ -1413,9 +1428,12 @@ export function generateAdminMain(params: Object): Void {
             break;
           }
         }
-        aliasMeta[jtName + "_" + cn] = { comment: cm, mysqlType: mt, title: tt,
-                                         enumItems: jtEnums[cn],
-                                         enumOwner: jtName, enumCol: cn };
+        // 输出别名：cols[].alias 显式优先，空 = 表名_列名（与后端/设计器一致）
+        let outAlias: String = cs["alias"];
+        if (outAlias == null || outAlias == "") { outAlias = jtName + "_" + cn; }
+        aliasMeta[outAlias] = { comment: cm, mysqlType: mt, title: tt,
+                                enumItems: jtEnums[cn],
+                                enumOwner: jtName, enumCol: cn };
       }
     }
   }

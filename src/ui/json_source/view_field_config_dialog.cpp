@@ -14,12 +14,17 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QSpinBox>
+#include <QTabBar>
+#include <QTabWidget>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 #include "json_source_finder.h"
 #include "json_upload_model.h"
 #include "src/ui/common/domain_source_service.h"
+#include "src/util/ui/component/aui_code_tab_bar.h"
 #include "src/ui/json_vue/combobox_config_dialog.h"
 #include "src/ui/json_vue/json_vue_model.h"
 #include "src/util/ui/component/aui_button.h"
@@ -55,6 +60,103 @@ protected:
   }
 };
 
+// ── 数据库类型分类（与 main_admin.ac 的 widgetFromMysqlType 保持一致）──────
+QString lowerType(const QString &t) { return t.trimmed().toLower(); }
+
+bool isBooleanType(const QString &t) {
+  const QString s = lowerType(t);
+  return s.contains(QStringLiteral("tinyint(1)")) || s == QStringLiteral("bool") ||
+         s == QStringLiteral("boolean");
+}
+
+bool isDateType(const QString &t) {
+  const QString s = lowerType(t);
+  return s.contains(QStringLiteral("date")) || s.contains(QStringLiteral("time"));
+}
+
+bool isFloatType(const QString &t) {
+  const QString s = lowerType(t);
+  return s.contains(QStringLiteral("decimal")) || s.contains(QStringLiteral("numeric")) ||
+         s.contains(QStringLiteral("float")) || s.contains(QStringLiteral("double"));
+}
+
+bool isNumericType(const QString &t) {
+  const QString s = lowerType(t);
+  return s.contains(QStringLiteral("int")) || isFloatType(s);
+}
+
+bool isStringType(const QString &t) {
+  const QString s = lowerType(t);
+  return s.isEmpty() || s.contains(QStringLiteral("char")) || s.contains(QStringLiteral("text")) ||
+         s.contains(QStringLiteral("json")) || s.contains(QStringLiteral("enum")) ||
+         s.contains(QStringLiteral("set"));
+}
+
+QString inferWidgetFromType(const QString &type) {
+  if (isBooleanType(type)) return QStringLiteral("boolean");
+  const QString s = lowerType(type);
+  if (s.contains(QStringLiteral("datetime")) || s.contains(QStringLiteral("timestamp"))) {
+    return QStringLiteral("date");
+  }
+  if (isNumericType(s)) return QStringLiteral("number");
+  return QStringLiteral("input");
+}
+
+QString widgetLabel(const QString &w) {
+  if (w.isEmpty()) return QStringLiteral("自动");
+  if (w == QStringLiteral("input")) return QStringLiteral("单行文本");
+  if (w == QStringLiteral("textarea")) return QStringLiteral("多行文本");
+  if (w == QStringLiteral("select")) return QStringLiteral("下拉选择");
+  if (w == QStringLiteral("date")) return QStringLiteral("日期选择");
+  if (w == QStringLiteral("number") || w == QStringLiteral("int") || w == QStringLiteral("float") ||
+      w == QStringLiteral("money")) {
+    return QStringLiteral("数字输入");
+  }
+  if (w == QStringLiteral("image")) return QStringLiteral("图片");
+  if (w == QStringLiteral("upload")) return QStringLiteral("上传");
+  if (w == QStringLiteral("boolean")) return QStringLiteral("开关");
+  return w;
+}
+
+QString listModeLabel(const QString &mode) {
+  if (mode == QStringLiteral("text")) return QStringLiteral("文本");
+  if (mode == QStringLiteral("switch")) return QStringLiteral("开关");
+  if (mode == QStringLiteral("money")) return QStringLiteral("金额");
+  if (mode == QStringLiteral("tag")) return QStringLiteral("标签");
+  if (mode == QStringLiteral("image")) return QStringLiteral("图片");
+  return QStringLiteral("自动");
+}
+
+/// 字段设置专用 Tab 容器：QTabWidget::setTabBar 是 protected，
+/// 通过子类注入项目通用 AuiCodeTabBar（VSCode 风格自绘，与编辑器/底部面板同款）。
+class FieldTabWidget : public QTabWidget {
+public:
+  explicit FieldTabWidget(QWidget *parent = nullptr) : QTabWidget(parent) {
+    auto *bar = new AuiCodeTabBar(this);
+    bar->setObjectName(QStringLiteral("field_tabBar"));
+    bar->setShowCloseButton(false);
+    bar->setTabHeight(28);
+    setTabBar(bar);
+  }
+};
+
+QToolButton *makeAdvancedButton(QWidget *parent) {
+  auto *btn = new QToolButton(parent);
+  btn->setCheckable(true);
+  btn->setAutoRaise(true);
+  btn->setToolButtonStyle(Qt::ToolButtonTextOnly);
+  btn->setText(QStringLiteral("高级设置 ▸"));
+  return btn;
+}
+
+void wireAdvanced(QToolButton *btn, QWidget *box) {
+  box->setVisible(false);
+  QObject::connect(btn, &QToolButton::toggled, box, [btn, box](bool on) {
+    box->setVisible(on);
+    btn->setText(on ? QStringLiteral("高级设置 ▾") : QStringLiteral("高级设置 ▸"));
+  });
+}
+
 }  // namespace
 
 // ════════════════════════════════════════════════════════════
@@ -67,123 +169,108 @@ ViewFieldConfigDialog::ViewFieldConfigDialog(const QString &ref, bool isJoinRow,
 }
 
 void ViewFieldConfigDialog::setupUI() {
-  // 对齐 jsonvue 字段设置面板：宽度 520（长标签行不被挤压）
-  setMinimumWidth(520);
+  // 三分区 Tab：字段头常显，列表/编辑/取值域各自独立，避免 20+ 行纵向堆叠。
+  setMinimumWidth(580);
   ConfigDialogFrame frame = beginConfigDialog(this, QStringLiteral("字段设置"),
-                                              QMargins(12, 10, 12, 10), 6);
-  m_form = new QFormLayout;
-  auto *form = m_form;
-  form->setContentsMargins(0, 0, 0, 0);
-  form->setSpacing(6);
-  // 标签右对齐（对齐 jsonvue）：控件列起始位置一致，标签长短不一不再参差
-  form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                                              QMargins(12, 10, 12, 10), 8);
 
-  // 字段名首行（对齐 jsonvue：面板围绕单字段属性展开，字段名常显）
+  auto *header = new QHBoxLayout;
   m_fieldNameLabel = new QLabel(m_ref, this);
   m_fieldNameLabel->setStyleSheet(QStringLiteral("font-weight: 600; font-size: 13px;"));
-  form->addRow(QStringLiteral("字段:"), m_fieldNameLabel);
+  m_typeLabel = new QLabel(this);
+  m_typeLabel->setObjectName(QStringLiteral("field_mysqlType"));
+  m_typeLabel->setStyleSheet(
+      QStringLiteral("color: %1; font-size: 12px;").arg(AuiStyle::mutedTextColor().name()));
+  header->addWidget(m_fieldNameLabel);
+  header->addSpacing(10);
+  header->addWidget(m_typeLabel);
+  header->addStretch();
+  frame.contentLayout->addLayout(header);
 
-  if (!m_isJoinRow) {
-    // ── 字段取值域（方案 B 中心化；类型简化为 未声明/数据源/远程接口）──
-    auto *domainSep = new QLabel(QStringLiteral("── 字段取值域 ──"), this);
-    domainSep->setAlignment(Qt::AlignCenter);
-    form->addRow(QString(), domainSep);
-    m_domainTypeCombo = AuiComboBox::create(this);
-    m_domainTypeCombo->addItem(QStringLiteral("未声明（无数据源）"), QString());
-    m_domainTypeCombo->addItem(QStringLiteral("数据源（.jsonsource / 全局枚举）"),
-                               QStringLiteral("source"));
-    m_domainTypeCombo->addItem(QStringLiteral("远程接口（手动 URL）"),
-                               QString::fromLatin1(JsonVueDomain::kRemote));
-    form->addRow(QStringLiteral("取值域类型:"), m_domainTypeCombo);
+  // 复用项目通用 VSCode 风格标签栏：与编辑器/底部面板同一套主题色与选中指示条，
+  // 不依赖 Windows 原生 QTabBar 绘制（原生风格会忽略文字颜色/主题）。
+  m_tabs = new FieldTabWidget(this);
+  m_tabs->setObjectName(QStringLiteral("field_tabs"));
+  m_tabs->setDocumentMode(true);
+  // 内容区与 AuiCodeTabBar 选中页同色（editor.background），避免选中 tab
+  // 与对话框 panel 背景出现一块色差；同时去掉设计器 QSS 可能继承来的 pane 边框。
+  m_tabs->setStyleSheet(
+      QStringLiteral("QTabWidget::pane { border: none; background: %1; }")
+          .arg(AuiStyle::editorBackground().name()));
+  frame.contentLayout->addWidget(m_tabs, 1);
 
-    m_domainSourceRow = new QWidget(this);
-    auto *domainSrcLay = new QHBoxLayout(m_domainSourceRow);
-    domainSrcLay->setContentsMargins(0, 0, 0, 0);
-    domainSrcLay->setSpacing(2);
-    domainSrcLay->addWidget(AuiButton::createHelpButton(QStringLiteral("数据源作用域"),
-                                                        jsonVueSourceScopeHelpText(),
-                                                        m_domainSourceRow));
-    m_domainSourceCombo = new AuiTreeCombo(this);
-    domainSrcLay->addWidget(m_domainSourceCombo, 1);
-    form->addRow(QStringLiteral("取值数据源:"), m_domainSourceRow);
+  buildListTab();
+  buildEditTab();
+  buildDomainTab();
 
-    // 远程源按钮：复用 ComboboxConfigDialog 配置 URL/字段/分页（与 jsonvue 同款）
-    m_domainUrlBtn = new QPushButton(QStringLiteral("配置远程数据源..."), this);
-    form->addRow(QStringLiteral("远程源:"), m_domainUrlBtn);
-    connect(m_domainUrlBtn, &QPushButton::clicked, this, [this]() {
-      ComboboxConfigDialog dlg(this);
-      dlg.setSearchRoot(m_searchRoot);
-      dlg.setSourceRef(m_domainSourceFile, m_domainSourceId);
-      dlg.setConfig(m_selectUrl, m_selectValueField, m_selectLabelField);
-      dlg.setPagedConfig(m_selectPaged, m_selectPageKey, m_selectPageSizeKey, m_selectPageSize,
-                         m_selectSearchTitle, m_selectSearchField, m_selectMethod);
-      if (dlg.exec() == QDialog::Accepted) {
-        m_domainSourceFile = dlg.sourceFile();
-        m_domainSourceId = dlg.sourceId();
-        m_selectUrl = dlg.url();
-        m_selectValueField = dlg.valueField();
-        m_selectLabelField = dlg.labelField();
-        m_selectPaged = dlg.paged();
-        m_selectPageKey = dlg.pageKey();
-        m_selectPageSizeKey = dlg.pageSizeKey();
-        m_selectPageSize = dlg.pageSize();
-        m_selectSearchTitle = dlg.searchTitle();
-        m_selectSearchField = dlg.searchField();
-        m_selectMethod = dlg.method();
-      }
-    });
-
-    m_domainPreviewLabel = new QLabel(this);
-    m_domainPreviewLabel->setStyleSheet(
-        QStringLiteral("color: %1; font-size: 12px;").arg(AuiStyle::mutedTextColor().name()));
-    form->addRow(QStringLiteral("选项预览:"), m_domainPreviewLabel);
-
-    // 选中数据源 → 更新缓存 + 预览
-    connect(m_domainSourceCombo, &AuiTreeCombo::itemSelected, this, [this](const QVariant &refVar) {
-      const QString ref = refVar.toString();
-      m_domainSourceFile.clear();
-      m_domainSourceId.clear();
-      if (!ref.isEmpty()) {
-        const int sep = ref.lastIndexOf(QLatin1Char('#'));
-        m_domainSourceFile = ref.left(sep);
-        m_domainSourceId = ref.mid(sep + 1);
-      }
-      updateDomainPreview();
-      deriveWidgetFromDomain();
-    });
-
-    // 取值域类型切换：activated 仅用户操作触发，显隐子控件并重建候选
-    connect(m_domainTypeCombo, &QComboBox::activated, this, [this](int) {
-      buildDomainCandidates();
-      rebuildDomainControls();
-      deriveWidgetFromDomain();
-    });
+  if (m_isJoinRow) {
+    // 联表列只读：编辑/取值域页不加入 Tab（控件仍构造，指针可用且随对话框释放）。
+    m_tabs->tabBar()->setVisible(false);
   }
 
-  // ── 列表页展示 ──
-  auto *listSep = new QLabel(QStringLiteral("── 列表页展示 ──"), this);
-  listSep->setAlignment(Qt::AlignCenter);
-  form->addRow(QString(), listSep);
-  m_displayTypeCombo = AuiComboBox::create(this);
-  m_displayTypeCombo->addItem(QStringLiteral("自动（按编辑控件/类型推导）"), QString());
-  m_displayTypeCombo->addItem(QStringLiteral("image（图片缩略图）"), QStringLiteral("image"));
-  form->addRow(QStringLiteral("列表展示:"), m_displayTypeCombo);
-  connect(m_displayTypeCombo, &QComboBox::activated, this,
-          [this](int) { updateListRows(); });
+  m_summaryLabel = new QLabel(this);
+  m_summaryLabel->setObjectName(QStringLiteral("field_summary"));
+  m_summaryLabel->setWordWrap(true);
+  m_summaryLabel->setStyleSheet(
+      QStringLiteral("color: %1; font-size: 12px;").arg(AuiStyle::mutedTextColor().name()));
+  frame.contentLayout->addWidget(m_summaryLabel);
 
-  // 列表开关：与编辑控件解耦（如 int 列编辑用数字、列表用 0/1 开关）
-  m_listSwitchCheck = new QCheckBox(QStringLiteral("列表页可直接切换（0/1 开关）"), this);
-  m_listSwitchCheck->setToolTip(
-      QStringLiteral("勾选后列表该列渲染为可点击开关，编辑表单控件不受影响；联表列只读不可配置"));
-  m_listSwitchCheck->setEnabled(!m_isJoinRow);
-  form->addRow(QStringLiteral("列表开关:"), m_listSwitchCheck);
+  finishConfigDialog(this, frame);
 
-  m_widthCombo = createNumericCombo(this, {60, 80, 100, 120, 150, 180, 220}, 0);
+  if (m_typeLabel->text().isEmpty()) {
+    m_typeLabel->setText(m_isJoinRow ? QStringLiteral("联表列 · 只读") : QStringLiteral("类型未知"));
+  }
+  updateListRows();
+  updateEditFormRows();
+  refreshHints();
+}
+
+void ViewFieldConfigDialog::buildListTab() {
+  auto *tab = new QWidget(this);
+  auto *lay = new QVBoxLayout(tab);
+  lay->setContentsMargins(0, 8, 0, 0);
+  lay->setSpacing(6);
+
+  auto *form = new QFormLayout;
+  form->setContentsMargins(0, 0, 0, 0);
+  form->setSpacing(6);
+  form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+  m_forms.append(form);
+
+  m_listModeCombo = AuiComboBox::create(tab);
+  m_listModeCombo->setObjectName(QStringLiteral("field_listMode"));
+  m_listModeCombo->addItem(QStringLiteral("自动（按数据库类型推导）"), QStringLiteral("auto"));
+  m_listModeCombo->addItem(QStringLiteral("文本"), QStringLiteral("text"));
+  if (!m_isJoinRow) {
+    m_listModeCombo->addItem(QStringLiteral("开关（0/1）"), QStringLiteral("switch"));
+  }
+  m_listModeCombo->addItem(QStringLiteral("金额"), QStringLiteral("money"));
+  m_listModeCombo->addItem(QStringLiteral("标签（枚举）"), QStringLiteral("tag"));
+  m_listModeCombo->addItem(QStringLiteral("图片"), QStringLiteral("image"));
+  form->addRow(QStringLiteral("呈现方式:"), m_listModeCombo);
+
+  m_listHint = new QLabel(tab);
+  m_listHint->setObjectName(QStringLiteral("field_listHint"));
+  m_listHint->setStyleSheet(
+      QStringLiteral("color: %1; font-size: 12px;").arg(AuiStyle::mutedTextColor().name()));
+  form->addRow(QString(), m_listHint);
+
+  m_widthCombo = createNumericCombo(tab, {60, 80, 100, 120, 150, 180, 220}, 0);
   m_widthCombo->setEditable(true);
   m_widthCombo->lineEdit()->setPlaceholderText(QStringLiteral("空 = 自适应"));
   form->addRow(QStringLiteral("列表列宽(px):"), m_widthCombo);
+  lay->addLayout(form);
 
-  m_listThumbRow = new QWidget(this);
+  m_listAdvBtn = makeAdvancedButton(tab);
+  m_listAdvBtn->setObjectName(QStringLiteral("field_listAdvanced"));
+  m_listAdvBox = new QWidget(tab);
+  auto *advForm = new QFormLayout(m_listAdvBox);
+  advForm->setContentsMargins(0, 0, 0, 0);
+  advForm->setSpacing(6);
+  advForm->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+  m_forms.append(advForm);
+
+  m_listThumbRow = new QWidget(m_listAdvBox);
   auto *listThumbLay = new QHBoxLayout(m_listThumbRow);
   listThumbLay->setContentsMargins(0, 0, 0, 0);
   listThumbLay->setSpacing(4);
@@ -192,50 +279,91 @@ void ViewFieldConfigDialog::setupUI() {
   for (QSpinBox *spin : {m_listThumbW, m_listThumbH}) {
     spin->setRange(0, 999);
     static_cast<ThumbSpinBox *>(spin)->setFollowPresetText(QStringLiteral("跟随预设"));
-    spin->setMinimumWidth(80);  // 容纳「跟随预设」占位文字（默认宽度按数字算，占位显示不全）
+    spin->setMinimumWidth(80);
     listThumbLay->addWidget(spin);
   }
   listThumbLay->addWidget(new QLabel(QStringLiteral("宽×高（0=跟随预设）"), m_listThumbRow));
   listThumbLay->addStretch();
-  form->addRow(QStringLiteral("列表缩略图:"), m_listThumbRow);
+  advForm->addRow(QStringLiteral("列表缩略图:"), m_listThumbRow);
 
-  // ── 编辑表单（参数行按控件类型动态出现；联表行整区折叠仅列表展示生效）──
-  m_editSep = new QLabel(QStringLiteral("── 编辑表单 ──"), this);
-  m_editSep->setAlignment(Qt::AlignCenter);
-  form->addRow(QString(), m_editSep);
-  m_widgetCombo = AuiComboBox::create(this);
-  // 候选文案对齐 jsonvue / 主流低代码惯例：业务词为主，括号内技术名
-  m_widgetCombo->addItem(QStringLiteral("自动（按 mysqlType 推导）"), QStringLiteral(""));
-  m_widgetCombo->addItem(QStringLiteral("单行文本(input)"), QStringLiteral("input"));
-  m_widgetCombo->addItem(QStringLiteral("多行文本(textarea)"), QStringLiteral("textarea"));
-  m_widgetCombo->addItem(QStringLiteral("下拉选择(select)"), QStringLiteral("select"));
-  m_widgetCombo->addItem(QStringLiteral("日期(date)"), QStringLiteral("date"));
-  m_widgetCombo->addItem(QStringLiteral("数字(number)"), QStringLiteral("number"));
-  m_widgetCombo->addItem(QStringLiteral("图片(image)"), QStringLiteral("image"));
-  m_widgetCombo->addItem(QStringLiteral("上传(upload)"), QStringLiteral("upload"));
-  m_widgetCombo->addItem(QStringLiteral("开关(boolean)"), QStringLiteral("boolean"));
+  wireAdvanced(m_listAdvBtn, m_listAdvBox);
+  lay->addWidget(m_listAdvBtn);
+  lay->addWidget(m_listAdvBox);
+  lay->addStretch();
+
+  if (m_isJoinRow) {
+    auto *tip = new QLabel(QStringLiteral("联表列只读：仅列表展示配置生效"), tab);
+    tip->setStyleSheet(
+        QStringLiteral("color: %1; font-size: 12px;").arg(AuiStyle::mutedTextColor().name()));
+    lay->addWidget(tip);
+  }
+
+  m_tabs->addTab(tab, QStringLiteral("列表展示"));
+
+  connect(m_listModeCombo, &QComboBox::activated, this, [this](int) {
+    updateListRows();
+    refreshHints();
+  });
+  connect(m_widthCombo->lineEdit(), &QLineEdit::textChanged, this, [this](const QString &) {
+    refreshHints();
+  });
+  connect(m_listThumbW, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          [this](int) { refreshHints(); });
+  connect(m_listThumbH, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          [this](int) { refreshHints(); });
+}
+
+void ViewFieldConfigDialog::buildEditTab() {
+  auto *tab = new QWidget(this);
+  tab->setObjectName(QStringLiteral("field_editTab"));
+  m_editTab = tab;
+  auto *lay = new QVBoxLayout(tab);
+  lay->setContentsMargins(0, 8, 0, 0);
+  lay->setSpacing(6);
+
+  auto *form = new QFormLayout;
+  form->setContentsMargins(0, 0, 0, 0);
+  form->setSpacing(6);
+  form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+  m_forms.append(form);
+
+  m_widgetCombo = AuiComboBox::create(tab);
+  m_widgetCombo->setObjectName(QStringLiteral("field_widget"));
   form->addRow(QStringLiteral("编辑控件:"), m_widgetCombo);
-  connect(m_widgetCombo, &QComboBox::activated, this,
-          [this](int) { updateEditFormRows(); });
 
-  // ── 控件子参数（紧随编辑控件；updateEditFormRows 按类型整行折叠，
-  //    可见行总是连续跟在选择器下方——对齐 jsonvue 子容器重建的视觉效果，
-  //    且控件值常驻无需缓存回写）──
-  m_placeholderEdit = new QLineEdit(this);
+  m_widgetHint = new QLabel(tab);
+  m_widgetHint->setObjectName(QStringLiteral("field_widgetHint"));
+  m_widgetHint->setWordWrap(true);
+  m_widgetHint->setStyleSheet(
+      QStringLiteral("color: %1; font-size: 12px;").arg(AuiStyle::mutedTextColor().name()));
+  form->addRow(QString(), m_widgetHint);
+
+  m_editEditableCheck = new QCheckBox(QStringLiteral("允许在表单中输入"), tab);
+  m_editEditableCheck->setChecked(true);
+  m_editEditableCheck->setToolTip(
+      QStringLiteral("取消勾选 = 编辑/详情表单内只读展示（仍展示字段值）\n"
+                     "字段是否提交由「字段呈现」的写入列控制"));
+  form->addRow(QStringLiteral("允许输入:"), m_editEditableCheck);
+
+  m_requiredCheck = new QCheckBox(QStringLiteral("必填（提交时校验）"), tab);
+  form->addRow(QStringLiteral("必填:"), m_requiredCheck);
+
+  m_placeholderEdit = new QLineEdit(tab);
   m_placeholderEdit->setPlaceholderText(QStringLiteral("空 = 模板缺省占位"));
   form->addRow(QStringLiteral("占位提示:"), m_placeholderEdit);
 
-  m_maxlengthSpin = new QSpinBox(this);
+  m_maxlengthSpin = new QSpinBox(tab);
   m_maxlengthSpin->setRange(0, 9999);
   m_maxlengthSpin->setSpecialValueText(QStringLiteral("不限"));
   form->addRow(QStringLiteral("最大长度:"), m_maxlengthSpin);
 
-  m_textareaRowsSpin = new QSpinBox(this);
+  m_textareaRowsSpin = new QSpinBox(tab);
   m_textareaRowsSpin->setRange(0, 20);
   m_textareaRowsSpin->setSpecialValueText(QStringLiteral("跟随模板（4）"));
   form->addRow(QStringLiteral("textarea 行数:"), m_textareaRowsSpin);
 
-  auto *rangeRow = new QWidget(this);
+  m_rangeRow = new QWidget(tab);
+  auto *rangeRow = m_rangeRow;
   auto *rangeLay = new QHBoxLayout(rangeRow);
   rangeLay->setContentsMargins(0, 0, 0, 0);
   rangeLay->setSpacing(4);
@@ -247,16 +375,16 @@ void ViewFieldConfigDialog::setupUI() {
     s->setSpecialValueText(QStringLiteral("不限"));
     rangeLay->addWidget(s);
   }
-  rangeLay->addWidget(new QLabel(QStringLiteral("～（最小/最大，0=不限）"), rangeRow));
+  rangeLay->addWidget(new QLabel(QStringLiteral("～（最小/最大）"), rangeRow));
   rangeLay->addStretch();
   form->addRow(QStringLiteral("数值范围:"), rangeRow);
 
-  m_precisionSpin = new QSpinBox(this);
+  m_precisionSpin = new QSpinBox(tab);
   m_precisionSpin->setRange(0, 8);
   m_precisionSpin->setSpecialValueText(QStringLiteral("跟随模板（2）"));
   form->addRow(QStringLiteral("小数位:"), m_precisionSpin);
 
-  m_dateFormatCombo = AuiComboBox::create(this);
+  m_dateFormatCombo = AuiComboBox::create(tab);
   m_dateFormatCombo->addItem(QStringLiteral("自动（按 mysqlType 推导）"), QString());
   m_dateFormatCombo->addItem(QStringLiteral("date（年-月-日）"), QStringLiteral("date"));
   m_dateFormatCombo->addItem(QStringLiteral("datetime（年-月-日 时:分:秒）"),
@@ -264,14 +392,13 @@ void ViewFieldConfigDialog::setupUI() {
   m_dateFormatCombo->addItem(QStringLiteral("month（年-月）"), QStringLiteral("month"));
   m_dateFormatCombo->addItem(QStringLiteral("year（年）"), QStringLiteral("year"));
   m_dateFormatCombo->addItem(QStringLiteral("daterange（日期范围）"), QStringLiteral("daterange"));
-  form->addRow(QStringLiteral("日期格式覆盖:"), m_dateFormatCombo);
+  form->addRow(QStringLiteral("日期格式:"), m_dateFormatCombo);
 
-  // 上传预设下拉：列出作用域内所有 .jsonupload 预设（同 jsonvue 字段设置面板）
-  m_uploadSourceCombo = AuiComboBox::create(this);
+  m_uploadSourceCombo = AuiComboBox::create(tab);
   m_uploadSourceCombo->addItem(QStringLiteral("（不上传，手动输入图片 URL）"), QString());
   form->addRow(QStringLiteral("上传预设:"), m_uploadSourceCombo);
 
-  m_editThumbRow = new QWidget(this);
+  m_editThumbRow = new QWidget(tab);
   auto *editThumbLay = new QHBoxLayout(m_editThumbRow);
   editThumbLay->setContentsMargins(0, 0, 0, 0);
   editThumbLay->setSpacing(4);
@@ -280,53 +407,148 @@ void ViewFieldConfigDialog::setupUI() {
   for (QSpinBox *spin : {m_editThumbW, m_editThumbH}) {
     spin->setRange(0, 999);
     static_cast<ThumbSpinBox *>(spin)->setFollowPresetText(QStringLiteral("跟随预设"));
-    spin->setMinimumWidth(80);  // 容纳「跟随预设」占位文字（默认宽度按数字算，占位显示不全）
+    spin->setMinimumWidth(80);
     editThumbLay->addWidget(spin);
   }
   editThumbLay->addWidget(new QLabel(QStringLiteral("宽×高（0=跟随预设）"), m_editThumbRow));
   editThumbLay->addStretch();
   form->addRow(QStringLiteral("编辑缩略图:"), m_editThumbRow);
-  // 表单可编辑 / 必填（展示与写入在「字段呈现」列表勾选，不在本面板重复）
-  m_editEditableCheck = new QCheckBox(this);
-  m_editEditableCheck->setChecked(true);
-  m_editEditableCheck->setToolTip(
-      QStringLiteral("取消勾选 = 编辑表单内只读展示（仍可展示，但不允许输入）\n"
-                     "（详情模式整表单只读，无需逐字段设置）"));
-  form->addRow(QStringLiteral("表单可编辑:"), m_editEditableCheck);
 
-  // 必填（编辑提交时校验；位置与 jsonvue 字段设置一致：表单可编辑 → 必填 → 栅格）
-  m_requiredCheck = new QCheckBox(this);
-  form->addRow(QStringLiteral("必填:"), m_requiredCheck);
+  lay->addLayout(form);
 
-  // 表单栅格：combo 三态（对齐 jsonvue 半行/整行；自动 = 模板缺省 12）
-  m_formSpanCombo = AuiComboBox::create(this);
+  m_editAdvBtn = makeAdvancedButton(tab);
+  m_editAdvBtn->setObjectName(QStringLiteral("field_editAdvanced"));
+  m_editAdvBox = new QWidget(tab);
+  auto *advForm = new QFormLayout(m_editAdvBox);
+  advForm->setContentsMargins(0, 0, 0, 0);
+  advForm->setSpacing(6);
+  advForm->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+  m_forms.append(advForm);
+
+  m_formSpanCombo = AuiComboBox::create(m_editAdvBox);
   m_formSpanCombo->addItem(QStringLiteral("自动（模板缺省）"), 0);
   m_formSpanCombo->addItem(QStringLiteral("半行（24 栅格占 12）"), 12);
   m_formSpanCombo->addItem(QStringLiteral("整行（24 栅格占 24）"), 24);
-  form->addRow(QStringLiteral("表单栅格:"), m_formSpanCombo);
+  advForm->addRow(QStringLiteral("表单栅格:"), m_formSpanCombo);
 
-  m_formDefaultEdit = new QLineEdit(this);
+  m_formDefaultEdit = new QLineEdit(m_editAdvBox);
   m_formDefaultEdit->setPlaceholderText(QStringLiteral("新建时表单预填（空 = 不预填）"));
-  form->addRow(QStringLiteral("表单默认值:"), m_formDefaultEdit);
+  advForm->addRow(QStringLiteral("表单默认值:"), m_formDefaultEdit);
 
-  // 注：编辑表单标题不在此配置——界面显示标题统一取「字段呈现」的标题列
+  wireAdvanced(m_editAdvBtn, m_editAdvBox);
+  lay->addWidget(m_editAdvBtn);
+  lay->addWidget(m_editAdvBox);
+  lay->addStretch();
 
-  frame.contentLayout->addLayout(form);
+  if (!m_isJoinRow) m_tabs->addTab(tab, QStringLiteral("编辑表单"));
 
-  // 初始行显隐：列表缩略图随 displayType；编辑参数行随控件类型；联表行整区折叠
-  updateListRows();
-  if (!m_isJoinRow) {
-    rebuildDomainControls();
+  connect(m_widgetCombo, &QComboBox::activated, this, [this](int) {
     updateEditFormRows();
-  } else {
-    setEditRowsVisible(false);
-  }
+    refreshHints();
+  });
+  connect(m_editEditableCheck, &QCheckBox::toggled, this, [this](bool) {
+    updateEditFormRows();
+    refreshHints();
+  });
+  connect(m_requiredCheck, &QCheckBox::toggled, this, [this](bool) { refreshHints(); });
+  connect(m_minSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
+          [this](double) { refreshHints(); });
+  connect(m_maxSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
+          [this](double) { refreshHints(); });
+  connect(m_precisionSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+          [this](int) { refreshHints(); });
+  connect(m_formSpanCombo, &QComboBox::activated, this, [this](int) { refreshHints(); });
+}
 
-  if (m_isJoinRow) {
-    auto *tip = new QLabel(QStringLiteral("联表列只读：无取值域/编辑控件配置，仅列表展示生效"), this);
-    frame.contentLayout->addWidget(tip);
-  }
-  finishConfigDialog(this, frame);
+void ViewFieldConfigDialog::buildDomainTab() {
+  auto *tab = new QWidget(this);
+  tab->setObjectName(QStringLiteral("field_domainTab"));
+  m_domainTab = tab;
+  auto *lay = new QVBoxLayout(tab);
+  lay->setContentsMargins(0, 8, 0, 0);
+  lay->setSpacing(6);
+
+  auto *form = new QFormLayout;
+  form->setContentsMargins(0, 0, 0, 0);
+  form->setSpacing(6);
+  form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+  m_forms.append(form);
+
+  m_domainTypeCombo = AuiComboBox::create(tab);
+  m_domainTypeCombo->addItem(QStringLiteral("未声明（无数据源）"), QString());
+  m_domainTypeCombo->addItem(QStringLiteral("数据源（.jsonsource / 全局枚举）"),
+                             QStringLiteral("source"));
+  m_domainTypeCombo->addItem(QStringLiteral("远程接口（手动 URL）"),
+                             QString::fromLatin1(JsonVueDomain::kRemote));
+  form->addRow(QStringLiteral("取值域类型:"), m_domainTypeCombo);
+
+  m_domainSourceRow = new QWidget(tab);
+  auto *domainSrcLay = new QHBoxLayout(m_domainSourceRow);
+  domainSrcLay->setContentsMargins(0, 0, 0, 0);
+  domainSrcLay->setSpacing(2);
+  domainSrcLay->addWidget(AuiButton::createHelpButton(QStringLiteral("数据源作用域"),
+                                                      jsonVueSourceScopeHelpText(),
+                                                      m_domainSourceRow));
+  m_domainSourceCombo = new AuiTreeCombo(tab);
+  domainSrcLay->addWidget(m_domainSourceCombo, 1);
+  form->addRow(QStringLiteral("取值数据源:"), m_domainSourceRow);
+
+  m_domainUrlBtn = new QPushButton(QStringLiteral("配置远程数据源..."), tab);
+  form->addRow(QStringLiteral("远程源:"), m_domainUrlBtn);
+
+  m_domainPreviewLabel = new QLabel(tab);
+  m_domainPreviewLabel->setWordWrap(true);
+  m_domainPreviewLabel->setStyleSheet(
+      QStringLiteral("color: %1; font-size: 12px;").arg(AuiStyle::mutedTextColor().name()));
+  form->addRow(QStringLiteral("选项预览:"), m_domainPreviewLabel);
+
+  lay->addLayout(form);
+  lay->addStretch();
+  if (!m_isJoinRow) m_tabs->addTab(tab, QStringLiteral("取值域"));
+
+  connect(m_domainUrlBtn, &QPushButton::clicked, this, [this]() {
+    ComboboxConfigDialog dlg(this);
+    dlg.setSearchRoot(m_searchRoot);
+    dlg.setSourceRef(m_domainSourceFile, m_domainSourceId);
+    dlg.setConfig(m_selectUrl, m_selectValueField, m_selectLabelField);
+    dlg.setPagedConfig(m_selectPaged, m_selectPageKey, m_selectPageSizeKey, m_selectPageSize,
+                       m_selectSearchTitle, m_selectSearchField, m_selectMethod);
+    if (dlg.exec() == QDialog::Accepted) {
+      m_domainSourceFile = dlg.sourceFile();
+      m_domainSourceId = dlg.sourceId();
+      m_selectUrl = dlg.url();
+      m_selectValueField = dlg.valueField();
+      m_selectLabelField = dlg.labelField();
+      m_selectPaged = dlg.paged();
+      m_selectPageKey = dlg.pageKey();
+      m_selectPageSizeKey = dlg.pageSizeKey();
+      m_selectPageSize = dlg.pageSize();
+      m_selectSearchTitle = dlg.searchTitle();
+      m_selectSearchField = dlg.searchField();
+      m_selectMethod = dlg.method();
+    }
+  });
+
+  connect(m_domainSourceCombo, &AuiTreeCombo::itemSelected, this, [this](const QVariant &refVar) {
+    const QString ref = refVar.toString();
+    m_domainSourceFile.clear();
+    m_domainSourceId.clear();
+    if (!ref.isEmpty()) {
+      const int sep = ref.lastIndexOf(QLatin1Char('#'));
+      m_domainSourceFile = ref.left(sep);
+      m_domainSourceId = ref.mid(sep + 1);
+    }
+    updateDomainPreview();
+    deriveWidgetFromDomain();
+    refreshHints();
+  });
+
+  connect(m_domainTypeCombo, &QComboBox::activated, this, [this](int) {
+    buildDomainCandidates();
+    rebuildDomainControls();
+    deriveWidgetFromDomain();
+    refreshHints();
+  });
 }
 
 void ViewFieldConfigDialog::setSearchRoot(const QString &dir) {
@@ -368,6 +590,54 @@ void ViewFieldConfigDialog::setSearchRoot(const QString &dir) {
 //  当前行配置载入
 // ════════════════════════════════════════════════════════════
 
+void ViewFieldConfigDialog::setMysqlType(const QString &mysqlType, bool hasEnum) {
+  m_mysqlType = mysqlType.trimmed();
+  m_hasEnum = hasEnum;
+  if (!m_typeLabel) return;
+  // 空 mysqlType 且非联表 = 多语言平铺字段（只参与列表展示；编辑由多语言组件处理）。
+  QString text = m_mysqlType.isEmpty() ? QStringLiteral("多语言字段 · 仅列表展示") : m_mysqlType;
+  if (m_hasEnum) text += QStringLiteral(" · 表内枚举");
+  if (m_isJoinRow) {
+    text = QStringLiteral("联表列 · ") +
+           (m_mysqlType.isEmpty() ? QStringLiteral("类型未知") : m_mysqlType) +
+           QStringLiteral(" · 只读");
+  }
+  m_typeLabel->setText(text);
+}
+
+void ViewFieldConfigDialog::rebuildWidgetOptions(const QString &preferred) {
+  if (!m_widgetCombo) return;
+  QSignalBlocker blocker(m_widgetCombo);
+  m_widgetCombo->clear();
+  auto add = [this](const QString &label, const QString &data) {
+    m_widgetCombo->addItem(label, data);
+  };
+  add(QStringLiteral("自动（按数据库类型推导）"), QString());
+  if (m_hasEnum) {
+    // 表内枚举的编辑控件由生成端强制为标签下拉，不再提供会冲突的控件。
+    add(QStringLiteral("下拉选择(select)"), QStringLiteral("select"));
+  } else {
+    add(QStringLiteral("单行文本(input)"), QStringLiteral("input"));
+    if (isStringType(m_mysqlType)) {
+      add(QStringLiteral("多行文本(textarea)"), QStringLiteral("textarea"));
+      add(QStringLiteral("图片(image)"), QStringLiteral("image"));
+      add(QStringLiteral("上传(upload)"), QStringLiteral("upload"));
+    }
+    if (isNumericType(m_mysqlType)) add(QStringLiteral("数字(number)"), QStringLiteral("number"));
+    if (isDateType(m_mysqlType)) add(QStringLiteral("日期(date)"), QStringLiteral("date"));
+    add(QStringLiteral("下拉选择(select)"), QStringLiteral("select"));
+    if (!isDateType(m_mysqlType)) add(QStringLiteral("开关(boolean)"), QStringLiteral("boolean"));
+  }
+
+  int idx = preferred.isEmpty() ? 0 : m_widgetCombo->findData(preferred);
+  if (idx < 0 && !preferred.isEmpty()) {
+    // 旧配置/不兼容控件保留可见，保存时不会被静默改掉；上方提示会说明风险。
+    add(widgetLabel(preferred) + QStringLiteral("（当前配置）"), preferred);
+    idx = m_widgetCombo->count() - 1;
+  }
+  m_widgetCombo->setCurrentIndex(idx < 0 ? 0 : idx);
+}
+
 void ViewFieldConfigDialog::setCurrent(const JsonTableSelCol &sc, const JsonTableEditCol &ec) {
   // 列宽是可编辑数值下拉：非预设值必须清掉选中项并写入编辑框，
   // 否则 currentData 会停留在预设 60，保存时把任意宽度静默改成 60。
@@ -382,11 +652,30 @@ void ViewFieldConfigDialog::setCurrent(const JsonTableSelCol &sc, const JsonTabl
     m_widthCombo->setCurrentIndex(-1);
     m_widthCombo->setEditText(QString());
   }
-  comboSelectData(m_widgetCombo, ec.widget);
+
+  // 编辑控件：旧 int/float/money 统一归并为 number，再按数据库类型过滤候选。
+  QString widget = ec.widget;
+  if (widget == QStringLiteral("int") || widget == QStringLiteral("float") ||
+      widget == QStringLiteral("money")) {
+    widget = QStringLiteral("number");
+  }
+  rebuildWidgetOptions(widget);
+
+  // 列表呈现方式：开关优先于 displayType（生成端也是开关覆盖展示类型）。
+  QString listMode = QStringLiteral("auto");
+  if (ec.switchEditable) {
+    listMode = QStringLiteral("switch");
+  } else if (sc.displayType == QStringLiteral("boolean")) {
+    listMode = QStringLiteral("switch");
+  } else if (sc.displayType == QStringLiteral("image") ||
+             sc.displayType == QStringLiteral("money") ||
+             sc.displayType == QStringLiteral("tag") || sc.displayType == QStringLiteral("text")) {
+    listMode = sc.displayType;
+  }
+  comboSelectData(m_listModeCombo, listMode);
+
   m_editEditableCheck->setChecked(ec.editEditable);
   m_requiredCheck->setChecked(ec.required);
-  comboSelectData(m_displayTypeCombo, sc.displayType);
-  if (m_listSwitchCheck) m_listSwitchCheck->setChecked(ec.switchEditable);
   m_listThumbW->setValue(sc.listThumbWidth);
   m_listThumbH->setValue(sc.listThumbHeight);
   if (m_uploadSourceCombo) {
@@ -412,14 +701,18 @@ void ViewFieldConfigDialog::setCurrent(const JsonTableSelCol &sc, const JsonTabl
   comboSelectData(m_dateFormatCombo, ec.dateFormat);
   comboSelectData(m_formSpanCombo, ec.formSpan > 0 ? QVariant(ec.formSpan) : QVariant(0));
   m_formDefaultEdit->setText(ec.formDefaultValue);
-  // 联动行显隐（displayType=image → 列表缩略图行；控件类型 → 编辑参数行；
-  // 联表行编辑区整体折叠，仅列表展示生效）
-  updateListRows();
-  if (m_isJoinRow) {
-    setEditRowsVisible(false);
-  } else {
-    updateEditFormRows();
+
+  // 已有高级配置时自动展开，避免“配置存在但看不见”。
+  if (m_listAdvBtn) {
+    m_listAdvBtn->setChecked(sc.listThumbWidth > 0 || sc.listThumbHeight > 0);
   }
+  if (m_editAdvBtn) {
+    m_editAdvBtn->setChecked(ec.formSpan > 0 || !ec.formDefaultValue.isEmpty());
+  }
+
+  updateListRows();
+  updateEditFormRows();
+  refreshHints();
 }
 
 void ViewFieldConfigDialog::setDomain(const JsonTableColumn &col) {
@@ -437,6 +730,8 @@ void ViewFieldConfigDialog::setDomain(const JsonTableColumn &col) {
   comboSelectData(m_domainTypeCombo, uiType);
   buildDomainCandidates();
   rebuildDomainControls();
+  deriveWidgetFromDomain();
+  refreshHints();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -489,61 +784,203 @@ QString ViewFieldConfigDialog::currentUploadRef() const {
   return m_uploadSourceCombo->currentData().toString();
 }
 
+QString ViewFieldConfigDialog::mysqlWidget() const {
+  return m_hasEnum ? QStringLiteral("select") : inferWidgetFromType(m_mysqlType);
+}
+
+QString ViewFieldConfigDialog::effectiveWidget() const {
+  QString w = m_widgetCombo ? m_widgetCombo->currentData().toString() : QString();
+  if (w == QStringLiteral("int") || w == QStringLiteral("float") || w == QStringLiteral("money")) {
+    w = QStringLiteral("number");
+  }
+  return w.isEmpty() ? mysqlWidget() : w;
+}
+
+QString ViewFieldConfigDialog::listModeResult() const {
+  if (!m_listModeCombo) return QStringLiteral("文本");
+  const QString mode = m_listModeCombo->currentData().toString();
+  if (mode != QStringLiteral("auto")) return listModeLabel(mode);
+  if (m_isJoinRow) return QStringLiteral("文本");
+  if (m_hasEnum) return QStringLiteral("标签");
+  const QString w = effectiveWidget();
+  if (w == QStringLiteral("boolean")) return QStringLiteral("开关");
+  if (w == QStringLiteral("image")) return QStringLiteral("图片");
+  return QStringLiteral("文本");
+}
+
+QString ViewFieldConfigDialog::listModeReason() const {
+  if (!m_listModeCombo || m_listModeCombo->currentData().toString() != QStringLiteral("auto")) {
+    return QString();
+  }
+  if (m_hasEnum) return QStringLiteral("表内枚举");
+  if (effectiveWidget() == QStringLiteral("boolean") && !m_mysqlType.isEmpty()) {
+    return m_mysqlType;
+  }
+  return QString();
+}
+
+void ViewFieldConfigDialog::refreshHints() {
+  if (!m_widgetHint || !m_listHint || !m_summaryLabel) return;
+  const QString w = effectiveWidget();
+  const QString type = m_mysqlType.isEmpty() ? QStringLiteral("未知") : m_mysqlType;
+  const bool autoWidget =
+      !m_widgetCombo || m_widgetCombo->currentData().toString().isEmpty();
+
+  QString widgetText;
+  QString warning;
+  if (autoWidget) {
+    widgetText = QStringLiteral("自动 → %1（%2）").arg(widgetLabel(w), type);
+  } else {
+    widgetText = QStringLiteral("指定 → %1").arg(widgetLabel(w));
+    if (m_hasEnum && w != QStringLiteral("select")) {
+      warning = QStringLiteral("表内枚举会强制渲染为标签下拉，此编辑控件不会生效");
+    } else if (w == QStringLiteral("input") && isNumericType(m_mysqlType)) {
+      warning = QStringLiteral("数据库为数值类型，文本输入会按字符串提交");
+    } else if (w == QStringLiteral("number") && !isNumericType(m_mysqlType)) {
+      warning = QStringLiteral("数据库不是数值类型，仍会生成数字输入，提交值可能与列类型不匹配");
+    } else if (w == QStringLiteral("date") && !isDateType(m_mysqlType)) {
+      warning = QStringLiteral("数据库不是日期类型，仍会生成日期选择");
+    } else if ((w == QStringLiteral("image") || w == QStringLiteral("upload")) &&
+               !isStringType(m_mysqlType)) {
+      warning = QStringLiteral("数据库不是字符串类型，图片 URL 可能无法保存");
+    } else if (w == QStringLiteral("textarea") && !isStringType(m_mysqlType)) {
+      warning = QStringLiteral("数据库不是字符串类型，多行文本提交值可能不匹配");
+    }
+  }
+  if (!warning.isEmpty()) widgetText += QStringLiteral("；") + warning;
+  m_widgetHint->setText(widgetText);
+  m_widgetHint->setStyleSheet(
+      QStringLiteral("color: %1; font-size: 12px;")
+          .arg((warning.isEmpty() ? AuiStyle::mutedTextColor() : AuiStyle::errorTextColor()).name()));
+
+  const bool autoMode =
+      !m_listModeCombo || m_listModeCombo->currentData().toString() == QStringLiteral("auto");
+  QString listText = (autoMode ? QStringLiteral("自动 → ") : QStringLiteral("指定 → ")) +
+                     listModeResult();
+  const QString listReason = listModeReason();
+  if (!listReason.isEmpty()) listText += QStringLiteral("（") + listReason + QStringLiteral("）");
+  m_listHint->setText(listText);
+
+  if (m_isJoinRow) {
+    m_summaryLabel->setText(
+        QStringLiteral("生成结果：列表：%1（联表只读）").arg(listModeResult()));
+    return;
+  }
+
+  QStringList parts;
+  parts << QStringLiteral("列表：") + listModeResult();
+  parts << QStringLiteral("编辑：") + widgetLabel(w);
+  if (w == QStringLiteral("number") && isNumericType(m_mysqlType)) {
+    const double minV = m_minSpin ? m_minSpin->value() : 0;
+    const double maxV = m_maxSpin ? m_maxSpin->value() : 0;
+    if (minV != 0 && maxV != 0) {
+      parts << QStringLiteral("范围：%1～%2").arg(minV).arg(maxV);
+    } else if (minV != 0) {
+      parts << QStringLiteral("最小：%1").arg(minV);
+    } else if (maxV != 0) {
+      parts << QStringLiteral("最大：%1").arg(maxV);
+    }
+    if (isFloatType(m_mysqlType) && m_precisionSpin) {
+      const int precision = m_precisionSpin->value() > 0 ? m_precisionSpin->value() : 2;
+      parts << QStringLiteral("%1 位小数").arg(precision);
+    }
+  }
+  if (m_requiredCheck && m_requiredCheck->isChecked() && m_editEditableCheck &&
+      m_editEditableCheck->isChecked()) {
+    parts << QStringLiteral("必填");
+  }
+  if (m_editEditableCheck && !m_editEditableCheck->isChecked()) {
+    parts << QStringLiteral("表单只读");
+  }
+  if (m_formSpanCombo) {
+    const int span = m_formSpanCombo->currentData().toInt();
+    if (span == 12) parts << QStringLiteral("半行");
+    if (span == 24) parts << QStringLiteral("整行");
+  }
+  m_summaryLabel->setText(QStringLiteral("生成结果：") + parts.join(QStringLiteral(" ｜ ")));
+  updateTabVisibility();
+}
+
+void ViewFieldConfigDialog::updateTabVisibility() {
+  if (!m_tabs) return;
+  if (m_isJoinRow) {
+    m_tabs->tabBar()->setVisible(false);
+    return;
+  }
+  // 物理列才有编辑表单；多语言平铺字段只展示列表（编辑由多语言组件接管）。
+  const bool physical = !m_mysqlType.isEmpty();
+  const QString domainType = m_domainTypeCombo ? m_domainTypeCombo->currentData().toString() : QString();
+  // 取值域是物理列的基础配置（查询下拉/列表标签都可能用到），普通物理列常显；
+  // 仅表内枚举且未配置域时隐藏（枚举由「枚举」页维护，避免两个来源混淆）。
+  const bool domainNeeded = physical && (!m_hasEnum || !domainType.isEmpty());
+  if (m_editTab) {
+    const int idx = m_tabs->indexOf(m_editTab);
+    if (idx >= 0) m_tabs->setTabVisible(idx, physical);
+  }
+  if (m_domainTab) {
+    const int idx = m_tabs->indexOf(m_domainTab);
+    if (idx >= 0) m_tabs->setTabVisible(idx, domainNeeded);
+  }
+  // 只剩列表页时隐藏 Tab 栏（与联表行一致）。
+  m_tabs->tabBar()->setVisible(physical);
+}
+
 void ViewFieldConfigDialog::updateListRows() {
-  if (!m_displayTypeCombo) return;
-  // 列表缩略图仅 image 展示类型有意义（整行折叠）
-  const bool isImg =
-      m_displayTypeCombo->currentData().toString() == QStringLiteral("image");
-  setFormRowVisible(m_listThumbRow, isImg);
+  if (!m_listModeCombo) return;
+  const bool imageMode =
+      m_listModeCombo->currentData().toString() == QStringLiteral("image");
+  // 列表缩略图仅 image 呈现方式有意义（整行折叠）
+  setFormRowVisible(m_listThumbRow, imageMode);
+  // 高级设置里只有缩略图；非图片模式没有任何可配项时，整个入口一起隐藏。
+  if (m_listAdvBtn) {
+    if (!imageMode) m_listAdvBtn->setChecked(false);
+    m_listAdvBtn->setVisible(imageMode);
+  }
+  if (m_listAdvBox) {
+    m_listAdvBox->setVisible(imageMode && m_listAdvBtn && m_listAdvBtn->isChecked());
+  }
 }
 
 void ViewFieldConfigDialog::updateEditFormRows() {
   if (!m_widgetCombo) return;
-  const QString w = m_widgetCombo->currentData().toString();
-  const bool isImageLike =
-      (w == QStringLiteral("image") || w == QStringLiteral("upload"));
-  const bool isNumber = (w == QStringLiteral("number") || w == QStringLiteral("int") ||
-                         w == QStringLiteral("float"));
-  // 参数行按控件类型整行折叠（对齐 jsonvue 字段设置面板的按需出现模式）
+  const QString w = effectiveWidget();
+  const bool isImageLike = (w == QStringLiteral("image") || w == QStringLiteral("upload"));
+  const bool stringDb = isStringType(m_mysqlType);
+  const bool numericDb = isNumericType(m_mysqlType);
+  const bool floatDb = isFloatType(m_mysqlType);
+  const bool dateDb = isDateType(m_mysqlType);
+  // 参数行按「最终生效控件」+ 数据库类型整行折叠：
+  // auto 时也要按推导结果展示范围/长度/日期参数，不能因为没显式选控件就全部隐藏。
   setFormRowVisible(m_placeholderEdit,
                     isImageLike || w == QStringLiteral("input") ||
                         w == QStringLiteral("textarea"));
-  setFormRowVisible(m_maxlengthSpin, w == QStringLiteral("input"));
-  setFormRowVisible(m_textareaRowsSpin, w == QStringLiteral("textarea"));
-  setFormRowVisible(m_minSpin, isNumber);
-  setFormRowVisible(m_precisionSpin, w == QStringLiteral("float"));
-  setFormRowVisible(m_dateFormatCombo, w == QStringLiteral("date"));
-  setFormRowVisible(m_uploadSourceCombo, isImageLike);
-  setFormRowVisible(m_editThumbRow, isImageLike);
-}
-
-void ViewFieldConfigDialog::setEditRowsVisible(bool on) {
-  if (m_editSep) m_editSep->setVisible(on);
-  QWidget *fields[] = {m_widgetCombo,      m_placeholderEdit, m_maxlengthSpin,
-                       m_textareaRowsSpin, m_minSpin,         m_precisionSpin,
-                       m_dateFormatCombo,  m_editEditableCheck, m_requiredCheck,
-                       m_formSpanCombo,    m_formDefaultEdit, m_uploadSourceCombo,
-                       m_editThumbRow};
-  for (QWidget *f : fields) {
-    if (f) setFormRowVisible(f, on);
-  }
-}
-
-int ViewFieldConfigDialog::formRowOf(QWidget *field) const {
-  for (int r = 0; r < m_form->rowCount(); ++r) {
-    const QLayoutItem *it = m_form->itemAt(r, QFormLayout::FieldRole);
-    if (it && it->widget() == field) return r;
-  }
-  return -1;
+  setFormRowVisible(m_maxlengthSpin, w == QStringLiteral("input") && stringDb);
+  setFormRowVisible(m_textareaRowsSpin, w == QStringLiteral("textarea") && stringDb);
+  setFormRowVisible(m_rangeRow, w == QStringLiteral("number") && numericDb);
+  setFormRowVisible(m_precisionSpin, w == QStringLiteral("number") && floatDb);
+  setFormRowVisible(m_dateFormatCombo, w == QStringLiteral("date") && dateDb);
+  setFormRowVisible(m_uploadSourceCombo, isImageLike && stringDb);
+  setFormRowVisible(m_editThumbRow, isImageLike && stringDb);
+  if (m_requiredCheck) m_requiredCheck->setEnabled(m_editEditableCheck->isChecked());
+  refreshHints();
 }
 
 void ViewFieldConfigDialog::setFormRowVisible(QWidget *field, bool on) {
-  const int r = formRowOf(field);
-  if (r >= 0) m_form->setRowVisible(r, on);
+  if (!field) return;
+  // 字段可能位于任一 Tab 的表单；跨表单查找 FieldRole 对应的行。
+  for (QFormLayout *form : m_forms) {
+    for (int r = 0; r < form->rowCount(); ++r) {
+      const QLayoutItem *it = form->itemAt(r, QFormLayout::FieldRole);
+      if (it && it->widget() == field) {
+        form->setRowVisible(r, on);
+        return;
+      }
+    }
+  }
 }
 
 void ViewFieldConfigDialog::deriveWidgetFromDomain() {
-  if (m_isJoinRow || !m_widgetCombo) return;
+  if (m_isJoinRow || m_hasEnum || !m_widgetCombo) return;
   // 仅控件为"自动"时联动（用户显式选择优先，不覆盖）
   if (m_widgetCombo->currentData().toString() != QString()) return;
   const QString t = m_domainTypeCombo ? m_domainTypeCombo->currentData().toString() : QString();
@@ -578,7 +1015,13 @@ int ViewFieldConfigDialog::width() const {
 void ViewFieldConfigDialog::fillListResult(JsonTableSelCol *sc) const {
   if (!sc) return;
   sc->width = width();
-  sc->displayType = m_displayTypeCombo ? m_displayTypeCombo->currentData().toString() : QString();
+  const QString mode = m_listModeCombo ? m_listModeCombo->currentData().toString() : QString();
+  // switch 由 editCols.switchEditable 承接，displayType 保持空由生成端推导；
+  // 其余显式模式直接写入 displayType。
+  sc->displayType =
+      (mode.isEmpty() || mode == QStringLiteral("auto") || mode == QStringLiteral("switch"))
+          ? QString()
+          : mode;
   sc->listThumbWidth = m_listThumbW ? m_listThumbW->value() : 0;
   sc->listThumbHeight = m_listThumbH ? m_listThumbH->value() : 0;
 }
@@ -588,7 +1031,8 @@ void ViewFieldConfigDialog::fillEditResult(JsonTableEditCol *ec) const {
   if (m_widgetCombo) ec->widget = m_widgetCombo->currentData().toString();
   ec->editEditable = m_editEditableCheck ? m_editEditableCheck->isChecked() : true;
   ec->required = m_requiredCheck ? m_requiredCheck->isChecked() : false;
-  ec->switchEditable = m_listSwitchCheck ? m_listSwitchCheck->isChecked() : false;
+  ec->switchEditable =
+      m_listModeCombo && m_listModeCombo->currentData().toString() == QStringLiteral("switch");
   if (m_placeholderEdit) ec->placeholder = m_placeholderEdit->text().trimmed();
   ec->maxlength = m_maxlengthSpin ? m_maxlengthSpin->value() : 0;
   ec->textareaRows = m_textareaRowsSpin ? m_textareaRowsSpin->value() : 0;
