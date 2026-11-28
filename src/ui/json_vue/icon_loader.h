@@ -33,6 +33,11 @@ public:
   QIcon cached(const QString &iconName) const;
   QIcon getOrCreateIcon(const QString &iconName, int size = 20);
 
+  /// 本地图标集（与 shop IconSelect 一致）：prefix → 图标名列表（prefix:name）
+  QStringList localIconNames(const QString &prefix);
+  /// 本地图标集前缀顺序（ep/ri/ant-design/mdi）
+  QStringList localPrefixes();
+
   void requestIcon(const QString &iconName, std::function<void(const QString &)> callback);
   void requestIcons(const QStringList &iconNames,
                     std::function<void(const QString &)> callback);
@@ -51,6 +56,19 @@ private:
   IconLoader(const IconLoader &) = delete;
   IconLoader &operator=(const IconLoader &) = delete;
 
+  /// 本地图标（body + 坐标）数据，来自 res/icons/iconify_sets.json
+  struct LocalIconData {
+    QString body;
+    int left = 0;
+    int top = 0;
+    int width = 16;
+    int height = 16;
+  };
+  void ensureLocalLoaded();
+  QIcon localIcon(const QString &iconName);
+  /// "vi-ep:user" → "ep:user"（本地数据键统一无 vi- 前缀）
+  static QString normalizeIconName(const QString &iconName);
+
   void sendBatchRequest(const QStringList &iconNames);
   void tryUrl(int urlIndex, const QString &fullIcon, const QString &prefix,
               const QString &name, const QStringList &urls);
@@ -60,5 +78,10 @@ private:
   QSet<QString> m_loading;
   QHash<QString, QVector<std::function<void(const QString &)>>> m_pending;
 
-  static constexpr int kDefaultIconSize = 20;
+  bool m_localLoaded = false;
+  QHash<QString, LocalIconData> m_localIcons;   ///< "ep:user" → 数据
+  QHash<QString, QStringList> m_localNames;     ///< "ep" → ["ep:add-location", ...]
+  QStringList m_localPrefixes;                  ///< ep/ri/ant-design/mdi
+
+  static constexpr int kDefaultIconSize = 32;
 };

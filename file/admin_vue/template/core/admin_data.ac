@@ -748,7 +748,40 @@ export function processButtons(rawButtons: Object[]): Object {
     let btn: Object = {};
     btn["key"] = rawBtn.actionKey;
     btn["label"] = rawBtn.label;
-    btn["icon"] = rawBtn.icon;
+    // 图标统一：旧值可能是 vi-ep:xxx（admin_vue <Icon>），也可能是 ep:xxx。
+    // pure 页面用 ep:xxx + useRenderIcon；admin_vue 继续用 vi- 前缀。
+    let rawIcon: String = rawBtn.icon;
+    if (rawIcon == null) { rawIcon = ""; }
+    let pureIcon: String = rawIcon;
+    if (pureIcon.startsWith("vi-")) { pureIcon = pureIcon.substring(3); }
+    let adminIcon: String = rawIcon;
+    if (adminIcon != "" && !adminIcon.startsWith("vi-")) { adminIcon = "vi-" + adminIcon; }
+    btn["icon"] = adminIcon;
+    btn["pureIcon"] = pureIcon;
+    btn["pureIconEsc"] = escapeJsStr(pureIcon);
+
+    // 显示控制：仅图标（tooltip 用 label）、按行状态显示
+    let showLabel: Bool = (rawBtn.showLabel != false);
+    if (!showLabel && pureIcon == "") { showLabel = true; }  // 无图标回退文字
+    btn["showLabel"] = showLabel;
+    btn["iconOnly"] = (!showLabel && pureIcon != "");
+    let rawLabel: String = rawBtn.label;
+    if (rawLabel == null) { rawLabel = ""; }
+    btn["labelEsc"] = escapeJsStr(rawLabel);
+    let vf: String = rawBtn.visibleField;
+    if (vf == null) { vf = ""; }
+    let vv: String = rawBtn.visibleValue;
+    if (vv == null) { vv = ""; }
+    let hasCond: Bool = false;
+    let vExpr: String = "";
+    if (rawBtn.position == "row" && vf != "" && vv != "") {
+      let opStr: String = (rawBtn.visibleOp == "ne") ? "!==" : "===";
+      vExpr = "String(row." + vf + ") " + opStr + " '" + escapeJsStr(vv) + "'";
+      hasCond = true;
+    }
+    btn["hasVisibleCondition"] = hasCond;
+    btn["visibleExpr"] = vExpr;
+    btn["visibleField"] = vf;
     btn["type"] = rawBtn.buttonType;
     btn["position"] = rawBtn.position;
     btn["actionType"] = rawBtn.actionType;
@@ -905,7 +938,7 @@ export function processButtons(rawButtons: Object[]): Object {
     btn["isConfirm"] = isConfirm;
     btn["isDialog"] = isDialog;
     btn["isLink"] = isLink;
-    btn["hasIcon"] = (rawBtn.icon != "");
+    btn["hasIcon"] = (pureIcon != "");
     btn["hasType"] = (rawBtn.buttonType != "");
 
     buttons.push(btn);
@@ -1467,8 +1500,30 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
 
   // ── 数据加工 ────────────────────────────────────────────────────
   let btnResult = processButtons(rawButtons);
+  // 自定义按钮 API 分流：apiExtNames 中的函数从手写模块（apiExtPath）导入，
+  // 其余额外 API 仍从本页生成的 api 文件导入，避免生成页 API 缺手写函数。
+  let apiExtPath: String = json["apiExtPath"];
+  if (apiExtPath == null) { apiExtPath = ""; }
+  let apiExtNames: String[] = json["apiExtNames"];
+  let apiExtSet: Object = {};
+  if (apiExtPath != "" && apiExtNames != null) {
+    for (apiExtName in apiExtNames) { apiExtSet[apiExtName] = true; }
+  }
+  let pageExtraApis: String[] = [];
+  let apiExtList: String[] = [];
+  let extraApis: String[] = btnResult["extraApiList"];
+  for (extraApi in extraApis) {
+    if (apiExtSet[extraApi] == true) { apiExtList.append(extraApi); }
+    else { pageExtraApis.append(extraApi); }
+  }
   let apiImports = buildApiImports(queryApi, deleteApi, updateApi, noDelete, noEdit,
-                                   btnResult["extraApiList"]);
+                                   pageExtraApis);
+  let apiExtImports: String = "";
+  for (let aei = 0; aei < apiExtList.length; aei = aei + 1) {
+    if (aei > 0) { apiExtImports = apiExtImports + ", "; }
+    apiExtImports = apiExtImports + apiExtList[aei];
+  }
+  let hasApiExtImport: Bool = (apiExtPath != "" && apiExtList.length > 0);
   let columns = processColumns(rawColumns, sourceMap, uploadMap);
   // 列 dataName → 列 映射（查询字段复用列的下拉数据源时查表用）
   let columnMap: Object = {};
@@ -1697,13 +1752,35 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
   let linkButtons: Object[] = btnResult["linkButtons"];
 
   // ── 操作列宽度（详情/编辑/删除为 16px 图标按钮 + 相邻 margin 12px，
-  //    约每按钮 28px；左右 cell padding 各 10px，另加 20px 余量。
-  //    自定义行按钮仍为文本样式，每个约 60px）────────────────────────
+  //    约每按钮 28px；自定义行按钮按“文字长度 * 16px + 图标 + 间隔”估算，
+  //    避免带图标+文字的多按钮被固定列宽裁掉文字）────────────────────
   let baseActionCount = 0;
   if (!noDetail) { baseActionCount = baseActionCount + 1; }
   if (!noEdit) { baseActionCount = baseActionCount + 1; }
   if (!noDelete) { baseActionCount = baseActionCount + 1; }
-  let actionColumnWidth: Int = rowButtons.length * 60;
+  let actionColumnWidth: Int = 0;
+  let condGroupWidth: Object = {};
+  let rowBtnLen = rowButtons.length;
+  for (let rbi = 0; rbi < rowBtnLen; rbi = rbi + 1) {
+    let rb: Object = rowButtons[rbi];
+    let rbLabel: String = rb["label"];
+    let rbTextLen: Int = 0;
+    if (rb["showLabel"] == true && rbLabel != null) { rbTextLen = rbLabel.length; }
+    let rbWidth: Int = rbTextLen * 16 + 12;  // 16px 字号 + 按钮间隔
+    if (rb["hasIcon"] == true) { rbWidth = rbWidth + 20; }  // 图标 16 + 间距 4
+    if (rb["hasVisibleCondition"] == true) {
+      // 同一状态字段的互斥按钮只占一份最大宽度
+      let gk: String = rb["visibleField"];
+      let cur: Int = 0;
+      if (condGroupWidth[gk] != null) { cur = condGroupWidth[gk]; }
+      if (rbWidth > cur) { condGroupWidth[gk] = rbWidth; }
+    } else {
+      actionColumnWidth = actionColumnWidth + rbWidth;
+    }
+  }
+  for (gk in condGroupWidth) {
+    actionColumnWidth = actionColumnWidth + condGroupWidth[gk];
+  }
   if (baseActionCount > 0) {
     actionColumnWidth = actionColumnWidth + baseActionCount * 28 + 20;
   }
@@ -1714,6 +1791,12 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
   // 整列不渲染（否则会留一列 48px 空白）
   let hasActionColumn: Bool = (baseActionCount > 0 || rowButtons.length > 0);
   let hasCustomButtons = (buttons.length > 0);
+  // 自定义按钮是否带图标（pure 页面用 useRenderIcon 渲染 ep:xxx）
+  let hasButtonIcons: Bool = false;
+  let btnIconLen = buttons.length;
+  for (let bii = 0; bii < btnIconLen; bii = bii + 1) {
+    if (buttons[bii]["hasIcon"] == true) { hasButtonIcons = true; break; }
+  }
 
   // ── 检查是否有 tag / image 类型的列（需要导入 ElTag / ElImage）──
   let hasTagColumns = false;
@@ -1791,6 +1874,10 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
   tplData["apiModule"] = page["apiModule"];        // ${apiModule} API 模块路径
   tplData["pageName"] = page["pageName"];          // ${pageName} jsonvue 文件名（不含扩展名）
   tplData["apiImports"] = apiImports;              // ${apiImports} API 导入列表
+  // 自定义按钮的手写 API 导入（index.tpl 使用）
+  tplData["apiExtPath"] = apiExtPath;              // ${apiExtPath} 手写 API 模块路径
+  tplData["apiExtImports"] = apiExtImports;        // ${apiExtImports} 手写 API 函数列表
+  tplData["hasApiExtImport"] = hasApiExtImport;    // ${if hasApiExtImport} 是否导入手写 API
   tplData["queryApi"] = queryApi;                  // ${queryApi} 查询接口名
   tplData["deleteApi"] = deleteApi;                // ${deleteApi} 删除接口名
   tplData["updateApi"] = updateApi;                // ${updateApi} 修改接口名
@@ -1819,6 +1906,7 @@ export function buildAdminTplData(json: Object, file: String, suffixes: Object,
   tplData["queryFields"] = queryFields;            // ${each q in queryFields} 查询字段循环
   // 自定义按钮相关数据
   tplData["hasCustomButtons"] = hasCustomButtons;  // ${if hasCustomButtons} 是否有自定义按钮
+  tplData["hasButtonIcons"] = hasButtonIcons;      // ${if hasButtonIcons} 自定义按钮是否带图标
   tplData["hasAjaxButtons"] = (ajaxButtons.length > 0);
   tplData["hasConfirmButtons"] = (confirmButtons.length > 0);
   tplData["hasDialogButtons"] = (dialogButtons.length > 0);

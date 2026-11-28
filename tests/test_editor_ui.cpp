@@ -24,6 +24,7 @@
 #include "src/ui/json_source/json_table_designer.h"
 #include "src/ui/json_source/view_field_config_dialog.h"
 #include "src/ui/json_source/table_schema_service.h"
+#include "src/ui/json_vue/icon_loader.h"
 #include "src/ui/main_dev/editor_factory.h"
 #include "src/ui/main_dev/main_dev_model.h"
 #include "src/ui/schema_json/schema_form_editor.h"
@@ -400,6 +401,17 @@ void testJoinAliasValidation() {
   CHECK(TableSchema::validateCrossRefs(bTable, cfg, cfg.tables, bTable.tableName, &err));
 }
 
+/// 图标选择器本地图标集：四套 shop 图标可用，旧 vi- 前缀继续兼容。
+void testLocalIconSets() {
+  IconLoader &loader = IconLoader::instance();
+  CHECK(loader.localIconNames(QStringLiteral("ep")).size() > 100);
+  CHECK(!loader.localIconNames(QStringLiteral("ri")).isEmpty());
+  CHECK(!loader.localIconNames(QStringLiteral("ant-design")).isEmpty());
+  CHECK(!loader.localIconNames(QStringLiteral("mdi")).isEmpty());
+  CHECK(!loader.getOrCreateIcon(QStringLiteral("ep:user")).isNull());
+  CHECK(!loader.getOrCreateIcon(QStringLiteral("vi-ep:user")).isNull());
+}
+
 /// 真实字段修改仍需写回；同值信号及防抖内改回原值不能制造修改标记。
 void testSchemaFieldEditing() {
   QTemporaryDir dir;
@@ -547,6 +559,7 @@ int main(int argc, char **argv) {
   testViewFieldWidthRoundTrip();
   testJoinAliasEnumFlag();
   testJoinAliasValidation();
+  testLocalIconSets();
   testPhysicalColumnMetadata();
   for (const QString &suffix :
        {QStringLiteral(".jsonvue"), QStringLiteral(".jsonsource"), QStringLiteral(".jsonupload"),

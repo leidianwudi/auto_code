@@ -2,9 +2,9 @@
  * @file icon_picker_dialog.h
  * @brief 图标选择对话框
  *
- * 支持 3 套图标库（Element Plus / Ant Design / TDesign），标签切换，翻页浏览。
- * 通过 IconLoader 单例异步加载真实 SVG 图标并渲染。
- * 图标格式：vi-{prefix}:{name}，如 vi-ep:edit
+ * 图标集与 shop IconSelect 对齐（Element / Remix / Ant Design / Material），
+ * 数据来自 IconLoader 的本地图标集，不依赖网络；标签切换，翻页浏览。
+ * 图标格式：{prefix}:{name}，如 ep:edit（兼容旧 vi-ep:edit）。
  */
 
 #pragma once
@@ -38,10 +38,8 @@ private:
   /// 重建页码按钮
   void rebuildPageButtons();
 
-  /// 获取各图标库的图标列表
-  static QStringList getEpIcons();
-  static QStringList getAntIcons();
-  static QStringList getTdIcons();
+  /// 获取标签页对应的本地图标列表（prefix:name）
+  static QStringList iconsForTab(int tabIndex);
 
   QTabWidget *m_tabWidget = nullptr;
   QLineEdit *m_searchEdit = nullptr;

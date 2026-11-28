@@ -30,7 +30,8 @@ import EnableSwitch from "@/components/ac/enable_switch.vue";
 ${/if}
 import { message } from "@/utils/message";
 import { hasPerms } from "@/utils/auth";
-${if !noDetail}
+${if hasButtonIcons}import { useRenderIcon } from "@/components/ReIcon/src/hooks";
+${/if}${if !noDetail}
 import View from "~icons/ep/view";
 ${/if}
 ${if !noEdit}
@@ -47,7 +48,8 @@ import { http } from "@/utils/http";
 ${/if}
 import Write from "./components/write.vue";
 import { ${apiImports} } from "@/api/${apiModule}/${pageName}";
-${if hasTagColumns}import { tableEnumMap } from "@/api/source/table_enum";
+${if hasApiExtImport}import { ${apiExtImports} } from "${apiExtPath}";
+${/if}${if hasTagColumns}import { tableEnumMap } from "@/api/source/table_enum";
 ${/if}
 ${if hasSelectApi}import { ${selectApiImports} } from "@/api/${apiModule}/${pageName}";
 ${/if}${if hasBoolSourceImports}${boolSourceImportLines}
@@ -263,17 +265,26 @@ ${/if}
 ${if hasCustomButtons}
 // ── 自定义按钮动作处理 ──
 // row 为 null 表示工具栏按钮触发，有值表示行操作列按钮触发
+const runCustomApi = async (api: any, id: any) => {
+  try {
+    await api(id);
+    message("操作成功", { type: "success" });
+    loadData();
+  } catch (e: any) {
+    message(e?.message ?? "操作失败", { type: "error" });
+  }
+};
 const onCustomAction = (row: any, actionKey: string) => {
 ${each btn in ajaxButtons}
   if (actionKey === '${btn.key}') {
-    ${btn.apiName}(row ? row.id : undefined);
+    runCustomApi(${btn.apiName}, row ? row.id : undefined);
     return;
   }
 ${/each}
 ${each btn in confirmButtons}
   if (actionKey === '${btn.key}') {
     ElMessageBox.confirm('${btn.confirmText}', '提示', { type: 'warning' })
-      .then(() => ${btn.apiName}(row ? row.id : undefined));
+      .then(() => runCustomApi(${btn.apiName}, row ? row.id : undefined));
     return;
   }
 ${/each}
@@ -321,9 +332,15 @@ ${/each}
 const onCustomDialogSubmit = async (actionKey: string) => {
 ${each btn in dialogButtons}
   if (actionKey === '${btn.key}') {
-    await ${btn.dialogApi}({ id: ${btn.key}Row.value?.id, ...${btn.key}Form });
-    ${btn.key}Visible.value = false;
-    Object.keys(${btn.key}Form).forEach((k: string) => ((${btn.key}Form as any)[k] = ''));
+    try {
+      await ${btn.dialogApi}({ id: ${btn.key}Row.value?.id, ...${btn.key}Form });
+      message("操作成功", { type: "success" });
+      loadData();
+      ${btn.key}Visible.value = false;
+      Object.keys(${btn.key}Form).forEach((k: string) => ((${btn.key}Form as any)[k] = ''));
+    } catch (e: any) {
+      message(e?.message ?? "操作失败", { type: "error" });
+    }
     return;
   }
 ${/each}
@@ -397,8 +414,12 @@ ${else}      <div class="mb-3">
 ${/if}
 ${if !noAdd}        <el-button type="primary" :disabled="!hasPerms(['${permPrefix}:add'])" @click="addAction">新增</el-button>
 ${/if}${if !noDelete}        <el-button type="danger" :disabled="selectedRows.length === 0 || !hasPerms(['${permPrefix}:delete'])" @click="delData()">删除</el-button>
-${/if}${each btn in toolbarButtons}        <el-button${if btn.hasType} type="${btn.type}"${/if} @click="onCustomAction(null, '${btn.key}')">${btn.label}</el-button>
-${/each}${if useListTable}        </template>
+${/if}${each btn in toolbarButtons}${if btn.iconOnly}        <el-tooltip :content="'${btn.labelEsc}'" placement="top">
+${/if}        <el-button${if btn.hasType} type="${btn.type}"${/if} @click="onCustomAction(null, '${btn.key}')">
+${if btn.hasIcon}          <el-icon${if btn.showLabel} class="mr-1"${/if}><component :is="useRenderIcon('${btn.pureIconEsc}')" /></el-icon>${/if}${if btn.showLabel}${btn.label}${/if}
+        </el-button>
+${if btn.iconOnly}        </el-tooltip>
+${/if}${/each}${if useListTable}        </template>
 ${else}      </div>
 
       <el-table v-loading="loading" :data="dataList"${if !noDelete} @selection-change="onSelectionChange"${/if}${if hasTableDefaultSort} :default-sort="{ prop: '${defaultSortField}', order: '${defaultSortOrder}' }"${/if}>
@@ -519,8 +540,14 @@ ${/if}${if !noDelete}            <el-tooltip content="删除" placement="top">
                 <IconifyIconOffline :icon="Delete" />
               </el-button>
             </el-tooltip>
-${/if}${each btn in rowButtons}            <el-button link size="small"${if btn.hasType} type="${btn.type}"${/if} @click="onCustomAction(row, '${btn.key}')">${btn.label}</el-button>
-${/each}
+${/if}${each btn in rowButtons}${if btn.hasVisibleCondition}            <template v-if="${btn.visibleExpr}">
+${/if}${if btn.iconOnly}            <el-tooltip :content="'${btn.labelEsc}'" placement="top">
+${/if}            <el-button link size="small"${if btn.hasType} type="${btn.type}"${/if} @click="onCustomAction(row, '${btn.key}')">
+${if btn.hasIcon}              <el-icon${if btn.showLabel} class="mr-1"${/if}><component :is="useRenderIcon('${btn.pureIconEsc}')" /></el-icon>${/if}${if btn.showLabel}${btn.label}${/if}
+            </el-button>
+${if btn.iconOnly}            </el-tooltip>
+${/if}${if btn.hasVisibleCondition}            </template>
+${/if}${/each}
           </template>
         </el-table-column>
 ${/if}
@@ -561,7 +588,8 @@ ${each f in btn.dialogFields}
 ${if f.isSelect}          <el-select v-model="${btn.key}Form.${f.fieldName}" clearable placeholder="请选择" style="width: 100%">
             <el-option v-for="it in ${btn.key}${f.fieldNameCamel}Options" :key="String(it.${f.selectValueField})" :label="it.${f.selectLabelField}" :value="it.${f.selectValueField}" />
           </el-select>
-${else if f.isInt}${else if f.isFloat}          <el-input-number v-model="${btn.key}Form.${f.fieldName}" style="width: 100%" />
+${else if f.isInt}          <el-input-number v-model="${btn.key}Form.${f.fieldName}"${if f.hasMinValue} :min="${f.minValue}"${/if}${if f.hasMaxValue} :max="${f.maxValue}"${/if} style="width: 100%" />
+${else if f.isFloat}          <el-input-number v-model="${btn.key}Form.${f.fieldName}" :precision="${f.precision}"${if f.hasMinValue} :min="${f.minValue}"${/if}${if f.hasMaxValue} :max="${f.maxValue}"${/if} style="width: 100%" />
 ${else if f.isDate}          <el-date-picker v-model="${btn.key}Form.${f.fieldName}"${if f.hasDateFormat} type="${f.dateFormat}"${/if} placeholder="请选择日期" style="width: 100%" />
 ${else if f.isTextArea}          <el-input v-model="${btn.key}Form.${f.fieldName}" type="textarea" :rows="${f.textareaRows}" placeholder="请输入" />
 ${else}          <el-input v-model="${btn.key}Form.${f.fieldName}" placeholder="请输入" />

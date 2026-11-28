@@ -1,557 +1,673 @@
 {
-  "table": {
-    "appAuth": "user",
-    "appOutCols": [
-      "id",
-      "level",
-      "nick",
-      "head_img_url",
-      "is_real_name",
-      "fans_count",
-      "like_count"
+  table: {
+    adminQueryMode: 'crud',
+    apiExtNames: [
+      'unfreezeUser',
+      'freezeUser',
+      'disableUser',
+      'enableUser',
     ],
-    "appQuery": true,
-    "appQueryMode": "empty",
-    "columns": [
-      {
-        "comment": "主键",
-        "title": "用户ID",
-        "isAutoInc": true,
-        "isPrimary": true,
-        "mysqlType": "int",
-        "name": "id",
-        "nullable": false,
-        "unsigned": false
-      },
-      {
-        "comment": "用户vip等级",
-        "title": "VIP等级",
-        "default": "0",
-        "isAutoInc": false,
-        "isPrimary": false,
-        "mysqlType": "int",
-        "name": "level",
-        "nullable": false,
-        "unsigned": false
-      },
-      {
-        "comment": "昵称",
-        "isAutoInc": false,
-        "isPrimary": false,
-        "mysqlType": "varchar(64)",
-        "name": "nick",
-        "nullable": false,
-        "unsigned": false,
-        "default": ""
-      },
-      {
-        "comment": "头像url",
-        "isAutoInc": false,
-        "isPrimary": false,
-        "mysqlType": "varchar(256)",
-        "name": "head_img_url",
-        "nullable": false,
-        "title": "头像",
-        "unsigned": false,
-        "default": ""
-      },
-      {
-        "comment": "是否实名;0:未实名;1:已实名",
-        "default": "0",
-        "isAutoInc": false,
-        "isPrimary": false,
-        "mysqlType": "int",
-        "name": "is_real_name",
-        "nullable": false,
-        "title": "是否实名",
-        "unsigned": false
-      },
-      {
-        "comment": "粉丝数量",
-        "title": "粉丝数",
-        "default": "0",
-        "isAutoInc": false,
-        "isPrimary": false,
-        "mysqlType": "int",
-        "name": "fans_count",
-        "nullable": false,
-        "unsigned": false
-      },
-      {
-        "comment": "获赞数量",
-        "title": "获赞数",
-        "default": "0",
-        "isAutoInc": false,
-        "isPrimary": false,
-        "mysqlType": "int",
-        "name": "like_count",
-        "nullable": false,
-        "unsigned": false
-      },
-      {
-        "comment": "获踩数量",
-        "title": "获踩数",
-        "default": "0",
-        "isAutoInc": false,
-        "isPrimary": false,
-        "mysqlType": "int",
-        "name": "dislike_count",
-        "nullable": false,
-        "unsigned": false
-      },
-      {
-        "comment": "自己关注数量",
-        "title": "关注数",
-        "default": "0",
-        "isAutoInc": false,
-        "isPrimary": false,
-        "mysqlType": "int",
-        "name": "following_count",
-        "nullable": false,
-        "unsigned": false
-      },
-      {
-        "comment": "上级",
-        "isAutoInc": false,
-        "isPrimary": false,
-        "mysqlType": "varchar(64)",
-        "name": "parent_account",
-        "nullable": false,
-        "unsigned": false,
-        "default": ""
-      },
-      {
-        "comment": "上级的上级",
-        "title": "二级上级",
-        "isAutoInc": false,
-        "isPrimary": false,
-        "mysqlType": "varchar(64)",
-        "name": "grandparent_account",
-        "nullable": false,
-        "unsigned": false,
-        "default": ""
-      },
-      {
-        "comment": "金币余额",
-        "default": "0.00",
-        "isAutoInc": false,
-        "isPrimary": false,
-        "mysqlType": "decimal(20,2)",
-        "name": "coin",
-        "nullable": false,
-        "unsigned": false
-      },
-      {
-        "comment": "充值金币",
-        "default": "0.00",
-        "isAutoInc": false,
-        "isPrimary": false,
-        "mysqlType": "decimal(20,2)",
-        "name": "recharge_coin",
-        "nullable": false,
-        "unsigned": false
-      },
-      {
-        "comment": "充值金额",
-        "default": "0.00",
-        "isAutoInc": false,
-        "isPrimary": false,
-        "mysqlType": "decimal(20,2)",
-        "name": "recharge_money",
-        "nullable": false,
-        "unsigned": false
-      },
-      {
-        "comment": "活动获得金币",
-        "title": "活动金币",
-        "default": "0.00",
-        "isAutoInc": false,
-        "isPrimary": false,
-        "mysqlType": "decimal(20,2)",
-        "name": "activity_coin",
-        "nullable": false,
-        "unsigned": false
-      },
-      {
-        "comment": "收益金币",
-        "default": "0.00",
-        "isAutoInc": false,
-        "isPrimary": false,
-        "mysqlType": "decimal(20,2)",
-        "name": "earn_coin",
-        "nullable": false,
-        "unsigned": false
-      },
-      {
-        "comment": "消费金币",
-        "default": "0.00",
-        "isAutoInc": false,
-        "isPrimary": false,
-        "mysqlType": "decimal(20,2)",
-        "name": "spend_coin",
-        "nullable": false,
-        "unsigned": false
-      },
-      {
-        "comment": "转出金币",
-        "default": "0.00",
-        "isAutoInc": false,
-        "isPrimary": false,
-        "mysqlType": "decimal(20,2)",
-        "name": "out_coin",
-        "nullable": false,
-        "unsigned": false
-      },
-      {
-        "comment": "道具数量",
-        "default": "0",
-        "isAutoInc": false,
-        "isPrimary": false,
-        "mysqlType": "int",
-        "name": "item_count",
-        "nullable": false,
-        "unsigned": false
-      },
-      {
-        "comment": "备注",
-        "isAutoInc": false,
-        "isPrimary": false,
-        "mysqlType": "varchar(256)",
-        "name": "desc",
-        "nullable": false,
-        "unsigned": false,
-        "default": ""
-      },
-      {
-        "name": "credit_limit",
-        "mysqlType": "decimal(20,2)",
-        "comment": "购买授信额度，不增加余额",
-        "title": "授信额度",
-        "default": "0.00",
-        "nullable": false,
-        "unsigned": false,
-        "isPrimary": false,
-        "isAutoInc": false
-      },
-      {
-        "name": "credit_enabled",
-        "mysqlType": "tinyint",
-        "comment": "授信启用：0关闭/1启用",
-        "title": "授信状态",
-        "default": "0",
-        "nullable": false,
-        "unsigned": false,
-        "isPrimary": false,
-        "isAutoInc": false
-      },
-      {
-        "name": "wallet_version",
-        "mysqlType": "bigint",
-        "comment": "钱包资金变更版本",
-        "title": "钱包版本",
-        "default": "0",
-        "nullable": false,
-        "unsigned": false,
-        "isPrimary": false,
-        "isAutoInc": false
-      }
+    apiExtPath: '@/api/user/unfreeze',
+    appAuth: 'user',
+    appOutCols: [
+      'id',
+      'level',
+      'nick',
+      'head_img_url',
+      'is_real_name',
+      'fans_count',
+      'like_count',
     ],
-    "editCols": [
+    appQuery: true,
+    appQueryMode: 'empty',
+    buttons: [
       {
-        "editEditable": false,
-        "label": "用户ID",
-        "ref": "id",
-        "visible": false
+        actionKey: 'unfreeze',
+        actionType: 'confirm',
+        apiName: 'unfreezeUser',
+        buttonType: 'warning',
+        confirmText: '确定解除该用户的登录冻结？',
+        icon: 'ep:unlock',
+        label: '解冻',
+        position: 'row',
+        showLabel: false,
+        stateGroup: 'freeze',
+        visibleField: 'user_ext_is_freeze',
+        visibleValue: '1',
       },
       {
-        "editEditable": false,
-        "label": "账户",
-        "ref": "user_ext_account",
-        "writable": false
-      },
-      {
-        "label": "昵称",
-        "ref": "nick",
-        "required": true
-      },
-      {
-        "label": "VIP等级",
-        "ref": "level",
-        "required": true
-      },
-      {
-        "label": "是否实名",
-        "ref": "is_real_name",
-        "widget": "select"
-      },
-      {
-        "editEditable": false,
-        "label": "金币余额",
-        "ref": "coin",
-        "writable": false
-      },
-      {
-        "editEditable": false,
-        "label": "充值金币",
-        "ref": "recharge_coin",
-        "writable": false
-      },
-      {
-        "editEditable": false,
-        "label": "充值金额",
-        "ref": "recharge_money",
-        "writable": false
-      },
-      {
-        "editEditable": false,
-        "label": "活动金币",
-        "ref": "activity_coin",
-        "writable": false
-      },
-      {
-        "label": "备注",
-        "ref": "desc"
-      },
-      {
-        "editThumbHeight": 60,
-        "editThumbWidth": 120,
-        "label": "头像",
-        "ref": "head_img_url",
-        "uploadSourceFile": "D:/work/github/auto_code/file/go_pure/shop/upload/img.jsonupload",
-        "uploadSourceId": "user_head",
-        "widget": "image"
-      },
-      {
-        "editEditable": false,
-        "label": "粉丝数",
-        "ref": "fans_count",
-        "writable": false
-      },
-      {
-        "editEditable": false,
-        "label": "获赞数",
-        "ref": "like_count",
-        "writable": false
-      },
-      {
-        "editEditable": false,
-        "label": "获踩数",
-        "ref": "dislike_count",
-        "writable": false
-      },
-      {
-        "editEditable": false,
-        "label": "关注数",
-        "ref": "following_count",
-        "writable": false
-      },
-      {
-        "editEditable": false,
-        "label": "上级",
-        "ref": "parent_account",
-        "writable": false
-      },
-      {
-        "editEditable": false,
-        "label": "二级上级",
-        "ref": "grandparent_account",
-        "writable": false
-      },
-      {
-        "editEditable": false,
-        "label": "收益金币",
-        "ref": "earn_coin",
-        "writable": false
-      },
-      {
-        "editEditable": false,
-        "label": "消费金币",
-        "ref": "spend_coin",
-        "writable": false
-      },
-      {
-        "editEditable": false,
-        "label": "转出金币",
-        "ref": "out_coin",
-        "writable": false
-      },
-      {
-        "editEditable": false,
-        "label": "道具数量",
-        "ref": "item_count",
-        "writable": false
-      }
-    ],
-    "enums": [
-      {
-        "column": "is_real_name",
-        "comment": "是否实名",
-        "items": [
+        actionKey: 'freeze',
+        actionType: 'dialog',
+        buttonType: 'danger',
+        dialogApi: 'freezeUser',
+        dialogFields: [
           {
-            "key": "no",
-            "label": "未实名",
-            "value": "0",
-            "valueType": "number"
+            editStyle: 'int',
+            fieldName: 'hours',
+            label: '冻结时长(小时)',
+            maxValue: 8760,
+            minValue: 1,
+            required: true,
           },
-          {
-            "key": "yes",
-            "label": "已实名",
-            "value": "1",
-            "valueType": "number"
-          }
-        ]
-      }
-    ],
-    "genCache": true,
-    "indexes": [
-      {
-        "cols": [
-          "nick"
         ],
-        "name": "ft_user_nick",
-        "unique": false
-      }
-    ],
-    "joinTables": [
+        dialogTitle: '冻结用户',
+        icon: 'ep:lock',
+        label: '冻结',
+        position: 'row',
+        showLabel: false,
+        stateGroup: 'freeze',
+        visibleField: 'user_ext_is_freeze',
+        visibleValue: '0',
+      },
       {
-        "cols": [
+        actionKey: 'disable',
+        actionType: 'confirm',
+        apiName: 'disableUser',
+        buttonType: 'danger',
+        confirmText: '确定禁用该用户？',
+        icon: 'ep:circle-close',
+        label: '禁用',
+        position: 'row',
+        showLabel: false,
+        stateGroup: 'disable',
+        visibleField: 'user_ext_is_disable',
+        visibleValue: '0',
+      },
+      {
+        actionKey: 'enable',
+        actionType: 'confirm',
+        apiName: 'enableUser',
+        buttonType: 'success',
+        confirmText: '确定启用该用户？',
+        icon: 'ep:circle-check',
+        label: '启用',
+        position: 'row',
+        showLabel: false,
+        stateGroup: 'disable',
+        visibleField: 'user_ext_is_disable',
+        visibleValue: '1',
+      },
+    ],
+    columns: [
+      {
+        comment: '主键',
+        isAutoInc: true,
+        isPrimary: true,
+        mysqlType: 'int',
+        name: 'id',
+        nullable: false,
+        title: '用户ID',
+        unsigned: false,
+      },
+      {
+        comment: '用户vip等级',
+        default: '0',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'level',
+        nullable: false,
+        title: 'VIP等级',
+        unsigned: false,
+      },
+      {
+        comment: '昵称',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'nick',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '头像url',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(256)',
+        name: 'head_img_url',
+        nullable: false,
+        title: '头像',
+        unsigned: false,
+      },
+      {
+        comment: '是否实名;0:未实名;1:已实名',
+        default: '0',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'is_real_name',
+        nullable: false,
+        title: '是否实名',
+        unsigned: false,
+      },
+      {
+        comment: '粉丝数量',
+        default: '0',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'fans_count',
+        nullable: false,
+        title: '粉丝数',
+        unsigned: false,
+      },
+      {
+        comment: '获赞数量',
+        default: '0',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'like_count',
+        nullable: false,
+        title: '获赞数',
+        unsigned: false,
+      },
+      {
+        comment: '获踩数量',
+        default: '0',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'dislike_count',
+        nullable: false,
+        title: '获踩数',
+        unsigned: false,
+      },
+      {
+        comment: '自己关注数量',
+        default: '0',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'following_count',
+        nullable: false,
+        title: '关注数',
+        unsigned: false,
+      },
+      {
+        comment: '上级',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'parent_account',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '上级的上级',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(64)',
+        name: 'grandparent_account',
+        nullable: false,
+        title: '二级上级',
+        unsigned: false,
+      },
+      {
+        comment: '金币余额',
+        default: '0.00',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'decimal(20,2)',
+        name: 'coin',
+        nullable: false,
+        title: '钱包余额',
+        unsigned: false,
+      },
+      {
+        comment: '充值金币',
+        default: '0.00',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'decimal(20,2)',
+        name: 'recharge_coin',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '充值金额',
+        default: '0.00',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'decimal(20,2)',
+        name: 'recharge_money',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '活动获得金币',
+        default: '0.00',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'decimal(20,2)',
+        name: 'activity_coin',
+        nullable: false,
+        title: '活动金币',
+        unsigned: false,
+      },
+      {
+        comment: '收益金币',
+        default: '0.00',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'decimal(20,2)',
+        name: 'earn_coin',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '消费金币',
+        default: '0.00',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'decimal(20,2)',
+        name: 'spend_coin',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '转出金币',
+        default: '0.00',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'decimal(20,2)',
+        name: 'out_coin',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '道具数量',
+        default: '0',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'int',
+        name: 'item_count',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '备注',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'varchar(256)',
+        name: 'desc',
+        nullable: false,
+        unsigned: false,
+      },
+      {
+        comment: '购买授信额度，不增加余额',
+        default: '0.00',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'decimal(20,2)',
+        name: 'credit_limit',
+        nullable: false,
+        title: '授信额度',
+        unsigned: false,
+      },
+      {
+        comment: '授信启用：0关闭/1启用',
+        default: '0',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'tinyint',
+        name: 'credit_enabled',
+        nullable: false,
+        title: '授信状态',
+        unsigned: false,
+      },
+      {
+        comment: '钱包资金变更版本',
+        default: '0',
+        isAutoInc: false,
+        isPrimary: false,
+        mysqlType: 'bigint',
+        name: 'wallet_version',
+        nullable: false,
+        title: '钱包版本',
+        unsigned: false,
+      },
+    ],
+    editCols: [
+      {
+        editEditable: false,
+        label: '用户ID',
+        ref: 'id',
+        visible: false,
+      },
+      {
+        editEditable: false,
+        label: '账户',
+        ref: 'user_ext_account',
+        writable: false,
+      },
+      {
+        label: '昵称',
+        ref: 'nick',
+        required: true,
+      },
+      {
+        label: 'VIP等级',
+        ref: 'level',
+        required: true,
+      },
+      {
+        label: '是否实名',
+        ref: 'is_real_name',
+        widget: 'select',
+      },
+      {
+        editEditable: false,
+        label: '钱包余额',
+        ref: 'coin',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '充值金币',
+        ref: 'recharge_coin',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '充值金额',
+        ref: 'recharge_money',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '活动金币',
+        ref: 'activity_coin',
+        writable: false,
+      },
+      {
+        label: '备注',
+        ref: 'desc',
+      },
+      {
+        editThumbHeight: 60,
+        editThumbWidth: 120,
+        label: '头像',
+        ref: 'head_img_url',
+        uploadSourceFile: 'D:/work/github/auto_code/file/go_pure/shop/upload/img.jsonupload',
+        uploadSourceId: 'user_head',
+        widget: 'image',
+      },
+      {
+        editEditable: false,
+        label: '粉丝数',
+        ref: 'fans_count',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '获赞数',
+        ref: 'like_count',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '获踩数',
+        ref: 'dislike_count',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '关注数',
+        ref: 'following_count',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '上级',
+        ref: 'parent_account',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '二级上级',
+        ref: 'grandparent_account',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '收益金币',
+        ref: 'earn_coin',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '消费金币',
+        ref: 'spend_coin',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '转出金币',
+        ref: 'out_coin',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '道具数量',
+        ref: 'item_count',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '账号禁用',
+        ref: 'user_ext_is_disable',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '登录冻结',
+        ref: 'user_ext_is_freeze',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '冻结截止时间',
+        ref: 'user_ext_freeze_end_time',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '真实姓名',
+        ref: 'user_ext_real_name',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '联系电话',
+        ref: 'user_ext_tel',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '注册时间',
+        ref: 'user_ext_register_time',
+        writable: false,
+      },
+      {
+        editEditable: false,
+        label: '最后登录时间',
+        ref: 'user_ext_last_time',
+        writable: false,
+      },
+      {
+        label: '授信额度',
+        ref: 'credit_limit',
+      },
+      {
+        label: '授信状态',
+        ref: 'credit_enabled',
+      },
+      {
+        label: '钱包版本',
+        ref: 'wallet_version',
+      },
+    ],
+    enums: [
+      {
+        column: 'is_real_name',
+        comment: '是否实名',
+        items: [
           {
-            "col": "account",
-            "label": "账户"
+            key: 'no',
+            label: '未实名',
+            value: '0',
+            valueType: 'number',
           },
           {
-            "col": "is_freeze",
-            "label": "登录冻结"
+            key: 'yes',
+            label: '已实名',
+            value: '1',
+            valueType: 'number',
           },
-          {
-            "col": "freeze_end_time",
-            "label": "冻结截止时间"
-          },
-          {
-            "col": "is_disable",
-            "label": "账号禁用"
-          },
-          {
-            "col": "real_name",
-            "label": "真实姓名"
-          },
-          {
-            "col": "tel",
-            "label": "联系电话"
-          },
-          {
-            "col": "register_time",
-            "label": "注册时间"
-          },
-          {
-            "col": "last_time",
-            "label": "最后登录时间"
-          }
         ],
-        "on": [
-          "id",
-          "user_id"
+      },
+    ],
+    genAdd: false,
+    genCache: true,
+    genDelete: false,
+    indexes: [
+      {
+        cols: [
+          'nick',
         ],
-        "table": "user_ext",
-        "type": "LEFT"
-      }
+        name: 'ft_user_nick',
+        unique: false,
+      },
     ],
-    "manualUpdateTime": false,
-    "modelName": "user",
-    "selCols": [
+    joinTables: [
       {
-        "ref": "id",
-        "label": "用户ID"
+        cols: [
+          {
+            col: 'account',
+            label: '账户',
+          },
+          {
+            col: 'is_freeze',
+            label: '登录冻结',
+          },
+          {
+            col: 'freeze_end_time',
+            label: '冻结截止时间',
+          },
+          {
+            col: 'is_disable',
+            label: '账号禁用',
+          },
+          {
+            col: 'real_name',
+            label: '真实姓名',
+          },
+          {
+            col: 'tel',
+            label: '联系电话',
+          },
+          {
+            col: 'register_time',
+            label: '注册时间',
+          },
+          {
+            col: 'last_time',
+            label: '最后登录时间',
+          },
+        ],
+        on: [
+          'id',
+          'user_id',
+        ],
+        table: 'user_ext',
+        type: 'LEFT',
       },
-      {
-        "ref": "user_ext_account",
-        "label": "登录账号"
-      },
-      {
-        "ref": "nick",
-        "label": "昵称"
-      },
-      {
-        "ref": "coin",
-        "label": "钱包余额"
-      },
-      {
-        "ref": "is_real_name",
-        "label": "是否实名"
-      },
-      {
-        "ref": "user_ext_is_disable",
-        "label": "账号禁用"
-      },
-      {
-        "ref": "user_ext_is_freeze",
-        "label": "登录冻结"
-      },
-      {
-        "ref": "user_ext_freeze_end_time",
-        "label": "冻结截止时间",
-        "width": 180
-      },
-      {
-        "ref": "user_ext_real_name",
-        "label": "真实姓名"
-      },
-      {
-        "ref": "user_ext_tel",
-        "label": "联系电话"
-      },
-      {
-        "ref": "user_ext_register_time",
-        "label": "注册时间",
-        "width": 180
-      },
-      {
-        "ref": "user_ext_last_time",
-        "label": "最后登录时间",
-        "width": 180
-      }
     ],
-    "selColsEq": [
+    manualUpdateTime: false,
+    modelName: 'user',
+    selCols: [
       {
-        "ref": "id"
+        label: '用户ID',
+        ref: 'id',
       },
       {
-        "ref": "user_ext_account"
-      }
-    ],
-    "selColsLike": [
+        ref: 'user_ext_account',
+      },
       {
-        "ref": "nick"
-      }
+        label: '昵称',
+        ref: 'nick',
+      },
+      {
+        label: '是否实名',
+        ref: 'is_real_name',
+      },
+      {
+        label: '钱包余额',
+        ref: 'coin',
+      },
+      {
+        ref: 'user_ext_is_disable',
+      },
+      {
+        ref: 'user_ext_is_freeze',
+      },
+      {
+        ref: 'user_ext_freeze_end_time',
+        width: 180,
+      },
+      {
+        ref: 'user_ext_real_name',
+      },
+      {
+        ref: 'user_ext_tel',
+      },
+      {
+        ref: 'user_ext_register_time',
+        width: 180,
+      },
+      {
+        ref: 'user_ext_last_time',
+        width: 180,
+      },
     ],
-    "tableComment": "用户表",
-    "tableName": "user",
-    "viewOrder": [
-      "id",
-      "user_ext_account",
-      "nick",
-      "level",
-      "is_real_name",
-      "coin",
-      "recharge_coin",
-      "recharge_money",
-      "activity_coin",
-      "desc",
-      "head_img_url",
-      "fans_count",
-      "like_count",
-      "dislike_count",
-      "following_count",
-      "parent_account",
-      "grandparent_account",
-      "earn_coin",
-      "spend_coin",
-      "out_coin",
-      "item_count"
+    selColsEq: [
+      {
+        ref: 'id',
+      },
+      {
+        ref: 'user_ext_account',
+      },
     ],
-    "adminQueryMode": "read",
-    "genAdd": false,
-    "genEdit": false,
-    "genDelete": false
-  }
+    selColsLike: [
+      {
+        ref: 'nick',
+      },
+    ],
+    tableComment: '用户表',
+    tableName: 'user',
+    viewOrder: [
+      'id',
+      'user_ext_account',
+      'nick',
+      'level',
+      'is_real_name',
+      'coin',
+      'recharge_coin',
+      'recharge_money',
+      'activity_coin',
+      'desc',
+      'head_img_url',
+      'fans_count',
+      'like_count',
+      'dislike_count',
+      'following_count',
+      'parent_account',
+      'grandparent_account',
+      'earn_coin',
+      'spend_coin',
+      'out_coin',
+      'item_count',
+    ],
+  },
 }

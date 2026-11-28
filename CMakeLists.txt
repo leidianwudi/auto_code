@@ -393,8 +393,21 @@ target_link_libraries(ac_ui
 qt_add_executable(auto_code WIN32 MACOSX_BUNDLE main.cpp res/app_icon.rc)
 target_link_libraries(auto_code PRIVATE ac_ui)
 
+# 本地图标集（与 shop IconSelect 同源）：图标选择器离线渲染，不依赖在线 Iconify API
+qt_add_resources(auto_code "icon_resources"
+    PREFIX "/icons"
+    BASE "res/icons"
+    FILES res/icons/iconify_sets.json
+)
+
 add_executable(auto_code_ui_tests EXCLUDE_FROM_ALL tests/test_editor_ui.cpp)
 target_link_libraries(auto_code_ui_tests PRIVATE ac_ui)
+# 界面测试同样可能打开图标选择器，内置同一份本地图标资源
+qt_add_resources(auto_code_ui_tests "icon_resources"
+    PREFIX "/icons"
+    BASE "res/icons"
+    FILES res/icons/iconify_sets.json
+)
 add_dependencies(auto_code_ui_tests auto_code)
 # windeployqt 默认仅部署 Windows 平台插件；无窗口回归测试需要 offscreen 插件。
 add_custom_command(TARGET auto_code_ui_tests POST_BUILD

@@ -43,6 +43,12 @@ inline constexpr const char *kDialogTitle = "dialogTitle";
 inline constexpr const char *kDialogApi = "dialogApi";
 inline constexpr const char *kDialogFields = "dialogFields";
 inline constexpr const char *kLinkPath = "linkPath";
+// 显示控制（行按钮）
+inline constexpr const char *kShowLabel = "showLabel";        ///< 是否显示按钮文字（false=仅图标+tooltip）
+inline constexpr const char *kVisibleField = "visibleField";  ///< 显示条件字段（空=始终显示）
+inline constexpr const char *kVisibleOp = "visibleOp";        ///< 比较：eq=等于 / ne=不等于
+inline constexpr const char *kVisibleValue = "visibleValue";  ///< 显示条件值（字符串比较）
+inline constexpr const char *kStateGroup = "stateGroup";      ///< 双状态分组键（同组只显示一行）
 }  // namespace JsonVueKey
 
 /// 枚举序列化字符串值常量（写入 .jsonvue / .jsontable / 生成代码时使用；
@@ -193,6 +199,13 @@ struct ButtonConfig {
   // Link 行为专用
   QString linkPath;  ///< 跳转路径（如"/user/log?id={id}"，{id} 用行数据替换）
 
+  // ── 显示控制（行按钮）──
+  bool showLabel = true;        ///< 是否显示按钮文字（false=仅图标，悬停显示文字 tip）
+  QString visibleField;         ///< 显示条件字段（表字段/联表别名；空=始终显示）
+  QString visibleOp = QStringLiteral("eq");  ///< eq=等于 / ne=不等于
+  QString visibleValue;         ///< 显示条件值（按字符串比较）
+  QString stateGroup;           ///< 双状态分组键（同一业务的两个状态共享；空=独立按钮）
+
   /// 序列化为 JSON
   QJsonObject toJson() const;
   /// 从 JSON 反序列化
@@ -206,5 +219,7 @@ inline bool operator==(const ButtonConfig &a, const ButtonConfig &b) {
          a.actionKey == b.actionKey && a.apiName == b.apiName &&
          a.confirmText == b.confirmText && a.dialogTitle == b.dialogTitle &&
          a.dialogApi == b.dialogApi && a.dialogFields == b.dialogFields &&
-         a.linkPath == b.linkPath;
+         a.linkPath == b.linkPath && a.showLabel == b.showLabel &&
+         a.visibleField == b.visibleField && a.visibleOp == b.visibleOp &&
+         a.visibleValue == b.visibleValue && a.stateGroup == b.stateGroup;
 }

@@ -204,6 +204,29 @@ QString joinOutputAlias(const QString &table, const JsonTableJoinCol &c) {
   return c.alias.isEmpty() ? table + QLatin1Char('_') + c.col : c.alias;
 }
 
+/// 按钮“显示条件”可选字段：本表物理列 + 联表输出别名（ref, 标签）
+QVector<QPair<QString, QString>> visibilityFieldsFor(const JsonTableTable &table) {
+  QVector<QPair<QString, QString>> out;
+  QSet<QString> seen;
+  for (const auto &c : table.columns) {
+    if (c.name.isEmpty() || seen.contains(c.name)) continue;
+    QString label = c.title.isEmpty() ? c.comment : c.title;
+    if (label.isEmpty()) label = c.name;
+    out.append({c.name, label});
+    seen.insert(c.name);
+  }
+  for (const auto &js : table.joinTables) {
+    for (const auto &c : js.cols) {
+      const QString alias = joinOutputAlias(js.table, c);
+      if (alias.isEmpty() || seen.contains(alias)) continue;
+      QString label = c.label.isEmpty() ? alias : c.label;
+      out.append({alias, label + QStringLiteral(" · 联表")});
+      seen.insert(alias);
+    }
+  }
+  return out;
+}
+
 /// 通用表格单元格文本（空表/缺条目返回空串；截断空白）
 QString cellOf(const QTableWidget *table, int row, int col) {
   const QTableWidgetItem *it = table ? table->item(row, col) : nullptr;
@@ -460,26 +483,33 @@ void JsonTableDesigner::setupUI() {
   btnHeader->addWidget(new QLabel(QStringLiteral("操作按钮:"), this));
   btnHeader->addStretch();
   auto *addBtnBtn = makeCompactButton(QStringLiteral("+ 加按钮"), this);
+  auto *copyBtnBtn = makeCompactButton(QStringLiteral("复制按钮"), this);
   auto *delBtnBtn = makeCompactButton(QStringLiteral("- 删按钮"), this);
   auto *upBtnBtn = makeCompactButton(QStringLiteral("↑ 上移"), this);
   auto *downBtnBtn = makeCompactButton(QStringLiteral("↓ 下移"), this);
   btnHeader->addWidget(addBtnBtn);
+  btnHeader->addWidget(copyBtnBtn);
   btnHeader->addWidget(delBtnBtn);
   btnHeader->addWidget(upBtnBtn);
   btnHeader->addWidget(downBtnBtn);
   btnLay->addLayout(btnHeader);
 
   m_buttonTable = makeConfigTable({{QStringLiteral("按钮文字"), QHeaderView::Interactive, 140},
-                                   {QStringLiteral("位置"), QHeaderView::Interactive, 90},
+                                   {QStringLiteral("位置"), QHeaderView::Interactive, 80},
                                    {QStringLiteral("行为"), QHeaderView::Interactive, 90},
+                                   {QStringLiteral("显示"), QHeaderView::Interactive, 150},
                                    {QStringLiteral("动作"), QHeaderView::Stretch, 0}},
                                   this, 0, 0, QAbstractItemView::SelectRows);
   m_buttonTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
   m_buttonTable->setToolTip(
       QStringLiteral("列表页自定义按钮（工具栏/行操作列），行为支持 直接调 API / 二次确认 / "
-                     "对话框表单 / 跳转；\n双击数据行或「+ 加按钮」打开按钮配置对话框"));
+                     "对话框表单 / 跳转；\n「显示」列为按行状态的显示条件或仅图标模式；"
+                     "双击数据行或「+ 加按钮」打开按钮配置对话框，\n对话框顶部可选择"
+                     "「单状态 / 双状态」（双状态 = 同一业务的两个互斥状态，列表中合并为一行）；"
+                     "「复制按钮」把选中按钮复制到列表末尾"));
   btnLay->addWidget(m_buttonTable, 1);
   connect(addBtnBtn, &QPushButton::clicked, this, &JsonTableDesigner::onAddButton);
+  connect(copyBtnBtn, &QPushButton::clicked, this, &JsonTableDesigner::onCopyButton);
   connect(delBtnBtn, &QPushButton::clicked, this, &JsonTableDesigner::onRemoveButton);
   connect(upBtnBtn, &QPushButton::clicked, this, [this]() { moveButtonRow(-1); });
   connect(downBtnBtn, &QPushButton::clicked, this, [this]() { moveButtonRow(1); });
@@ -1606,10 +1636,19 @@ void JsonTableDesigner::moveJoinRow(int delta) {
 }
 
 void JsonTableDesigner::moveButtonRow(int delta) {
+  auto groups = buttonRowGroups();
   const int row = m_buttonTable->currentRow();
   const int target = row + delta;
-  if (row < 0 || target < 0 || target >= m_buttons.size()) return;
-  m_buttons.swapItemsAt(row, target);
+  if (row < 0 || target < 0 || target >= groups.size()) return;
+  // 按显示行整体移动：组内状态顺序不变，双状态组不会被拆散；交换后平铺回
+  // m_buttons（所有显示行覆盖全部下标，顺序即新顺序）
+  groups.swapItemsAt(row, target);
+  QVector<ButtonConfig> ordered;
+  ordered.reserve(m_buttons.size());
+  for (const auto &g : groups) {
+    for (int idx : g) ordered.append(m_buttons.at(idx));
+  }
+  m_buttons = ordered;
   fillButtons();  // 按钮表格条目是摘要（真实数据在 m_buttons），整表重建最可靠
   m_buttonTable->selectRow(target);
   if (!m_loading) emit configChanged();
@@ -2982,85 +3021,306 @@ void JsonTableDesigner::setSortOptions(const QStringList &opts) {
 //  操作按钮（buttons：键名与 .jsonvue ButtonConfig 一致）
 // ════════════════════════════════════════════════════════════
 
-void JsonTableDesigner::fillButtons() {
-  m_buttonTable->setRowCount(0);
-  for (int i = 0; i < m_buttons.size(); ++i) {
-    appendButtonRow(i);
+/// 按钮表格「显示」列摘要
+QString buttonDisplaySummary(const ButtonConfig &b) {
+  QString text;
+  if (b.visibleField.isEmpty()) {
+    text = QStringLiteral("总是显示");
+  } else {
+    text = QStringLiteral("%1 %2 %3")
+               .arg(b.visibleField, b.visibleOp == QStringLiteral("ne") ? QStringLiteral("≠")
+                                                                       : QStringLiteral("="),
+                    b.visibleValue);
   }
+  if (!b.showLabel) text += QStringLiteral("（仅图标）");
+  return text;
 }
 
-void JsonTableDesigner::appendButtonRow(int idx) {
-  if (idx < 0 || idx >= m_buttons.size()) return;
-  const ButtonConfig &b = m_buttons[idx];
+/// 按钮行为类型中文名
+QString buttonActionLabel(ButtonActionType t) {
+  switch (t) {
+    case ButtonActionType::Ajax:
+      return QStringLiteral("调 API");
+    case ButtonActionType::Confirm:
+      return QStringLiteral("二次确认");
+    case ButtonActionType::Dialog:
+      return QStringLiteral("对话框");
+    case ButtonActionType::Link:
+      return QStringLiteral("跳转");
+  }
+  return QString();
+}
+
+/// 生成未被占用的双状态分组键（state_N）
+QString uniqueStateGroup(const QVector<ButtonConfig> &buttons) {
+  QSet<QString> used;
+  for (const auto &b : buttons) {
+    if (!b.stateGroup.isEmpty()) used.insert(b.stateGroup);
+  }
+  int n = 1;
+  QString group;
+  do {
+    group = QStringLiteral("state_%1").arg(n++);
+  } while (used.contains(group));
+  return group;
+}
+
+void JsonTableDesigner::fillButtons() {
+  m_buttonTable->setRowCount(0);
+  const auto groups = buttonRowGroups();
+  for (const auto &g : groups) appendButtonGroupRow(g);
+}
+
+QVector<QVector<int>> JsonTableDesigner::buttonRowGroups() const {
+  QVector<QVector<int>> groups;
+  QHash<QString, int> groupRow;
+  for (int i = 0; i < m_buttons.size(); ++i) {
+    const QString &g = m_buttons[i].stateGroup;
+    if (g.isEmpty()) {
+      groups.append(QVector<int>{i});
+      continue;
+    }
+    const auto it = groupRow.constFind(g);
+    if (it != groupRow.constEnd()) {
+      groups[it.value()].append(i);
+    } else {
+      groupRow.insert(g, groups.size());
+      groups.append(QVector<int>{i});
+    }
+  }
+  return groups;
+}
+
+void JsonTableDesigner::appendButtonGroupRow(const QVector<int> &indices) {
+  if (indices.isEmpty()) return;
+  const ButtonConfig &primary = m_buttons[indices.first()];
+  const bool dual = indices.size() > 1;
+
+  QString label;
+  if (dual) {
+    QStringList labels;
+    for (int i : indices) {
+      if (!m_buttons[i].label.isEmpty()) labels << m_buttons[i].label;
+    }
+    label = labels.join(QStringLiteral(" / "));
+    if (label.isEmpty()) label = QStringLiteral("双状态");
+  } else {
+    label = primary.label;
+  }
+
+  QString position;
+  if (dual) {
+    bool allRow = true;
+    bool allToolbar = true;
+    for (int i : indices) {
+      allRow = allRow && m_buttons[i].position == ButtonPosition::Row;
+      allToolbar = allToolbar && m_buttons[i].position == ButtonPosition::Toolbar;
+    }
+    position = allRow ? QStringLiteral("行操作")
+                      : (allToolbar ? QStringLiteral("工具栏") : QStringLiteral("混合"));
+  } else {
+    position = primary.position == ButtonPosition::Toolbar ? QStringLiteral("工具栏")
+                                                           : QStringLiteral("行操作");
+  }
+
+  QString display;
+  QString displayTip;
+  QString actionText;
+  if (dual) {
+    // 显示列压缩为「标签=值 / 标签=值」（完整字段名放 tooltip，避免列宽截断）
+    QStringList parts;
+    QStringList tips;
+    QStringList actions;
+    for (int i : indices) {
+      const ButtonConfig &b = m_buttons[i];
+      const QString name = b.label.isEmpty() ? QStringLiteral("状态") : b.label;
+      if (!b.actionKey.isEmpty()) actions << b.actionKey;
+      if (b.visibleField.isEmpty()) {
+        parts << name;
+        tips << name;
+      } else {
+        const QString op =
+            b.visibleOp == QStringLiteral("ne") ? QStringLiteral("≠") : QStringLiteral("=");
+        parts << QStringLiteral("%1%2%3").arg(name, op, b.visibleValue);
+        tips << QStringLiteral("%1：%2 %3 %4").arg(name, b.visibleField, op, b.visibleValue);
+      }
+    }
+    display = parts.join(QStringLiteral(" / "));
+    displayTip = tips.join(QStringLiteral("\n"));
+    actionText = actions.isEmpty() ? primary.stateGroup : actions.join(QStringLiteral(" / "));
+  } else {
+    display = buttonDisplaySummary(primary);
+    displayTip = display;
+    actionText = primary.actionKey;
+  }
+
   const int row = m_buttonTable->rowCount();
   m_buttonTable->insertRow(row);
-  m_buttonTable->setItem(row, 0, new QTableWidgetItem(b.label));
-  m_buttonTable->setItem(
-      row, 1,
-      new QTableWidgetItem(b.position == ButtonPosition::Toolbar ? QStringLiteral("工具栏")
-                                                                 : QStringLiteral("行操作")));
-  QString action;
-  switch (b.actionType) {
-    case ButtonActionType::Ajax:
-      action = QStringLiteral("调 API");
-      break;
-    case ButtonActionType::Confirm:
-      action = QStringLiteral("二次确认");
-      break;
-    case ButtonActionType::Dialog:
-      action = QStringLiteral("对话框");
-      break;
-    case ButtonActionType::Link:
-      action = QStringLiteral("跳转");
-      break;
-  }
-  m_buttonTable->setItem(row, 2, new QTableWidgetItem(action));
-  m_buttonTable->setItem(row, 3, new QTableWidgetItem(b.actionKey));
+  m_buttonTable->setItem(row, 0, new QTableWidgetItem(label));
+  m_buttonTable->setItem(row, 1, new QTableWidgetItem(position));
+  m_buttonTable->setItem(row, 2,
+                         new QTableWidgetItem(dual ? QStringLiteral("双状态")
+                                                   : buttonActionLabel(primary.actionType)));
+  auto *displayItem = new QTableWidgetItem(display);
+  displayItem->setToolTip(displayTip);
+  m_buttonTable->setItem(row, 3, displayItem);
+  m_buttonTable->setItem(row, 4, new QTableWidgetItem(actionText));
 }
 
 void JsonTableDesigner::onAddButton() {
+  // 单/双状态在对话框内选择
   ButtonConfigDialog dlg(this);
   dlg.setSearchRoot(m_filePath.isEmpty() ? QString() : QFileInfo(m_filePath).absolutePath());
+  dlg.setVisibilityFields(visibilityFieldsFor(m_table));
   if (dlg.exec() != QDialog::Accepted) return;
-  m_buttons.append(dlg.getData());
-  appendButtonRow(m_buttons.size() - 1);
+
+  QVector<ButtonConfig> states = dlg.getStates();
+  if (states.isEmpty()) return;
+  if (states.size() >= 2) {
+    // 双状态：生成未被占用的分组键（同组在设计器列表中合并为一行）
+    const QString group = uniqueStateGroup(m_buttons);
+    states[0].stateGroup = group;
+    states[1].stateGroup = group;
+  } else {
+    states[0].stateGroup.clear();
+  }
+
+  for (const auto &s : states) m_buttons.append(s);
+  fillButtons();
+  m_buttonTable->selectRow(m_buttonTable->rowCount() - 1);
+  if (!m_loading) emit configChanged();
+}
+
+void JsonTableDesigner::onCopyButton() {
+  const auto groups = buttonRowGroups();
+  const int row = m_buttonTable->currentRow();
+  if (row < 0 || row >= groups.size()) return;
+
+  // 复制当前显示行（双状态组整体复制，组内顺序不变）到列表末尾
+  QVector<ButtonConfig> copies;
+  copies.reserve(groups[row].size());
+  for (int idx : groups[row]) {
+    if (idx >= 0 && idx < m_buttons.size()) copies.append(m_buttons[idx]);
+  }
+  if (copies.isEmpty()) return;
+
+  // actionKey 是生成端的处理函数标识，副本必须唯一（xxxCopy / xxxCopy2…）
+  QSet<QString> keys;
+  for (const auto &btn : m_buttons) {
+    if (!btn.actionKey.isEmpty()) keys.insert(btn.actionKey);
+  }
+  auto uniqueKey = [&keys](const QString &base) {
+    if (base.isEmpty()) return QString();
+    QString key = base + QStringLiteral("Copy");
+    int n = 2;
+    while (keys.contains(key)) key = base + QStringLiteral("Copy%1").arg(n++);
+    keys.insert(key);
+    return key;
+  };
+  for (auto &cfg : copies) {
+    if (!cfg.label.isEmpty()) cfg.label += QStringLiteral(" 副本");
+    cfg.actionKey = uniqueKey(cfg.actionKey);
+  }
+
+  if (copies.size() >= 2) {
+    // 双状态副本：新建分组键，避免与原组混淆
+    const QString group = uniqueStateGroup(m_buttons);
+    for (auto &cfg : copies) cfg.stateGroup = group;
+  } else {
+    copies[0].stateGroup.clear();
+  }
+
+  for (const auto &cfg : copies) m_buttons.append(cfg);
+  fillButtons();
+  m_buttonTable->selectRow(m_buttonTable->rowCount() - 1);  // 副本追加在最后一行
+  if (!m_loading) emit configChanged();
 }
 
 void JsonTableDesigner::onEditButton(int row) {
-  if (row < 0 || row >= m_buttons.size()) return;
-  ButtonConfigDialog dlg(m_buttons[row], this);
-  dlg.setSearchRoot(m_filePath.isEmpty() ? QString() : QFileInfo(m_filePath).absolutePath());
-  if (dlg.exec() != QDialog::Accepted) return;
-  m_buttons[row] = dlg.getData();
-  // 摘要刷新：重建该行文本（行数不变）
-  const ButtonConfig &b = m_buttons[row];
-  m_buttonTable->item(row, 0)->setText(b.label);
-  m_buttonTable->item(row, 1)->setText(
-      b.position == ButtonPosition::Toolbar ? QStringLiteral("工具栏") : QStringLiteral("行操作"));
-  QString action;
-  switch (b.actionType) {
-    case ButtonActionType::Ajax:
-      action = QStringLiteral("调 API");
-      break;
-    case ButtonActionType::Confirm:
-      action = QStringLiteral("二次确认");
-      break;
-    case ButtonActionType::Dialog:
-      action = QStringLiteral("对话框");
-      break;
-    case ButtonActionType::Link:
-      action = QStringLiteral("跳转");
-      break;
+  const auto groups = buttonRowGroups();
+  if (row < 0 || row >= groups.size()) return;
+  if (!openButtonGroupEditor(groups[row])) return;
+  fillButtons();
+  if (row < m_buttonTable->rowCount()) m_buttonTable->selectRow(row);
+  if (!m_loading) emit configChanged();
+}
+
+bool JsonTableDesigner::openButtonGroupEditor(const QVector<int> &indices) {
+  QVector<int> ordered = indices;
+  std::sort(ordered.begin(), ordered.end());
+  QVector<ButtonConfig> states;
+  QVector<int> valid;
+  states.reserve(ordered.size());
+  valid.reserve(ordered.size());
+  for (int idx : ordered) {
+    if (idx < 0 || idx >= m_buttons.size()) continue;
+    valid.append(idx);
+    states.append(m_buttons[idx]);
   }
-  m_buttonTable->item(row, 2)->setText(action);
-  m_buttonTable->item(row, 3)->setText(b.actionKey);
+  if (states.isEmpty()) return false;
+
+  // 单层模态：单/双状态都在同一个对话框内，可随时切换状态模式
+  ButtonConfigDialog dlg(states, this);
+  dlg.setSearchRoot(m_filePath.isEmpty() ? QString() : QFileInfo(m_filePath).absolutePath());
+  dlg.setVisibilityFields(visibilityFieldsFor(m_table));
+  if (dlg.exec() != QDialog::Accepted) return false;
+
+  const QVector<ButtonConfig> out = dlg.getStates();
+  if (out.isEmpty()) return false;
+
+  if (out.size() == 1) {
+    // 对话框内切回单状态：保留第一份配置，删除组内其余状态（从后往前删）
+    ButtonConfig cfg = out.first();
+    cfg.stateGroup.clear();
+    m_buttons[valid.first()] = cfg;
+    QVector<int> rest;
+    for (int i = 1; i < valid.size(); ++i) rest.append(valid[i]);
+    std::sort(rest.begin(), rest.end(), [](int a, int b) { return a > b; });
+    for (int idx : rest) {
+      if (idx >= 0 && idx < m_buttons.size()) m_buttons.removeAt(idx);
+    }
+    return true;
+  }
+
+  // 对话框内启用双状态：沿用已有分组键，没有则新建
+  const int first = valid.first();
+  QString group = m_buttons[first].stateGroup;
+  if (group.isEmpty()) group = uniqueStateGroup(m_buttons);
+
+  ButtonConfig stateA = out[0];
+  stateA.stateGroup = group;
+  m_buttons[first] = stateA;
+  if (valid.size() >= 2) {
+    ButtonConfig stateB = out[1];
+    stateB.stateGroup = group;
+    m_buttons[valid[1]] = stateB;
+    // 同组多余状态（正常不存在）：删除
+    QVector<int> extra;
+    for (int i = 2; i < valid.size(); ++i) extra.append(valid[i]);
+    std::sort(extra.begin(), extra.end(), [](int a, int b) { return a > b; });
+    for (int idx : extra) {
+      if (idx >= 0 && idx < m_buttons.size()) m_buttons.removeAt(idx);
+    }
+  } else {
+    ButtonConfig stateB = out[1];
+    stateB.stateGroup = group;
+    m_buttons.insert(first + 1, stateB);
+  }
+  return true;
 }
 
 void JsonTableDesigner::onRemoveButton() {
-  int row = m_buttonTable->currentRow();
-  if (row < 0 || row >= m_buttons.size()) return;
-  m_buttonTable->removeRow(row);
-  m_buttons.removeAt(row);
+  const auto groups = buttonRowGroups();
+  const int row = m_buttonTable->currentRow();
+  if (row < 0 || row >= groups.size()) return;
+  QVector<int> indices = groups[row];
+  std::sort(indices.begin(), indices.end());
+  for (int i = indices.size() - 1; i >= 0; --i) {
+    const int idx = indices[i];
+    if (idx >= 0 && idx < m_buttons.size()) m_buttons.removeAt(idx);
+  }
+  fillButtons();
+  if (!m_loading) emit configChanged();
 }
 
 void JsonTableDesigner::syncEnumDrafts() {

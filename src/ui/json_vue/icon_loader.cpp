@@ -9,8 +9,12 @@
 #include "icon_loader.h"
 
 #include <QBuffer>
+#include <QColor>
+#include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonValue>
 #include <QNetworkAccessManager>
 #include <QNetworkProxyFactory>
 #include <QNetworkReply>
@@ -18,6 +22,8 @@
 #include <QPainter>
 #include <QSvgRenderer>
 #include <QTimer>
+
+#include "src/util/ui/component/aui_style.h"
 
 // ════════════════════════════════════════════════════════════
 //  构造 / 析构
@@ -40,10 +46,16 @@ IconLoader &IconLoader::instance() {
 //  缓存查询
 // ════════════════════════════════════════════════════════════
 
-QIcon IconLoader::cached(const QString &iconName) const { return m_cache.value(iconName); }
+QIcon IconLoader::cached(const QString &iconName) const {
+  if (m_cache.contains(iconName)) return m_cache.value(iconName);
+  return m_cache.value(normalizeIconName(iconName));
+}
 
 QIcon IconLoader::getOrCreateIcon(const QString &iconName, int size) {
   if (m_cache.contains(iconName)) return m_cache.value(iconName);
+  // 本地图标集（与 shop IconSelect 同源）优先，离线可用
+  QIcon local = localIcon(iconName);
+  if (!local.isNull()) return local;
   // 生成占位图标（不缓存，后续网络成功后替换）
   return QIcon(generatePlaceholder(iconName, size));
 }
@@ -56,6 +68,12 @@ void IconLoader::requestIcon(const QString &iconName,
                              std::function<void(const QString &)> callback) {
   // 已缓存真实图标：立即回调
   if (m_cache.contains(iconName)) {
+    if (callback) callback(iconName);
+    return;
+  }
+  // 本地图标集：同步渲染，立即回调，不走网络
+  QIcon local = localIcon(iconName);
+  if (!local.isNull()) {
     if (callback) callback(iconName);
     return;
   }
@@ -77,6 +95,11 @@ void IconLoader::requestIcons(const QStringList &iconNames,
   for (const QString &name : iconNames) {
     if (m_cache.contains(name)) {
       // 已缓存真实图标：立即回调
+      if (callback) callback(name);
+      continue;
+    }
+    // 本地图标集：同步渲染，立即回调，不进网络队列
+    if (!localIcon(name).isNull()) {
       if (callback) callback(name);
       continue;
     }
@@ -153,7 +176,13 @@ void IconLoader::tryUrl(int urlIndex, const QString &fullIcon, const QString &pr
 // ════════════════════════════════════════════════════════════
 
 QPixmap IconLoader::renderSvg(const QString &svgContent, int size) {
-  QSvgRenderer renderer(svgContent.toUtf8());
+  // 图标 body 用 fill="currentColor"：替换为当前主题文字色，深色主题下也能看见
+  QString svg = svgContent;
+  if (svg.contains(QStringLiteral("currentColor"))) {
+    svg.replace(QStringLiteral("currentColor"),
+                AuiStyle::textColor().name(QColor::HexRgb));
+  }
+  QSvgRenderer renderer(svg.toUtf8());
   if (!renderer.isValid()) return QPixmap();
 
   QPixmap pixmap(size, size);
@@ -198,6 +227,92 @@ QPixmap IconLoader::generatePlaceholder(const QString &iconName, int size) {
   painter.drawText(QRect(0, 0, size, size), Qt::AlignCenter, firstChar);
 
   return pixmap;
+}
+
+// ════════════════════════════════════════════════════════════
+//  本地图标集（res/icons/iconify_sets.json；与 shop IconSelect 同源）
+// ════════════════════════════════════════════════════════════
+
+void IconLoader::ensureLocalLoaded() {
+  if (m_localLoaded) return;
+  m_localLoaded = true;
+
+  QFile f(QStringLiteral(":/icons/iconify_sets.json"));
+  if (!f.open(QIODevice::ReadOnly)) return;
+  const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+  if (!doc.isObject()) return;
+
+  const QJsonArray sets = doc.object().value(QStringLiteral("sets")).toArray();
+  for (const QJsonValue &sv : sets) {
+    const QJsonObject s = sv.toObject();
+    const QString prefix = s.value(QStringLiteral("prefix")).toString();
+    if (prefix.isEmpty()) continue;
+    const int defW = s.value(QStringLiteral("width")).toInt(16);
+    const int defH = s.value(QStringLiteral("height")).toInt(16);
+    const int defL = s.value(QStringLiteral("left")).toInt(0);
+    const int defT = s.value(QStringLiteral("top")).toInt(0);
+
+    const QJsonObject icons = s.value(QStringLiteral("icons")).toObject();
+    QStringList names;
+    names.reserve(icons.size());
+    for (auto it = icons.constBegin(); it != icons.constEnd(); ++it) {
+      const QJsonObject o = it.value().toObject();
+      LocalIconData d;
+      d.body = o.value(QStringLiteral("body")).toString();
+      d.width = o.value(QStringLiteral("width")).toInt(defW);
+      d.height = o.value(QStringLiteral("height")).toInt(defH);
+      d.left = o.value(QStringLiteral("left")).toInt(defL);
+      d.top = o.value(QStringLiteral("top")).toInt(defT);
+      const QString key = prefix + QLatin1Char(':') + it.key();
+      m_localIcons.insert(key, d);
+      names.append(key);
+    }
+    names.sort();
+    m_localNames.insert(prefix, names);
+    m_localPrefixes.append(prefix);
+  }
+}
+
+QString IconLoader::normalizeIconName(const QString &iconName) {
+  // 兼容旧配置的 vi- 前缀（old element-plus-admin 写法）
+  return iconName.startsWith(QStringLiteral("vi-")) ? iconName.mid(3) : iconName;
+}
+
+QIcon IconLoader::localIcon(const QString &iconName) {
+  const QString key = normalizeIconName(iconName);
+  const auto cachedIt = m_cache.constFind(key);
+  if (cachedIt != m_cache.constEnd()) return cachedIt.value();
+
+  ensureLocalLoaded();
+  const auto it = m_localIcons.constFind(key);
+  if (it == m_localIcons.constEnd()) return QIcon();
+
+  const LocalIconData &d = it.value();
+  const QString svg =
+      QStringLiteral("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"%1 %2 %3 %4\" "
+                     "width=\"%3\" height=\"%4\">%5</svg>")
+          .arg(d.left)
+          .arg(d.top)
+          .arg(d.width)
+          .arg(d.height)
+          .arg(d.body);
+  const QPixmap pm = renderSvg(svg, kDefaultIconSize);
+  if (pm.isNull()) return QIcon();
+
+  const QIcon icon(pm);
+  m_cache.insert(key, icon);
+  if (key != iconName) m_cache.insert(iconName, icon);
+  return icon;
+}
+
+QStringList IconLoader::localIconNames(const QString &prefix) {
+  ensureLocalLoaded();
+  return m_localNames.value(prefix);
+}
+
+QStringList IconLoader::localPrefixes() {
+  ensureLocalLoaded();
+  return m_localPrefixes;
 }
 
 // ════════════════════════════════════════════════════════════

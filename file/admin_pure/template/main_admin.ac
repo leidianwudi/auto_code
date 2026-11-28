@@ -1001,6 +1001,9 @@ export function buildJsonvueFromTable(table: Object, globalEnumNames: Object, jo
     // 操作按钮（键名与 .jsonvue buttons 完全一致；无按钮时为 null，
     // 加工器 processButtons 对空/缺失键防御性处理）
     buttons: table["buttons"],
+    // 自定义按钮 API 导入源（手写模块；空 = 全部从本页生成的 api 文件导入）
+    apiExtPath: table["apiExtPath"],
+    apiExtNames: table["apiExtNames"],
     // i18n 元数据（write.tpl 语言 Tab / 详情回填 / base_lang 语言清单）
     i18n: i18nMeta
   };

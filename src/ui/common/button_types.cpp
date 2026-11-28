@@ -192,6 +192,14 @@ QJsonObject ButtonConfig::toJson() const {
   }
   // Link 行为专用
   if (!linkPath.isEmpty()) obj[JsonVueKey::kLinkPath] = linkPath;
+  // 显示控制（默认值不落键：showLabel=true / visibleOp=eq）
+  if (!showLabel) obj[JsonVueKey::kShowLabel] = false;
+  if (!visibleField.isEmpty()) {
+    obj[JsonVueKey::kVisibleField] = visibleField;
+    if (visibleOp != QStringLiteral("eq")) obj[JsonVueKey::kVisibleOp] = visibleOp;
+    obj[JsonVueKey::kVisibleValue] = visibleValue;
+  }
+  if (!stateGroup.isEmpty()) obj[JsonVueKey::kStateGroup] = stateGroup;
   return obj;
 }
 
@@ -214,5 +222,10 @@ ButtonConfig ButtonConfig::fromJson(const QJsonObject &obj) {
     b.dialogFields.append(DialogFieldConfig::fromJson(v.toObject()));
   }
   b.linkPath = obj.value(JsonVueKey::kLinkPath).toString();
+  b.showLabel = obj.value(JsonVueKey::kShowLabel).toBool(true);
+  b.visibleField = obj.value(JsonVueKey::kVisibleField).toString();
+  b.visibleOp = obj.value(JsonVueKey::kVisibleOp).toString(QStringLiteral("eq"));
+  b.visibleValue = obj.value(JsonVueKey::kVisibleValue).toString();
+  b.stateGroup = obj.value(JsonVueKey::kStateGroup).toString();
   return b;
 }

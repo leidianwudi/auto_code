@@ -81,8 +81,8 @@
         "unique": true
       }
     ],
-    "frontend": false,
-    "adminQueryMode": "empty",
+    "frontend": true,
+    "adminQueryMode": "read",
     "appQuery": false,
     "manualUpdateTime": false,
     "selCols": [

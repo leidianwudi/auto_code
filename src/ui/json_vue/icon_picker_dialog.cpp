@@ -2,8 +2,8 @@
  * @file icon_picker_dialog.cpp
  * @brief 图标选择对话框实现
  *
- * 3 套图标库：Element Plus / Ant Design / TDesign
- * 标签切换 + 翻页 + 纯图标网格（无文字）
+ * 图标集与 shop IconSelect 对齐：Element / Remix / Ant Design / Material
+ * 标签切换 + 翻页 + 纯图标网格（无文字）；数据来自本地 SVG，不依赖网络。
  */
 
 #include "icon_picker_dialog.h"
@@ -70,10 +70,12 @@ IconPickerDialog::IconPickerDialog(const QString &currentIcon, QWidget *parent)
     QString prefix = IconLoader::extractPrefix(currentIcon);
     if (prefix == QStringLiteral("ep")) {
       m_currentTab = 0;
-    } else if (prefix == QStringLiteral("ant-design")) {
+    } else if (prefix == QStringLiteral("ri")) {
       m_currentTab = 1;
-    } else if (prefix == QStringLiteral("tdesign")) {
+    } else if (prefix == QStringLiteral("ant-design")) {
       m_currentTab = 2;
+    } else if (prefix == QStringLiteral("mdi")) {
+      m_currentTab = 3;
     }
   }
   m_tabWidget->setCurrentIndex(m_currentTab);
@@ -125,8 +127,9 @@ void IconPickerDialog::setupUI() {
   m_tabWidget = new QTabWidget;
   m_tabWidget->setDocumentMode(true);
   m_tabWidget->addTab(new QWidget, QStringLiteral("Element Plus"));
+  m_tabWidget->addTab(new QWidget, QStringLiteral("Remix"));
   m_tabWidget->addTab(new QWidget, QStringLiteral("Ant Design"));
-  m_tabWidget->addTab(new QWidget, QStringLiteral("TDesign"));
+  m_tabWidget->addTab(new QWidget, QStringLiteral("Material"));
   // 仅显示 tab 栏，隐藏空白内容区
   m_tabWidget->tabBar()->setFixedHeight(30);
   m_tabWidget->setFixedHeight(32);
@@ -275,19 +278,8 @@ void IconPickerDialog::switchTab(int tabIndex) {
 // ════════════════════════════════════════════════════════════
 
 void IconPickerDialog::fillPage() {
-  // 获取当前标签页的完整图标列表
-  QStringList allIcons;
-  switch (m_currentTab) {
-    case 0:
-      allIcons = getEpIcons();
-      break;
-    case 1:
-      allIcons = getAntIcons();
-      break;
-    case 2:
-      allIcons = getTdIcons();
-      break;
-  }
+  // 获取当前标签页的完整图标列表（本地图标集，prefix:name）
+  const QStringList allIcons = iconsForTab(m_currentTab);
 
   // 搜索过滤
   QString filter = m_searchEdit->text().trimmed().toLower();

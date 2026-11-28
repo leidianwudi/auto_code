@@ -13,6 +13,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QTabWidget>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
@@ -50,26 +51,19 @@ QString editStyleDataToText(const QString &data) {
 }  // namespace
 
 // ════════════════════════════════════════════════════════════
-//  构造
+//  ButtonConfigForm：单个状态的配置表单
 // ════════════════════════════════════════════════════════════
 
-ButtonConfigDialog::ButtonConfigDialog(QWidget *parent) : QDialog(parent) { setupUI(); }
-
-ButtonConfigDialog::ButtonConfigDialog(const ButtonConfig &config, QWidget *parent)
-    : QDialog(parent) {
-  setupUI();
-  setData(config);
-}
+ButtonConfigForm::ButtonConfigForm(QWidget *parent) : QWidget(parent) { setupUI(); }
 
 // ════════════════════════════════════════════════════════════
 //  界面构建
 // ════════════════════════════════════════════════════════════
 
-void ButtonConfigDialog::setupUI() {
-  setMinimumWidth(700);
-  setMinimumHeight(600);
-  auto frame = beginConfigDialog(this, QStringLiteral("按钮配置"), QMargins(12, 8, 12, 12), 8);
-  auto *mainLayout = frame.contentLayout;
+void ButtonConfigForm::setupUI() {
+  auto *mainLayout = new QVBoxLayout(this);
+  mainLayout->setContentsMargins(0, 0, 0, 0);
+  mainLayout->setSpacing(8);
 
   // ── 基本信息 ──
   auto *basicGroup = new QLabel(QStringLiteral("基本信息"));
@@ -91,11 +85,12 @@ void ButtonConfigDialog::setupUI() {
   m_actionKeyEdit->setMinimumHeight(28);
   basicForm->addRow(QStringLiteral("动作标识:"), m_actionKeyEdit);
 
-  // label 改变时自动推导 actionKey
+  // label 改变时自动推导 actionKey，并刷新多状态页签标题
   connect(m_labelEdit, &QLineEdit::textChanged, this, [this](const QString &text) {
     if (m_actionKeyEdit->text().isEmpty()) {
       m_actionKeyEdit->setText(deriveActionKey(text));
     }
+    emit identityChanged();
   });
 
   // 图标预览按钮（点击弹出图标选择器）
@@ -131,11 +126,43 @@ void ButtonConfigDialog::setupUI() {
   iconLayout->addWidget(m_iconClearBtn);
   basicForm->addRow(QStringLiteral("图标:"), iconLayout);
 
+  m_showLabelCheck =
+      new QCheckBox(QStringLiteral("显示按钮文字（不勾选则仅图标，悬停显示文字提示）"));
+  m_showLabelCheck->setChecked(true);
+  basicForm->addRow(QStringLiteral("显示方式:"), m_showLabelCheck);
+
   m_positionCombo = AuiComboBox::create();
   m_positionCombo->setMinimumHeight(28);
   m_positionCombo->addItem(QStringLiteral("行操作列"), static_cast<int>(ButtonPosition::Row));
   m_positionCombo->addItem(QStringLiteral("顶部工具栏"), static_cast<int>(ButtonPosition::Toolbar));
   basicForm->addRow(QStringLiteral("位置:"), m_positionCombo);
+
+  // 显示条件：仅行按钮生效；字段=值时显示，空=始终显示
+  auto *condLayout = new QHBoxLayout;
+  condLayout->setSpacing(4);
+  m_visibleFieldCombo = AuiComboBox::create();
+  m_visibleFieldCombo->setMinimumHeight(28);
+  m_visibleFieldCombo->addItem(QStringLiteral("不限制"), QString());
+  m_visibleFieldCombo->setToolTip(
+      QStringLiteral("选择本表字段或联表输出别名；留空表示按钮始终显示"));
+  m_visibleOpCombo = AuiComboBox::create();
+  m_visibleOpCombo->setMinimumHeight(28);
+  m_visibleOpCombo->addItem(QStringLiteral("等于"), QStringLiteral("eq"));
+  m_visibleOpCombo->addItem(QStringLiteral("不等于"), QStringLiteral("ne"));
+  m_visibleValueEdit = new QLineEdit;
+  m_visibleValueEdit->setMinimumHeight(28);
+  m_visibleValueEdit->setPlaceholderText(QStringLiteral("如 1 / normal"));
+  m_visibleValueEdit->setToolTip(QStringLiteral("按字符串比较：String(row.字段) == 值"));
+  condLayout->addWidget(m_visibleFieldCombo, 2);
+  condLayout->addWidget(m_visibleOpCombo, 1);
+  condLayout->addWidget(m_visibleValueEdit, 1);
+  basicForm->addRow(QStringLiteral("显示条件:"), condLayout);
+  connect(m_positionCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+          [this](int) { updateVisibilityControls(); });
+  connect(m_visibleFieldCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+          [this](int) { updateVisibilityControls(); });
+  connect(m_visibleValueEdit, &QLineEdit::textChanged, this,
+          [this](const QString &) { emit identityChanged(); });
 
   m_buttonTypeCombo = AuiComboBox::create();
   m_buttonTypeCombo->setMinimumHeight(28);
@@ -235,7 +262,7 @@ void ButtonConfigDialog::setupUI() {
   dialogLayout->addWidget(m_dialogFieldsTable);
 
   m_addFieldBtn = new QPushButton(QStringLiteral("+ 添加字段"));
-  connect(m_addFieldBtn, &QPushButton::clicked, this, &ButtonConfigDialog::onAddDialogField);
+  connect(m_addFieldBtn, &QPushButton::clicked, this, &ButtonConfigForm::onAddDialogField);
   dialogLayout->addWidget(m_addFieldBtn);
   mainLayout->addWidget(m_dialogWidget);
 
@@ -260,16 +287,49 @@ void ButtonConfigDialog::setupUI() {
   // ── 弹性空间 ──
   mainLayout->addStretch();
 
-  finishConfigDialog(this, frame);
-
   updateBehaviorVisibility();
+  updateVisibilityControls();
+}
+
+void ButtonConfigForm::updateVisibilityControls() {
+  const auto position =
+      static_cast<ButtonPosition>(m_positionCombo->currentData().toInt());
+  const bool isRow = (position == ButtonPosition::Row);
+  m_visibleFieldCombo->setEnabled(isRow);
+  const bool hasField =
+      isRow && !m_visibleFieldCombo->currentData().toString().isEmpty();
+  m_visibleOpCombo->setEnabled(hasField);
+  m_visibleValueEdit->setEnabled(hasField);
+}
+
+void ButtonConfigForm::setVisibilityFields(
+    const QVector<QPair<QString, QString>> &fields) {
+  const QString pending = m_pendingVisibleField;
+  m_visibleFieldCombo->clear();
+  m_visibleFieldCombo->addItem(QStringLiteral("不限制"), QString());
+  for (const auto &f : fields) {
+    if (f.first.isEmpty()) continue;
+    const QString label = f.second.isEmpty() ? f.first : f.second;
+    m_visibleFieldCombo->addItem(
+        QStringLiteral("%1（%2）").arg(label, f.first), f.first);
+  }
+  const int idx = m_visibleFieldCombo->findData(pending);
+  m_visibleFieldCombo->setCurrentIndex(idx >= 0 ? idx : 0);
+  updateVisibilityControls();
+}
+
+QString ButtonConfigForm::stateTitle(int index) const {
+  QString name = m_labelEdit->text().trimmed();
+  if (name.isEmpty()) name = QStringLiteral("状态 %1").arg(index + 1);
+  const QString value = m_visibleValueEdit->text().trimmed();
+  return value.isEmpty() ? name : QStringLiteral("%1（值=%2）").arg(name, value);
 }
 
 // ════════════════════════════════════════════════════════════
 //  行为类型可见性更新
 // ════════════════════════════════════════════════════════════
 
-void ButtonConfigDialog::updateBehaviorVisibility() {
+void ButtonConfigForm::updateBehaviorVisibility() {
   auto actionType = static_cast<ButtonActionType>(m_actionTypeCombo->currentData().toInt());
 
   m_ajaxWidget->setVisible(actionType == ButtonActionType::Ajax);
@@ -282,7 +342,7 @@ void ButtonConfigDialog::updateBehaviorVisibility() {
 //  actionKey 自动推导
 // ════════════════════════════════════════════════════════════
 
-QString ButtonConfigDialog::deriveActionKey(const QString &label) {
+QString ButtonConfigForm::deriveActionKey(const QString &label) {
   // 从 label 提取 ASCII 字母，首字母小写
   QString result;
   for (const QChar &c : label) {
@@ -297,7 +357,7 @@ QString ButtonConfigDialog::deriveActionKey(const QString &label) {
   return result;
 }
 
-void ButtonConfigDialog::setIconName(const QString &iconName) {
+void ButtonConfigForm::setIconName(const QString &iconName) {
   m_currentIconName = iconName;
   if (iconName.isEmpty()) {
     m_iconBtn->setText(QStringLiteral(" 无 "));
@@ -324,7 +384,7 @@ void ButtonConfigDialog::setIconName(const QString &iconName) {
 //  dialogFields 表格操作
 // ════════════════════════════════════════════════════════════
 
-void ButtonConfigDialog::onAddDialogField() {
+void ButtonConfigForm::onAddDialogField() {
   int row = m_dialogFieldsTable->rowCount();
   m_dialogFieldsTable->insertRow(row);
 
@@ -408,7 +468,7 @@ void ButtonConfigDialog::onAddDialogField() {
   };
 }
 
-void ButtonConfigDialog::onRemoveDialogField(int row) {
+void ButtonConfigForm::onRemoveDialogField(int row) {
   if (row < 0 || row >= m_dialogFieldsTable->rowCount()) {
     return;
   }
@@ -418,7 +478,7 @@ void ButtonConfigDialog::onRemoveDialogField(int row) {
   }
 }
 
-void ButtonConfigDialog::onConfigureFieldStyle(int row) {
+void ButtonConfigForm::onConfigureFieldStyle(int row) {
   if (row < 0 || row >= m_dialogFieldsTable->rowCount()) {
     return;
   }
@@ -464,13 +524,13 @@ void ButtonConfigDialog::onConfigureFieldStyle(int row) {
 //  搜索根目录
 // ════════════════════════════════════════════════════════════
 
-void ButtonConfigDialog::setSearchRoot(const QString &dir) { m_searchRoot = dir; }
+void ButtonConfigForm::setSearchRoot(const QString &dir) { m_searchRoot = dir; }
 
 // ════════════════════════════════════════════════════════════
 //  表格数据收集 / 填充
 // ════════════════════════════════════════════════════════════
 
-QVector<DialogFieldConfig> ButtonConfigDialog::collectDialogFields() const {
+QVector<DialogFieldConfig> ButtonConfigForm::collectDialogFields() const {
   QVector<DialogFieldConfig> result;
   int count = m_dialogFieldsTable->rowCount();
   for (int i = 0; i < count; ++i) {
@@ -505,7 +565,7 @@ QVector<DialogFieldConfig> ButtonConfigDialog::collectDialogFields() const {
   return result;
 }
 
-void ButtonConfigDialog::fillDialogFields(const QVector<DialogFieldConfig> &fields) {
+void ButtonConfigForm::fillDialogFields(const QVector<DialogFieldConfig> &fields) {
   m_dialogFieldsTable->setRowCount(0);
   m_dialogFieldsData.clear();
   for (const auto &f : fields) {
@@ -541,7 +601,7 @@ void ButtonConfigDialog::fillDialogFields(const QVector<DialogFieldConfig> &fiel
 //  数据读写
 // ════════════════════════════════════════════════════════════
 
-ButtonConfig ButtonConfigDialog::getData() const {
+ButtonConfig ButtonConfigForm::getData() const {
   ButtonConfig b;
   b.label = m_labelEdit->text();
   b.actionKey = m_actionKeyEdit->text();
@@ -561,10 +621,25 @@ ButtonConfig ButtonConfigDialog::getData() const {
   b.dialogFields = collectDialogFields();
   b.linkPath = m_linkPathEdit->text();
 
+  // 显示控制（工具栏按钮无行状态，条件不生效）
+  b.showLabel = m_showLabelCheck->isChecked();
+  b.visibleField = m_visibleFieldCombo->currentData().toString();
+  b.visibleOp = m_visibleOpCombo->currentData().toString();
+  b.visibleValue = m_visibleValueEdit->text().trimmed();
+  if (b.position != ButtonPosition::Row) {
+    b.visibleField.clear();
+    b.visibleOp = QStringLiteral("eq");
+    b.visibleValue.clear();
+  }
+  // 仅图标模式必须有图标，否则回退为文字显示
+  if (!b.showLabel && b.icon.isEmpty()) {
+    b.showLabel = true;
+  }
+
   return b;
 }
 
-void ButtonConfigDialog::setData(const ButtonConfig &config) {
+void ButtonConfigForm::setData(const ButtonConfig &config) {
   m_labelEdit->setText(config.label);
   m_actionKeyEdit->setText(config.actionKey);
   // 图标
@@ -588,5 +663,190 @@ void ButtonConfigDialog::setData(const ButtonConfig &config) {
   fillDialogFields(config.dialogFields);
   m_linkPathEdit->setText(config.linkPath);
 
+  // 显示控制
+  m_showLabelCheck->setChecked(config.showLabel);
+  m_pendingVisibleField = config.visibleField;
+  comboSelectData(m_visibleFieldCombo, config.visibleField);
+  comboSelectData(m_visibleOpCombo,
+                  config.visibleOp.isEmpty() ? QStringLiteral("eq") : config.visibleOp);
+  m_visibleValueEdit->setText(config.visibleValue);
+
   updateBehaviorVisibility();
+  updateVisibilityControls();
+}
+
+// ════════════════════════════════════════════════════════════
+//  ButtonConfigDialog：统一弹窗（单状态无页签 / 多状态页签）
+// ════════════════════════════════════════════════════════════
+
+ButtonConfigDialog::ButtonConfigDialog(QWidget *parent) : QDialog(parent) { setupUI(1); }
+
+ButtonConfigDialog::ButtonConfigDialog(const ButtonConfig &config, QWidget *parent)
+    : QDialog(parent) {
+  setupUI(1);
+  setData(config);
+}
+
+ButtonConfigDialog::ButtonConfigDialog(const QVector<ButtonConfig> &states, QWidget *parent)
+    : QDialog(parent) {
+  setupUI(qMax(1, states.size()));
+  setStates(states);
+}
+
+void ButtonConfigDialog::setupUI(int stateCount) {
+  setMinimumWidth(700);
+  setMinimumHeight(600);
+  auto frame = beginConfigDialog(this, QStringLiteral("按钮配置"), QMargins(12, 8, 12, 12), 8);
+  auto *mainLayout = frame.contentLayout;
+
+  // ── 状态模式：单状态 / 双状态（双状态在同一弹窗内用页签呈现）──
+  auto *modeRow = new QHBoxLayout;
+  modeRow->setSpacing(6);
+  modeRow->addWidget(new QLabel(QStringLiteral("按钮状态:")));
+  m_modeCombo = AuiComboBox::create();
+  m_modeCombo->setMinimumHeight(28);
+  m_modeCombo->addItem(QStringLiteral("单状态（一个按钮）"), 0);
+  m_modeCombo->addItem(QStringLiteral("双状态（两个互斥按钮）"), 1);
+  m_modeCombo->setToolTip(
+      QStringLiteral("双状态 = 同一业务的两个互斥状态（如 解冻/冻结），各用一份配置"));
+  modeRow->addWidget(m_modeCombo, 1);
+  mainLayout->addLayout(modeRow);
+
+  m_modeHint = new QLabel(
+      QStringLiteral("双状态：每个页签独立配置文字、接口与显示条件；"
+                     "生成后按行数据只显示其中一个。"));
+  m_modeHint->setWordWrap(true);
+  m_modeHint->setStyleSheet(
+      QStringLiteral("color: %1;").arg(AuiStyle::secondaryTextColor().name()));
+  mainLayout->addWidget(m_modeHint);
+
+  // 表单呈现区：单状态 = 表单直接铺开；双状态 = 两份表单放进页签
+  m_contentHost = new QWidget;
+  m_contentLayout = new QVBoxLayout(m_contentHost);
+  m_contentLayout->setContentsMargins(0, 0, 0, 0);
+  m_contentLayout->setSpacing(0);
+  mainLayout->addWidget(m_contentHost, 1);
+
+  m_tabs = new QTabWidget;
+  auto *firstForm = new ButtonConfigForm;
+  m_forms.append(firstForm);
+  connect(firstForm, &ButtonConfigForm::identityChanged, this,
+          &ButtonConfigDialog::refreshTabTitles);
+  m_contentLayout->addWidget(firstForm, 1);
+
+  connect(m_modeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+          [this](int) { updateModeUI(); });
+  // 双状态构造时直接进入双状态模式（信号触发第二个表单的懒创建）
+  if (stateCount > 1) m_modeCombo->setCurrentIndex(1);
+  updateModeUI();  // 初始化显隐（单状态时隐藏说明与页签）
+
+  finishConfigDialog(this, frame);
+}
+
+void ButtonConfigDialog::updateModeUI() {
+  if (!m_modeCombo || !m_contentLayout || m_forms.isEmpty()) return;
+  const bool dual = isDualMode();
+  ButtonConfigForm *first = m_forms.first();
+
+  if (dual) {
+    ensureDualForm();
+    // 表单 0/1 按状态顺序放进页签（先摘出再插入，保证页签顺序固定）
+    m_contentLayout->removeWidget(first);
+    const int i0 = m_tabs->indexOf(first);
+    if (i0 >= 0) m_tabs->removeTab(i0);
+    m_tabs->insertTab(0, first, first->stateTitle(0));
+    ButtonConfigForm *second = m_forms.at(1);
+    const int i1 = m_tabs->indexOf(second);
+    if (i1 >= 0) m_tabs->removeTab(i1);
+    m_tabs->addTab(second, second->stateTitle(1));
+    m_tabs->setCurrentIndex(0);
+    if (m_contentLayout->indexOf(m_tabs) < 0) m_contentLayout->addWidget(m_tabs, 1);
+    m_tabs->show();
+    m_modeHint->show();
+  } else {
+    // 单状态：表单 0 回到内容区，页签整体隐藏（第二份配置暂存，切回时可恢复）
+    const int i0 = m_tabs->indexOf(first);
+    if (i0 >= 0) m_tabs->removeTab(i0);
+    m_contentLayout->removeWidget(m_tabs);
+    m_tabs->hide();
+    if (m_contentLayout->indexOf(first) < 0) m_contentLayout->addWidget(first, 1);
+    first->show();
+    m_modeHint->hide();
+  }
+  refreshTabTitles();
+}
+
+void ButtonConfigDialog::ensureDualForm() {
+  if (m_forms.size() >= 2) return;
+  auto *form = new ButtonConfigForm;
+  form->setSearchRoot(m_searchRoot);
+  form->setVisibilityFields(m_visibilityFields);
+  m_forms.append(form);
+  connect(form, &ButtonConfigForm::identityChanged, this,
+          &ButtonConfigDialog::refreshTabTitles);
+}
+
+void ButtonConfigDialog::refreshTabTitles() {
+  if (!m_tabs) return;
+  for (int i = 0; i < m_forms.size(); ++i) {
+    const int idx = m_tabs->indexOf(m_forms[i]);
+    if (idx >= 0) m_tabs->setTabText(idx, m_forms[i]->stateTitle(i));
+  }
+}
+
+void ButtonConfigDialog::setDualMode(bool dual) {
+  if (!m_modeCombo) return;
+  m_modeCombo->setCurrentIndex(dual ? 1 : 0);
+}
+
+bool ButtonConfigDialog::isDualMode() const {
+  return m_modeCombo && m_modeCombo->currentIndex() == 1;
+}
+
+ButtonConfig ButtonConfigDialog::getData() const {
+  return m_forms.isEmpty() ? ButtonConfig() : m_forms.first()->getData();
+}
+
+QVector<ButtonConfig> ButtonConfigDialog::getStates() const {
+  QVector<ButtonConfig> out;
+  const int count = qMin(isDualMode() ? 2 : 1, m_forms.size());
+  out.reserve(count);
+  for (int i = 0; i < count; ++i) {
+    ButtonConfig cfg = m_forms[i]->getData();
+    // 页签外字段（stateGroup 分组键）沿用入参，编辑不影响分组关系
+    if (i < m_initialStates.size()) cfg.stateGroup = m_initialStates[i].stateGroup;
+    out.append(cfg);
+  }
+  return out;
+}
+
+void ButtonConfigDialog::setData(const ButtonConfig &config) {
+  if (m_forms.isEmpty()) return;
+  m_forms.first()->setData(config);
+  if (m_initialStates.isEmpty()) {
+    m_initialStates.append(config);
+  } else {
+    m_initialStates[0] = config;
+  }
+  refreshTabTitles();
+}
+
+void ButtonConfigDialog::setStates(const QVector<ButtonConfig> &states) {
+  m_initialStates = states;
+  setDualMode(states.size() > 1);  // 状态数与模式保持一致
+  for (int i = 0; i < m_forms.size() && i < states.size(); ++i) {
+    m_forms[i]->setData(states[i]);
+  }
+  refreshTabTitles();
+}
+
+void ButtonConfigDialog::setSearchRoot(const QString &dir) {
+  m_searchRoot = dir;
+  for (auto *form : m_forms) form->setSearchRoot(dir);
+}
+
+void ButtonConfigDialog::setVisibilityFields(
+    const QVector<QPair<QString, QString>> &fields) {
+  m_visibilityFields = fields;
+  for (auto *form : m_forms) form->setVisibilityFields(fields);
 }

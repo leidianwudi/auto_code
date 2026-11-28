@@ -154,7 +154,7 @@ private:
   bool swapConfigRows(QTableWidget *tw, int a, int b);
   /// 默认排序行上移/下移（delta=-1 上移，1 下移）
   void moveSortRow(int delta);
-  /// 操作按钮行上移/下移（m_buttons 随之交换，delta=-1 上移，1 下移）
+  /// 操作按钮行上移/下移（按“显示行”整体移动，双状态组一起移动）
   void moveButtonRow(int delta);
   /// 联表行上移/下移（delta=-1 上移，1 下移）
   void moveJoinRow(int delta);
@@ -165,12 +165,18 @@ private:
   // ── 操作按钮（buttons：键名与 .jsonvue ButtonConfig 一致）──
   /// 用 m_buttons 全量重建按钮表格
   void fillButtons();
-  /// 追加一行按钮摘要（label/位置/行为）
-  void appendButtonRow(int idx);
-  /// 添加按钮（ButtonConfigDialog 新建模式）
+  /// 表格显示行 → m_buttons 下标（双状态组一行包含多个下标）
+  QVector<QVector<int>> buttonRowGroups() const;
+  /// 追加一行按钮摘要（双状态组多列合并显示）
+  void appendButtonGroupRow(const QVector<int> &indices);
+  /// 添加按钮（对话框内可选择单状态 / 双状态）
   void onAddButton();
-  /// 编辑按钮（ButtonConfigDialog 编辑模式）
+  /// 复制当前按钮到列表末尾（双状态组整体复制并新建分组键）
+  void onCopyButton();
+  /// 编辑按钮（单状态/双状态统一对话框，可在对话框内切换状态模式）
   void onEditButton(int row);
+  /// 打开按钮配置对话框（单层模态；返回是否确认并应用）
+  bool openButtonGroupEditor(const QVector<int> &indices);
   /// 删除按钮
   void onRemoveButton();
   // ── 表级进阶键：表内枚举（主从表联动）──
@@ -247,7 +253,7 @@ private:
   QPushButton *m_refreshFieldsBtn = nullptr;  ///< 从数据库刷新字段按钮（字段页）
   QLineEdit *m_excludeEdit = nullptr;         ///< 刷新时忽略的列（逗号分隔，存 table.extra）
   // ── 操作按钮（字段呈现页签底部区块）──
-  QTableWidget *m_buttonTable = nullptr;      ///< 按钮摘要表格（label/位置/行为）
+  QTableWidget *m_buttonTable = nullptr;      ///< 按钮摘要表格（文字/位置/行为/显示/动作，双状态组合并为一行）
   QVector<ButtonConfig> m_buttons;            ///< 按钮编辑态
   // ── 表级进阶键 ──
   QTableWidget *m_sortTable = nullptr;        ///< 默认排序表格（列名 + 方向）
